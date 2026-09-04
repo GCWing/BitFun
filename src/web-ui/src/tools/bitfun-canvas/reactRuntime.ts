@@ -2,9 +2,12 @@ import reactUmd from '../../../node_modules/react/umd/react.production.min.js?ra
 import reactDomUmd from '../../../node_modules/react-dom/umd/react-dom.production.min.js?raw';
 import bitfunCanvasRuntimeBundle from 'virtual:bitfun-canvas-runtime-bundle';
 import { buildCanvasRuntimeInstallerScript } from './runtime/canvasRuntimeInstaller';
+import { CANVAS_RUNTIME_VERSION } from './runtime/sdk/contract.generated';
 
 interface ReactCanvasRuntimeOptions {
   title: string;
+  runtimeVersion?: string;
+  sdkVersion?: string;
 }
 
 interface ExtractedCanvasScript {
@@ -16,6 +19,7 @@ export interface ReactCanvasHtmlResult {
   html?: string;
   runtime: 'react' | 'legacy' | 'empty';
   revision?: string;
+  compatibilityFallback?: boolean;
 }
 
 const COMPONENT_SCRIPT_PATTERN =
@@ -62,6 +66,15 @@ export function buildReactCanvasHtmlResult(
     };
   }
 
+  if (options.runtimeVersion && options.runtimeVersion !== CANVAS_RUNTIME_VERSION) {
+    return {
+      html: compiledHtml,
+      runtime: 'legacy',
+      revision: componentScript.revision,
+      compatibilityFallback: true,
+    };
+  }
+
   const revision = componentScript.revision ?? '';
 
   return {
@@ -88,7 +101,7 @@ export function buildReactCanvasHtmlResult(
   <script>window.__bitfunCanvasPost?.('bitfun-canvas-react-dom-loaded', { hasReactDOM: Boolean(window.ReactDOM), hasCreateRoot: Boolean(window.ReactDOM?.createRoot) });</script>
   <script>${sanitizeInlineScript(buildCanvasRuntimeInstallerScript(revision))}</script>
   <script>${sanitizeInlineScript(bitfunCanvasRuntimeBundle.js)}</script>
-  <script>${sanitizeInlineScript(wrapUserCanvasScript(componentScript.code))}</script>
+  <script>${sanitizeInlineScript(wrapUserCanvasScript(componentScript.code, revision))}</script>
 </body>
 </html>`,
   };
@@ -127,7 +140,7 @@ function reactCanvasEarlyBridge(revision: string): string {
 `;
 }
 
-function wrapUserCanvasScript(componentCode: string): string {
+function wrapUserCanvasScript(componentCode: string, revision: string): string {
   return `
 (function () {
   try {
@@ -137,5 +150,6 @@ ${componentCode}
     window.BitfunCanvasRuntime.reportRuntimeError(error);
   }
 })();
+//# sourceURL=bitfun-canvas-${revision || 'unknown'}.js
 `;
 }

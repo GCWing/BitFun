@@ -1,4 +1,5 @@
 import React from 'react';
+import { DesignSystemProvider, ThemeRoot } from '@bitfun/ui';
 
 function errorText(error: unknown): string {
   if (error && typeof error === 'object') {
@@ -24,7 +25,7 @@ export function CanvasRuntimeErrorPanel({ error }: { error: unknown }) {
 
 export class CanvasRuntimeErrorBoundary extends React.Component<{
   children?: React.ReactNode;
-  onError: (error: unknown) => void;
+  onError: (error: unknown, componentStack?: string) => void;
 }, { error: unknown | null }> {
   state = { error: null };
 
@@ -32,14 +33,32 @@ export class CanvasRuntimeErrorBoundary extends React.Component<{
     return { error };
   }
 
-  componentDidCatch(error: unknown) {
-    this.props.onError(error);
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    this.props.onError(error, info.componentStack ?? undefined);
   }
 
   render() {
     if (this.state.error) return <CanvasRuntimeErrorPanel error={this.state.error} />;
     return this.props.children;
   }
+}
+
+function CanvasCommitProbe({ onReady }: { onReady: () => void }) {
+  React.useLayoutEffect(() => {
+    let cancelled = false;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (!cancelled) onReady();
+      });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [onReady]);
+  return null;
 }
 
 export function CanvasRuntimeRoot({
@@ -49,17 +68,18 @@ export function CanvasRuntimeRoot({
 }: {
   component: React.ComponentType | null;
   onReady: () => void;
-  onError: (error: unknown) => void;
+  onError: (error: unknown, componentStack?: string) => void;
 }) {
-  React.useEffect(() => {
-    onReady();
-    const timeout = window.setTimeout(onReady, 0);
-    return () => window.clearTimeout(timeout);
-  }, [onReady]);
+  const colorScheme = document.documentElement.style.colorScheme === 'dark' ? 'dark' : 'light';
 
   return (
     <CanvasRuntimeErrorBoundary onError={onError}>
-      {Component ? <Component /> : null}
+      <DesignSystemProvider colorScheme={colorScheme} portalHost={document.body}>
+        <ThemeRoot colorScheme={colorScheme} className="bitfun-canvas-design-system-root">
+          {Component ? <Component /> : null}
+          <CanvasCommitProbe onReady={onReady} />
+        </ThemeRoot>
+      </DesignSystemProvider>
     </CanvasRuntimeErrorBoundary>
   );
 }

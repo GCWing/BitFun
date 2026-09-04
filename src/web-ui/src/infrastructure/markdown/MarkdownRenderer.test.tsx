@@ -138,6 +138,57 @@ describe('Markdown file links', () => {
     expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 
+  it.each([
+    '[Open Canvas](bitfun-canvas://session/session_1/canvas/canvas_1)',
+    'bitfun-canvas://session/session_1/canvas/canvas_1',
+  ])('opens Canvas artifact links in the Canvas panel: %s', async (content) => {
+    const onCreateTab = vi.fn();
+    window.addEventListener('agent-create-tab', onCreateTab);
+
+    try {
+      await act(async () => {
+        root.render(
+          <MarkdownRenderer
+            content={content}
+            basePath="/srv/project"
+            remoteConnectionId="remote-connection-1"
+            remoteSshHost="workspace.example"
+          />,
+        );
+        await Promise.resolve();
+      });
+
+      const link = container.querySelector<HTMLButtonElement>('button.canvas-link');
+      expect(link).not.toBeNull();
+
+      act(() => link?.click());
+
+      expect(onCreateTab).toHaveBeenCalledTimes(1);
+      const event = onCreateTab.mock.calls[0][0] as CustomEvent;
+      expect(event.detail).toMatchObject({
+        type: 'bitfun-canvas',
+        title: 'BitFun Canvas',
+        data: {
+          artifactReference: 'bitfun-canvas://session/session_1/canvas/canvas_1',
+          workspacePath: '/srv/project',
+          remoteConnectionId: 'remote-connection-1',
+          remoteSshHost: 'workspace.example',
+          _source: { type: 'markdown-link' },
+        },
+        metadata: {
+          artifactReference: 'bitfun-canvas://session/session_1/canvas/canvas_1',
+          fromMarkdown: true,
+        },
+        checkDuplicate: true,
+        duplicateCheckKey: 'bitfun-canvas-bitfun-canvas://session/session_1/canvas/canvas_1',
+        replaceExisting: true,
+      });
+      expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('agent-create-tab', onCreateTab);
+    }
+  });
+
   it('opens chat http links in the built-in browser by default', async () => {
     container.className = 'bitfun-session-scene modern-flowchat-container';
     const onCreateTab = vi.fn();

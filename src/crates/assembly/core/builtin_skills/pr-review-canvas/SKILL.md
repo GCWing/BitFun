@@ -103,4 +103,4 @@ Before calling `CreateCanvas`, verify:
 
 ## Output
 
-Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, give the returned `bitfun-canvas://...` artifact reference and mention the diff source used.
+Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, mention the Canvas title and diff source used, but do not print the internal `bitfun-canvas://...` reference; BitFun renders its openable card automatically below the response.

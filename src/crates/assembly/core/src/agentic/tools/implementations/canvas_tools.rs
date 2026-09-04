@@ -87,7 +87,7 @@ Rules:
 - Do not use relative imports, dynamic imports, npm packages, network fetches, or helper files.
 - The source must include `export default`.
 
-Returns a stable `bitfun-canvas://...` artifact reference. Use ReadCanvas to inspect it, PatchCanvas for small targeted revisions, and UpdateCanvas for full-source rewrites."#
+Returns a stable `bitfun-canvas://...` artifact reference for subsequent Canvas tool calls. The client presents the artifact as an openable card automatically; do not copy the internal reference into user-facing prose. Use ReadCanvas to inspect it, PatchCanvas for small targeted revisions, and UpdateCanvas for full-source rewrites."#
             .to_string())
     }
 
@@ -148,6 +148,7 @@ Returns a stable `bitfun-canvas://...` artifact reference. Use ReadCanvas to ins
             description: description.map(str::to_string),
             source_revision: revision.clone(),
             latest_compiled_revision: None,
+            latest_rendered_revision: None,
             last_known_good_revision: None,
             status: CanvasStatus::SourceSaved,
             created_at: now,
@@ -498,10 +499,12 @@ fn canvas_tool_result(action: &str, snapshot: &CanvasSnapshot, compiled: bool) -
         })
     });
     let data = json!({
-        "success": true,
+        "success": compiled,
         "action": action,
         "artifactReference": reference,
         "compiled": compiled,
+        "renderValidated": snapshot.artifact.last_known_good_revision.as_ref()
+            == Some(&snapshot.artifact.source_revision),
         "diagnosticCount": snapshot.diagnostics.len(),
         "compiledPayload": compiled_payload,
         "canvas": snapshot_data(snapshot, true),
@@ -521,11 +524,13 @@ fn canvas_result_for_assistant(
     compiled: bool,
 ) -> String {
     let mut message = format!(
-        "Canvas {}: {}. Status: {:?}. Source compiled: {}. Diagnostics: {}. Host render errors are reported later as runtime diagnostics on the same Canvas artifact.",
+        "Canvas {}: {}. Status: {:?}. Source compiled: {}. First-render validation: {}. Diagnostics: {}.",
         action,
         reference,
         snapshot.artifact.status,
         compiled,
+        snapshot.artifact.last_known_good_revision.as_ref()
+            == Some(&snapshot.artifact.source_revision),
         snapshot.diagnostics.len()
     );
 
@@ -689,6 +694,7 @@ fn snapshot_data(snapshot: &CanvasSnapshot, include_source: bool) -> Value {
         "diagnostics": &snapshot.diagnostics,
         "compiled": snapshot.compiled_payload.is_some(),
         "latestCompiledRevision": snapshot.artifact.latest_compiled_revision,
+        "latestRenderedRevision": snapshot.artifact.latest_rendered_revision,
         "lastKnownGoodRevision": snapshot.artifact.last_known_good_revision,
         "state": &snapshot.state,
     });
@@ -905,11 +911,10 @@ mod tests {
             panic!("expected result");
         };
         assert_eq!(data["compiled"], false);
+        assert_eq!(data["success"], false);
         assert_eq!(data["canvas"]["status"], "compile_failed");
-        assert_eq!(
-            data["canvas"]["lastKnownGoodRevision"],
-            data["canvas"]["latestCompiledRevision"]
-        );
+        assert!(data["canvas"]["lastKnownGoodRevision"].is_null());
+        assert!(!data["canvas"]["latestCompiledRevision"].is_null());
     }
 
     #[tokio::test]

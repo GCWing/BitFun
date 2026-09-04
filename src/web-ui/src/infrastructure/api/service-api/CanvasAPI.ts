@@ -4,6 +4,7 @@ export interface CanvasStateValue {
   canvasId: string;
   sourceRevisionSeen?: string;
   values: Record<string, unknown>;
+  valueVersions?: Record<string, number>;
   updatedAt: number;
   schemaVersion: number;
 }
@@ -18,6 +19,7 @@ export interface CanvasStateRequest {
 export interface SaveCanvasStateRequest extends CanvasStateRequest {
   sourceRevisionSeen?: string;
   values: Record<string, unknown>;
+  valueVersions?: Record<string, number>;
   updatedAt: number;
 }
 
@@ -26,6 +28,16 @@ export interface ReportCanvasRuntimeErrorRequest extends CanvasStateRequest {
   message: string;
   name?: string;
   stack?: string;
+  filename?: string;
+  line?: number;
+  column?: number;
+  componentStack?: string;
+}
+
+export interface ReportCanvasRuntimeReadyRequest extends CanvasStateRequest {
+  sourceRevisionSeen: string;
+  runtimeVersion: string;
+  sdkVersion: string;
 }
 
 export interface CanvasStateResponse {
@@ -48,6 +60,7 @@ export interface CanvasSnapshotValue {
     status?: string;
     sourceRevision?: string;
     latestCompiledRevision?: string;
+    latestRenderedRevision?: string;
     lastKnownGoodRevision?: string;
   };
   source?: {
@@ -60,6 +73,8 @@ export interface CanvasSnapshotValue {
     html?: string;
     sourceRevision?: string;
     contentHash?: string;
+    sdkVersion?: string;
+    runtimeVersion?: string;
   } | null;
   state?: CanvasStateValue | null;
 }
@@ -84,6 +99,10 @@ class CanvasAPI {
 
   async reportRuntimeError(request: ReportCanvasRuntimeErrorRequest): Promise<CanvasArtifactResponse> {
     return api.invoke('report_canvas_runtime_error', { request });
+  }
+
+  async reportRuntimeReady(request: ReportCanvasRuntimeReadyRequest): Promise<CanvasArtifactResponse> {
+    return api.invoke('report_canvas_runtime_ready', { request });
   }
 }
 

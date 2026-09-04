@@ -298,8 +298,9 @@ export type LinkProps = {
  * ```
  */
 export declare function Link({ children, href, style }: LinkProps): JSX.Element;
+/** @deprecated Use Card padding instead of the retired size prop. */
 export type CardSize = "base" | "lg";
-export type CardVariant = "default" | "borderless";
+export type CardVariant = "default" | "elevated" | "subtle" | "accent" | "borderless";
 /**
  * Inline chevron SVG used by disclosure-style controls (collapsible cards,
  * expandable list items, etc.). Shared by `Card` and `todo-list.tsx` so
@@ -312,26 +313,8 @@ export type CardProps = {
     children?: ReactNode;
     /** Default: bordered surface with radius; `borderless` removes both. */
     variant?: CardVariant;
-    /** `lg` uses a taller header and roomier title padding (matches BitFun UI). */
-    size?: CardSize;
-    /**
-     * When true, the header uses `position: sticky` so it stays visible while
-     * the card body scrolls. Requires the card (or a parent) to have a
-     * constrained height and `overflow: auto` — the canvas host controls this,
-     * so sticky behavior depends on the host viewport.
-     */
-    stickyHeader?: boolean;
-    /**
-     * Make the card collapsible. The header becomes a clickable toggle with
-     * a leading chevron; `CardBody` renders nothing while the card is closed.
-     */
-    collapsible?: boolean;
-    /** Initial open state in uncontrolled mode. Ignored when `open` is set. */
-    defaultOpen?: boolean;
-    /** Controlled open state. Pair with `onOpenChange`. */
-    open?: boolean;
-    /** Fires on every toggle with the next open state. */
-    onOpenChange?: (open: boolean) => void;
+    padding?: "none" | "small" | "medium" | "large";
+    radius?: "small" | "medium" | "large";
     style?: CSSProperties;
 };
 /**
@@ -353,7 +336,7 @@ export type CardProps = {
  * Pass **plain text** as `CardHeader` children — the header provides its own
  * 12px font. Do **not** put `<H1>` or `<H2>` inside a card header.
  *
- * Set `collapsible` to make the header a toggle that shows/hides `CardBody`.
+ * Use `CollapsibleSection` when content needs disclosure behavior.
  *
  * @example
  * ```tsx
@@ -367,27 +350,23 @@ export type CardProps = {
  *   </CardBody>
  * </Card>
  *
- * // Collapsible card
- * <Card collapsible defaultOpen={false}>
- *   <CardHeader>deploy-service.ts</CardHeader>
- *   <CardBody>Service handles rolling deployments across regions.</CardBody>
- * </Card>
- *
  * // Bad — card wrapping plain text that should just be a heading
  * // Use <H2>Overview</H2><Text>…</Text> instead.
  * ```
  */
-export declare function Card({ children, variant, size, stickyHeader, collapsible, defaultOpen, open: openProp, onOpenChange, style }: CardProps): JSX.Element;
+export declare function Card(props: CardProps): JSX.Element;
 export type CardHeaderProps = {
     /** Plain text title. Do **not** pass headings, buttons, pills, or layout rows. */
     children?: ReactNode;
+    title?: ReactNode;
+    subtitle?: ReactNode;
     /** Small trailing content aligned to the right edge — a status label, a
      *  single pill, or a short metadata string. Keep it compact. */
     trailing?: ReactNode;
     style?: CSSProperties;
 };
 /**
- * 28px header row (32px at `size="lg"`). A compact label for the card.
+ * Compact label row for a card.
  *
  * **`children`** — plain text only. This is a 12px label, not a toolbar.
  * Do **not** pass `<H1>`, `<H2>`, `<Text weight="bold">`, `<Pill>`,
@@ -411,7 +390,7 @@ export type CardHeaderProps = {
  * // Bad — multiple pills in header (use trailing for one, or move to CardBody)
  * ```
  */
-export declare function CardHeader({ children, trailing, style }: CardHeaderProps): JSX.Element;
+export declare function CardHeader(props: CardHeaderProps): JSX.Element;
 export type CardBodyProps = {
     children?: ReactNode;
     style?: CSSProperties;
@@ -431,7 +410,8 @@ export type CardBodyProps = {
 export declare function CardBody({ children, style }: CardBodyProps): JSX.Element | null;
 export type ButtonProps = {
     children?: ReactNode;
-    variant?: "primary" | "secondary" | "ghost";
+    variant?: "primary" | "secondary" | "ghost" | "danger" | "success";
+    size?: "sm" | "small" | "md" | "medium" | "lg" | "large";
     disabled?: boolean;
     type?: "button" | "submit" | "reset";
     style?: CSSProperties;
@@ -450,7 +430,7 @@ export type ButtonProps = {
  * </Row>
  * ```
  */
-export declare function Button({ children, variant, disabled, type, style, onClick }: ButtonProps): JSX.Element;
+export declare function Button(props: ButtonProps): JSX.Element;
 /** @deprecated Pills always render neutral now; tones are ignored. */
 export type PillTone = "neutral" | "added" | "deleted" | "renamed" | "success" | "warning" | "info";
 export type PillSize = "sm" | "md";

@@ -59,7 +59,7 @@ The trigger is **user intent**, not response shape. Ask: would the user benefit 
 - A **legend** when more than one series is shown, with the exact series names from the source data.
 - The **source and time range** in a small caption (e.g. "Source: Datadog · last 7 days"). If a value is a transformation (mean, p95, normalized, smoothed), say so in the label.
 
-**Component discovery:** prefer built-in `bitfun/canvas` components over hand-rolled markup. The full public surface (components, hooks, prop types, tokens) is declared in `sdk/index.d.ts` next to this skill and its sibling `.d.ts` files — read them when you need exact exports, prop shapes, or hook signatures rather than guessing. Referencing an export that does not exist is the most common runtime error.
+**Component discovery:** prefer built-in `bitfun/canvas` components over hand-rolled markup. Read `sdk/sdk-contract.generated.json` first: it is the generated, versioned source of truth for runtime exports and accepted component props. Use `sdk/index.d.ts` and its sibling `.d.ts` files for richer type documentation and examples, but never invent an export or prop that is absent from the generated contract.
 
 Apply the Canvas generation policy below as you write, and complete its pre-delivery self-check (section 6) before returning the canvas.
 
@@ -94,15 +94,15 @@ Before returning canvas code, verify:
 
 ## Introducing the canvas
 
-Whenever you mention a canvas to the user — one you created, updated, or want them to open — **always** include the `bitfun-canvas://...` artifact reference returned by the Canvas tool. Use the artifact title or a short descriptive label near the reference; do not refer to a canvas by name alone without the reference.
+The `bitfun-canvas://...` artifact reference is an internal resource identifier. **Never copy it into the chat response or format it as a link.** BitFun automatically collects successful Canvas tool results and renders openable Canvas cards below the completed response. Keep the returned reference only for subsequent `ReadCanvas`, `PatchCanvas`, or `UpdateCanvas` calls.
 
-When you create a canvas, add a short note in your chat response telling the user they can open it beside the chat, with that `bitfun-canvas://...` reference:
+When you create a canvas, add a short note in your chat response telling the user they can open it from the Canvas card below:
 
 - **First canvas** — include one sentence explaining what a canvas is.
 - **Unsolicited canvas** — if the user didn't ask for a canvas, include one sentence explaining why you chose it over plain text.
 
-Both can apply at once; one or two sentences total is enough. Skip the intro for subsequent canvases unless you are mentioning that canvas again (still include the artifact reference).
+Both can apply at once; one or two sentences total is enough. Skip the intro for subsequent canvases unless you need to describe what changed. Refer to a canvas by title, never by its internal URI.
 
 ## Troubleshooting
 
-If a canvas appears blank or missing, first inspect the Canvas tool result diagnostics and runtime diagnostics. `CreateCanvas`, `PatchCanvas`, and `UpdateCanvas` save the source first, then compile it. If compilation or policy validation fails, the tool returns diagnostics and preserves the previous last-known-good compiled payload when one exists. Runtime errors are reported back to the host as Canvas diagnostics; open the source view, fix the exception, then call `PatchCanvas` for a small exact edit or `UpdateCanvas` for a full rewrite.
+If a canvas appears blank or missing, first inspect the Canvas tool result diagnostics and runtime diagnostics. `CreateCanvas`, `PatchCanvas`, and `UpdateCanvas` save the source first, then compile it. Compilation means the source was accepted and transformed; `Preview ready` is reported only after the same revision completes a real first render. If compilation or policy validation fails, the tool reports failure with diagnostics and preserves the previous render-validated payload when one exists. Runtime errors are reported back to the host as Canvas diagnostics; open the source view, fix the exception, then call `PatchCanvas` for a small exact edit or `UpdateCanvas` for a full rewrite.

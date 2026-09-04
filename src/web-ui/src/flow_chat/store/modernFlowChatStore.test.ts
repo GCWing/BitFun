@@ -1309,6 +1309,40 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(modelItems[1].isLastRound).toBe(true);
   });
 
+  it('attaches the latest Canvas artifact card to the completed response tail', () => {
+    const artifactReference = 'bitfun-canvas://session/canvas-session/canvas/canvas_1';
+    const createCanvas = makeTool('create-canvas', 'CreateCanvas');
+    createCanvas.toolResult = {
+      success: true,
+      result: { artifactReference, canvas: { artifact: { title: 'Usage report' } } },
+    };
+    const patchCanvas = makeTool('patch-canvas', 'PatchCanvas');
+    patchCanvas.toolResult = {
+      success: true,
+      result: { artifactReference, canvas: { artifact: { title: 'Usage report' } } },
+    };
+    const session = makeSession({
+      sessionId: 'canvas-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'canvas-session',
+        userMessage: { id: 'user-1', content: 'Build a report', timestamp: 900 },
+        modelRounds: [
+          makeRound({ id: 'canvas-round', items: [createCanvas] }),
+          makeRound({ id: 'answer-round', items: [patchCanvas, makeTextItem('answer', 'Done.')] }),
+        ],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const modelItems = sessionToVirtualItems(session)
+      .filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelItems[0].canvasArtifactItems).toBeUndefined();
+    expect(modelItems[1].canvasArtifactItems).toEqual([patchCanvas]);
+  });
+
   it('does not split the turn-tail large round (avoids completion remount flash)', () => {
     const largeRound = makeRound({
       id: 'large-tail-round',

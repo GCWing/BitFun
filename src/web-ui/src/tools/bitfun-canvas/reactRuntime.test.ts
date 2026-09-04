@@ -20,7 +20,7 @@ window.BitfunCanvasRuntime.mount(Canvas);
 </body>
 </html>`;
 
-async function runCanvasHtml(html: string) {
+async function runCanvasHtml(html: string, state: Record<string, unknown> = {}) {
   const dom = new JSDOM(html, {
     pretendToBeVisual: true,
     runScripts: 'outside-only',
@@ -33,6 +33,25 @@ async function runCanvasHtml(html: string) {
     value: {
       postMessage(message: unknown) {
         messages.push(message);
+        const record = message as { type?: string; requestId?: string };
+        if (record?.type === 'bitfun-canvas-load-state') {
+          dom.window.setTimeout(() => {
+            dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+              data: {
+                type: 'bitfun-canvas-load-state-result',
+                requestId: record.requestId,
+                state: {
+                  canvasId: 'canvas_test',
+                  sourceRevisionSeen: 'legacy_revision',
+                  values: state,
+                  valueVersions: {},
+                  updatedAt: 1,
+                  schemaVersion: 1,
+                },
+              },
+            }));
+          }, 0);
+        }
       },
     },
   });
@@ -52,7 +71,19 @@ async function runCanvasHtml(html: string) {
       dom.window.eval(script);
     }
     await new Promise<void>(resolve => {
-      dom.window.setTimeout(resolve, 25);
+      const deadline = Date.now() + 500;
+      const poll = () => {
+        const settled = messages.some(message => {
+          const type = (message as { type?: string })?.type;
+          return type === 'bitfun-canvas-ready' || type === 'bitfun-canvas-runtime-error';
+        });
+        if (settled || Date.now() >= deadline) {
+          resolve();
+          return;
+        }
+        dom.window.setTimeout(poll, 10);
+      };
+      poll();
     });
     return { dom, messages };
   } catch (error) {
@@ -93,6 +124,22 @@ describe('React Canvas runtime bridge', () => {
     expect(html).not.toContain('jsxDEV');
     expect(html).not.toContain('jsxRuntime');
     expect(html).not.toContain('legacy runtime');
+    expect(html).toContain('//# sourceURL=bitfun-canvas-rev_test.js');
+  });
+
+  it('keeps a compiled payload on its matching legacy runtime', () => {
+    const result = buildReactCanvasHtmlResult(compiledHtml, {
+      title: 'Legacy Canvas',
+      runtimeVersion: '0.1.0',
+      sdkVersion: '0.2.0',
+    });
+
+    expect(result).toEqual({
+      html: compiledHtml,
+      runtime: 'legacy',
+      revision: 'rev_test',
+      compatibilityFallback: true,
+    });
   });
 
   it('uses a light centered standalone shell by default', () => {
@@ -254,6 +301,48 @@ window.BitfunCanvasRuntime.mount(Canvas);
       expect(dom.window.document.querySelector('[data-bf-component="tab-group"]')).toBeTruthy();
       expect(dom.window.document.querySelector('[data-bf-component="input"]')).toBeTruthy();
       expect(dom.window.document.querySelector('[data-bf-component="empty"]')).toBeTruthy();
+    } finally {
+      dom.window.close();
+    }
+  });
+
+  it('hydrates state before first render and ignores incompatible persisted shapes', async () => {
+    const html = buildReactCanvasHtml(`<!DOCTYPE html>
+<script type="module" data-revision="rev_state">
+const { Stack, Table, Tabs, Text, useCanvasState, useEffect } = window.BitfunCanvasSDK;
+const { h } = window.BitfunCanvasRuntime;
+function Canvas() {
+  const [rows, setRows] = useCanvasState('rows', [{ label: 'Current' }]);
+  useEffect(() => {
+    setRows(current => [...current, { label: 'Added' }]);
+  }, []);
+  return h(Stack, null,
+    h(Text, { 'data-testid': 'row-count' }, String(rows.length)),
+    h(Tabs, { items: { invalid: true } }),
+    h(Table, { headers: ['Label'], rows: { invalid: true } })
+  );
+}
+window.BitfunCanvasRuntime.mount(Canvas);
+</script>`, { title: 'State compatibility' });
+
+    const { dom, messages } = await runCanvasHtml(html ?? '', { rows: 'stale value' });
+    try {
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'bitfun-canvas-state-warning',
+        key: 'rows',
+      }));
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'bitfun-canvas-prop-warning',
+        component: 'Tabs',
+        prop: 'items',
+      }));
+      expect(messages).toContainEqual(expect.objectContaining({ type: 'bitfun-canvas-ready' }));
+      expect(messages).not.toContainEqual(expect.objectContaining({ type: 'bitfun-canvas-runtime-error' }));
+      expect(dom.window.document.querySelector('[data-testid="row-count"]')?.textContent).toBe('2');
+      expect(messages).toContainEqual(expect.objectContaining({
+        type: 'bitfun-canvas-save-state',
+        values: { rows: [{ label: 'Current' }, { label: 'Added' }] },
+      }));
     } finally {
       dom.window.close();
     }

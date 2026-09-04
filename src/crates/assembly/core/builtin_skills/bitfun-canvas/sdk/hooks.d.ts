@@ -53,6 +53,14 @@ export declare function useHostAppearance(): CanvasHostAppearance;
  * function that receives the previous value.
  */
 export type SetCanvasState<T> = (action: T | ((prev: T) => T)) => void;
+export interface CanvasStateOptions<T> {
+    /** Increment when the persisted value shape changes. Defaults to 1. */
+    version?: number;
+    /** Optional runtime guard for data loaded from an older host or revision. */
+    validate?: (value: unknown) => value is T;
+    /** Converts a stored value from its recorded version to the current shape. */
+    migrate?: (value: unknown, fromVersion: number) => T;
+}
 /**
  * Persistent state hook for canvas applications. Works like `React.useState`
  * but the value survives rebuilds, reloads, and IDE restarts — it is stored
@@ -86,7 +94,7 @@ export type SetCanvasState<T> = (action: T | ((prev: T) => T)) => void;
  * }
  * ```
  */
-export declare function useCanvasState<T>(key: string, defaultValue: T): [T, SetCanvasState<T>];
+export declare function useCanvasState<T>(key: string, defaultValue: T, options?: CanvasStateOptions<T>): [T, SetCanvasState<T>];
 /**
  * Action requests that a Canvas can dispatch to the BitFun host.
  */

@@ -76,7 +76,25 @@ export function Text({
   truncate = false,
   style,
   color,
-  ...props
+  padding,
+  margin,
+  background,
+  border,
+  borderTop,
+  borderRight,
+  borderBottom,
+  borderLeft,
+  borderRadius,
+  width,
+  height,
+  flex,
+  display,
+  opacity,
+  minWidth,
+  maxWidth,
+  minHeight,
+  maxHeight,
+  ...elementProps
 }: CanvasTextProps) {
   const Component = as;
   const truncateStyle = truncate
@@ -85,6 +103,7 @@ export function Text({
 
   return (
     <Component
+      {...elementProps}
       style={{
         margin: 0,
         color: color || toneColor(tone),
@@ -92,7 +111,27 @@ export function Text({
         fontWeight: weightValue(weight),
         fontStyle: italic ? 'italic' : undefined,
         ...truncateStyle,
-        ...commonStyle(props, style),
+        ...commonStyle({
+          padding,
+          margin,
+          background,
+          border,
+          borderTop,
+          borderRight,
+          borderBottom,
+          borderLeft,
+          borderRadius,
+          width,
+          height,
+          flex,
+          display,
+          color,
+          opacity,
+          minWidth,
+          maxWidth,
+          minHeight,
+          maxHeight,
+        }, style),
       }}
     >
       {children}

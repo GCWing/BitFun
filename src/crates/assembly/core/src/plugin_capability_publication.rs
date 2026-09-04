@@ -75,7 +75,9 @@ impl PluginCapabilityPublicationPlan {
         publication: PluginPublicationIdentity,
     ) -> Self {
         Self {
-            workspace_root: workspace_root.to_path_buf(),
+            workspace_root: crate::agentic::workspace::canonical_local_workspace_path(
+                workspace_root,
+            ),
             generation_key: generation_key.to_string(),
             publication,
             registrations: Vec::new(),

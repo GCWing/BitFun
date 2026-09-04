@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:d4f94c70b0fc9d9a",
+  "digest": "fnv1a64:8efb881b158a90b5",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -4043,7 +4043,7 @@
     {
       "id": "load_canvas_artifact",
       "surface": "tauri_command",
-      "remoteWorkspace": "LegacyUnaudited",
+      "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
         "kind": "proxied"
       },
@@ -4055,7 +4055,7 @@
     {
       "id": "load_canvas_state",
       "surface": "tauri_command",
-      "remoteWorkspace": "LegacyUnaudited",
+      "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
         "kind": "proxied"
       },
@@ -5856,7 +5856,19 @@
     {
       "id": "report_canvas_runtime_error",
       "surface": "tauri_command",
-      "remoteWorkspace": "LegacyUnaudited",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the CLI peer host has no handler for this command"
+      }
+    },
+    {
+      "id": "report_canvas_runtime_ready",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
         "kind": "proxied"
       },
@@ -6293,7 +6305,7 @@
     {
       "id": "save_canvas_state",
       "surface": "tauri_command",
-      "remoteWorkspace": "LegacyUnaudited",
+      "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
         "kind": "proxied"
       },

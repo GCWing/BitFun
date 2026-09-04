@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Icon } from '@bitfun/ui';
 import { AlertTriangle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -9,8 +9,9 @@ import { CodePreview } from '../components/CodePreview';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { i18nService } from '@/infrastructure/i18n';
-import { createTab } from '@/shared/utils/tabUtils';
+import { openCanvasArtifactTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
+import { CanvasPreflight, type CanvasPreflightStatus } from '@/tools/bitfun-canvas/CanvasPreflight';
 import './CanvasToolCard.scss';
 
 const log = createLogger('CanvasToolCard');
@@ -19,16 +20,20 @@ interface CanvasToolResult {
   action?: string;
   artifactReference?: string;
   compiled?: boolean;
+  renderValidated?: boolean;
   diagnosticCount?: number;
   compiledPayload?: {
     contentHash?: string;
     sourceRevision?: string;
+    sdkVersion?: string;
+    runtimeVersion?: string;
   } | null;
   canvas?: {
     artifact?: {
       title?: string;
       status?: string;
       sourceRevision?: string;
+      latestRenderedRevision?: string;
       lastKnownGoodRevision?: string;
     };
     status?: string;
@@ -87,6 +92,14 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   const session = sessionId ? flowChatStore.getState().sessions.get(sessionId) : null;
   const source = resultData?.canvas?.source?.source;
   const canvasStatus = resultData?.canvas?.status || resultData?.canvas?.artifact?.status;
+  const [preflightStatus, setPreflightStatus] = useState<CanvasPreflightStatus>('idle');
+  const sourceRevision = resultData?.canvas?.artifact?.sourceRevision;
+  const hasRuntimeFailure = canvasStatus === 'runtime_failed' || canvasStatus === 'runtimeFailed';
+  const renderValidated = !hasRuntimeFailure && (
+    resultData?.renderValidated
+      || Boolean(sourceRevision && resultData?.canvas?.artifact?.lastKnownGoodRevision === sourceRevision)
+      || preflightStatus === 'ready'
+  );
   const isLoading =
     status === 'preparing' || status === 'streaming' || status === 'running' || status === 'pending';
   const isFailed = status === 'error' || toolResult?.success === false;
@@ -105,15 +118,13 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   const showSourcePreview =
     liveSource.length > 0 && !isFailed && (status !== 'completed' || sourceTypewriter.isRevealing);
   const sourceDisplayContent = isSourceVisuallyStreaming ? sourceTypewriter.displayText : liveSource;
-  const metaText = artifactReference
-    || (liveSource.length > 0
-      ? `Source · ${i18nService.formatNumber(liveSource.length)} chars`
-      : 'Waiting for artifact reference');
+  const metaText = liveSource.length > 0
+    ? `Source · ${i18nService.formatNumber(liveSource.length)} chars`
+    : isOpenable ? 'Canvas artifact' : 'Waiting for Canvas';
 
   const handleOpenPanel = useCallback(() => {
     if (!isOpenable) return;
 
-    const duplicateCheckKey = `bitfun-canvas-${artifactReference}`;
     log.info('Opening Canvas panel', {
       artifactReference,
       title,
@@ -130,35 +141,26 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       remoteSshHost: session?.remoteSshHost,
     });
 
-    createTab({
-      type: 'bitfun-canvas',
+    openCanvasArtifactTab({
+      artifactReference: artifactReference!,
       title,
-      data: {
-        artifactReference,
-        source,
-        status: canvasStatus,
-        diagnostics,
-        workspacePath: session?.workspacePath,
-        remoteConnectionId: session?.remoteConnectionId,
-        remoteSshHost: session?.remoteSshHost,
-        _source: {
-          type: 'tool-call',
-          toolName: toolItem.toolName,
-          sessionId,
-          toolCallId: toolCall?.id,
-          toolItemId: toolItem.id,
-        },
+      source,
+      status: canvasStatus,
+      diagnostics,
+      workspacePath: session?.workspacePath,
+      remoteConnectionId: session?.remoteConnectionId,
+      remoteSshHost: session?.remoteSshHost,
+      sourceMetadata: {
+        type: 'tool-call',
+        toolName: toolItem.toolName,
+        sessionId,
+        toolCallId: toolCall?.id,
+        toolItemId: toolItem.id,
       },
       metadata: {
-        duplicateCheckKey,
         fromTool: true,
         toolName: toolItem.toolName,
-        artifactReference,
       },
-      checkDuplicate: true,
-      duplicateCheckKey,
-      replaceExisting: true,
-      mode: 'agent',
     });
   }, [
     artifactReference,
@@ -197,7 +199,15 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
           <span data-bf-component="canvas-tool-card" data-bf-part="status" className="canvas-tool-card__status">
             {isLoading
               ? (isSourceVisuallyStreaming ? 'Writing source' : 'Rendering')
-              : resultData?.compiled ? 'Preview ready' : canvasStatus || 'Saved'}
+              : renderValidated
+                ? 'Preview ready'
+                : preflightStatus === 'failed'
+                  ? 'Runtime failed'
+                  : preflightStatus === 'timeout'
+                    ? 'Validation timed out'
+                    : resultData?.compiled
+                      ? 'Validating preview'
+                      : canvasStatus || 'Saved'}
           </span>
         </div>
       )}
@@ -240,6 +250,16 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       data-bf-part="root"
       data-bf-state={[isOpenable && 'clickable', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
     >
+      {status === 'completed' && resultData?.compiled && !renderValidated && artifactReference ? (
+        <CanvasPreflight
+          artifactReference={artifactReference}
+          title={title}
+          workspacePath={session?.workspacePath}
+          remoteConnectionId={session?.remoteConnectionId}
+          remoteSshHost={session?.remoteSshHost}
+          onStatusChange={setPreflightStatus}
+        />
+      ) : null}
       <ProminentToolCard
         status={status}
         isExpanded={!isOpenable || diagnostics.length > 0 || isFailed}

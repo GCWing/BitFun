@@ -14,6 +14,7 @@ const canvasApiMock = vi.hoisted(() => ({
   loadState: vi.fn(() => Promise.resolve({ state: null })),
   saveState: vi.fn(() => Promise.resolve({ state: null })),
   reportRuntimeError: vi.fn(() => Promise.resolve({ canvas: null })),
+  reportRuntimeReady: vi.fn(() => Promise.resolve({ canvas: null })),
 }));
 
 const systemApiMock = vi.hoisted(() => ({
@@ -107,7 +108,7 @@ describe('BitfunCanvasPanel message boundary', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Canvas HTML through document write instead of a blob URL', async () => {
+  it('renders Canvas HTML through an opaque-origin srcdoc iframe', async () => {
     await act(async () => {
       root.render(
         <BitfunCanvasPanel
@@ -123,9 +124,9 @@ describe('BitfunCanvasPanel message boundary', () => {
 
     const iframe = container.querySelector('iframe') as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
-    expect(iframe.getAttribute('src')).toBe('about:blank');
-    expect(iframe.getAttribute('srcdoc')).toBeNull();
-    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('Canvas');
+    expect(iframe.getAttribute('src')).toBeNull();
+    expect(iframe.getAttribute('srcdoc')).toContain('Canvas');
+    expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
   });
 
   it('ignores Canvas host actions from non-iframe message sources', async () => {

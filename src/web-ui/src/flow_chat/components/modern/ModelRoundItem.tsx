@@ -44,6 +44,7 @@ import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
 import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { canvasArtifactReferenceFromToolItem } from '../../utils/canvasArtifactPresentation';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -131,6 +132,7 @@ interface ModelRoundItemProps {
   turnEndedAt?: number;
   turnDurationMs?: number;
   turnTokenUsage?: TokenUsage;
+  canvasArtifactItems?: FlowToolItem[];
   expandedThinkingItemIds?: string[];
 }
 
@@ -362,6 +364,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     turnStartedAt,
     turnEndedAt,
     turnDurationMs,
+    canvasArtifactItems = [],
     expandedThinkingItemIds = [],
   }) => {
     const { t } = useTranslation('flow-chat');
@@ -456,13 +459,16 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
     const groupedItems = useMemo(() => {
+      const visibleItems = isTurnComplete
+        ? sortedItems.filter(item => !canvasArtifactReferenceFromToolItem(item))
+        : sortedItems;
       return buildModelRoundItemGroups({
-        items: sortedItems,
+        items: visibleItems,
         isStreaming: round.isStreaming,
         disableExploreGrouping: round.renderHints?.disableExploreGrouping === true,
         isCollapsibleTool,
       });
-    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
+    }, [isTurnComplete, round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
 
     const groupSummary = useMemo(
       () => renderTraceEnabled ? summarizeModelRoundItemGroups(groupedItems) : null,
@@ -742,6 +748,25 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           isFinalSection: isLastRound,
         })}
 
+        {canvasArtifactItems.length > 0 && (
+          <div
+            className="model-round-item__canvas-attachments"
+            data-bf-component="model-round-item"
+            data-bf-part="canvasAttachments"
+          >
+            {canvasArtifactItems.map((item, index) => (
+              <FlowItemRenderer
+                key={`canvas-attachment:${item.id}`}
+                item={item}
+                turnId={turnId}
+                roundId={round.id}
+                isLastItem={index === canvasArtifactItems.length - 1}
+                expandedThinkingItemIds={expandedThinkingItemIds}
+              />
+            ))}
+          </div>
+        )}
+
         {shouldReserveFooter && (
           <div
             className={`model-round-item__footer${shouldRevealFooter ? '' : ' model-round-item__footer--pending'}`}
@@ -847,7 +872,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       prev.turnStartedAt === next.turnStartedAt &&
       prev.turnEndedAt === next.turnEndedAt &&
       prev.turnDurationMs === next.turnDurationMs &&
-      prev.turnTokenUsage === next.turnTokenUsage
+      prev.turnTokenUsage === next.turnTokenUsage &&
+      prev.canvasArtifactItems === next.canvasArtifactItems
     );
   }
 );

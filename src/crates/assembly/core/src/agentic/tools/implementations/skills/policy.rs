@@ -54,6 +54,13 @@ mod tests {
             resolve_builtin_default_enabled("ppt-design", "Other"),
             Some(false)
         );
+        for mode_id in ["agentic", "Claw", "Creative", "Cowork", "DeepResearch"] {
+            assert_eq!(
+                resolve_builtin_default_enabled("bitfun-canvas", mode_id),
+                Some(false),
+                "Canvas skills must stay opt-in for mode {mode_id}"
+            );
+        }
     }
 
     #[test]

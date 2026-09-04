@@ -21,6 +21,7 @@ import type {
   CanvasTabsProps,
   CanvasTone,
 } from './types';
+import { canvasArrayProp } from './runtimeValidation';
 
 function cardAppearance(variant: CanvasCardProps['variant']): React.ComponentProps<typeof BitFunCard>['appearance'] {
   if (variant === 'borderless') return 'subtle';
@@ -140,16 +141,17 @@ export function Tabs({
   className,
   style,
 }: CanvasTabsProps) {
+  const safeItems = canvasArrayProp<NonNullable<CanvasTabsProps['items']>[number]>('Tabs', 'items', items);
   const tabsId = React.useId();
   const [internalActiveKey, setInternalActiveKey] = React.useState(
-    defaultActiveKey ?? items.find(item => !item.disabled)?.key ?? '',
+    defaultActiveKey ?? safeItems.find(item => !item.disabled)?.key ?? '',
   );
   const candidateKey = activeKey ?? internalActiveKey;
-  const selectedItem = items.find(item => item.key === candidateKey && !item.disabled)
-    ?? items.find(item => !item.disabled);
+  const selectedItem = safeItems.find(item => item.key === candidateKey && !item.disabled)
+    ?? safeItems.find(item => !item.disabled);
   const selectedKey = selectedItem?.key ?? '';
 
-  if (items.length === 0) {
+  if (safeItems.length === 0) {
     return <div className={className} style={style}>{children}</div>;
   }
 
@@ -167,7 +169,7 @@ export function Tabs({
       style={style}
     >
       <DesignTabGroup
-        items={items.map(item => ({
+        items={safeItems.map(item => ({
           disabled: item.disabled,
           id: `${tabsId}-tab-${item.key}`,
           label: item.label,

@@ -17,6 +17,7 @@ import type {
   CanvasTextInputProps,
   CanvasToggleProps,
 } from './types';
+import { canvasArrayProp } from './runtimeValidation';
 
 function controlSize(size: 'sm' | 'small' | 'md' | 'medium' | 'lg' | 'large' | undefined) {
   if (size === 'sm' || size === 'small') return 'sm';
@@ -111,7 +112,11 @@ export function Select({
   size,
   ...props
 }: CanvasSelectProps) {
-  const normalizedOptions = options.map(normalizeOption);
+  const normalizedOptions = canvasArrayProp<string | number | CanvasSelectOption>(
+    'Select',
+    'options',
+    options,
+  ).map(normalizeOption);
   const selectClassName = ['bf-select', className].filter(Boolean).join(' ');
   const normalizedDefaultValue = Array.isArray(defaultValue) ? defaultValue[0] : defaultValue;
 

@@ -1,6 +1,11 @@
 type CanvasRuntimeRecord = Record<string, any>;
 type RuntimeReact = any;
 type RuntimeReactDOM = any;
+type CanvasStateRuntimeOptions<T> = {
+  version?: number;
+  validate?: (value: unknown) => value is T;
+  migrate?: (value: unknown, fromVersion: number) => T;
+};
 type RuntimeWindow = Window & {
   React?: unknown;
   ReactDOM?: unknown;
@@ -34,8 +39,12 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     danger: 'var(--bitfun-canvas-danger)',
     info: 'var(--bitfun-canvas-info)',
   });
-  let sourceRevision = initialRevision;
+  const sourceRevision = initialRevision;
   let hostStateValues: CanvasRuntimeRecord = {};
+  let hostStateVersions: Record<string, number> = {};
+  let stateHydrated = false;
+  const stateReadyCallbacks = new Set<() => void>();
+  const rejectedStateKeys = new Set<string>();
   let designModeEnabled = false;
   let hoveredDesignElement: Element | null = null;
   const stateListeners = new Set<() => void>();
@@ -183,9 +192,70 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     }
     if (nextAppearance.type === 'dark' || nextAppearance.type === 'light') {
       document.documentElement.style.colorScheme = nextAppearance.type;
+      document.querySelectorAll('[data-bf-design-system-root]').forEach(element => {
+        element.setAttribute('data-color-scheme', nextAppearance.type);
+      });
     }
     hostAppearance = makeAppearance({ ...hostAppearance, ...nextAppearance });
     rerender();
+  }
+
+  function markStateReady(): void {
+    if (stateHydrated) return;
+    stateHydrated = true;
+    stateReadyCallbacks.forEach(callback => callback());
+    stateReadyCallbacks.clear();
+  }
+
+  function whenStateReady(callback: () => void): () => void {
+    if (stateHydrated) {
+      callback();
+      return () => {};
+    }
+    stateReadyCallbacks.add(callback);
+    return () => stateReadyCallbacks.delete(callback);
+  }
+
+  function stateValueMatchesDefault(value: unknown, defaultValue: unknown): boolean {
+    if (defaultValue === null || defaultValue === undefined) return true;
+    if (Array.isArray(defaultValue)) return Array.isArray(value);
+    if (typeof defaultValue === 'object') {
+      return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+    }
+    return typeof value === typeof defaultValue;
+  }
+
+  function stateValueForKey<T>(
+    key: string,
+    defaultValue: T,
+    options?: CanvasStateRuntimeOptions<T>,
+  ): T {
+    if (!Object.prototype.hasOwnProperty.call(hostStateValues, key)) return defaultValue;
+    let persistedValue = hostStateValues[key];
+    const targetVersion = Math.max(1, Math.floor(options?.version || 1));
+    const persistedVersion = Math.max(1, Math.floor(hostStateVersions[key] || 1));
+    if (persistedVersion !== targetVersion) {
+      if (!options?.migrate) return defaultValue;
+      try {
+        persistedValue = options.migrate(persistedValue, persistedVersion);
+        hostStateValues = { ...hostStateValues, [key]: persistedValue };
+        hostStateVersions = { ...hostStateVersions, [key]: targetVersion };
+      } catch {
+        return defaultValue;
+      }
+    }
+    if (options?.validate && !options.validate(persistedValue)) return defaultValue;
+    if (stateValueMatchesDefault(persistedValue, defaultValue)) return persistedValue as T;
+    if (!rejectedStateKeys.has(key)) {
+      rejectedStateKeys.add(key);
+      window.parent?.postMessage({
+        type: 'bitfun-canvas-state-warning',
+        sourceRevisionSeen: sourceRevision,
+        key,
+        message: `Ignored incompatible persisted Canvas state for key "${key}"`,
+      }, '*');
+    }
+    return defaultValue;
   }
 
   function useHostAppearance(): CanvasRuntimeRecord {
@@ -200,39 +270,43 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     return hostAppearance;
   }
 
-  function useCanvasState(key: string, defaultValue: unknown): [unknown, (nextValue: unknown) => void] {
-    const initialValue = Object.prototype.hasOwnProperty.call(hostStateValues, key)
-      ? hostStateValues[key]
-      : defaultValue;
+  function useCanvasState<T>(key: string, defaultValue: T, options?: CanvasStateRuntimeOptions<T>): [T, (nextValue: T | ((value: T) => T)) => void] {
+    const initialValue = stateValueForKey(key, defaultValue, options);
     const [value, setValue] = React.useState(initialValue);
     React.useEffect(() => {
       const listener = () => {
-        setValue(Object.prototype.hasOwnProperty.call(hostStateValues, key) ? hostStateValues[key] : defaultValue);
+        setValue(stateValueForKey(key, defaultValue, options));
       };
       stateListeners.add(listener);
       return () => {
         stateListeners.delete(listener);
       };
-    }, [key, defaultValue]);
+    }, [key, defaultValue, options]);
     const update = React.useCallback(
-      (nextValue: unknown) => {
+      (nextValue: T | ((value: T) => T)) => {
+        const currentValue = stateValueForKey(key, defaultValue, options);
         const resolved =
           typeof nextValue === 'function'
-            ? (nextValue as (value: unknown) => unknown)(hostStateValues[key] ?? defaultValue)
+            ? (nextValue as (value: T) => T)(currentValue)
             : nextValue;
         hostStateValues = { ...hostStateValues, [key]: resolved };
+        hostStateVersions = {
+          ...hostStateVersions,
+          [key]: Math.max(1, Math.floor(options?.version || 1)),
+        };
         setValue(resolved);
         window.parent?.postMessage(
           {
             type: 'bitfun-canvas-save-state',
             sourceRevisionSeen: sourceRevision,
             values: hostStateValues,
+            valueVersions: hostStateVersions,
             updatedAt: Date.now(),
           },
           '*',
         );
       },
-      [key, defaultValue],
+      [key, defaultValue, options],
     );
     return [value, update];
   }
@@ -260,6 +334,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   function postRuntimeError(error: any): void {
     window.parent?.postMessage({
       type: 'bitfun-canvas-runtime-error',
+      sourceRevisionSeen: sourceRevision,
       message: String(error?.message || error || 'Canvas runtime error'),
       name: error?.name ? String(error.name) : undefined,
       stack: error?.stack ? String(error.stack) : undefined,
@@ -449,9 +524,12 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     ) {
       if (data.state && typeof data.state === 'object' && data.state.values && typeof data.state.values === 'object') {
         hostStateValues = { ...data.state.values };
-        if (data.state.sourceRevisionSeen) sourceRevision = data.state.sourceRevisionSeen;
+        hostStateVersions = data.state.valueVersions && typeof data.state.valueVersions === 'object'
+          ? { ...data.state.valueVersions }
+          : {};
         stateListeners.forEach(listener => listener());
       }
+      markStateReady();
     } else if (data.type === 'bitfun-canvas-action-result' || data.type === 'bitfun-canvas-error') {
       const request = data.requestId ? pendingRequests.get(data.requestId) : null;
       if (!request) return;
@@ -477,8 +555,8 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
 
   runtimeWindow.BitfunCanvasRuntimeHooks = {
     useHostAppearance,
-    useCanvasState<T>(key: string, defaultValue: T) {
-      return useCanvasState(key, defaultValue) as [T, (value: T | ((previous: T) => T)) => void];
+    useCanvasState<T>(key: string, defaultValue: T, options?: CanvasStateRuntimeOptions<T>) {
+      return useCanvasState(key, defaultValue, options);
     },
     useCanvasAction,
     useState: React.useState,
@@ -486,6 +564,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     useEffect: React.useEffect,
     useCallback: React.useCallback,
     useMemo: React.useMemo,
+    whenStateReady,
   };
 
   runtimeWindow.BitfunCanvasSDK = {
@@ -506,4 +585,12 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       postReady();
     },
   };
+
+  const stateRequestId = `canvas-state-${++requestSeq}`;
+  window.parent?.postMessage({
+    type: 'bitfun-canvas-load-state',
+    requestId: stateRequestId,
+    sourceRevisionSeen: sourceRevision,
+  }, '*');
+  window.setTimeout(markStateReady, 400);
 }

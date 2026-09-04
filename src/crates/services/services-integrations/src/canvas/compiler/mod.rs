@@ -17,13 +17,12 @@ mod sdk_contract;
 mod tests;
 
 use bitfun_product_domains::canvas::policy::validate_canvas_source_policy;
-use bitfun_product_domains::canvas::runtime::{
-    CanvasCompileResult, BITFUN_CANVAS_RUNTIME_VERSION, BITFUN_CANVAS_SDK_VERSION,
-};
+use bitfun_product_domains::canvas::runtime::CanvasCompileResult;
 use bitfun_product_domains::canvas::types::{
     CanvasCompiledPayload, CanvasDiagnostic, CanvasDiagnosticCategory, CanvasDiagnosticSeverity,
     CanvasSource,
 };
+use bitfun_product_domains::canvas::{BITFUN_CANVAS_RUNTIME_VERSION, BITFUN_CANVAS_SDK_VERSION};
 
 pub use html::compile_canvas_html;
 use html::stable_content_hash;

@@ -61,6 +61,8 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const markdownRemoteConnectionId = activeSessionOverride?.remoteConnectionId
     || activeSessionOverride?.config?.remoteConnectionId
     || contextRemoteConnectionId;
+  const markdownRemoteSshHost = activeSessionOverride?.remoteSshHost
+    || activeSessionOverride?.config?.remoteSshHost;
   // Stable callback so the memoized Markdown component is not re-rendered
   // (and re-parsed) just because this block re-rendered.
   const handleOpenVisualization = useCallback((visualization: any) => {
@@ -151,6 +153,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       content={markdownContent}
       basePath={markdownBasePath}
       remoteConnectionId={markdownRemoteConnectionId}
+      remoteSshHost={markdownRemoteSshHost}
       // Prefer deferred visual streaming so Prism upgrade does not share a
       // frame with footer insertion / list scroll settlement.
       isStreaming={markdownStreaming}

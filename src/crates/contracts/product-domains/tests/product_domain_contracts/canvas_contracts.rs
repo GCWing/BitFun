@@ -2,7 +2,7 @@ use bitfun_product_domains::canvas::{
     parse_canvas_artifact_ref, validate_canvas_imports, validate_canvas_source_policy,
     CanvasArtifact, CanvasArtifactRef, CanvasDiagnostic, CanvasDiagnosticCategory,
     CanvasDiagnosticSeverity, CanvasId, CanvasImportPolicyDiagnosticKind, CanvasRevision,
-    CanvasScope, CanvasSessionId, CanvasSource, CanvasStatus, CanvasWorkspaceId,
+    CanvasScope, CanvasSessionId, CanvasSource, CanvasState, CanvasStatus, CanvasWorkspaceId,
     CANVAS_SOURCE_LANGUAGE_TSX,
 };
 
@@ -72,6 +72,7 @@ fn canvas_artifact_serializes_with_camel_case_fields() {
         description: Some("Generated from review notes".to_string()),
         source_revision: CanvasRevision::new("rev_1"),
         latest_compiled_revision: None,
+        latest_rendered_revision: None,
         last_known_good_revision: None,
         status: CanvasStatus::SourceSaved,
         created_at: 1_000,
@@ -84,6 +85,32 @@ fn canvas_artifact_serializes_with_camel_case_fields() {
     assert_eq!(value["sessionId"], "session_1");
     assert_eq!(value["workspaceId"], "workspace_1");
     assert!(value.get("latest_compiled_revision").is_none());
+}
+
+#[test]
+fn canvas_new_render_and_state_fields_are_backward_compatible() {
+    let artifact: CanvasArtifact = serde_json::from_value(serde_json::json!({
+        "id": "canvas_1",
+        "scope": "session",
+        "sessionId": "session_1",
+        "workspaceId": "workspace_1",
+        "title": "Legacy Canvas",
+        "sourceRevision": "rev_1",
+        "status": "compiled",
+        "createdAt": 1,
+        "updatedAt": 2
+    }))
+    .expect("legacy artifact should deserialize");
+    assert!(artifact.latest_rendered_revision.is_none());
+
+    let state: CanvasState = serde_json::from_value(serde_json::json!({
+        "canvasId": "canvas_1",
+        "values": { "filter": "all" },
+        "updatedAt": 2,
+        "schemaVersion": 1
+    }))
+    .expect("legacy state should deserialize");
+    assert!(state.value_versions.is_empty());
 }
 
 #[test]

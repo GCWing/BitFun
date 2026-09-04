@@ -7,6 +7,7 @@ import { enqueuePendingTab } from '@/shared/services/pendingTabQueue';
 import { resolveAndFocusOpenTarget } from '@/shared/services/sceneOpenTargetResolver';
 import type { OpenSource } from '@/shared/services/sceneOpenTargetResolver';
 import { TAB_EVENTS } from '@/app/components/panels/content-canvas/types';
+import { parseCanvasArtifactReference } from '@/shared/utils/canvasArtifactReference';
 export type TabTargetMode = 'agent' | 'project' | 'git';
 
 export interface TabCreationOptions {
@@ -31,6 +32,19 @@ export interface CreateReviewPlatformPullRequestDetailTabOptions {
   pullRequestId?: string;
   pullRequestUrl?: string;
   title?: string;
+}
+
+export interface OpenCanvasArtifactTabOptions {
+  artifactReference: string;
+  title?: string;
+  source?: string;
+  status?: string;
+  diagnostics?: unknown[];
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  sourceMetadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 function isRightPanelCollapsed(): boolean {
@@ -79,6 +93,40 @@ export function createTab(options: TabCreationOptions): void {
   }
 
   window.dispatchEvent(createTabEvent);
+}
+
+/** Open a persisted Canvas artifact through the same panel path as Canvas tool cards. */
+export function openCanvasArtifactTab(options: OpenCanvasArtifactTabOptions): boolean {
+  const artifactReference = options.artifactReference.trim();
+  if (!parseCanvasArtifactReference(artifactReference)) {
+    return false;
+  }
+
+  const duplicateCheckKey = `bitfun-canvas-${artifactReference}`;
+  createTab({
+    type: 'bitfun-canvas',
+    title: options.title?.trim() || 'BitFun Canvas',
+    data: {
+      artifactReference,
+      source: options.source,
+      status: options.status,
+      diagnostics: options.diagnostics,
+      workspacePath: options.workspacePath,
+      remoteConnectionId: options.remoteConnectionId,
+      remoteSshHost: options.remoteSshHost,
+      ...(options.sourceMetadata ? { _source: options.sourceMetadata } : {}),
+    },
+    metadata: {
+      duplicateCheckKey,
+      artifactReference,
+      ...options.metadata,
+    },
+    checkDuplicate: true,
+    duplicateCheckKey,
+    replaceExisting: true,
+    mode: 'agent',
+  });
+  return true;
 }
 
  
