@@ -53,6 +53,7 @@ struct StoredSubmissionMetadata {
     icon: String,
     category: String,
     tags: Vec<String>,
+    #[serde(rename = "minOpenBitFunVersion")]
     min_openbitfun_version: String,
     changelog: String,
     license: MarketLicense,

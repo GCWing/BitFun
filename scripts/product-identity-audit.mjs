@@ -20,6 +20,14 @@ const repositoryRoot = path.resolve(path.dirname(scriptPath), '..');
 const retiredProductToken = `${'bit'}${'fun'}`;
 const shortPrefix = `${'b'}${'f'}`;
 const productIdentityOwner = 'src/crates/contracts/core-types/src/product_identity.rs';
+const retiredIdentityDataBoundaryFiles = new Set([
+  'deploy/openbitfun-host/README.md',
+  'deploy/openbitfun-host/migrate-market-data-v1.py',
+  'src/apps/relay-server/README.md',
+]);
+const noncanonicalIdentityDataBoundaryFiles = new Set([
+  'deploy/openbitfun-host/migrate-market-data-v1.py',
+]);
 
 const identityRules = Object.freeze([
   Object.freeze({
@@ -27,6 +35,7 @@ const identityRules = Object.freeze([
     description: 'non-canonical OpenBitFun casing',
     pattern: /openbitfun/giu,
     isViolation: (value) => !['OpenBitFun', 'openBitFun', 'openbitfun', 'OPENBITFUN'].includes(value),
+    allowedFiles: noncanonicalIdentityDataBoundaryFiles,
   }),
   Object.freeze({
     id: 'abbreviated-openbitfun-name',
@@ -40,6 +49,7 @@ const identityRules = Object.freeze([
     allowedMatch: ({ location }) => location.file === '.gitignore'
       && location.location === 'content'
       && location.lineText?.trim() === `.${retiredProductToken}/`,
+    allowedFiles: retiredIdentityDataBoundaryFiles,
   }),
   Object.freeze({
     id: 'retired-css-token-prefix',

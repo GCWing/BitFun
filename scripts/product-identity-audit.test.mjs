@@ -104,6 +104,21 @@ test('allows only the exact legacy data-directory ignore entry', () => {
   assert.ok(violations.every((violation) => violation.rule === 'retired-product-name'));
 });
 
+test('limits retired identity data to the one-time production migration boundary', () => {
+  const retiredField = ['min', 'Bit', 'fun', 'Version'].join('');
+  assert.deepEqual(
+    violationsFor(
+      `RETIRED_VERSION_FIELDS = ("${retiredField}",)`,
+      'deploy/openbitfun-host/migrate-market-data-v1.py',
+    ),
+    [],
+  );
+  assert.equal(
+    violationsFor(`const field = "${retiredField}";`, 'src/example.ts').length,
+    1,
+  );
+});
+
 test('rejects retired short CSS, DOM, dataset, layer, and environment prefixes', () => {
   const source = [
     `--${shortPrefix}-surface: white;`,

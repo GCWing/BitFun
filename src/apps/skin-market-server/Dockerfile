@@ -7,13 +7,22 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches/ patches/
+COPY design-system/LICENSE design-system/LICENSE
+COPY design-system/tooling/token-engine/package.json design-system/tooling/token-engine/package.json
+COPY design-system/packages/design-tokens/package.json design-system/packages/design-tokens/package.json
+COPY design-system/packages/theme-openbitfun/package.json design-system/packages/theme-openbitfun/package.json
 COPY src/skin-market-web/package.json src/skin-market-web/package.json
 RUN --mount=type=cache,id=openbitfun-skin-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --ignore-scripts --filter openbitfun-skin-market-web
+    pnpm install --frozen-lockfile --ignore-scripts --filter openbitfun-skin-market-web...
 
+COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
+COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
+COPY design-system/packages/theme-openbitfun/ design-system/packages/theme-openbitfun/
 COPY src/skin-market-web/ src/skin-market-web/
 COPY src/shared/appearance-market-contract-fixtures/ src/shared/appearance-market-contract-fixtures/
-RUN pnpm --dir src/skin-market-web build
+RUN pnpm --dir design-system/packages/design-tokens build \
+    && pnpm --dir design-system/packages/theme-openbitfun build \
+    && pnpm --dir src/skin-market-web build
 
 FROM rust:1.96-bookworm AS rust-builder
 

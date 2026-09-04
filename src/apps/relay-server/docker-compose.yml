@@ -7,10 +7,14 @@ services:
         # Pass through optional parallelism limit for low-memory hosts:
         #   RELAY_CARGO_BUILD_JOBS=1 docker compose build
         CARGO_BUILD_JOBS: ${RELAY_CARGO_BUILD_JOBS:-}
+        # Production sets this to the exact checkout commit so the runtime
+        # image can be audited just like the two marketplace images.
+        RELAY_GIT_COMMIT: ${RELAY_GIT_COMMIT:-unknown}
         # China mirror switch (set by deploy.sh / OPENBITFUN_MIRROR=cn):
         OPENBITFUN_USE_CN_MIRROR: ${OPENBITFUN_USE_CN_MIRROR:-0}
         OPENBITFUN_APT_MIRROR: ${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}
         OPENBITFUN_CARGO_SPARSE_URL: ${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}
+    image: openbitfun-relay:${RELAY_GIT_COMMIT:-local}
     # Intentionally no `platform:` pin — build/run for the host CPU
     # (linux/amd64 on x86_64, linux/arm64 on aarch64).
     container_name: openbitfun-relay
