@@ -29,7 +29,9 @@ describe('Mini App card presentation', () => {
 
     expect(library).toContain('<SegmentedControl');
     expect(library).toContain('variant="pills"');
-    expect(library).toContain('buildMiniAppLibraryItems(marketItems, apps, marketOrigins)');
+    expect(library).toContain(
+      'buildMiniAppLibraryItems(marketItems, apps, marketOrigins, sort)',
+    );
     expect(library).toContain('<MiniAppLibraryRow');
     expect(library).not.toContain('<MiniAppCard');
     expect(tabs).toContain('distribution="fill"');
@@ -84,6 +86,7 @@ describe('Mini App card presentation', () => {
     const sceneStyles = readRelative('../MiniAppGalleryScene.scss');
 
     expect(source).toContain('className="miniapp-gallery__list" role="list"');
+    expect(source.match(/cardHeight=\{126\}/g)).toHaveLength(2);
     expect(stylesheet).toMatch(/&__list \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
     expect(stylesheet).toMatch(
       /&__list\.gallery-grid--skeleton \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
@@ -122,8 +125,8 @@ describe('Mini App card presentation', () => {
     const actionsStart = row.indexOf('className="miniapp-library-row__actions"');
     const actions = row.slice(actionsStart);
 
-    expect(titleRow.indexOf('miniapp-library-row__category')).toBeLessThan(
-      titleRow.indexOf('miniapp-library-row__name'),
+    expect(titleRow.indexOf('miniapp-library-row__name')).toBeLessThan(
+      titleRow.indexOf('miniapp-library-row__category'),
     );
     expect(actions.indexOf('miniapp-library-row__status-rail')).toBeLessThan(
       actions.indexOf('<Button'),
@@ -134,12 +137,26 @@ describe('Mini App card presentation', () => {
     expect(row).toContain('<Download size={13}');
     expect(row).toContain('<HardDrive size={13}');
     expect(stylesheet).toMatch(
-      /&__summary \{[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\) var\(--bf-type-meta-line-height\);[\s\S]*?block-size: 140px;[\s\S]*?padding: var\(--bf-space-3\) var\(--bf-space-4\);/,
+      /&__summary \{[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\) var\(--bf-type-meta-line-height\);[\s\S]*?block-size: 126px;[\s\S]*?padding: var\(--bf-space-3\) var\(--bf-space-4\);/,
     );
     expect(stylesheet).toMatch(
       /&__meta \{[\s\S]*?align-self: end;[\s\S]*?block-size: var\(--bf-type-meta-line-height\);/,
     );
     expect(stylesheet).not.toContain("content: '·';");
+  });
+
+  it('keeps local-only and installed status tags mutually exclusive', () => {
+    const source = readRelative('../views/MiniAppLibraryView.tsx');
+    const statusesStart = source.indexOf('function libraryStatuses(');
+    const statusesEnd = source.indexOf('\nfunction requiresWorkspace', statusesStart);
+    const statusPolicy = source.slice(statusesStart, statusesEnd);
+
+    expect(statusPolicy).toContain(
+      'const isLocalOnly = Boolean(item.app && !item.listing && !item.origin);',
+    );
+    expect(statusPolicy).toMatch(
+      /else if \(isLocalOnly\) \{[\s\S]*?market\.library\.local[\s\S]*?\} else if \(item\.app\) \{[\s\S]*?market\.library\.installed/,
+    );
   });
 
   it('crops marketplace images into one fixed showcase slot with a neutral fallback', () => {

@@ -130,10 +130,10 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
             data-bf-component="miniapp-gallery-view"
             data-bf-part="title"
           >
+            <strong className="miniapp-library-row__name">{name}</strong>
             <StatusPill className="miniapp-library-row__category" tone="neutral">
               {category}
             </StatusPill>
-            <strong className="miniapp-library-row__name">{name}</strong>
           </span>
           <span className="miniapp-library-row__description">{description}</span>
           <span

@@ -50,7 +50,7 @@
 
     .gallery-skeleton-card {
       width: 100%;
-      min-height: 140px;
+      min-height: 126px;
       border-radius: var(--bf-radius-xl);
     }
   }
@@ -153,7 +153,7 @@
     grid-template-rows: auto minmax(0, 1fr) var(--bf-type-meta-line-height);
     gap: var(--bf-space-1);
     min-width: 0;
-    block-size: 140px;
+    block-size: 126px;
     box-sizing: border-box;
     padding: var(--bf-space-3) var(--bf-space-4);
   }

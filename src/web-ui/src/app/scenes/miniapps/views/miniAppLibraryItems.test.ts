@@ -7,7 +7,7 @@ import type {
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { buildMiniAppLibraryItems } from './miniAppLibraryItems';
 
-function app(id: string, name = id): MiniAppMeta {
+function app(id: string, name = id, createdAt = 1): MiniAppMeta {
   return {
     id,
     name,
@@ -16,7 +16,7 @@ function app(id: string, name = id): MiniAppMeta {
     category: 'utilities',
     tags: [],
     version: 1,
-    created_at: 1,
+    created_at: createdAt,
     updated_at: 1,
     permissions: {},
   };
@@ -109,6 +109,39 @@ describe('buildMiniAppLibraryItems', () => {
     expect(result.map((item) => item.action)).toEqual(['update', 'open', 'get']);
   });
 
+  it('sorts local apps by import time with zero downloads and a default rating of three', () => {
+    const localOnly = app('local-only', 'Local only', 1_720_000_002_000);
+    const market = listing('market-app', 1);
+    market.publishedAt = 1_720_000_001;
+    market.downloadCount = 8;
+    market.ratingAverage = 2.5;
+    market.ratingCount = 4;
+
+    const newest = buildMiniAppLibraryItems([market], [localOnly], {}, 'newest');
+    expect(newest.map((item) => item.key)).toEqual([
+      'local:local-only',
+      'market:market-app',
+    ]);
+    expect(newest[0]).toMatchObject({
+      downloadCount: 0,
+      ratingAverage: 3,
+      ratingCount: 0,
+      sortPublishedAtMs: localOnly.created_at,
+    });
+
+    const downloads = buildMiniAppLibraryItems([market], [localOnly], {}, 'downloads');
+    expect(downloads.map((item) => item.key)).toEqual([
+      'market:market-app',
+      'local:local-only',
+    ]);
+
+    const rating = buildMiniAppLibraryItems([market], [localOnly], {}, 'rating');
+    expect(rating.map((item) => item.key)).toEqual([
+      'local:local-only',
+      'market:market-app',
+    ]);
+  });
+
   it('keeps off-page installs and ignores duplicate marketplace rows', () => {
     const installed = app('off-page-install');
     const duplicate = listing('duplicate', 2);
@@ -120,10 +153,10 @@ describe('buildMiniAppLibraryItems', () => {
     );
 
     expect(result.map((item) => item.key)).toEqual([
-      'local:off-page-install',
       'market:duplicate',
+      'local:off-page-install',
     ]);
-    expect(result[0]).toMatchObject({
+    expect(result[1]).toMatchObject({
       action: 'open',
       app: { id: installed.id },
       origin: installedOrigin,
