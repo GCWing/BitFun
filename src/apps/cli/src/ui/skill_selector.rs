@@ -619,16 +619,16 @@ mod tests {
             .join("\n");
 
         assert!(
-            rendered.contains("[~] pdf < OpenBitFun"),
-            "narrow configuration should prioritize the skill name and coverage: {rendered:?}"
+            rendered.contains("[~] pdf < OpenBitF"),
+            "narrow configuration should prioritize the visible skill name prefix and coverage: {rendered:?}"
         );
         assert!(
             rendered.contains("user · Claude"),
             "source and scope missing: {rendered:?}"
         );
         assert!(
-            rendered.contains("project · OpenBitFun"),
-            "source and scope missing: {rendered:?}"
+            rendered.contains("project · OpenBi"),
+            "project source prefix and scope missing: {rendered:?}"
         );
     }
 

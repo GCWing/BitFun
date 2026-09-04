@@ -191,36 +191,31 @@ impl CliTestEnvironment {
         std::fs::create_dir_all(&config_dir).expect("create model config directory");
         let base_url = format!("{}/v1", server_base_url.trim_end_matches('/'));
         let request_url = format!("{base_url}/chat/completions");
-        let config = json!({
-            "app": {
-                "ai_experience": {
-                    "enable_session_title_generation": false
-                }
-            },
-            "ai": {
-                "models": [{
-                    "id": "cli-e2e-model",
-                    "name": "CLI E2E Model",
-                    "provider": "openai",
-                    "model_name": "cli-e2e-model",
-                    "base_url": base_url,
-                    "request_url": request_url,
-                    "api_key": "cli-e2e-key",
-                    "enabled": true,
-                    "category": "general_chat",
-                    "capabilities": capabilities
-                }],
-                "default_models": {
-                    "primary": "cli-e2e-model"
-                },
-                "agent_model_defaults": {
-                    "mode": "cli-e2e-model"
-                },
-                "max_rounds": 1,
-                "stream_idle_timeout_secs": 10,
-                "stream_ttft_timeout_secs": 10
-            }
+        let mut config =
+            serde_json::to_value(openbitfun_core::service::config::GlobalConfig::default())
+                .expect("serialize default CLI config");
+        config["app"]["ai_experience"]["enable_session_title_generation"] = json!(false);
+        config["ai"]["models"] = json!([{
+            "id": "cli-e2e-model",
+            "name": "CLI E2E Model",
+            "provider": "openai",
+            "model_name": "cli-e2e-model",
+            "base_url": base_url,
+            "request_url": request_url,
+            "api_key": "cli-e2e-key",
+            "enabled": true,
+            "category": "general_chat",
+            "capabilities": capabilities
+        }]);
+        config["ai"]["default_models"] = json!({
+            "primary": "cli-e2e-model"
         });
+        config["ai"]["agent_model_defaults"] = json!({
+            "mode": "cli-e2e-model"
+        });
+        config["ai"]["max_rounds"] = json!(1);
+        config["ai"]["stream_idle_timeout_secs"] = json!(10);
+        config["ai"]["stream_ttft_timeout_secs"] = json!(10);
         std::fs::write(
             config_dir.join("app.json"),
             serde_json::to_vec_pretty(&config).expect("serialize model config"),

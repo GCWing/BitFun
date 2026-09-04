@@ -2081,16 +2081,51 @@ fn overlapping_contexts(left: &ResolvedBinding, right: &ResolvedBinding) -> Vec<
 }
 
 fn wrap_help_notice(value: &str, max_chars: usize) -> Vec<String> {
+    let max_chars = max_chars.max(1);
+
     value
         .lines()
-        .flat_map(|line| {
-            let chars = line.chars().collect::<Vec<_>>();
-            chars
-                .chunks(max_chars.max(1))
-                .map(|chunk| chunk.iter().collect::<String>())
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|line| wrap_help_notice_line(line, max_chars))
         .collect()
+}
+
+fn wrap_help_notice_line(line: &str, max_chars: usize) -> Vec<String> {
+    if line.is_empty() {
+        return vec![String::new()];
+    }
+
+    let mut wrapped = Vec::new();
+    let mut current = String::new();
+
+    for word in line.split_whitespace() {
+        if !current.is_empty() && current.chars().count() + 1 + word.chars().count() <= max_chars {
+            current.push(' ');
+            current.push_str(word);
+            continue;
+        }
+
+        if !current.is_empty() {
+            wrapped.push(std::mem::take(&mut current));
+        }
+
+        let mut remaining = word;
+        while remaining.chars().count() > max_chars {
+            let chunk = remaining.chars().take(max_chars).collect::<String>();
+            wrapped.push(chunk);
+            remaining = &remaining[remaining
+                .char_indices()
+                .nth(max_chars)
+                .map(|(index, _)| index)
+                .expect("remaining is longer than max_chars")..];
+        }
+        current.push_str(remaining);
+    }
+
+    if !current.is_empty() {
+        wrapped.push(current);
+    }
+
+    wrapped
 }
 
 fn binding_error_summary(error: &str) -> &str {
@@ -3093,7 +3128,8 @@ mod tests {
 
         assert!(help.contains("Invalid shortcuts.send_message"), "{help}");
         assert!(help.contains("unsupported key"), "{help}");
-        assert!(help.contains("using OpenBitFun default"), "{help}");
+        assert!(help.contains("using OpenBitFun"), "{help}");
+        assert!(help.lines().any(|line| line.trim() == "default"), "{help}");
         assert!(!help.contains("more shortcut notices"), "{help}");
         assert!(help.lines().count() <= 19, "{help}");
         assert!(help.lines().all(|line| line.chars().count() <= 74));

@@ -16,7 +16,7 @@ import {
 } from './appearancePayload';
 
 const CANONICAL_THEME_VARIABLE_NAMES = Object.values(themeCssVariables);
-const CANONICAL_THEME_VARIABLE_NAMES_HASH = '9d7c655abec7171f4ab73e8feb34b14d74849e386657ac5a2f5b85ed60b729fe';
+const CANONICAL_THEME_VARIABLE_NAMES_HASH = '0c1109009e2a88adbade099e551aacecc2d18a4f6dbcf8436f0de80999c90d5d';
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',

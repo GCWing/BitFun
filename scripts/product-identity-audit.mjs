@@ -3,9 +3,11 @@
 /**
  * Prevent the retired product identity from returning to production sources.
  *
- * The normal product is OpenBitFun-only. A future one-time importer may add a
- * deliberately narrow allowlist for its source adapters and fixtures; until
- * that importer exists, this audit has no legacy exceptions.
+ * The normal product is OpenBitFun-only. The only legacy exception is the
+ * exact legacy data-directory ignore entry for machine-local data retained
+ * across upgrades.
+ * A future one-time importer may add another deliberately narrow allowlist for
+ * its source adapters and fixtures.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -35,6 +37,9 @@ const identityRules = Object.freeze([
     id: 'retired-product-name',
     description: 'retired product name',
     pattern: new RegExp(`(?<!open)${retiredProductToken}`, 'giu'),
+    allowedMatch: ({ location }) => location.file === '.gitignore'
+      && location.location === 'content'
+      && location.lineText?.trim() === `.${retiredProductToken}/`,
   }),
   Object.freeze({
     id: 'retired-css-token-prefix',
@@ -201,6 +206,9 @@ function collectMatches(value, location) {
   for (const rule of identityRules) {
     const pattern = new RegExp(rule.pattern.source, rule.pattern.flags);
     for (const match of value.matchAll(pattern)) {
+      if (rule.allowedMatch?.({ match: match[0], location })) {
+        continue;
+      }
       if (rule.allowedFiles?.has(location.file)) {
         continue;
       }
@@ -242,6 +250,7 @@ export function auditFile({ file, content }) {
       file: normalized,
       location: 'content',
       line: index + 1,
+      lineText: line,
     }));
   }
 
