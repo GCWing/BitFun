@@ -2686,7 +2686,11 @@ function eventMessage(event) {
     cancelled: 'toolCancelled',
   }[activity];
   if (key) {
-    return text(key, { tool: toolLabel(event.toolName || event.details.toolName) });
+    const label = text(key, { tool: toolLabel(event.toolName || event.details.toolName) });
+    // Completed/failed projections carry a redacted input summary (command,
+    // file path, pattern) — show it so tool rows identify what they did.
+    const summary = event.details && event.details.summary;
+    return summary ? `${label} · ${summary}` : label;
   }
   return event.message || event.kind || 'event';
 }
