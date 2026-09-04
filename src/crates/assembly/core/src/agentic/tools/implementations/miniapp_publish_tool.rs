@@ -73,6 +73,8 @@ Identify the app by `app_name` — the display name the user used (e.g. "循天�
 
 Listing metadata (name, description, icon, category, tags) is derived from the app's manifest; the marketplace slug and release number are derived automatically from the user's submission history. Provide 1-5 `listing_image_paths` (PNG/JPEG/WebP, each <= 5 MiB) for the marketplace gallery. A 16:9 composition is recommended; the first image becomes the listing-card cover. Keep key content clear and away from the edges because marketplace surfaces crop images to 16:9. If no image path is available, ask the user to provide one or have them use 市场 → 我的投稿 → 截取当前画面.
 
+Marketplace administrators may submit a new release for an existing listing even when another user published it originally. The listing keeps its original creator attribution.
+
 If the user is not signed in to the market, the tool returns a GitHub authorization link. Show the link to the user, wait for them to authorize in the browser, then call this tool again with the same arguments.
 
 Publishing is an outward-facing action: only call this when the user explicitly asks to publish/submit the app to the market."#
@@ -323,7 +325,22 @@ Publishing is an outward-facing action: only call this when the user explicitly 
             .list_submissions()
             .await
             .map_err(|e| BitFunError::tool(format!("Could not load submission history: {e}")))?;
-        let (listing_id, release_number) = match resolve_release_target(&submissions, &slug) {
+        let release_target = match resolve_release_target(&submissions, &slug) {
+            ReleaseTarget::NewListing if me.is_admin => match client.listing(&slug).await {
+                Ok(listing) => ReleaseTarget::ExistingListing {
+                    listing_id: listing.summary.listing_id,
+                    next_release: listing.summary.latest_release + 1,
+                },
+                Err(error) if error.code == "not_found" => ReleaseTarget::NewListing,
+                Err(error) => {
+                    return Err(BitFunError::tool(format!(
+                        "Could not resolve the administrator release target for '{slug}': {error}"
+                    )))
+                }
+            },
+            target => target,
+        };
+        let (listing_id, release_number) = match release_target {
             ReleaseTarget::NewListing => (None, 1),
             ReleaseTarget::ExistingListing {
                 listing_id,

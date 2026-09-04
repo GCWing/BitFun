@@ -44,6 +44,8 @@
 - 投稿状态保持 `draft → submitted → approved | rejected | withdrawn`；批准的
   release 可被永久 yank。
 - Release 不可变，新版本审核期间继续提供旧的已批准版本。
+- 新 release 可由 listing 原始发布者或当前管理员提交；listing 的
+  `owner_user_id` 始终保留首次发布者，不随管理员代发更新而变化。
 - 批准必须原子绑定 package hash、市场展示图 hash、规范化 metadata 和
   `review_bundle_hash`。
 - 市场展示图 URL 无 query 时保持规范化原图兼容；只允许 `compact-v1`（最大边 640px）

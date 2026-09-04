@@ -1557,9 +1557,13 @@ async fn approve_submission(
         .await
         .map_err(MarketError::internal)?;
     let submission = sqlx::query(
-        "SELECT listing_id, owner_user_id, slug, release_number, metadata_json,
-                package_sha256, package_size
-         FROM submissions WHERE id = ? AND status = 'submitted'",
+        "SELECT s.listing_id AS listing_id, s.owner_user_id AS owner_user_id,
+                s.slug AS slug, s.release_number AS release_number,
+                s.metadata_json AS metadata_json, s.package_sha256 AS package_sha256,
+                s.package_size AS package_size, u.github_id AS submitter_github_id
+         FROM submissions s
+         JOIN users u ON u.id = s.owner_user_id
+         WHERE s.id = ? AND s.status = 'submitted'",
     )
     .bind(submission_id)
     .fetch_optional(&mut *transaction)
@@ -1572,6 +1576,10 @@ async fn approve_submission(
         )
     })?;
     let owner_user_id: i64 = submission.get("owner_user_id");
+    let submitter_is_admin = state
+        .config
+        .admin_github_ids
+        .contains(&submission.get::<i64, _>("submitter_github_id"));
     let slug: String = submission.get("slug");
     let release_number: i64 = submission.get("release_number");
     let metadata_json: String = submission.get("metadata_json");
@@ -1599,7 +1607,7 @@ async fn approve_submission(
         .await
         .map_err(MarketError::internal)?
         .ok_or_else(|| MarketError::not_found("The target listing no longer exists."))?;
-        if listing.get::<i64, _>("owner_user_id") != owner_user_id
+        if (listing.get::<i64, _>("owner_user_id") != owner_user_id && !submitter_is_admin)
             || listing.get::<String, _>("slug") != slug
             || release_number != listing.get::<i64, _>("latest") + 1
         {
@@ -1785,9 +1793,9 @@ async fn validate_listing_ownership_and_release(
         .await
         .map_err(MarketError::internal)?
         .ok_or_else(|| MarketError::not_found("Listing was not found."))?;
-        if row.get::<i64, _>("owner_user_id") != user.internal_id {
+        if row.get::<i64, _>("owner_user_id") != user.internal_id && !state.auth.is_admin(user) {
             return Err(MarketError::forbidden(
-                "Only the listing owner may publish a new release.",
+                "Only the listing owner or an administrator may publish a new release.",
             ));
         }
         if row.get::<String, _>("slug") != slug {
@@ -2456,6 +2464,181 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(audit_count, 2);
+    }
+
+    #[tokio::test]
+    async fn administrator_can_publish_update_without_reassigning_listing_owner() {
+        let temporary = tempfile::tempdir().unwrap();
+        let config = MarketConfig {
+            bind: "127.0.0.1:0".parse().unwrap(),
+            public_base_url: "https://market.openbitfun.com/miniapp".to_string(),
+            database_path: temporary.path().join("market.sqlite"),
+            artifact_dir: temporary.path().join("artifacts"),
+            web_dir: temporary.path().join("web"),
+            github_client_id: Some("client-id".to_string()),
+            github_client_secret: Some("client-secret".to_string()),
+            session_secret: "test-session-secret-at-least-24".to_string(),
+            admin_github_ids: HashSet::from([24753352]),
+            public_browse: true,
+            web_submissions_enabled: false,
+        };
+        let db = Database::open(&config.database_path).await.unwrap();
+        let artifacts = ArtifactStore::open(config.artifact_dir.clone())
+            .await
+            .unwrap();
+        let auth = AuthService::new(config.clone(), db.clone()).unwrap();
+        let state = Arc::new(MarketState {
+            config,
+            db: db.clone(),
+            artifacts,
+            auth,
+        });
+        let original_owner = db
+            .upsert_github_user(1001, "original-owner", "https://example.com/owner.png")
+            .await
+            .unwrap();
+        let administrator = db
+            .upsert_github_user(24753352, "administrator", "https://example.com/admin.png")
+            .await
+            .unwrap();
+        let unrelated_user = db
+            .upsert_github_user(1002, "unrelated-user", "https://example.com/user.png")
+            .await
+            .unwrap();
+        let metadata = StoredSubmissionMetadata {
+            name: "Owner Preserving App".to_string(),
+            description: "Verifies delegated release publishing.".to_string(),
+            icon: "box".to_string(),
+            category: "utilities".to_string(),
+            tags: vec!["ownership".to_string()],
+            min_bitfun_version: "0.2.19".to_string(),
+            changelog: "Initial release.".to_string(),
+            license: MarketLicense {
+                spdx_expression: Some("MIT".to_string()),
+                custom_url: None,
+            },
+            repository_url: None,
+            permissions: MiniAppPermissions::default(),
+            i18n: None,
+        };
+        let now = Utc::now().timestamp();
+        let initial_submission_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO submissions(
+                id, owner_user_id, slug, release_number, metadata_json, status,
+                package_sha256, package_size, submitted_at, created_at, updated_at
+             ) VALUES(?, ?, ?, 1, ?, 'submitted', ?, 128, ?, ?, ?)",
+        )
+        .bind(&initial_submission_id)
+        .bind(original_owner.internal_id)
+        .bind("owner-preserving-app")
+        .bind(canonical_metadata_json(&metadata).unwrap())
+        .bind("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO screenshots(
+                id, submission_id, position, sha256, media_type, size_bytes,
+                width, height, created_at
+             ) VALUES(?, ?, 0, ?, 'image/webp', 64, 1600, 900, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&initial_submission_id)
+        .bind("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        .bind(now)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        approve_submission(state.as_ref(), &administrator, &initial_submission_id)
+            .await
+            .unwrap();
+
+        let initial_detail = listing_detail_by_slug(state.as_ref(), "owner-preserving-app", -1)
+            .await
+            .unwrap();
+        let listing_id = initial_detail.summary.listing_id.clone();
+        assert_eq!(initial_detail.summary.owner.login, "original-owner");
+        assert_eq!(
+            validate_listing_ownership_and_release(
+                state.as_ref(),
+                &administrator,
+                Some(&listing_id),
+                "owner-preserving-app",
+                2,
+            )
+            .await
+            .unwrap(),
+            Some(listing_id.clone()),
+        );
+        assert_eq!(
+            validate_listing_ownership_and_release(
+                state.as_ref(),
+                &unrelated_user,
+                Some(&listing_id),
+                "owner-preserving-app",
+                2,
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::FORBIDDEN,
+        );
+
+        let update_submission_id = Uuid::new_v4().to_string();
+        let mut update_metadata = metadata;
+        update_metadata.changelog = "Administrator-published artwork refresh.".to_string();
+        sqlx::query(
+            "INSERT INTO submissions(
+                id, listing_id, owner_user_id, slug, release_number, metadata_json, status,
+                package_sha256, package_size, submitted_at, created_at, updated_at
+             ) VALUES(?, ?, ?, ?, 2, ?, 'submitted', ?, 128, ?, ?, ?)",
+        )
+        .bind(&update_submission_id)
+        .bind(&listing_id)
+        .bind(administrator.internal_id)
+        .bind("owner-preserving-app")
+        .bind(canonical_metadata_json(&update_metadata).unwrap())
+        .bind("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+        .bind(now + 1)
+        .bind(now + 1)
+        .bind(now + 1)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO screenshots(
+                id, submission_id, position, sha256, media_type, size_bytes,
+                width, height, created_at
+             ) VALUES(?, ?, 0, ?, 'image/webp', 64, 1600, 900, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&update_submission_id)
+        .bind("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+        .bind(now + 1)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        approve_submission(state.as_ref(), &administrator, &update_submission_id)
+            .await
+            .unwrap();
+
+        let updated_detail = listing_detail_by_slug(state.as_ref(), "owner-preserving-app", -1)
+            .await
+            .unwrap();
+        assert_eq!(updated_detail.summary.latest_release, 2);
+        assert_eq!(updated_detail.summary.owner.login, "original-owner");
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT owner_user_id FROM listings WHERE id = ?")
+                .bind(&listing_id)
+                .fetch_one(db.pool())
+                .await
+                .unwrap(),
+            original_owner.internal_id,
+        );
     }
 
     #[test]

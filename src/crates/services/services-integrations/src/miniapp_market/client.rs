@@ -4,7 +4,8 @@ use super::credentials::{
 };
 use bitfun_product_domains::miniapp::market::{
     CursorPage, MarketListingDetail, MarketListingSummary, MarketSort, MarketSubmission,
-    MarketSubmissionDraftRequest, MarketUserSummary, MARKET_PACKAGE_CONTENT_TYPE,
+    MarketSubmissionDraftRequest, MarketUserSummary, ReviewDecisionRequest,
+    MARKET_PACKAGE_CONTENT_TYPE,
 };
 use reqwest::{Method, RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -383,6 +384,20 @@ impl MarketClient {
             ))))
             .await?;
         self.json(request).await
+    }
+
+    pub async fn review_submission(
+        &mut self,
+        submission_id: &str,
+        decision: &ReviewDecisionRequest,
+    ) -> Result<MarketSubmission, MarketClientError> {
+        let request = self
+            .authorized(self.client.post(self.url(&format!(
+                "/admin/submissions/{}/decision",
+                urlencoding::encode(submission_id)
+            ))))
+            .await?;
+        self.json(request.json(decision)).await
     }
 
     pub async fn logout(&mut self) -> Result<(), MarketClientError> {

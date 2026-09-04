@@ -75,6 +75,7 @@ import { useMiniAppActivity } from '../hooks/useMiniAppActivity';
 import { getMiniAppSceneId, stopMiniAppActivity } from '../miniAppActivity';
 import { useMiniAppStore } from '../miniAppStore';
 import { loadInstalledMarketOrigins } from '../utils/loadInstalledMarketOrigins';
+import { getMiniAppShowcaseAsset } from '../utils/miniAppIcons';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { buildMiniAppLibraryItems, type MiniAppLibraryItem } from './miniAppLibraryItems';
 import { buildReleaseHistory } from './miniAppReleaseHistory';
@@ -273,8 +274,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
   });
 
   const projectedItems = useMemo(
-    () => buildMiniAppLibraryItems(marketItems, apps, marketOrigins),
-    [apps, marketItems, marketOrigins],
+    () => buildMiniAppLibraryItems(marketItems, apps, marketOrigins, sort),
+    [apps, marketItems, marketOrigins, sort],
   );
   const libraryItems = useMemo(
     () => projectedItems.filter((item) => matchesLibraryFilter(
@@ -626,7 +627,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
       return (
         <GallerySkeleton
           count={5}
-          cardHeight={140}
+          cardHeight={126}
           minCardWidth={640}
           className="miniapp-gallery__list"
         />
@@ -676,7 +677,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 && busyListingId
                 && busyListingId !== item.listing.listingId,
             );
-            const meta = item.listing
+            const metaLabel = item.listing
               ? t('market.library.marketMeta', {
                 owner: item.listing.owner.login,
                 rating: item.listing.ratingAverage.toFixed(1),
@@ -701,11 +702,18 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 category={categoryLabel(sourceCategory, t)}
                 description={description}
                 detailsLabel={t('market.library.viewDetails', { name })}
-                meta={meta}
+                downloadCount={item.listing
+                  ? formatNumber(item.downloadCount)
+                  : undefined}
+                localMeta={item.listing ? undefined : t('market.library.localMeta')}
+                metaLabel={metaLabel}
                 name={name}
+                owner={item.listing?.owner.login}
+                rating={item.listing ? item.ratingAverage.toFixed(1) : undefined}
                 showcaseAlt={t('market.library.showcaseAlt', { name })}
                 showcaseFallbackLabel={t('market.library.showcaseFallback', { name })}
-                showcaseUrl={item.listing?.screenshotUrls[0]}
+                showcaseUrl={item.listing?.screenshotUrls[0]
+                  ?? (item.app ? getMiniAppShowcaseAsset(item.app.id) : undefined)}
                 statuses={statuses}
                 version={t('market.library.version', { version: release })}
                 onOpenDetails={() => {
@@ -726,7 +734,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         {catalogLoading && marketItems.length === 0 ? (
           <GallerySkeleton
             count={2}
-            cardHeight={140}
+            cardHeight={126}
             minCardWidth={640}
             className="miniapp-gallery__list miniapp-gallery__list--continuation"
           />
@@ -758,13 +766,6 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         subtitle={t('subtitle')}
         actions={(
           <div className="miniapp-gallery__header-actions">
-            <SearchField
-              leadingIcon={<Icon name="search" size="lg" aria-hidden />}
-              onValueChange={setQuery}
-              placeholder={t('searchPlaceholder')}
-              size="sm"
-              value={query}
-            />
             <MarketAccountControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
@@ -841,7 +842,23 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
       >
         <GalleryZone
           title={t('allApps')}
-          titleAdornment={<NumberBadge value={libraryItems.length} />}
+          titleAdornment={(
+            <span
+              className="miniapp-gallery__heading-actions"
+              data-bf-component="miniapp-gallery-view"
+              data-bf-part="tools"
+            >
+              <NumberBadge value={libraryItems.length} />
+              <SearchField
+                className="miniapp-gallery__search"
+                leadingIcon={<Icon name="search" size="lg" aria-hidden />}
+                onValueChange={setQuery}
+                placeholder={t('searchPlaceholder')}
+                size="sm"
+                value={query}
+              />
+            </span>
+          )}
           tools={(
             <Select
               className="miniapp-gallery__sort"
@@ -1200,8 +1217,12 @@ function libraryStatuses(
   t: Translate,
 ): MiniAppLibraryStatus[] {
   const statuses: MiniAppLibraryStatus[] = [];
+  const isLocalOnly = Boolean(item.app && !item.listing && !item.origin);
+
   if (item.action === 'update') {
     statuses.push({ label: t('market.library.updateAvailable'), tone: 'warning' });
+  } else if (isLocalOnly) {
+    statuses.push({ label: t('market.library.local'), tone: 'neutral' });
   } else if (item.app) {
     statuses.push({ label: t('market.library.installed'), tone: 'success' });
   }
@@ -1210,8 +1231,6 @@ function libraryStatuses(
     statuses.push({ label: t('running'), tone: 'info' });
   } else if (item.app && customizingIdSet.has(item.app.id)) {
     statuses.push({ label: t('market.library.customizing'), tone: 'accent' });
-  } else if (!item.listing && !item.origin && item.app) {
-    statuses.push({ label: t('market.library.local'), tone: 'neutral' });
   }
   return statuses;
 }

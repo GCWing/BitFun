@@ -5,6 +5,11 @@ import dailyDivinationIcon from '@/assets/miniapps/catalog/daily-divination.png'
 import gomokuIcon from '@/assets/miniapps/catalog/gomoku.png';
 import pptLiveIcon from '@/assets/miniapps/catalog/ppt-live.png';
 import regexPlaygroundIcon from '@/assets/miniapps/catalog/regex-playground.png';
+import codingFootprintShowcase from '@/assets/miniapps/showcases/coding-footprint.webp';
+import dailyDivinationShowcase from '@/assets/miniapps/showcases/daily-divination.webp';
+import gomokuShowcase from '@/assets/miniapps/showcases/gomoku.webp';
+import pptLiveShowcase from '@/assets/miniapps/showcases/ppt-live.webp';
+import regexPlaygroundShowcase from '@/assets/miniapps/showcases/regex-playground.webp';
 import {
   Aperture,
   Box,
@@ -74,8 +79,20 @@ const BUILTIN_MINI_APP_ICON_ASSETS: Readonly<Record<string, string>> = {
   'builtin-regex-playground': regexPlaygroundIcon,
 };
 
+const BUILTIN_MINI_APP_SHOWCASE_ASSETS: Readonly<Record<string, string>> = {
+  'builtin-coding-selfie': codingFootprintShowcase,
+  'builtin-daily-divination': dailyDivinationShowcase,
+  'builtin-gomoku': gomokuShowcase,
+  'builtin-ppt-live': pptLiveShowcase,
+  'builtin-regex-playground': regexPlaygroundShowcase,
+};
+
 export function getMiniAppIconAsset(id: string): string | undefined {
   return BUILTIN_MINI_APP_ICON_ASSETS[id];
+}
+
+export function getMiniAppShowcaseAsset(id: string): string | undefined {
+  return BUILTIN_MINI_APP_SHOWCASE_ASSETS[id];
 }
 
 export function renderMiniAppIcon(name: string, size = 28): React.ReactNode {
