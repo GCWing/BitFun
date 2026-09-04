@@ -134,15 +134,31 @@ describe('dispatch wire contract single source', () => {
   });
 
   it('requires the compiled product and data identities on every target probe', () => {
+    const productIdentity = read(
+      '../../../../../src/crates/contracts/core-types/src/product_identity.rs',
+    );
+    const targetDispatch = read('../../../../../src/apps/cli/src/dispatch/mod.rs');
     const targetProtocol = read('../../../../../src/apps/cli/src/dispatch/protocol.rs');
     const transportValidator = read(
       '../../../../../src/crates/services/services-integrations/src/remote_ssh/dispatch_ssh.rs',
     );
 
-    expect(contractSource).toContain('pub fn dispatch_product_id()');
-    expect(contractSource).toContain('pub fn dispatch_data_namespace()');
+    expect(productIdentity).toContain('pub const fn product_id()');
+    expect(productIdentity).toContain('pub const fn data_namespace()');
+    expect(targetDispatch).toContain(
+      'openbitfun_services_core::product_identity::product_id()',
+    );
+    expect(targetDispatch).toContain(
+      'openbitfun_services_core::product_identity::data_namespace()',
+    );
     expect(targetProtocol).toContain('pub(crate) product_id: String');
     expect(targetProtocol).toContain('pub(crate) data_namespace: String');
+    expect(transportValidator).toContain(
+      'openbitfun_services_core::product_identity::product_id()',
+    );
+    expect(transportValidator).toContain(
+      'openbitfun_services_core::product_identity::data_namespace()',
+    );
     expect(transportValidator).toContain('.get("productId")');
     expect(transportValidator).toContain('.get("dataNamespace")');
   });

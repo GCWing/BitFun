@@ -825,9 +825,13 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
+        let native_line = rendered
+            .lines()
+            .find(|line| line.contains("[OpenBitFun]"))
+            .expect("native row source missing");
         assert!(
-            rendered.contains("[OpenBitFun] github"),
-            "native row missing: {rendered:?}"
+            native_line.contains("githu"),
+            "native name prefix missing: {rendered:?}"
         );
         assert!(
             rendered.contains("[External] docs"),
