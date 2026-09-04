@@ -213,5 +213,6 @@ Before calling `CreateCanvas`, verify:
 ## Output
 
 Call `CreateCanvas` with a concise title and the complete TSX source. In the
-final response, give the returned `bitfun-canvas://...` artifact reference and
-mention the trace or case source used.
+final response, mention the Canvas title and trace or case source used, but do
+not print the internal `bitfun-canvas://...` reference; BitFun renders its
+openable card automatically below the response.

@@ -2,9 +2,15 @@ import React from 'react';
 
 type CanvasRuntimeHooks = {
   useHostAppearance?: () => unknown;
-  useCanvasState?: <T>(key: string, defaultValue: T) => [T, (value: T | ((previous: T) => T)) => void];
+  useCanvasState?: <T>(key: string, defaultValue: T, options?: CanvasStateOptions<T>) => [T, (value: T | ((previous: T) => T)) => void];
   useCanvasAction?: () => (action: unknown) => Promise<unknown>;
 };
+
+export interface CanvasStateOptions<T> {
+  version?: number;
+  validate?: (value: unknown) => value is T;
+  migrate?: (value: unknown, fromVersion: number) => T;
+}
 
 declare global {
   interface Window {
@@ -22,10 +28,10 @@ export function useHostAppearance() {
   return hook ? hook() : {};
 }
 
-export function useCanvasState<T>(key: string, defaultValue: T): [T, (value: T | ((previous: T) => T)) => void] {
+export function useCanvasState<T>(key: string, defaultValue: T, options?: CanvasStateOptions<T>): [T, (value: T | ((previous: T) => T)) => void] {
   const fallbackState = React.useState(defaultValue);
   const hook = runtimeHooks().useCanvasState;
-  return hook ? hook(key, defaultValue) : fallbackState;
+  return hook ? hook(key, defaultValue, options) : fallbackState;
 }
 
 export function useCanvasAction(): (action: unknown) => Promise<unknown> {

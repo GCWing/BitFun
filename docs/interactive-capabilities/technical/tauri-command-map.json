@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "31576ac07aa5a6ae4ff437630fb72d99a9097bba2e34815bf2786e31885d7647",
-  "commandCount": 660,
+  "commandCount": 661,
   "coverage": {
-    "commandCount": 660,
-    "documentedCommandCount": 629,
+    "commandCount": 661,
+    "documentedCommandCount": 630,
     "implementationCommandCount": 31,
     "implementationDigest": "b93e50920109afc78b821c590d39f8e8eca90273ee22e804c64da393d0c5c498"
   },
@@ -5166,7 +5166,7 @@
       "rustPath": "api::canvas_api::load_canvas_artifact",
       "sourceFile": "src/apps/desktop/src/api/canvas_api.rs",
       "signature": "fn load_canvas_artifact( state: State<'_, AppState>, request: CanvasStateRequest, ) -> Result<CanvasArtifactResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "load_canvas_state",
@@ -5182,7 +5182,7 @@
       "rustPath": "api::canvas_api::load_canvas_state",
       "sourceFile": "src/apps/desktop/src/api/canvas_api.rs",
       "signature": "fn load_canvas_state( state: State<'_, AppState>, request: CanvasStateRequest, ) -> Result<CanvasStateResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "load_git_repo_history",
@@ -7573,7 +7573,23 @@
       "rustPath": "api::canvas_api::report_canvas_runtime_error",
       "sourceFile": "src/apps/desktop/src/api/canvas_api.rs",
       "signature": "fn report_canvas_runtime_error( state: State<'_, AppState>, request: ReportCanvasRuntimeErrorRequest, ) -> Result<CanvasArtifactResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "report_canvas_runtime_ready",
+      "moduleId": "canvas",
+      "capabilityId": "feature.canvas",
+      "capabilityIds": [
+        "feature.canvas"
+      ],
+      "documentedItemIds": [
+        "feature.canvas:html-react"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::canvas_api::report_canvas_runtime_ready",
+      "sourceFile": "src/apps/desktop/src/api/canvas_api.rs",
+      "signature": "fn report_canvas_runtime_ready( state: State<'_, AppState>, request: ReportCanvasRuntimeReadyRequest, ) -> Result<CanvasArtifactResponse, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "report_ide_control_result",
@@ -8167,7 +8183,7 @@
       "rustPath": "api::canvas_api::save_canvas_state",
       "sourceFile": "src/apps/desktop/src/api/canvas_api.rs",
       "signature": "fn save_canvas_state( state: State<'_, AppState>, request: SaveCanvasStateRequest, ) -> Result<CanvasStateResponse, String>",
-      "remoteWorkspacePolicy": "LegacyUnaudited"
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "save_cloud_speech_config",

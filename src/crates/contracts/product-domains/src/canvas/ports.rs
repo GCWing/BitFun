@@ -1,8 +1,8 @@
 use crate::canvas::{
     runtime::CanvasCompileResult,
     types::{
-        CanvasArtifact, CanvasCompiledPayload, CanvasDiagnostic, CanvasId, CanvasSessionId,
-        CanvasSnapshot, CanvasSource, CanvasState,
+        CanvasArtifact, CanvasCompiledPayload, CanvasDiagnostic, CanvasId, CanvasRevision,
+        CanvasSessionId, CanvasSnapshot, CanvasSource, CanvasState,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -79,10 +79,20 @@ pub trait CanvasStoragePort: Send + Sync {
         payload: CanvasCompiledPayload,
     ) -> CanvasPortFuture<'_, CanvasSnapshot>;
 
+    fn mark_runtime_ready(
+        &self,
+        session_id: CanvasSessionId,
+        canvas_id: CanvasId,
+        source_revision: CanvasRevision,
+        runtime_version: String,
+        sdk_version: String,
+    ) -> CanvasPortFuture<'_, CanvasSnapshot>;
+
     fn report_runtime_diagnostic(
         &self,
         session_id: CanvasSessionId,
         canvas_id: CanvasId,
+        source_revision: Option<CanvasRevision>,
         diagnostic: CanvasDiagnostic,
     ) -> CanvasPortFuture<'_, CanvasSnapshot>;
 

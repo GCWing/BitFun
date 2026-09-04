@@ -8,12 +8,13 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { fileTabManager } from '@/shared/services/FileTabManager';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { parseCanvasArtifactReference } from '@/shared/utils/canvasArtifactReference';
 import { createLogger } from '@/shared/utils/logger';
 import type { WebElementContext } from '@/shared/types/context';
-import { readWidgetAppearancePayload } from '@/tools/generative-widget/appearancePayload';
 import { canvasAppearanceAdapter } from '@/infrastructure/appearance/adapters/CanvasAppearanceAdapter';
 import { exportCanvasHtml } from './canvasHtmlExportService';
 import { buildReactCanvasHtmlResult } from './reactRuntime';
+import { readHostAppearancePayload } from './appearance';
 import {
   isPeerDeviceModeActive,
   PEER_MODE_CANVAS_POLL_MS,
@@ -60,22 +61,6 @@ interface CanvasActionRecord {
   lineEnd?: unknown;
 }
 
-interface CanvasHostAppearancePayload {
-  type: 'light' | 'dark' | 'auto';
-  id?: string;
-  vars?: Record<string, string>;
-  bg: string;
-  panel: string;
-  fg: string;
-  muted: string;
-  border: string;
-  accent: string;
-  success: string;
-  warning: string;
-  danger: string;
-  info: string;
-}
-
 interface CanvasElementReference {
   nodeId?: string | null;
   component?: string;
@@ -117,8 +102,7 @@ function positiveInteger(value: unknown): number | undefined {
 
 function sessionIdFromCanvasArtifactReference(artifactReference?: string): string | null {
   if (!artifactReference) return null;
-  const match = /^bitfun-canvas:\/\/session\/([^/]+)\/canvas\/[^/]+$/.exec(artifactReference);
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
+  return parseCanvasArtifactReference(artifactReference)?.sessionId ?? null;
 }
 
 function canvasAutoRepairPrompt(params: {
@@ -140,26 +124,6 @@ function canvasAutoRepairPrompt(params: {
     'Do not stop after explaining the error. The Canvas must compile and render successfully.',
   ].filter(Boolean);
   return lines.join('\n');
-}
-
-function readHostAppearancePayload(): CanvasHostAppearancePayload {
-  const settings = canvasAppearanceAdapter.getSettings();
-  const widgetAppearance = readWidgetAppearancePayload();
-  return {
-    type: settings.mode,
-    id: settings.id,
-    vars: widgetAppearance?.vars,
-    bg: settings.bg,
-    panel: settings.panel,
-    fg: settings.fg,
-    muted: settings.muted,
-    border: settings.border,
-    accent: settings.accent,
-    success: settings.success,
-    warning: settings.warning,
-    danger: settings.danger,
-    info: settings.info,
-  };
 }
 
 function formatElementReference(reference: CanvasElementReference, artifactReference?: string): string {
@@ -217,11 +181,14 @@ function canvasSnapshotSignature(canvas: CanvasSnapshotValue | null | undefined)
     canvas.artifact?.status || '',
     canvas.artifact?.sourceRevision || '',
     canvas.artifact?.latestCompiledRevision || '',
+    canvas.artifact?.latestRenderedRevision || '',
     canvas.artifact?.lastKnownGoodRevision || '',
     canvas.source?.revision || '',
     canvas.source?.source?.length ?? 0,
     canvas.compiledPayload?.sourceRevision || '',
     canvas.compiledPayload?.contentHash || '',
+    canvas.compiledPayload?.sdkVersion || '',
+    canvas.compiledPayload?.runtimeVersion || '',
     canvas.compiledPayload?.html?.length ?? 0,
     canvas.diagnostics?.length ?? 0,
     canvas.diagnostics?.map(diagnostic => `${diagnostic.severity || ''}:${diagnostic.code || ''}:${diagnostic.message || ''}`).join('|') || '',
@@ -247,9 +214,9 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     runtimeError: false,
   });
   const reportedRuntimeErrorsRef = useRef(new Set<string>());
+  const reportedReadyRevisionsRef = useRef(new Set<string>());
   const autoRepairRuntimeErrorsRef = useRef(new Set<string>());
   const loadedCanvasSignatureRef = useRef<string | null>(null);
-  const injectedFrameKeyRef = useRef<string | null>(null);
   const [sourceVisible, setSourceVisible] = useState(false);
   const [designMode, setDesignMode] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
@@ -261,8 +228,12 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   const resolvedDiagnostics = loadedCanvas?.diagnostics ?? diagnostics;
   const resolvedTitle = loadedCanvas?.artifact?.title || title || 'BitFun Canvas';
   const renderedCanvas = useMemo(
-    () => buildReactCanvasHtmlResult(resolvedHtml, { title: resolvedTitle }),
-    [resolvedHtml, resolvedTitle],
+    () => buildReactCanvasHtmlResult(resolvedHtml, {
+      title: resolvedTitle,
+      runtimeVersion: loadedCanvas?.compiledPayload?.runtimeVersion,
+      sdkVersion: loadedCanvas?.compiledPayload?.sdkVersion,
+    }),
+    [loadedCanvas?.compiledPayload?.runtimeVersion, loadedCanvas?.compiledPayload?.sdkVersion, resolvedHtml, resolvedTitle],
   );
   const renderedHtml = renderedCanvas.html;
   const hasHtml = typeof renderedHtml === 'string' && renderedHtml.trim().length > 0;
@@ -283,6 +254,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   useEffect(() => {
     loadedCanvasSignatureRef.current = null;
     reportedRuntimeErrorsRef.current.clear();
+    reportedReadyRevisionsRef.current.clear();
     autoRepairRuntimeErrorsRef.current.clear();
     setLoadedCanvas(null);
   }, [artifactReference]);
@@ -451,6 +423,10 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     message?: unknown;
     name?: unknown;
     stack?: unknown;
+    filename?: unknown;
+    lineno?: unknown;
+    colno?: unknown;
+    componentStack?: unknown;
   }) => {
     if (!artifactReference) return;
     const message = String(data.message || 'Canvas runtime error');
@@ -473,6 +449,10 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
         message,
         name,
         stack,
+        filename: data.filename ? String(data.filename) : undefined,
+        line: typeof data.lineno === 'number' ? data.lineno : undefined,
+        column: typeof data.colno === 'number' ? data.colno : undefined,
+        componentStack: data.componentStack ? String(data.componentStack) : undefined,
         workspacePath,
         remoteConnectionId,
         remoteSshHost,
@@ -498,6 +478,75 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     remoteSshHost,
     requestCanvasAutoRepair,
     renderedCanvas.revision,
+    workspacePath,
+  ]);
+
+  const reportRuntimeReady = useCallback(async (data: {
+    sourceRevisionSeen?: unknown;
+    runtimeVersion?: unknown;
+    sdkVersion?: unknown;
+  }) => {
+    const expectedRevision = renderedCanvas.revision;
+    const expectedRuntimeVersion = loadedCanvas?.compiledPayload?.runtimeVersion;
+    const expectedSdkVersion = loadedCanvas?.compiledPayload?.sdkVersion;
+    const sourceRevisionSeen = String(data.sourceRevisionSeen || '');
+    const runtimeVersion = String(data.runtimeVersion || '');
+    const sdkVersion = String(data.sdkVersion || '');
+    if (
+      !artifactReference
+      || renderedCanvas.runtime !== 'react'
+      || !expectedRevision
+      || !expectedRuntimeVersion
+      || !expectedSdkVersion
+    ) return;
+    if (
+      sourceRevisionSeen !== expectedRevision
+      || runtimeVersion !== expectedRuntimeVersion
+      || sdkVersion !== expectedSdkVersion
+    ) {
+      log.warn('Ignored mismatched Canvas runtime readiness', {
+        artifactReference,
+        expectedRevision,
+        sourceRevisionSeen,
+        expectedRuntimeVersion,
+        runtimeVersion,
+        expectedSdkVersion,
+        sdkVersion,
+      });
+      return;
+    }
+    const key = `${artifactReference}\u0000${sourceRevisionSeen}\u0000${runtimeVersion}\u0000${sdkVersion}`;
+    if (reportedReadyRevisionsRef.current.has(key)) return;
+    reportedReadyRevisionsRef.current.add(key);
+    try {
+      const response = await canvasAPI.reportRuntimeReady({
+        artifactReference,
+        sourceRevisionSeen,
+        runtimeVersion,
+        sdkVersion,
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost,
+      });
+      applyLoadedCanvas(response.canvas ?? null, 'runtime-ready');
+    } catch (error) {
+      reportedReadyRevisionsRef.current.delete(key);
+      log.warn('Failed to report Canvas runtime readiness', {
+        artifactReference,
+        revision: sourceRevisionSeen,
+        runtimeVersion,
+        error,
+      });
+    }
+  }, [
+    applyLoadedCanvas,
+    artifactReference,
+    loadedCanvas?.compiledPayload?.runtimeVersion,
+    loadedCanvas?.compiledPayload?.sdkVersion,
+    remoteConnectionId,
+    remoteSshHost,
+    renderedCanvas.revision,
+    renderedCanvas.runtime,
     workspacePath,
   ]);
 
@@ -680,7 +729,6 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
   useLayoutEffect(() => {
     if (!hasHtml || !artifactReference) {
       setFrameReadyKey(null);
-      injectedFrameKeyRef.current = null;
       return;
     }
     iframeStatusRef.current = {
@@ -710,6 +758,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
         type?: string;
         requestId?: string;
         values?: Record<string, unknown>;
+        valueVersions?: Record<string, number>;
         sourceRevisionSeen?: string;
         action?: unknown;
         reference?: CanvasElementReference;
@@ -768,6 +817,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
               revision: renderedCanvas.revision,
             });
             await initializeIframe('ready');
+            await reportRuntimeReady(data);
             break;
           }
           case 'bitfun-canvas-module-started': {
@@ -776,6 +826,26 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
               artifactReference,
               runtime: renderedCanvas.runtime,
               revision: renderedCanvas.revision,
+            });
+            await initializeIframe('module-started');
+            break;
+          }
+          case 'bitfun-canvas-state-warning': {
+            log.warn('Canvas rejected incompatible persisted state', {
+              artifactReference,
+              revision: renderedCanvas.revision,
+              key: (data as { key?: unknown }).key,
+              message: (data as { message?: unknown }).message,
+            });
+            break;
+          }
+          case 'bitfun-canvas-prop-warning': {
+            log.warn('Canvas ignored an invalid component prop value', {
+              artifactReference,
+              revision: renderedCanvas.revision,
+              component: (data as { component?: unknown }).component,
+              prop: (data as { prop?: unknown }).prop,
+              message: (data as { message?: unknown }).message,
             });
             break;
           }
@@ -793,6 +863,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
               artifactReference,
               sourceRevisionSeen: message.sourceRevisionSeen,
               values: message.values ?? {},
+              valueVersions: message.valueVersions ?? {},
               updatedAt: Date.now(),
               workspacePath,
               remoteConnectionId,
@@ -867,7 +938,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           runtime: renderedCanvas.runtime,
           revision: renderedCanvas.revision,
           renderedHtmlLength: renderedHtml?.length ?? 0,
-          frameTransport: 'document-write',
+          frameTransport: 'srcdoc',
           bootStarted: status.bootStarted,
         });
       }
@@ -888,6 +959,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     postToIframe,
     postAppearanceToIframe,
     reportRuntimeError,
+    reportRuntimeReady,
     renderedHtml,
     renderedHtmlKey,
     renderedCanvas.revision,
@@ -896,53 +968,6 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
     resolvedTitle,
     remoteSshHost,
     workspacePath,
-  ]);
-
-  useLayoutEffect(() => {
-    if (!isFrameReady || !renderedHtml) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const doc = iframe.contentDocument;
-    if (!doc) {
-      log.warn('Canvas iframe document is unavailable for HTML injection', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        frameTransport: 'document-write',
-      });
-      return;
-    }
-
-    try {
-      injectedFrameKeyRef.current = frameDocumentKey;
-      doc.open();
-      doc.write(renderedHtml);
-      doc.close();
-      log.info('Canvas iframe HTML written', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        renderedHtmlLength: renderedHtml.length,
-        frameTransport: 'document-write',
-      });
-    } catch (error) {
-      injectedFrameKeyRef.current = null;
-      log.error('Failed to write Canvas iframe HTML', {
-        artifactReference,
-        runtime: renderedCanvas.runtime,
-        revision: renderedCanvas.revision,
-        frameTransport: 'document-write',
-        error,
-      });
-    }
-  }, [
-    artifactReference,
-    frameDocumentKey,
-    isFrameReady,
-    renderedCanvas.revision,
-    renderedCanvas.runtime,
-    renderedHtml,
   ]);
 
   useEffect(() => {
@@ -1029,16 +1054,15 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
           data-bf-component="canvas-tool"
           data-bf-part="frame"
           title={resolvedTitle}
-          src="about:blank"
-          sandbox="allow-scripts allow-same-origin"
+          srcDoc={renderedHtml}
+          sandbox="allow-scripts"
           data-artifact-reference={artifactReference}
           onLoad={() => {
-            if (injectedFrameKeyRef.current !== frameDocumentKey) return;
             log.info('Canvas iframe loaded', {
               artifactReference,
               runtime: renderedCanvas.runtime,
               revision: renderedCanvas.revision,
-              frameTransport: 'document-write',
+              frameTransport: 'srcdoc',
             });
             void initializeIframe('load');
           }}

@@ -418,6 +418,25 @@ mod tests {
             .is_some());
     }
 
+    #[test]
+    fn canvas_skills_keep_internal_artifact_references_out_of_chat() {
+        for path in [
+            "bitfun-canvas/SKILL.md",
+            "pr-review-canvas/SKILL.md",
+            "agent-eval-canvas/SKILL.md",
+        ] {
+            let text = embedded_skill_text(path);
+            assert!(
+                text.contains("automatically"),
+                "{path} must tell the agent to leave Canvas URI presentation to the client"
+            );
+            assert!(
+                !text.contains("give the returned `bitfun-canvas://...` artifact reference"),
+                "{path} still instructs the agent to expose an internal Canvas URI"
+            );
+        }
+    }
+
     fn gstack_skill_texts() -> Vec<(String, &'static str)> {
         BUILTIN_SKILLS_DIR
             .dirs()

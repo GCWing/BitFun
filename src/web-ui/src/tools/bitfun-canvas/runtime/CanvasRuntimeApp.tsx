@@ -10,6 +10,13 @@ type CanvasRuntimeWindow = Window & {
   BitfunCanvasSDK?: CanvasRuntimeRecord;
   BitfunCanvasSDKAdapters?: CanvasRuntimeRecord;
   BitfunCanvasRuntime?: CanvasRuntimeRecord;
+  BitfunCanvasContract?: {
+    runtimeVersion?: string;
+    sdkVersion?: string;
+  };
+  BitfunCanvasRuntimeHooks?: {
+    whenStateReady?: (callback: () => void) => (() => void);
+  };
   ReactDOM?: {
     createRoot?: (element: HTMLElement) => {
       render: (node: React.ReactNode) => void;
@@ -34,12 +41,19 @@ function currentRevision(): string {
 
 function postCanvasMessage(type: string, payload: CanvasRuntimeRecord = {}) {
   const revision = currentRevision();
+  const contract = runtimeWindow().BitfunCanvasContract;
+  const enrichedPayload = {
+    sourceRevisionSeen: revision,
+    runtimeVersion: contract?.runtimeVersion,
+    sdkVersion: contract?.sdkVersion,
+    ...payload,
+  };
   const post = runtimeWindow().__bitfunCanvasPost;
   if (post) {
-    post(type, { sourceRevisionSeen: revision, ...payload });
+    post(type, enrichedPayload);
     return;
   }
-  window.parent?.postMessage({ type, sourceRevisionSeen: revision, ...payload }, '*');
+  window.parent?.postMessage({ type, ...enrichedPayload }, '*');
 }
 
 function errorText(error: unknown): string {
@@ -54,7 +68,7 @@ function postReady(): void {
   postCanvasMessage('bitfun-canvas-ready');
 }
 
-function postRuntimeError(error: unknown): void {
+function postRuntimeError(error: unknown, componentStack?: string): void {
   const details = error && typeof error === 'object'
     ? error as { message?: unknown; name?: unknown; stack?: unknown }
     : null;
@@ -62,6 +76,7 @@ function postRuntimeError(error: unknown): void {
     message: details?.message ? String(details.message) : String(error || 'Canvas runtime error'),
     name: details?.name ? String(details.name) : undefined,
     stack: details?.stack ? String(details.stack) : undefined,
+    componentStack,
   });
 }
 
@@ -134,8 +149,12 @@ export function installBitfunCanvasRuntimeApp(): void {
     reportRuntimeError,
     mount(component: React.ComponentType) {
       renderComponent = component;
-      renderRuntimeRoot();
-      postReady();
+      const whenStateReady = target.BitfunCanvasRuntimeHooks?.whenStateReady;
+      if (whenStateReady) {
+        whenStateReady(renderRuntimeRoot);
+      } else {
+        renderRuntimeRoot();
+      }
     },
   };
 }

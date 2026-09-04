@@ -82,6 +82,9 @@ export {
 } from './typography';
 
 export type {
+  CanvasStateOptions,
+} from './hooks';
+export type {
   CanvasBoxProps,
   CanvasAlertProps,
   CanvasButtonProps,

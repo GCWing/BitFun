@@ -149,6 +149,8 @@ pub struct CanvasArtifact {
     pub source_revision: CanvasRevision,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_compiled_revision: Option<CanvasRevision>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_rendered_revision: Option<CanvasRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_known_good_revision: Option<CanvasRevision>,
     #[serde(default)]
@@ -211,6 +213,8 @@ pub struct CanvasState {
     pub source_revision_seen: Option<CanvasRevision>,
     #[serde(default)]
     pub values: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub value_versions: BTreeMap<String, u32>,
     pub updated_at: i64,
     #[serde(default = "default_state_schema_version")]
     pub schema_version: u32,

@@ -1,6 +1,11 @@
 use bitfun_product_domains::canvas::types::{
     CanvasDiagnostic, CanvasDiagnosticCategory, CanvasDiagnosticSeverity,
 };
+#[cfg(feature = "canvas-runtime")]
+use bitfun_product_domains::canvas::{
+    canvas_appearance_token_group_allows as generated_appearance_token_group_allows,
+    canvas_sdk_component_props as generated_component_props, CANVAS_SDK_COMMON_PROPS,
+};
 
 #[cfg(feature = "canvas-runtime")]
 use oxc::ast::ast::{
@@ -67,7 +72,7 @@ impl CanvasSdkContractVisitor<'_> {
         let Some(component) = self.jsx_component_name(&element.name) else {
             return;
         };
-        let Some(allowed_props) = sdk_component_allowed_props(component.as_str()) else {
+        let Some(allowed_props) = generated_component_props(component.as_str()) else {
             return;
         };
 
@@ -79,7 +84,7 @@ impl CanvasSdkContractVisitor<'_> {
                 continue;
             };
             if prop == "key"
-                || common_canvas_style_prop(prop.as_str())
+                || common_canvas_prop(prop.as_str())
                 || allowed_props.iter().any(|allowed| *allowed == prop)
             {
                 continue;
@@ -164,7 +169,7 @@ impl CanvasSdkContractVisitor<'_> {
         if !self.host_appearance_locals.contains(root.name.as_str()) {
             return;
         }
-        if canvas_appearance_token_group_allows(group, token) {
+        if generated_appearance_token_group_allows(group, token) {
             return;
         }
 
@@ -193,274 +198,10 @@ fn jsx_attribute_name(name: &JSXAttributeName<'_>) -> Option<String> {
 }
 
 #[cfg(feature = "canvas-runtime")]
-fn sdk_component_allowed_props(component: &str) -> Option<&'static [&'static str]> {
-    match component {
-        "Stack" => Some(&["children", "gap", "style"]),
-        "Row" => Some(&["children", "gap", "align", "justify", "wrap", "style"]),
-        "Grid" => Some(&["children", "columns", "gap", "align", "style"]),
-        "Box" => Some(&[
-            "children",
-            "padding",
-            "background",
-            "border",
-            "radius",
-            "style",
-        ]),
-        "Divider" => Some(&["style"]),
-        "H1" | "H2" | "H3" | "Code" | "Link" => Some(&["children", "href", "style"]),
-        "Text" => Some(&[
-            "children", "tone", "size", "as", "weight", "italic", "truncate", "style", "color",
-        ]),
-        "Card" => Some(&[
-            "children",
-            "variant",
-            "size",
-            "stickyHeader",
-            "collapsible",
-            "defaultOpen",
-            "open",
-            "onOpenChange",
-            "style",
-        ]),
-        "CardHeader" => Some(&["children", "trailing", "style"]),
-        "CardBody" => Some(&["children", "style"]),
-        "Alert" => Some(&[
-            "children",
-            "type",
-            "tone",
-            "title",
-            "message",
-            "description",
-            "showIcon",
-            "style",
-        ]),
-        "Callout" => Some(&["children", "tone", "title", "icon", "style"]),
-        "CollapsibleSection" => Some(&[
-            "children",
-            "title",
-            "leading",
-            "count",
-            "trailing",
-            "defaultOpen",
-            "style",
-        ]),
-        "Empty" => Some(&["description", "image", "imageSize", "children", "style"]),
-        "Tabs" => Some(&[
-            "items",
-            "activeKey",
-            "defaultActiveKey",
-            "onChange",
-            "children",
-            "type",
-            "size",
-            "stretch",
-            "style",
-        ]),
-        "Pill" => Some(&[
-            "children",
-            "active",
-            "tone",
-            "size",
-            "leadingContent",
-            "keyboardHint",
-            "disabled",
-            "title",
-            "style",
-            "onClick",
-        ]),
-        "Stat" => Some(&["value", "label", "tone", "style"]),
-        "Table" => Some(&[
-            "headers",
-            "rows",
-            "columnAlign",
-            "rowTone",
-            "framed",
-            "striped",
-            "stickyHeader",
-            "style",
-            "emptyMessage",
-        ]),
-        "KeyValueList" => Some(&["items", "columns", "compact", "emptyMessage", "style"]),
-        "Timeline" => Some(&["items", "emptyMessage", "style"]),
-        "FileTree" => Some(&["items", "defaultExpanded", "emptyMessage", "style"]),
-        "ProgressBar" => Some(&["value", "max", "label", "tone", "showValue", "style"]),
-        "Swatch" => Some(&["color", "style", "title", "className"]),
-        "UsageBar" => Some(&[
-            "segments",
-            "total",
-            "topLeftLabel",
-            "topRightLabel",
-            "style",
-        ]),
-        "TodoList" => Some(&["todos", "dimmedTodoIds", "onTodoClick", "style"]),
-        "TodoListCard" => Some(&[
-            "todos",
-            "dimmedTodoIds",
-            "defaultExpanded",
-            "onTodoClick",
-            "style",
-        ]),
-        "DependencyGraph" => Some(&[
-            "nodes",
-            "edges",
-            "direction",
-            "nodeWidth",
-            "nodeHeight",
-            "rankGap",
-            "nodeGap",
-            "padding",
-            "title",
-            "height",
-            "style",
-        ]),
-        "FlowDiagram" => Some(&[
-            "steps",
-            "nodes",
-            "edges",
-            "direction",
-            "nodeWidth",
-            "nodeHeight",
-            "rankGap",
-            "nodeGap",
-            "padding",
-            "title",
-            "height",
-            "style",
-        ]),
-        "Button" => Some(&[
-            "children", "variant", "disabled", "type", "style", "onClick",
-        ]),
-        "Toggle" => Some(&["checked", "onChange", "disabled", "size", "style"]),
-        "Checkbox" => Some(&["checked", "onChange", "disabled", "label", "style"]),
-        "Select" => Some(&[
-            "value",
-            "onChange",
-            "options",
-            "placeholder",
-            "disabled",
-            "style",
-        ]),
-        "TextInput" => Some(&[
-            "value",
-            "onChange",
-            "placeholder",
-            "disabled",
-            "type",
-            "style",
-        ]),
-        "Input" => Some(&[
-            "value",
-            "onChange",
-            "placeholder",
-            "disabled",
-            "type",
-            "label",
-            "hint",
-            "prefix",
-            "suffix",
-            "error",
-            "errorMessage",
-            "size",
-            "style",
-        ]),
-        "TextArea" => Some(&[
-            "value",
-            "onChange",
-            "placeholder",
-            "disabled",
-            "rows",
-            "style",
-        ]),
-        "IconButton" => Some(&[
-            "children", "onClick", "disabled", "title", "variant", "size", "style",
-        ]),
-        "DiffStats" => Some(&["additions", "deletions", "style"]),
-        "DiffView" => Some(&[
-            "lines",
-            "path",
-            "language",
-            "showLineNumbers",
-            "coloredLineNumbers",
-            "showAccentStrip",
-            "style",
-        ]),
-        "BarChart" | "LineChart" | "PieChart" => Some(&[
-            "data",
-            "categories",
-            "series",
-            "height",
-            "style",
-            "stacked",
-            "horizontal",
-            "normalized",
-            "valueSuffix",
-            "valuePrefix",
-            "showValues",
-            "beginAtZero",
-            "yMin",
-            "yMax",
-            "referenceLines",
-            "fill",
-            "showHoverGuide",
-            "size",
-            "donut",
-        ]),
-        "Spacer" => Some(&[]),
-        _ => None,
-    }
-}
-
-#[cfg(feature = "canvas-runtime")]
-fn common_canvas_style_prop(prop: &str) -> bool {
-    matches!(
-        prop,
-        "padding"
-            | "margin"
-            | "background"
-            | "border"
-            | "borderTop"
-            | "borderRight"
-            | "borderBottom"
-            | "borderLeft"
-            | "borderRadius"
-            | "width"
-            | "height"
-            | "flex"
-            | "display"
-            | "opacity"
-            | "minWidth"
-            | "maxWidth"
-            | "minHeight"
-            | "maxHeight"
-    )
-}
-
-#[cfg(feature = "canvas-runtime")]
-fn canvas_appearance_token_group_allows(group: &str, token: &str) -> bool {
-    match group {
-        "bg" => matches!(token, "editor" | "chrome" | "elevated" | "canvas"),
-        "text" => matches!(
-            token,
-            "primary" | "secondary" | "tertiary" | "quaternary" | "link" | "onAccent"
-        ),
-        "fill" => matches!(token, "primary" | "secondary" | "tertiary" | "quaternary"),
-        "stroke" => matches!(token, "primary" | "secondary" | "tertiary" | "focused"),
-        "accent" => matches!(
-            token,
-            "primary" | "control" | "controlHover" | "success" | "warning" | "danger" | "info"
-        ),
-        "diff" => matches!(
-            token,
-            "insertedLine" | "removedLine" | "stripAdded" | "stripRemoved"
-        ),
-        "category" => matches!(
-            token,
-            "blue" | "cyan" | "gray" | "green" | "orange" | "pink" | "purple" | "yellow"
-        ),
-        "status" => matches!(token, "success" | "warning" | "danger" | "info"),
-        "tokens" | "palette" => true,
-        _ => false,
-    }
+fn common_canvas_prop(prop: &str) -> bool {
+    CANVAS_SDK_COMMON_PROPS.contains(&prop)
+        || prop.starts_with("aria-")
+        || prop.starts_with("data-")
 }
 
 #[cfg(feature = "canvas-runtime")]

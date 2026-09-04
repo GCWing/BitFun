@@ -13,6 +13,8 @@
 /** Shared category color palette used by `Swatch`, `UsageBar`, etc. */
 export type { CategoryPalette, Color } from "./canvas-tokens.js";
 export { categoryPaletteDark, categoryPaletteLight, usageColorSequence, } from "./canvas-tokens.js";
+export type { AlertProps, BoxProps, DependencyGraphProps, EmptyProps, FileTreeItem, FileTreeProps, FlowDiagramProps, FlowStep, GraphEdge, GraphNode, InputProps, KeyValueItem, KeyValueListProps, ProgressBarProps, TabsItem, TabsProps, TimelineItem, TimelineProps, } from "./runtime-components.js";
+export { Alert, Box, DependencyGraph, Empty, FileTree, FlowDiagram, Input, KeyValueList, normalizeDiffLines, ProgressBar, Tabs, Timeline, } from "./runtime-components.js";
 /** Charts. */
 export type { BarChartProps, ChartDataPoint, ChartReferenceLine, ChartSeries, ChartTone, LineChartProps, PieChartProps, } from "./chart-primitives.js";
 export { BarChart, LineChart, PieChart } from "./chart-primitives.js";
@@ -33,7 +35,7 @@ export { DiffStats, DiffView } from "./diff-view.js";
 export type { CheckboxProps, IconButtonProps, SelectOption, SelectProps, TextAreaProps, TextInputProps, ToggleProps, } from "./form-primitives.js";
 export { Checkbox, IconButton, Select, TextArea, TextInput, Toggle, } from "./form-primitives.js";
 /** Host state hooks. */
-export type { CanvasAction, CanvasHostAppearance, SetCanvasState } from "./hooks.js";
+export type { CanvasAction, CanvasHostAppearance, CanvasStateOptions, SetCanvasState } from "./hooks.js";
 export { useCanvasAction, useCanvasState, useHostAppearance } from "./hooks.js";
 /** Colored category swatch (uses the shared `Color` palette). */
 export type { SwatchProps } from "./swatch.js";

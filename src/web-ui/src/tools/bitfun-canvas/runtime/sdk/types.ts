@@ -84,7 +84,9 @@ export type CanvasDividerProps = React.HTMLAttributes<HTMLHRElement>;
 
 export type CanvasHeadingProps = React.HTMLAttributes<HTMLHeadingElement>;
 
-export interface CanvasTextProps extends CanvasCommonStyleProps {
+export interface CanvasTextProps
+  extends Omit<React.HTMLAttributes<HTMLElement>, keyof CanvasCommonStyleProps | 'color'>,
+    CanvasCommonStyleProps {
   children?: React.ReactNode;
   tone?: CanvasTone;
   size?: 'sm' | 'small' | 'body' | 'md' | 'lg' | number | string;

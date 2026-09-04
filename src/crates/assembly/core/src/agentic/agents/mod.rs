@@ -92,34 +92,8 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     overrides
 }
 
-fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static str) {
-    #[cfg(feature = "tool-packs")]
-    {
-        let provider_groups =
-            bitfun_tool_packs::try_product_tool_provider_group_plan_for_ids(&[provider_id])
-                .expect("shared coding mode provider group must exist");
-        for group in provider_groups {
-            tools.extend(
-                group
-                    .tool_names()
-                    .iter()
-                    .map(|tool_name| tool_name.to_string()),
-            );
-        }
-    }
-
-    #[cfg(all(feature = "canvas-runtime", not(feature = "tool-packs")))]
-    if provider_id == "core.canvas" {
-        tools.extend(
-            ["CreateCanvas", "ReadCanvas", "UpdateCanvas", "PatchCanvas"]
-                .into_iter()
-                .map(str::to_string),
-        );
-    }
-}
-
 pub fn shared_coding_mode_tools() -> Vec<String> {
-    let mut tools = vec![
+    vec![
         "Task".to_string(),
         "ListModels".to_string(),
         "AgentWait".to_string(),
@@ -157,9 +131,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "PublishAppearance".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
-    ];
-    append_provider_group_tools(&mut tools, "core.canvas");
-    tools
+    ]
 }
 
 /// Agent trait defining the interface for all agents
@@ -329,13 +301,13 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_canvas_provider_tools() {
+    fn shared_coding_mode_tools_keep_canvas_provider_tools_opt_in() {
         let tools = shared_coding_mode_tools();
 
-        assert!(tools.contains(&"CreateCanvas".to_string()));
-        assert!(tools.contains(&"ReadCanvas".to_string()));
-        assert!(tools.contains(&"UpdateCanvas".to_string()));
-        assert!(tools.contains(&"PatchCanvas".to_string()));
+        assert!(!tools.contains(&"CreateCanvas".to_string()));
+        assert!(!tools.contains(&"ReadCanvas".to_string()));
+        assert!(!tools.contains(&"UpdateCanvas".to_string()));
+        assert!(!tools.contains(&"PatchCanvas".to_string()));
     }
 
     #[test]

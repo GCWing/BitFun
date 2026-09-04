@@ -22,6 +22,7 @@ import type {
   CanvasTodoListProps,
   CanvasUsageBarProps,
 } from './types';
+import { canvasArrayProp } from './runtimeValidation';
 
 export function Callout({ children, tone = 'info', title, style, ...props }: CanvasCalloutProps) {
   const accent = toneColor(tone);
@@ -103,15 +104,19 @@ export function Table({
   style,
   ...props
 }: CanvasTableProps) {
+  const safeHeaders = canvasArrayProp<React.ReactNode>('Table', 'headers', headers);
+  const safeRows = canvasArrayProp<React.ReactNode[]>('Table', 'rows', rows);
+  const safeColumnAlign = canvasArrayProp<React.CSSProperties['textAlign']>('Table', 'columnAlign', columnAlign);
+  const safeRowTone = canvasArrayProp<NonNullable<CanvasTableProps['rowTone']>[number]>('Table', 'rowTone', rowTone);
   const table = (
     <table className="bf-table">
       <thead>
         <tr>
-          {headers.map((header, index) => (
+          {safeHeaders.map((header, index) => (
             <th
               key={index}
               style={{
-                textAlign: columnAlign[index] || 'left',
+                textAlign: safeColumnAlign[index] || 'left',
                 position: stickyHeader ? 'sticky' : undefined,
                 top: stickyHeader ? 0 : undefined,
               }}
@@ -122,17 +127,17 @@ export function Table({
         </tr>
       </thead>
       <tbody>
-        {rows.length ? (
-          rows.map((row, rowIndex) => (
+        {safeRows.length ? (
+          safeRows.map((row, rowIndex) => (
             <tr
               key={rowIndex}
               style={{
                 background: striped && rowIndex % 2 === 1 ? 'var(--bf-color-surface-subtle)' : undefined,
               }}
             >
-              {headers.map((_, index) => (
-                <td key={index} style={{ textAlign: columnAlign[index] || 'left' }}>
-                  {index === 0 && rowTone[rowIndex] ? (
+              {safeHeaders.map((_, index) => (
+                <td key={index} style={{ textAlign: safeColumnAlign[index] || 'left' }}>
+                  {index === 0 && safeRowTone[rowIndex] ? (
                     <span
                       style={{
                         display: 'inline-block',
@@ -140,7 +145,7 @@ export function Table({
                         height: 6,
                         borderRadius: 99,
                         marginRight: 7,
-                        background: toneColor(rowTone[rowIndex]),
+                        background: toneColor(safeRowTone[rowIndex]),
                         verticalAlign: 'middle',
                       }}
                     />
@@ -152,7 +157,7 @@ export function Table({
           ))
         ) : (
           <tr>
-            <td colSpan={headers.length || 1} style={{ color: 'var(--bf-color-content-muted)' }}>
+            <td colSpan={safeHeaders.length || 1} style={{ color: 'var(--bf-color-content-muted)' }}>
               {emptyMessage}
             </td>
           </tr>
@@ -378,14 +383,15 @@ export function Timeline({
   style,
   ...props
 }: CanvasTimelineProps) {
+  const safeItems = canvasArrayProp<NonNullable<CanvasTimelineProps['items']>[number]>('Timeline', 'items', items);
   return (
     <ol
       {...props}
       className={['bf-timeline', props.className].filter(Boolean).join(' ')}
       style={{ display: 'grid', gap: 10, margin: 0, padding: 0, listStyle: 'none', ...style }}
     >
-      {items.length ? (
-        items.map((item, index) => {
+      {safeItems.length ? (
+        safeItems.map((item, index) => {
           const color = toneColor(item.tone);
           return (
             <li
@@ -512,6 +518,7 @@ export function FileTree({
   style,
   ...props
 }: CanvasFileTreeProps) {
+  const safeItems = canvasArrayProp<CanvasFileTreeItem>('FileTree', 'items', items);
   return (
     <div
       {...props}
@@ -526,7 +533,7 @@ export function FileTree({
         ...style,
       }}
     >
-      {items.length ? renderFileTreeItems(items, 0, defaultExpanded) : (
+      {safeItems.length ? renderFileTreeItems([...safeItems], 0, defaultExpanded) : (
         <div style={{ color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>{emptyMessage}</div>
       )}
     </div>
@@ -625,7 +632,11 @@ export function UsageBar({
   style,
   ...props
 }: CanvasUsageBarProps) {
-  const normalized = segments.map((segment, index) => ({
+  const normalized = canvasArrayProp<NonNullable<CanvasUsageBarProps['segments']>[number]>(
+    'UsageBar',
+    'segments',
+    segments,
+  ).map((segment, index) => ({
     ...segment,
     value: positiveSegmentValue(segment.value),
     color: segment.color || usageColorSequence[index % usageColorSequence.length],
@@ -751,7 +762,8 @@ export function TodoList({
   style,
   ...props
 }: CanvasTodoListProps) {
-  if (!todos.length) return null;
+  const safeTodos = canvasArrayProp<CanvasTodoItem>('TodoList', 'todos', todos);
+  if (!safeTodos.length) return null;
   const dimmed = dimmedTodoSet(dimmedTodoIds);
 
   return (
@@ -764,7 +776,7 @@ export function TodoList({
         ...style,
       }}
     >
-      {todos.map((todo) => {
+      {safeTodos.map((todo) => {
         const content = todo.content || todo.id;
         const isDimmed = dimmed.has(todo.id);
         const rowStyle = {
@@ -831,10 +843,11 @@ export function TodoListCard({
   style,
   ...props
 }: CanvasTodoListCardProps) {
-  const completed = todos.filter(todo => todo.status === 'completed').length;
-  const key = `todo-list-card:${todos.map(todo => todo.id).join('|')}`;
+  const safeTodos = canvasArrayProp<CanvasTodoItem>('TodoListCard', 'todos', todos);
+  const completed = safeTodos.filter(todo => todo.status === 'completed').length;
+  const key = `todo-list-card:${safeTodos.map(todo => todo.id).join('|')}`;
   const [open, setOpen] = useCanvasState(key, Boolean(defaultExpanded));
-  if (!todos.length) return null;
+  if (!safeTodos.length) return null;
 
   return (
     <section
@@ -879,12 +892,12 @@ export function TodoListCard({
         </span>
         <span style={{ fontWeight: 'var(--bf-type-label-selected-font-weight)', fontSize: 'var(--bf-type-support-font-size)' }}>Tasks</span>
         <span style={{ marginLeft: 'auto', color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>
-          {completed}/{todos.length} done
+          {completed}/{safeTodos.length} done
         </span>
       </button>
       {open ? (
         <div style={{ padding: 8 }}>
-          <TodoList todos={todos} dimmedTodoIds={dimmedTodoIds} onTodoClick={onTodoClick} />
+          <TodoList todos={safeTodos} dimmedTodoIds={dimmedTodoIds} onTodoClick={onTodoClick} />
         </div>
       ) : null}
     </section>

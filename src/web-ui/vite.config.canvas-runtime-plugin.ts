@@ -54,7 +54,7 @@ export function bitfunCanvasRuntimeBundlePlugin(): Plugin {
         write: false,
         cssCodeSplit: false,
         minify: true,
-        sourcemap: false,
+        sourcemap: 'inline',
         lib: {
           entry,
           name: 'BitfunCanvasRuntimeAdapters',

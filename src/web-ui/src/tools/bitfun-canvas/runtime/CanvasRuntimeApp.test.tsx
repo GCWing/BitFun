@@ -6,6 +6,7 @@ type TestWindow = Window & {
   BitfunCanvasSDK?: Record<string, unknown>;
   BitfunCanvasSDKAdapters?: Record<string, unknown>;
   BitfunCanvasRuntime?: Record<string, any>;
+  BitfunCanvasContract?: { runtimeVersion: string; sdkVersion: string };
   ReactDOM?: {
     createRoot: (element: HTMLElement) => { render: (node: unknown) => void };
   };
@@ -33,6 +34,7 @@ function installTestDom() {
     BitfunCanvasSDK: { Fallback: true },
     BitfunCanvasSDKAdapters: { Adapter: true },
     BitfunCanvasRuntime: { fallback: true },
+    BitfunCanvasContract: { runtimeVersion: 'runtime_test', sdkVersion: 'sdk_test' },
     ReactDOM: {
       createRoot: vi.fn(() => ({ render })),
     },
@@ -86,10 +88,18 @@ describe('CanvasRuntimeApp', () => {
 
     expect(testWindow.ReactDOM?.createRoot).toHaveBeenCalled();
     expect(render).toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'bitfun-canvas-ready' }),
+      '*',
+    );
+    const runtimeRoot = render.mock.calls[0][0] as React.ReactElement<{ onReady: () => void }>;
+    runtimeRoot.props.onReady();
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'bitfun-canvas-ready',
         sourceRevisionSeen: 'rev_test',
+        runtimeVersion: 'runtime_test',
+        sdkVersion: 'sdk_test',
       }),
       '*',
     );

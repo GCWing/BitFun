@@ -1,26 +1,78 @@
+import { Stack as DesignStack } from '@bitfun/ui';
 import { commonStyle, flexAlign, flexJustify } from './style';
 import type {
   CanvasBoxProps,
+  CanvasCommonStyleProps,
   CanvasDividerProps,
   CanvasGridProps,
   CanvasRowProps,
   CanvasStackProps,
 } from './types';
 
+function splitCommonProps<T extends CanvasCommonStyleProps>(props: T) {
+  const {
+    padding,
+    margin,
+    background,
+    border,
+    borderTop,
+    borderRight,
+    borderBottom,
+    borderLeft,
+    borderRadius,
+    width,
+    height,
+    flex,
+    display,
+    color,
+    opacity,
+    minWidth,
+    maxWidth,
+    minHeight,
+    maxHeight,
+    ...elementProps
+  } = props;
+  return {
+    elementProps,
+    styleProps: {
+      padding,
+      margin,
+      background,
+      border,
+      borderTop,
+      borderRight,
+      borderBottom,
+      borderLeft,
+      borderRadius,
+      width,
+      height,
+      flex,
+      display,
+      color,
+      opacity,
+      minWidth,
+      maxWidth,
+      minHeight,
+      maxHeight,
+    },
+  };
+}
+
 export function Stack({ children, gap = 12, style, ...props }: CanvasStackProps) {
+  const { elementProps, styleProps } = splitCommonProps(props);
   return (
-    <div
-      {...props}
-      className={['bf-canvas-stack', props.className].filter(Boolean).join(' ')}
+    <DesignStack
+      {...elementProps}
+      className={['bf-canvas-stack', elementProps.className].filter(Boolean).join(' ')}
+      direction="vertical"
+      gap="0"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
         gap,
-        ...commonStyle(props, style),
+        ...commonStyle(styleProps, style),
       }}
     >
       {children}
-    </div>
+    </DesignStack>
   );
 }
 
@@ -33,21 +85,22 @@ export function Row({
   style,
   ...props
 }: CanvasRowProps) {
+  const { elementProps, styleProps } = splitCommonProps(props);
   return (
-    <div
-      {...props}
+    <DesignStack
+      {...elementProps}
+      direction="horizontal"
+      gap="0"
+      wrap={wrap}
       style={{
-        display: 'flex',
-        flexDirection: 'row',
         gap,
         alignItems: flexAlign(align),
         justifyContent: flexJustify(justify),
-        flexWrap: wrap ? 'wrap' : 'nowrap',
-        ...commonStyle(props, style),
+        ...commonStyle(styleProps, style),
       }}
     >
       {children}
-    </div>
+    </DesignStack>
   );
 }
 
@@ -59,15 +112,16 @@ export function Grid({
   style,
   ...props
 }: CanvasGridProps) {
+  const { elementProps, styleProps } = splitCommonProps(props);
   return (
     <div
-      {...props}
+      {...elementProps}
       style={{
         display: 'grid',
         gridTemplateColumns: typeof columns === 'number' ? `repeat(${columns}, minmax(0, 1fr))` : columns,
         gap,
         alignItems: flexAlign(align),
-        ...commonStyle(props, style),
+        ...commonStyle(styleProps, style),
       }}
     >
       {children}
@@ -76,8 +130,9 @@ export function Grid({
 }
 
 export function Box({ children, style, ...props }: CanvasBoxProps) {
+  const { elementProps, styleProps } = splitCommonProps(props);
   return (
-    <div {...props} style={commonStyle(props, style)}>
+    <div {...elementProps} style={commonStyle(styleProps, style)}>
       {children}
     </div>
   );

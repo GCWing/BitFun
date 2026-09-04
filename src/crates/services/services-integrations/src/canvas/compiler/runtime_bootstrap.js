@@ -649,6 +649,10 @@
   }
   const Stat = ({ value, label, tone, style } = {}) => el('div', { style: { display: 'grid', gap: '2px', ...style } }, [el('strong', { style: { color: toneColor(tone), fontSize: '22px', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' } }, [value]), el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [label])]);
   const Table = ({ headers = [], rows = [], columnAlign = [], rowTone = [], framed = true, striped = false, stickyHeader = false, style, emptyMessage = 'No rows' } = {}) => {
+    headers = Array.isArray(headers) ? headers : [];
+    rows = Array.isArray(rows) ? rows : [];
+    columnAlign = Array.isArray(columnAlign) ? columnAlign : [];
+    rowTone = Array.isArray(rowTone) ? rowTone : [];
     const bodyRows = rows.length ? rows.map((row, rowIndex) => el('tr', { style: { background: striped && rowIndex % 2 === 1 ? 'rgba(127,127,127,0.04)' : 'transparent' } }, headers.map((_, index) => {
       const content = row[index] ?? '';
       const tone = index === 0 ? rowTone[rowIndex] : undefined;
@@ -670,7 +674,9 @@
       el('dd', { style: { margin: '2px 0 0', color: toneColor(item.tone), fontSize: compact ? '12px' : '13px', fontWeight: 560, overflowWrap: 'anywhere' } }, [item.value]),
     ])) : [el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
   };
-  const Timeline = ({ items = [], emptyMessage = 'No events', style } = {}) => el('ol', { style: { display: 'grid', gap: '10px', margin: 0, padding: 0, listStyle: 'none', ...style } }, items.length ? items.map((item, index) => el('li', { key: item.key || index, style: { display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr)', gap: '9px', minWidth: 0 } }, [
+  const Timeline = ({ items = [], emptyMessage = 'No events', style } = {}) => {
+    items = Array.isArray(items) ? items : [];
+    return el('ol', { style: { display: 'grid', gap: '10px', margin: 0, padding: 0, listStyle: 'none', ...style } }, items.length ? items.map((item, index) => el('li', { key: item.key || index, style: { display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr)', gap: '9px', minWidth: 0 } }, [
     el('span', { style: { display: 'grid', placeItems: 'center', width: 18, height: 18, marginTop: 1, borderRadius: 999, background: 'rgba(127,127,127,0.12)', color: toneColor(item.tone), fontSize: '10px', fontWeight: 700 } }, [item.icon || '']),
     el('span', { style: { minWidth: 0, display: 'grid', gap: '2px' } }, [
       el('span', { style: { display: 'flex', gap: '8px', alignItems: 'baseline', justifyContent: 'space-between', minWidth: 0 } }, [
@@ -680,11 +686,12 @@
       item.description ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [item.description]) : null,
     ]),
   ])) : [el('li', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+  };
   function fileTreeKey(item, index, depth) {
     return item.key || item.path || `${depth}-${index}-${String(item.name || '')}`;
   }
   function renderFileTreeItems(items, depth, defaultExpanded) {
-    return (items || []).map((item, index) => {
+    return (Array.isArray(items) ? items : []).map((item, index) => {
       const children = Array.isArray(item.children) ? item.children : [];
       const isFolder = item.type === 'folder' || children.length > 0;
       const row = el('span', { style: { display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, padding: '3px 0', paddingLeft: `${depth * 16}px` } }, [
@@ -699,7 +706,10 @@
       ]);
     });
   }
-  const FileTree = ({ items = [], defaultExpanded = true, emptyMessage = 'No files', style } = {}) => el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid rgba(127,127,127,0.20)', borderRadius: '8px', padding: '8px 10px', background: 'rgba(127,127,127,0.04)', ...style } }, items.length ? renderFileTreeItems(items, 0, defaultExpanded) : [el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+  const FileTree = ({ items = [], defaultExpanded = true, emptyMessage = 'No files', style } = {}) => {
+    items = Array.isArray(items) ? items : [];
+    return el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid rgba(127,127,127,0.20)', borderRadius: '8px', padding: '8px 10px', background: 'rgba(127,127,127,0.04)', ...style } }, items.length ? renderFileTreeItems(items, 0, defaultExpanded) : [el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+  };
   const ProgressBar = ({ value = 0, max = 100, label, tone = 'primary', showValue = true, style } = {}) => {
     const safeMax = Math.max(1, Number(max) || 100);
     const safeValue = Math.max(0, Math.min(safeMax, Number(value) || 0));
@@ -838,7 +848,10 @@
     ]);
   };
   const Checkbox = ({ checked, onChange, disabled, label, style } = {}) => el('label', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '12px', opacity: disabled ? 0.55 : 1, ...style } }, [el('input', { type: 'checkbox', checked, disabled, onChange: event => onChange?.(event.target.checked), style: { accentColor: 'var(--bitfun-canvas-accent)' } }), label]);
-  const Select = ({ value, options = [], placeholder, disabled, onChange, style } = {}) => el('select', { value, disabled, onChange: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', ...style } }, [placeholder ? el('option', { value: '' }, [placeholder]) : null, ...options.map(option => typeof option === 'string' ? el('option', { value: option }, [option]) : el('option', { value: option.value, disabled: option.disabled }, [option.label]))]);
+  const Select = ({ value, options = [], placeholder, disabled, onChange, style } = {}) => {
+    options = Array.isArray(options) ? options : [];
+    return el('select', { value, disabled, onChange: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', ...style } }, [placeholder ? el('option', { value: '' }, [placeholder]) : null, ...options.map(option => typeof option === 'string' ? el('option', { value: option }, [option]) : el('option', { value: option.value, disabled: option.disabled }, [option.label]))]);
+  };
   const TextInput = ({ value, placeholder, disabled, type = 'text', onChange, style } = {}) => el('input', { value, placeholder, disabled, type, onInput: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', ...style } });
   const Input = ({ value, placeholder, disabled, type = 'text', onChange, label, hint, prefix, suffix, error, errorMessage, style } = {}) => el('label', { style: { display: 'grid', gap: '5px', color: 'var(--bitfun-canvas-fg)', fontSize: '12px', ...style } }, [
     label ? el('span', { style: { fontWeight: 600 } }, [label]) : null,
@@ -866,7 +879,7 @@
     if (type === 'removed') return { background: 'rgba(209,36,47,0.12)', color: 'var(--bitfun-canvas-fg)', accent: 'var(--bitfun-canvas-danger)', sign: '-' };
     return { background: 'transparent', color: 'var(--bitfun-canvas-fg)', accent: 'transparent', sign: ' ' };
   }
-  const DiffView = ({ lines = [], showLineNumbers = true, coloredLineNumbers = true, showAccentStrip = true, style } = {}) => el('div', { style: { overflow: 'auto', fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: '12px', lineHeight: 1.55, background: 'rgba(127,127,127,0.035)', ...style } }, lines.map((line, index) => {
+  const DiffView = ({ lines = [], showLineNumbers = true, coloredLineNumbers = true, showAccentStrip = true, style } = {}) => el('div', { style: { overflow: 'auto', fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: '12px', lineHeight: 1.55, background: 'rgba(127,127,127,0.035)', ...style } }, normalizeDiffLines(lines).map((line, index) => {
     const meta = diffLineStyle(line.type);
     return el('div', { style: { display: 'grid', gridTemplateColumns: `${showAccentStrip ? '3px ' : ''}${showLineNumbers ? '52px ' : ''}18px minmax(0,1fr)`, minWidth: '100%', background: meta.background, color: meta.color, whiteSpace: 'pre' } }, [
       showAccentStrip ? el('span', { style: { background: meta.accent } }) : null,
@@ -1276,6 +1289,26 @@
     rerender();
   });
   const Fragment = ({ children } = {}) => toArray(children);
-  window.BitfunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, mergeStyle, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostAppearance, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
+  function normalizeDiffLines(lines) {
+    const rawLines = typeof lines === 'string' ? lines.split('\n') : Array.isArray(lines) ? lines : [];
+    return rawLines.map((line, index) => {
+      if (line && typeof line === 'object' && !Array.isArray(line)) {
+        return {
+          type: line.type,
+          lineNumber: line.lineNumber ?? line.oldLineNumber ?? line.newLineNumber ?? index + 1,
+          content: line.content ?? line.text ?? '',
+        };
+      }
+      const content = String(line ?? '');
+      const added = content.startsWith('+') && !content.startsWith('+++');
+      const removed = content.startsWith('-') && !content.startsWith('---');
+      return {
+        type: added ? 'added' : removed ? 'removed' : undefined,
+        lineNumber: index + 1,
+        content: added || removed ? content.slice(1) : content,
+      };
+    });
+  }
+  window.BitfunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, normalizeDiffLines, mergeStyle, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostAppearance, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
   window.BitfunCanvasRuntime = { h, Fragment, mount(component) { renderFn = component; rerender(); } };
 })();

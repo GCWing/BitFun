@@ -15,6 +15,7 @@ interface MarkdownMathRendererProps {
   components: Components;
   sanitizeSchema: RehypeSanitizeOptions;
   remarkAutolinkComputerFileLinks: Pluggable;
+  urlTransform: (value: string) => string;
 }
 
 export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
@@ -22,11 +23,13 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   components,
   sanitizeSchema,
   remarkAutolinkComputerFileLinks,
+  urlTransform,
 }) => (
   <div data-bf-component="markdown" data-bf-part="math">
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
+      urlTransform={urlTransform}
       components={components}
     >
       {markdownContent}

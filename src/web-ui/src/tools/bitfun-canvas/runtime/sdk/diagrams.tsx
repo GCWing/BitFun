@@ -6,6 +6,7 @@ import type {
   CanvasFlowDiagramProps,
   CanvasFlowStep,
 } from './types';
+import { canvasArrayProp } from './runtimeValidation';
 import { toneColor } from './style';
 import { computeDAGLayout, edgePath, normalizeDagEdges } from './diagramLayout';
 
@@ -168,14 +169,16 @@ export function DependencyGraph({
   className,
   ...props
 }: CanvasDependencyGraphProps) {
-  const layout = computeDAGLayout({ nodes, edges, direction, nodeWidth, nodeHeight, rankGap, nodeGap, padding });
-  const resolvedEdges = normalizeDagEdges(edges);
+  const safeNodes = canvasArrayProp<CanvasDagNode>('DependencyGraph', 'nodes', nodes);
+  const safeEdges = canvasArrayProp<CanvasDagEdge>('DependencyGraph', 'edges', edges);
+  const layout = computeDAGLayout({ nodes: [...safeNodes], edges: [...safeEdges], direction, nodeWidth, nodeHeight, rankGap, nodeGap, padding });
+  const resolvedEdges = normalizeDagEdges([...safeEdges]);
   const resolvedHeight = height ?? layout.height;
 
   return (
     <DiagramShell {...props} title={title} height={resolvedHeight} style={style} className={className}>
-      {nodes.length ? (
-        renderGraphSvg({ layout, nodes, edges: resolvedEdges, title: String(title || 'Dependency graph') })
+      {safeNodes.length ? (
+        renderGraphSvg({ layout, nodes: [...safeNodes], edges: resolvedEdges, title: String(title || 'Dependency graph') })
       ) : (
         <div style={{ color: 'var(--bf-color-content-muted)', fontSize: 'var(--bf-type-support-font-size)' }}>No graph nodes</div>
       )}
@@ -220,8 +223,10 @@ export function FlowDiagram({
   ...props
 }: CanvasFlowDiagramProps) {
   const stepNodes = normalizeFlowSteps(steps);
-  const resolvedNodes = nodes?.length ? nodes : stepNodes;
-  const resolvedEdges = edges?.length ? edges : flowEdges(resolvedNodes);
+  const explicitNodes = canvasArrayProp<CanvasDagNode>('FlowDiagram', 'nodes', nodes);
+  const explicitEdges = canvasArrayProp<CanvasDagEdge>('FlowDiagram', 'edges', edges);
+  const resolvedNodes = explicitNodes.length ? [...explicitNodes] : stepNodes;
+  const resolvedEdges = explicitEdges.length ? [...explicitEdges] : flowEdges(resolvedNodes);
   const layout = computeDAGLayout({
     nodes: resolvedNodes,
     edges: resolvedEdges,

@@ -75,6 +75,14 @@ const DISABLE_CREATION: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
+// Canvas is an optional artifact workflow. Keep its built-in skills available
+// for explicit user selection without making every conversation eligible for
+// implicit Canvas generation.
+const DISABLE_CANVAS: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::Canvas),
+    effect: PolicyEffect::Disable,
+};
+
 const DISABLE_DEBUGGING: SkillPolicyRule = SkillPolicyRule {
     selector: SkillSelector::Group(BuiltinSkillGroup::Debugging),
     effect: PolicyEffect::Disable,
@@ -122,6 +130,7 @@ const AGENTIC_POLICY: ModeSkillPolicy = ModeSkillPolicy {
         DISABLE_COMPUTER_USE,
         DISABLE_MINIAPP,
         DISABLE_CREATION,
+        DISABLE_CANVAS,
     ],
 };
 
@@ -134,6 +143,7 @@ const CLAW_POLICY: ModeSkillPolicy = ModeSkillPolicy {
         DISABLE_MINIAPP,
         DISABLE_CREATION,
         DISABLE_DEBUGGING,
+        DISABLE_CANVAS,
     ],
 };
 
@@ -144,6 +154,7 @@ const CREATIVE_POLICY: ModeSkillPolicy = ModeSkillPolicy {
         DISABLE_GSTACK,
         DISABLE_COMPUTER_USE,
         DISABLE_DEBUGGING,
+        DISABLE_CANVAS,
     ],
 };
 
@@ -221,6 +232,33 @@ mod tests {
                 Some(false),
                 "agent-browser must stay opt-in for mode {mode_id}: ControlHub's browser domain is the default browser path"
             );
+        }
+    }
+
+    #[test]
+    fn canvas_skills_default_off_in_every_mode() {
+        for skill in [
+            "agent-eval-canvas",
+            "docs-canvas",
+            "bitfun-canvas",
+            "pr-review-canvas",
+        ] {
+            for mode_id in [
+                "agentic",
+                "coding_shared",
+                "Claw",
+                "Creative",
+                "Cowork",
+                "ComputerUse",
+                "DeepResearch",
+                "SomeUnknownMode",
+            ] {
+                assert_eq!(
+                    resolve_builtin_default_enabled(skill, mode_id),
+                    Some(false),
+                    "Canvas skill {skill} must stay opt-in for mode {mode_id}"
+                );
+            }
         }
     }
 

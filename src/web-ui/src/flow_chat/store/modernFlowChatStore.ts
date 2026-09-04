@@ -22,6 +22,7 @@ import {
 } from '../utils/turnCompletionNotice';
 import { createAbsoluteSessionTurnIndexResolver } from '../utils/flowChatTurnOrdinal';
 import { parseDeepResearchContent } from '../deep-research/deepResearchProtocol';
+import { collectCanvasArtifactToolItems } from '../utils/canvasArtifactPresentation';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -83,6 +84,7 @@ export type VirtualItem =
       turnEndedAt?: number;
       turnDurationMs?: number;
       turnTokenUsage?: TokenUsage;
+      canvasArtifactItems?: FlowToolItem[];
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
@@ -397,6 +399,13 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     });
     
     const isTurnComplete = turn.status === 'completed' || turn.status === 'cancelled' || turn.status === 'error';
+    const canvasArtifactItems = collectCanvasArtifactToolItems(turn.modelRounds);
+    const canvasAttachmentHostRoundId = [...renderEntries]
+      .reverse()
+      .find((entry): entry is Extract<(typeof renderEntries)[number], { type: 'round' }> => (
+        entry.type === 'round' && !isExploreOnlyRound(entry.round)
+      ))
+      ?.round.id;
 
     const flushRoundEntries = (
       rounds: ModelRound[],
@@ -518,6 +527,9 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
               ? Math.max(0, turn.endTime - turn.startTime)
               : undefined,
             turnTokenUsage: turn.tokenUsage,
+            canvasArtifactItems: isTurnComplete && round.id === canvasAttachmentHostRoundId
+              ? canvasArtifactItems
+              : undefined,
           });
           roundIndex++;
         }

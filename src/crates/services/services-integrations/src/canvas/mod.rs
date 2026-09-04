@@ -9,8 +9,8 @@ mod compiler;
 use bitfun_product_domains::canvas::{
     is_safe_canvas_ref_segment, CanvasArtifact, CanvasCompileResult, CanvasCompiledPayload,
     CanvasDiagnostic, CanvasDiagnosticSeverity, CanvasId, CanvasPortError, CanvasPortErrorKind,
-    CanvasPortFuture, CanvasPortResult, CanvasSessionId, CanvasSnapshot, CanvasSource, CanvasState,
-    CanvasStatus, CanvasStoragePort,
+    CanvasPortFuture, CanvasPortResult, CanvasRevision, CanvasSessionId, CanvasSnapshot,
+    CanvasSource, CanvasState, CanvasStatus, CanvasStoragePort,
 };
 pub use compiler::{compile_canvas_component_js, compile_canvas_html, compile_canvas_source};
 use std::collections::BTreeMap;
@@ -217,6 +217,9 @@ impl CanvasStoragePort for CanvasMemoryStore {
                 artifact.latest_compiled_revision = previous
                     .and_then(|snapshot| snapshot.artifact.latest_compiled_revision.clone())
                     .or(artifact.latest_compiled_revision);
+                artifact.latest_rendered_revision = previous
+                    .and_then(|snapshot| snapshot.artifact.latest_rendered_revision.clone())
+                    .or(artifact.latest_rendered_revision);
                 artifact.last_known_good_revision = previous
                     .and_then(|snapshot| snapshot.artifact.last_known_good_revision.clone())
                     .or(artifact.last_known_good_revision);
@@ -383,8 +386,46 @@ impl CanvasStoragePort for CanvasMemoryStore {
                 };
                 snapshot.compiled_payload = Some(payload.clone());
                 snapshot.artifact.latest_compiled_revision = Some(payload.source_revision.clone());
-                snapshot.artifact.last_known_good_revision = Some(payload.source_revision);
                 snapshot.artifact.status = CanvasStatus::Compiled;
+                snapshot.clone()
+            };
+            store.persist_snapshot(&snapshot).await?;
+            Ok(snapshot)
+        })
+    }
+
+    fn mark_runtime_ready(
+        &self,
+        session_id: CanvasSessionId,
+        canvas_id: CanvasId,
+        source_revision: CanvasRevision,
+        runtime_version: String,
+        sdk_version: String,
+    ) -> CanvasPortFuture<'_, CanvasSnapshot> {
+        let store = self.clone();
+        Box::pin(async move {
+            let snapshot = {
+                let mut state = store.inner.lock().map_err(|_| {
+                    CanvasPortError::new(CanvasPortErrorKind::Backend, "Canvas store lock poisoned")
+                })?;
+                let key = Self::key(session_id.clone(), canvas_id.clone());
+                let Some(snapshot) = state.snapshots.get_mut(&key) else {
+                    return Err(Self::missing(&session_id, &canvas_id));
+                };
+                let is_current_compiled_revision =
+                    snapshot.compiled_payload.as_ref().is_some_and(|payload| {
+                        payload.source_revision == source_revision
+                            && payload.runtime_version == runtime_version
+                            && payload.sdk_version == sdk_version
+                    }) && snapshot.artifact.source_revision == source_revision;
+                if is_current_compiled_revision {
+                    snapshot.artifact.latest_rendered_revision = Some(source_revision.clone());
+                    snapshot.artifact.last_known_good_revision = Some(source_revision);
+                    snapshot.artifact.status = CanvasStatus::Compiled;
+                    snapshot.diagnostics.retain(|diagnostic| {
+                        diagnostic.code.as_deref() != Some("canvas.runtime.error")
+                    });
+                }
                 snapshot.clone()
             };
             store.persist_snapshot(&snapshot).await?;
@@ -396,6 +437,7 @@ impl CanvasStoragePort for CanvasMemoryStore {
         &self,
         session_id: CanvasSessionId,
         canvas_id: CanvasId,
+        source_revision: Option<CanvasRevision>,
         diagnostic: CanvasDiagnostic,
     ) -> CanvasPortFuture<'_, CanvasSnapshot> {
         let store = self.clone();
@@ -411,11 +453,16 @@ impl CanvasStoragePort for CanvasMemoryStore {
                 let Some(snapshot) = state.snapshots.get_mut(&key) else {
                     return Err(Self::missing(&session_id, &canvas_id));
                 };
-                snapshot
-                    .diagnostics
-                    .retain(|existing| existing.code.as_deref() != diagnostic.code.as_deref());
-                snapshot.diagnostics.push(diagnostic);
-                snapshot.artifact.status = CanvasStatus::RuntimeFailed;
+                let is_current_revision = source_revision.as_ref().map_or(true, |revision| {
+                    revision == &snapshot.artifact.source_revision
+                });
+                if is_current_revision {
+                    snapshot
+                        .diagnostics
+                        .retain(|existing| existing.code.as_deref() != diagnostic.code.as_deref());
+                    snapshot.diagnostics.push(diagnostic);
+                    snapshot.artifact.status = CanvasStatus::RuntimeFailed;
+                }
                 snapshot.clone()
             };
             store.persist_snapshot(&snapshot).await?;
@@ -481,7 +528,7 @@ mod tests {
     use super::*;
     use bitfun_product_domains::canvas::{
         CanvasDiagnosticCategory, CanvasDiagnosticSeverity, CanvasRevision, CanvasScope,
-        CanvasWorkspaceId,
+        CanvasWorkspaceId, BITFUN_CANVAS_RUNTIME_VERSION,
     };
     use std::collections::BTreeMap;
 
@@ -495,6 +542,7 @@ mod tests {
             description: None,
             source_revision: CanvasRevision::new("rev_1"),
             latest_compiled_revision: None,
+            latest_rendered_revision: None,
             last_known_good_revision: None,
             status: CanvasStatus::SourceSaved,
             created_at: 1,
@@ -577,6 +625,7 @@ mod tests {
                     canvas_id: CanvasId::new("canvas_1"),
                     source_revision_seen: Some(CanvasRevision::new("rev_1")),
                     values,
+                    value_versions: BTreeMap::new(),
                     updated_at: 2,
                     schema_version: 1,
                 },
@@ -659,6 +708,7 @@ mod tests {
                     canvas_id: CanvasId::new("canvas_1"),
                     source_revision_seen: Some(CanvasRevision::new("rev_1")),
                     values,
+                    value_versions: BTreeMap::new(),
                     updated_at: 3,
                     schema_version: 1,
                 },
@@ -724,6 +774,24 @@ mod tests {
             .unwrap();
         assert!(first.compiled);
         assert!(first.payload.is_some());
+        let compiled_snapshot = store
+            .load_snapshot(CanvasSessionId::new("session_1"), CanvasId::new("canvas_1"))
+            .await
+            .unwrap();
+        assert!(compiled_snapshot
+            .artifact
+            .last_known_good_revision
+            .is_none());
+        store
+            .mark_runtime_ready(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                CanvasRevision::new("rev_1"),
+                BITFUN_CANVAS_RUNTIME_VERSION.to_string(),
+                bitfun_product_domains::canvas::BITFUN_CANVAS_SDK_VERSION.to_string(),
+            )
+            .await
+            .unwrap();
 
         let mut updated_artifact = sample_artifact("canvas_1", "session_1");
         updated_artifact.source_revision = CanvasRevision::new("rev_2");
@@ -790,6 +858,7 @@ mod tests {
             .report_runtime_diagnostic(
                 CanvasSessionId::new("session_1"),
                 CanvasId::new("canvas_1"),
+                Some(CanvasRevision::new("rev_1")),
                 CanvasDiagnostic {
                     severity: CanvasDiagnosticSeverity::Error,
                     category: CanvasDiagnosticCategory::Runtime,
@@ -808,6 +877,100 @@ mod tests {
         assert_eq!(
             snapshot.diagnostics[0].category,
             CanvasDiagnosticCategory::Runtime
+        );
+    }
+
+    #[tokio::test]
+    async fn canvas_store_ignores_stale_runtime_signals() {
+        let store = CanvasMemoryStore::new();
+        store
+            .save_source(
+                sample_artifact("canvas_1", "session_1"),
+                sample_source("canvas_1"),
+                Vec::new(),
+            )
+            .await
+            .unwrap();
+        store
+            .compile_latest(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                2,
+            )
+            .await
+            .unwrap();
+
+        let wrong_runtime = store
+            .mark_runtime_ready(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                CanvasRevision::new("rev_1"),
+                "legacy-runtime".to_string(),
+                bitfun_product_domains::canvas::BITFUN_CANVAS_SDK_VERSION.to_string(),
+            )
+            .await
+            .unwrap();
+        assert!(wrong_runtime.artifact.latest_rendered_revision.is_none());
+        assert!(wrong_runtime.artifact.last_known_good_revision.is_none());
+
+        let wrong_sdk = store
+            .mark_runtime_ready(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                CanvasRevision::new("rev_1"),
+                BITFUN_CANVAS_RUNTIME_VERSION.to_string(),
+                "legacy-sdk".to_string(),
+            )
+            .await
+            .unwrap();
+        assert!(wrong_sdk.artifact.latest_rendered_revision.is_none());
+        assert!(wrong_sdk.artifact.last_known_good_revision.is_none());
+
+        let stale_error = store
+            .report_runtime_diagnostic(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                Some(CanvasRevision::new("rev_stale")),
+                CanvasDiagnostic {
+                    severity: CanvasDiagnosticSeverity::Error,
+                    category: CanvasDiagnosticCategory::Runtime,
+                    message: "stale error".to_string(),
+                    code: Some("canvas.runtime.error".to_string()),
+                    line: None,
+                    column: None,
+                    suggested_fix: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(stale_error.artifact.status, CanvasStatus::Compiled);
+        assert!(stale_error.diagnostics.is_empty());
+
+        let ready = store
+            .mark_runtime_ready(
+                CanvasSessionId::new("session_1"),
+                CanvasId::new("canvas_1"),
+                CanvasRevision::new("rev_1"),
+                BITFUN_CANVAS_RUNTIME_VERSION.to_string(),
+                bitfun_product_domains::canvas::BITFUN_CANVAS_SDK_VERSION.to_string(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            ready
+                .artifact
+                .latest_rendered_revision
+                .as_ref()
+                .map(CanvasRevision::as_str),
+            Some("rev_1")
+        );
+        assert_eq!(
+            ready
+                .artifact
+                .last_known_good_revision
+                .as_ref()
+                .map(CanvasRevision::as_str),
+            Some("rev_1")
         );
     }
 

@@ -1917,6 +1917,7 @@ pub async fn run() {
             api::canvas_api::load_canvas_artifact,
             api::canvas_api::load_canvas_state,
             api::canvas_api::report_canvas_runtime_error,
+            api::canvas_api::report_canvas_runtime_ready,
             api::canvas_api::save_canvas_state,
             api::miniapp_api::miniapp_worker_stop,
             api::miniapp_api::miniapp_worker_list_running,

@@ -376,10 +376,28 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
             "unexpected plan default for {mode_id}"
         );
     }
-    assert_eq!(
-        resolve_builtin_default_enabled("bitfun-canvas", "agentic"),
-        Some(true)
-    );
+    for skill in [
+        "agent-eval-canvas",
+        "docs-canvas",
+        "bitfun-canvas",
+        "pr-review-canvas",
+    ] {
+        for mode_id in [
+            "agentic",
+            "coding_shared",
+            "Claw",
+            "Cowork",
+            "Creative",
+            "ComputerUse",
+            "DeepResearch",
+        ] {
+            assert_eq!(
+                resolve_builtin_default_enabled(skill, mode_id),
+                Some(false),
+                "Canvas skill {skill} must stay opt-in for mode {mode_id}"
+            );
+        }
+    }
 }
 
 #[test]
