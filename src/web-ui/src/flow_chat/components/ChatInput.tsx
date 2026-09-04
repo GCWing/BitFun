@@ -70,6 +70,7 @@ import {
 } from '../store/sessionComposerStore';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
+  clearComposerForSubmission,
   failedSubmissionRecoveryTarget,
   shouldRecordContextMutation,
   successfulRetryCleanupTarget,
@@ -4865,6 +4866,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     const originalMessage = draftTrimmed;
     const submissionSessionId = effectiveTargetSessionId;
+    const submittedContexts = [...contexts];
     const composerPresentation = messageOverride === undefined
       ? richTextInputRef.current?.getComposerPresentation?.() ?? null
       : null;
@@ -4996,21 +4998,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setHistoryIndex(-1);
     setSavedDraft('');
 
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    clearPendingLargePastes();
-    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
-    setQueuedInput(null);
+    clearComposerForSubmission({
+      clearValue: () => dispatchInput({ type: 'CLEAR_VALUE' }),
+      clearContexts,
+      clearPendingLargePastes,
+      // Clear the machine queue too; otherwise queuedInput→input sync puts
+      // the submitted text back into the composer.
+      clearQueuedInput: () => setQueuedInput(null),
+    });
     const clearedComposerRevision = submissionSessionId
       ? composerMutationRevision(submissionSessionId)
       : 0;
 
     try {
-      const transport = await submitThroughChatInputRegistration(
+      await submitThroughChatInputRegistration(
         registration,
         {
           text: message,
           displayText: originalMessage,
-          contexts: [...contexts],
+          contexts: submittedContexts,
           composerPresentation: persistedComposerPresentation,
           sessionId: effectiveTargetSessionId || undefined,
           workspacePath: workspacePath || undefined,
@@ -5022,13 +5028,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value: originalMessage,
             pendingLargePastes: originalPendingLargePastes,
           },
+          clearContextsOnSuccess: false,
         }),
       );
-      if (transport === 'registered') {
-        clearContexts();
-      }
-      clearPendingLargePastes();
-      dispatchInput({ type: 'CLEAR_VALUE' });
     } catch (error) {
       log.error('Failed to send message', { error });
       const recoveryTarget = failedSubmissionRecoveryTarget(
@@ -5038,14 +5040,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         submissionSessionId ? composerMutationRevision(submissionSessionId) : 0,
       );
       if (recoveryTarget === 'current') {
-        replacePendingLargePastes(originalPendingLargePastes);
         dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+        replaceContexts(submittedContexts);
+        replacePendingLargePastes(originalPendingLargePastes);
         if (derivedState?.isProcessing) {
           setQueuedInput(originalMessage);
         }
       } else if (recoveryTarget === 'stored' && submissionSessionId) {
         const composer = sessionComposerStore.getState();
         composer.setValue(submissionSessionId, originalMessage);
+        composer.setContexts(submissionSessionId, submittedContexts);
         composer.setPendingLargePastes(submissionSessionId, originalPendingLargePastes);
       }
     }
@@ -5070,6 +5074,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     expandComposerSpecialTokens,
     isAcpInputSession,
     richTextInputRef,
+    replaceContexts,
     replacePendingLargePastes,
     setQueuedInput,
     submitBtwFromInput,

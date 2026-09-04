@@ -55,6 +55,7 @@ vi.mock('@/shared/utils/logger', () => ({
 
 let sendFromProbe: (() => Promise<void>) | undefined;
 let sendDraftFromProbe: (() => Promise<void>) | undefined;
+let sendWithClearedComposerFromProbe: (() => Promise<void>) | undefined;
 
 function Probe() {
   const { sendMessage } = useMessageSender({
@@ -68,6 +69,9 @@ function Probe() {
       value: '[Pasted text #1]',
       pendingLargePastes: { '[Pasted text #1]': 'expanded paste content' },
     },
+  });
+  sendWithClearedComposerFromProbe = () => sendMessage('image prompt', {
+    clearContextsOnSuccess: false,
   });
   return null;
 }
@@ -90,6 +94,7 @@ describe('useMessageSender', () => {
     container.remove();
     sendFromProbe = undefined;
     sendDraftFromProbe = undefined;
+    sendWithClearedComposerFromProbe = undefined;
     vi.clearAllMocks();
   });
 
@@ -121,6 +126,7 @@ describe('useMessageSender', () => {
         },
       }),
     );
+    expect(mocks.onClearContexts).toHaveBeenCalledOnce();
   });
 
   it('preserves the original large-paste composer draft for queued restoration', async () => {
@@ -145,5 +151,16 @@ describe('useMessageSender', () => {
         },
       }),
     );
+  });
+
+  it('skips delayed context cleanup when the caller already cleared the submission', async () => {
+    await act(async () => {
+      root.render(<Probe />);
+    });
+    await act(async () => {
+      await sendWithClearedComposerFromProbe?.();
+    });
+
+    expect(mocks.onClearContexts).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,24 @@
+interface ComposerSubmissionClearActions {
+  clearValue: () => void;
+  clearContexts: () => void;
+  clearPendingLargePastes: () => void;
+  clearQueuedInput: () => void;
+}
+
+/**
+ * Clear every user-visible part of a submitted composer before transport work
+ * begins. Keeping these mutations in one synchronous call prevents React from
+ * painting a text-only or attachment-only intermediate draft.
+ */
+export function clearComposerForSubmission(
+  actions: ComposerSubmissionClearActions,
+): void {
+  actions.clearValue();
+  actions.clearContexts();
+  actions.clearPendingLargePastes();
+  actions.clearQueuedInput();
+}
+
 export function failedSubmissionRecoveryTarget(
   submissionSessionId: string | null,
   currentSessionId: string | null,
