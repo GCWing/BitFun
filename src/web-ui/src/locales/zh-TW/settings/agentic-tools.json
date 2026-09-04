@@ -29,9 +29,9 @@
       "desc": "選擇多個任務同時開始時的執行方式。",
       "tooltipLabel": "任務並行方式說明",
       "safeOnly": "安全並行",
-      "safeOnlyDesc": "只同時執行不會修改內容的任務。",
+      "safeOnlyDesc": "只同時執行不會修改內容的任務",
       "forceParallel": "盡量並行",
-      "forceParallelDesc": "盡可能同時執行多個任務。"
+      "forceParallelDesc": "盡可能同時執行多個任務"
     },
     "seconds": "秒"
   },

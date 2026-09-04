@@ -2,6 +2,7 @@
 
 export { ConfigPageHeader } from './ConfigPageHeader';
 export type { ConfigPageHeaderProps } from './ConfigPageHeader';
+export { formatStandaloneUiCopy, formatStandaloneUiText } from './standaloneUiCopy';
 export { ConfigCollectionSection } from './ConfigCollectionSection';
 export type { ConfigCollectionSectionProps } from './ConfigCollectionSection';
 export { ConfigCollectionItem } from './ConfigCollectionItem';

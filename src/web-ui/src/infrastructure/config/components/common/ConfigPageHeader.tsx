@@ -1,5 +1,6 @@
 import React from 'react';
 import { PageHeader } from '@bitfun/ui';
+import { formatStandaloneUiText } from './standaloneUiCopy';
 import './ConfigPageHeader.scss';
 
 export interface ConfigPageHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
@@ -36,7 +37,7 @@ export const ConfigPageHeader: React.FC<ConfigPageHeaderProps> = ({
                 </span>
               )}
               description={subtitle ? (
-                <span className="bitfun-config-page-header__subtitle" data-bf-component="config" data-bf-part="pageHeaderSubtitle">{subtitle}</span>
+                <span className="bitfun-config-page-header__subtitle" data-bf-component="config" data-bf-part="pageHeaderSubtitle">{formatStandaloneUiText(subtitle)}</span>
               ) : undefined}
             />
           </div>

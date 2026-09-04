@@ -80,6 +80,28 @@ describe('ConfigPageLayout', () => {
     expect(container.querySelector('[data-bf-part="pageHeaderExtra"] button')?.textContent).toBe('Import');
   });
 
+  it('removes sentence periods from standalone copy while preserving ellipses', () => {
+    act(() => {
+      root.render(
+        <>
+          <ConfigPageHeader title="Models" subtitle="Configure model providers." />
+          <ConfigPageSection title="Appearance" description="选择界面外观。">
+            <ConfigPageRow label="Loading state" description="Loading...">
+              <div>Control</div>
+            </ConfigPageRow>
+          </ConfigPageSection>
+        </>,
+      );
+    });
+
+    expect(container.querySelector('[data-bf-part="pageHeaderSubtitle"]')?.textContent)
+      .toBe('Configure model providers');
+    expect(container.querySelector('[data-bf-part="sectionDescription"]')?.textContent)
+      .toBe('选择界面外观');
+    expect(container.querySelector('[data-bf-part="rowDescription"]')?.textContent)
+      .toBe('Loading...');
+  });
+
   it('keeps the compact 680px settings geometry from the shared layout contract', () => {
     const tokens = readStyleFixture('config-page-layout.tokens.scss');
     const layout = readStyleFixture('ConfigPageLayout.scss');

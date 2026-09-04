@@ -29,9 +29,9 @@
       "desc": "Choose how multiple tasks run when they start together.",
       "tooltipLabel": "Task concurrency details",
       "safeOnly": "Safe parallel",
-      "safeOnlyDesc": "Run tasks together only when they do not modify content.",
+      "safeOnlyDesc": "Run tasks together only when they do not modify content",
       "forceParallel": "Prefer parallel",
-      "forceParallelDesc": "Run multiple tasks together whenever possible."
+      "forceParallelDesc": "Run multiple tasks together whenever possible"
     },
     "seconds": "sec"
   },

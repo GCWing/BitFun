@@ -15,3 +15,23 @@
     font: inherit;
   }
 }
+
+@layer bf.base {
+  [data-bf-design-system-root] select option,
+  [data-bf-design-system-root] select optgroup {
+    color: var(--bf-color-content-primary);
+    background-color: var(--bf-color-surface-panel);
+  }
+
+  [data-bf-design-system-root] select option:disabled {
+    color: var(--bf-color-content-disabled);
+  }
+
+  @media (forced-colors: active) {
+    [data-bf-design-system-root] select option,
+    [data-bf-design-system-root] select optgroup {
+      color: FieldText;
+      background-color: Field;
+    }
+  }
+}

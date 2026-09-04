@@ -1,5 +1,6 @@
- import { FieldGroup, FormSection, ScrollArea, type FieldGroupFieldSurface } from '@bitfun/ui';
+import { FieldGroup, FormSection, ScrollArea, type FieldGroupFieldSurface } from '@bitfun/ui';
 import React from 'react';
+import { formatStandaloneUiCopy } from './standaloneUiCopy';
 import './ConfigPageLayout.scss';
 
 export interface ConfigPageLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -117,7 +118,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
         </span>
       )}
       description={description ? (
-        <span className="bitfun-config-page-section__description" data-bf-component="config" data-bf-part="sectionDescription">{description}</span>
+        <span className="bitfun-config-page-section__description" data-bf-component="config" data-bf-part="sectionDescription">{formatStandaloneUiCopy(description)}</span>
       ) : undefined}
       actions={extra ? (
         <div className="bitfun-config-page-section__extra">{extra}</div>
@@ -206,7 +207,7 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
           ) : null}
         </div>
         {description ? (
-          <div className="bitfun-config-page-row__description" data-bf-component="config" data-bf-part="rowDescription">{description}</div>
+          <div className="bitfun-config-page-row__description" data-bf-component="config" data-bf-part="rowDescription">{formatStandaloneUiCopy(description)}</div>
         ) : null}
       </div>
       {hasControl ? (

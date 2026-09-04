@@ -46,11 +46,14 @@ test("Select exposes size, invalid, disabled, and leading regions independently"
   assert.match(markup, /data-bf-part="indicator"/);
 });
 
-test("Select styles consume only public field and geometry tokens", async () => {
+test("Select styles theme both the closed field and native option menu", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--bf-control-select-padding-inline/);
   assert.match(styles, /--bf-control-select-indicator-size/);
   assert.match(styles, /--bf-color-field-border-focus/);
+  assert.match(styles, /option[^}]*color:\s*var\(--bf-color-content-primary\)/s);
+  assert.match(styles, /option[^}]*background-color:\s*var\(--bf-color-surface-panel\)/s);
+  assert.match(styles, /option:disabled[^}]*color:\s*var\(--bf-color-content-disabled\)/s);
   assert.match(styles, /--bf-color-status-danger-border/);
 });

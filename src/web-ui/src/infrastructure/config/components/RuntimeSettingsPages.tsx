@@ -24,7 +24,14 @@ import {
   ConfigRetryState,
 } from '@/infrastructure/config/components/common';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
-import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
+import {
+  ConfigPageContent,
+  ConfigPageHeader,
+  ConfigPageLayout,
+  ConfigPageRow,
+  ConfigPageSection,
+  formatStandaloneUiText,
+} from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import {
   DEFAULT_AGENT_COMPANION_PET,
@@ -1215,7 +1222,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 value={subagentBatchExecutionPolicy}
                 options={subagentBatchExecutionPolicyOptions.map(option => ({
                   disabled: option.disabled,
-                  label: option.description ? `${option.label} — ${option.description}` : option.label,
+                  label: option.description
+                    ? `${option.label} — ${formatStandaloneUiText(option.description)}`
+                    : option.label,
                   value: option.value,
                 }))}
                 size="sm"

@@ -29,9 +29,9 @@
       "desc": "选择多个任务同时开始时的运行方式。",
       "tooltipLabel": "任务并行方式说明",
       "safeOnly": "安全并行",
-      "safeOnlyDesc": "只同时运行不会修改内容的任务。",
+      "safeOnlyDesc": "只同时运行不会修改内容的任务",
       "forceParallel": "尽量并行",
-      "forceParallelDesc": "尽可能同时运行多个任务。"
+      "forceParallelDesc": "尽可能同时运行多个任务"
     },
     "seconds": "秒"
   },
