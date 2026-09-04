@@ -122,28 +122,11 @@
   &__path-input {
     flex: 1;
     min-width: 0;
+    border-style: dashed;
 
     input {
-      width: 100%;
       cursor: default;
       user-select: none;
-      font-size: var(--bf-type-label-sm-font-size);
-      padding: 10px 12px;
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-      border: 1px dashed var(--bf-color-border-subtle);
-      border-radius: 8px;
-      color: var(--bf-color-content-primary);
-
-      &::placeholder {
-        color: var(--bf-color-content-muted);
-        font-size: var(--bf-type-label-sm-font-size);
-      }
-
-      &:focus {
-        border-style: solid;
-        border-color: var(--bf-color-border-default);
-        outline: none;
-      }
     }
   }
 
@@ -155,36 +138,7 @@
   // ==================== Project Name Input ====================
 
   &__name-input {
-    input {
-      width: 100%;
-      font-size: var(--bf-type-label-sm-font-size);
-      padding: 10px 12px;
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-      border: 1px solid var(--bf-color-border-subtle);
-      border-radius: 8px;
-      color: var(--bf-color-content-primary);
-      transition:
-        background-color 0.2s ease,
-        border-color 0.2s ease,
-        box-shadow 0.2s ease,
-        color 0.2s ease;
-
-      &::placeholder {
-        color: var(--bf-color-content-muted);
-        font-size: var(--bf-type-label-sm-font-size);
-      }
-
-      &:focus {
-        border-color: color-mix(in srgb, var(--bf-color-accent-default) 45%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-        outline: none;
-      }
-
-      &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-    }
+    width: 100%;
   }
 
   // ==================== Full Path Display ====================

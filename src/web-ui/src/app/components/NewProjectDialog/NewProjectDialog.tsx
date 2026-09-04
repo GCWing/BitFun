@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
+import { basenamePath } from '@/shared/utils/pathUtils';
 import './NewProjectDialog.scss';
 
 const log = createLogger('NewProjectDialog');
@@ -45,6 +46,12 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   const [projectName, setProjectName] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string>('');
+
+  const parentFolderName = useMemo(() => {
+    if (!parentPath) return '';
+    const pathWithoutTrailingSeparators = parentPath.replace(/[\\/]+$/, '') || parentPath;
+    return basenamePath(pathWithoutTrailingSeparators) || pathWithoutTrailingSeparators;
+  }, [parentPath]);
 
   // Combine parent path and project name
   const fullPath = useMemo(() => {
@@ -147,14 +154,13 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               {t('newProject.parentDirectory')}
             </label>
             <div data-bf-component="new-project-dialog" data-bf-part="pathSelector" className="new-project-dialog__path-selector">
-              <div className="new-project-dialog__path-input">
-                <Input
-                  type="text"
-                  value={parentPath}
-                  readOnly
-                  placeholder={t('newProject.parentDirectoryPlaceholder')}
-                />
-              </div>
+              <Input
+                className="new-project-dialog__path-input"
+                type="text"
+                value={parentFolderName}
+                readOnly
+                placeholder={t('newProject.parentDirectoryPlaceholder')}
+              />
               <Button
                 type="button"
                 className="new-project-dialog__select-btn"
@@ -174,16 +180,15 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               <FileText size={14} />
               {t('newProject.projectName')}
             </label>
-            <div className="new-project-dialog__name-input">
-              <Input
-                type="text"
-                value={projectName}
-                onChange={handleProjectNameChange}
-                placeholder={t('newProject.projectNamePlaceholder')}
-                disabled={isCreating}
-                autoFocus
-              />
-            </div>
+            <Input
+              className="new-project-dialog__name-input"
+              type="text"
+              value={projectName}
+              onChange={handleProjectNameChange}
+              placeholder={t('newProject.projectNamePlaceholder')}
+              disabled={isCreating}
+              autoFocus
+            />
           </div>
 
           {/* Full path display */}
@@ -194,7 +199,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
               </div>
               <div className="new-project-dialog__preview-content">
                 <span className="new-project-dialog__preview-label">{t('newProject.fullPath')}</span>
-                <span className="new-project-dialog__preview-path">{fullPath}</span>
+                <span className="new-project-dialog__preview-path" title={fullPath}>{fullPath}</span>
               </div>
             </div>
           )}
