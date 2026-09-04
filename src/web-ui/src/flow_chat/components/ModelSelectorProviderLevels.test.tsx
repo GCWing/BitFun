@@ -271,7 +271,7 @@ describe('ModelSelector provider levels', () => {
 
   });
 
-  it('opens the reasoning presets from the settings summary', async () => {
+  it('opens generic reasoning defaults from the settings summary', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
       config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
     });
@@ -284,8 +284,11 @@ describe('ModelSelector provider levels', () => {
           status: 'known',
           default_preset: 'medium',
           presets: [
-            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
-            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+            { id: 'off', label: 'Off', order: 0, source: 'adapter_fallback', actions: [{ type: 'toggle', enabled: false }] },
+            { id: 'on', label: 'On', order: 1, source: 'adapter_fallback', actions: [{ type: 'toggle', enabled: true }] },
+            { id: 'low', label: 'Low', order: 10, source: 'adapter_fallback', actions: [{ type: 'effort', value: 'low' }] },
+            { id: 'medium', label: 'Medium', order: 11, source: 'adapter_fallback', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 12, source: 'adapter_fallback', actions: [{ type: 'effort', value: 'high' }] },
           ],
         },
       }],
@@ -309,7 +312,7 @@ describe('ModelSelector provider levels', () => {
     expect(sharedSubmenuItems()).not.toBeNull();
     expect(options.every(option => sharedSubmenuItems()?.contains(option))).toBe(true);
     expect(options.map(option => option.dataset.presetId))
-      .toEqual(['auto', 'medium', 'high']);
+      .toEqual(['auto', 'off', 'on', 'low', 'medium', 'high']);
     expect(options.every(option => (
       option.querySelector('.bitfun-model-selector__option-desc') === null
     ))).toBe(true);

@@ -328,7 +328,7 @@
     "catalogAuto": "自动检测",
     "catalogModelsDev": "指定 models.dev 模型",
     "catalogDisabled": "仅使用自定义预设",
-    "catalogAutoTooltip": "自动检测官方供应商地址下受支持模型的思考预设，同时保留自定义预设。",
+    "catalogAutoTooltip": "优先使用已识别模型的精确思考预设；未命中时提供可手动选择的通用开启、关闭和低/中/高强度，同时保留自定义预设。",
     "catalogModelsDevTooltip": "使用指定 models.dev 供应商和模型的思考预设。模型名称是别名，或兼容网关需要显式绑定时使用。",
     "catalogDisabledTooltip": "不生成 models.dev 和适配器预设，仅保留你配置的自定义预设。",
     "catalogSummary": {

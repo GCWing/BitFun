@@ -635,6 +635,7 @@ fn gemini_response_to_trace(response: &GeminiResponse) -> ModelExchangeResponseT
 #[cfg(test)]
 mod tests {
     use super::{send_message_retry_delay_ms, AIClient};
+    use crate::providers::shared::GENERIC_REASONING_PROVIDER_ID;
     use crate::providers::{anthropic, gemini, gemini::GeminiMessageConverter, openai};
     use crate::types::{AIConfig, ModelRequestContext, ToolDefinition};
     use crate::types::{ReasoningPresetAction, ReasoningPresetDescriptor};
@@ -794,6 +795,21 @@ mod tests {
         }
     }
 
+    fn generic_reasoning_preset(
+        id: &str,
+        actions: Vec<ReasoningPresetAction>,
+    ) -> ReasoningPresetDescriptor {
+        ReasoningPresetDescriptor {
+            id: id.to_string(),
+            label: id.to_string(),
+            order: 0,
+            actions,
+            source: bitfun_core_types::ReasoningPresetSource::AdapterFallback,
+            execution_provider: Some(GENERIC_REASONING_PROVIDER_ID.to_string()),
+            execution_model: Some("unlisted-model".to_string()),
+        }
+    }
+
     #[test]
     fn selected_reasoning_effort_overrides_model_custom_body() {
         let client = make_test_client(
@@ -819,6 +835,98 @@ mod tests {
 
         assert_eq!(body["reasoning"]["effort"], "high");
         assert_eq!(body["model"], "test-model");
+    }
+
+    #[test]
+    fn generic_openai_reasoning_defaults_compile_for_unlisted_models() {
+        let high =
+            make_test_client("openai", None).with_reasoning_preset(&generic_reasoning_preset(
+                "high",
+                vec![ReasoningPresetAction::Effort {
+                    value: "high".to_string(),
+                }],
+            ));
+        let high_body = openai::chat::build_request_body(
+            &high,
+            &high.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+        assert_eq!(high_body["reasoning_effort"], "high");
+
+        for (enabled, expected) in [(true, "enabled"), (false, "disabled")] {
+            let client =
+                make_test_client("openai", None).with_reasoning_preset(&generic_reasoning_preset(
+                    if enabled { "on" } else { "off" },
+                    vec![ReasoningPresetAction::Toggle { enabled }],
+                ));
+            let body = openai::chat::build_request_body(
+                &client,
+                &client.config.request_url,
+                vec![json!({ "role": "user", "content": "hello" })],
+                None,
+                None,
+            );
+            assert_eq!(body["thinking"]["type"], expected);
+            assert!(body.get("reasoning_effort").is_none());
+        }
+    }
+
+    #[test]
+    fn generic_responses_toggle_uses_medium_and_none_defaults() {
+        for (enabled, expected) in [(true, "medium"), (false, "none")] {
+            let client = make_test_client("responses", None).with_reasoning_preset(
+                &generic_reasoning_preset(
+                    if enabled { "on" } else { "off" },
+                    vec![ReasoningPresetAction::Toggle { enabled }],
+                ),
+            );
+            let body = openai::responses::build_request_body(
+                &client,
+                None,
+                vec![json!({"role": "user", "content": "hello"})],
+                None,
+                None,
+            );
+            assert_eq!(body["reasoning"]["effort"], expected);
+        }
+    }
+
+    #[test]
+    fn generic_anthropic_and_gemini_reasoning_defaults_compile() {
+        let anthropic_client =
+            make_test_client("anthropic", None).with_reasoning_preset(&generic_reasoning_preset(
+                "low",
+                vec![ReasoningPresetAction::Effort {
+                    value: "low".to_string(),
+                }],
+            ));
+        let anthropic_body = anthropic::request::build_request_body(
+            &anthropic_client,
+            &anthropic_client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+        assert_eq!(anthropic_body["thinking"]["type"], "adaptive");
+        assert_eq!(anthropic_body["output_config"]["effort"], "low");
+
+        let gemini_client = make_test_client("gemini", None).with_reasoning_preset(
+            &generic_reasoning_preset("on", vec![ReasoningPresetAction::Toggle { enabled: true }]),
+        );
+        let gemini_body = gemini::request::build_request_body(
+            &gemini_client,
+            None,
+            vec![json!({ "role": "user", "parts": [{ "text": "hello" }] })],
+            None,
+            None,
+        );
+        assert_eq!(
+            gemini_body["generationConfig"]["thinkingConfig"]["thinkingLevel"],
+            "MEDIUM"
+        );
     }
 
     #[test]
@@ -1176,7 +1284,7 @@ mod tests {
     }
 
     #[test]
-    fn openai_chat_rejects_generic_toggle_for_an_unverified_endpoint() {
+    fn openai_chat_rejects_unmapped_model_config_toggle_for_an_unverified_endpoint() {
         let client = AIClient::new(AIConfig {
             name: "openai-compatible".to_string(),
             base_url: "https://example.com/v1".to_string(),

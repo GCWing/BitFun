@@ -328,7 +328,7 @@
     "catalogAuto": "Auto-detect",
     "catalogModelsDev": "Use explicit models.dev model",
     "catalogDisabled": "Custom presets only",
-    "catalogAutoTooltip": "Automatically detects reasoning presets for supported models on official provider endpoints. Custom presets are also included.",
+    "catalogAutoTooltip": "Uses precise presets for recognized models, then offers manual generic on, off, and low/medium/high controls when no projection matches. Custom presets are also included.",
     "catalogModelsDevTooltip": "Uses the reasoning presets of a specific models.dev provider and model. Choose this when the configured model name is an alias or a compatible gateway requires an explicit binding.",
     "catalogDisabledTooltip": "Disables generated presets from models.dev and adapter fallbacks. Only your custom presets remain available.",
     "catalogSummary": {

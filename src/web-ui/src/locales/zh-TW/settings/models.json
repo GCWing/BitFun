@@ -328,7 +328,7 @@
     "catalogAuto": "自動偵測",
     "catalogModelsDev": "指定 models.dev 模型",
     "catalogDisabled": "僅使用自定義預設",
-    "catalogAutoTooltip": "自動偵測官方供應商位址下受支援模型的思考預設，同時保留自定義預設。",
+    "catalogAutoTooltip": "優先使用已識別模型的精確思考預設；未命中時提供可手動選擇的通用開啟、關閉和低／中／高強度，同時保留自定義預設。",
     "catalogModelsDevTooltip": "使用指定 models.dev 供應商和模型的思考預設。模型名稱是別名，或相容閘道需要明確綁定時使用。",
     "catalogDisabledTooltip": "不生成 models.dev 和適配器預設，僅保留你設定的自定義預設。",
     "catalogSummary": {

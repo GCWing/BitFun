@@ -87,14 +87,23 @@ fn compile_reasoning_action(
         .unwrap_or(configured_model)
         .trim()
         .to_ascii_lowercase();
+    let is_generic_reasoning = shared::is_generic_reasoning_preset(preset);
     match action {
-        ReasoningPresetAction::Effort { value } if model.starts_with("gemini-3-") => {
+        ReasoningPresetAction::Effort { value }
+            if model.starts_with("gemini-3-") || is_generic_reasoning =>
+        {
+            let value = if is_generic_reasoning {
+                shared::normalize_generic_reasoning_effort(value)
+                    .ok_or_else(|| anyhow!("Generic reasoning effort '{}' is unsupported", value))?
+            } else {
+                value.trim()
+            };
             insert_generation_field(
                 request_body,
                 "thinkingConfig",
                 serde_json::json!({
                     "includeThoughts": true,
-                    "thinkingLevel": value.trim().to_ascii_uppercase(),
+                    "thinkingLevel": value.to_ascii_uppercase(),
                 }),
             );
             Ok(true)
@@ -125,6 +134,24 @@ fn compile_reasoning_action(
                     "includeThoughts": enabled,
                     "thinkingBudget": if *enabled { -1 } else { 0 },
                 }),
+            );
+            Ok(true)
+        }
+        ReasoningPresetAction::Toggle { enabled } if is_generic_reasoning => {
+            insert_generation_field(
+                request_body,
+                "thinkingConfig",
+                if *enabled {
+                    serde_json::json!({
+                        "includeThoughts": true,
+                        "thinkingLevel": "MEDIUM",
+                    })
+                } else {
+                    serde_json::json!({
+                        "includeThoughts": false,
+                        "thinkingBudget": 0,
+                    })
+                },
             );
             Ok(true)
         }

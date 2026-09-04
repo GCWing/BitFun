@@ -141,6 +141,36 @@ fn compile_reasoning_action(
         .unwrap_or(configured_model)
         .trim()
         .to_ascii_lowercase();
+    let is_generic_reasoning = shared::is_generic_reasoning_preset(preset);
+
+    if is_generic_reasoning {
+        return match action {
+            ReasoningPresetAction::Effort { value } => {
+                let normalized =
+                    shared::normalize_generic_reasoning_effort(value).ok_or_else(|| {
+                        anyhow!("Generic reasoning effort '{}' is unsupported", value)
+                    })?;
+                apply_anthropic_adaptive_reasoning(request_body, Some(normalized));
+                Ok(true)
+            }
+            ReasoningPresetAction::Toggle { enabled: true } => {
+                apply_anthropic_adaptive_reasoning(request_body, None);
+                Ok(true)
+            }
+            ReasoningPresetAction::Toggle { enabled: false } => {
+                request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+                request_body
+                    .as_object_mut()
+                    .map(|body| body.remove("output_config"));
+                Ok(true)
+            }
+            ReasoningPresetAction::BudgetTokens { .. } => Ok(false),
+            ReasoningPresetAction::RequestPatch { .. } => {
+                unreachable!("patches are compiled by shared code")
+            }
+        };
+    }
+
     let is_deepseek_reasoning_target = execution_provider.eq_ignore_ascii_case("deepseek")
         || is_deepseek_url(url)
         || is_deepseek_reasoning_effort_model(&execution_model);

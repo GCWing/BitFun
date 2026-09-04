@@ -691,14 +691,14 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
     }
 
     // models.dev remains authoritative when it explicitly says the model is
-    // not reasoning-capable. Otherwise, a tested adapter fallback fills gaps
-    // in a missing or incomplete snapshot. Fallbacks are available only for
-    // auto-bound official endpoints; an explicit models.dev binding may point
-    // at an arbitrary gateway and must not grant adapter-inferred capability.
-    if matches!(binding, ReasoningCatalogBinding::Auto)
+    // not reasoning-capable or exposes no selectable control. Otherwise, a
+    // tested adapter fallback fills gaps in a missing or incomplete snapshot.
+    // An explicit models.dev binding may point at an arbitrary gateway and
+    // must not grant adapter-inferred capability.
+    let allows_adapter_fallback = matches!(binding, ReasoningCatalogBinding::Auto)
         && source_match.is_none_or(|(_, model)| model.reasoning)
-        && source_match.is_none_or(|(_, model)| model.reasoning_options.is_none())
-    {
+        && source_match.is_none_or(|(_, model)| model.reasoning_options.is_none());
+    if allows_adapter_fallback {
         let support = adapter_reasoning_support(provider, base_url, model_id, provider);
         for descriptor in adapter_fallback_descriptors(
             provider,
@@ -710,6 +710,17 @@ pub fn project_reasoning_catalog_with_limit_and_auto_binding(
             descriptors
                 .entry(descriptor.id.clone())
                 .or_insert(descriptor);
+        }
+    }
+
+    // A model catalog can never stay perfectly current. When auto detection
+    // produced no usable projection, expose a small protocol-level manual
+    // fallback instead of hiding the control. Auto remains the default; these
+    // presets are applied only after an explicit user selection. More precise
+    // model- or provider-specific presets continue to win above.
+    if allows_adapter_fallback && descriptors.is_empty() {
+        for descriptor in generic_reasoning_descriptors(provider, model_id) {
+            descriptors.insert(descriptor.id.clone(), descriptor);
         }
     }
 
@@ -1089,6 +1100,33 @@ fn adapter_fallback_descriptors(
     }
 }
 
+fn generic_reasoning_descriptors(provider: &str, model_id: &str) -> Vec<ReasoningPresetDescriptor> {
+    let provider = provider.trim().to_ascii_lowercase();
+    if !matches!(
+        provider.as_str(),
+        "openai" | "response" | "responses" | "anthropic" | "gemini" | "google"
+    ) {
+        return Vec::new();
+    }
+
+    let model_id = model_id.trim().to_ascii_lowercase();
+    let source = ReasoningPresetSource::AdapterFallback;
+    let execution_provider = crate::providers::shared::GENERIC_REASONING_PROVIDER_ID;
+    let mut descriptors = toggle_descriptors(source, execution_provider, &model_id);
+    descriptors.extend(effort_descriptors(
+        &[
+            Some("low".into()),
+            Some("medium".into()),
+            Some("high".into()),
+        ],
+        false,
+        source,
+        execution_provider,
+        &model_id,
+    ));
+    descriptors
+}
+
 fn adapter_fallback_provider_id(provider: &str, base_url: &str) -> Option<&'static str> {
     if let Some(provider_id) = auto_provider_id(provider, base_url) {
         return Some(provider_id);
@@ -1242,6 +1280,7 @@ mod tests {
         project_reasoning_catalog, project_reasoning_catalog_with_limit,
         project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
     };
+    use crate::providers::shared::GENERIC_REASONING_PROVIDER_ID;
     use bitfun_core_types::{
         ModelsDevCatalogSource, ReasoningCapabilityStatus, ReasoningCatalogBinding,
         ReasoningConfig, ReasoningPreset, ReasoningPresetAction, ReasoningPresetSource,
@@ -1554,7 +1593,7 @@ mod tests {
     }
 
     #[test]
-    fn zhipu_glm_52_adapter_fallback_is_limited_to_official_endpoints() {
+    fn zhipu_glm_52_uses_precise_fallback_only_on_official_endpoints() {
         for (provider, base_url) in [
             ("openai", "https://open.bigmodel.cn/api/paas/v4"),
             ("anthropic", "https://api.z.ai/api/anthropic"),
@@ -1575,15 +1614,25 @@ mod tests {
                 .all(|preset| preset.source == ReasoningPresetSource::AdapterFallback));
         }
 
-        let untrusted = project_reasoning_catalog(
+        let compatible_gateway = project_reasoning_catalog(
             "openai",
             "glm-5.2",
             "https://gateway.example.com/v1",
             None,
             None,
         );
-        assert_eq!(untrusted.status, ReasoningCapabilityStatus::Unknown);
-        assert!(untrusted.presets.is_empty());
+        assert_eq!(compatible_gateway.status, ReasoningCapabilityStatus::Known);
+        assert_eq!(
+            compatible_gateway
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "low", "medium", "high"]
+        );
+        assert!(compatible_gateway.presets.iter().all(|preset| {
+            preset.execution_provider.as_deref() == Some(GENERIC_REASONING_PROVIDER_ID)
+        }));
     }
 
     #[test]
@@ -1841,7 +1890,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_official_model_stays_fail_closed() {
+    fn unknown_official_model_gets_manual_generic_defaults() {
         let projection = project_reasoning_catalog(
             "responses",
             "gpt-9-unknown",
@@ -1850,8 +1899,19 @@ mod tests {
             None,
         );
 
-        assert_eq!(projection.status, ReasoningCapabilityStatus::Unknown);
-        assert!(projection.presets.is_empty());
+        assert_eq!(projection.status, ReasoningCapabilityStatus::Known);
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "low", "medium", "high"]
+        );
+        assert!(projection.presets.iter().all(|preset| {
+            preset.source == ReasoningPresetSource::AdapterFallback
+                && preset.execution_provider.as_deref() == Some(GENERIC_REASONING_PROVIDER_ID)
+        }));
     }
 
     #[test]
@@ -1876,7 +1936,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_catalog_rejects_custom_and_untrusted_endpoints() {
+    fn auto_catalog_uses_only_generic_defaults_on_untrusted_endpoints() {
         for (provider, model, base_url) in [
             (
                 "responses",
@@ -1926,17 +1986,25 @@ mod tests {
         ] {
             let projection =
                 project_reasoning_catalog(provider, model, base_url, None, Some(&catalog()));
+            assert_eq!(projection.status, ReasoningCapabilityStatus::Known);
             assert_eq!(
-                projection.status,
-                ReasoningCapabilityStatus::Unknown,
-                "auto catalog must fail closed for {base_url}"
+                projection
+                    .presets
+                    .iter()
+                    .map(|preset| preset.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["off", "on", "low", "medium", "high"],
+                "auto catalog must use generic controls for {base_url}"
             );
-            assert!(projection.presets.is_empty());
+            assert!(projection.presets.iter().all(|preset| {
+                preset.source == ReasoningPresetSource::AdapterFallback
+                    && preset.execution_provider.as_deref() == Some(GENERIC_REASONING_PROVIDER_ID)
+            }));
         }
     }
 
     #[test]
-    fn auto_catalog_requires_the_official_endpoint_to_match_the_protocol() {
+    fn mismatched_official_endpoint_uses_generic_defaults_not_catalog_presets() {
         let projection = project_reasoning_catalog(
             "anthropic",
             "gpt-test",
@@ -1945,8 +2013,18 @@ mod tests {
             Some(&catalog()),
         );
 
-        assert_eq!(projection.status, ReasoningCapabilityStatus::Unknown);
-        assert!(projection.presets.is_empty());
+        assert_eq!(projection.status, ReasoningCapabilityStatus::Known);
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "low", "medium", "high"]
+        );
+        assert!(projection.presets.iter().all(|preset| {
+            preset.execution_provider.as_deref() == Some(GENERIC_REASONING_PROVIDER_ID)
+        }));
     }
 
     #[test]
@@ -2058,7 +2136,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_effort_mapping_is_unknown_and_custom_presets_remain_available() {
+    fn generic_defaults_and_custom_presets_remain_available_together() {
         let configured = ReasoningConfig {
             catalog: ReasoningCatalogBinding::Auto,
             default_preset: Some("custom".to_string()),
@@ -2082,21 +2160,35 @@ mod tests {
 
         assert_eq!(projection.status, ReasoningCapabilityStatus::Known);
         assert_eq!(projection.default_preset.as_deref(), Some("custom"));
-        assert_eq!(projection.presets.len(), 1);
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "low", "medium", "high", "custom"]
+        );
     }
 
     #[test]
-    fn unsupported_effort_mapping_without_custom_presets_is_unknown() {
+    fn unmaintained_glm_53_flash_on_a_custom_gateway_uses_generic_defaults() {
         let projection = project_reasoning_catalog(
             "openai",
-            "gpt-test",
-            "https://example.com/v1/chat/completions",
+            "GLM-5.3-Flash",
+            "http://gateway.example.test/v1",
             None,
             Some(&catalog()),
         );
 
-        assert_eq!(projection.status, ReasoningCapabilityStatus::Unknown);
-        assert!(projection.presets.is_empty());
+        assert_eq!(projection.status, ReasoningCapabilityStatus::Known);
+        assert_eq!(
+            projection
+                .presets
+                .iter()
+                .map(|preset| preset.id.as_str())
+                .collect::<Vec<_>>(),
+            ["off", "on", "low", "medium", "high"]
+        );
     }
 
     #[test]

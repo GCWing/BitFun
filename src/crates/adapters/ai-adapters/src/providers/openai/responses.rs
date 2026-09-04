@@ -4,7 +4,9 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ModelRequestContext, ReasoningPresetAction, ToolDefinition};
+use crate::types::{
+    Message, ModelRequestContext, ReasoningPresetAction, ReasoningPresetDescriptor, ToolDefinition,
+};
 use anyhow::{anyhow, Result};
 use log::debug;
 use sha2::{Digest, Sha256};
@@ -76,6 +78,37 @@ fn ensure_reasoning_summary_opt_in(request_body: &mut serde_json::Value) {
         .or_insert_with(|| serde_json::Value::String("auto".to_string()));
 }
 
+fn compile_reasoning_action(
+    preset: &ReasoningPresetDescriptor,
+    action: &ReasoningPresetAction,
+    body: &mut serde_json::Value,
+) -> Result<bool> {
+    match action {
+        ReasoningPresetAction::Effort { value } => {
+            if value.trim().is_empty() {
+                return Err(anyhow!("Responses reasoning effort must not be empty"));
+            }
+            body["reasoning"] = serde_json::json!({ "effort": value, "summary": "auto" });
+            Ok(true)
+        }
+        ReasoningPresetAction::Toggle { enabled }
+            if shared::is_generic_reasoning_preset(preset) =>
+        {
+            body["reasoning"] = serde_json::json!({
+                "effort": if *enabled { "medium" } else { "none" },
+                "summary": "auto"
+            });
+            Ok(true)
+        }
+        ReasoningPresetAction::Toggle { .. } | ReasoningPresetAction::BudgetTokens { .. } => {
+            Ok(false)
+        }
+        ReasoningPresetAction::RequestPatch { .. } => {
+            unreachable!("patches are compiled by shared code")
+        }
+    }
+}
+
 fn try_build_request_body_with_context(
     client: &AIClient,
     instructions: Option<String>,
@@ -119,25 +152,14 @@ fn try_build_request_body_with_context(
         "prompt_cache_key",
         "tools",
     ];
-    let compile = |action: &ReasoningPresetAction, body: &mut serde_json::Value| -> Result<bool> {
-        match action {
-            ReasoningPresetAction::Effort { value } => {
-                if value.trim().is_empty() {
-                    return Err(anyhow!("Responses reasoning effort must not be empty"));
-                }
-                body["reasoning"] = serde_json::json!({ "effort": value, "summary": "auto" });
-                Ok(true)
-            }
-            ReasoningPresetAction::Toggle { .. } | ReasoningPresetAction::BudgetTokens { .. } => {
-                Ok(false)
-            }
-            ReasoningPresetAction::RequestPatch { .. } => {
-                unreachable!("patches are compiled by shared code")
-            }
-        }
-    };
     if let Some(preset) = client.model_reasoning_preset.as_ref() {
-        shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
+        shared::apply_reasoning_actions(
+            preset,
+            &mut request_body,
+            protected_keys,
+            &[],
+            |action, body| compile_reasoning_action(preset, action, body),
+        )?;
     }
 
     let protected_body = shared::protect_request_body(
@@ -177,7 +199,13 @@ fn try_build_request_body_with_context(
             &["reasoning"],
             &[],
         );
-        shared::apply_reasoning_actions(preset, &mut request_body, protected_keys, &[], compile)?;
+        shared::apply_reasoning_actions(
+            preset,
+            &mut request_body,
+            protected_keys,
+            &[],
+            |action, body| compile_reasoning_action(preset, action, body),
+        )?;
     }
     ensure_reasoning_summary_opt_in(&mut request_body);
     if let Some(schema) = request_context.and_then(|context| context.output_schema.as_ref()) {

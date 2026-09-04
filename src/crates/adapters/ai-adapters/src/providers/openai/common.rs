@@ -58,6 +58,7 @@ pub(crate) fn compile_chat_reasoning_action(
         || is_deepseek_reasoning_effort_model(&execution_model);
     let is_glm_52_reasoning_target = is_glm_52_reasoning_effort_model(&execution_model)
         && (execution_provider.eq_ignore_ascii_case("zhipuai") || is_zhipuai_url(url));
+    let is_generic_reasoning = shared::is_generic_reasoning_preset(preset);
 
     match action {
         ReasoningPresetAction::Toggle { enabled } if is_deepseek_reasoning_target => {
@@ -99,6 +100,25 @@ pub(crate) fn compile_chat_reasoning_action(
             let normalized = normalize_glm_52_reasoning_effort(value)
                 .ok_or_else(|| anyhow!("GLM-5.2 reasoning effort '{}' is unsupported", value))?;
             request_body["thinking"] = serde_json::json!({ "type": "enabled" });
+            request_body["reasoning_effort"] = serde_json::json!(normalized);
+            Ok(true)
+        }
+        ReasoningPresetAction::Toggle { enabled } if is_generic_reasoning => {
+            if !apply_openai_compatible_toggle(request_body, *enabled, url) {
+                request_body["thinking"] = serde_json::json!({
+                    "type": if *enabled { "enabled" } else { "disabled" }
+                });
+            }
+            if !enabled {
+                request_body
+                    .as_object_mut()
+                    .map(|body| body.remove("reasoning_effort"));
+            }
+            Ok(true)
+        }
+        ReasoningPresetAction::Effort { value } if is_generic_reasoning => {
+            let normalized = shared::normalize_generic_reasoning_effort(value)
+                .ok_or_else(|| anyhow!("Generic reasoning effort '{}' is unsupported", value))?;
             request_body["reasoning_effort"] = serde_json::json!(normalized);
             Ok(true)
         }
