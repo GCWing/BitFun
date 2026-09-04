@@ -256,10 +256,13 @@ describe('UserMessageItem steering tag', () => {
 
     const bubble = container.querySelector('[data-testid="chat-user-message"]');
     const shell = bubble?.parentElement;
+    const meta = container.querySelector('.user-message-item__meta');
     const time = container.querySelector<HTMLTimeElement>('[data-testid="chat-user-message-timestamp"]');
 
     expect(shell?.classList.contains('user-message-item-shell--with-timestamp')).toBe(true);
-    expect(time?.parentElement).toBe(shell);
+    expect(meta?.parentElement).toBe(shell);
+    expect(time?.parentElement).toBe(meta);
+    expect(container.querySelector('.user-message-item__actions')?.parentElement).toBe(meta);
     expect(time?.parentElement).not.toBe(bubble);
     expect(time?.dateTime).toBe('2026-09-03T06:32:08.000Z');
     expect(time?.textContent?.trim()).not.toBe('');
