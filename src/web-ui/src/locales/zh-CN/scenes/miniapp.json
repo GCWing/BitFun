@@ -1,6 +1,6 @@
 {
   "title": "小应用",
-  "subtitle": "即时生成的小应用，打开就能用，也能继续迭代。",
+  "subtitle": "在一个列表中发现、安装、更新和打开所有小应用。",
   "searchPlaceholder": "搜索小应用...",
   "importFromFolder": "从文件夹导入",
   "importAction": "导入小应用",
@@ -129,9 +129,29 @@
     "loadMore": "加载更多",
     "tabs": {
       "label": "MiniApp 页面",
+      "apps": "全部应用",
       "installed": "已安装",
       "market": "市场",
       "submissions": "我的投稿"
+    },
+    "library": {
+      "get": "获取",
+      "update": "更新",
+      "open": "打开",
+      "manage": "管理",
+      "installed": "已安装",
+      "updateAvailable": "可更新",
+      "customizing": "定制中",
+      "local": "本地",
+      "version": "v{{version}}",
+      "marketMeta": "作者 @{{owner}} · 评分 {{rating}} · {{downloads}} 次下载",
+      "localMeta": "位于此设备",
+      "viewDetails": "查看“{{name}}”详情",
+      "showcaseAlt": "{{name}} 展示图",
+      "showcaseFallback": "{{name}} 暂无展示图",
+      "remoteUnsupported": "此应用需要本地工作区。",
+      "marketUnavailable": "小应用市场暂时不可用，已安装应用仍可正常使用。",
+      "empty": "暂时没有可用的小应用。"
     },
     "sort": {
       "newest": "最新发布",
@@ -210,6 +230,7 @@
       "installed": "MiniApp 已安装。",
       "updated": "MiniApp 已更新，旧版本已保存。",
       "installFailed": "安装或更新失败：{{error}}",
+      "deleteFailed": "删除小应用失败：{{error}}",
       "catalogFailed": "市场暂时不可用：{{error}}",
       "submissionsFailed": "加载投稿失败：{{error}}"
     },

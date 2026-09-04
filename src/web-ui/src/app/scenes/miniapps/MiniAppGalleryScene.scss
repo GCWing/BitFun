@@ -1,4 +1,4 @@
-$miniapp-gallery-content-inline-size: min(calc(100% - var(--bf-space-6)), 680px);
+$miniapp-gallery-content-inline-size: min(calc(100% - var(--bf-space-6)), 880px);
 
 .miniapp-gallery-scene {
   display: flex;
@@ -37,9 +37,8 @@ $miniapp-gallery-content-inline-size: min(calc(100% - var(--bf-space-6)), 680px)
   }
 }
 
-// All three panes share the Installed view's compact content rail. Keep this
-// geometry at the scene owner so Market and Submissions cannot drift back to
-// GalleryLayout's wider default independently.
+// Both panes share one compact content rail. Keep this geometry at the scene
+// owner so the library and submissions cannot drift independently.
 .miniapp-gallery-pane {
   background: var(--bf-color-surface-scene);
 

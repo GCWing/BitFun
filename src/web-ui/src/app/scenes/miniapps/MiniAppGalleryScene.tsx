@@ -4,19 +4,18 @@
  */
 import React, { Suspense, lazy, useState } from 'react';
 
-import { Icon, SegmentedControl } from '@bitfun/ui';
+import { SegmentedControl } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
-const MiniAppGalleryView = lazy(() => import('./views/MiniAppGalleryView'));
-const MiniAppMarketView = lazy(() => import('./views/MiniAppMarketView'));
+const MiniAppLibraryView = lazy(() => import('./views/MiniAppLibraryView'));
 const MiniAppSubmissionsView = lazy(() => import('./views/MiniAppSubmissionsView'));
 
-type MiniAppGalleryTab = 'installed' | 'market' | 'submissions';
+type MiniAppGalleryTab = 'apps' | 'submissions';
 
 const MiniAppGalleryScene: React.FC = () => {
   const { t } = useI18n('scenes/miniapp');
-  const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('installed');
+  const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('apps');
   const tabs = (
     <SegmentedControl
       aria-label={t('title')}
@@ -24,18 +23,11 @@ const MiniAppGalleryScene: React.FC = () => {
       distribution="fill"
       options={[
         {
-          value: 'installed',
-          icon: <Icon name="arrow-down" size="sm" />,
-          label: t('market.tabs.installed'),
-        },
-        {
-          value: 'market',
-          icon: <Icon name="store" size="sm" />,
-          label: t('market.tabs.market'),
+          value: 'apps',
+          label: t('market.tabs.apps'),
         },
         {
           value: 'submissions',
-          icon: <Icon name="upload" size="sm" />,
           label: t('market.tabs.submissions'),
         },
       ]}
@@ -49,8 +41,7 @@ const MiniAppGalleryScene: React.FC = () => {
     <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
       <div className="miniapp-gallery-scene__content">
         <Suspense fallback={null}>
-          {activeTab === 'installed' && <MiniAppGalleryView tabs={tabs} />}
-          {activeTab === 'market' && <MiniAppMarketView tabs={tabs} />}
+          {activeTab === 'apps' && <MiniAppLibraryView tabs={tabs} />}
           {activeTab === 'submissions' && <MiniAppSubmissionsView tabs={tabs} />}
         </Suspense>
       </div>

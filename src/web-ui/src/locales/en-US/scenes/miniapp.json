@@ -1,6 +1,6 @@
 {
   "title": "Mini Apps",
-  "subtitle": "Instantly generated mini apps, ready to use right away. You can also continue to iterate on them.",
+  "subtitle": "Browse, install, update, and open every mini app in one place.",
   "searchPlaceholder": "Search mini apps...",
   "importFromFolder": "Import from folder",
   "importAction": "Import mini app",
@@ -129,9 +129,29 @@
     "loadMore": "Load more",
     "tabs": {
       "label": "MiniApp pages",
+      "apps": "All apps",
       "installed": "Installed",
       "market": "Market",
       "submissions": "My submissions"
+    },
+    "library": {
+      "get": "Get",
+      "update": "Update",
+      "open": "Open",
+      "manage": "Manage",
+      "installed": "Installed",
+      "updateAvailable": "Update available",
+      "customizing": "Customizing",
+      "local": "Local",
+      "version": "v{{version}}",
+      "marketMeta": "By @{{owner}} · {{rating}} rating · {{downloads}} downloads",
+      "localMeta": "On this device",
+      "viewDetails": "View details for {{name}}",
+      "showcaseAlt": "{{name}} showcase image",
+      "showcaseFallback": "No showcase image for {{name}}",
+      "remoteUnsupported": "This app needs a local workspace.",
+      "marketUnavailable": "The marketplace is unavailable. Installed apps are still ready to use.",
+      "empty": "No mini apps are available yet."
     },
     "sort": {
       "newest": "Newest",
@@ -210,6 +230,7 @@
       "installed": "MiniApp installed.",
       "updated": "MiniApp updated; the old version was saved.",
       "installFailed": "Install or update failed: {{error}}",
+      "deleteFailed": "Could not delete the MiniApp: {{error}}",
       "catalogFailed": "The market is unavailable: {{error}}",
       "submissionsFailed": "Could not load submissions: {{error}}"
     },
