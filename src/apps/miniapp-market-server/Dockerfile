@@ -7,12 +7,21 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches/ patches/
+COPY design-system/LICENSE design-system/LICENSE
+COPY design-system/tooling/token-engine/package.json design-system/tooling/token-engine/package.json
+COPY design-system/packages/design-tokens/package.json design-system/packages/design-tokens/package.json
+COPY design-system/packages/theme-bitfun/package.json design-system/packages/theme-bitfun/package.json
 COPY src/miniapp-market-web/package.json src/miniapp-market-web/package.json
 RUN --mount=type=cache,id=bitfun-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-miniapp-market-web
+    pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-miniapp-market-web...
 
+COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
+COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
+COPY design-system/packages/theme-bitfun/ design-system/packages/theme-bitfun/
 COPY src/miniapp-market-web/ src/miniapp-market-web/
-RUN pnpm --dir src/miniapp-market-web build
+RUN pnpm --dir design-system/packages/design-tokens build \
+    && pnpm --dir design-system/packages/theme-bitfun build \
+    && pnpm --dir src/miniapp-market-web build
 
 FROM rust:1.96-bookworm AS rust-builder
 
