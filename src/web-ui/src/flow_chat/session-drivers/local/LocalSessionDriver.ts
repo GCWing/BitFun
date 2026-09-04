@@ -64,9 +64,7 @@ export const localSessionDriver: SessionDriver = {
 
     const explicitModelName = config.modelName?.trim() || undefined;
     const reasoningPreset = config.reasoningPreset
-      ?? (explicitModelName
-        ? await resolveReasoningPresetForSessionCreation(explicitModelName)
-        : undefined);
+      ?? await resolveReasoningPresetForSessionCreation(explicitModelName);
     surfaceScope.assertCurrent('resolve session creation reasoning preset');
 
     const response = await agentAPI.createSession({

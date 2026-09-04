@@ -89,15 +89,23 @@ export async function getModelMaxTokens(modelName?: string, agentType?: string):
 }
 
 export async function resolveReasoningPresetForSessionCreation(
-  modelName: string,
+  modelName?: string,
 ): Promise<string | undefined> {
   try {
+    let modelSelection = modelName?.trim();
+    if (!modelSelection) {
+      const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
+      const configData = await configManager.getConfigs(['ai.agent_model_defaults']);
+      const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
+      modelSelection = agentModelDefaults?.mode?.trim() || 'primary';
+    }
+
     const catalog = await aiApi.getModelCatalog();
-    const selectedModelId = modelName === 'primary'
+    const selectedModelId = modelSelection === 'primary'
       ? catalog.default_models.primary ?? undefined
-      : modelName === 'fast'
+      : modelSelection === 'fast'
         ? catalog.default_models.fast ?? catalog.default_models.primary ?? undefined
-        : modelName;
+        : modelSelection;
     const concreteModelId = selectedModelId
       && catalog.models.some(model => model.id === selectedModelId)
       ? selectedModelId

@@ -323,6 +323,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [levelDirection, setLevelDirection] = useState<ModelSelectorLevelDirection>('none');
   const [loading, setLoading] = useState(false);
   const [reasoningLoading, setReasoningLoading] = useState(false);
+  const [preSessionReasoningSelection, setPreSessionReasoningSelection] = useState<{
+    modelId: string;
+    presetId: string | undefined;
+  } | null>(null);
   const acpRestoreToastShownRef = useRef<string | null>(null);
   const acpOptionsRef = useRef<AcpSessionOptions | null>(null);
 
@@ -973,9 +977,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (!concreteModelId) return null;
     return modelCatalog?.models.find(model => model.id === concreteModelId)?.reasoning ?? null;
   }, [concreteModelId, modelCatalog]);
-  const selectedReasoningPreset = currentReasoningProjection?.status === 'known'
-    && currentReasoningProjection.presets?.some(preset => preset.id === sessionReasoningPreset)
+  const preSessionReasoningPreset = concreteModelId
+    ? preSessionReasoningSelection?.modelId === concreteModelId
+      ? preSessionReasoningSelection.presetId
+      : getRecentReasoningPreset(concreteModelId)
+    : undefined;
+  const reasoningPresetCandidate = sessionId
     ? sessionReasoningPreset
+    : preSessionReasoningPreset;
+  const selectedReasoningPreset = currentReasoningProjection?.status === 'known'
+    && currentReasoningProjection.presets?.some(preset => preset.id === reasoningPresetCandidate)
+    ? reasoningPresetCandidate
     : undefined;
   const orderedReasoningPresets = useMemo(
     () => currentReasoningProjection?.status === 'known'
@@ -996,7 +1008,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const reasoningPresetLabels = orderedReasoningPresets.map(preset => (
     presetDisplayLabel(preset, orderedReasoningPresets, t)
   ));
-  const hasNativeReasoningSettings = Boolean(sessionId && orderedReasoningPresets.length > 0);
+  const hasNativeReasoningSettings = orderedReasoningPresets.length > 0;
   useEffect(() => {
     if (
       !targetIsSubagent
@@ -1144,7 +1156,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       disabled
       || loading
       || reasoningLoading
-      || !sessionId
       || !concreteModelId
       || currentReasoningProjection?.status !== 'known'
     ) {
@@ -1155,6 +1166,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       normalizedPreset
       && !currentReasoningProjection.presets?.some(preset => preset.id === normalizedPreset)
     ) {
+      return;
+    }
+
+    if (!sessionId) {
+      setRecentReasoningPreset(concreteModelId, normalizedPreset);
+      setPreSessionReasoningSelection({
+        modelId: concreteModelId,
+        presetId: normalizedPreset,
+      });
+      log.info('New session reasoning preset updated', {
+        modelId: concreteModelId,
+        presetId: normalizedPreset ?? 'auto',
+      });
       return;
     }
 
@@ -1180,6 +1204,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       }
       if (!targetIsSubagent) {
         setRecentReasoningPreset(concreteModelId, normalizedPreset);
+        setPreSessionReasoningSelection({
+          modelId: concreteModelId,
+          presetId: normalizedPreset,
+        });
       }
       log.info('Session reasoning preset updated', {
         sessionId,

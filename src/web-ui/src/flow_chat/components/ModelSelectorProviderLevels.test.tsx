@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from './ModelSelector';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { getRecentReasoningPreset } from '../utils/reasoningPresets';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -315,6 +316,45 @@ describe('ModelSelector provider levels', () => {
     expect(options.every(option => option.querySelector('svg') === null)).toBe(true);
     expect(options.find(option => option.dataset.presetId === 'high')?.getAttribute('aria-checked'))
       .toBe('true');
+  });
+
+  it('offers and remembers reasoning presets before a session is created', async () => {
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1,
+      default_models: { primary: 'acme-fast' },
+      models: [{
+        id: 'acme-fast',
+        reasoning: {
+          status: 'known',
+          default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    });
+
+    await renderSelector();
+    await openSettingsMenu();
+
+    const reasoningRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
+    );
+    expect(reasoningRow?.textContent).toContain('reasoningSelector.levels.medium');
+
+    await act(async () => reasoningRow?.click());
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-model-selector-reasoning-option"][data-preset-id="high"]',
+      )?.click();
+    });
+
+    expect(getRecentReasoningPreset('acme-fast')).toBe('high');
+    expect(flowChatStoreMocks.store.updateSessionReasoningPreset).not.toHaveBeenCalled();
+    expect(container.querySelector(
+      '[data-testid="chat-model-selector-trigger-reasoning"]',
+    )?.textContent).toContain('reasoningSelector.levels.high');
   });
 
   it('offers providers first and keeps the symbolic selectors on that level', async () => {
