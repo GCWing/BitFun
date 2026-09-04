@@ -69,6 +69,10 @@ required. The default dev profile keeps line tables while reducing PDB size.
 
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
 
+### Concurrent manual builds race the shutdown GC
+
+Killing `bitfun-desktop.exe` ends the `desktop:dev` / `desktop:preview:debug` session, and that shutdown runs target GC. A manual `cargo build -p bitfun-desktop` started too early can then fail mid-compile with `os error 3` (系统找不到指定的路径) writing into `target/debug/build` or `target/debug/incremental` because GC deleted those directories while the build was writing. `os error 5` (拒绝访问) on `bitfun-desktop.exe` itself means the app is still running and locks the exe. Both are transient: make sure the preview session (node `dev.cjs` + vite + the exe) has fully exited — wait a few seconds after killing the exe — and simply re-run the build. No `cargo clean` is needed.
+
 ## DevTools feature (model rule)
 
 The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When adding or modifying debug-related code:

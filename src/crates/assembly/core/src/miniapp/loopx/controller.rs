@@ -816,8 +816,25 @@ impl LoopxController {
         drop(_mutation);
         self.broadcast_new_events(&persisted, start_cursor);
 
-        for task_id in created_task_ids {
-            self.enqueue_task(task_id, Duration::ZERO)?;
+        // Enqueue only the first created task per repository. The rest stay
+        // Preparing/Queued and are chained by schedule_next_for_repository
+        // after each settlement, keeping execution order deterministic
+        // (creation order) instead of letting concurrent drives race for the
+        // repository slot (which could start the last-created task first).
+        let mut enqueued_repositories: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for task_id in &created_task_ids {
+            let repository_id = {
+                let state = self.state.read().await;
+                match state.tasks.iter().find(|task| &task.task_id == task_id) {
+                    Some(task) => task.identity.item.repository.canonical_id(),
+                    None => continue,
+                }
+            };
+            if !enqueued_repositories.insert(repository_id) {
+                continue;
+            }
+            self.enqueue_task(task_id.clone(), Duration::ZERO)?;
         }
         Ok(LoopxCreateTaskResponse {
             outcomes,

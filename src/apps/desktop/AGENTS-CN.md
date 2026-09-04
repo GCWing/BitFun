@@ -60,6 +60,10 @@ pnpm run prepare:dsh-profile   # 可选：本地 DeepSeek Harness 会话
 
 `release-fast` profile（`Cargo.toml`）：继承 `release`，但关闭 LTO、`codegen-units` 提高到 16、启用增量编译。编译速度显著提升，代价是二进制体积增大和边际运行时性能下降。
 
+### 手动并发构建会与退出时 GC 竞争
+
+杀掉 `bitfun-desktop.exe` 会结束 `desktop:dev` / `desktop:preview:debug` 会话，退出过程会执行 target GC。此时立即手动执行 `cargo build -p bitfun-desktop` 可能编译中途失败，报 `os error 3`（系统找不到指定的路径），原因是 GC 在构建写入时删除了 `target/debug/build` 或 `target/debug/incremental` 目录。`bitfun-desktop.exe` 自身报 `os error 5`（拒绝访问）则是应用仍在运行、exe 被锁定。两者都是暂时性的：确认 preview 会话（node `dev.cjs` + vite + exe）完全退出——杀掉 exe 后等几秒——然后直接重跑构建即可，无需 `cargo clean`。
+
 ## DevTools feature（模型规则）
 
 `devtools` Cargo feature 用于桌面端 UI/UX 调试。添加或修改调试相关代码时：
