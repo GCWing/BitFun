@@ -1,17 +1,18 @@
 use super::tool_activity::project_tool_activity;
 use crate::agentic::coordination::ConversationCoordinator;
+use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 use bitfun_events::AgenticEvent;
 use bitfun_product_domains::miniapp::loopx::{
-    LoopxAgentCancelRequest, LoopxAgentCancelResult, LoopxAgentFinishRequest,
-    LoopxAgentFinishResult, LoopxAgentOutputSinceRequest, LoopxAgentOutputSinceResult,
-    LoopxAgentPort, LoopxAgentProbeRequest, LoopxAgentProbeResult, LoopxAgentResetRequest,
-    LoopxAgentResetResult, LoopxAgentStartRequest, LoopxAgentStartResult, LoopxHostFuture,
-    LoopxHostPortError, LoopxHostPortErrorKind, LoopxTurnOutputEvent, LoopxTurnOutputEventKind,
-    LOOPX_BUILTIN_APP_ID,
+    required_permission_scopes_are_granted, LoopxAgentCancelRequest, LoopxAgentCancelResult,
+    LoopxAgentFinishRequest, LoopxAgentFinishResult, LoopxAgentOutputSinceRequest,
+    LoopxAgentOutputSinceResult, LoopxAgentPort, LoopxAgentProbeRequest, LoopxAgentProbeResult,
+    LoopxAgentResetRequest, LoopxAgentResetResult, LoopxAgentStartRequest, LoopxAgentStartResult,
+    LoopxHostFuture, LoopxHostPortError, LoopxHostPortErrorKind, LoopxTurnOutputEvent,
+    LoopxTurnOutputEventKind, LOOPX_BUILTIN_APP_ID,
 };
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionSource,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, PermissionMode,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -111,6 +112,13 @@ impl LoopxAgentPort for CoreLoopxAgentPort {
                 return Err(host_error(
                     LoopxHostPortErrorKind::InvalidInput,
                     "LoopX Agent worktree path is required",
+                    &request.operation_id,
+                ));
+            }
+            if !required_permission_scopes_are_granted(&request.granted_scopes) {
+                return Err(host_error(
+                    LoopxHostPortErrorKind::InvalidInput,
+                    "LoopX Agent cannot run headlessly without every required intake permission scope",
                     &request.operation_id,
                 ));
             }
@@ -479,6 +487,10 @@ fn loopx_session_metadata(
             "loopxTurnId".to_string(),
             serde_json::json!(request.metadata.loopx_turn_id.clone()),
         ),
+        (
+            PERMISSION_MODE_CONTEXT_KEY.to_string(),
+            serde_json::json!(PermissionMode::AutoApprove.as_str()),
+        ),
     ])
 }
 
@@ -512,6 +524,7 @@ mod tests {
     use bitfun_events::{ToolEventData, ToolEventIdentity};
     use bitfun_product_domains::miniapp::loopx::{
         LoopxAgentTurnMetadata, LoopxIssueKey, LoopxItemKind, LoopxRepositoryKey,
+        LOOPX_REQUIRED_PERMISSION_SCOPES,
     };
 
     #[test]
@@ -519,6 +532,7 @@ mod tests {
         let request = LoopxAgentStartRequest {
             task_id: "task-1".to_string(),
             generation: 2,
+            granted_scopes: LOOPX_REQUIRED_PERMISSION_SCOPES.to_vec(),
             metadata: LoopxAgentTurnMetadata {
                 goal_id: "goal-1".to_string(),
                 loopx_turn_id: "turn-1".to_string(),
@@ -539,6 +553,10 @@ mod tests {
         let metadata = loopx_session_metadata(&request);
         assert_eq!(metadata["surface"], serde_json::json!("miniapp_agent"));
         assert_eq!(metadata["appId"], serde_json::json!(LOOPX_BUILTIN_APP_ID));
+        assert_eq!(
+            metadata[PERMISSION_MODE_CONTEXT_KEY],
+            serde_json::json!(PermissionMode::AutoApprove.as_str())
+        );
     }
 
     #[test]

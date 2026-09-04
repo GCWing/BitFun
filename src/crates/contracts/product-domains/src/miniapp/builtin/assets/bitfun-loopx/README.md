@@ -208,6 +208,9 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   宿主审批/恢复动作直接推进，仅在真实待机恢复的 force reconciliation 中重新向 CLI
   对账。这样等待审批不会每 30 秒生成一个可能超时的 sidecar 进程。
 - Issue 列表与 issue 视图是一级工作区：右侧 issue 视图永远对应当前选中任务，未选中时自动跟随正在运行的任务并显示跟随横幅；点击左侧任务即固定查看该 Issue，右侧内容与左侧选中严格一一对应。issue 视图自上而下集中展示：任务头（标题、状态、操作、GitHub 链接）、审批面板、当前阶段（五阶段总结 + 当前动作）、最新进展（durable 的最后回合总结 + 事实 chips：工作区路径、回合、结算回执、产出物、错误）、原始 Issue 描述（可折叠）和合并时间线（宿主事件与模型实时输出按轮次交错，准备期/排队期不再空白）。审批门禁同时投影为持久顶部提示，但只负责提醒与跳转；批准/拒绝只在 issue 视图内提交，提交后以任务 pending 状态等待宿主确认，不把 CLI 往返延迟表现成按钮卡死。
+- 桌面默认保持“任务 / Issue 详情 / 运行时间线”三列，只有右侧 issue workspace 小于
+  780 CSS px 时才把详情和时间线上下堆叠。选中任务后只读刷新一次 GitHub metadata，
+  优先显示当前的 Unicode-safe 600 字符摘要；网络不可用时回退到持久任务快照。
 - `pending_gate_id/message/action_kind` 属于任务快照的持久投影，审批按钮不依赖可能被
   截断的历史事件回放。升级前的 `WaitingForUser` 记录若缺少该投影，普通 attach 只做
   一次 CLI reconciliation 补齐，之后重新进入等待态免轮询路径。
@@ -217,6 +220,11 @@ built-in source、非本地覆盖和本地执行域。伪造 id、draft、市场
   selected todo、boundary、required reads、execution policy 和 writeback contract
   投影给 Agent。Agent 技术能力由 assembly 显式声明，services adapter 只负责协议翻译；
   permission grant 始终是另一条独立边界。
+- Intake 展示的五项标准 scope 是无头 issue-fix Agent 完成工作的必需集合。用户明确确认
+  全部 scope 后，host 才以 `auto_approve` 运行该 transient turn，避免在没有通用工具审批卡的
+  MiniApp 中创建无人能回答的 permission request。发布、公开评论、PR、合并和生产操作不可在
+  intake 预授权，仍由 LoopX typed user gate 要求 owner 决策。缺少任一必需 scope 时在创建阶段
+  明确拒绝，不启动一个会隐形等待权限的 Agent turn。
 - LoopX registry 是 goal/todo/gate/quota/settlement 的唯一权威。BitFun 持久化的
   `LoopxTaskState` 只描述 workspace、session、取消和恢复等 host-job 生命周期，并保存
   最近一次只读 `goalState` 投影；启动环境检查和 UI attach 都会向 CLI 对账。

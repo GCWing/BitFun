@@ -420,15 +420,22 @@ pub fn decide_task_dedup(
     }
 }
 
+pub const LOOPX_REQUIRED_PERMISSION_SCOPES: [LoopxPermissionScope; 5] = [
+    LoopxPermissionScope::WorkspaceRead,
+    LoopxPermissionScope::WorkspaceWrite,
+    LoopxPermissionScope::GitLocal,
+    LoopxPermissionScope::GithubRead,
+    LoopxPermissionScope::AgentExecution,
+];
+
 pub fn intake_scope_is_pregrantable(scope: LoopxPermissionScope) -> bool {
-    matches!(
-        scope,
-        LoopxPermissionScope::WorkspaceRead
-            | LoopxPermissionScope::WorkspaceWrite
-            | LoopxPermissionScope::GitLocal
-            | LoopxPermissionScope::GithubRead
-            | LoopxPermissionScope::AgentExecution
-    )
+    LOOPX_REQUIRED_PERMISSION_SCOPES.contains(&scope)
+}
+
+pub fn required_permission_scopes_are_granted(granted: &[LoopxPermissionScope]) -> bool {
+    LOOPX_REQUIRED_PERMISSION_SCOPES
+        .iter()
+        .all(|scope| granted.contains(scope))
 }
 
 /// The agent concluded the reported failure was already fixed upstream, so the

@@ -457,12 +457,14 @@ fn workspace_agent_and_gate_ports_keep_routes_typed() {
         worktree_path: "/worktrees/task-1".to_string(),
         instruction: "Fix the selected issue".to_string(),
         model_id: "primary".to_string(),
+        granted_scopes: LOOPX_REQUIRED_PERMISSION_SCOPES.to_vec(),
         metadata: Default::default(),
     };
     let agent_json = serde_json::to_value(agent).unwrap();
     assert_eq!(agent_json["generation"], 3);
     assert_eq!(agent_json["worktreePath"], "/worktrees/task-1");
     assert_eq!(agent_json["instruction"], "Fix the selected issue");
+    assert_eq!(agent_json["grantedScopes"].as_array().unwrap().len(), 5);
 
     let legacy_agent: LoopxAgentStartRequest = serde_json::from_value(serde_json::json!({
         "prompt": "Legacy LoopX prompt"

@@ -23,7 +23,7 @@ const DEFAULT_SECONDARY_BACKOFF: Duration = Duration::from_secs(60);
 /// Upper bound of the plain-text excerpt kept per issue/PR body. Keeps task
 /// snapshots (and the event stream) bounded while still giving task surfaces
 /// readable context.
-const DESCRIPTION_EXCERPT_MAX: usize = 600;
+const DESCRIPTION_EXCERPT_MAX_CHARS: usize = 600;
 
 /// Trims a GitHub markdown body into a bounded plain-text excerpt used by
 /// task surfaces. Markdown image/link syntax is resolved to its visible text,
@@ -31,12 +31,9 @@ const DESCRIPTION_EXCERPT_MAX: usize = 600;
 /// normalized. The full body is never projected into the candidate/task
 /// snapshot.
 fn candidate_description(body: &str) -> String {
-    let mut excerpt = String::with_capacity(body.len().min(DESCRIPTION_EXCERPT_MAX + 64));
+    let mut excerpt = String::with_capacity(body.len().min(DESCRIPTION_EXCERPT_MAX_CHARS * 3));
     let mut chars = body.chars().peekable();
     while let Some(ch) = chars.next() {
-        if excerpt.len() >= DESCRIPTION_EXCERPT_MAX {
-            break;
-        }
         match ch {
             '!' if chars.peek() == Some(&'[') => {
                 // `![alt](url)` → keep alt, drop url.
@@ -59,16 +56,16 @@ fn candidate_description(body: &str) -> String {
             _ => excerpt.push(ch),
         }
     }
-    excerpt = excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
-    if excerpt.len() > DESCRIPTION_EXCERPT_MAX {
-        let mut boundary = DESCRIPTION_EXCERPT_MAX;
-        while boundary > 0 && !excerpt.is_char_boundary(boundary) {
-            boundary -= 1;
-        }
-        excerpt.truncate(boundary);
-        excerpt.push('…');
+    let normalized = excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut normalized_chars = normalized.chars();
+    let mut bounded = normalized_chars
+        .by_ref()
+        .take(DESCRIPTION_EXCERPT_MAX_CHARS)
+        .collect::<String>();
+    if normalized_chars.next().is_some() {
+        bounded.push('…');
     }
-    excerpt
+    bounded
 }
 
 /// Reads characters up to and including `stop`, returning the text before it.
@@ -1016,7 +1013,19 @@ mod tests {
         // Full body and remote URLs never leak into the projection.
         let serialized = serde_json::to_string(&candidate).expect("serialize");
         assert!(!serialized.contains("https://example.test"));
-        assert!(candidate.description.len() <= DESCRIPTION_EXCERPT_MAX);
+        assert!(candidate.description.chars().count() <= DESCRIPTION_EXCERPT_MAX_CHARS + 1);
+    }
+
+    #[test]
+    fn metadata_projection_counts_unicode_characters_and_marks_real_truncation() {
+        let cjk_body = format!("{} sh 命令。", "中".repeat(210));
+        assert!(cjk_body.len() > DESCRIPTION_EXCERPT_MAX_CHARS);
+        assert_eq!(candidate_description(&cjk_body), cjk_body);
+
+        let oversized = "项".repeat(DESCRIPTION_EXCERPT_MAX_CHARS + 1);
+        let projected = candidate_description(&oversized);
+        assert_eq!(projected.chars().count(), DESCRIPTION_EXCERPT_MAX_CHARS + 1);
+        assert!(projected.ends_with('…'));
     }
 
     #[test]

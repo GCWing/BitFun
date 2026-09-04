@@ -295,7 +295,7 @@ const COPY = {
     bridgeUnavailable: '宿主没有提供受信任的 LoopX 运行接口。请更新 BitFun 后重试。',
     selectAtLeastOne: '至少选择一个仍开放的 Issue 或 PR。',
     selectAll: '全选',
-    selectPermissions: '请确认本次任务需要的权限范围。',
+    selectPermissions: '请确认全部必需权限范围后再创建任务。',
     previewExpired: '确认信息已失效，请重新分析链接。',
     taskCreated: '任务已创建。',
     tasksCreated: '已创建 {value} 个任务。',
@@ -653,7 +653,7 @@ const COPY = {
     bridgeUnavailable: 'The host did not expose the trusted LoopX runtime interface. Update BitFun and try again.',
     selectAtLeastOne: 'Select at least one open issue or pull request.',
     selectAll: 'Select all',
-    selectPermissions: 'Confirm the permission scopes required by this run.',
+    selectPermissions: 'Confirm every required permission scope before creating the task.',
     previewExpired: 'This preview is stale. Analyze the URL again.',
     taskCreated: 'Task created.',
     tasksCreated: '{value} tasks created.',
@@ -1235,17 +1235,19 @@ function itemUrl(item) {
 }
 
 function identityTitleOf(task) {
-  const title = task && task.identity && task.identity.title;
-  if (typeof title === 'string' && title.trim()) return title.trim();
   const item = task && task.identity && task.identity.item;
-  return (state.itemMetadata.get(itemKey(item)) || {}).title || '';
+  const refreshed = (state.itemMetadata.get(itemKey(item)) || {}).title;
+  if (typeof refreshed === 'string' && refreshed.trim()) return refreshed.trim();
+  const title = task && task.identity && task.identity.title;
+  return typeof title === 'string' ? title.trim() : '';
 }
 
 function identityDescriptionOf(task) {
-  const description = task && task.identity && task.identity.description;
-  if (typeof description === 'string' && description.trim()) return description.trim();
   const item = task && task.identity && task.identity.item;
-  return (state.itemMetadata.get(itemKey(item)) || {}).description || '';
+  const refreshed = (state.itemMetadata.get(itemKey(item)) || {}).description;
+  if (typeof refreshed === 'string' && refreshed.trim()) return refreshed.trim();
+  const description = task && task.identity && task.identity.description;
+  return typeof description === 'string' ? description.trim() : '';
 }
 
 function compactHumanTitle(rawTitle, fallback) {
@@ -3289,9 +3291,9 @@ function renderAll() {
 async function hydrateTaskMetadata(taskId) {
   const task = taskForId(taskId);
   const item = task && task.identity && task.identity.item;
-  if (!item || identityDescriptionOf(task)) return;
+  if (!item) return;
   const metadataKey = itemKey(item);
-  if (state.metadataRequests.has(metadataKey)) return;
+  if (state.metadataRequests.has(metadataKey) || state.itemMetadata.has(metadataKey)) return;
   state.metadataRequests.add(metadataKey);
   renderIssueView();
   try {
@@ -3441,6 +3443,7 @@ function renderIntakeWarnings() {
   if (preview.workspace && preview.workspace.disposition === 'unavailable') {
     warnings.push(preview.workspace.detail || text('workspaceUnavailable'));
   }
+  if (!allRequiredPermissionScopesSelected()) warnings.push(text('selectPermissions'));
   view.intakeWarning.hidden = warnings.length === 0;
   view.intakeWarning.textContent = warnings.join(' ');
 }
@@ -3461,6 +3464,14 @@ function selectedPermissionScopes() {
     .map((input) => input.value);
 }
 
+function allRequiredPermissionScopesSelected() {
+  const required = state.preview && Array.isArray(state.preview.permissionScopes)
+    ? state.preview.permissionScopes
+    : [];
+  const selected = new Set(selectedPermissionScopes());
+  return required.length > 0 && required.every((scope) => selected.has(scope));
+}
+
 function syncSelectAll() {
   const selectAll = view.candidateSelectAll;
   if (!selectAll) return;
@@ -3478,7 +3489,7 @@ function updateCreateButton() {
   const previewReady = Boolean(state.preview)
     && (!state.preview.model || state.preview.model.available !== false)
     && (!state.preview.workspace || state.preview.workspace.disposition !== 'unavailable');
-  view.createButton.disabled = itemCount === 0 || !previewReady;
+  view.createButton.disabled = itemCount === 0 || !previewReady || !allRequiredPermissionScopesSelected();
   view.createButton.textContent = itemCount > 1
     ? `${text('createTasks')} (${itemCount})`
     : text('createTasks');
@@ -3638,7 +3649,7 @@ async function createTasks(retryTerminal) {
     return;
   }
   const grantedScopes = selectedPermissionScopes();
-  if (!grantedScopes.length) {
+  if (!allRequiredPermissionScopesSelected()) {
     view.intakeWarning.hidden = false;
     view.intakeWarning.textContent = text('selectPermissions');
     return;

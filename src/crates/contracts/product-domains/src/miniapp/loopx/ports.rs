@@ -765,6 +765,7 @@ pub struct LoopxAgentStartRequest {
     #[serde(alias = "prompt")]
     pub instruction: String,
     pub model_id: String,
+    pub granted_scopes: Vec<LoopxPermissionScope>,
     pub metadata: LoopxAgentTurnMetadata,
 }
 

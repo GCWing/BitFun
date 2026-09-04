@@ -560,13 +560,7 @@ impl LoopxController {
             tokio::join!(resolved, workspace_probe, agent_probe);
         self.record_progress(progress.take()).await?;
         let resolved = resolved.map_err(|error| error.to_string())?;
-        let scopes = vec![
-            LoopxPermissionScope::WorkspaceRead,
-            LoopxPermissionScope::WorkspaceWrite,
-            LoopxPermissionScope::GitLocal,
-            LoopxPermissionScope::GithubRead,
-            LoopxPermissionScope::AgentExecution,
-        ];
+        let scopes = LOOPX_REQUIRED_PERMISSION_SCOPES.to_vec();
         let model = match agent_probe {
             Ok(probe) => LoopxModelCapability {
                 model_id,
@@ -700,6 +694,12 @@ impl LoopxController {
             !preview.permission_scopes.contains(scope) || !intake_scope_is_pregrantable(*scope)
         }) {
             return Err("Intake includes a permission scope that was not previewed".to_string());
+        }
+        if !required_permission_scopes_are_granted(&request.granted_scopes) {
+            return Err(
+                "All LoopX permission scopes shown in intake are required for an autonomous issue-fix task"
+                    .to_string(),
+            );
         }
 
         let _mutation = self.mutation_lock.lock().await;
@@ -1920,6 +1920,7 @@ impl LoopxController {
                         worktree_path: task.workspace_path.clone().unwrap_or_default(),
                         instruction: agent_instruction,
                         model_id: task.model_id.clone().unwrap_or_else(|| "auto".to_string()),
+                        granted_scopes: task.granted_scopes.clone(),
                         metadata: LoopxAgentTurnMetadata {
                             goal_id: task.goal_id.clone().unwrap_or_default(),
                             loopx_turn_id: turn.turn_id,

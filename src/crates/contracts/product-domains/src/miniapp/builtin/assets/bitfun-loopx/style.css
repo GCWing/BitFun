@@ -1129,8 +1129,8 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .environment-grid { grid-template-columns: 1fr; }
 }
 
-/* 宽屏三列（任务 | 详情 | 日志）；容器变窄时详情与日志上下堆叠，日志仍占主体。 */
-@container loopx-main (max-width: 1080px) {
+/* 宽屏三列（任务 | 详情 | 日志）；只在右侧工作区真正变窄时上下堆叠。 */
+@container loopx-main (max-width: 780px) {
   .issue-columns { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 1fr) auto; }
   .issue-detail {
     order: 2;
