@@ -87,6 +87,23 @@ test('rejects retired names in copy, packages, paths, protocols, and environment
   assert.ok(violations.every((violation) => violation.rule === 'retired-product-name'));
 });
 
+test('allows only the exact legacy data-directory ignore entry', () => {
+  const legacyDataDirectoryPrefix = `.${retiredLowerName}`;
+  const legacyDataDirectoryIgnore = `${legacyDataDirectoryPrefix}/`;
+
+  assert.deepEqual(
+    auditFile({ file: '.gitignore', content: `${legacyDataDirectoryIgnore}\n` }),
+    [],
+  );
+
+  const violations = auditFile({
+    file: '.gitignore',
+    content: `${legacyDataDirectoryPrefix}-cache/\n  ${legacyDataDirectoryIgnore} # comment\n`,
+  });
+  assert.equal(violations.length, 2);
+  assert.ok(violations.every((violation) => violation.rule === 'retired-product-name'));
+});
+
 test('rejects retired short CSS, DOM, dataset, layer, and environment prefixes', () => {
   const source = [
     `--${shortPrefix}-surface: white;`,
