@@ -427,7 +427,7 @@ const SkillsScene: React.FC = () => {
                     )}
 
                     {!installed.loading && !installed.error && installedFiltered.length > 0 && (
-                      <div
+                      <ScrollArea
                         className="skills-main__grid"
                         data-testid="skill-list"
                         data-bf-scene="skills"
@@ -591,7 +591,7 @@ const SkillsScene: React.FC = () => {
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </ScrollArea>
                     )}
                   </div>
 
