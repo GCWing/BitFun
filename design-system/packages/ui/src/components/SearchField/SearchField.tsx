@@ -42,8 +42,11 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
     ? (
         <IconButton
           aria-label={clearLabel}
+          className={styles.clear}
           icon={<Icon name="xmark" />}
           onClick={onClear}
+          onMouseDown={(event) => event.preventDefault()}
+          shape="circle"
           size="sm"
           variant="quiet"
         />

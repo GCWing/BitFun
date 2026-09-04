@@ -453,7 +453,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       <ListboxOption
         active={activeIndex === navigationIndex}
         aria-label={typeof option.description === "string"
-          ? `${option.label} — ${option.description}`
+          ? `${option.label}: ${option.description}`
           : option.label}
         description={option.description}
         disabled={option.disabled || loading}
@@ -505,11 +505,14 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           aria-label={designSystem.messages.searchOptions}
           autoComplete="off"
           className={styles.searchField}
-          clearLabel={designSystem.messages.clearSelection}
-          onClear={() => {
-            setQuery("");
-            setActiveIndex(firstEnabledIndex(navigationItems, 1));
-          }}
+          clearLabel={query ? designSystem.messages.clearSelection : undefined}
+          leadingIcon={<Icon name="search" />}
+          onClear={query
+            ? () => {
+                setQuery("");
+                setActiveIndex(firstEnabledIndex(navigationItems, 1));
+              }
+            : undefined}
           onKeyDown={handleSearchKeyDown}
           onValueChange={(nextQuery) => {
             setQuery(nextQuery);

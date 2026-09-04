@@ -83,3 +83,26 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
   assert.doesNotMatch(styles, /data-popover-mode/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
+
+test("Combobox search and option geometry follows the standard menu rhythm", async () => {
+  const source = await readFile(
+    new URL("../src/components/Combobox/Combobox.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = await readFile(
+    new URL("../src/components/Combobox/Combobox.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /clearLabel=\{query \? designSystem\.messages\.clearSelection : undefined\}/);
+  assert.match(source, /leadingIcon=\{<Icon name="search" \/>\}/);
+  assert.match(styles, /\.popover\s*\{[^}]*gap:\s*var\(--bf-space-1\)/s);
+  assert.match(
+    styles,
+    /\.searchField \[data-bf-component="input"\]\s*\{[^}]*border-radius:\s*var\(--bf-control-select-radius\)/s,
+  );
+  assert.match(
+    styles,
+    /\.listbox \[data-bf-part="list"\],[^}]*gap:\s*calc\(var\(--bf-space-1\) \/ 2\)/s,
+  );
+});

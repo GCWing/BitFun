@@ -268,6 +268,7 @@
     max-inline-size: calc(100vw - var(--bf-space-4));
     min-block-size: 0;
     flex-direction: column;
+    gap: var(--bf-space-1);
     padding: var(--bf-overlay-menu-surface-padding);
     border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
     border-radius: var(--bf-overlay-menu-surface-radius);
@@ -278,16 +279,28 @@
 
   .search {
     flex: 0 0 auto;
-    padding: var(--bf-space-1);
   }
 
   .searchField {
     inline-size: 100%;
   }
 
+  .searchField [data-bf-component="input"] {
+    border-radius: var(--bf-control-select-radius);
+  }
+
   .listbox {
     flex: 1 1 auto;
     min-block-size: 0;
+  }
+
+  .listbox [data-bf-part="list"],
+  .listbox [data-bf-part="group-options"] {
+    gap: calc(var(--bf-space-1) / 2);
+  }
+
+  .listbox [data-bf-part="group"] {
+    gap: var(--bf-overlay-menu-section-gap);
   }
 
   .message {

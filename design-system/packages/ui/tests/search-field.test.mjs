@@ -63,6 +63,25 @@ test("SearchField exposes a labeled clear action without hiding it from assistiv
 
   assert.match(markup, /aria-label="Clear search"/);
   assert.match(markup, /data-bf-component="icon-button"/);
+  assert.match(markup, /data-bf-shape="circle"/);
+  assert.match(markup, /data-size="sm"/);
+});
+
+test("SearchField keeps its clear action visually embedded and preserves input focus", async () => {
+  const source = await readFile(
+    new URL("../src/components/SearchField/SearchField.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = await readFile(
+    new URL("../src/components/SearchField/SearchField.module.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+  assert.match(
+    styles,
+    /\.root \.clear\s*\{[^}]*--_icon-button-background:\s*var\(--bf-color-field-background\)[^}]*background:\s*var\(--bf-color-field-background\)/s,
+  );
 });
 
 test("SearchField owns pill composition while reusing Input behavior", async () => {

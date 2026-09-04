@@ -9,6 +9,16 @@
     border-radius: var(--bf-radius-pill);
   }
 
+  .root .clear {
+    --_icon-button-background: var(--bf-color-field-background);
+
+    background: var(--bf-color-field-background);
+  }
+
+  .root .field:hover:not([data-disabled="true"]) .clear {
+    --_icon-button-background: var(--bf-color-field-background-hover);
+  }
+
   .root .field:not([data-invalid="true"]):focus-within {
     border-color: var(--bf-color-content-primary);
     box-shadow: none;
