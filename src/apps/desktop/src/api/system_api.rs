@@ -898,17 +898,135 @@ pub async fn send_system_notification(
     app: tauri::AppHandle,
     request: SendNotificationRequest,
 ) -> Result<(), String> {
-    use tauri_plugin_notification::NotificationExt;
-
-    let mut builder = app.notification().builder().title(&request.title);
-    if let Some(body) = &request.body {
-        builder = builder.body(body);
+    #[cfg(target_os = "windows")]
+    {
+        // The Tauri notification plugin drops notify-rust's response handle after
+        // showing a Windows toast, so its body-click activation cannot be observed.
+        return send_clickable_windows_notification(app, request);
     }
-    builder.show().map_err(|e| e.to_string())
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use tauri_plugin_notification::NotificationExt;
+
+        let mut builder = app.notification().builder().title(&request.title);
+        if let Some(body) = &request.body {
+            builder = builder.body(body);
+        }
+        builder.show().map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn send_clickable_windows_notification(
+    app: tauri::AppHandle,
+    request: SendNotificationRequest,
+) -> Result<(), String> {
+    let mut notification = notify_rust::Notification::new();
+    notification.summary(&request.title);
+    if let Some(body) = &request.body {
+        notification.body(body);
+    }
+
+    if should_use_configured_notification_app_id() {
+        notification.app_id(&app.config().identifier);
+    }
+
+    let handle = notification.show().map_err(|error| error.to_string())?;
+    // Waiting for a toast click is blocking; keep it off both the UI thread and
+    // the async executor while retaining the response handle until dismissal.
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(error) =
+            handle.wait_for_response(move |response: &notify_rust::NotificationResponse| {
+                if !notification_response_activates_main_window(response) {
+                    return;
+                }
+
+                let app_for_window = app.clone();
+                if let Err(error) = app.run_on_main_thread(move || {
+                    activate_main_window_from_notification(&app_for_window);
+                }) {
+                    log::warn!(
+                        "Failed to schedule main window activation from notification: {}",
+                        error
+                    );
+                }
+            })
+        {
+            log::warn!("Failed to observe Windows notification response: {}", error);
+        }
+    });
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn should_use_configured_notification_app_id() -> bool {
+    use std::path::MAIN_SEPARATOR;
+
+    // Match the Tauri plugin's development behavior. A Cargo-built executable
+    // has no installed Windows shortcut that registers BitFun's AppUserModelID.
+    let Ok(executable) = tauri::utils::platform::current_exe() else {
+        return false;
+    };
+    let Some(executable_dir) = executable.parent() else {
+        return false;
+    };
+    let executable_dir = executable_dir.display().to_string();
+
+    !executable_dir.ends_with(format!("{MAIN_SEPARATOR}target{MAIN_SEPARATOR}debug").as_str())
+        && !executable_dir
+            .ends_with(format!("{MAIN_SEPARATOR}target{MAIN_SEPARATOR}release").as_str())
+}
+
+#[cfg(target_os = "windows")]
+fn notification_response_activates_main_window(
+    response: &notify_rust::NotificationResponse,
+) -> bool {
+    matches!(
+        response,
+        notify_rust::NotificationResponse::Default
+            | notify_rust::NotificationResponse::Action(_)
+            | notify_rust::NotificationResponse::Reply(_)
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn activate_main_window_from_notification(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("Failed to activate main window from notification: main window not found");
+        return;
+    };
+
+    if let Err(error) = window.unminimize() {
+        log::warn!(
+            "Failed to unminimize main window from notification: {}",
+            error
+        );
+    }
+    if let Err(error) = window.show() {
+        log::warn!("Failed to show main window from notification: {}", error);
+    }
+    if let Err(error) = window.set_focus() {
+        log::warn!("Failed to focus main window from notification: {}", error);
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn notification_body_click_activates_main_window_but_dismissal_does_not() {
+        use notify_rust::{CloseReason, NotificationResponse};
+
+        assert!(super::notification_response_activates_main_window(
+            &NotificationResponse::Default
+        ));
+        assert!(!super::notification_response_activates_main_window(
+            &NotificationResponse::Closed(CloseReason::Dismissed)
+        ));
+    }
+
     /// The probe reads `platforms[<key>].url` out of `latest.json`; if this key
     /// stops matching what scripts/generate-tauri-latest-json.mjs emits, every
     /// probe silently scores 0 and ranking degrades to the configured order.
