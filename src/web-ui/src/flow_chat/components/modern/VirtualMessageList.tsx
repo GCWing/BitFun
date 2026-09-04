@@ -452,6 +452,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     before: false,
     after: false,
   });
+  /** Re-arming is a transition out of a boundary, not a repeated level read. */
+  const boundaryReachedRef = useRef<Record<SessionHistoryWindowDirection, boolean>>({
+    before: false,
+    after: false,
+  });
   /**
    * `exhausted` describes the window that asked, not the session.
    *
@@ -474,6 +479,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   if (previousWindowBoundsKeyRef.current !== windowBoundsKey) {
     previousWindowBoundsKeyRef.current = windowBoundsKey;
     exhaustedBoundaryRef.current = { before: false, after: false };
+    boundaryReachedRef.current = { before: false, after: false };
   }
   /**
    * Whether a boundary may be asked about again.
@@ -2336,9 +2342,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     for (const direction of HISTORY_WINDOW_DIRECTIONS) {
       // Off the boundary: whatever the last page added has been absorbed, and
       // arriving there again will be the reader's own doing.
-      if (!reached.has(direction)) {
+      const isReached = reached.has(direction);
+      if (!isReached && boundaryReachedRef.current[direction]) {
         boundaryArmedRef.current[direction] = true;
       }
+      boundaryReachedRef.current[direction] = isReached;
       if (asking.has(direction)) requestHistoryBoundary(direction);
     }
   }, [

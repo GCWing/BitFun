@@ -621,6 +621,55 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 )}
               </>
             )}
+            </div>
+          </div>
+        )}
+
+        {message.images && message.images.length > 0 && (
+          <div className="user-message-item__images" data-bf-component="user-message-item" data-bf-part="images">
+            {message.images.map(img => {
+              const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
+              return src ? (
+                <div data-bf-component="user-message-item" data-bf-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
+                  <img src={src} alt={img.name} />
+                </div>
+              ) : null;
+            })}
+          </div>
+        )}
+
+          {lightboxImage && createPortal(
+            <div
+              className="user-message-item__lightbox"
+              onClick={() => setLightboxImage(null)}
+              data-bf-component="user-message-item"
+              data-bf-part="lightbox"
+              data-bf-native-webview-occlusion
+            >
+              <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
+                <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
+              </button>
+              <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
+            </div>,
+            getAppearanceOverlayHost(),
+          )}
+        </div>
+
+        <div className="user-message-item__meta" data-bf-component="user-message-item" data-bf-part="meta">
+          {sentTime && sentAtLabel && sentTimestamp !== null && (
+            <time
+              className="user-message-item__timestamp"
+              data-bf-component="user-message-item"
+              data-bf-part="timestamp"
+              data-testid="chat-user-message-timestamp"
+              dateTime={new Date(sentTimestamp).toISOString()}
+              title={sentAtLabel}
+              aria-label={sentAtLabel}
+            >
+              {sentTime}
+            </time>
+          )}
+          {!isEditing && (
             <div className="user-message-item__actions" data-bf-component="user-message-item" data-bf-part="actions">
               <button
                 className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
@@ -668,53 +717,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 </Tooltip>
               ) : null}
             </div>
-            </div>
-          </div>
-        )}
-
-        {message.images && message.images.length > 0 && (
-          <div className="user-message-item__images" data-bf-component="user-message-item" data-bf-part="images">
-            {message.images.map(img => {
-              const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
-              return src ? (
-                <div data-bf-component="user-message-item" data-bf-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
-                  <img src={src} alt={img.name} />
-                </div>
-              ) : null;
-            })}
-          </div>
-        )}
-
-          {lightboxImage && createPortal(
-            <div
-              className="user-message-item__lightbox"
-              onClick={() => setLightboxImage(null)}
-              data-bf-component="user-message-item"
-              data-bf-part="lightbox"
-              data-bf-native-webview-occlusion
-            >
-              <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
-                <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
-              </button>
-              <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
-            </div>,
-            getAppearanceOverlayHost(),
           )}
         </div>
 
-        {sentTime && sentAtLabel && sentTimestamp !== null && (
-          <time
-            className="user-message-item__timestamp"
-            data-bf-component="user-message-item"
-            data-bf-part="timestamp"
-            data-testid="chat-user-message-timestamp"
-            dateTime={new Date(sentTimestamp).toISOString()}
-            title={sentAtLabel}
-            aria-label={sentAtLabel}
-          >
-            {sentTime}
-          </time>
-        )}
       </div>
     );
   }
