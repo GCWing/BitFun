@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     position: relative;
     display: inline-flex;
@@ -13,7 +13,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .statusLayer > :where(svg, img),
@@ -38,15 +38,15 @@
   }
 
   .success {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   .danger {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   .muted {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   @media (prefers-reduced-motion: reduce) {

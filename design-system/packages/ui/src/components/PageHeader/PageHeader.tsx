@@ -39,34 +39,34 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
       {...props}
       className={classNames(styles.root, className)}
       data-align={align}
-      data-bf-component="page-header"
+      data-openbitfun-component="page-header"
       data-level={level}
       data-required={required ? "true" : "false"}
       data-size={size}
       ref={ref}
     >
       {leading !== undefined && leading !== null && (
-        <span className={styles.leading} data-bf-part="leading">
+        <span className={styles.leading} data-openbitfun-part="leading">
           {leading}
         </span>
       )}
-      <span className={styles.content} data-bf-part="content">
-        <Heading className={styles.heading} data-bf-part="heading">
+      <span className={styles.content} data-openbitfun-part="content">
+        <Heading className={styles.heading} data-openbitfun-part="heading">
           {title}
           {required && (
-            <span aria-hidden="true" className={styles.required} data-bf-part="required">
+            <span aria-hidden="true" className={styles.required} data-openbitfun-part="required">
               *
             </span>
           )}
         </Heading>
         {description !== undefined && description !== null && (
-          <span className={styles.description} data-bf-part="description">
+          <span className={styles.description} data-openbitfun-part="description">
             {description}
           </span>
         )}
       </span>
       {action !== undefined && action !== null && (
-        <span className={styles.action} data-bf-part="action">
+        <span className={styles.action} data-openbitfun-part="action">
           {action}
         </span>
       )}

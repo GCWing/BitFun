@@ -1,16 +1,16 @@
-@layer bf.components {
+@layer openbitfun.components {
   .submenuBoundary { display: contents; }
   .popup {
     position: fixed;
-    z-index: var(--bf-layer-context-menu);
+    z-index: var(--openbitfun-layer-context-menu);
     transform-origin: top left;
     opacity: 0;
     translate: 0 -4px;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-enter), translate var(--bf-motion-duration-fast) var(--bf-motion-easing-enter);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-enter), translate var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-enter);
     pointer-events: none;
   }
   .popup[data-state="entered"] { opacity: 1; translate: 0 0; pointer-events: auto; }
   .popup[data-state="exiting"] { transition-duration: 100ms; }
-  .popup [aria-expanded="true"] { background: var(--bf-color-action-neutral-surface); }
+  .popup [aria-expanded="true"] { background: var(--openbitfun-color-action-neutral-surface); }
   @media (prefers-reduced-motion: reduce) { .popup { translate: none; transition: none; } }
 }

@@ -24,8 +24,8 @@ use super::permission::render_permission_overlay;
 use super::prompt_stash_selector::PromptStashSelectorState;
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::question::render_question_overlay;
-use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::session_lineage_selector::{SessionLineageAction, SessionLineageSelectorState};
+use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
 use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
 use super::subagent_selector::{SubagentItem, SubagentSelectorAction, SubagentSelectorState};
 use super::text_input::TextInput;
@@ -224,7 +224,7 @@ pub(crate) struct ChatView {
     inactive_session_composers: HashMap<String, InactiveSessionComposer>,
     /// Drafts accepted by the Runtime, isolated by Session for local undo/redo identity.
     submitted_drafts: SubmittedDraftHistory,
-    workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+    workspace_references: Vec<openbitfun_agent_runtime::sdk::AgentWorkspaceReference>,
     image_attachments: Vec<ComposerImageAttachment>,
     workspace_reference_popup: WorkspaceReferencePopupState,
     /// History position
@@ -458,11 +458,7 @@ impl ChatView {
     /// block, identified by the owning message id and the block's index
     /// within that message. Mirrors the id scheme used by `render_message`.
     #[cfg(test)]
-    pub(crate) fn toggle_thinking_block_for_test(
-        &mut self,
-        message_id: &str,
-        block_index: usize,
-    ) {
+    pub(crate) fn toggle_thinking_block_for_test(&mut self, message_id: &str, block_index: usize) {
         let id = format!("{}::thinking:{}", message_id, block_index);
         self.thinking_disclosures.toggle(&id);
         self.invalidate_render_cache();

@@ -78,7 +78,7 @@
   },
   "import": {
     "title": "Import and reuse",
-    "description": "See what content from {{name}} works with BitFun. Import available items directly; other items show their current support status.",
+    "description": "See what content from {{name}} works with OpenBitFun. Import available items directly; other items show their current support status.",
     "columns": {
       "item": "Item",
       "type": "Type",
@@ -102,16 +102,16 @@
     "importingAction": "Importing",
     "undetectedItem": "No {{type}} found",
     "undetectedDescription": "No available content was found",
-    "notAdaptedDescription": "BitFun does not support {{name}} {{type}} yet",
-    "ownerAdaptedDescription": "{{type}} is already available in BitFun and does not need to be imported",
+    "notAdaptedDescription": "OpenBitFun does not support {{name}} {{type}} yet",
+    "ownerAdaptedDescription": "{{type}} is already available in OpenBitFun and does not need to be imported",
     "notifications": {
-      "success": "Imported {{name}} into BitFun",
+      "success": "Imported {{name}} into OpenBitFun",
       "stale": "The source changed. Review the latest state and try again.",
       "failed": "Failed to import {{name}}"
     }
   },
   "run": {
-    "title": "Use in BitFun",
+    "title": "Use in OpenBitFun",
     "description": "Start a dedicated {{name}} session, or set it up as a subagent for the main Agent to call on suitable tasks.",
     "session": {
       "title": "Create standalone session",

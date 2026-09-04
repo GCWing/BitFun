@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Icon } from '@bitfun/ui';
+import { Tooltip, Icon } from '@openbitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
 import { downloadMarkdownInBrowser } from '@/shared/utils/browserDownload';

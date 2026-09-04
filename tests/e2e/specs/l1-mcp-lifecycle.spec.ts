@@ -102,7 +102,7 @@ async function invokeExpectingFailure(
   command: string,
   args: unknown,
 ): Promise<{ error: string; durationMs: number }> {
-  const driverPort = Number(process.env.BITFUN_E2E_WEBDRIVER_PORT || 4445);
+  const driverPort = Number(process.env.OPENBITFUN_E2E_WEBDRIVER_PORT || 4445);
   const startedAt = Date.now();
   const response = await fetch(
     `http://127.0.0.1:${driverPort}/session/${browser.sessionId}/execute/sync`,
@@ -139,7 +139,7 @@ async function openMCPSettings(): Promise<void> {
   await mcpPage.waitForClickable({ timeout: 15000 });
   await mcpPage.click();
 
-  await $('[data-bf-component="mcp-tools-config"][data-bf-part="root"]')
+  await $('[data-openbitfun-component="mcp-tools-config"][data-openbitfun-part="root"]')
     .waitForDisplayed({ timeout: 15000 });
 }
 
@@ -154,23 +154,23 @@ describe('L1 MCP lifecycle', () => {
   before(async () => {
     counterPath = path.join(
       os.tmpdir(),
-      `bitfun-mcp-lifecycle-${process.pid}-${Date.now()}.log`,
+      `openbitfun-mcp-lifecycle-${process.pid}-${Date.now()}.log`,
     );
     fastCounterPath = path.join(
       os.tmpdir(),
-      `bitfun-mcp-lifecycle-fast-${process.pid}-${Date.now()}.log`,
+      `openbitfun-mcp-lifecycle-fast-${process.pid}-${Date.now()}.log`,
     );
     slowStopCounterPath = path.join(
       os.tmpdir(),
-      `bitfun-mcp-lifecycle-slow-stop-${process.pid}-${Date.now()}.log`,
+      `openbitfun-mcp-lifecycle-slow-stop-${process.pid}-${Date.now()}.log`,
     );
     slowStopEventPath = path.join(
       os.tmpdir(),
-      `bitfun-mcp-lifecycle-slow-stop-events-${process.pid}-${Date.now()}.log`,
+      `openbitfun-mcp-lifecycle-slow-stop-events-${process.pid}-${Date.now()}.log`,
     );
     switchCounterPath = path.join(
       os.tmpdir(),
-      `bitfun-mcp-lifecycle-switch-${process.pid}-${Date.now()}.log`,
+      `openbitfun-mcp-lifecycle-switch-${process.pid}-${Date.now()}.log`,
     );
 
     const snapshot = await expectInvoke<MCPJsonConfigSnapshot>('load_mcp_json_config');
@@ -244,7 +244,7 @@ describe('L1 MCP lifecycle', () => {
     await authButton.waitForClickable({ timeout: 10000 });
     await authButton.click();
 
-    const authEditor = await $('[data-bf-component="mcp-tools-config"][data-bf-part="authEditor"]');
+    const authEditor = await $('[data-openbitfun-component="mcp-tools-config"][data-openbitfun-part="authEditor"]');
     await authEditor.waitForDisplayed({ timeout: 5000 });
     expect(await authEditor.isDisplayed()).toBe(true);
 

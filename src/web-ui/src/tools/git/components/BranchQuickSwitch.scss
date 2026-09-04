@@ -7,21 +7,21 @@
   @include overlay-layout.anchored-picker-inline-size;
 
   position: fixed;
-  z-index: var(--bf-layer-popover);
+  z-index: var(--openbitfun-layer-popover);
   box-sizing: border-box;
   overflow: hidden;
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-label-md-font-family);
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-label-md-font-weight);
-  line-height: var(--bf-type-label-md-line-height);
-  letter-spacing: var(--bf-type-label-md-letter-spacing);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-label-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-md-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
+  letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   user-select: none;
 }
 
 .branch-quick-switch__search {
   padding: 8px;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .branch-quick-switch__input-field {
@@ -31,13 +31,13 @@
 .branch-quick-switch__list {
   max-height: min(280px, calc(100vh - 96px));
   padding: calc(
-    var(--bf-overlay-menu-surface-padding)
-    + var(--bf-focus-width)
+    var(--openbitfun-overlay-menu-surface-padding)
+    + var(--openbitfun-focus-width)
   );
 }
 
-.branch-quick-switch__list [data-bf-part='list'] {
-  gap: calc(var(--bf-space-1) / 2);
+.branch-quick-switch__list [data-openbitfun-part='list'] {
+  gap: calc(var(--openbitfun-space-1) / 2);
 }
 
 .branch-quick-switch__loading,
@@ -47,19 +47,19 @@
   justify-content: center;
   gap: 8px;
   padding: 20px;
-  color: var(--bf-color-content-muted);
-  font-family: var(--bf-type-label-md-font-family);
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-label-md-font-weight);
-  line-height: var(--bf-type-label-md-line-height);
-  letter-spacing: var(--bf-type-label-md-letter-spacing);
+  color: var(--openbitfun-color-content-muted);
+  font-family: var(--openbitfun-type-label-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-md-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
+  letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   text-align: center;
 }
 
 .branch-quick-switch__item {
-  min-height: var(--bf-control-height-sm);
+  min-height: var(--openbitfun-control-height-sm);
 
-  &[data-bf-state='current'] {
+  &[data-openbitfun-state='current'] {
     cursor: default;
   }
 }
@@ -91,7 +91,7 @@
   gap: 8px;
   overflow-y: auto;
   padding: 2px 0;
-  scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+  scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 
@@ -100,15 +100,15 @@
   align-items: baseline;
   gap: 10px;
   min-width: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .branch-switch-conflict-dialog__file-path {
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-md-font-size);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -117,20 +117,20 @@
   display: inline-flex;
   flex: 0 0 auto;
   gap: 7px;
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-md-font-size);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
 }
 
 .branch-switch-conflict-dialog__additions {
-  color: var(--bf-color-code-change-added);
+  color: var(--openbitfun-color-code-change-added);
 }
 
 .branch-switch-conflict-dialog__deletions {
-  color: var(--bf-color-code-change-removed);
+  color: var(--openbitfun-color-code-change-removed);
 }
 
 .branch-switch-commit-dialog__error {
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .branch-switch-commit-dialog {
@@ -145,9 +145,9 @@
 
   p {
     margin: 0;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
   > .branch-switch-commit-dialog__input {
@@ -155,7 +155,7 @@
   }
 
   .branch-switch-commit-dialog__error {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 }
 

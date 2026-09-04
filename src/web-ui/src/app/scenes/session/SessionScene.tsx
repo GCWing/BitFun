@@ -497,30 +497,30 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     <div
       ref={containerRef}
       className={[
-        'bitfun-session-scene',
-        isDragging && 'bitfun-session-scene--dragging',
-        isDraggingBottom && 'bitfun-session-scene--dragging-bottom',
-        isTerminalDockedBottom && 'bitfun-session-scene--terminal-bottom',
+        'openbitfun-session-scene',
+        isDragging && 'openbitfun-session-scene--dragging',
+        isDraggingBottom && 'openbitfun-session-scene--dragging-bottom',
+        isTerminalDockedBottom && 'openbitfun-session-scene--terminal-bottom',
         isEntering && 'layout-entering',
       ].filter(Boolean).join(' ')}
       style={panelCollapseHintStyles}
       data-testid="session-scene"
-      data-bf-scene="session"
-      data-bf-part="root"
-      data-bf-state={[
+      data-openbitfun-scene="session"
+      data-openbitfun-part="root"
+      data-openbitfun-state={[
         isDragging && 'dragging',
         isDraggingBottom && 'dragging',
         isTerminalDockedBottom && 'terminal-bottom',
       ].filter(Boolean).join(' ') || undefined}
     >
-      <div className="bitfun-session-scene__main-row" data-bf-scene="session" data-bf-part="main">
+      <div className="openbitfun-session-scene__main-row" data-openbitfun-scene="session" data-openbitfun-part="main">
         {/* ChatPane — FlowChat conversation */}
         {!isChatHidden && (
           <div
-            className={`bitfun-session-scene__chat-pane ${isDragging ? 'bitfun-session-scene__chat-pane--dragging' : ''}`}
+            className={`openbitfun-session-scene__chat-pane ${isDragging ? 'openbitfun-session-scene__chat-pane--dragging' : ''}`}
             data-testid="session-chat-pane"
-            data-bf-scene="session"
-            data-bf-part="chat"
+            data-openbitfun-scene="session"
+            data-openbitfun-part="chat"
           >
             <ChatPane
               width={0}
@@ -540,10 +540,10 @@ const SessionScene: React.FC<SessionSceneProps> = ({
           <div
             ref={resizerRef}
             className={[
-              'bitfun-pane-resizer',
-              state.layout.rightPanelCollapsed && 'bitfun-pane-resizer--collapsed',
-              isDraggingRight && 'bitfun-pane-resizer--dragging',
-              isHovering && 'bitfun-pane-resizer--hovering',
+              'openbitfun-pane-resizer',
+              state.layout.rightPanelCollapsed && 'openbitfun-pane-resizer--collapsed',
+              isDraggingRight && 'openbitfun-pane-resizer--dragging',
+              isHovering && 'openbitfun-pane-resizer--hovering',
             ].filter(Boolean).join(' ')}
             onMouseDown={handleMouseDownResizer}
             onDoubleClick={handleDoubleClick}
@@ -559,9 +559,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             title={t('layout.resizer.title', { mode: panelModeLabels[rightPanelMode] })}
             data-testid="session-right-pane-resizer"
           >
-            <div className="bitfun-pane-resizer__line" />
-            <div className="bitfun-pane-resizer__handle">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="bitfun-pane-resizer__icon">
+            <div className="openbitfun-pane-resizer__line" />
+            <div className="openbitfun-pane-resizer__handle">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="openbitfun-pane-resizer__icon">
                 <circle cx="6" cy="4" r="1" fill="currentColor" />
                 <circle cx="6" cy="8" r="1" fill="currentColor" />
                 <circle cx="6" cy="12" r="1" fill="currentColor" />
@@ -577,11 +577,11 @@ const SessionScene: React.FC<SessionSceneProps> = ({
         <div
           ref={auxPaneElementRef}
           className={[
-            'bitfun-session-scene__aux-pane',
-            state.layout.rightPanelCollapsed         && 'bitfun-session-scene__aux-pane--collapsed',
-            isDraggingRight                          && 'bitfun-session-scene__aux-pane--dragging',
-            isRightAsMain                            && 'bitfun-session-scene__aux-pane--editor-mode',
-            isAuxPaneExpandingImmediate              && 'bitfun-session-scene__aux-pane--no-animation',
+            'openbitfun-session-scene__aux-pane',
+            state.layout.rightPanelCollapsed         && 'openbitfun-session-scene__aux-pane--collapsed',
+            isDraggingRight                          && 'openbitfun-session-scene__aux-pane--dragging',
+            isRightAsMain                            && 'openbitfun-session-scene__aux-pane--editor-mode',
+            isAuxPaneExpandingImmediate              && 'openbitfun-session-scene__aux-pane--no-animation',
           ].filter(Boolean).join(' ')}
           style={{
             width: state.layout.rightPanelCollapsed
@@ -590,8 +590,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
           }}
           data-mode={rightPanelMode}
           data-testid="session-aux-pane"
-          data-bf-scene="session"
-          data-bf-part="auxiliary"
+          data-openbitfun-scene="session"
+          data-openbitfun-part="auxiliary"
           onTransitionEnd={handleRightPanelTransitionEnd}
         >
           <AuxPane
@@ -607,10 +607,10 @@ const SessionScene: React.FC<SessionSceneProps> = ({
         <>
           <div
             className={[
-              'bitfun-bottom-pane-resizer',
-              state.layout.bottomTerminalPanelCollapsed && 'bitfun-bottom-pane-resizer--collapsed',
-              isDraggingBottom && 'bitfun-bottom-pane-resizer--dragging',
-              isHoveringBottom && 'bitfun-bottom-pane-resizer--hovering',
+              'openbitfun-bottom-pane-resizer',
+              state.layout.bottomTerminalPanelCollapsed && 'openbitfun-bottom-pane-resizer--collapsed',
+              isDraggingBottom && 'openbitfun-bottom-pane-resizer--dragging',
+              isHoveringBottom && 'openbitfun-bottom-pane-resizer--hovering',
             ].filter(Boolean).join(' ')}
             onMouseDown={handleMouseDownBottomResizer}
             onDoubleClick={handleBottomDoubleClick}
@@ -625,9 +625,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             aria-valuemax={BOTTOM_TERMINAL_PANEL_CONFIG.MAX_WIDTH}
             title={t('layout.resizer.title', { mode: panelModeLabels[bottomTerminalPanelMode] })}
           >
-            <div className="bitfun-bottom-pane-resizer__line" />
-            <div className="bitfun-bottom-pane-resizer__handle">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="bitfun-bottom-pane-resizer__icon">
+            <div className="openbitfun-bottom-pane-resizer__line" />
+            <div className="openbitfun-bottom-pane-resizer__handle">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="openbitfun-bottom-pane-resizer__icon">
                 <circle cx="4" cy="6" r="1" fill="currentColor" />
                 <circle cx="8" cy="6" r="1" fill="currentColor" />
                 <circle cx="12" cy="6" r="1" fill="currentColor" />
@@ -641,16 +641,16 @@ const SessionScene: React.FC<SessionSceneProps> = ({
           <div
             ref={bottomTerminalPaneElementRef}
             className={[
-              'bitfun-session-scene__bottom-terminal-pane',
-              state.layout.bottomTerminalPanelCollapsed && 'bitfun-session-scene__bottom-terminal-pane--collapsed',
-              isDraggingBottom && 'bitfun-session-scene__bottom-terminal-pane--dragging',
+              'openbitfun-session-scene__bottom-terminal-pane',
+              state.layout.bottomTerminalPanelCollapsed && 'openbitfun-session-scene__bottom-terminal-pane--collapsed',
+              isDraggingBottom && 'openbitfun-session-scene__bottom-terminal-pane--dragging',
             ].filter(Boolean).join(' ')}
             style={{
               height: state.layout.bottomTerminalPanelCollapsed ? undefined : `${currentBottomHeight}px`,
             }}
             data-mode={bottomTerminalPanelMode}
-            data-bf-scene="session"
-            data-bf-part="terminal"
+            data-openbitfun-scene="session"
+            data-openbitfun-part="terminal"
             onTransitionEnd={handleBottomPanelTransitionEnd}
           >
             <BottomTerminalPane

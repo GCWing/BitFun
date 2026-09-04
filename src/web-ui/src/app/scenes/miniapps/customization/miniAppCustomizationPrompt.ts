@@ -6,7 +6,7 @@ export function buildMiniAppCustomizationPrompt(params: {
   userRequest: string;
 }): string {
   return [
-    'You are customizing a BitFun MiniApp draft.',
+    'You are customizing a OpenBitFun MiniApp draft.',
     `App: ${params.appName} (${params.appId})`,
     `Draft id: ${params.draftId}`,
     `Draft root: ${params.draftRoot}`,

@@ -7,7 +7,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Keyboard, Square } from 'lucide-react';
-import { Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import {
   SceneChromeContribution,
   useSceneChromeContext,
@@ -254,7 +254,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         !sessionOverviewRootRef.current?.contains(target) &&
         !sessionOverviewPanelRef.current?.contains(target) &&
         !backgroundCommandMenuRef.current?.contains(target) &&
-        !targetElement?.closest('[data-bf-part="sessionTreeMenu"]')
+        !targetElement?.closest('[data-openbitfun-part="sessionTreeMenu"]')
       ) {
         closeSessionOverview(false);
       }
@@ -458,8 +458,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     return (
       <div
         className="flowchat-header__background-command-actions"
-        data-bf-component="flow-chat-header"
-        data-bf-part="backgroundActivity"
+        data-openbitfun-component="flow-chat-header"
+        data-openbitfun-part="backgroundActivity"
       >
         <Tooltip content={t('flowChatHeader.backgroundCommandActions')}>
           <IconButton
@@ -476,8 +476,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           <Menu
             ref={backgroundCommandMenuRef}
             className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
-            data-bf-component="flow-chat-header"
-            data-bf-part="commandMenu"
+            data-openbitfun-component="flow-chat-header"
+            data-openbitfun-part="commandMenu"
             aria-label={t('flowChatHeader.backgroundCommandActions')}
             style={backgroundCommandMenuPosition}
             data-testid="flowchat-header-background-menu"
@@ -485,8 +485,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             {canSendBackgroundCommandInput ? (
               <MenuItem
                 type="button"
-                data-bf-component="flow-chat-header"
-                data-bf-part="commandItem"
+                data-openbitfun-component="flow-chat-header"
+                data-openbitfun-part="commandItem"
                 onClick={(event) => handleCommandInputRequest(event, command)}
                 leading={<Keyboard size={12} aria-hidden="true" />}
               >
@@ -497,8 +497,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               <MenuItem
                 type="button"
                 tone="danger"
-                data-bf-component="flow-chat-header"
-                data-bf-part="commandItem"
+                data-openbitfun-component="flow-chat-header"
+                data-openbitfun-part="commandItem"
                 onClick={(event) => handleCommandStop(event, command)}
                 disabled={command.isStopping === true}
                 leading={<Square size={12} aria-hidden="true" />}
@@ -562,8 +562,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const leftActions = (
     <div
       className="flowchat-header__actions flowchat-header__actions--left"
-      data-bf-component="flow-chat-header"
-      data-bf-part="leftActions"
+      data-openbitfun-component="flow-chat-header"
+      data-openbitfun-part="leftActions"
     >
       <SessionFilesBadge sessionId={sessionId} />
     </div>
@@ -571,16 +571,16 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const rightActions = (
     <div
       className="flowchat-header__actions"
-      data-bf-component="flow-chat-header"
-      data-bf-part="actions"
+      data-openbitfun-component="flow-chat-header"
+      data-openbitfun-part="actions"
     >
         {visible ? (isSearchOpen ? (
           <div
             className="flowchat-header__search"
             role="search"
             data-testid="flowchat-header-search-bar"
-            data-bf-component="flow-chat-header"
-            data-bf-part="search"
+            data-openbitfun-component="flow-chat-header"
+            data-openbitfun-part="search"
           >
             <Input
               ref={searchInputRef}
@@ -589,8 +589,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               trailing={
                 <span
                   className="flowchat-header__search-inline-controls"
-                  data-bf-component="flow-chat-header"
-                  data-bf-part="searchControls"
+                  data-openbitfun-component="flow-chat-header"
+                  data-openbitfun-part="searchControls"
                 >
                   <span className="flowchat-header__search-count" aria-live="polite">
                     {searchQuery.trim()
@@ -660,8 +660,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         <div
           className="flowchat-header__session-overview"
           ref={sessionOverviewRootRef}
-          data-bf-component="flow-chat-header"
-          data-bf-part="sessionOverview"
+          data-openbitfun-component="flow-chat-header"
+          data-openbitfun-part="sessionOverview"
         >
           <Tooltip content={sessionOverviewLabel}>
             <IconButton
@@ -671,9 +671,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                 isSessionOverviewOpen && 'flowchat-header__session-overview-trigger--active',
                 hasSessionActivity && 'flowchat-header__session-overview-trigger--has-activity',
               ].filter(Boolean).join(' ')}
-              data-bf-component="flow-chat-header"
-              data-bf-part="sessionOverviewTrigger"
-              data-bf-state={[
+              data-openbitfun-component="flow-chat-header"
+              data-openbitfun-part="sessionOverviewTrigger"
+              data-openbitfun-state={[
                 isSessionOverviewOpen ? 'open' : null,
                 hasSessionActivity ? 'active' : null,
               ].filter(Boolean).join(' ') || undefined}
@@ -699,9 +699,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <div
               ref={sessionOverviewPanelRef}
               className="flowchat-header__session-overview-panel"
-              data-bf-component="flow-chat-header"
-              data-bf-part="sessionOverviewPanel"
-              data-bf-placement={sessionOverviewPanelLayout?.placement ?? 'bottom'}
+              data-openbitfun-component="flow-chat-header"
+              data-openbitfun-part="sessionOverviewPanel"
+              data-openbitfun-placement={sessionOverviewPanelLayout?.placement ?? 'bottom'}
               role="dialog"
               aria-label={t('flowChatHeader.sessionOverview')}
               data-testid="flowchat-header-session-overview-panel"
@@ -719,14 +719,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
               <div
                 className="flowchat-header__session-overview-list"
-                data-bf-component="flow-chat-header"
-                data-bf-part="sessionOverviewList"
+                data-openbitfun-component="flow-chat-header"
+                data-openbitfun-part="sessionOverviewList"
               >
                 <div
                   className="flowchat-header__session-overview-section"
-                  data-bf-component="flow-chat-header"
-                  data-bf-part="sessionOverviewItem"
-                  data-bf-state={hasActiveSessionTreeDescendants ? 'active' : undefined}
+                  data-openbitfun-component="flow-chat-header"
+                  data-openbitfun-part="sessionOverviewItem"
+                  data-openbitfun-state={hasActiveSessionTreeDescendants ? 'active' : undefined}
                   data-testid="flowchat-header-session-tree-section"
                 >
                   <div
@@ -755,7 +755,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-state="empty"
+                      data-openbitfun-state="empty"
                     >
                       {t('flowChatHeader.sessionOverviewAgentsUnavailable')}
                     </div>
@@ -764,9 +764,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
                 <div
                   className="flowchat-header__session-overview-section"
-                  data-bf-component="flow-chat-header"
-                  data-bf-part="sessionOverviewItem"
-                  data-bf-state={runningBackgroundCommandCount > 0 ? 'active' : undefined}
+                  data-openbitfun-component="flow-chat-header"
+                  data-openbitfun-part="sessionOverviewItem"
+                  data-openbitfun-state={runningBackgroundCommandCount > 0 ? 'active' : undefined}
                   data-testid="flowchat-header-background-commands"
                 >
                   <div
@@ -803,8 +803,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                         <Menu
                           ref={backgroundCommandMenuRef}
                           className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
-                          data-bf-component="flow-chat-header"
-                          data-bf-part="commandMenu"
+                          data-openbitfun-component="flow-chat-header"
+                          data-openbitfun-part="commandMenu"
                           aria-label={t('flowChatHeader.backgroundCommandActions')}
                           style={backgroundCommandMenuPosition}
                           data-testid="flowchat-header-background-menu"
@@ -812,8 +812,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           <MenuItem
                             type="button"
                             tone="danger"
-                            data-bf-component="flow-chat-header"
-                            data-bf-part="commandItem"
+                            data-openbitfun-component="flow-chat-header"
+                            data-openbitfun-part="commandItem"
                             onClick={handleCommandStopAll}
                             leading={<Square size={12} aria-hidden="true" />}
                           >
@@ -827,8 +827,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   {hasBackgroundCommands ? (
                     <div
                       className="flowchat-header__background-command-list"
-                      data-bf-component="flow-chat-header"
-                      data-bf-part="activitySection"
+                      data-openbitfun-component="flow-chat-header"
+                      data-openbitfun-part="activitySection"
                     >
                       {displayBackgroundCommands.map((command) => (
                         <div
@@ -860,9 +860,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-component="flow-chat-header"
-                      data-bf-part="activitySection"
-                      data-bf-state="empty"
+                      data-openbitfun-component="flow-chat-header"
+                      data-openbitfun-part="activitySection"
+                      data-openbitfun-state="empty"
                       data-testid="flowchat-header-background-empty"
                     >
                       {t('flowChatHeader.backgroundTerminalEmpty')}
@@ -872,9 +872,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
                 <div
                   className="flowchat-header__session-overview-section flowchat-header__session-overview-section--pull-requests"
-                  data-bf-component="flow-chat-header"
-                  data-bf-part="sessionOverviewItem"
-                  data-bf-state={isPullRequestOverviewUnavailable ? 'unavailable' : pullRequestOverview.status}
+                  data-openbitfun-component="flow-chat-header"
+                  data-openbitfun-part="sessionOverviewItem"
+                  data-openbitfun-state={isPullRequestOverviewUnavailable ? 'unavailable' : pullRequestOverview.status}
                   data-testid="flowchat-header-pull-requests"
                 >
                   <button
@@ -897,7 +897,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   {pullRequestOverview.status === 'loading' || pullRequestOverview.status === 'idle' ? (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-state="loading"
+                      data-openbitfun-state="loading"
                       aria-live="polite"
                     >
                       {t('flowChatHeader.pullRequestLoading')}
@@ -906,7 +906,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                     <button
                       type="button"
                       className="flowchat-header__session-overview-empty-state flowchat-header__session-overview-empty-state--action flowchat-header__session-overview-empty-state--error"
-                      data-bf-state="error"
+                      data-openbitfun-state="error"
                       onClick={() => void loadPullRequestOverview()}
                     >
                       {t('flowChatHeader.pullRequestLoadFailed')}
@@ -914,7 +914,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : pullRequestOverview.status === 'not-git' ? (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-state="unavailable"
+                      data-openbitfun-state="unavailable"
                       data-testid="flowchat-header-pull-requests-unavailable"
                     >
                       {t('flowChatHeader.pullRequestNotGitRepository')}
@@ -922,7 +922,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : pullRequestOverview.status === 'no-workspace' ? (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-state="unavailable"
+                      data-openbitfun-state="unavailable"
                       data-testid="flowchat-header-pull-requests-unavailable"
                     >
                       {t('flowChatHeader.pullRequestWorkspaceUnavailable')}
@@ -930,7 +930,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : pullRequestOverview.items.length === 0 ? (
                     <div
                       className="flowchat-header__session-overview-empty-state"
-                      data-bf-state="empty"
+                      data-openbitfun-state="empty"
                       data-testid="flowchat-header-pull-requests-empty"
                     >
                       {t('flowChatHeader.pullRequestEmpty')}
@@ -965,9 +965,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                 'flowchat-header__right-panel-trigger',
                 isRightPanelOpen && 'flowchat-header__right-panel-trigger--active',
               ].filter(Boolean).join(' ')}
-              data-bf-component="flow-chat-header"
-              data-bf-part="rightPanelTrigger"
-              data-bf-state={isRightPanelOpen ? 'open' : 'collapsed'}
+              data-openbitfun-component="flow-chat-header"
+              data-openbitfun-part="rightPanelTrigger"
+              data-openbitfun-state={isRightPanelOpen ? 'open' : 'collapsed'}
               size="xs"
               onClick={onToggleRightPanel}
               aria-label={rightPanelLabel}
@@ -986,8 +986,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         <div
           className="flowchat-header__chrome-actions flow-chat-typography"
           data-shortcut-scope="chat"
-          data-bf-component="flow-chat-header"
-          data-bf-part="root"
+          data-openbitfun-component="flow-chat-header"
+          data-openbitfun-part="root"
         >
           {leftActions}
           {rightActions}
@@ -1003,8 +1003,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   return (
     <div
       className="flowchat-header"
-      data-bf-component="flow-chat-header"
-      data-bf-part="root"
+      data-openbitfun-component="flow-chat-header"
+      data-openbitfun-part="root"
     >
       {leftActions}
       {rightActions}

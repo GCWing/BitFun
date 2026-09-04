@@ -11,7 +11,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PREVIEW_ROOT = join(ROOT, 'src', 'apps', 'mobile', 'design-system', 'preview');
 const SHARED_ASSETS = new Map([
   ['/design-system-tokens.css', join(ROOT, 'design-system', 'packages', 'design-tokens', 'dist', 'tokens.css')],
-  ['/design-system-theme.css', join(ROOT, 'design-system', 'packages', 'theme-bitfun', 'dist', 'themes.css')],
+  ['/design-system-theme.css', join(ROOT, 'design-system', 'packages', 'theme-openbitfun', 'dist', 'themes.css')],
 ]);
 const requiredFiles = ['index.html', 'preview.css', 'preview.js', 'generated/mobile-design-data.js'];
 
@@ -42,7 +42,7 @@ const server = createServer((request, response) => {
   const requestPath = decodeURIComponent((request.url ?? '/').split('?')[0]);
   const sharedAsset = SHARED_ASSETS.get(requestPath);
   if (sharedAsset) {
-    response.setHeader('X-BitFun-Mobile-Preview', '1');
+    response.setHeader('X-OpenBitFun-Mobile-Preview', '1');
     response.setHeader('Content-Type', contentType(extname(sharedAsset)));
     createReadStream(sharedAsset).pipe(response);
     return;
@@ -57,13 +57,13 @@ const server = createServer((request, response) => {
     response.writeHead(404).end('Not found');
     return;
   }
-  response.setHeader('X-BitFun-Mobile-Preview', '1');
+  response.setHeader('X-OpenBitFun-Mobile-Preview', '1');
   response.setHeader('Content-Type', contentType(extname(path)));
   createReadStream(path).pipe(response);
 });
 
 server.on('error', async (error) => {
-  if (error.code === 'EADDRINUSE' && await isBitFunPreview(url)) {
+  if (error.code === 'EADDRINUSE' && await isOpenBitFunPreview(url)) {
     console.log(`[mobile-ui-preview] Reusing existing preview at ${url}`);
     openPreview(url);
     process.exit(0);
@@ -81,11 +81,11 @@ server.listen(port, host, () => {
   openPreview(url);
 });
 
-async function isBitFunPreview(target) {
+async function isOpenBitFunPreview(target) {
   try {
     const response = await fetch(target, { signal: AbortSignal.timeout(1500) });
-    if (response.headers.get('x-bitfun-mobile-preview') === '1') return true;
-    return (await response.text()).includes('<title>BitFun Mobile Parity Bench</title>');
+    if (response.headers.get('x-openbitfun-mobile-preview') === '1') return true;
+    return (await response.text()).includes('<title>OpenBitFun Mobile Parity Bench</title>');
   } catch {
     return false;
   }

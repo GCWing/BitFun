@@ -1,22 +1,22 @@
 [package]
-name = "bitfun-opencode-adapter"
+name = "openbitfun-opencode-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "OpenCode-compatible source and candidate adapter for BitFun"
+description = "OpenCode-compatible source and candidate adapter for OpenBitFun"
 autotests = false
 
 [lib]
-name = "bitfun_opencode_adapter"
+name = "openbitfun_opencode_adapter"
 crate-type = ["rlib"]
 
 [dependencies]
 async-trait = { workspace = true }
-bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client" }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources", "plugin-source"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime", "plugin-runtime"] }
-bitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
-bitfun-static-hook-support = { path = "../static-hook-support" }
+openbitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources", "plugin-source"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime", "plugin-runtime"] }
+openbitfun-services-core = { path = "../../services/services-core", features = ["markdown"] }
+openbitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }
@@ -33,8 +33,8 @@ urlencoding = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["script-tool-runtime"] }
-bitfun-services-integrations = { path = "../../services/services-integrations", features = ["plugin-source", "script-tool-runtime"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["script-tool-runtime"] }
+openbitfun-services-integrations = { path = "../../services/services-integrations", features = ["plugin-source", "script-tool-runtime"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tempfile = { workspace = true }
 

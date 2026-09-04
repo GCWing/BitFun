@@ -1,6 +1,6 @@
 import React, { forwardRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Textarea } from '@bitfun/ui';
+import { Textarea } from '@openbitfun/ui';
 
 export interface ConfigTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
    
@@ -87,8 +87,8 @@ export const ConfigTextarea = forwardRef<HTMLTextAreaElement, ConfigTextareaProp
               <span
                 aria-hidden="true"
                 className="config-form-label__required"
-                data-bf-component="config"
-                data-bf-part="required"
+                data-openbitfun-component="config"
+                data-openbitfun-part="required"
               >
                 *
               </span>

@@ -1,4 +1,4 @@
-import { Icon } from "@bitfun/ui";
+import { Icon } from "@openbitfun/ui";
 import designSystemHero from "../assets/design-system-hero.webp";
 import { useI18n } from "../i18n";
 
@@ -14,7 +14,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
       <section className="overview-hero">
         <div className="overview-copy">
           <span className="page-version">v0.1.0</span>
-          <h1>BitFun Design System</h1>
+          <h1>OpenBitFun Design System</h1>
           <p>{t("overview.intro")}</p>
           <div className="overview-actions">
             <button

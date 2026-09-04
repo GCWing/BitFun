@@ -1,4 +1,4 @@
-export const DISPATCH_PROTOCOL_VERSION = 5;
+export const DISPATCH_PROTOCOL_VERSION = 6;
 
 /**
  * Capabilities every dispatch target must advertise.
@@ -12,6 +12,7 @@ export const DISPATCH_PROTOCOL_VERSION = 5;
  * cannot run a dispatch at all.
  */
 export const BASE_DISPATCH_CAPABILITIES = [
+  'product_identity',
   'persistent_jobs',
   'cursor_events',
   'detached_worker',

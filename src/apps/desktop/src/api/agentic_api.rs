@@ -14,8 +14,8 @@ use crate::runtime::{
     DesktopRuntimeContext, DesktopSessionApplicationError, DesktopSessionScopeRequest,
 };
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
+use openbitfun_agent_runtime::sdk::{
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRecoveryOutcome,
     AgentDialogTurnRecoveryRequest, AgentDialogTurnRequest, AgentInputAttachment,
     AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelSelection,
@@ -24,23 +24,23 @@ use bitfun_agent_runtime::sdk::{
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
     RuntimeError, SessionEventBackfill, SessionEventProjectionSnapshot, SessionInteractionSnapshot,
 };
-use bitfun_core::agentic::agents::AgentSource;
-use bitfun_core::agentic::coordination::{
+use openbitfun_core::agentic::agents::AgentSource;
+use openbitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
     SubagentTimeoutAction,
 };
-use bitfun_core::agentic::core::*;
-use bitfun_core::agentic::deep_review_policy::{
+use openbitfun_core::agentic::core::*;
+use openbitfun_core::agentic::deep_review_policy::{
     apply_deep_review_queue_control, default_review_team_definition, DeepReviewQueueControlAction,
     ReviewTeamDefinition,
 };
-use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
-use bitfun_core::agentic::image_analysis::ImageContextData;
-use bitfun_core::agentic::memories::{db::MemoryDatabase, workspace::reset_memory_workspace};
-use bitfun_core::agentic::session::SessionViewRestoreTiming;
-use bitfun_core::agentic::tools::image_context::get_image_context;
-use bitfun_core::agentic::tools::implementations::exec_command::{
+use openbitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
+use openbitfun_core::agentic::image_analysis::ImageContextData;
+use openbitfun_core::agentic::memories::{db::MemoryDatabase, workspace::reset_memory_workspace};
+use openbitfun_core::agentic::session::SessionViewRestoreTiming;
+use openbitfun_core::agentic::tools::image_context::get_image_context;
+use openbitfun_core::agentic::tools::implementations::exec_command::{
     background_command_output_capture, control_exec_command_session, send_exec_command_input,
     ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
     ExecCommandInputRequest, ListBackgroundCommandOutputRequest,
@@ -48,25 +48,27 @@ use bitfun_core::agentic::tools::implementations::exec_command::{
     ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
     ReadBackgroundCommandOutputResponse,
 };
-use bitfun_core::service::config::project_permission_store::{
+use openbitfun_core::service::config::project_permission_store::{
     deserialize_project_permission_config, project_permission_file_path,
     project_permission_file_path_for_remote, ProjectPermissionConfig,
 };
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
-use bitfun_core::service::session::{
+use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use openbitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
+use openbitfun_core::service::session::{
     DialogTurnData, SessionContextUsage, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind, SessionTurnCatalog, SessionTurnWindowResponse,
 };
-use bitfun_core::service::workspace::WorkspaceKind;
-use bitfun_core::service::workspace::{WorkspaceActivityMode, WorkspaceCreateOptions};
-use bitfun_core::service::worktree::{WorktreeCreateRequest, WorktreeListRequest, WorktreeService};
-use bitfun_core_types::{
+use openbitfun_core::service::workspace::WorkspaceKind;
+use openbitfun_core::service::workspace::{WorkspaceActivityMode, WorkspaceCreateOptions};
+use openbitfun_core::service::worktree::{
+    WorktreeCreateRequest, WorktreeListRequest, WorktreeService,
+};
+use openbitfun_core_types::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
     WorktreeError, WorktreeErrorCode,
 };
-use bitfun_product_domains::tool_permissions::PermissionRule;
-use bitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
+use openbitfun_product_domains::tool_permissions::PermissionRule;
+use openbitfun_runtime_ports::{PermissionMode, PortErrorKind, SessionTurnWindowRequest};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -595,7 +597,7 @@ fn frontend_event_projection_snapshot(
         events: snapshot
             .events
             .into_iter()
-            .filter_map(bitfun_events::project_agentic_frontend_event)
+            .filter_map(openbitfun_events::project_agentic_frontend_event)
             .map(|event| FrontendProjectedAgenticEvent {
                 event_name: event.event_name,
                 payload: event.payload,
@@ -636,7 +638,7 @@ fn session_event_backfill_to_response(
             interaction_snapshot,
             events: events
                 .into_iter()
-                .filter_map(bitfun_events::project_agentic_frontend_event)
+                .filter_map(openbitfun_events::project_agentic_frontend_event)
                 .map(|event| FrontendProjectedAgenticEvent {
                     event_name: event.event_name,
                     payload: event.payload,
@@ -1116,7 +1118,7 @@ async fn permission_project_id_for_workspace(
     )
     .await
     .ok_or_else(|| format!("Workspace identity is unavailable: {workspace_id}"))?;
-    bitfun_core::agentic::tools::pipeline::permission_project_id_for_workspace_identity(
+    openbitfun_core::agentic::tools::pipeline::permission_project_id_for_workspace_identity(
         &identity, remote,
     )
     .map_err(|error| error.to_string())
@@ -1305,7 +1307,8 @@ pub async fn save_project_permission_rules(
     let current_revision = project_permission_rules_revision(current_content.as_deref());
     if request.revision != current_revision {
         return Err(
-            "Project permission rules changed outside BitFun. Reload before saving.".to_string(),
+            "Project permission rules changed outside OpenBitFun. Reload before saving."
+                .to_string(),
         );
     }
 
@@ -1670,7 +1673,7 @@ pub async fn create_session(
         )
         .await
     {
-        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+        openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
             "Desktop session creation",
             Some(std::path::Path::new(&resolved_execution_target.root_path)),
             error,
@@ -2206,7 +2209,7 @@ async fn ensure_session_loaded_for_selector_update(
 #[tauri::command]
 pub async fn reload_session_context(
     runtime: State<'_, DesktopRuntimeContext>,
-    request: bitfun_runtime_ports::AgentContextReloadRequest,
+    request: openbitfun_runtime_ports::AgentContextReloadRequest,
 ) -> Result<(), String> {
     runtime
         .session_application()
@@ -2975,7 +2978,7 @@ pub async fn cancel_dialog_turn(
 ) -> Result<(), String> {
     if let Some(acp_client_service) = app_state.acp_client_service.as_ref() {
         match acp_client_service
-            .cancel_bitfun_session(&request.session_id)
+            .cancel_openbitfun_session(&request.session_id)
             .await
         {
             Ok(true) => return Ok(()),
@@ -3316,16 +3319,16 @@ pub async fn control_background_command(
     .map(|response| {
         if response.session_id.is_none() {
             let status = match response.completion.map(|completion| completion.status) {
-                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Interrupted) => {
-                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Interrupted
+                Some(openbitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Interrupted) => {
+                    openbitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Interrupted
                 }
-                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Killed) => {
-                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Killed
+                Some(openbitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Killed) => {
+                    openbitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Killed
                 }
-                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Pruned) => {
-                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Pruned
+                Some(openbitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Pruned) => {
+                    openbitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Pruned
                 }
-                _ => bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Exited,
+                _ => openbitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Exited,
             };
             let capture = background_command_output_capture();
             tauri::async_runtime::spawn(async move {
@@ -3877,7 +3880,7 @@ pub async fn get_available_modes(
             .ensure_configured_plugin_instance(scope, None)
             .await
         {
-            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "Desktop mode catalog",
                 workspace_path.as_deref(),
                 error,
@@ -3885,7 +3888,7 @@ pub async fn get_available_modes(
             .await;
         }
         if let Err(error) =
-            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+            openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
                 workspace_path.as_deref(),
             )
             .await
@@ -4084,11 +4087,11 @@ fn system_time_to_unix_secs(time: std::time::SystemTime) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_core::service::session::{
+    use openbitfun_core::service::session::{
         ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
     };
-    use bitfun_events::AgenticEvent;
-    use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
+    use openbitfun_events::AgenticEvent;
+    use openbitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
 
     #[tokio::test]

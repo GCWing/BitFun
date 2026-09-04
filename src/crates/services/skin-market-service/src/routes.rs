@@ -12,7 +12,9 @@ use axum::routing::{any, get, post, put};
 use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use bitfun_product_domains::appearance_market::{
+use chrono::Utc;
+use hmac::{Hmac, Mac};
+use openbitfun_product_domains::appearance_market::{
     compute_appearance_review_bundle_hash, validate_appearance_market_slug,
     AppearanceAdminSubmissionDetail, AppearanceCursorPage, AppearanceMarketListingDetail,
     AppearanceMarketListingSummary, AppearanceMarketPackageMeta, AppearanceMarketPublicationStatus,
@@ -23,8 +25,7 @@ use bitfun_product_domains::appearance_market::{
     APPEARANCE_MARKET_MAX_PACKAGE_BYTES, APPEARANCE_MARKET_MAX_PAGE_SIZE,
     APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
 };
-use chrono::Utc;
-use hmac::{Hmac, Mac};
+use openbitfun_product_domains::product_release::OPENBITFUN_INITIAL_RELEASE_VERSION;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -339,7 +340,7 @@ async fn download_release(
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         HeaderValue::from_str(&format!(
-            "attachment; filename=\"{}-{}.bitfun-appearance\"",
+            "attachment; filename=\"{}-{}.openbitfun-appearance\"",
             slug, meta.package_version
         ))
         .map_err(SkinMarketError::internal)?,
@@ -1310,7 +1311,7 @@ fn summary_from_row(
         mode: meta.mode,
         package_version: meta.package_version,
         latest_release: row.get::<i64, _>("release_number") as u32,
-        min_bitfun_version: draft.min_bitfun_version,
+        min_openbitfun_version: draft.min_openbitfun_version,
         required_capabilities: meta.required_capabilities,
         owner: AppearanceMarketUserSummary {
             github_id: row.get("github_id"),
@@ -1338,7 +1339,7 @@ fn release_from_row(row: &sqlx::sqlite::SqliteRow) -> SkinMarketResult<Appearanc
         listing_id: row.get("listing_id"),
         release_number: row.get::<i64, _>("release_number") as u32,
         package_version: meta.package_version,
-        min_bitfun_version: draft.min_bitfun_version,
+        min_openbitfun_version: draft.min_openbitfun_version,
         package_sha256: row.get("package_sha256"),
         package_size: row.get::<i64, _>("package_size") as u64,
         review_bundle_hash: row.get("review_bundle_hash"),
@@ -1486,7 +1487,7 @@ fn submission_from_row(
         author: meta.as_ref().and_then(|meta| meta.author.clone()),
         mode: meta.as_ref().map(|meta| meta.mode),
         package_version: meta.as_ref().map(|meta| meta.package_version.clone()),
-        min_bitfun_version: draft.min_bitfun_version,
+        min_openbitfun_version: draft.min_openbitfun_version,
         required_capabilities: meta
             .map(|meta| meta.required_capabilities)
             .unwrap_or_default(),
@@ -1600,12 +1601,7 @@ fn validate_draft(request: &AppearanceMarketSubmissionDraftRequest) -> SkinMarke
             "Appearance release numbers start at 1.",
         ));
     }
-    Version::parse(&request.min_bitfun_version).map_err(|_| {
-        SkinMarketError::bad_request(
-            "invalid_min_bitfun_version",
-            "minBitfunVersion must use semantic version syntax.",
-        )
-    })?;
+    validate_min_openbitfun_version(&request.min_openbitfun_version)?;
     if request.changelog.chars().count() > 2_000 {
         return Err(SkinMarketError::bad_request(
             "invalid_changelog",
@@ -1624,8 +1620,43 @@ fn validate_draft(request: &AppearanceMarketSubmissionDraftRequest) -> SkinMarke
     Ok(())
 }
 
+fn validate_min_openbitfun_version(value: &str) -> SkinMarketResult<()> {
+    let version = Version::parse(value).map_err(|_| {
+        SkinMarketError::bad_request(
+            "invalid_min_openbitfun_version",
+            "minOpenBitFunVersion must use semantic version syntax, for example 1.0.0.",
+        )
+    })?;
+    if version < OPENBITFUN_INITIAL_RELEASE_VERSION {
+        return Err(SkinMarketError::bad_request(
+            "invalid_min_openbitfun_version",
+            "minOpenBitFunVersion must be 1.0.0 or newer.",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod minimum_version_tests {
+    use super::validate_min_openbitfun_version;
+
+    #[test]
+    fn minimum_openbitfun_version_starts_at_initial_release() {
+        assert!(validate_min_openbitfun_version("1.0.0").is_ok());
+        assert!(validate_min_openbitfun_version("1.2.0").is_ok());
+
+        let pre_release_identity = [0, 9, 0]
+            .into_iter()
+            .map(|part| part.to_string())
+            .collect::<Vec<_>>()
+            .join(".");
+        assert!(validate_min_openbitfun_version(&pre_release_identity).is_err());
+        assert!(validate_min_openbitfun_version("1.0.0-rc.1").is_err());
+    }
+}
+
 fn validate_license(
-    license: &bitfun_product_domains::appearance_market::AppearanceMarketLicense,
+    license: &openbitfun_product_domains::appearance_market::AppearanceMarketLicense,
 ) -> SkinMarketResult<()> {
     let spdx = license
         .spdx_expression

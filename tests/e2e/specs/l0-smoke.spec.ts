@@ -59,7 +59,7 @@ describe('L0 Smoke Tests', () => {
   describe('Core UI components', () => {
     it('Header should be visible', async () => {
       await browser.pause(2000);
-      const header = await $('.bitfun-nav-panel, .bitfun-scene-bar, .bitfun-nav-bar, [data-testid="header-container"]');
+      const header = await $('.openbitfun-nav-panel, .openbitfun-scene-bar, .openbitfun-nav-bar, [data-testid="header-container"]');
       const exists = await header.isExisting();
 
       if (exists) {
@@ -68,9 +68,9 @@ describe('L0 Smoke Tests', () => {
       } else {
         console.log('[L0] Checking fallback selectors...');
         const selectors = [
-          '.bitfun-nav-panel',
-          '.bitfun-scene-bar',
-          '.bitfun-nav-bar',
+          '.openbitfun-nav-panel',
+          '.openbitfun-scene-bar',
+          '.openbitfun-nav-bar',
           'header',
           '.header',
           '[class*="header"]',
@@ -113,7 +113,7 @@ describe('L0 Smoke Tests', () => {
       const welcomeSelectors = [
         '.welcome-scene--first-time',
         '.welcome-scene',
-        '.bitfun-scene-viewport--welcome',
+        '.openbitfun-scene-viewport--welcome',
       ];
 
       let welcomeExists = false;
@@ -132,7 +132,7 @@ describe('L0 Smoke Tests', () => {
 
       if (!welcomeExists) {
         // Fallback: check for scene viewport
-        const sceneViewport = await $('.bitfun-scene-viewport');
+        const sceneViewport = await $('.openbitfun-scene-viewport');
         welcomeExists = await sceneViewport.isExisting();
         console.log('[L0] Fallback check - scene viewport exists:', welcomeExists);
       }

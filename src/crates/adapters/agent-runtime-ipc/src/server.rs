@@ -9,8 +9,8 @@ use crate::{
     RuntimeIpcTransportError, RuntimeSessionLeases, MAX_REQUEST_FRAME_BYTES,
     MAX_RESPONSE_FRAME_BYTES, PROTOCOL_VERSION,
 };
-use bitfun_events::AgenticEvent;
-use bitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
+use openbitfun_events::AgenticEvent;
+use openbitfun_runtime_ports::{AgentSubmissionSource, AgentTurnCancellationRequest};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;

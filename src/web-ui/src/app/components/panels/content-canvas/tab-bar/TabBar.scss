@@ -7,12 +7,12 @@
   align-items: center;
   height: 36px;
   padding: 0 4px;
-  background: var(--bf-color-surface-scene);
-  border-bottom: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-scene);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
 
   // Active group - slightly different background for active tabs
   &.is-active-group {
-    background: var(--bf-color-surface-scene);
+    background: var(--openbitfun-color-surface-scene);
   }
 
   // Tab list
@@ -52,18 +52,18 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &--close-all:hover {
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 15%, transparent);
-      color: var(--bf-color-status-danger-content);
+      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 15%, transparent);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 }
@@ -81,7 +81,7 @@
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background: var(--bf-color-accent-default);
+  background: var(--openbitfun-color-accent-default);
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;

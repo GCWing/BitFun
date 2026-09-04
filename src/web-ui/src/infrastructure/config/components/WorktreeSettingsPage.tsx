@@ -1,4 +1,4 @@
-import { Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@bitfun/ui';
+import { Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@openbitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -41,8 +41,8 @@ const AUTO_DELETE_LIMIT_MAX = 100;
 const WORKTREE_REMOVE_ANIMATION_MS = 180;
 
 const DEFAULT_SETTINGS: WorktreeSettings = {
-  rootPath: '~/.bitfun/worktrees',
-  branchPrefix: 'bitfun/',
+  rootPath: '~/.openbitfun/worktrees',
+  branchPrefix: 'openbitfun/',
   copyLocalChanges: false,
   autoDeleteEnabled: true,
   autoDeleteLimit: 15,
@@ -194,7 +194,7 @@ const WorktreeSettingsPage: React.FC = () => {
 
   const captureScrollSnapshot = useCallback((): ScrollSnapshot | null => {
     const anchor = projectsResultsRef.current;
-    const scrollContainer = anchor?.closest<HTMLElement>('.bitfun-config-page-layout');
+    const scrollContainer = anchor?.closest<HTMLElement>('.openbitfun-config-page-layout');
     if (!anchor || !scrollContainer) {
       return null;
     }
@@ -580,18 +580,18 @@ const WorktreeSettingsPage: React.FC = () => {
     return (
       <article
         className={[
-          'bitfun-worktree-settings__worktree',
+          'openbitfun-worktree-settings__worktree',
           removingWorktreeId === worktree.worktreeId
-            && 'bitfun-worktree-settings__worktree--removing',
+            && 'openbitfun-worktree-settings__worktree--removing',
         ].filter(Boolean).join(' ')}
         key={worktree.worktreeId}
         data-worktree-id={worktree.worktreeId}
       >
-        <div className="bitfun-worktree-settings__worktree-main">
-          <div className="bitfun-worktree-settings__worktree-copy">
-            <div className="bitfun-worktree-settings__worktree-heading">
-              <h5 className="bitfun-worktree-settings__worktree-title">{branchLabel}</h5>
-              <div className="bitfun-worktree-settings__metadata">
+        <div className="openbitfun-worktree-settings__worktree-main">
+          <div className="openbitfun-worktree-settings__worktree-copy">
+            <div className="openbitfun-worktree-settings__worktree-heading">
+              <h5 className="openbitfun-worktree-settings__worktree-title">{branchLabel}</h5>
+              <div className="openbitfun-worktree-settings__metadata">
                 {worktree.lifecycle !== 'managed' && <span>{lifecycleLabel}</span>}
                 {worktree.dirty && <span>{t('management.state.dirty')}</span>}
                 {worktree.hasUnpublishedCommits && (
@@ -601,12 +601,12 @@ const WorktreeSettingsPage: React.FC = () => {
                 {worktree.missing && <span>{t('management.state.missing')}</span>}
               </div>
             </div>
-            <code className="bitfun-worktree-settings__path" title={worktree.path}>
+            <code className="openbitfun-worktree-settings__path" title={worktree.path}>
               {worktree.path}
             </code>
             {worktree.associatedSessionCount > 0 && (
               <div
-                className="bitfun-worktree-settings__sessions-summary"
+                className="openbitfun-worktree-settings__sessions-summary"
                 title={sessionNames}
               >
                 <MessageSquareText size={13} aria-hidden />
@@ -615,12 +615,12 @@ const WorktreeSettingsPage: React.FC = () => {
                     count: worktree.associatedSessionCount,
                   })}
                 </span>
-                <span className="bitfun-worktree-settings__session-links">
+                <span className="openbitfun-worktree-settings__session-links">
                   {worktree.sessions.map(session => (
                     <button
                       key={session.sessionId}
                       type="button"
-                      className="bitfun-worktree-settings__session-link"
+                      className="openbitfun-worktree-settings__session-link"
                       disabled={openingSessionId !== null}
                       title={t('management.sessions.openLabel', {
                         name: session.sessionName,
@@ -632,14 +632,14 @@ const WorktreeSettingsPage: React.FC = () => {
                     >
                       {openingSessionId === session.sessionId && (
                         <LoaderCircle
-                          className="bitfun-worktree-settings__session-link-spinner"
+                          className="openbitfun-worktree-settings__session-link-spinner"
                           size={12}
                           aria-hidden
                         />
                       )}
                       <span>{session.sessionName}</span>
                       {session.archived && (
-                        <span className="bitfun-worktree-settings__session-link-state">
+                        <span className="openbitfun-worktree-settings__session-link-state">
                           {t('management.sessions.status.archived')}
                         </span>
                       )}
@@ -649,7 +649,7 @@ const WorktreeSettingsPage: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="bitfun-worktree-settings__delete-control">
+          <div className="openbitfun-worktree-settings__delete-control">
             <Tooltip content={blockReason ?? t('management.delete.action')}>
               <IconButton
                 tone="danger"
@@ -672,17 +672,17 @@ const WorktreeSettingsPage: React.FC = () => {
   };
 
   const renderProjectsSkeleton = () => (
-    <div className="bitfun-worktree-settings__skeleton">
-      <span className="bitfun-sr-only" role="status">
+    <div className="openbitfun-worktree-settings__skeleton">
+      <span className="openbitfun-sr-only" role="status">
         {t('management.loading')}
       </span>
-      <div className="bitfun-worktree-settings__skeleton-header" aria-hidden="true">
+      <div className="openbitfun-worktree-settings__skeleton-header" aria-hidden="true">
         <span />
         <span />
       </div>
-      <div className="bitfun-worktree-settings__skeleton-list" aria-hidden="true">
+      <div className="openbitfun-worktree-settings__skeleton-list" aria-hidden="true">
         {[0, 1, 2].map(index => (
-          <div className="bitfun-worktree-settings__skeleton-row" key={index}>
+          <div className="openbitfun-worktree-settings__skeleton-row" key={index}>
             <span />
             <span />
             <span />
@@ -698,7 +698,7 @@ const WorktreeSettingsPage: React.FC = () => {
     }
     if (projects.length === 0 && !projectsMessage) {
       return (
-        <div className="bitfun-worktree-settings__empty">
+        <div className="openbitfun-worktree-settings__empty">
           <FolderGit2 size={22} aria-hidden />
           <div>
             <h4>{t('management.empty.title')}</h4>
@@ -712,16 +712,16 @@ const WorktreeSettingsPage: React.FC = () => {
     }
 
     return (
-      <div className="bitfun-worktree-settings__projects">
+      <div className="openbitfun-worktree-settings__projects">
         {projects.map(project => (
           <section
-            className="bitfun-worktree-settings__project"
-            data-bf-component="worktree-settings"
-            data-bf-part="project"
+            className="openbitfun-worktree-settings__project"
+            data-openbitfun-component="worktree-settings"
+            data-openbitfun-part="project"
             key={project.projectWorkspacePath}
           >
-            <header className="bitfun-worktree-settings__project-header">
-              <div className="bitfun-worktree-settings__project-identity">
+            <header className="openbitfun-worktree-settings__project-header">
+              <div className="openbitfun-worktree-settings__project-identity">
                 <h4>{workspaceName(project.projectWorkspacePath)}</h4>
                 <code title={project.projectWorkspacePath}>
                   {project.projectWorkspacePath}
@@ -732,9 +732,9 @@ const WorktreeSettingsPage: React.FC = () => {
               </span>
             </header>
             <div
-              className="bitfun-worktree-settings__worktree-list"
-              data-bf-component="worktree-settings"
-              data-bf-part="worktreeList"
+              className="openbitfun-worktree-settings__worktree-list"
+              data-openbitfun-component="worktree-settings"
+              data-openbitfun-part="worktreeList"
             >
               {project.worktrees.map(worktree => renderWorktree(project, worktree))}
             </div>
@@ -763,9 +763,9 @@ const WorktreeSettingsPage: React.FC = () => {
 
   return (
     <ConfigPageLayout
-      className="bitfun-worktree-settings"
-      data-bf-component="worktree-settings"
-      data-bf-part="root"
+      className="openbitfun-worktree-settings"
+      data-openbitfun-component="worktree-settings"
+      data-openbitfun-part="root"
     >
       <ConfigPageHeader
         icon={<Icon name="git" size="lg" aria-hidden />}
@@ -775,7 +775,7 @@ const WorktreeSettingsPage: React.FC = () => {
       <ConfigPageContent>
         {renderSettings()}
         <ConfigPageSection
-          className="bitfun-worktree-settings__management-section"
+          className="openbitfun-worktree-settings__management-section"
           bodySurface={false}
           title={t('management.title')}
           description={t('management.description')}
@@ -800,25 +800,25 @@ const WorktreeSettingsPage: React.FC = () => {
           )}
           <div
             ref={projectsResultsRef}
-            data-bf-component="worktree-settings"
-            data-bf-part="results"
+            data-openbitfun-component="worktree-settings"
+            data-openbitfun-part="results"
             className={[
-              'bitfun-worktree-settings__results',
+              'openbitfun-worktree-settings__results',
               projectsLoading
                 && projectsInitialized
-                && 'bitfun-worktree-settings__results--refreshing',
+                && 'openbitfun-worktree-settings__results--refreshing',
             ].filter(Boolean).join(' ')}
             aria-busy={projectsLoading}
           >
             {projectsLoading && projectsInitialized && (
               <>
                 <div
-                  className="bitfun-worktree-settings__refresh-progress"
+                  className="openbitfun-worktree-settings__refresh-progress"
                   aria-hidden="true"
                 >
                   <span />
                 </div>
-                <span className="bitfun-sr-only" role="status">
+                <span className="openbitfun-sr-only" role="status">
                   {t('management.loading')}
                 </span>
               </>

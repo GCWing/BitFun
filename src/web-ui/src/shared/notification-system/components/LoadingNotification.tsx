@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton } from '@openbitfun/ui';
 import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
@@ -38,9 +38,9 @@ export const LoadingNotification: React.FC<LoadingNotificationProps> = ({ notifi
   return (
     <div
       className={`loading-notification loading-notification--${status || 'active'}`}
-      data-bf-component="notification"
-      data-bf-part="loadingItem"
-      data-bf-state={status || undefined}
+      data-openbitfun-component="notification"
+      data-openbitfun-part="loadingItem"
+      data-openbitfun-state={status || undefined}
     >
       
       <div className="loading-notification__icon">

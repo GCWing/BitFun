@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-agent-tools"
+name = "openbitfun-agent-tools"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun agent tool contracts"
+description = "OpenBitFun agent tool contracts"
 
 [lib]
-name = "bitfun_agent_tools"
+name = "openbitfun_agent_tools"
 crate-type = ["rlib"]
 
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
 

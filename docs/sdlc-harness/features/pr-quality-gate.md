@@ -1,4 +1,4 @@
-# BitFun 子模块设计：变更就绪度与可选 PR 门禁
+# OpenBitFun 子模块设计：变更就绪度与可选 PR 门禁
 
 > 上游文档：[product-requirements.md](../product-requirements.md)、[design.md](../design.md)
 > 模块角色：在用户准备提交、发起 PR、进入团队协作或项目开启强策略时，把变更、验证、风险和人工决策投影为可读的就绪度摘要；只有在配置或风险要求下才升级为 PR 门禁。

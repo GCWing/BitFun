@@ -6,5 +6,5 @@ export const turnCompletionNoticeAppearanceDescriptor: AppearanceSurfaceDescript
     { id: 'root' }, { id: 'icon' }, { id: 'content' }, { id: 'text' },
     { id: 'title' }, { id: 'body' }, { id: 'reason' }, { id: 'reasonCode' },
   ],
-  facets: [{ id: 'tone', attribute: 'data-bf-tone', values: ['error', 'info', 'warning'] }],
+  facets: [{ id: 'tone', attribute: 'data-openbitfun-tone', values: ['error', 'info', 'warning'] }],
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, type IconName, type IconSize } from '@bitfun/ui';
+import { Icon, type IconName, type IconSize } from '@openbitfun/ui';
 import codingFootprintIcon from '@/assets/miniapps/catalog/coding-footprint.png';
 import dailyDivinationIcon from '@/assets/miniapps/catalog/daily-divination.png';
 import gomokuIcon from '@/assets/miniapps/catalog/gomoku.png';
@@ -46,12 +46,12 @@ function catalogSize(size: number): IconSize {
 }
 
 const ICON_GRADIENTS = [
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-accent-hover) 35%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-secondary) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-success-content) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-accent-secondary) 35%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-domain-generative-ui) 30%, transparent) 0%, color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent) 100%)',
-  'linear-gradient(135deg, color-mix(in srgb, var(--bf-color-status-danger-content) 25%, transparent) 0%, color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-accent-hover) 35%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-accent-secondary) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-status-success-content) 30%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-accent-hover) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-status-danger-content) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-accent-secondary) 35%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-status-danger-content) 20%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-domain-generative-ui) 30%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-accent-hover) 25%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-status-danger-content) 25%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent) 100%)',
 ];
 
 const MINI_APP_ICONS = {

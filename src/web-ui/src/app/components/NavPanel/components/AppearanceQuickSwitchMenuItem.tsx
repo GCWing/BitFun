@@ -9,7 +9,7 @@ import React, {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, Menu, MenuItem, MenuSeparator } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSeparator } from '@openbitfun/ui';
 
 import {
   SYSTEM_APPEARANCE_ID,
@@ -165,7 +165,7 @@ const AppearanceQuickSwitchMenuItem: React.FC<AppearanceQuickSwitchMenuItemProps
 
   const focusFirstSubmenuItem = useCallback(() => {
     const firstItem = submenuRef.current?.querySelector<HTMLButtonElement>(
-      '[data-bf-menu-item]:not(:disabled)',
+      '[data-openbitfun-menu-item]:not(:disabled)',
     );
     firstItem?.focus();
   }, []);
@@ -217,10 +217,10 @@ const AppearanceQuickSwitchMenuItem: React.FC<AppearanceQuickSwitchMenuItemProps
     <>
       <MenuItem
         ref={triggerRef}
-        className={`bitfun-nav-panel__appearance-menu-trigger${open ? ' is-open' : ''}`}
+        className={`openbitfun-nav-panel__appearance-menu-trigger${open ? ' is-open' : ''}`}
         leading={<Icon name="palette" size="sm" aria-hidden="true" />}
         metadata={(
-          <span className="bitfun-nav-panel__appearance-menu-current" title={selectedDisplayName}>
+          <span className="openbitfun-nav-panel__appearance-menu-current" title={selectedDisplayName}>
             {selectedDisplayName}
           </span>
         )}
@@ -237,7 +237,7 @@ const AppearanceQuickSwitchMenuItem: React.FC<AppearanceQuickSwitchMenuItemProps
       {open && createPortal(
         <Menu
           ref={submenuRef}
-          className="bitfun-nav-panel__appearance-submenu"
+          className="openbitfun-nav-panel__appearance-submenu"
           aria-label={t('nav.settingsMenu.theme')}
           data-placement={submenuLayout?.placement}
           data-testid="nav-settings-appearance-menu"

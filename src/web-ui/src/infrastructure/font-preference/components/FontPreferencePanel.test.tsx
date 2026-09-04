@@ -41,7 +41,7 @@ describe('FontPreferencePanel', () => {
     document.body.innerHTML = renderToStaticMarkup(<FontPreferencePanel />);
 
     const levelGroup = document.querySelector('[data-testid="appearance-ui-font-level-group"]');
-    const segmentedControl = levelGroup?.querySelector('[data-bf-component="segmented-control"]');
+    const segmentedControl = levelGroup?.querySelector('[data-openbitfun-component="segmented-control"]');
     const segments = Array.from(levelGroup?.querySelectorAll('[role="radio"]') ?? []);
     const previewInput = document.querySelector<HTMLInputElement>(
       '[data-testid="appearance-ui-font-preview-input"]',
@@ -60,13 +60,13 @@ describe('FontPreferencePanel', () => {
     ]);
     expect(
       segments.every(
-        segment => segment.querySelector('[data-bf-part="label"]')?.getAttribute('style') === null,
+        segment => segment.querySelector('[data-openbitfun-part="label"]')?.getAttribute('style') === null,
       ),
     ).toBe(true);
     expect(previewInput?.placeholder).toBe('appearance.fontSize.previewPlaceholder');
     expect(previewInput?.style.fontSize).toBe('14px');
-    expect(previewInput?.closest('[data-bf-component="input"]')?.getAttribute('data-size')).toBe('md');
-    expect(previewInput?.closest('[data-bf-component="input"]')?.getAttribute('data-field-surface')).toBe('default');
+    expect(previewInput?.closest('[data-openbitfun-component="input"]')?.getAttribute('data-size')).toBe('md');
+    expect(previewInput?.closest('[data-openbitfun-component="input"]')?.getAttribute('data-field-surface')).toBe('default');
     expect(document.querySelector('[data-testid="appearance-font-reset-btn"]')).toBeNull();
   });
 
@@ -84,7 +84,7 @@ describe('FontPreferencePanel', () => {
 
     expect(
       customControls
-        ?.querySelector('[data-bf-component="number-input"]')
+        ?.querySelector('[data-openbitfun-component="number-input"]')
         ?.getAttribute('data-size'),
     ).toBe('md');
     expect(numberInput?.value).toBe('18');

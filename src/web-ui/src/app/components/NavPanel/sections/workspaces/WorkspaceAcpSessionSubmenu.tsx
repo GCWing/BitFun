@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, Loader2 } from 'lucide-react';
-import { Icon, Menu, MenuItem } from '@bitfun/ui';
+import { Icon, Menu, MenuItem } from '@openbitfun/ui';
 
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -124,7 +124,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
 
     const focusFirstSubmenuItem = useCallback(() => {
       submenuRef.current
-        ?.querySelector<HTMLButtonElement>('[data-bf-menu-item]:not(:disabled)')
+        ?.querySelector<HTMLButtonElement>('[data-openbitfun-menu-item]:not(:disabled)')
         ?.focus();
     }, []);
 
@@ -171,7 +171,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
       <>
         <MenuItem
           ref={triggerRef}
-          className={`bitfun-nav-panel__workspace-acp-menu-trigger${open ? ' is-open' : ''}`}
+          className={`openbitfun-nav-panel__workspace-acp-menu-trigger${open ? ' is-open' : ''}`}
           leading={<Bot size={13} aria-hidden="true" />}
           shortcut={<Icon name="chevron-right" size="sm" aria-hidden="true" />}
           aria-haspopup="menu"
@@ -186,7 +186,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
         {open && createPortal(
           <Menu
             ref={setSubmenuRef}
-            className="bitfun-nav-panel__workspace-item-menu-popover bitfun-nav-panel__workspace-acp-submenu"
+            className="openbitfun-nav-panel__workspace-item-menu-popover openbitfun-nav-panel__workspace-acp-submenu"
             aria-label={label}
             data-placement={layout?.placement}
             data-testid="nav-workspace-menu-acp-submenu"

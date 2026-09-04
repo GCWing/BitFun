@@ -1,13 +1,13 @@
 //! Subagent API
 
 use crate::api::app_state::AppState;
-use bitfun_core::agentic::agents::{
+use log::warn;
+use openbitfun_core::agentic::agents::{
     AgentInfo, CustomSubagent, CustomSubagentDetail, CustomSubagentKind, SubAgentSource,
     SubagentListScope, SubagentQueryContext,
 };
-use bitfun_core::service::config::SubagentModelSelection;
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use log::warn;
+use openbitfun_core::service::config::SubagentModelSelection;
+use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -190,7 +190,7 @@ pub async fn delete_subagent(
         }
     }
 
-    if let Err(e) = bitfun_core::service::config::reload_global_config().await {
+    if let Err(e) = openbitfun_core::service::config::reload_global_config().await {
         warn!(
             "Failed to reload global config after subagent deletion: subagent_id={}, error={}",
             subagent_id, e
@@ -553,7 +553,7 @@ pub async fn update_subagent_config(
         }
 
         if model_updated || availability_updated {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
+            if let Err(e) = openbitfun_core::service::config::reload_global_config().await {
                 warn!(
                     "Failed to reload global config after subagent config update: subagent_id={}, error={}",
                     subagent_id, e

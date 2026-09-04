@@ -21,8 +21,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
-  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Button: ({
@@ -44,7 +44,7 @@ vi.mock('@bitfun/ui', () => ({
 
 const SYNCED = {
   changed: true,
-  branch: 'bitfun/dispatch/job-1',
+  branch: 'openbitfun/dispatch/job-1',
   baseCommit: '0'.repeat(40),
   headCommit: '1'.repeat(40),
   commitCount: 2,
@@ -53,7 +53,7 @@ const SYNCED = {
     { status: 'M', path: 'src/main.ts' },
   ],
   truncatedChanges: false,
-  baselineWorktreePath: '/home/me/.bitfun/worktrees/repo/dispatch-job-1',
+  baselineWorktreePath: '/home/me/.openbitfun/worktrees/repo/dispatch-job-1',
   syncedHeadCommit: '1'.repeat(40),
 };
 
@@ -73,8 +73,8 @@ describe('DispatchResultDialog Git sync', () => {
         <DispatchResultDialog
           open
           jobId="job-1"
-          branch="bitfun/dispatch/job-1"
-          baselineWorktreePath="/home/me/.bitfun/worktrees/repo/dispatch-job-1"
+          branch="openbitfun/dispatch/job-1"
+          baselineWorktreePath="/home/me/.openbitfun/worktrees/repo/dispatch-job-1"
           targetLabel="build-host"
           onClose={vi.fn()}
           {...props}
@@ -100,8 +100,8 @@ describe('DispatchResultDialog Git sync', () => {
   it('keeps branch and save location in collapsed details before syncing', async () => {
     await render();
 
-    expect(container.textContent).toContain('bitfun/dispatch/job-1');
-    expect(container.textContent).toContain('/home/me/.bitfun/worktrees/repo/dispatch-job-1');
+    expect(container.textContent).toContain('openbitfun/dispatch/job-1');
+    expect(container.textContent).toContain('/home/me/.openbitfun/worktrees/repo/dispatch-job-1');
     expect(container.querySelector('details')?.open).toBe(false);
     expect(mocks.syncResult).not.toHaveBeenCalled();
 

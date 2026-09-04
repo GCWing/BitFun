@@ -13,12 +13,12 @@
 
 #![allow(dead_code)]
 
-use bitfun_core::agentic::tools::computer_use_host::AppMenuShortcut;
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{CFGetTypeID, CFTypeRef, TCFType};
 use core_foundation::boolean::{CFBooleanGetTypeID, CFBooleanRef};
 use core_foundation::string::{CFString, CFStringRef};
+use openbitfun_core::agentic::tools::computer_use_host::AppMenuShortcut;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::ffi::c_void;
 
 type CFNumberRef = *const c_void;
@@ -437,10 +437,10 @@ fn walk(elem: AXUIElementRef, path: &[String], depth: u32, state: &mut WalkState
 /// Returns an empty result (not an error) when the app has no menu bar
 /// (e.g. background-only agents) — that is a legitimate "no shortcuts"
 /// answer, not a failure.
-pub(super) fn dump_app_menu_shortcuts(pid: i32) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
+pub(super) fn dump_app_menu_shortcuts(pid: i32) -> OpenBitFunResult<(Vec<AppMenuShortcut>, u32)> {
     let app = unsafe { AXUIElementCreateApplication(pid) };
     if app.is_null() {
-        return Err(BitFunError::tool(format!(
+        return Err(OpenBitFunError::tool(format!(
             "AXUIElementCreateApplication returned null for pid={}",
             pid
         )));

@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .viewport,
   .list,
@@ -19,15 +19,15 @@
     display: flex;
     min-inline-size: 0;
     min-block-size: 0;
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
   }
 
   .viewport {
     flex: 1 1 auto;
     min-inline-size: 0;
     min-block-size: 0;
-    max-block-size: var(--bf-overlay-menu-max-block-size);
-    padding-inline-end: var(--bf-overlay-menu-scrollbar-gap);
+    max-block-size: var(--openbitfun-overlay-menu-max-block-size);
+    padding-inline-end: var(--openbitfun-overlay-menu-scrollbar-gap);
   }
 
   .list,
@@ -39,20 +39,20 @@
   }
 
   .list {
-    gap: var(--bf-overlay-menu-section-gap);
+    gap: var(--openbitfun-overlay-menu-section-gap);
   }
 
   .groupLabel {
     display: flex;
     align-items: center;
-    min-block-size: var(--bf-overlay-menu-heading-height);
-    padding-inline: var(--bf-overlay-menu-heading-padding-inline);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    min-block-size: var(--openbitfun-overlay-menu-heading-height);
+    padding-inline: var(--openbitfun-overlay-menu-heading-padding-inline);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
   .option {
@@ -60,13 +60,13 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: var(--bf-overlay-menu-item-height);
-    gap: var(--bf-overlay-menu-item-gap);
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+    gap: var(--openbitfun-overlay-menu-item-gap);
     margin: 0;
-    padding-block: var(--bf-space-1);
-    padding-inline: var(--bf-overlay-menu-item-padding-inline);
+    padding-block: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-overlay-menu-item-padding-inline);
     border: 0;
-    border-radius: var(--bf-overlay-menu-item-radius);
+    border-radius: var(--openbitfun-overlay-menu-item-radius);
     outline: 0;
     color: inherit;
     background: transparent;
@@ -74,45 +74,45 @@
     text-align: start;
     cursor: pointer;
     transition:
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .option:not(:disabled):is(:hover, [data-active="true"]) {
-    background: var(--bf-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .option[data-selected="true"] {
-    background: var(--bf-color-selection-surface);
+    background: var(--openbitfun-color-selection-surface);
   }
 
   .option:not(:disabled):active {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .option:focus-visible {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .option:disabled {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 
   .leading,
   .indicator {
     display: inline-flex;
-    flex: 0 0 var(--bf-overlay-menu-item-icon-size);
+    flex: 0 0 var(--openbitfun-overlay-menu-item-icon-size);
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-overlay-menu-item-icon-size);
-    block-size: var(--bf-overlay-menu-item-icon-size);
+    inline-size: var(--openbitfun-overlay-menu-item-icon-size);
+    block-size: var(--openbitfun-overlay-menu-item-icon-size);
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"],
+  .leading > [data-openbitfun-component="icon"],
   .indicator > :where(svg, img),
-  .indicator > [data-bf-component="icon"] {
+  .indicator > [data-openbitfun-component="icon"] {
     inline-size: 100%;
     block-size: 100%;
   }
@@ -123,32 +123,32 @@
     flex: 1 1 auto;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   .label,
   .description,
   .metadata {
     overflow: hidden;
-    font-family: var(--bf-type-label-md-font-family);
+    font-family: var(--openbitfun-type-label-md-font-family);
     text-overflow: ellipsis;
   }
 
   .label {
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     white-space: nowrap;
   }
 
   .description,
   .metadata {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
   .description {
@@ -161,17 +161,17 @@
   }
 
   .indicator {
-    color: var(--bf-color-action-neutral-content);
+    color: var(--openbitfun-color-action-neutral-content);
   }
 
   .empty {
-    padding: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    padding: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     text-align: center;
   }
 
@@ -188,7 +188,7 @@
     }
 
     .option:focus-visible {
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
   }
 }

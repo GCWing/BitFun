@@ -19,7 +19,7 @@ for name in "${required[@]}"; do
 done
 
 if [[ "${#missing[@]}" -gt 0 ]]; then
-  if [[ "${BITFUN_REQUIRE_APPLE_SIGNING:-false}" == "true" ]]; then
+  if [[ "${OPENBITFUN_REQUIRE_APPLE_SIGNING:-false}" == "true" ]]; then
     printf 'Apple signing is required, but these secrets are missing: %s\n' "${missing[*]}" >&2
     exit 1
   fi
@@ -27,10 +27,10 @@ if [[ "${#missing[@]}" -gt 0 ]]; then
   exit 0
 fi
 
-signing_dir="${RUNNER_TEMP}/bitfun-apple-signing"
+signing_dir="${RUNNER_TEMP}/openbitfun-apple-signing"
 certificate_path="${signing_dir}/developer-id.p12"
 api_key_path="${signing_dir}/AuthKey_${APPLE_API_KEY}.p8"
-keychain_path="${RUNNER_TEMP}/bitfun-signing.keychain-db"
+keychain_path="${RUNNER_TEMP}/openbitfun-signing.keychain-db"
 
 mkdir -p "${signing_dir}"
 chmod 700 "${signing_dir}"
@@ -71,7 +71,7 @@ fi
   echo "APPLE_API_KEY=${APPLE_API_KEY}"
   echo "APPLE_API_KEY_PATH=${api_key_path}"
   echo "APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY}"
-  echo "BITFUN_APPLE_SIGNING_CONFIGURED=true"
+  echo "OPENBITFUN_APPLE_SIGNING_CONFIGURED=true"
 } >>"${GITHUB_ENV}"
 
 echo "Apple Developer ID signing and notarization credentials are ready."

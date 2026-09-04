@@ -2,8 +2,8 @@
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use bitfun_runtime_ports::AgentInputAttachment;
 use image::imageops::FilterType;
+use openbitfun_runtime_ports::AgentInputAttachment;
 
 use super::{ChatImageAttachment, RemoteImageContext};
 

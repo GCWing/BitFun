@@ -30,6 +30,18 @@ afterEach(() => {
 });
 
 describe('PendingQueueModule', () => {
+  it('persists local queues only under the canonical surface-scoped key', () => {
+    const sessionId = testSession();
+    pendingQueueManager.enqueue({ sessionId, content: 'local draft' });
+
+    const canonicalKey = `openbitfun.flowChat.pendingQueue.v1.${encodeURIComponent(JSON.stringify([
+      LOCAL_SURFACE_ID,
+      sessionId,
+    ]))}`;
+    expect(window.localStorage.getItem(canonicalKey)).not.toBeNull();
+    expect(window.localStorage.getItem(`flowChat.pendingQueue.${sessionId}`)).toBeNull();
+  });
+
   it('promotes an existing item for explicit drain without rebuilding or losing its payload', () => {
     const sessionId = testSession();
     pendingQueueManager.enqueue({ sessionId, content: 'first' });

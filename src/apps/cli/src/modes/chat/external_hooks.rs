@@ -106,7 +106,7 @@ fn extension_command_help_request(command_name: &str, arguments: &str) -> Option
             "",
             "Usage: /extensions [status | refresh | safe-mode on | safe-mode off | source enable <source-key> | source disable <source-key>]",
             "",
-            "Shows external AI application sources and controls BitFun Safe Mode. Source files remain owned by their native application.",
+            "Shows external AI application sources and controls OpenBitFun Safe Mode. Source files remain owned by their native application.",
             "",
             "Help: /help extensions, /extensions -h, or /extensions --help",
         ].join("\n")),
@@ -115,7 +115,7 @@ fn extension_command_help_request(command_name: &str, arguments: &str) -> Option
             "",
             "Usage: /tools [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]",
             "",
-            "Shows BitFun, MCP, and compatible external tool sources. Activation and conflicts remain guarded by BitFun policy.",
+            "Shows OpenBitFun, MCP, and compatible external tool sources. Activation and conflicts remain guarded by OpenBitFun policy.",
             "",
             "Help: /help tools, /tools -h, or /tools --help",
         ].join("\n")),
@@ -146,7 +146,7 @@ fn extension_command_help_request(command_name: &str, arguments: &str) -> Option
 fn render_external_hook_catalog(snapshot: &ExternalHookCatalogSnapshotV1) -> String {
     let mut lines = vec![
         "Available external Hook sources".to_string(),
-        "Discovery is read-only. Review an exact import plan before BitFun copies or enables anything."
+        "Discovery is read-only. Review an exact import plan before OpenBitFun copies or enables anything."
             .to_string(),
         String::new(),
     ];
@@ -333,7 +333,7 @@ fn matcher_label(matcher: &ExternalHookMatcherSummary) -> String {
 }
 
 fn projection_label(
-    entry: &bitfun_product_domains::external_hook_catalog::ExternalHookCatalogEntry,
+    entry: &openbitfun_product_domains::external_hook_catalog::ExternalHookCatalogEntry,
 ) -> &'static str {
     match entry.projection_status {
         ExternalHookProjectionStatus::Mapped => match entry
@@ -342,11 +342,11 @@ fn projection_label(
             .map(|mapping| mapping.hook_point)
         {
             Some(
-                bitfun_product_domains::external_hook_contributions::ExternalHookPoint::ToolBefore,
-            ) => "coverage mapped: BitFun tool before",
+                openbitfun_product_domains::external_hook_contributions::ExternalHookPoint::ToolBefore,
+            ) => "coverage mapped: OpenBitFun tool before",
             Some(
-                bitfun_product_domains::external_hook_contributions::ExternalHookPoint::ToolAfter,
-            ) => "coverage mapped: BitFun tool after",
+                openbitfun_product_domains::external_hook_contributions::ExternalHookPoint::ToolAfter,
+            ) => "coverage mapped: OpenBitFun tool after",
             None => "invalid mapping",
         },
         ExternalHookProjectionStatus::NativeOnly => "native only",
@@ -384,9 +384,9 @@ fn source_health_label(health: ExternalSourceHealth) -> &'static str {
 }
 
 fn hook_handler_label(
-    kind: bitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind,
+    kind: openbitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind,
 ) -> &'static str {
-    use bitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind;
+    use openbitfun_product_domains::external_hook_catalog::ExternalHookHandlerKind;
     match kind {
         ExternalHookHandlerKind::Function => "function",
         ExternalHookHandlerKind::Command => "command",
@@ -475,13 +475,13 @@ impl ChatMode {
                 self.spawn_hook_management(
                     async move {
                         let imports =
-                            bitfun_core::external_hook_import::external_hook_import_snapshot(
+                            openbitfun_core::external_hook_import::external_hook_import_snapshot(
                                 Some(&workspace),
                                 refresh,
                             )
                             .await?;
                         let native = project_native_hook_overview(
-                            bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                            openbitfun_core::native_hooks::overview(Some(&workspace)).await,
                             &workspace,
                         );
                         Ok(HookManagementResult::Snapshot(HookManagementSnapshot {
@@ -588,7 +588,7 @@ impl ChatMode {
         if !confirm {
             self.spawn_hook_management(
                 async move {
-                    bitfun_core::external_hook_import::plan_external_hook_import(
+                    openbitfun_core::external_hook_import::plan_external_hook_import(
                         Some(&workspace),
                         source,
                     )
@@ -616,7 +616,7 @@ impl ChatMode {
         let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let result = bitfun_core::external_hook_import::apply_external_hook_import(
+                let result = openbitfun_core::external_hook_import::apply_external_hook_import(
                     Some(&workspace),
                     ExternalHookImportApplyRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
@@ -636,7 +636,7 @@ impl ChatMode {
                     crate::hook_import::completed_import_status(&snapshot, &source, applied)
                         .to_string();
                 let native = project_native_hook_overview(
-                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    openbitfun_core::native_hooks::overview(Some(&workspace)).await,
                     &workspace,
                 );
                 Ok(HookManagementResult::Changed {
@@ -657,7 +657,7 @@ impl ChatMode {
         &'a self,
         number: usize,
         chat_state: &mut ChatState,
-    ) -> Option<&'a bitfun_product_domains::external_hook_import::ImportedHookSourceSnapshotV1>
+    ) -> Option<&'a openbitfun_product_domains::external_hook_import::ImportedHookSourceSnapshotV1>
     {
         let Some(snapshot) = &self.hook_management_snapshot else {
             chat_state.add_system_message("Run /hooks first to load imported sources.".to_string());
@@ -709,7 +709,7 @@ impl ChatMode {
         let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let imports = bitfun_core::external_hook_import::mutate_external_hook_import(
+                let imports = openbitfun_core::external_hook_import::mutate_external_hook_import(
                     Some(&workspace),
                     ExternalHookImportMutationRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
@@ -719,12 +719,12 @@ impl ChatMode {
                 )
                 .await?;
                 let native = project_native_hook_overview(
-                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    openbitfun_core::native_hooks::overview(Some(&workspace)).await,
                     &workspace,
                 );
                 let status = if remove {
                     format!(
-                        "Removed BitFun's managed copy of {import_id}; the source was unchanged."
+                        "Removed OpenBitFun's managed copy of {import_id}; the source was unchanged."
                     )
                 } else if enabled {
                     format!("Enabled {import_id} for the next matching event.")
@@ -784,7 +784,7 @@ impl ChatMode {
         let workspace = std::path::PathBuf::from(self.agent.project_workspace_path_string());
         self.spawn_hook_management(
             async move {
-                let imports = bitfun_core::external_hook_import::mutate_external_hook_import(
+                let imports = openbitfun_core::external_hook_import::mutate_external_hook_import(
                     Some(&workspace),
                     ExternalHookImportMutationRequestV1 {
                         schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
@@ -794,7 +794,7 @@ impl ChatMode {
                 )
                 .await?;
                 let native = project_native_hook_overview(
-                    bitfun_core::native_hooks::overview(Some(&workspace)).await,
+                    openbitfun_core::native_hooks::overview(Some(&workspace)).await,
                     &workspace,
                 );
                 Ok(HookManagementResult::Changed {

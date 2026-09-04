@@ -547,7 +547,7 @@ pub struct PermissionRequest {
     pub request_id: String,
     /// Model round that owns this permission request.
     ///
-    /// BitFun-created tool requests always provide this value so interactive
+    /// OpenBitFun-created tool requests always provide this value so interactive
     /// surfaces can keep requests from one model round together.
     pub round_id: String,
     /// Stable permission order within `round_id`.

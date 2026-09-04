@@ -1,6 +1,6 @@
 use crate::error::{MarketError, MarketResult};
-use bitfun_product_domains::miniapp::market::MarketUserSummary;
 use chrono::Utc;
+use openbitfun_product_domains::miniapp::market::MarketUserSummary;
 use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Pool, Row, Sqlite};

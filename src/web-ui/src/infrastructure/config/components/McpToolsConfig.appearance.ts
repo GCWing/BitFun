@@ -22,6 +22,6 @@ export const mcpToolsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'authorizationInput' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-bf-view', values: ['list', 'json'] },
+    { id: 'view', attribute: 'data-openbitfun-view', values: ['list', 'json'] },
   ],
 };

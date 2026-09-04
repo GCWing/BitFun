@@ -1,7 +1,5 @@
 //! CLI command and product-assembly contract tests.
 
-#[path = "cli_command_contracts/compat_entrypoint.rs"]
-mod compat_entrypoint;
 #[path = "cli_command_contracts/exec_cli_contracts.rs"]
 mod exec_cli_contracts;
 #[path = "cli_command_contracts/mcp_add_cli.rs"]

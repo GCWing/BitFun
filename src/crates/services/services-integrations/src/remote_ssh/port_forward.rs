@@ -632,12 +632,12 @@ enum ListingFormat {
 /// dialect came back instead of making it guess from the shape.
 const LISTENING_PORT_PROBE_SCRIPT: &str = concat!(
     "if command -v ss >/dev/null 2>&1; then ",
-    "echo __BITFUN_SS__; ss -H -l -t -n -p 2>/dev/null; ",
+    "echo __OPENBITFUN_SS__; ss -H -l -t -n -p 2>/dev/null; ",
     "elif command -v lsof >/dev/null 2>&1; then ",
-    "echo __BITFUN_LSOF__; lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null; ",
+    "echo __OPENBITFUN_LSOF__; lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null; ",
     "elif command -v netstat >/dev/null 2>&1; then ",
-    "echo __BITFUN_NETSTAT__; netstat -l -t -n -p 2>/dev/null; ",
-    "else echo __BITFUN_NONE__; fi"
+    "echo __OPENBITFUN_NETSTAT__; netstat -l -t -n -p 2>/dev/null; ",
+    "else echo __OPENBITFUN_NONE__; fi"
 );
 
 /// Split a `host:port` token, tolerating the IPv6 and wildcard spellings the
@@ -795,9 +795,11 @@ fn parse_listening_ports(output: &str) -> anyhow::Result<Vec<RemoteListeningPort
             anyhow::bail!("The remote produced no listening-socket listing");
         };
         match line.trim() {
-            "__BITFUN_SS__" | "__BITFUN_NETSTAT__" => break ListingFormat::ColumnarSocketStat,
-            "__BITFUN_LSOF__" => break ListingFormat::Lsof,
-            "__BITFUN_NONE__" => anyhow::bail!(
+            "__OPENBITFUN_SS__" | "__OPENBITFUN_NETSTAT__" => {
+                break ListingFormat::ColumnarSocketStat
+            }
+            "__OPENBITFUN_LSOF__" => break ListingFormat::Lsof,
+            "__OPENBITFUN_NONE__" => anyhow::bail!(
                 "The remote host has none of ss, lsof, or netstat, so its listening ports \
                  cannot be detected. Enter the port manually."
             ),
@@ -865,7 +867,7 @@ mod tests {
 
     #[test]
     fn parses_ss_listing() {
-        let output = "__BITFUN_SS__\n\
+        let output = "__OPENBITFUN_SS__\n\
 LISTEN 0      4096       127.0.0.1:3000       0.0.0.0:*    users:((\"node\",pid=999,fd=20))\n\
 LISTEN 0      511          0.0.0.0:8080       0.0.0.0:*    users:((\"nginx\",pid=1234,fd=6))\n\
 LISTEN 0      128            0.0.0.0:22       0.0.0.0:*    users:((\"sshd\",pid=700,fd=3))\n";
@@ -880,7 +882,7 @@ LISTEN 0      128            0.0.0.0:22       0.0.0.0:*    users:((\"sshd\",pid=
 
     #[test]
     fn parses_netstat_listing() {
-        let output = "__BITFUN_NETSTAT__\n\
+        let output = "__OPENBITFUN_NETSTAT__\n\
 Active Internet connections (only servers)\n\
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name\n\
 tcp        0      0 127.0.0.1:5173          0.0.0.0:*               LISTEN      4242/vite\n\
@@ -896,7 +898,7 @@ tcp6       0      0 :::9229                 :::*                    LISTEN      
 
     #[test]
     fn parses_lsof_listing() {
-        let output = "__BITFUN_LSOF__\n\
+        let output = "__OPENBITFUN_LSOF__\n\
 COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\n\
 node    99999  bob   20u  IPv4 0x1234567890abcdef      0t0  TCP 127.0.0.1:3000 (LISTEN)\n\
 Python  55555  bob    3u  IPv6 0xfedcba0987654321      0t0  TCP *:8000 (LISTEN)\n";
@@ -913,7 +915,7 @@ Python  55555  bob    3u  IPv6 0xfedcba0987654321      0t0  TCP *:8000 (LISTEN)\
     fn skips_shell_banner_before_the_marker() {
         let output = "Welcome to Ubuntu 24.04 LTS\n\
 Last login: Tue Aug 19 09:00:00 2026\n\
-__BITFUN_SS__\n\
+__OPENBITFUN_SS__\n\
 LISTEN 0 4096 127.0.0.1:4000 0.0.0.0:* users:((\"api\",pid=12,fd=7))\n";
         let ports = parse_listening_ports(output).expect("listing should parse");
         assert_eq!(ports.len(), 1);
@@ -922,7 +924,7 @@ LISTEN 0 4096 127.0.0.1:4000 0.0.0.0:* users:((\"api\",pid=12,fd=7))\n";
 
     #[test]
     fn reports_a_remote_without_any_probe_tool() {
-        let error = parse_listening_ports("__BITFUN_NONE__\n")
+        let error = parse_listening_ports("__OPENBITFUN_NONE__\n")
             .expect_err("a remote with no tooling should be an error");
         assert!(
             error.to_string().contains("manually"),

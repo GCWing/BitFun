@@ -270,7 +270,7 @@ impl ChatMode {
          * never persisted, never in model context. In a terminal the scrollback
          * is the record, so nothing here needs to replace what is being removed.
          */
-        let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
+        let report_result: Result<openbitfun_core::service::session_usage::SessionUsageReport> =
             tokio::task::block_in_place(|| {
                 let session_id = session_id.clone();
                 let workspace_path = workspace_path.clone();
@@ -473,7 +473,7 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     return None;
                 }
-                let config_owner = bitfun_core::service::config::get_global_config_service()
+                let config_owner = openbitfun_core::service::config::get_global_config_service()
                     .await
                     .ok()?;
                 let models = config_owner.get_ai_models().await.ok()?;
@@ -513,7 +513,7 @@ impl ChatMode {
                 if self.agent.is_remote_workspace() {
                     return None;
                 }
-                let config_owner = bitfun_core::service::config::get_global_config_service()
+                let config_owner = openbitfun_core::service::config::get_global_config_service()
                     .await
                     .ok()?;
                 let models = config_owner.get_ai_models().await.ok()?;

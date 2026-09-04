@@ -63,10 +63,10 @@
       "more_count": "還有 {{count}} 條"
     },
     "welcome": {
-      "toast_title": "歡迎使用 BitFun",
+      "toast_title": "歡迎使用 OpenBitFun",
       "toast_desc": "AI 驅動的編程環境，助您事半功倍",
-      "modal_title": "歡迎來到 BitFun",
-      "modal_body": "BitFun 是一款以 AI 為核心的編程環境。\n\n通過多輪對話與工具協作，讓開發更高效。"
+      "modal_title": "歡迎來到 OpenBitFun",
+      "modal_body": "OpenBitFun 是一款以 AI 為核心的編程環境。\n\n通過多輪對話與工具協作，讓開發更高效。"
     }
   },
   "confirm": {

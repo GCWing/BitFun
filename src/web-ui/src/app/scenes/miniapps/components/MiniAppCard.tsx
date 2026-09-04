@@ -1,4 +1,4 @@
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton } from '@openbitfun/ui';
 import React from 'react';
 import { Play, Square } from 'lucide-react';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -70,7 +70,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
   };
 
   return (
-    <div data-bf-component="mini-app-card" data-bf-part="root" data-miniapp-id={app.id}
+    <div data-openbitfun-component="mini-app-card" data-openbitfun-part="root" data-miniapp-id={app.id}
       className={[
         'miniapp-card',
         isRunning && 'miniapp-card--running',
@@ -88,9 +88,9 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
       aria-label={localizedName}
     >
       <div className="miniapp-card__main">
-        <div className="miniapp-card__header" data-bf-component="mini-app-card" data-bf-part="header">
-          <div className="miniapp-card__icon-area" data-bf-component="mini-app-card" data-bf-part="iconArea">
-            <div className="miniapp-card__icon" data-bf-component="mini-app-card" data-bf-part="icon">
+        <div className="miniapp-card__header" data-openbitfun-component="mini-app-card" data-openbitfun-part="header">
+          <div className="miniapp-card__icon-area" data-openbitfun-component="mini-app-card" data-openbitfun-part="iconArea">
+            <div className="miniapp-card__icon" data-openbitfun-component="mini-app-card" data-openbitfun-part="icon">
               {iconAsset ? (
                 <img className="miniapp-card__icon-image" src={iconAsset} alt="" aria-hidden="true" />
               ) : renderMiniAppIcon(app.icon || 'box', 40)}
@@ -98,7 +98,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
           </div>
           <div className="miniapp-card__header-actions">
             {(isRunning || isCustomizing) && (
-              <span className="miniapp-card__status-dots" data-bf-component="mini-app-card" data-bf-part="status" aria-hidden="true">
+              <span className="miniapp-card__status-dots" data-openbitfun-component="mini-app-card" data-openbitfun-part="status" aria-hidden="true">
                 {isRunning && <span className="miniapp-card__run-dot" />}
                 {isCustomizing && <span className="miniapp-card__customize-dot" />}
               </span>
@@ -114,22 +114,22 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
         </div>
 
         <div className="miniapp-card__content">
-          <div className="miniapp-card__title-group" data-bf-component="mini-app-card" data-bf-part="title">
-            <span className="miniapp-card__name" data-bf-component="mini-app-card" data-bf-part="name">{localizedName}</span>
+          <div className="miniapp-card__title-group" data-openbitfun-component="mini-app-card" data-openbitfun-part="title">
+            <span className="miniapp-card__name" data-openbitfun-component="mini-app-card" data-openbitfun-part="name">{localizedName}</span>
           </div>
 
-          <div className="miniapp-card__body" data-bf-component="mini-app-card" data-bf-part="body">
+          <div className="miniapp-card__body" data-openbitfun-component="mini-app-card" data-openbitfun-part="body">
             {localizedDescription ? (
-              <div className="miniapp-card__desc" data-bf-component="mini-app-card" data-bf-part="description">
+              <div className="miniapp-card__desc" data-openbitfun-component="mini-app-card" data-openbitfun-part="description">
                 <span className="miniapp-card__desc-inner">{localizedDescription}</span>
               </div>
             ) : null}
           </div>
         </div>
 
-        <div className="miniapp-card__footer" data-bf-component="mini-app-card" data-bf-part="footer">
-          <div className="miniapp-card__tags" data-bf-component="mini-app-card" data-bf-part="tags">
-            <span className="miniapp-card__tag" data-bf-component="mini-app-card" data-bf-part="version">
+        <div className="miniapp-card__footer" data-openbitfun-component="mini-app-card" data-openbitfun-part="footer">
+          <div className="miniapp-card__tags" data-openbitfun-component="mini-app-card" data-openbitfun-part="tags">
+            <span className="miniapp-card__tag" data-openbitfun-component="mini-app-card" data-openbitfun-part="version">
               V{marketReleaseNumber ?? app.version}
             </span>
             {displayedTags.map((tag) => (
@@ -145,7 +145,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
               </span>
             ) : null}
           </div>
-          <div className="miniapp-card__actions" data-bf-component="mini-app-card" data-bf-part="actions" onClick={(event) => event.stopPropagation()}>
+          <div className="miniapp-card__actions" data-openbitfun-component="mini-app-card" data-openbitfun-part="actions" onClick={(event) => event.stopPropagation()}>
             {isRunning && onStop ? (
               <IconButton
                 aria-label={t('card.stop')}

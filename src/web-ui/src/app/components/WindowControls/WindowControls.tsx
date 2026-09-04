@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import './WindowControls.scss';
 
@@ -61,9 +61,9 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
     <div
       {...props}
       className={['window-controls', className].filter(Boolean).join(' ')}
-      data-bf-component="window-controls"
-      data-bf-part="root"
-      data-bf-state={[disabled && 'disabled', maximized && 'maximized'].filter(Boolean).join(' ') || undefined}
+      data-openbitfun-component="window-controls"
+      data-openbitfun-part="root"
+      data-openbitfun-state={[disabled && 'disabled', maximized && 'maximized'].filter(Boolean).join(' ') || undefined}
     >
       <Tooltip content={t('window.minimize')} placement="bottom">
         <button

@@ -440,7 +440,7 @@ fn build_markdown_card(content: &str) -> serde_json::Value {
                     "text_align": "left",
                     "text_size": "normal",
                     "margin": "0px 0px 0px 0px",
-                    "element_id": "bitfun_remote_reply_markdown",
+                    "element_id": "openbitfun_remote_reply_markdown",
                 }
             ],
         },
@@ -494,7 +494,7 @@ fn build_action_card(
         "header": {
             "title": {
                 "tag": "plain_text",
-                "content": "BitFun Remote Connect",
+                "content": "OpenBitFun Remote Connect",
             }
         },
         "elements": elements,

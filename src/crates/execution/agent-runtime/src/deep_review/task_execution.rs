@@ -12,7 +12,7 @@ use super::{
     DeepReviewCapacityQueueDecision, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
     DeepReviewPolicyViolation, DeepReviewQueueControlSnapshot, DeepReviewSubagentRole,
 };
-use bitfun_events::{DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus};
+use openbitfun_events::{DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};

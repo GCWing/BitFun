@@ -2,7 +2,7 @@
 
 # AGENTS-CN.md
 
-BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
+OpenBitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 
 仓库核心原则：**先保持产品逻辑平台无关，再通过平台适配层对外暴露能力**。
 
@@ -24,7 +24,7 @@ Stable Contracts and Security Control Plane 的边界以
 
 | # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
 |---|---|---|---|---|---|
-| 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp`、`sdk-host` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
+| 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `OpenBitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp`、`sdk-host` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线、不可变内置 Agent 内容、adapter/service 注册和生态无关的来源协调 | `agent-content`, `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
 | 3 | 适配层 | `src/crates/adapters` | AI/transport/WebDriver 协议 adapter、外部 AI work source adapter（OpenCode/Claude Code/Codex）和外部 provider 转换 | `agent-runtime-ipc`、`ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
 | 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、session persistence primitives、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
@@ -77,7 +77,7 @@ Web UI、mobile、CLI、Desktop、Installer、打包及 focused test 命令由�
 - 跨形态稳定标签放在
   `src/shared/i18n/resources/shared/<locale>/terms.json`；流程文案留在所属
   产品形态资源中。
-- 不要把 Web UI locale 资源导入 `src/mobile-web`、`BitFun-Installer` 等较小形态；
+- 不要把 Web UI locale 资源导入 `src/mobile-web`、`OpenBitFun-Installer` 等较小形态；
   完整规则见 `docs/architecture/i18n.md`。
 - 静态自包含页面只能使用生成的 page-scoped shared-term 文件，不得导入 Web UI locale catalog。
 - Web UI 只急切加载 bootstrap namespace；路由或功能文案使用
@@ -126,11 +126,11 @@ await api.invoke('your_command', { request: { ... } });
 
 - 不要在 UI 组件里直接调用 Tauri API；应通过 adapter / infrastructure 层访问。
 - 桌面端专属集成应放在 `src/apps/desktop`，再通过类型化能力接口回流；需要事件投递时，使用已有生产 transport adapter。
-- 在共享 core 中避免使用 `tauri::AppHandle` 等宿主 API；优先使用 `bitfun_events::EventEmitter` 等共享抽象。
+- 在共享 core 中避免使用 `tauri::AppHandle` 等宿主 API；优先使用 `openbitfun_events::EventEmitter` 等共享抽象。
 
 ### 远程场景
 
-BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 runtime、以及正在操作的人，
+OpenBitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 runtime、以及正在操作的人，
 可能分别位于三台机器。下面四种场景是每次改动都要一并覆盖的一等目标，不是事后再补的适配。
 
 | 场景 | 含义 | 设计入口 |
@@ -138,7 +138,7 @@ BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 
 | 远程工作区 | 当前工作区位于 SSH 主机、跳板机链路或 Docker 容器；文件、终端、搜索和 Agent 子进程都必须在那一侧执行 | [remote-workspace-transport.md](docs/architecture/remote-workspace-transport.md)、[remote-workspaces.md](docs/features/remote-workspaces.md) |
 | 远程控制 | 手机端 mobile web，或飞书 / Telegram / 微信 Bot，通过 Remote Connect relay 驱动 Desktop 或 CLI 宿主上的会话 | [`src/mobile-web`](src/mobile-web/AGENTS.md)、[services-integrations](src/crates/services/services-integrations/AGENTS.md) 的 `remote_connect`、[relay-service](src/crates/services/relay-service/AGENTS.md) |
 | 多端互控（Peer Device Mode） | 同账号的一台设备成为另一台的数据平面：控制端外壳仍在本地，invoke 和事件来自 peer | [peer-device-mode.md](docs/architecture/peer-device-mode.md)、[peer-device README](src/web-ui/src/infrastructure/peer-device/README.md) |
-| Dispatch 分离任务 | 控制端把持久化任务提交到另一台 BitFun 宿主后即可断开；目标端拥有 job、session、worktree、事件日志和权限信箱 | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
+| Dispatch 分离任务 | 控制端把持久化任务提交到另一台 OpenBitFun 宿主后即可断开；目标端拥有 job、session、worktree、事件日志和权限信箱 | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
 
 四种场景共同适用的规则：
 
@@ -180,7 +180,7 @@ BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 
 
 ### 升级兼容性
 
-用户是原地升级的，而上述远程场景经常让两个不同版本的 BitFun 连在同一条链路上。
+用户是原地升级的，而上述远程场景经常让两个不同版本的 OpenBitFun 连在同一条链路上。
 任何改动都必须保证已有安装在升级后无需手工修复即可继续工作。
 
 - **落盘结构会被新旧两侧代码同时读取。** 配置、设置、会话、连接配置、worktree 和
@@ -204,15 +204,15 @@ BitFun 不是只在本地运行的桌面应用：工作区、执行这一轮的 
 
 ### Agent Hooks
 
-- BitFun 的原生用户 Hooks 实现 Codex Hook 契约，因此 <https://learn.chatgpt.com/docs/hooks> 是其事件、载荷字段与决策结构的参考来源，不要另起炉灶。[`docs/features/agent-hooks.zh-CN.md`](docs/features/agent-hooks.zh-CN.md)（[English](docs/features/agent-hooks.md)）只覆盖 BitFun 特有部分 —— 文件位置、`app.hooks` 开关和差异表 —— 新增或消除差异时必须同步更新。
-- 可移植引擎（配置解析、载荷构造、进程执行、决策合并）位于 `bitfun-agent-runtime::native_hooks`。`bitfun-core::native_hooks` 负责配置发现、开关门控和按事件的分发辅助函数；各分发点调用这些辅助函数，不要就地执行 Hook。
-- 可执行 Hooks 可以来自原生用户配置、生态插件或 BitFun 内置实现（包括当前编译期 `post_call_hooks`）。这些来源保持各自的信任、配置、契约和执行策略语义，但可以统一注册到共享的 `HookRegistry`，并由 `AgentHookEngine` 调度。其他 AI 应用的外部 Hook 目录（`external_hooks`）仍只用于只读发现，不得进入可执行 Registry。
+- OpenBitFun 的原生用户 Hooks 实现 Codex Hook 契约，因此 <https://learn.chatgpt.com/docs/hooks> 是其事件、载荷字段与决策结构的参考来源，不要另起炉灶。[`docs/features/agent-hooks.zh-CN.md`](docs/features/agent-hooks.zh-CN.md)（[English](docs/features/agent-hooks.md)）只覆盖 OpenBitFun 特有部分 —— 文件位置、`app.hooks` 开关和差异表 —— 新增或消除差异时必须同步更新。
+- 可移植引擎（配置解析、载荷构造、进程执行、决策合并）位于 `openbitfun-agent-runtime::native_hooks`。`openbitfun-core::native_hooks` 负责配置发现、开关门控和按事件的分发辅助函数；各分发点调用这些辅助函数，不要就地执行 Hook。
+- 可执行 Hooks 可以来自原生用户配置、生态插件或 OpenBitFun 内置实现（包括当前编译期 `post_call_hooks`）。这些来源保持各自的信任、配置、契约和执行策略语义，但可以统一注册到共享的 `HookRegistry`，并由 `AgentHookEngine` 调度。其他 AI 应用的外部 Hook 目录（`external_hooks`）仍只用于只读发现，不得进入可执行 Registry。
 
 ## 架构
 
 ### 产品架构护栏
 
-任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
+任何 `openbitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
 都必须先阅读
 [`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)。
 顶层文档只作为入口；模块级 ownership 细节应放到离代码最近的模块 `AGENTS.md`。
@@ -266,7 +266,7 @@ OpenCode 兼容或目标项目治理的变更，先阅读
 [`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md)。如果变更影响模块边界或行为，
 继续参考 `docs/sdlc-harness/architecture/` 或 `docs/sdlc-harness/features/` 下的对应设计。
 
-不要把 BitFun 自身验证假设硬编码成目标项目通用规则；质量保护行为必须保持面向目标项目、
+不要把 OpenBitFun 自身验证假设硬编码成目标项目通用规则；质量保护行为必须保持面向目标项目、
 基于证据、按风险分级、成本可控并可审计。
 
 ## 验证

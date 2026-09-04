@@ -5,13 +5,13 @@
 //! coordinates an agent computed actually land on the intended UI element.
 //!
 //! Ported from cua-driver-rs `cua-driver-core/src/image_utils.rs`
-//! `crosshair_png_bytes` / `write_crosshair_png`, adapted to BitFun's
-//! `image` pipeline (`RgbaImage` + `BitFunError`).
+//! `crosshair_png_bytes` / `write_crosshair_png`, adapted to OpenBitFun's
+//! `image` pipeline (`RgbaImage` + `OpenBitFunError`).
 
 #![allow(dead_code)]
 
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use image::{Rgba, RgbaImage};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::io::Cursor;
 
 /// Half-length of each crosshair arm in pixels (arm spans ±`ARM_LEN`).
@@ -88,20 +88,20 @@ pub(super) fn annotate_screenshot_with_click(
     mime: &str,
     x: u32,
     y: u32,
-) -> BitFunResult<Vec<u8>> {
+) -> OpenBitFunResult<Vec<u8>> {
     let mime_lower = mime.to_ascii_lowercase();
     let supported = matches!(
         mime_lower.as_str(),
         "image/jpeg" | "image/jpg" | "image/png"
     );
     if !supported {
-        return Err(BitFunError::tool(format!(
+        return Err(OpenBitFunError::tool(format!(
             "debug_overlay: unsupported mime type: {mime}"
         )));
     }
 
     let mut img = image::load_from_memory(raw)
-        .map_err(|e| BitFunError::tool(format!("debug_overlay: decode image failed: {e}")))?
+        .map_err(|e| OpenBitFunError::tool(format!("debug_overlay: decode image failed: {e}")))?
         .to_rgba8();
     draw_click_marker(&mut img, x, y);
 
@@ -116,7 +116,7 @@ pub(super) fn annotate_screenshot_with_click(
             rgb.height(),
             image::ExtendedColorType::Rgb8,
         )
-        .map_err(|e| BitFunError::tool(format!("debug_overlay: encode JPEG failed: {e}")))?;
+        .map_err(|e| OpenBitFunError::tool(format!("debug_overlay: encode JPEG failed: {e}")))?;
     Ok(out)
 }
 

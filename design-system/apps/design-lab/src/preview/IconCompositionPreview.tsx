@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, SessionIcon, TabGroup } from "@bitfun/ui";
+import { Button, Icon, IconButton, Input, SessionIcon, TabGroup } from "@openbitfun/ui";
 import { useI18n } from "../i18n";
 
 export function IconCompositionPreview() {

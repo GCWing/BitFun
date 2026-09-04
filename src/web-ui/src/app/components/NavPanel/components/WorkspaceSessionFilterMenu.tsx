@@ -6,7 +6,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useSubmenuIntent } from '@/shared/utils/useSubmenuIntent';
-import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import {
   DEFAULT_WORKSPACE_SESSION_VIEW,
   hasWorkspaceSessionFilters,
@@ -131,7 +131,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
       kind: 'multi', hidden: view.filters.hiddenEnvironments, options: ['local', 'remote', 'detached'] as WorkspaceSessionEnvironment[], toggle: value => view.toggleHiddenEnvironment(value as WorkspaceSessionEnvironment),
     },
     source: {
-      kind: 'multi', hidden: view.filters.hiddenSources, options: ['bitfun', 'external'] as WorkspaceSessionSource[], toggle: value => view.toggleHiddenSource(value as WorkspaceSessionSource),
+      kind: 'multi', hidden: view.filters.hiddenSources, options: ['openbitfun', 'external'] as WorkspaceSessionSource[], toggle: value => view.toggleHiddenSource(value as WorkspaceSessionSource),
     },
   }), [view]);
 
@@ -197,7 +197,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
     openSubmenuNow(submenu);
     if (focusFirstItem) {
       requestAnimationFrame(() => {
-        submenuRef.current?.querySelector<HTMLButtonElement>('[data-bf-menu-item]')?.focus();
+        submenuRef.current?.querySelector<HTMLButtonElement>('[data-openbitfun-menu-item]')?.focus();
       });
     }
   }, [openSubmenuNow]);
@@ -205,12 +205,12 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
   const row = (submenu: Submenu, value?: string, active = false) => (
     <MenuItem
       data-submenu-id={submenu}
-      data-bf-state={activeSubmenu === submenu ? 'open' : undefined}
+      data-openbitfun-state={activeSubmenu === submenu ? 'open' : undefined}
       aria-haspopup="menu"
       aria-expanded={activeSubmenu === submenu}
       metadata={(
-        <span className="bitfun-nav-panel__session-filter-menu-value">
-          {active ? <span className="bitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
+        <span className="openbitfun-nav-panel__session-filter-menu-value">
+          {active ? <span className="openbitfun-nav-panel__session-filter-active-dot" aria-hidden="true" /> : null}
           {value ? t(`nav.sessions.viewMenu.${submenu}.${value}`) : null}
           <Icon name="chevron-right" size="md" aria-hidden="true" />
         </span>
@@ -235,7 +235,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
     <>
       <Menu
         ref={menuRef}
-        className="bitfun-nav-panel__session-filter-menu"
+        className="openbitfun-nav-panel__session-filter-menu"
         style={menuPosition}
         autoFocusFirstItem
         aria-label={t('nav.sessions.viewMenu.title')}
@@ -296,7 +296,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
       {activeSubmenu && definition ? (
         <Menu
           ref={submenuRef}
-          className="bitfun-nav-panel__session-filter-submenu"
+          className="openbitfun-nav-panel__session-filter-submenu"
           style={{
             top: submenuPosition.top,
             left: submenuPosition.left,
@@ -349,9 +349,9 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
         <button
           ref={buttonRef}
           type="button"
-          className={`bitfun-nav-panel__section-action${open || isCustomized ? ' is-active' : ''}`}
-          data-bf-action="session-filter"
-          data-bf-state={[open && 'open', isCustomized && 'filtered'].filter(Boolean).join(' ') || undefined}
+          className={`openbitfun-nav-panel__section-action${open || isCustomized ? ' is-active' : ''}`}
+          data-openbitfun-action="session-filter"
+          data-openbitfun-state={[open && 'open', isCustomized && 'filtered'].filter(Boolean).join(' ') || undefined}
           aria-label={t('nav.sessions.viewMenu.tooltip')}
           aria-haspopup="menu"
           aria-expanded={open}

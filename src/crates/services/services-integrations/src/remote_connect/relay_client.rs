@@ -28,7 +28,7 @@ use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 /// This is safe to call multiple times and from any thread. Installing it
 /// explicitly keeps provider choice deterministic for every product client.
 pub fn ensure_rustls_crypto_provider() {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 }
 
 type WsStream =
@@ -695,7 +695,7 @@ mod tests {
 
 #[cfg(windows)]
 fn build_windows_rustls_connector() -> Result<Connector> {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
 
     let mut root_store = rustls::RootCertStore::empty();
 

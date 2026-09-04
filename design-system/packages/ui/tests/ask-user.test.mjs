@@ -27,7 +27,7 @@ const questions = [
         value: "stable",
       },
     ],
-    prompt: "BitFun has three versions — which would you like me to pull?",
+    prompt: "OpenBitFun has three versions — which would you like me to pull?",
     selectionMode: "single",
   },
 ];
@@ -42,16 +42,16 @@ test("AskUser renders the answered disclosure and native selection semantics", (
     summaryLabel: "1 question answered",
   }));
 
-  assert.match(markup, /data-bf-component="ask-user"/);
-  assert.match(markup, /data-bf-state="completed"/);
-  assert.match(markup, /data-bf-expanded="true"/);
+  assert.match(markup, /data-openbitfun-component="ask-user"/);
+  assert.match(markup, /data-openbitfun-state="completed"/);
+  assert.match(markup, /data-openbitfun-expanded="true"/);
   assert.match(markup, /<button[^>]+aria-expanded="true"/);
-  assert.match(markup, /data-bf-part="summary-label">1 question answered/);
-  assert.match(markup, /data-bf-part="summary-detail">Choose version:/);
+  assert.match(markup, /data-openbitfun-part="summary-label">1 question answered/);
+  assert.match(markup, /data-openbitfun-part="summary-detail">Choose version:/);
   assert.match(markup, /<fieldset[^>]+disabled=""/);
   assert.match(markup, /type="radio"[^>]+checked=""/);
   assert.match(markup, /lucide-disc2/);
-  assert.match(markup, /data-bf-part="description"/);
+  assert.match(markup, /data-openbitfun-part="description"/);
 });
 
 test("AskUser renders a controlled custom answer with an accessible text field", () => {
@@ -66,24 +66,24 @@ test("AskUser renders a controlled custom answer with an accessible text field",
   }));
 
   assert.match(markup, /data-custom="true" data-selected="true"/);
-  assert.match(markup, /data-bf-part="custom-input"/);
+  assert.match(markup, /data-openbitfun-part="custom-input"/);
   assert.match(markup, /aria-label="Custom version"/);
   assert.match(markup, /value="v0.2.17"/);
-  assert.match(markup, /data-bf-part="submit"/);
+  assert.match(markup, /data-openbitfun-part="submit"/);
 });
 
 test("AskUser styles use public semantic and component geometry tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-control-ask-user-header-height/);
-  assert.match(styles, /--bf-control-ask-user-option-padding-block/);
-  assert.match(styles, /--bf-control-ask-user-question-options-gap/);
-  assert.match(styles, /--bf-control-ask-user-description-max-width/);
-  assert.match(styles, /--bf-color-surface-subtle/);
-  assert.match(styles, /--bf-color-action-neutral-content/);
-  assert.match(styles, /--bf-color-content-muted/);
-  assert.match(styles, /--bf-color-status-success-content/);
-  assert.match(styles, /--bf-type-heading-page-line-height/);
+  assert.match(styles, /--openbitfun-control-ask-user-header-height/);
+  assert.match(styles, /--openbitfun-control-ask-user-option-padding-block/);
+  assert.match(styles, /--openbitfun-control-ask-user-question-options-gap/);
+  assert.match(styles, /--openbitfun-control-ask-user-description-max-width/);
+  assert.match(styles, /--openbitfun-color-surface-subtle/);
+  assert.match(styles, /--openbitfun-color-action-neutral-content/);
+  assert.match(styles, /--openbitfun-color-content-muted/);
+  assert.match(styles, /--openbitfun-color-status-success-content/);
+  assert.match(styles, /--openbitfun-type-heading-page-line-height/);
   assert.match(
     styles,
     /circle:nth-of-type\(2\)\s*\{\s*fill:\s*currentColor/,

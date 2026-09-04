@@ -71,7 +71,7 @@ describe('remote surface generated bindings', () => {
       'account_cancel_pending_login',
       'peer_mode_ping',
       'dispatch_submit',
-      'mark_bitfun_control_surface_ready',
+      'mark_openbitfun_control_surface_ready',
       'show_main_window',
     ]) {
       expect(PEER_CONTROLLER_LOCAL_COMMANDS.has(command), command).toBe(true);

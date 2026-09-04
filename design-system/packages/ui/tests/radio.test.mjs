@@ -18,7 +18,7 @@ test("Radio keeps native semantics and supporting copy", () => {
   assert.match(markup, /name="model"/);
   assert.match(markup, /Primary/);
   assert.match(markup, /Uses the recommended model/);
-  assert.match(markup, /data-bf-component="radio"/);
+  assert.match(markup, /data-openbitfun-component="radio"/);
 });
 
 test("Radio exposes normalized sizes and states", () => {

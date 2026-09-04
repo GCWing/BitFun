@@ -40,8 +40,8 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@bitfun/ui', () => ({
-  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   Button: ({
     children,
     disabled,
@@ -538,7 +538,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     expect(container.textContent).toContain('Waiting for model capacity');
-    expect(container.textContent).toContain('BitFun is waiting for temporary model capacity.');
+    expect(container.textContent).toContain('OpenBitFun is waiting for temporary model capacity.');
     expect(container.textContent).toContain('Reason: model concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');

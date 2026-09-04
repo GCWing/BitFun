@@ -4,19 +4,19 @@ use agent_client_protocol::schema::{
     SetSessionModelRequest, SetSessionModelResponse,
 };
 use agent_client_protocol::{Error, Result};
-use bitfun_agent_runtime::sdk::AgentSessionModelUpdateRequest;
-use bitfun_core::agentic::agents::get_agent_registry;
-use bitfun_core::service::config::types::AIConfig;
-use bitfun_core::service::config::{GlobalConfig, GlobalConfigManager};
+use openbitfun_agent_runtime::sdk::AgentSessionModelUpdateRequest;
+use openbitfun_core::agentic::agents::get_agent_registry;
+use openbitfun_core::service::config::types::AIConfig;
+use openbitfun_core::service::config::{GlobalConfig, GlobalConfigManager};
 
-use super::BitfunAcpRuntime;
+use super::OpenBitFunAcpRuntime;
 
 const PRIMARY_MODEL_ID: &str = "primary";
 const FAST_MODEL_ID: &str = "fast";
 const MODEL_CONFIG_ID: &str = "model";
 const MODE_CONFIG_ID: &str = "mode";
 
-impl BitfunAcpRuntime {
+impl OpenBitFunAcpRuntime {
     pub(super) async fn update_session_model(
         &self,
         request: SetSessionModelRequest,
@@ -79,7 +79,7 @@ impl BitfunAcpRuntime {
 
         self.agent_runtime
             .update_session_model(AgentSessionModelUpdateRequest {
-                session_id: session.bitfun_session_id.clone(),
+                session_id: session.openbitfun_session_id.clone(),
                 model_id: normalized_model_id.clone(),
             })
             .await
@@ -224,7 +224,7 @@ fn available_model_select_options(ai_config: &AIConfig) -> Vec<SessionConfigSele
     options
 }
 
-fn model_display_name(model: &bitfun_core::service::config::types::AIModelConfig) -> String {
+fn model_display_name(model: &openbitfun_core::service::config::types::AIModelConfig) -> String {
     if model.model_name.trim().is_empty() {
         format!("{} / {}", model.provider, model.name)
     } else {
@@ -235,18 +235,18 @@ fn model_display_name(model: &bitfun_core::service::config::types::AIModelConfig
 async fn load_ai_config() -> Result<AIConfig> {
     let config_service = GlobalConfigManager::get_service()
         .await
-        .map_err(BitfunAcpRuntime::internal_error)?;
+        .map_err(OpenBitFunAcpRuntime::internal_error)?;
     let global_config = config_service
         .get_config::<GlobalConfig>(None)
         .await
-        .map_err(BitfunAcpRuntime::internal_error)?;
+        .map_err(OpenBitFunAcpRuntime::internal_error)?;
     Ok(global_config.ai)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{current_model_id, normalize_session_model_id, PRIMARY_MODEL_ID};
-    use bitfun_core::service::config::types::{AIConfig, AIModelConfig};
+    use openbitfun_core::service::config::types::{AIConfig, AIModelConfig};
 
     #[test]
     fn acp_session_model_mutation_uses_the_runtime_sdk() {

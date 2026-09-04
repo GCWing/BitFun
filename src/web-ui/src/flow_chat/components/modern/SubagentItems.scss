@@ -28,11 +28,11 @@
 // Subagent container for items under the same parent task.
 .subagent-items-container {
   // Keep the expanded body on the card edge while preserving internal spacing.
-  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
+  padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
 
   // Continue the task card border on left/right/bottom; top border is hidden.
-  background: var(--bf-color-surface-scene);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-scene);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-top: none;
   // Top corners are square to merge with the header card above.
   border-radius: 0 0 8px 8px;
@@ -45,11 +45,11 @@
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
-    line-height: var(--bf-type-flow-support-line-height);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     .markdown-renderer,
     .text-content {
-      line-height: var(--bf-type-flow-support-line-height);
+      line-height: var(--openbitfun-type-flow-support-line-height);
     }
 
     .markdown-renderer {
@@ -75,16 +75,16 @@
     align-items: center;
     gap: 8px;
     padding: 6px 0;
-    font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .subagent-text-block__expand-btn {
     background: none;
     border: none;
-    color: var(--bf-color-link-default);
+    color: var(--openbitfun-color-link-default);
     cursor: pointer;
-    font-size: var(--bf-type-flow-control-font-size);
+    font-size: var(--openbitfun-type-flow-control-font-size);
     padding: 0;
 
     &:hover {

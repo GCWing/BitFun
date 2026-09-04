@@ -11,7 +11,7 @@ import {
   Select,
   StatusPill,
   type SelectOption,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   AlertTriangle,
@@ -757,8 +757,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
 
   return (
     <GalleryLayout
-      data-bf-component="miniapp-gallery-view"
-      data-bf-part="root"
+      data-openbitfun-component="miniapp-gallery-view"
+      data-openbitfun-part="root"
       className="miniapp-gallery-pane miniapp-gallery"
     >
       <GalleryPageHeader
@@ -836,8 +836,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
       {tabs}
 
       <div
-        data-bf-component="miniapp-gallery-view"
-        data-bf-part="content"
+        data-openbitfun-component="miniapp-gallery-view"
+        data-openbitfun-part="content"
         className="gallery-zones"
       >
         <GalleryZone
@@ -845,8 +845,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
           titleAdornment={(
             <span
               className="miniapp-gallery__heading-actions"
-              data-bf-component="miniapp-gallery-view"
-              data-bf-part="tools"
+              data-openbitfun-component="miniapp-gallery-view"
+              data-openbitfun-part="tools"
             >
               <NumberBadge value={libraryItems.length} />
               <SearchField
@@ -870,12 +870,12 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
             />
           )}
         >
-          <div data-bf-component="miniapp-gallery-view" data-bf-part="categoryFilters">
+          <div data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="categoryFilters">
             <SegmentedControl
               className="miniapp-gallery__categories"
               options={CATEGORIES.map((value) => ({
                 label: (
-                  <span data-bf-component="miniapp-gallery-view" data-bf-part="categoryFilter">
+                  <span data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="categoryFilter">
                     {categoryLabel(value, t)}
                   </span>
                 ),
@@ -892,8 +892,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
             <div
               className="miniapp-gallery__market-error"
               role="alert"
-              data-bf-component="miniapp-gallery-view"
-              data-bf-part="error"
+              data-openbitfun-component="miniapp-gallery-view"
+              data-openbitfun-part="error"
             >
               <AlertTriangle size={16} aria-hidden="true" />
               <span>{t('market.library.marketUnavailable')}</span>
@@ -996,8 +996,8 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         {detail ? (
           <div
             className="miniapp-market-detail"
-            data-bf-component="miniapp-gallery-view"
-            data-bf-part="detail"
+            data-openbitfun-component="miniapp-gallery-view"
+            data-openbitfun-part="detail"
           >
             {detail.screenshotUrls.length ? (
               <div className="miniapp-market-detail__screenshots">
@@ -1071,7 +1071,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
                 {releaseHistory.visible.map((release) => (
                   <div key={release.releaseId}>
                     <span>v{release.releaseNumber}</span>
-                    <span>{release.minBitfunVersion}+</span>
+                    <span>{release.minOpenBitFunVersion}+</span>
                     {release.yanked
                       ? <StatusPill tone="warning">{t('market.detail.yanked')}</StatusPill>
                       : <Icon name="check-line" size="sm" />}

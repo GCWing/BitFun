@@ -2,8 +2,8 @@
 
 use crate::stream::types::responses::OPENAI_RESPONSES_REPLAY_PROTOCOL;
 use crate::types::{Message, ToolDefinition};
-use bitfun_core_types::ModelResponseReplayItem;
 use log::{error, warn};
+use openbitfun_core_types::ModelResponseReplayItem;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
@@ -529,7 +529,7 @@ impl OpenAIMessageConverter {
 mod tests {
     use super::OpenAIMessageConverter;
     use crate::types::{Message, ToolCall, ToolImageAttachment};
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         ModelReasoningSummaryPart, ModelResponseReplay, ModelResponseReplayItem,
     };
     use serde_json::json;

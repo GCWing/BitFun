@@ -2,7 +2,7 @@
 
 # AGENTS.md
 
-BitFun is a Rust workspace plus React frontends.
+OpenBitFun is a Rust workspace plus React frontends.
 
 Repository rule: **keep product logic platform-agnostic, then expose it through platform adapters**.
 
@@ -39,7 +39,7 @@ Keep crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
-| 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp`, `app-server`, `sdk-host` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
+| 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `OpenBitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp`, `app-server`, `sdk-host` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, immutable built-in Agent content, adapter/service registration, and ecosystem-neutral source coordination | `agent-content`, `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
 | 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver protocol adapters, external AI work source adapters (OpenCode/Claude Code/Codex), and external-provider translation | `agent-runtime-ipc`, `ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
 | 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `miniapp-market-service`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
@@ -97,7 +97,7 @@ commands, use the nearest local guide. The full script registry remains in
   `src/shared/i18n/resources/shared/<locale>/terms.json`; workflow copy stays
   in the owning product surface.
 - Do not import Web UI locale resources into smaller product surfaces such as
-  `src/mobile-web` or `BitFun-Installer`. See `docs/architecture/i18n.md`.
+  `src/mobile-web` or `OpenBitFun-Installer`. See `docs/architecture/i18n.md`.
 - Static self-contained pages may use generated page-scoped shared-term files;
   they must not import Web UI locale catalogs.
 - Web UI loads only bootstrap namespaces eagerly; use `useI18n(namespace)` for
@@ -150,7 +150,7 @@ await api.invoke('your_command', { request: { ... } });
 
 - Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer.
 - Desktop-only host adapters belong in `src/apps/desktop`, then flow through typed capability interfaces and, when event delivery is needed, the production transport adapter.
-- In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
+- In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `openbitfun_events::EventEmitter`.
 
 #### Non-interactive child processes
 
@@ -158,7 +158,7 @@ await api.invoke('your_command', { request: { ... } });
   background, or redirected host must not use bare `std::process::Command` or
   `tokio::process::Command`, including CLI modes that another host can invoke.
   Prefer
-  `bitfun_services_core::process_manager::{create_command, create_tokio_command}`
+  `openbitfun_services_core::process_manager::{create_command, create_tokio_command}`
   or the existing facade for that layer. If a direct command is unavoidable,
   Windows code must explicitly apply `CREATE_NO_WINDOW`; Node child processes
   must set `windowsHide: true`. Apply the same policy to test fixtures so tests
@@ -166,7 +166,7 @@ await api.invoke('your_command', { request: { ... } });
 
 ### Remote scenarios
 
-BitFun is not a local-only desktop app. The workspace, the runtime that executes
+OpenBitFun is not a local-only desktop app. The workspace, the runtime that executes
 a turn, and the person driving it can each sit on a different machine. Treat the
 four scenarios below as first-class targets of every change, not as a later port.
 
@@ -175,7 +175,7 @@ four scenarios below as first-class targets of every change, not as a later port
 | Remote workspace | The active workspace lives on an SSH host, a jump-host chain, or a Docker container; files, terminal, search, and Agent subprocesses must execute there | [remote-workspace-transport.md](docs/architecture/remote-workspace-transport.md), [remote-workspaces.md](docs/features/remote-workspaces.md) |
 | Remote control | Mobile web, or a Feishu / Telegram / WeChat bot, drives a session on a Desktop or CLI host through the Remote Connect relay | [`src/mobile-web`](src/mobile-web/AGENTS.md), `remote_connect` in [services-integrations](src/crates/services/services-integrations/AGENTS.md), [relay-service](src/crates/services/relay-service/AGENTS.md) |
 | Peer Device Mode | One same-account device becomes the data plane of another: the controller shell stays local, invokes and events come from the peer | [peer-device-mode.md](docs/architecture/peer-device-mode.md), [peer-device README](src/web-ui/src/infrastructure/peer-device/README.md) |
-| Detached Dispatch | A controller submits a durable job to another BitFun host and may then disconnect; the target owns the job, session, worktree, event log, and permission mailbox | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
+| Detached Dispatch | A controller submits a durable job to another OpenBitFun host and may then disconnect; the target owns the job, session, worktree, event log, and permission mailbox | [detached-task-dispatch.md](docs/architecture/detached-task-dispatch.md) |
 
 Rules that apply to all four:
 
@@ -234,7 +234,7 @@ evidence of remote behavior.
 ### Upgrade compatibility
 
 Users upgrade in place, and the remote scenarios above routinely put two
-different BitFun versions on the same connection. Every change must keep
+different OpenBitFun versions on the same connection. Every change must keep
 existing installs working without manual repair.
 
 - **Persisted shapes are read by older and newer code.** Config, settings,
@@ -266,15 +266,15 @@ existing installs working without manual repair.
 
 ### Agent hooks
 
-- BitFun native user hooks implement the Codex hook contract, so <https://learn.chatgpt.com/docs/hooks> is the reference for their events, payload fields, and decision schema. Do not fork that contract. [`docs/features/agent-hooks.md`](docs/features/agent-hooks.md) ([中文](docs/features/agent-hooks.zh-CN.md)) covers only the BitFun-specific parts — file locations, the `app.hooks` gates, and the deviations table — and must be updated whenever a deviation is added or closed.
-- The portable engine (settings parsing, payload construction, process execution, decision merging) lives in `bitfun-agent-runtime::native_hooks`. `bitfun-core::native_hooks` owns config discovery, gating, and per-event dispatch helpers; dispatch sites call those helpers instead of executing hooks inline.
-- Executable hooks may come from native user configuration, ecosystem plugins, or BitFun built-ins (including the current compiled-in `post_call_hooks`). These sources keep distinct trust, configuration, contract, and execution-policy semantics, but may register through the shared `HookRegistry` and be dispatched by `AgentHookEngine`. The external hook catalog of other AI applications (`external_hooks`) remains read-only discovery data and must not enter the executable registry.
+- OpenBitFun native user hooks implement the Codex hook contract, so <https://learn.chatgpt.com/docs/hooks> is the reference for their events, payload fields, and decision schema. Do not fork that contract. [`docs/features/agent-hooks.md`](docs/features/agent-hooks.md) ([中文](docs/features/agent-hooks.zh-CN.md)) covers only the OpenBitFun-specific parts — file locations, the `app.hooks` gates, and the deviations table — and must be updated whenever a deviation is added or closed.
+- The portable engine (settings parsing, payload construction, process execution, decision merging) lives in `openbitfun-agent-runtime::native_hooks`. `openbitfun-core::native_hooks` owns config discovery, gating, and per-event dispatch helpers; dispatch sites call those helpers instead of executing hooks inline.
+- Executable hooks may come from native user configuration, ecosystem plugins, or OpenBitFun built-ins (including the current compiled-in `post_call_hooks`). These sources keep distinct trust, configuration, contract, and execution-policy semantics, but may register through the shared `HookRegistry` and be dispatched by `AgentHookEngine`. The external hook catalog of other AI applications (`external_hooks`) remains read-only discovery data and must not enter the executable registry.
 
 ## Architecture
 
 ### Product architecture guardrails
 
-For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
+For any `openbitfun-core` decomposition, feature-boundary, dependency-boundary, or
 Rust build-speed refactor, read both
 [`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
 and
@@ -348,7 +348,7 @@ first, then [`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md). If
 module boundaries or behavior change, follow the matching design under
 `docs/sdlc-harness/architecture/` or `docs/sdlc-harness/features/`.
 
-Do not hard-code BitFun repository assumptions as target-project rules; keep
+Do not hard-code OpenBitFun repository assumptions as target-project rules; keep
 quality protection behavior target-aware, evidence-backed, risk-tiered,
 cost-aware, and auditable.
 

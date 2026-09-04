@@ -14,10 +14,10 @@ export const languageSelectorAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'loading' },
   ],
   facets: [
-    { id: 'mode', attribute: 'data-bf-mode', values: ['dropdown', 'inline', 'icon-only'] },
+    { id: 'mode', attribute: 'data-openbitfun-mode', values: ['dropdown', 'inline', 'icon-only'] },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'changing', selector: { kind: 'self', suffix: '[data-bf-state~="changing"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'changing', selector: { kind: 'self', suffix: '[data-openbitfun-state~="changing"]' } },
   ],
 };

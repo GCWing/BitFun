@@ -43,7 +43,7 @@ pub struct DispatchWorkspaceDelivery {
 ///
 /// Dispatch is deliberately orthogonal to `SessionExecutionTarget`: the latter
 /// describes a path owned by this process, while non-local dispatch targets are
-/// owned by another BitFun process.
+/// owned by another OpenBitFun process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 #[derive(Default)]
@@ -149,7 +149,7 @@ mod tests {
             project_workspace_path: "/work/app-main".to_string(),
             baseline_worktree_id: "wt-1".to_string(),
             base_commit: "0123456789abcdef0123456789abcdef01234567".to_string(),
-            branch: "bitfun/dispatch/1a2b3c4d".to_string(),
+            branch: "openbitfun/dispatch/1a2b3c4d".to_string(),
             remote_url: Some("git@example.com:acme/app.git".to_string()),
             include_uncommitted: true,
         })
@@ -162,7 +162,7 @@ mod tests {
                 "projectWorkspacePath": "/work/app-main",
                 "baselineWorktreeId": "wt-1",
                 "baseCommit": "0123456789abcdef0123456789abcdef01234567",
-                "branch": "bitfun/dispatch/1a2b3c4d",
+                "branch": "openbitfun/dispatch/1a2b3c4d",
                 "remoteUrl": "git@example.com:acme/app.git",
                 "includeUncommitted": true
             })
@@ -176,7 +176,7 @@ mod tests {
             project_workspace_path: "/work/app-main".to_string(),
             baseline_worktree_id: "wt-1".to_string(),
             base_commit: "0123456789abcdef0123456789abcdef01234567".to_string(),
-            branch: "bitfun/dispatch/1a2b3c4d".to_string(),
+            branch: "openbitfun/dispatch/1a2b3c4d".to_string(),
             remote_url: None,
             include_uncommitted: false,
         })

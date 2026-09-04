@@ -30,7 +30,7 @@ function geometry(svg) {
 }
 
 test("editing an external UI SVG invalidates its inline module without a restart", async () => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "bitfun-ui-asset-hmr-"));
+  const fixture = await mkdtemp(path.join(tmpdir(), "openbitfun-ui-asset-hmr-"));
   let server;
   try {
     const root = path.join(fixture, "app");
@@ -79,7 +79,7 @@ test("Design Lab registers shared UI source watching only for development", asyn
     fileURLToPath(new URL("../vite.config.ts", import.meta.url)),
   );
   const plugins = loaded.config.plugins.flat(Infinity);
-  const watcher = plugins.find(plugin => plugin?.name === "bitfun:watch-ui-source");
+  const watcher = plugins.find(plugin => plugin?.name === "openbitfun:watch-ui-source");
   assert.ok(watcher, "The real application config must install the source watcher");
   assert.equal(watcher.apply, "serve");
   const watched = [];

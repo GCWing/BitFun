@@ -2,30 +2,30 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/Logo-ICON-128.png" />
+    <link rel="icon" type="image/png" href="/brand/openbitfun-app-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BitFun - AI Code Assistant</title>
+    <title>OpenBitFun - AI Code Assistant</title>
     <script>
       (function () {
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
         var root = document.documentElement;
         var fallbackMessages = {
           'en-US': {
-            loadingApp: 'Starting BitFun...',
+            loadingApp: 'Starting OpenBitFun...',
             minimize: 'Minimize',
             maximize: 'Maximize',
             close: 'Close',
             petLoading: 'Loading companion...'
           },
           'zh-CN': {
-            loadingApp: '正在启动 BitFun...',
+            loadingApp: '正在启动 OpenBitFun...',
             minimize: '最小化',
             maximize: '最大化',
             close: '关闭',
             petLoading: '正在加载助手...'
           },
           'zh-TW': {
-            loadingApp: '正在啟動 BitFun...',
+            loadingApp: '正在啟動 OpenBitFun...',
             minimize: '最小化',
             maximize: '最大化',
             close: '關閉',
@@ -33,7 +33,7 @@
           }
         };
         function resolveLocale() {
-          var injected = window.__BITFUN_BOOTSTRAP_LOCALE__;
+          var injected = window.__OPENBITFUN_BOOTSTRAP_LOCALE__;
           var lang = typeof injected === 'string' && injected ? injected : navigator.language;
           if (/^zh-(tw|hk|mo|hant)/i.test(lang)) return 'zh-TW';
           if (/^en/i.test(lang)) return 'en-US';
@@ -41,20 +41,20 @@
         }
         function resolveMessages() {
           var locale = resolveLocale();
-          var injected = window.__BITFUN_BOOTSTRAP_MESSAGES__;
+          var injected = window.__OPENBITFUN_BOOTSTRAP_MESSAGES__;
           return Object.assign({}, fallbackMessages[locale], injected || {});
         }
-        window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__ = resolveMessages;
-        window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__ = resolveLocale;
-        window.__BITFUN_STARTUP_OVERLAY_STARTED_AT__ = performance.now();
+        window.__OPENBITFUN_RESOLVE_BOOTSTRAP_MESSAGES__ = resolveMessages;
+        window.__OPENBITFUN_RESOLVE_BOOTSTRAP_LOCALE__ = resolveLocale;
+        window.__OPENBITFUN_STARTUP_OVERLAY_STARTED_AT__ = performance.now();
         root.setAttribute('lang', resolveLocale());
-        root.setAttribute('data-bf-design-system-root', '');
+        root.setAttribute('data-openbitfun-design-system-root', '');
         if (!root.hasAttribute('data-color-scheme')) {
           root.setAttribute('data-color-scheme', m && m.matches ? 'dark' : 'light');
         }
         root.setAttribute('data-contrast', 'standard');
         root.setAttribute('data-density', 'compact');
-        var bg = root.style.backgroundColor || 'var(--bf-color-surface-chrome)';
+        var bg = root.style.backgroundColor || 'var(--openbitfun-color-surface-chrome)';
         root.style.backgroundColor = bg;
         function paintBody() {
           if (document.body) document.body.style.backgroundColor = bg;
@@ -68,11 +68,11 @@
       })();
     </script>
     <link rel="stylesheet" href="/src/design-system-theme.css" />
-    <!-- BITFUN_FONT_PROFILE_STYLESHEET -->
+    <!-- OPENBITFUN_FONT_PROFILE_STYLESHEET -->
     <style>
-      @layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;
+      @layer openbitfun.tokens.system, openbitfun.tokens.theme, openbitfun.reset, openbitfun.base, openbitfun.components, openbitfun.overrides;
 
-      @layer bf.reset {
+      @layer openbitfun.reset {
         *,
         *::before,
         *::after {
@@ -89,7 +89,7 @@
       }
       
       html {
-        background-color: var(--bf-color-surface-chrome);
+        background-color: var(--openbitfun-color-surface-chrome);
       }
       
       body {
@@ -97,18 +97,18 @@
       }
 
       #root,
-      #bitfun-startup-overlay {
+      #openbitfun-startup-overlay {
         width: 100%;
         height: 100%;
       }
 
-      #bitfun-startup-overlay {
+      #openbitfun-startup-overlay {
         position: fixed;
         inset: 0;
         z-index: 9999;
       }
 
-      .bitfun-sr-only {
+      .openbitfun-sr-only {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -126,18 +126,18 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: var(--bf-color-surface-chrome);
-        color: var(--bf-color-content-muted);
-        font-family: var(--bf-font-family-sans);
+        background: var(--openbitfun-color-surface-chrome);
+        color: var(--openbitfun-color-content-muted);
+        font-family: var(--openbitfun-font-family-sans);
         font-size: 13px;
         pointer-events: none;
       }
 
-      #bitfun-startup-overlay.bitfun-startup-overlay--exiting {
-        animation: bitfun-startup-overlay-exit 0.24s ease-in-out both;
+      #openbitfun-startup-overlay.openbitfun-startup-overlay--exiting {
+        animation: openbitfun-startup-overlay-exit 0.24s ease-in-out both;
       }
 
-      .bitfun-startup-window-controls {
+      .openbitfun-startup-window-controls {
         position: fixed;
         top: 8px;
         right: 10px;
@@ -149,11 +149,11 @@
         pointer-events: auto;
       }
 
-      .bitfun-startup-window-controls[hidden] {
+      .openbitfun-startup-window-controls[hidden] {
         display: none;
       }
 
-      .bitfun-startup-window-controls__btn {
+      .openbitfun-startup-window-controls__btn {
         width: 28px;
         height: 28px;
         display: grid;
@@ -162,28 +162,28 @@
         border: 1px solid transparent;
         border-radius: 6px;
         background: transparent;
-        color: var(--bf-color-content-muted);
+        color: var(--openbitfun-color-content-muted);
         cursor: pointer;
         transition: background 0.15s ease, color 0.15s ease;
       }
 
-      .bitfun-startup-window-controls__btn:hover {
-        background: var(--bf-color-action-quiet-hover);
-        color: var(--bf-color-content-primary);
+      .openbitfun-startup-window-controls__btn:hover {
+        background: var(--openbitfun-color-action-quiet-hover);
+        color: var(--openbitfun-color-content-primary);
       }
 
-      .bitfun-startup-window-controls__btn--close:hover {
-        color: var(--bf-color-status-danger-content);
+      .openbitfun-startup-window-controls__btn--close:hover {
+        color: var(--openbitfun-color-status-danger-content);
       }
 
-      .bitfun-startup-window-controls__glyph {
+      .openbitfun-startup-window-controls__glyph {
         position: relative;
         width: 12px;
         height: 12px;
         display: block;
       }
 
-      .bitfun-startup-window-controls__glyph--minimize::before {
+      .openbitfun-startup-window-controls__glyph--minimize::before {
         content: "";
         position: absolute;
         left: 2px;
@@ -194,7 +194,7 @@
         background: currentColor;
       }
 
-      .bitfun-startup-window-controls__glyph--maximize::before {
+      .openbitfun-startup-window-controls__glyph--maximize::before {
         content: "";
         position: absolute;
         inset: 2px;
@@ -202,8 +202,8 @@
         border-radius: 2px;
       }
 
-      .bitfun-startup-window-controls__glyph--close::before,
-      .bitfun-startup-window-controls__glyph--close::after {
+      .openbitfun-startup-window-controls__glyph--close::before,
+      .openbitfun-startup-window-controls__glyph--close::after {
         content: "";
         position: absolute;
         left: 2px;
@@ -214,11 +214,11 @@
         background: currentColor;
       }
 
-      .bitfun-startup-window-controls__glyph--close::before {
+      .openbitfun-startup-window-controls__glyph--close::before {
         transform: rotate(45deg);
       }
 
-      .bitfun-startup-window-controls__glyph--close::after {
+      .openbitfun-startup-window-controls__glyph--close::after {
         transform: rotate(-45deg);
       }
 
@@ -237,13 +237,24 @@
       }
 
       .splash-screen__logo,
-      .bitfun-preload__logo {
+      .openbitfun-preload__logo {
         display: block;
         width: 96px;
         height: 96px;
-        border-radius: 16px;
         user-select: none;
         -webkit-user-select: none;
+      }
+
+      .openbitfun-preload__logo--light {
+        display: none;
+      }
+
+      [data-color-scheme="dark"] .openbitfun-preload__logo--dark {
+        display: none;
+      }
+
+      [data-color-scheme="dark"] .openbitfun-preload__logo--light {
+        display: block;
       }
 
       .splash-screen__message {
@@ -252,7 +263,7 @@
         left: 50%;
         min-width: 220px;
         max-width: min(360px, calc(100vw - 48px));
-        color: var(--bf-color-content-muted);
+        color: var(--openbitfun-color-content-muted);
         font-size: 12px;
         line-height: 1.4;
         text-align: center;
@@ -278,7 +289,7 @@
         }
       }
 
-      @keyframes bitfun-startup-overlay-exit {
+      @keyframes openbitfun-startup-overlay-exit {
         from {
           opacity: 1;
         }
@@ -301,15 +312,15 @@
         }
       }
 
-      .bitfun-pet-preload-body {
+      .openbitfun-pet-preload-body {
         background: transparent !important;
       }
 
-      .bitfun-pet-preload-body #root {
+      .openbitfun-pet-preload-body #root {
         background: transparent;
       }
 
-      .bitfun-pet-preload {
+      .openbitfun-pet-preload {
         width: 100%;
         height: 100%;
         display: grid;
@@ -318,15 +329,15 @@
         pointer-events: none;
       }
 
-      .bitfun-pet-preload__sprite {
+      .openbitfun-pet-preload__sprite {
         position: relative;
         width: 48px;
         height: 48px;
         transform-origin: center bottom;
-        animation: bitfun-pet-preload-breathe 1.8s ease-in-out infinite;
+        animation: openbitfun-pet-preload-breathe 1.8s ease-in-out infinite;
       }
 
-      @keyframes bitfun-pet-preload-breathe {
+      @keyframes openbitfun-pet-preload-breathe {
         0%, 100% {
           opacity: 0.58;
           transform: scale(0.96);
@@ -338,67 +349,75 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .bitfun-pet-preload__sprite {
+        .openbitfun-pet-preload__sprite {
           animation: none;
         }
       }
     </style>
     <!-- Stable Creative-mode override points copied into packaged frontend revisions. -->
-    <link rel="stylesheet" href="/bitfun-creation.css" />
-    <script defer src="/bitfun-creation.js"></script>
+    <link rel="stylesheet" href="/openbitfun-creation.css" />
+    <script defer src="/openbitfun-creation.js"></script>
   </head>
 
   <body>
     <script type="module" src="/src/main.tsx"></script>
     <div id="root"></div>
-    <div id="bitfun-startup-overlay">
+    <div id="openbitfun-startup-overlay">
       <div class="splash-screen">
-        <div class="bitfun-startup-window-controls" data-startup-window-controls hidden>
-          <button class="bitfun-startup-window-controls__btn" type="button" data-startup-window-action="minimize">
-            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--minimize" aria-hidden="true"></span>
+        <div class="openbitfun-startup-window-controls" data-startup-window-controls hidden>
+          <button class="openbitfun-startup-window-controls__btn" type="button" data-startup-window-action="minimize">
+            <span class="openbitfun-startup-window-controls__glyph openbitfun-startup-window-controls__glyph--minimize" aria-hidden="true"></span>
           </button>
-          <button class="bitfun-startup-window-controls__btn" type="button" data-startup-window-action="toggle_maximize">
-            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--maximize" aria-hidden="true"></span>
+          <button class="openbitfun-startup-window-controls__btn" type="button" data-startup-window-action="toggle_maximize">
+            <span class="openbitfun-startup-window-controls__glyph openbitfun-startup-window-controls__glyph--maximize" aria-hidden="true"></span>
           </button>
-          <button class="bitfun-startup-window-controls__btn bitfun-startup-window-controls__btn--close" type="button" data-startup-window-action="close">
-            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--close" aria-hidden="true"></span>
+          <button class="openbitfun-startup-window-controls__btn openbitfun-startup-window-controls__btn--close" type="button" data-startup-window-action="close">
+            <span class="openbitfun-startup-window-controls__glyph openbitfun-startup-window-controls__glyph--close" aria-hidden="true"></span>
           </button>
         </div>
         <div class="splash-screen__center">
           <div class="splash-screen__logo-wrap">
             <img
-              class="bitfun-preload__logo"
-              src="/Logo-ICON-128.png"
+              src="/brand/openbitfun-mark-dark-128.png"
+              class="openbitfun-preload__logo openbitfun-preload__logo--dark"
+              alt=""
+              draggable="false"
+              decoding="async"
+              fetchpriority="low"
+            />
+            <img
+              class="openbitfun-preload__logo openbitfun-preload__logo--light"
+              src="/brand/openbitfun-mark-light-128.png"
               alt=""
               draggable="false"
               decoding="async"
               fetchpriority="low"
             />
           </div>
-          <div class="splash-screen__message">Starting BitFun...</div>
+          <div class="splash-screen__message">Starting OpenBitFun...</div>
         </div>
       </div>
     </div>
     <script>
       (function () {
         var params = new URLSearchParams(window.location.search);
-        var isPetWindow = params.get('bitfunWindow') === 'agent-companion';
-        var messages = window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__
-          ? window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__()
-          : { loadingApp: 'Starting BitFun...', minimize: 'Minimize', maximize: 'Maximize', close: 'Close', petLoading: 'Loading companion...' };
-        var locale = window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__
-          ? window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__()
+        var isPetWindow = params.get('openbitfunWindow') === 'agent-companion';
+        var messages = window.__OPENBITFUN_RESOLVE_BOOTSTRAP_MESSAGES__
+          ? window.__OPENBITFUN_RESOLVE_BOOTSTRAP_MESSAGES__()
+          : { loadingApp: 'Starting OpenBitFun...', minimize: 'Minimize', maximize: 'Maximize', close: 'Close', petLoading: 'Loading companion...' };
+        var locale = window.__OPENBITFUN_RESOLVE_BOOTSTRAP_LOCALE__
+          ? window.__OPENBITFUN_RESOLVE_BOOTSTRAP_LOCALE__()
           : 'en-US';
         document.documentElement.setAttribute('lang', locale);
 
         if (isPetWindow) {
-          document.body.classList.add('bitfun-pet-preload-body');
-          var startupOverlay = document.getElementById('bitfun-startup-overlay');
+          document.body.classList.add('openbitfun-pet-preload-body');
+          var startupOverlay = document.getElementById('openbitfun-startup-overlay');
           if (startupOverlay) startupOverlay.remove();
           var root = document.getElementById('root');
           if (root) {
-            root.innerHTML = '<div class="bitfun-pet-preload"><div class="bitfun-pet-preload__sprite" aria-hidden="true"></div><span class="bitfun-sr-only"></span></div>';
-            var petStatus = root.querySelector('.bitfun-sr-only');
+            root.innerHTML = '<div class="openbitfun-pet-preload"><div class="openbitfun-pet-preload__sprite" aria-hidden="true"></div><span class="openbitfun-sr-only"></span></div>';
+            var petStatus = root.querySelector('.openbitfun-sr-only');
             if (petStatus) petStatus.textContent = messages.petLoading;
           }
           return;
@@ -413,7 +432,7 @@
         }
 
         var controls = document.querySelector('[data-startup-window-controls]');
-        if (controls && window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__) {
+        if (controls && window.__OPENBITFUN_SHOW_STARTUP_WINDOW_CONTROLS__) {
           controls.hidden = false;
           var labels = {
             minimize: messages.minimize,

@@ -8,6 +8,6 @@ export const archivedSessionsConfigAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'rowInfo' }, { id: 'rowActions' },
   ],
   states: [
-    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-bf-state~="collapsed"]' } },
+    { id: 'collapsed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="collapsed"]' } },
   ],
 };

@@ -10,7 +10,7 @@ const read = (relativePath) =>
 
 test('relay archive contains the runtime and admin binaries plus static assets', () => {
   const packageScript = read('scripts/relay/package-unix.sh');
-  assert.match(packageScript, /bitfun-relay-server/);
+  assert.match(packageScript, /openbitfun-relay-server/);
   assert.match(packageScript, /relay-admin/);
   assert.match(packageScript, /src\/apps\/relay-server\/static/);
   assert.match(packageScript, /\/health/);
@@ -31,8 +31,8 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
   assert.match(nightly, /needs:\s*\[[^\]]*build-artifacts[^\]]*\]/);
 
   for (const workflow of [desktop, nightly]) {
-    assert.match(workflow, /bitfun-relay-server-\*\.tar\.gz/);
-    assert.match(workflow, /bitfun-cli-\*\.tar\.gz/);
+    assert.match(workflow, /openbitfun-relay-server-\*\.tar\.gz/);
+    assert.match(workflow, /openbitfun-cli-\*\.tar\.gz/);
     assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sig/);
     assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sha256\.sig/);
     assert.match(workflow, /\$\{cli_url\}\.sha256\.sig/);
@@ -58,7 +58,7 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
     assert.match(workflow, /platforms:\s*linux\/amd64,linux\/arm64/);
     assert.match(
       workflow,
-      /ghcr\.io\/(?:gcwing|\$\{GITHUB_REPOSITORY_OWNER,,\})\/bitfun-relay-server/i,
+      /ghcr\.io\/(?:gcwing|\$\{GITHUB_REPOSITORY_OWNER,,\})\/openbitfun-relay-server/i,
     );
     assert.match(workflow, /relay-image\.json/);
     assert.match(workflow, /scripts\/sign-release-assets\.sh relay-image\.json/);
@@ -67,16 +67,16 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
     assert.match(workflow, /DOCKER_CONFIG="\$clean_config" docker buildx imagetools inspect/);
   }
   assert.match(formal, /latest_release=.*releases\/latest/);
-  assert.doesNotMatch(nightly, /bitfun-relay-server:latest/);
+  assert.doesNotMatch(nightly, /openbitfun-relay-server:latest/);
 
   assert.match(smoke, /for arch in amd64 arm64/);
   assert.match(smoke, /\.State\.Health/);
   assert.match(smoke, /docker image rm "\$IMAGE_REF"/);
   assert.match(smoke, /docker logs --tail/);
 
-  assert.match(dockerfile, /org\.opencontainers\.image\.source="https:\/\/github\.com\/GCWing\/BitFun"/);
+  assert.match(dockerfile, /org\.opencontainers\.image\.source="https:\/\/github\.com\/GCWing\/OpenBitFun"/);
   assert.match(dockerfile, /TARGETARCH/);
-  assert.match(dockerfile, /bitfun-relay-server/);
+  assert.match(dockerfile, /openbitfun-relay-server/);
   assert.match(dockerfile, /relay-admin/);
   assert.match(dockerfile, /debian:trixie-slim/);
 });
@@ -117,7 +117,7 @@ test('nightly publishes signed macOS CLI archives for SSH dispatch', () => {
   assert.match(nightlyArtifacts, /Package macOS CLI for SSH dispatch/);
   assert.match(nightlyArtifacts, /scripts\/cli\/package-unix\.sh "\$ASSET_VERSION" "\$TARGET"/);
   assert.match(nightlyArtifacts, /steps\.macos-cli\.outputs\.archive/);
-  assert.match(nightlyArtifacts, /bitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
+  assert.match(nightlyArtifacts, /openbitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
   assert.match(nightly, /for target in aarch64-apple-darwin x86_64-apple-darwin/);
   assert.match(nightly, /\$\{archive\}\.sha256\.sig/);
 });

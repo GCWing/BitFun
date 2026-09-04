@@ -1,15 +1,15 @@
 /**
  * Injected into browser webviews to reduce composition cost for realtime
  * canvas/video preview pages. It is intentionally conservative and only
- * activates for pages that look like BitFun's Harmony device preview stream.
+ * activates for pages that look like OpenBitFun's Harmony device preview stream.
  */
 export const STREAM_RENDER_OPTIMIZATION_SCRIPT = /* js */ `(function(){
-  if(window.__bitfun_stream_render_optimized){return;}
+  if(window.__openbitfun_stream_render_optimized){return;}
 
   // #region agent log
   function installStreamDiagnostics(){
-    if(location.hostname!=='127.0.0.1'||location.port!=='41953'||window.__bitfun_stream_diagnostics){return;}
-    window.__bitfun_stream_diagnostics=true;
+    if(location.hostname!=='127.0.0.1'||location.port!=='41953'||window.__openbitfun_stream_diagnostics){return;}
+    window.__openbitfun_stream_diagnostics=true;
 
     var endpoint='http://127.0.0.1:7469/log';
     var drawCount=0;
@@ -114,13 +114,13 @@ export const STREAM_RENDER_OPTIMIZATION_SCRIPT = /* js */ `(function(){
 
   function optimize(){
     if(!looksLikeDeviceStream()){return;}
-    window.__bitfun_stream_render_optimized=true;
+    window.__openbitfun_stream_render_optimized=true;
     installStreamDiagnostics();
 
-    var style=document.getElementById('bitfun-stream-render-optimization');
+    var style=document.getElementById('openbitfun-stream-render-optimization');
     if(!style){
       style=document.createElement('style');
-      style.id='bitfun-stream-render-optimization';
+      style.id='openbitfun-stream-render-optimization';
       style.textContent=[
         'header{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important;}',
         '#screenFrame{box-shadow:none!important;}',

@@ -17,7 +17,7 @@ export const settingsNavAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'dirtyMarker', propertyProfile: 'paint', visualRole: 'decoration' },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
   ],
 };

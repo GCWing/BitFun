@@ -19,8 +19,8 @@ export async function captureElementToDownloadsPng(
   fileNamePrefix: string,
 ): Promise<void> {
   const computedStyle = getComputedStyle(document.documentElement);
-  const bgColor = computedStyle.getPropertyValue('--bf-color-surface-scene').trim()
-    || getBuiltinAppearanceThemeToken('--bf-color-surface-scene');
+  const bgColor = computedStyle.getPropertyValue('--openbitfun-color-surface-scene').trim()
+    || getBuiltinAppearanceThemeToken('--openbitfun-color-surface-scene');
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 

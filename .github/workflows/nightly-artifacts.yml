@@ -69,14 +69,14 @@ jobs:
     runs-on: ${{ fromJSON('{"linux-x64":"ubuntu-latest","linux-arm64":"ubuntu-24.04-arm","macos-arm64":"macos-15","macos-x64":"macos-15-intel","windows-x64":"windows-latest"}')[matrix.platform] }}
     env:
       NODE_OPTIONS: --max-old-space-size=6144
-      BITFUN_RELEASE_CHANNEL: nightly
+      OPENBITFUN_RELEASE_CHANNEL: nightly
       # Nightly does not publish a Tauri latest.json feed yet. Preserve its
       # existing stable updater endpoints until that publishing path exists.
-      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
+      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json
       TAURI_UPDATER_FALLBACK_ENDPOINT: https://openbitfun.com/release/latest.json
       # Nightly relay archives are signed too (linux-binaries.yml receives the
       # key), so nightly Desktop needs the same trust root to verify them.
-      BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      OPENBITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       PACKAGE_TARGET: ${{ fromJSON('{"linux-x64":"x86_64-unknown-linux-gnu","linux-arm64":"aarch64-unknown-linux-gnu","macos-arm64":"aarch64-apple-darwin","macos-x64":"x86_64-apple-darwin","windows-x64":"x86_64-pc-windows-msvc"}')[matrix.platform] }}
 
     strategy:
@@ -165,14 +165,14 @@ jobs:
 
       - name: Verify Installer i18n projection
         if: runner.os == 'Windows'
-        run: pnpm --dir BitFun-Installer run sync:i18n
+        run: pnpm --dir OpenBitFun-Installer run sync:i18n
 
       - name: Verify Installer Tauri package alignment
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          info="$(pnpm --dir BitFun-Installer exec tauri info 2>&1)"
+          info="$(pnpm --dir OpenBitFun-Installer exec tauri info 2>&1)"
           printf '%s\n' "$info"
           if grep -Fq 'Error: Found version mismatched Tauri packages.' <<<"$info"; then
             exit 1
@@ -212,7 +212,7 @@ jobs:
           CARGO_INCREMENTAL: "0"
           CARGO_PROFILE_DEV_DEBUG: "0"
           CARGO_PROFILE_TEST_DEBUG: "0"
-        run: cargo test --locked -p bitfun-cli --test terminal_process_contracts -- --test-threads=1
+        run: cargo test --locked -p openbitfun-cli --test terminal_process_contracts -- --test-threads=1
 
       - name: Build desktop app
         shell: bash
@@ -249,16 +249,16 @@ jobs:
         run: |
           set -euo pipefail
           ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
-          cargo build --release --target "$TARGET" -p bitfun-cli
+          cargo build --release --target "$TARGET" -p openbitfun-cli
           bash scripts/cli/package-unix.sh "$ASSET_VERSION" "$TARGET"
 
       - name: Sign macOS CLI archive and checksum
         if: runner.os == 'macOS'
         shell: bash
         env:
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           bash scripts/sign-release-assets.sh \
@@ -320,13 +320,13 @@ jobs:
               find_bundle_dir '*.app'
               find_bundle_file '*.dmg'
               shopt -s nullglob
-              cli_archives=(bitfun-cli-*-"${PACKAGE_TARGET}".tar.gz)
+              cli_archives=(openbitfun-cli-*-"${PACKAGE_TARGET}".tar.gz)
               [[ ${#cli_archives[@]} -eq 1 ]]
               test -s "${cli_archives[0]}"
               test -s "${cli_archives[0]}.sha256"
               ;;
             windows-x64)
-              test -s BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
+              test -s OpenBitFun-Installer/src-tauri/target/release/openbitfun-installer.exe
               ;;
             *)
               echo "Unsupported package platform: ${{ matrix.platform }}" >&2
@@ -338,18 +338,18 @@ jobs:
         if: ${{ inputs.upload_artifacts }}
         uses: actions/upload-artifact@v6
         with:
-          name: bitfun-${{ inputs.artifact_prefix }}-${{ matrix.platform }}-bundle
+          name: openbitfun-${{ inputs.artifact_prefix }}-${{ matrix.platform }}-bundle
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
           path: |
             target/*/release/bundle
             target/release/bundle
             src/apps/desktop/target/release/bundle
-            BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
-            bitfun-cli-*-apple-darwin.tar.gz
-            bitfun-cli-*-apple-darwin.tar.gz.sha256
-            bitfun-cli-*-apple-darwin.tar.gz.sig
-            bitfun-cli-*-apple-darwin.tar.gz.sha256.sig
+            OpenBitFun-Installer/src-tauri/target/release/openbitfun-installer.exe
+            openbitfun-cli-*-apple-darwin.tar.gz
+            openbitfun-cli-*-apple-darwin.tar.gz.sha256
+            openbitfun-cli-*-apple-darwin.tar.gz.sig
+            openbitfun-cli-*-apple-darwin.tar.gz.sha256.sig
 
   linux-binaries:
     name: Linux CLI and Relay Server

@@ -9,20 +9,20 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use bitfun_product_domains::account::{
+use openbitfun_product_domains::account::{
     AccountDevice, AccountInfo, AccountSnapshotProjection, SettingsSyncProgress, SettingsSyncStatus,
 };
 use tokio::sync::RwLock;
 
-use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use bitfun_core::service::remote_connect::account::{
+use openbitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
+use openbitfun_core::service::remote_connect::account::{
     ensure_relay_session_history_exportable, AccountSession,
 };
-use bitfun_core::service::remote_connect::account_runtime::{
+use openbitfun_core::service::remote_connect::account_runtime::{
     build_session_backup, AccountRoutingStartRequest, AccountRuntime, AccountRuntimeHost,
     AccountSessionBackup, AccountSessionBackupPort, BackgroundRoutingOwnerRetirementError,
 };
-use bitfun_core::service::remote_connect::{
+use openbitfun_core::service::remote_connect::{
     self, encryption, relay_client::RelayClient, relay_client::RelayEvent, session_store,
     DeviceIdentity, RemoteServer,
 };
@@ -43,7 +43,7 @@ pub(crate) fn build_management_account_runtime() -> Arc<AccountRuntime> {
 }
 
 pub(crate) fn account_snapshot_projection(
-    snapshot: bitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
+    snapshot: openbitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
 ) -> AccountSnapshotProjection {
     AccountSnapshotProjection {
         logged_in: snapshot.logged_in,
@@ -68,30 +68,30 @@ pub(crate) fn account_snapshot_projection(
 }
 
 pub(crate) fn settings_sync_progress(
-    progress: bitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
+    progress: openbitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
 ) -> SettingsSyncProgress {
     settings_sync_progress_from_core(progress)
 }
 
 fn settings_sync_progress_from_core(
-    progress: bitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
+    progress: openbitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
 ) -> SettingsSyncProgress {
     SettingsSyncProgress {
         operation_id: progress.operation_id,
         status: match progress.status {
-            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Idle => {
+            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Idle => {
                 SettingsSyncStatus::Idle
             }
-            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Syncing => {
+            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Syncing => {
                 SettingsSyncStatus::Syncing
             }
-            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Done => {
+            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Done => {
                 SettingsSyncStatus::Done
             }
-            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Failed => {
+            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Failed => {
                 SettingsSyncStatus::Failed
             }
-            bitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Cancelled => {
+            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Cancelled => {
                 SettingsSyncStatus::Cancelled
             }
         },
@@ -107,7 +107,7 @@ fn settings_sync_progress_from_core(
 }
 
 pub(crate) fn account_login_status_message(
-    result: &bitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
+    result: &openbitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
 ) -> String {
     if result.has_cloud_settings {
         return format!(

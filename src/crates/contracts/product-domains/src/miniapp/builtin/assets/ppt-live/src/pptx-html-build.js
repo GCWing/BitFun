@@ -709,7 +709,7 @@ export function createPptxDeck(deck = {}) {
   pptx.author = 'PPT Live';
   pptx.subject = deck.brief?.topic || deck.title || 'PPT Live deck';
   pptx.title = deck.title || 'PPT Live';
-  pptx.company = 'BitFun';
+  pptx.company = 'OpenBitFun';
   pptx.lang = 'zh-CN';
   pptx.theme = {
     headFontFace: PPTX_LATIN_FONT_FACE,

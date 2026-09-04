@@ -1,5 +1,5 @@
-use bitfun_claude_code_adapter::{ClaudeCodeCommandProvider, ClaudeCodeCommandProviderOptions};
-use bitfun_product_domains::external_sources::{
+use openbitfun_claude_code_adapter::{ClaudeCodeCommandProvider, ClaudeCodeCommandProviderOptions};
+use openbitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, PromptCommandAvailability,
     PromptCommandProviderSnapshot, PromptCommandShellPreference, PromptCommandSourceProvider,
 };
@@ -57,7 +57,7 @@ fn write(path: impl AsRef<Path>, contents: &str) {
 fn resolve(
     provider: &ClaudeCodeCommandProvider,
     snapshot: &PromptCommandProviderSnapshot,
-) -> Vec<bitfun_product_domains::external_sources::PromptCommandDefinition> {
+) -> Vec<openbitfun_product_domains::external_sources::PromptCommandDefinition> {
     provider
         .resolve_commands(
             snapshot,
@@ -524,7 +524,7 @@ fn invalid_higher_layer_command_masks_lower_layer_until_source_is_disabled() {
         .iter()
         .filter(|source| {
             source.scope
-                != bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
+                != openbitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
         })
         .map(|source| source.key.clone())
         .collect::<BTreeSet<_>>();

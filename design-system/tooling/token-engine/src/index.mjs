@@ -172,7 +172,7 @@ export function resolveTokens(document) {
   return Object.fromEntries([...resolved.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export function tokenNameToCssVariable(name, prefix = "bf") {
+export function tokenNameToCssVariable(name, prefix = "openbitfun") {
   const normalizedName = name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/[._\s]+/g, "-")
@@ -194,8 +194,8 @@ export function diffResolvedTokens(baseTokens, nextTokens) {
 
 export function renderCss(tokens, options = {}) {
   const {
-    layer = "bf.tokens",
-    prefix = "bf",
+    layer = "openbitfun.tokens",
+    prefix = "openbitfun",
     preserveReferences = false,
     selector = ":root",
   } = options;
@@ -223,7 +223,7 @@ export function renderCss(tokens, options = {}) {
 }
 
 export function createTokenArtifacts(tokens, options = {}) {
-  const { exportName = "tokens", prefix = "bf" } = options;
+  const { exportName = "tokens", prefix = "openbitfun" } = options;
   const values = Object.fromEntries(
     Object.entries(tokens).map(([name, token]) => [name, token.value]),
   );
@@ -246,7 +246,7 @@ export function createTokenArtifacts(tokens, options = {}) {
     typescript: [
       `export type TokenName = ${tokenNameUnion};`,
       `export declare const ${exportName}: Readonly<Record<TokenName, string | number | boolean>>;`,
-      "export declare const cssVariables: Readonly<Record<TokenName, `--bf-${string}`>>;",
+      "export declare const cssVariables: Readonly<Record<TokenName, `--openbitfun-${string}`>>;",
       "",
     ].join("\n"),
     values,
@@ -257,7 +257,7 @@ export function createTokenCatalog(modes, options = {}) {
   const {
     defaultMode = Object.keys(modes)[0],
     include = () => true,
-    prefix = "bf",
+    prefix = "openbitfun",
   } = options;
   const modeNames = Object.keys(modes);
   const defaultTokens = modes[defaultMode];

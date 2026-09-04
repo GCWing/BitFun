@@ -1,7 +1,7 @@
 //! Shared desktop resolution of on-disk session roots for remote workspaces.
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
+use openbitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
 
 pub async fn desktop_effective_session_storage_path(
     app_state: &AppState,

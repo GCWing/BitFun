@@ -6,6 +6,7 @@
 pub mod ai;
 pub mod errors;
 pub mod model;
+pub mod product_identity;
 pub mod session;
 pub mod session_usage;
 pub mod speech;

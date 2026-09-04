@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
-use bitfun_app_server_protocol::error::AppServerErrorKind;
-use bitfun_app_server_protocol::search::{
+use openbitfun_app_server_protocol::error::AppServerErrorKind;
+use openbitfun_app_server_protocol::search::{
     SearchSessionContentMessage, SearchSessionContentResponse, PRODUCT_SEARCH_CAPABILITY_ID,
 };
-use bitfun_runtime_ports::{PortError, PortErrorKind};
+use openbitfun_runtime_ports::{PortError, PortErrorKind};
 
-use crate::agent::BitfunAppRuntime;
+use crate::agent::OpenBitFunAppRuntime;
 use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
-    runtime: Arc<BitfunAppRuntime>,
+    runtime: Arc<OpenBitFunAppRuntime>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()

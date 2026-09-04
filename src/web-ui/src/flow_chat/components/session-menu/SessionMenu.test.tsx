@@ -11,8 +11,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -47,7 +47,7 @@ describe('SessionMenu', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
 
     rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      if (this instanceof HTMLElement && this.classList.contains('bitfun-session-menu__trigger')) {
+      if (this instanceof HTMLElement && this.classList.contains('openbitfun-session-menu__trigger')) {
         return {
           top: 760,
           bottom: 784,
@@ -78,7 +78,7 @@ describe('SessionMenu', () => {
 
   afterEach(() => {
     act(() => root.unmount());
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container.remove();
     rectSpy.mockRestore();
     widthSpy.mockRestore();
@@ -91,15 +91,15 @@ describe('SessionMenu', () => {
       root.render(<SessionMenu />);
     });
 
-    const trigger = container.querySelector<HTMLButtonElement>('.bitfun-session-menu__trigger');
+    const trigger = container.querySelector<HTMLButtonElement>('.openbitfun-session-menu__trigger');
     await act(async () => {
       trigger!.click();
       await Promise.resolve();
     });
 
-    const dropdown = document.querySelector<HTMLElement>('.bitfun-session-menu__dropdown');
-    expect(dropdown?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
-    expect(dropdown?.dataset.bfPlacement).toBe('top');
+    const dropdown = document.querySelector<HTMLElement>('.openbitfun-session-menu__dropdown');
+    expect(dropdown?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
+    expect(dropdown?.dataset.openbitfunPlacement).toBe('top');
     expect(dropdown?.style.visibility).toBe('visible');
     expect(Number.parseFloat(dropdown?.style.left ?? '')).toBeLessThanOrEqual(752);
   });

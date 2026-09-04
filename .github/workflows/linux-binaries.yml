@@ -151,12 +151,12 @@ jobs:
           # Compiled into the CLI; its presence makes signature verification
           # mandatory for self-update. Unset on forks, which then fall back to
           # checksum-only.
-          BITFUN_RELEASE_PUBKEY: ${{ secrets.release_pubkey }}
+          OPENBITFUN_RELEASE_PUBKEY: ${{ secrets.release_pubkey }}
         run: |
           cargo build --locked --release \
             --target ${{ matrix.platform.target }} \
-            -p bitfun-cli \
-            -p bitfun-relay-server \
+            -p openbitfun-cli \
+            -p openbitfun-relay-server \
             --bins
 
       # A binary above this floor cannot start on older distributions, and the
@@ -168,10 +168,10 @@ jobs:
         run: |
           rel="target/${{ matrix.platform.target }}/release"
           bash scripts/ci/check-glibc-floor.sh 2.35 \
-            "$rel/bitfun-relay-server" \
+            "$rel/openbitfun-relay-server" \
             "$rel/relay-admin" \
-            "$rel/bitfun" \
-            "$rel/bitfun-cli"
+            "$rel/openbitfun" \
+            "$rel/openbitfun"
 
       - name: Test CLI installer
         shell: bash
@@ -196,9 +196,9 @@ jobs:
       - name: Sign release archives
         shell: bash
         env:
-          BITFUN_SIGNING_KEY: ${{ secrets.release_signing_key }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.release_signing_password }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.release_pubkey }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.release_signing_key }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.release_signing_password }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.release_pubkey }}
           CLI_ARCHIVE: ${{ steps.cli-stage.outputs.archive }}
           RELAY_ARCHIVE: ${{ steps.relay-stage.outputs.archive }}
         run: |
@@ -260,7 +260,7 @@ jobs:
         if: ${{ inputs.upload_artifacts }}
         uses: actions/upload-artifact@v6
         with:
-          name: bitfun-linux-${{ inputs.artifact_prefix }}-${{ matrix.platform.name }}
+          name: openbitfun-linux-${{ inputs.artifact_prefix }}-${{ matrix.platform.name }}
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
           path: |

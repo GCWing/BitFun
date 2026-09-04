@@ -3,7 +3,7 @@
 use crate::mcp::protocol::{MCPTool, MCPToolResult, MCPToolResultContent};
 use crate::mcp::MCPRuntimeResult;
 use async_trait::async_trait;
-use bitfun_agent_tools::{
+use openbitfun_agent_tools::{
     build_mcp_tool_bridge_definition, McpToolBridgeBehaviorHints, McpToolBridgeDefinition,
     McpToolBridgeDefinitionInput,
 };

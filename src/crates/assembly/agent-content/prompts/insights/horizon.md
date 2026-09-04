@@ -1,4 +1,4 @@
-Analyze this BitFun usage data and identify future opportunities.
+Analyze this OpenBitFun usage data and identify future opportunities.
 
 RESPOND WITH ONLY A VALID JSON OBJECT:
 {

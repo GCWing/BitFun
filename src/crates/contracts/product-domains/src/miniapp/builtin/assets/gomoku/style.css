@@ -1,12 +1,12 @@
 /* === Design System ===
- * Theme: 与 BitFun 主题一致的扁平工具风，去掉所有写实木纹/羊皮/印章/拟物高光。
+ * Theme: 与 OpenBitFun 主题一致的扁平工具风，去掉所有写实木纹/羊皮/印章/拟物高光。
  * Palette:
- *   - dominant:   var(--bitfun-bg) / var(--bitfun-text)
- *   - supporting: var(--bitfun-bg-secondary), var(--bitfun-bg-elevated), var(--bitfun-border)
- *   - accent:     var(--bitfun-accent)            // 选中/主 CTA/最后一手
+ *   - dominant:   var(--openbitfun-bg) / var(--openbitfun-text)
+ *   - supporting: var(--openbitfun-bg-secondary), var(--openbitfun-bg-elevated), var(--openbitfun-border)
+ *   - accent:     var(--openbitfun-accent)            // 选中/主 CTA/最后一手
  *   - stones:     纯色填充 + 1px 描边（无径向渐变）
  * Typography:
- *   - 全 sans：var(--bitfun-font-sans)
+ *   - 全 sans：var(--openbitfun-font-sans)
  *   - heading 14-16px / 600  · body 13px / 400  · caption 11-12px / 400
  *   - 不使用大字距、不使用衬线
  * Radius:  card 8px · control 6px · pill 999px
@@ -18,23 +18,23 @@ body, html { margin: 0; padding: 0; height: 100%; }
 [hidden] { display: none !important; }
 
 :root {
-  --g-bg:           var(--bitfun-bg);
-  --g-bg-secondary: var(--bitfun-bg-secondary);
-  --g-bg-elevated:  var(--bitfun-bg-elevated);
+  --g-bg:           var(--openbitfun-bg);
+  --g-bg-secondary: var(--openbitfun-bg-secondary);
+  --g-bg-elevated:  var(--openbitfun-bg-elevated);
 
-  --g-text:         var(--bitfun-text);
-  --g-text-soft:    var(--bitfun-text-secondary);
-  --g-text-mute:    var(--bitfun-text-muted);
+  --g-text:         var(--openbitfun-text);
+  --g-text-soft:    var(--openbitfun-text-secondary);
+  --g-text-mute:    var(--openbitfun-text-muted);
 
-  --g-border:        var(--bitfun-border);
-  --g-border-subtle: var(--bitfun-border-subtle);
+  --g-border:        var(--openbitfun-border);
+  --g-border-subtle: var(--openbitfun-border-subtle);
 
-  --g-element:       var(--bitfun-element-bg);
-  --g-element-hover: var(--bitfun-element-hover);
+  --g-element:       var(--openbitfun-element-bg);
+  --g-element-hover: var(--openbitfun-element-hover);
 
-  --g-accent:        var(--bitfun-accent);
-  --g-accent-hover:  var(--bitfun-accent-hover);
-  --g-accent-soft:   color-mix(in srgb, var(--bitfun-accent) 16%, transparent);
+  --g-accent:        var(--openbitfun-accent);
+  --g-accent-hover:  var(--openbitfun-accent-hover);
+  --g-accent-soft:   color-mix(in srgb, var(--openbitfun-accent) 16%, transparent);
 
   /* Stones — dark theme defaults.
    * Black stones use a lighter rim so they read against the dark board surface;
@@ -44,17 +44,17 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --g-stone-white:        #f1f1f3;
   --g-stone-white-stroke: rgba(0, 0, 0, 0.35);
 
-  --g-radius:    var(--bitfun-radius-lg);
-  --g-radius-sm: var(--bitfun-radius);
+  --g-radius:    var(--openbitfun-radius-lg);
+  --g-radius-sm: var(--openbitfun-radius);
 
-  --g-sans: var(--bitfun-font-sans);
+  --g-sans: var(--openbitfun-font-sans);
 
   --g-dur: 160ms;
   --g-ease: cubic-bezier(.2, .8, .2, 1);
 }
 
 /* Light theme — invert rim contrast since the board is now bright. */
-[data-bf-appearance-mode="light"] {
+[data-openbitfun-appearance-mode="light"] {
   --g-stone-black:        #1c1c1f;
   --g-stone-black-stroke: rgba(0, 0, 0, 0.55);
   --g-stone-white-stroke: rgba(0, 0, 0, 0.22);
@@ -420,7 +420,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .btn--primary {
   background: var(--g-accent);
-  color: var(--bitfun-text-on-accent);
+  color: var(--openbitfun-text-on-accent);
   border-color: var(--g-accent);
   flex: initial;
   padding: 8px 18px;
@@ -501,7 +501,7 @@ button { font-family: inherit; cursor: pointer; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--bitfun-scrollbar-thumb);
+  background: var(--openbitfun-scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {

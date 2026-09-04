@@ -1,4 +1,4 @@
-use bitfun_product_domains::canvas::types::CanvasDiagnostic;
+use openbitfun_product_domains::canvas::types::CanvasDiagnostic;
 
 #[cfg(feature = "canvas-runtime")]
 use oxc::allocator::Allocator;

@@ -28,10 +28,10 @@ describe('AssistantAvatar', () => {
       root.render(<AssistantAvatar presetId="orbit-nova" emoji="🧭" size={28} />);
     });
 
-    const avatar = container.querySelector('[data-bf-component="assistant-avatar"]');
+    const avatar = container.querySelector('[data-openbitfun-component="assistant-avatar"]');
     const image = container.querySelector('.assistant-avatar__image') as HTMLImageElement;
-    expect(avatar?.getAttribute('data-bf-preset')).toBe('claw-orbit');
-    expect(avatar?.getAttribute('data-bf-family')).toBe('clawOrbit');
+    expect(avatar?.getAttribute('data-openbitfun-preset')).toBe('claw-orbit');
+    expect(avatar?.getAttribute('data-openbitfun-family')).toBe('clawOrbit');
     expect(avatar?.getAttribute('style')).toContain('28px');
     expect(image.getAttribute('src')).toBe('/assets/assistant/claw-avatar-alt.webp');
   });
@@ -41,8 +41,8 @@ describe('AssistantAvatar', () => {
       root.render(<AssistantAvatar presetId="future-avatar" emoji="🧭" stableKey="assistant-1" />);
     });
 
-    const avatar = container.querySelector('[data-bf-component="assistant-avatar"]');
-    expect(avatar?.getAttribute('data-bf-family')).toBe('emoji');
+    const avatar = container.querySelector('[data-openbitfun-component="assistant-avatar"]');
+    expect(avatar?.getAttribute('data-openbitfun-family')).toBe('emoji');
     expect(avatar?.textContent).toContain('🧭');
   });
 
@@ -62,10 +62,10 @@ describe('AssistantAvatar', () => {
       );
     });
 
-    const avatar = container.querySelector('[data-bf-component="assistant-avatar"]');
+    const avatar = container.querySelector('[data-openbitfun-component="assistant-avatar"]');
     const image = container.querySelector('.assistant-avatar__image') as HTMLImageElement;
-    expect(avatar?.getAttribute('data-bf-family')).toBe('claw');
-    expect(avatar?.getAttribute('data-bf-preset')).toBe('claw');
+    expect(avatar?.getAttribute('data-openbitfun-family')).toBe('claw');
+    expect(avatar?.getAttribute('data-openbitfun-preset')).toBe('claw');
     expect(avatar?.getAttribute('aria-label')).toBe('Claw avatar');
     expect(image.getAttribute('src')).toBe('/assets/assistant/claw-avatar.webp');
   });

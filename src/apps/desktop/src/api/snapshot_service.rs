@@ -1,18 +1,18 @@
 //! Snapshot Service API
 
-use bitfun_core::product_runtime::{
+use log::{info, warn};
+use openbitfun_core::product_runtime::{
     CoreSessionMaintenancePermit, CoreSessionMutationPermit, CoreSessionReadPermit,
 };
-use bitfun_core::service::remote_ssh::workspace_state::{
+use openbitfun_core::service::remote_ssh::workspace_state::{
     is_remote_path, workspace_session_identity,
 };
-use bitfun_core::service::snapshot::{
+use openbitfun_core::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
     initialize_snapshot_manager_for_workspace, open_snapshot_history_for_workspace,
     open_snapshot_manager_for_view, FileChangeEntry, OperationType, SnapshotManager,
 };
-use bitfun_runtime_ports::{AgentSessionWorkspaceLocation, SessionStoragePathRequest};
-use log::{info, warn};
+use openbitfun_runtime_ports::{AgentSessionWorkspaceLocation, SessionStoragePathRequest};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{path::PathBuf, sync::Arc};
@@ -519,8 +519,8 @@ pub async fn rollback_session(
 #[tauri::command]
 pub async fn rollback_session_to_turn(
     runtime: State<'_, DesktopRuntimeContext>,
-    request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest,
-) -> Result<bitfun_runtime_ports::AgentSessionRollbackToTurnOutcome, String> {
+    request: openbitfun_runtime_ports::AgentSessionRollbackToTurnRequest,
+) -> Result<openbitfun_runtime_ports::AgentSessionRollbackToTurnOutcome, String> {
     let remote_scope = SnapshotRemoteScope {
         remote_connection_id: request.remote_connection_id.clone(),
         remote_ssh_host: request.remote_ssh_host.clone(),
@@ -1288,7 +1288,7 @@ mod tests {
 
     #[test]
     fn targeted_rollback_request_preserves_stable_identity_and_remote_facts() {
-        let request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest =
+        let request: openbitfun_runtime_ports::AgentSessionRollbackToTurnRequest =
             serde_json::from_value(serde_json::json!({
                 "sessionId": "remote-session",
                 "targetTurnId": "turn-7",
@@ -1318,7 +1318,7 @@ mod tests {
         let workspace = tempfile::tempdir().expect("create workspace");
         let workspace_path = workspace.path().to_string_lossy().to_string();
         let remote =
-            bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
+            openbitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
         remote
             .register_remote_workspace(
                 workspace_path.clone(),
@@ -1378,7 +1378,7 @@ mod tests {
         let workspace = tempfile::tempdir().expect("create local workspace");
         let workspace_path = workspace.path().to_string_lossy().to_string();
         let remote =
-            bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
+            openbitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager();
         remote
             .register_remote_workspace(
                 workspace_path.clone(),
@@ -1397,7 +1397,7 @@ mod tests {
         ensure_complete_rollback_supported(
             &workspace_path,
             &Default::default(),
-            Some(bitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
+            Some(openbitfun_runtime_ports::AgentSessionWorkspaceLocation::Local),
         )
         .await
         .expect("explicit local identity must disambiguate the registered remote path");

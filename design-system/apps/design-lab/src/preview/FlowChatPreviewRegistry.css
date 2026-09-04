@@ -15,11 +15,11 @@
   min-inline-size: 0;
   inline-size: 100%;
   align-items: center;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
   overflow: hidden;
-  color: var(--bf-color-content-secondary);
-  font-family:var(--bf-type-body-md-font-family);
-  font-size: var(--bf-type-support-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  font-family:var(--openbitfun-type-body-md-font-family);
+  font-size: var(--openbitfun-type-support-font-size);
   white-space: nowrap;
 }
 
@@ -27,23 +27,23 @@
   display: inline-flex;
   min-inline-size: 0;
   align-items: center;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .flow-chat-composer-preview__context svg {
-  inline-size: var(--bf-font-size-base);
-  block-size: var(--bf-font-size-base);
+  inline-size: var(--openbitfun-font-size-base);
+  block-size: var(--openbitfun-font-size-base);
   flex: 0 0 auto;
 }
 
 .flow-chat-composer-preview__permission {
   margin-inline-start: auto;
-  padding: var(--bf-space-1) var(--bf-space-2);
-  border-radius: var(--bf-radius-pill);
-  color: var(--bf-color-status-success-content);
-  background: var(--bf-color-status-success-surface);
+  padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+  border-radius: var(--openbitfun-radius-pill);
+  color: var(--openbitfun-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
 }
 
 .flow-chat-composer-preview textarea {
@@ -55,48 +55,48 @@
   padding: 0;
   border: 0;
   outline: 0;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   background: transparent;
   font: inherit;
-  line-height: var(--bf-type-body-md-line-height);
+  line-height: var(--openbitfun-type-body-md-line-height);
 }
 
 .flow-chat-composer-preview textarea::placeholder {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   opacity: 1;
 }
 
-.flow-chat-composer-preview [data-bf-layout="compact"] textarea {
+.flow-chat-composer-preview [data-openbitfun-layout="compact"] textarea {
   /* typography-audit: allow -- compact textarea uses the control track as its single-line box */
-  line-height: var(--bf-control-chat-composer-compact-track-height);
+  line-height: var(--openbitfun-control-chat-composer-compact-track-height);
 }
 
 .flow-chat-composer-preview__model {
   display: inline-flex;
   min-inline-size: 0;
-  block-size: var(--bf-control-chat-composer-control-height);
+  block-size: var(--openbitfun-control-chat-composer-control-height);
   align-items: center;
   justify-content: center;
   margin: 0;
   padding: 0;
   border: 0;
-  color: var(--bf-color-action-neutral-content);
+  color: var(--openbitfun-color-action-neutral-content);
   background: transparent;
   cursor: pointer;
 }
 
-.flow-chat-composer-preview [data-bf-layout="compact"]
+.flow-chat-composer-preview [data-openbitfun-layout="compact"]
   .flow-chat-composer-preview__model {
   block-size: 100%;
 }
 
 .flow-chat-composer-preview__model {
   max-inline-size: 180px;
-  gap: var(--bf-space-1);
-  padding-inline: var(--bf-space-2);
-  border-radius: var(--bf-radius-pill);
-  font-family:var(--bf-type-body-md-font-family);
-  font-size: var(--bf-type-body-sm-font-size);
+  gap: var(--openbitfun-space-1);
+  padding-inline: var(--openbitfun-space-2);
+  border-radius: var(--openbitfun-radius-pill);
+  font-family:var(--openbitfun-type-body-md-font-family);
+  font-size: var(--openbitfun-type-body-sm-font-size);
 }
 
 .flow-chat-composer-preview__model > span {
@@ -106,17 +106,17 @@
 }
 
 .flow-chat-composer-preview__model > small {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font: inherit;
 }
 
 .flow-chat-composer-preview__model:hover:not(:disabled) {
-  background: var(--bf-color-action-neutral-surface-hover);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
 }
 
 .flow-chat-composer-preview__model:focus-visible {
-  outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-  outline-offset: var(--bf-focus-offset);
+  outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+  outline-offset: var(--openbitfun-focus-offset);
 }
 
 .flow-chat-tool-card-preview__command {
@@ -131,46 +131,46 @@
 
 .flow-chat-tool-card-preview__details {
   display: grid;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   min-inline-size: 0;
 }
 
 .flow-chat-tool-card-preview__details code {
   overflow: hidden;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-family: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .flow-chat-tool-card-preview__details span {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .flow-chat-tool-card-preview__duration {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-1);
-  color: var(--bf-color-content-muted);
+  gap: var(--openbitfun-space-1);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .flow-chat-tool-card-preview__duration[data-status="completed"] {
-  color: var(--bf-color-status-success-content);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .flow-chat-tool-card-preview__duration > svg {
-  inline-size: var(--bf-font-size-sm);
-  block-size: var(--bf-font-size-sm);
+  inline-size: var(--openbitfun-font-size-sm);
+  block-size: var(--openbitfun-font-size-sm);
 }
 
 .flow-chat-tool-card-preview__output,
 .flow-chat-tool-card-preview__diff {
   display: grid;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
   margin: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-body-sm-font-size);
-  line-height: var(--bf-type-body-md-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  line-height: var(--openbitfun-type-body-md-line-height);
   white-space: pre-wrap;
 }
 
@@ -179,13 +179,13 @@
 }
 
 .flow-chat-tool-card-preview__diff {
-  font-family: var(--bf-type-code-md-font-family);
+  font-family: var(--openbitfun-type-code-md-font-family);
 }
 
 .flow-chat-tool-card-preview__diff [data-change="added"] {
-  color: var(--bf-color-code-change-added);
+  color: var(--openbitfun-color-code-change-added);
 }
 
 .flow-chat-tool-card-preview__diff [data-change="removed"] {
-  color: var(--bf-color-code-change-removed);
+  color: var(--openbitfun-color-code-change-removed);
 }

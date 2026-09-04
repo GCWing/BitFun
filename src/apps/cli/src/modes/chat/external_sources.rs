@@ -32,7 +32,7 @@ fn parse_external_tool_review_action(
     // so a changed target fails closed instead of reusing the same number for
     // a different tool after a watcher refresh.
     let snapshot = reviewed_snapshot.or(current_snapshot).ok_or_else(|| {
-        "BitFun has not finished checking external tools; run /tools refresh".to_string()
+        "OpenBitFun has not finished checking external tools; run /tools refresh".to_string()
     })?;
     if command.eq_ignore_ascii_case("enable") || command.eq_ignore_ascii_case("disable") {
         let index = parse_positive_index(parts.next(), "tool number")?;
@@ -196,7 +196,7 @@ fn cli_native_prompt_command_descriptors(command_name: &str) -> Vec<NativePrompt
         })
         .map(|action| NativePromptCommandDescriptor {
             command_name: command_name.to_ascii_lowercase(),
-            candidate_id: format!("bitfun.cli:{}", action.id),
+            candidate_id: format!("openbitfun.cli:{}", action.id),
             behavior_version: action_conflict_behavior_version(action.id).to_string(),
         })
         .collect()
@@ -236,7 +236,7 @@ fn builtin_command_reconfirmation(
     command_name: &str,
     preferences: &ExternalSourceConflictPreferences,
 ) -> Option<BuiltinCommandReconfirmation> {
-    let candidate_id = format!("bitfun.cli:{action_id}");
+    let candidate_id = format!("openbitfun.cli:{action_id}");
     let participated_in_conflict = preferences.conflicted_candidate_ids.contains(&candidate_id);
     if !participated_in_conflict {
         return None;
@@ -426,18 +426,18 @@ impl ChatMode {
             let result = async {
                 if matches!(&task_action, ExternalControlUiAction::Show) {
                     let surface =
-                        bitfun_core::external_sources::get_external_source_control_snapshot(
+                        openbitfun_core::external_sources::get_external_source_control_snapshot(
                             Some(&workspace),
                             false,
-                            bitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
+                            openbitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
                         )
                         .await?;
                     let preferences =
-                        bitfun_core::external_sources::external_source_conflict_choices()
+                        openbitfun_core::external_sources::external_source_conflict_choices()
                             .await
                             .map(ExternalSourceConflictPreferences::from)
                             .map_err(
-                                bitfun_core::external_sources::sanitize_external_source_operation_error,
+                                openbitfun_core::external_sources::sanitize_external_source_operation_error,
                             )?;
                     return Ok((
                         surface.control,
@@ -462,7 +462,7 @@ impl ChatMode {
                     }
                     ExternalControlUiAction::Show => unreachable!(),
                 };
-                let surface = bitfun_core::external_sources::apply_external_source_control_action(
+                let surface = openbitfun_core::external_sources::apply_external_source_control_action(
                     Some(&workspace),
                     ExternalSourceControlRequestV1 {
                         schema_version: EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
@@ -473,17 +473,17 @@ impl ChatMode {
                 )
                 .await?;
                 let snapshot =
-                    bitfun_core::external_sources::get_external_source_control_snapshot(
+                    openbitfun_core::external_sources::get_external_source_control_snapshot(
                         Some(&workspace),
                         false,
-                        bitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
+                        openbitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
                     )
                     .await?;
-                let preferences = bitfun_core::external_sources::external_source_conflict_choices()
+                let preferences = openbitfun_core::external_sources::external_source_conflict_choices()
                     .await
                     .map(ExternalSourceConflictPreferences::from)
                     .map_err(
-                        bitfun_core::external_sources::sanitize_external_source_operation_error,
+                        openbitfun_core::external_sources::sanitize_external_source_operation_error,
                     )?;
                 Ok((
                     surface.control,
@@ -630,15 +630,18 @@ impl ChatMode {
         rt_handle.spawn(async move {
             let result = match &task_action {
                 ExternalToolReviewAction::Refresh => {
-                    bitfun_core::external_sources::external_source_snapshot(Some(&workspace), true)
-                        .await
+                    openbitfun_core::external_sources::external_source_snapshot(
+                        Some(&workspace),
+                        true,
+                    )
+                    .await
                 }
                 ExternalToolReviewAction::Decide {
                     approval_key,
                     decision_key,
                     approved,
                 } => {
-                    bitfun_core::external_sources::set_external_tool_target_decision(
+                    openbitfun_core::external_sources::set_external_tool_target_decision(
                         Some(&workspace),
                         approval_key,
                         decision_key,
@@ -651,7 +654,7 @@ impl ChatMode {
                     conflict_key,
                     candidate_id,
                 } => {
-                    bitfun_core::external_sources::set_external_tool_conflict_choice(
+                    openbitfun_core::external_sources::set_external_tool_conflict_choice(
                         Some(&workspace),
                         conflict_key,
                         candidate_id,
@@ -662,7 +665,7 @@ impl ChatMode {
                 ExternalToolReviewAction::Show => unreachable!(),
             }
             .map(ExternalSourceCatalogSnapshot::from)
-            .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error);
+            .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error);
             let _ = sender.send(ExternalToolMutationResult {
                 action: task_action,
                 result,
@@ -833,8 +836,11 @@ impl ChatMode {
         rt_handle.spawn(async move {
             let result = match &task_action {
                 ExternalAgentReviewAction::Refresh => {
-                    bitfun_core::external_sources::external_source_snapshot(Some(&workspace), true)
-                        .await
+                    openbitfun_core::external_sources::external_source_snapshot(
+                        Some(&workspace),
+                        true,
+                    )
+                    .await
                 }
                 ExternalAgentReviewAction::Decide {
                     candidate_id,
@@ -843,7 +849,7 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    bitfun_core::external_sources::set_external_subagent_activation(
+                    openbitfun_core::external_sources::set_external_subagent_activation(
                         Some(&workspace),
                         candidate_id,
                         *approved,
@@ -860,7 +866,7 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    bitfun_core::external_sources::choose_external_subagent_conflict(
+                    openbitfun_core::external_sources::choose_external_subagent_conflict(
                         Some(&workspace),
                         conflict_key,
                         candidate_id,
@@ -876,7 +882,7 @@ impl ChatMode {
                     expected_subagent_generation,
                     expected_preference_revision,
                 } => {
-                    bitfun_core::external_sources::set_external_subagent_model_binding(
+                    openbitfun_core::external_sources::set_external_subagent_model_binding(
                         Some(&workspace),
                         binding_key,
                         target.clone(),
@@ -888,7 +894,7 @@ impl ChatMode {
                 ExternalAgentReviewAction::Show => unreachable!(),
             }
             .map(ExternalSourceCatalogSnapshot::from)
-            .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error);
+            .map_err(openbitfun_core::external_sources::sanitize_external_source_operation_error);
             let _ = sender.send(ExternalAgentMutationResult {
                 action: task_action,
                 result,

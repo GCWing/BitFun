@@ -54,7 +54,7 @@ describe('L0 Settings Panel', () => {
           '[data-testid="nav-assistant-manager"]',
         );
         const lowerItem = document.querySelector<HTMLElement>(
-          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .bitfun-nav-panel__inline-item-label',
+          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .openbitfun-nav-panel__inline-item-label',
         );
 
         if (!upperItem || !lowerItem) {
@@ -105,7 +105,7 @@ describe('L0 Settings Panel', () => {
       await openSettingsItem.click();
 
       // Check for settings scene
-      const settingsScene = await $('.bitfun-settings-scene');
+      const settingsScene = await $('.openbitfun-settings-scene');
       await settingsScene.waitForDisplayed({ timeout: 10000 });
       const sceneExists = await settingsScene.isDisplayed();
 
@@ -124,19 +124,19 @@ describe('L0 Settings Panel', () => {
           '[data-testid="nav-assistant-manager"]',
         );
         const settingsItem = document.querySelector<HTMLElement>(
-          '.bitfun-settings-nav__item:not(.is-active)',
+          '.openbitfun-settings-nav__item:not(.is-active)',
         );
         const lowerItem = document.querySelector<HTMLElement>(
-          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .bitfun-nav-panel__inline-item-label',
+          '[data-testid="nav-session-item"]:not([data-session-active="true"]) .openbitfun-nav-panel__inline-item-label',
         );
         const activeSettingsItem = document.querySelector<HTMLElement>(
-          '.bitfun-settings-nav__item.is-active',
+          '.openbitfun-settings-nav__item.is-active',
         );
         const mainCategory = document.querySelector<HTMLElement>(
-          '.bitfun-nav-panel__section-label',
+          '.openbitfun-nav-panel__section-label',
         );
         const settingsCategory = document.querySelector<HTMLElement>(
-          '.bitfun-settings-nav__category-label',
+          '.openbitfun-settings-nav__category-label',
         );
 
         if (!mainItem || !settingsItem || !lowerItem || !activeSettingsItem || !mainCategory || !settingsCategory) {

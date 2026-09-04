@@ -33,8 +33,8 @@ describe('ConfigCollectionItem', () => {
       );
     });
 
-    const row = container.querySelector<HTMLElement>('.bitfun-collection-item__row');
-    const toggle = container.querySelector<HTMLButtonElement>('.bitfun-collection-item__details-toggle');
+    const row = container.querySelector<HTMLElement>('.openbitfun-collection-item__row');
+    const toggle = container.querySelector<HTMLButtonElement>('.openbitfun-collection-item__details-toggle');
     const control = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Active');
     expect(row?.getAttribute('role')).toBeNull();
@@ -45,13 +45,13 @@ describe('ConfigCollectionItem', () => {
     act(() => {
       control?.click();
     });
-    expect(container.querySelector('.bitfun-collection-item__details-collapse')).toBeNull();
+    expect(container.querySelector('.openbitfun-collection-item__details-collapse')).toBeNull();
 
     act(() => {
       toggle?.click();
     });
 
-    const details = container.querySelector<HTMLElement>('.bitfun-collection-item__details-collapse');
+    const details = container.querySelector<HTMLElement>('.openbitfun-collection-item__details-collapse');
     expect(toggle?.getAttribute('aria-expanded')).toBe('true');
     expect(container.textContent).toContain('Configuration location');
     expect(details?.dataset.open).toBe('true');
@@ -67,7 +67,7 @@ describe('ConfigCollectionItem', () => {
     act(() => {
       vi.advanceTimersByTime(180);
     });
-    expect(container.querySelector('.bitfun-collection-item__details-collapse')).toBeNull();
+    expect(container.querySelector('.openbitfun-collection-item__details-collapse')).toBeNull();
   });
 
   it('does not expose disabled details as an interactive control', () => {
@@ -82,7 +82,7 @@ describe('ConfigCollectionItem', () => {
       );
     });
 
-    const toggle = container.querySelector<HTMLButtonElement>('.bitfun-collection-item__details-toggle');
+    const toggle = container.querySelector<HTMLButtonElement>('.openbitfun-collection-item__details-toggle');
     expect(toggle?.disabled).toBe(true);
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
 
@@ -91,7 +91,7 @@ describe('ConfigCollectionItem', () => {
     });
 
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(container.querySelector('.bitfun-collection-item__details-collapse')).toBeNull();
+    expect(container.querySelector('.openbitfun-collection-item__details-collapse')).toBeNull();
   });
 
   it('optionally toggles from the row without stealing nested control clicks', () => {
@@ -106,13 +106,13 @@ describe('ConfigCollectionItem', () => {
       );
     });
 
-    const row = container.querySelector<HTMLElement>('.bitfun-collection-item__row');
-    const label = container.querySelector<HTMLElement>('.bitfun-collection-item__name');
+    const row = container.querySelector<HTMLElement>('.openbitfun-collection-item__row');
+    const label = container.querySelector<HTMLElement>('.openbitfun-collection-item__name');
     const control = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Edit');
-    const toggle = container.querySelector<HTMLButtonElement>('.bitfun-collection-item__details-toggle');
+    const toggle = container.querySelector<HTMLButtonElement>('.openbitfun-collection-item__details-toggle');
 
-    expect(row?.classList.contains('bitfun-collection-item__row--toggleable')).toBe(true);
+    expect(row?.classList.contains('openbitfun-collection-item__row--toggleable')).toBe(true);
 
     act(() => {
       control?.click();

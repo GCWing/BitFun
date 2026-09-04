@@ -17,10 +17,10 @@
  */
 
 /** Payload key injected by the controller. Keep in sync with the Rust const. */
-export const PEER_EVENT_SOURCE_KEY = '__bitfunSourceDeviceId';
+export const PEER_EVENT_SOURCE_KEY = '__openbitfunSourceDeviceId';
 
 /** Wrapper key used when a peer payload is not a JSON object. */
-export const PEER_EVENT_WRAPPED_PAYLOAD_KEY = '__bitfunSourcePayload';
+export const PEER_EVENT_WRAPPED_PAYLOAD_KEY = '__openbitfunSourcePayload';
 
 /**
  * Product events that belong to one device surface. A superset of the desktop

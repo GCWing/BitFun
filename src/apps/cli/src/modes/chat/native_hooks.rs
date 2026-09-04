@@ -63,10 +63,10 @@ fn native_hook_location(
 }
 
 fn project_native_hook_overview(
-    overview: bitfun_core::native_hooks::NativeHookOverview,
+    overview: openbitfun_core::native_hooks::NativeHookOverview,
     workspace: &std::path::Path,
 ) -> NativeHookOverview {
-    let user_hooks_file = bitfun_core::infrastructure::try_get_path_manager_arc()
+    let user_hooks_file = openbitfun_core::infrastructure::try_get_path_manager_arc()
         .ok()
         .map(|manager| manager.user_hooks_file());
     let path_labels = overview
@@ -102,7 +102,7 @@ fn project_native_hook_overview(
             .into_iter()
             .zip(path_labels.iter())
             .map(|(file, (_, location))| {
-                bitfun_product_domains::native_hooks::NativeHookFileSummary {
+                openbitfun_product_domains::native_hooks::NativeHookFileSummary {
                     scope: file.scope.to_string(),
                     location: location.clone(),
                     exists: file.exists,
@@ -114,7 +114,7 @@ fn project_native_hook_overview(
             .rules
             .into_iter()
             .map(
-                |rule| bitfun_product_domains::native_hooks::NativeHookRuleSummary {
+                |rule| openbitfun_product_domains::native_hooks::NativeHookRuleSummary {
                     event: rule.event.to_string(),
                     matcher: rule.matcher,
                     matcher_is_valid: rule.matcher_is_valid,
@@ -127,7 +127,7 @@ fn project_native_hook_overview(
                                 &handler.command,
                                 MAX_TUI_NATIVE_HOOK_COMMAND_CHARS,
                             );
-                            bitfun_product_domains::native_hooks::NativeHookHandlerSummary {
+                            openbitfun_product_domains::native_hooks::NativeHookHandlerSummary {
                                 command_summary,
                                 command_truncated,
                                 timeout_seconds: handler.timeout_seconds,
@@ -162,7 +162,7 @@ fn native_hook_help_text() -> String {
         "",
         "Usage: /hooks [refresh | import <source-number> [--confirm] | update <import-number> [--confirm] | enable <import-number> | disable <import-number> | remove <import-number> --confirm | reset <user|project> --confirm]",
         "",
-        "Shows native BitFun Hooks plus compatible Claude Code and Codex command Hooks.",
+        "Shows native OpenBitFun Hooks plus compatible Claude Code and Codex command Hooks.",
         "Import and update are preview-only until the exact reviewed plan is confirmed. Source files are never edited.",
         "Compatibility aliases: /hooks_external and /hooks-external.",
         "",
@@ -200,8 +200,8 @@ fn native_hook_rule_line(rule: &NativeHookRuleView) -> String {
 
 fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
     let mut lines = vec![
-        "Hooks (BitFun)".to_string(),
-        "Commands BitFun runs at agent lifecycle events. Nothing was executed to build this view."
+        "Hooks (OpenBitFun)".to_string(),
+        "Commands OpenBitFun runs at agent lifecycle events. Nothing was executed to build this view."
             .to_string(),
         String::new(),
     ];
@@ -329,8 +329,8 @@ mod remote_hook_projection_tests {
 
     fn core_overview(
         remote_workspace_unsupported: bool,
-    ) -> bitfun_core::native_hooks::NativeHookOverview {
-        bitfun_core::native_hooks::NativeHookOverview {
+    ) -> openbitfun_core::native_hooks::NativeHookOverview {
+        openbitfun_core::native_hooks::NativeHookOverview {
             enabled: true,
             project_hooks_enabled: false,
             files: Vec::new(),

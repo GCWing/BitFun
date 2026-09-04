@@ -6,8 +6,8 @@
     "serverList": {
       "title": "MCP 服務列表",
       "description": "MCP 服務與 JSON 設定",
-      "desktopUnavailable": "請在桌面端管理 BitFun MCP。",
-      "remoteUnavailable": "遠端連線時暫不支援管理 BitFun MCP。",
+      "desktopUnavailable": "請在桌面端管理 OpenBitFun MCP。",
+      "remoteUnavailable": "遠端連線時暫不支援管理 OpenBitFun MCP。",
       "loadFailed": "無法載入 MCP 服務。"
     }
   },
@@ -20,7 +20,7 @@
     "unavailable": "外部 MCP 暫時無法使用。",
     "empty": "未發現外部 MCP。",
     "import": {
-      "preview": "匯入到 BitFun",
+      "preview": "匯入到 OpenBitFun",
       "confirm": "將 {{count}} 個受支援的伺服器作為停用的原生設定匯入？",
       "apply": "匯入",
       "cancel": "取消",
@@ -184,7 +184,7 @@
   },
   "modal": {
     "remoteAuthTitle": "遠程認證：{{serverName}}",
-    "remoteOAuthHint": "使用 OAuth 連接這個遠程 MCP 伺服器。BitFun 會監聽一個本地回調地址，並在授權完成後重新連接該伺服器。",
+    "remoteOAuthHint": "使用 OAuth 連接這個遠程 MCP 伺服器。OpenBitFun 會監聽一個本地回調地址，並在授權完成後重新連接該伺服器。",
     "remoteOAuthCurrentStatus": "OAuth 狀態：{{status}}",
     "remoteOAuthRedirectUri": "回調地址：{{redirectUri}}",
     "remoteOAuthStatus": "OAuth 詳情：{{status}} - {{message}}",
@@ -198,7 +198,7 @@
     "loadFailed": "無法載入 MCP 設定。",
     "hint1": "使用標準 Cursor 格式的 MCP 設定。設定將自動儲存到用戶目錄下的 app.json 檔案中。",
     "hint2": "格式說明：可以省略 type 字段。提供 \"command\" 時按 stdio（本地進程）解析；提供 \"url\" 時按 sse（遠程服務）解析。也可顯式設置 type=\"stdio\"/\"sse\" 以保持兼容。",
-    "secretWarning": "設定中的 env、headers 或 URL 可能包含 API 金鑰。請只在 BitFun 內檢查和儲存，不要貼到線上 JSON 驗證工具。",
+    "secretWarning": "設定中的 env、headers 或 URL 可能包含 API 金鑰。請只在 OpenBitFun 內檢查和儲存，不要貼到線上 JSON 驗證工具。",
     "discardTitle": "放棄 MCP JSON 修改？",
     "discardMessage": "關閉後，尚未儲存的 MCP 設定修改將遺失。",
     "discardConfirm": "放棄修改",
@@ -273,7 +273,7 @@
     "operationFailed": "{{context}}失敗",
     "suggestions": {
       "jsonFormat": [
-        "使用 BitFun 編輯器內的語法位置提示檢查格式，不要上傳可能含金鑰的設定",
+        "使用 OpenBitFun 編輯器內的語法位置提示檢查格式，不要上傳可能含金鑰的設定",
         "確保所有字符串使用雙引號",
         "檢查是否有多餘的逗號",
         "確認所有括號正確閉合"

@@ -1,4 +1,4 @@
-import { themes } from '@bitfun/theme-bitfun';
+import { themes } from '@openbitfun/theme-openbitfun';
 import React, { createContext, useCallback, useLayoutEffect, useState } from 'react';
 
 export type ThemeId = 'dark' | 'light';
@@ -10,11 +10,11 @@ interface ThemeContextValue {
   toggleTheme: () => void;
 }
 
-const STORAGE_KEY = 'bitfun-mobile-theme';
+const STORAGE_KEY = 'openbitfun-mobile-theme';
 
 function commitThemeDOM(id: ThemeId) {
   const root = document.documentElement;
-  root.setAttribute('data-bf-design-system-root', '');
+  root.setAttribute('data-openbitfun-design-system-root', '');
   root.setAttribute('data-color-scheme', id);
   root.setAttribute('data-contrast', 'standard');
   root.setAttribute('data-density', 'comfortable');

@@ -6,7 +6,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 #[tokio::test]
 async fn standalone_sdk_host_negotiates_and_shuts_down_without_cli() {
-    const FIXTURE_KEY: &str = "bitfun-sdk-fixture-key-7f6b1d";
+    const FIXTURE_KEY: &str = "openbitfun-sdk-fixture-key-7f6b1d";
     let temp = tempfile::tempdir().expect("isolated SDK Host environment");
     let workspace = temp.path().join("workspace");
     let user_root = temp.path().join("user-root");
@@ -16,15 +16,15 @@ async fn standalone_sdk_host_negotiates_and_shuts_down_without_cli() {
         std::fs::create_dir_all(path).expect("SDK Host fixture directory");
     }
 
-    let mut child = bitfun_services_core::process_manager::create_tokio_command(env!(
-        "CARGO_BIN_EXE_bitfun-sdk-host"
+    let mut child = openbitfun_services_core::process_manager::create_tokio_command(env!(
+        "CARGO_BIN_EXE_openbitfun-sdk-host"
     ))
     .current_dir(&workspace)
-    .env_remove("BITFUN_USER_ROOT")
-    .env_remove("BITFUN_HOME")
-    .env("BITFUN_E2E_STORAGE_GUARD", "1")
-    .env("BITFUN_E2E_USER_ROOT", &user_root)
-    .env("BITFUN_E2E_HOME", &home_root)
+    .env_remove("OPENBITFUN_USER_ROOT")
+    .env_remove("OPENBITFUN_HOME")
+    .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+    .env("OPENBITFUN_E2E_USER_ROOT", &user_root)
+    .env("OPENBITFUN_E2E_HOME", &home_root)
     .env("APPDATA", &config_root)
     .env("XDG_CONFIG_HOME", &config_root)
     .env("HOME", &home_root)

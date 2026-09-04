@@ -1,4 +1,4 @@
-//! PagePublish tool — create/update a BitFun Page from inline files or a directory,
+//! PagePublish tool — create/update a OpenBitFun Page from inline files or a directory,
 //! then optionally deploy to production.
 
 use std::collections::HashMap;
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::agentic::tools::account_login_capability::account_login_available;
 use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolUseContext};
 use crate::agentic::tools::page_publish_host::{invoke_page_publish, PagePublishHostRequest};
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -30,17 +30,17 @@ impl Tool for PagePublishTool {
         "PagePublish"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(
-            r#"Publish a BitFun Page to the account relay: upload content, freeze an immutable version, and optionally deploy it to production.
+            r#"Publish a OpenBitFun Page to the account relay: upload content, freeze an immutable version, and optionally deploy it to production.
 
-Requires a logged-in BitFun account. This tool is only available after account login. Published Pages can be reviewed and managed later from the Pages scene.
+Requires a logged-in OpenBitFun account. This tool is only available after account login. Published Pages can be reviewed and managed later from the Pages scene.
 
-When you produce self-contained publishable web content (landing page, docs site, or a Page with server/worker.js) and the user is logged in, proactively ask whether they want it published to BitFun Page (suggest a slug and visibility). If they already said publish/deploy/上线, proceed with permission confirmation.
+When you produce self-contained publishable web content (landing page, docs site, or a Page with server/worker.js) and the user is logged in, proactively ask whether they want it published to OpenBitFun Page (suggest a slug and visibility). If they already said publish/deploy/上线, proceed with permission confirmation.
 
 IMPORTANT — content source:
-- Prefer `files` (inline path→UTF-8 content). For agent-authored pages, pass HTML/JS directly in `files` and call PagePublish. Do NOT Write/Edit page files into the user workspace just to publish, and do NOT create folders like bitfun-page/ unless the user explicitly asked to keep a local copy.
-- Use `directory` only when the user already has (or explicitly wants) page sources on disk in a local workspace. Remote workspaces must use `files` so BitFun never mistakes a remote path for a local path.
+- Prefer `files` (inline path→UTF-8 content). For agent-authored pages, pass HTML/JS directly in `files` and call PagePublish. Do NOT Write/Edit page files into the user workspace just to publish, and do NOT create folders like openbitfun-page/ unless the user explicitly asked to keep a local copy.
+- Use `directory` only when the user already has (or explicitly wants) page sources on disk in a local workspace. Remote workspaces must use `files` so OpenBitFun never mistakes a remote path for a local path.
 
 Input:
 - slug (required): page path id (lowercase letters, digits, hyphens)
@@ -61,7 +61,7 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
     }
 
     fn short_description(&self) -> String {
-        "Publish a BitFun Page (upload, save version, deploy).".to_string()
+        "Publish a OpenBitFun Page (upload, save version, deploy).".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -112,7 +112,7 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let slug = input
             .get("slug")
             .and_then(Value::as_str)
@@ -170,10 +170,10 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if !account_login_available() {
-            return Err(BitFunError::tool(
-                "PagePublish requires a logged-in BitFun account".to_string(),
+            return Err(OpenBitFunError::tool(
+                "PagePublish requires a logged-in OpenBitFun account".to_string(),
             ));
         }
 
@@ -182,7 +182,7 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| BitFunError::tool("slug is required".to_string()))?
+            .ok_or_else(|| OpenBitFunError::tool("slug is required".to_string()))?
             .to_string();
 
         let visibility = input
@@ -219,13 +219,13 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
             .map(str::to_string);
 
         if directory.is_some() && context.workspace.is_none() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "PagePublish directory requires a local workspace; use inline files when no workspace is open"
                     .to_string(),
             ));
         }
         if directory.is_some() && context.is_remote() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "PagePublish cannot read a remote workspace directory through the local desktop host; use inline files"
                     .to_string(),
             ));
@@ -235,12 +235,12 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
 
         match (&directory, &files) {
             (Some(_), Some(_)) => {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "provide either directory or files, not both".to_string(),
                 ));
             }
             (None, None) => {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "either directory or files is required".to_string(),
                 ));
             }
@@ -257,7 +257,7 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
             files,
         })
         .await
-        .map_err(BitFunError::tool)?;
+        .map_err(OpenBitFunError::tool)?;
 
         let version_id = result
             .get("version_id")
@@ -306,31 +306,33 @@ fn publish_result_for_assistant(
             "saved without changing production"
         };
         return format!(
-            "BitFun Page '{slug}' version '{version_id}' was {state} with {visibility} visibility. Open or copy it from the Pages scene/tool card so BitFun can create a scoped browser-access link; do not share the raw Page URL."
+            "OpenBitFun Page '{slug}' version '{version_id}' was {state} with {visibility} visibility. Open or copy it from the Pages scene/tool card so OpenBitFun can create a scoped browser-access link; do not share the raw Page URL."
         );
     }
 
     // Trailing space after URL keeps chat linkifiers from eating the next char.
     if deployed {
         if url.is_empty() {
-            format!("Published public BitFun Page '{slug}' version '{version_id}' to production.")
+            format!(
+                "Published public OpenBitFun Page '{slug}' version '{version_id}' to production."
+            )
         } else {
             format!(
-                "Published public BitFun Page '{slug}' version '{version_id}'. Production URL: {url} \n\
+                "Published public OpenBitFun Page '{slug}' version '{version_id}'. Production URL: {url} \n\
                  Share this full absolute URL with the user, and keep a trailing space after the URL."
             )
         }
     } else if preview.is_empty() {
-        format!("Saved public BitFun Page '{slug}' version '{version_id}' (not deployed).")
+        format!("Saved public OpenBitFun Page '{slug}' version '{version_id}' (not deployed).")
     } else {
         format!(
-            "Saved public BitFun Page '{slug}' version '{version_id}' (not deployed). Preview URL: {preview} \n\
+            "Saved public OpenBitFun Page '{slug}' version '{version_id}' (not deployed). Preview URL: {preview} \n\
              Share this full absolute URL with the user, and keep a trailing space after the URL."
         )
     }
 }
 
-fn parse_files_map(value: Option<&Value>) -> BitFunResult<Option<HashMap<String, String>>> {
+fn parse_files_map(value: Option<&Value>) -> OpenBitFunResult<Option<HashMap<String, String>>> {
     let Some(value) = value else {
         return Ok(None);
     };
@@ -338,15 +340,15 @@ fn parse_files_map(value: Option<&Value>) -> BitFunResult<Option<HashMap<String,
         return Ok(None);
     }
     let obj = value.as_object().ok_or_else(|| {
-        BitFunError::tool("files must be an object of path→content strings".to_string())
+        OpenBitFunError::tool("files must be an object of path→content strings".to_string())
     })?;
     if obj.is_empty() {
-        return Err(BitFunError::tool("files must not be empty".to_string()));
+        return Err(OpenBitFunError::tool("files must not be empty".to_string()));
     }
     let mut map = HashMap::with_capacity(obj.len());
     for (path, content) in obj {
         let Some(text) = content.as_str() else {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "files['{path}'] must be a UTF-8 string"
             )));
         };
@@ -374,7 +376,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 

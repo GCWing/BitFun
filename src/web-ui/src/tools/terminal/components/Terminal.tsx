@@ -515,13 +515,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
     const xtermViewport = container.querySelector<HTMLElement>('.xterm-viewport');
     if (xtermViewport) {
-      xtermViewport.dataset.bfComponent = 'terminal-tool';
-      xtermViewport.dataset.bfPart = 'output';
+      xtermViewport.dataset.openbitfunComponent = 'terminal-tool';
+      xtermViewport.dataset.openbitfunPart = 'output';
     }
     const xtermScreen = container.querySelector<HTMLElement>('.xterm-screen');
     if (xtermScreen) {
-      xtermScreen.dataset.bfComponent = 'terminal-tool';
-      xtermScreen.dataset.bfPart = 'screen';
+      xtermScreen.dataset.openbitfunComponent = 'terminal-tool';
+      xtermScreen.dataset.openbitfunPart = 'screen';
     }
 
     terminalRef.current = terminal;
@@ -866,9 +866,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
   return (
     <div 
-      className={`bitfun-terminal ${className}`}
-      data-bf-component="terminal-tool"
-      data-bf-part="root"
+      className={`openbitfun-terminal ${className}`}
+      data-openbitfun-component="terminal-tool"
+      data-openbitfun-part="root"
       data-shortcut-scope="terminal"
       data-terminal-id={terminalId}
       data-session-id={sessionId}
@@ -877,9 +877,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     >
       <div 
         ref={containerRef} 
-        className="bitfun-terminal__container"
-        data-bf-component="terminal-tool"
-        data-bf-part="terminal"
+        className="openbitfun-terminal__container"
+        data-openbitfun-component="terminal-tool"
+        data-openbitfun-part="terminal"
         data-testid="shell-command-output"
       />
     </div>

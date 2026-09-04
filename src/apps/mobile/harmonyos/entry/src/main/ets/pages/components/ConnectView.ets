@@ -135,7 +135,7 @@ export struct ConnectView {
           .width('82%')
 
         AppActionButton({
-          label: RemoteI18n.t('sidebar.signInBitFunAccount'),
+          label: RemoteI18n.t('sidebar.signInOpenBitFunAccount'),
           style: AppActionStyle.Secondary,
           actionHeight: 58,
           onAction: (): void => {

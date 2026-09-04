@@ -2,9 +2,9 @@ use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
+use crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri;
 use crate::agentic::tools::ToolPathOperation;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -35,7 +35,7 @@ impl Tool for DeleteFileTool {
         "Delete"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(r#"Deletes a file or directory from the filesystem. This operation records a lightweight checkpoint before deletion, but rollback is not automatic.
 
 Usage guidelines:
@@ -50,7 +50,7 @@ Usage guidelines:
    - Be careful with recursive deletion as it will remove all contents
 
 3. **Path Requirements**:
-   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths inside the current workspace, or exact `bitfun://...` URIs returned by another tool
+   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths inside the current workspace, or exact `openbitfun://...` URIs returned by another tool
    - Relative paths will be automatically resolved relative to the workspace directory
    - The path must exist in the filesystem
 
@@ -96,7 +96,7 @@ Important notes:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The file or directory to delete. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
+                    "description": "The file or directory to delete. Use a workspace-relative path, an absolute path inside the current workspace, or an exact openbitfun:// URI returned by another tool."
                 },
                 "recursive": {
                     "type": "boolean",
@@ -119,11 +119,11 @@ Important notes:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let path = input
             .get("path")
             .and_then(Value::as_str)
-            .ok_or_else(|| BitFunError::validation("path parameter is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::validation("path parameter is required".to_string()))?;
         file_permission_intents("edit", [path], context)
     }
 
@@ -186,11 +186,11 @@ Important notes:
                 };
             }
             None => {
-                if is_bitfun_tool_uri(path_str) {
+                if is_openbitfun_tool_uri(path_str) {
                     return ValidationResult {
                         result: false,
                         message: Some(
-                            "Tool context is required to resolve BitFun URIs".to_string(),
+                            "Tool context is required to resolve OpenBitFun URIs".to_string(),
                         ),
                         error_code: Some(400),
                         meta: None,
@@ -318,11 +318,11 @@ Important notes:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let path_str = input
             .get("path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("path is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("path is required".to_string()))?;
 
         let recursive = input
             .get("recursive")
@@ -347,7 +347,7 @@ Important notes:
             recursive,
         )
         .await
-        .map_err(BitFunError::tool)?;
+        .map_err(OpenBitFunError::tool)?;
 
         let result_data = json!({
             "success": true,
@@ -390,7 +390,7 @@ mod tests {
     #[tokio::test]
     async fn local_and_remote_delete_use_the_same_filesystem_contract() {
         use crate::agentic::{tools::framework::ToolUseContext, WorkspaceBinding};
-        use bitfun_runtime_ports::ToolRuntimeHandles;
+        use openbitfun_runtime_ports::ToolRuntimeHandles;
         use serde_json::json;
         use std::os::unix::fs::symlink;
         use std::path::PathBuf;
@@ -398,7 +398,8 @@ mod tests {
         // Run the real provider against separate fixture roots through both Session bindings.
         // These are routing/behavior tests, not evidence of a live SSH connection.
         for remote in [false, true] {
-            let root = std::env::temp_dir().join(format!("bitfun-delete-{}", uuid::Uuid::new_v4()));
+            let root =
+                std::env::temp_dir().join(format!("openbitfun-delete-{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(root.join("empty")).unwrap();
             std::fs::create_dir_all(root.join("nonempty")).unwrap();
             std::fs::write(root.join("nonempty/keep.txt"), "keep").unwrap();

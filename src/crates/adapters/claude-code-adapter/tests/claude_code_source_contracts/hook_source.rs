@@ -1,10 +1,10 @@
-use bitfun_claude_code_adapter::{ClaudeCodeHookProvider, ClaudeCodeHookProviderOptions};
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_claude_code_adapter::{ClaudeCodeHookProvider, ClaudeCodeHookProviderOptions};
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookNativeActivation, ExternalHookProjectionStatus,
     ExternalHookSourceProvider,
 };
-use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
-use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
+use openbitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use openbitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 use std::fs;
 use tempfile::tempdir;
 
@@ -52,7 +52,7 @@ fn prepares_only_the_supported_synchronous_claude_command_subset() {
     assert_eq!(prepared.handlers.len(), 1);
     assert!(prepared.handlers[0]
         .command
-        .contains("__BITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
+        .contains("__OPENBITFUN_MANAGED_HOOK_ROOT__/hooks/check.py"));
     assert_eq!(prepared.handlers[0].timeout_seconds, Some(12));
     assert_eq!(
         prepared.handlers[0].status_message.as_deref(),
@@ -167,7 +167,7 @@ fn narrower_project_activation_cannot_enable_a_disabled_user_import() {
         .iter()
         .find(|source| {
             source.scope
-                == bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
+                == openbitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
         })
         .unwrap();
 

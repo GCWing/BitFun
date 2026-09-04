@@ -65,7 +65,7 @@ function runPnpm(args, options) {
 }
 
 function runnerStdioOptions() {
-  if (process.env.BITFUN_E2E_PERF_RUNNER_STREAM_LOGS === '1') {
+  if (process.env.OPENBITFUN_E2E_PERF_RUNNER_STREAM_LOGS === '1') {
     return { stdio: 'inherit' };
   }
   return { stdio: 'pipe', encoding: 'utf8' };
@@ -228,26 +228,26 @@ function runStartupIteration(index, total, env, thresholds, seenTraceIds) {
 
 const iterations = readIntegerArgOrEnv(
   ['--samples', '--iterations'],
-  'BITFUN_E2E_PERF_STARTUP_ITERATIONS',
+  'OPENBITFUN_E2E_PERF_STARTUP_ITERATIONS',
   5,
 );
 const thresholds = {
-  interactiveShellReadyMs: readNumberEnv('BITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS', 5000),
-  firstScriptEvalMs: readNumberEnv('BITFUN_E2E_PERF_STARTUP_MAX_FIRST_SCRIPT_MS', 3000),
+  interactiveShellReadyMs: readNumberEnv('OPENBITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS', 5000),
+  firstScriptEvalMs: readNumberEnv('OPENBITFUN_E2E_PERF_STARTUP_MAX_FIRST_SCRIPT_MS', 3000),
   mainShownToInteractiveMs: readNumberEnv(
-    'BITFUN_E2E_PERF_STARTUP_MAX_MAIN_SHOWN_TO_INTERACTIVE_MS',
+    'OPENBITFUN_E2E_PERF_STARTUP_MAX_MAIN_SHOWN_TO_INTERACTIVE_MS',
     3000,
   ),
 };
 const env = {
   ...process.env,
-  BITFUN_E2E_APP_MODE: process.env.BITFUN_E2E_APP_MODE || 'release-fast',
+  OPENBITFUN_E2E_APP_MODE: process.env.OPENBITFUN_E2E_APP_MODE || 'release-fast',
   E2E_LOG_LEVEL: process.env.E2E_LOG_LEVEL || 'warn',
 };
 
 if (readFlag('--dry-run')) {
   console.log(
-    `[startup-stability] dry-run iterations=${iterations} appMode=${env.BITFUN_E2E_APP_MODE} ` +
+    `[startup-stability] dry-run iterations=${iterations} appMode=${env.OPENBITFUN_E2E_APP_MODE} ` +
       `grep="${STARTUP_TEST_NAME}"`,
   );
   process.exit(0);

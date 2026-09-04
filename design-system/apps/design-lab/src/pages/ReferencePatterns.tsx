@@ -32,7 +32,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from "@bitfun/ui";
+} from "@openbitfun/ui";
 import { useI18n } from "../i18n";
 
 export function ProviderConfigurationPattern() {
@@ -45,7 +45,7 @@ export function ProviderConfigurationPattern() {
     <Button variant="fill" onClick={() => { setSaved(true); setOpen(false); }}>{t("components.preview.modalSave")}</Button>
   </CardFooter>;
 
-  return <div className="pattern-provider" data-bf-pattern="provider-configuration">
+  return <div className="pattern-provider" data-openbitfun-pattern="provider-configuration">
     <div className="pattern-demo-actions">
       <Button size="sm" onClick={() => setOpen(true)}>{t("components.preview.modalInteractionDemo")}</Button>
     </div>
@@ -113,7 +113,7 @@ function ProviderFields() {
       </Disclosure>
     </Card>)}
     <Disclosure summary={t("patterns.provider.advanced")}>
-      <Field label={t("patterns.provider.headers")} controlWidth="fill"><Textarea defaultValue={'{\n  "X-Client": "BitFun"\n}'} rows={3} /></Field>
+      <Field label={t("patterns.provider.headers")} controlWidth="fill"><Textarea defaultValue={'{\n  "X-Client": "OpenBitFun"\n}'} rows={3} /></Field>
     </Disclosure>
   </div>;
 }
@@ -126,7 +126,7 @@ export function SceneToolbarPattern() {
   const [details, setDetails] = useState(false);
   const nextTab = useRef(1);
   const close = (value: string) => { const next = tabs.filter(tab => tab !== value); setTabs(next); if (active === value) setActive(next[0] ?? ""); };
-  return <Card appearance="raised" data-bf-pattern="scene-toolbar" className="pattern-scene-toolbar">
+  return <Card appearance="raised" data-openbitfun-pattern="scene-toolbar" className="pattern-scene-toolbar">
     <Toolbar leadingOverflow="scroll" leading={<TabGroup aria-label={t("patterns.toolbar.tabs")} value={active} onValueChange={setActive} items={tabs.map(value => ({ value, label: value, id: `pattern-tab-${value}`, panelId: `pattern-panel-${value}`, icon: <Icon name="files" size="sm" />, endAction: <IconButton aria-label={`${t("components.preview.close")}: ${value}`} icon={<Icon name="xmark" />} variant="quiet" size="xs" onClick={() => close(value)} /> }))} />}
       trailing={<ToolbarGroup>
         <ChangeCount additions={12} deletions={3} />
@@ -150,7 +150,7 @@ export function NestedMenuPattern() {
   const [position, setPosition] = useState<{ x: number; y: number } | undefined>();
   const [lastAction, setLastAction] = useState("");
   const [pinned, setPinned] = useState(false);
-  return <Card appearance="subtle" padding="md" gap="md" data-bf-pattern="nested-menu" onContextMenu={event => { event.preventDefault(); setPosition({ x: event.clientX, y: event.clientY }); setOpen(true); }}>
+  return <Card appearance="subtle" padding="md" gap="md" data-openbitfun-pattern="nested-menu" onContextMenu={event => { event.preventDefault(); setPosition({ x: event.clientX, y: event.clientY }); setOpen(true); }}>
     <PageHeader level={3} size="sm" title={t("patterns.menu.title")} description={t("patterns.menu.hint")} />
     <Button ref={anchorRef} aria-haspopup="menu" aria-expanded={open} leadingIcon={<Icon name="more" />} onClick={() => { setPosition(undefined); setOpen(!open); }}>{t("patterns.menu.open")}</Button>
     <MenuPopover aria-label={t("patterns.menu.title")} open={open} onClose={() => setOpen(false)} anchorRef={position ? undefined : anchorRef} position={position} items={[

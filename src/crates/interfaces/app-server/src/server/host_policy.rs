@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, ConnectionTo, Dispatch, Error, HandleDispatchFrom, Handled};
-use bitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
+use openbitfun_app_server_protocol::error::{AppServerErrorData, AppServerErrorKind};
 use serde_json::Value;
 
 use crate::role::{AppClient, AppServer};
@@ -66,7 +66,7 @@ pub struct AppServerHostLimits {
 }
 
 impl AppServerHostLimits {
-    /// Limits for the local stdio Server Host (`bitfun server`).
+    /// Limits for the local stdio Server Host (`openbitfun server`).
     pub const fn local_stdio() -> Self {
         Self {
             max_frame_bytes: DEFAULT_MAX_FRAME_BYTES,

@@ -161,7 +161,7 @@ export function validateMonacoAppearanceColorSemantics(
 }
 
 /**
- * Converts BitFun Appearance colors to the narrower formats accepted by Monaco.
+ * Converts OpenBitFun Appearance colors to the narrower formats accepted by Monaco.
  * Monaco workbench colors accept hex alpha, while token colors must be opaque.
  */
 export function projectMonacoAppearanceSettings(

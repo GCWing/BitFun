@@ -79,8 +79,8 @@
   "editor": {
     "createTitle": "建立待辦",
     "editTitle": "編輯待辦",
-    "createDescription": "建立一項待辦任務，BitFun 將在排定時間自動執行。",
-    "editDescription": "調整任務資訊與 BitFun 的執行方式。",
+    "createDescription": "建立一項待辦任務，OpenBitFun 將在排定時間自動執行。",
+    "editDescription": "調整任務資訊與 OpenBitFun 的執行方式。",
     "noWorkspace": "請先開啟一個工作區：定時執行需要有執行的位置。",
     "sections": {
       "information": "任務資訊",
@@ -92,7 +92,7 @@
     },
     "smartExecution": {
       "title": "智慧執行",
-      "description": "BitFun 會在排定時間使用所選 Agent 與工作區內容執行任務。"
+      "description": "OpenBitFun 會在排定時間使用所選 Agent 與工作區內容執行任務。"
     },
     "advanced": {
       "title": "進階設定（選填）",

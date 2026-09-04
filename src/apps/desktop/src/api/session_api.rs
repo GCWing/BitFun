@@ -6,17 +6,17 @@ use crate::runtime::{
     UiSessionMetadataField,
 };
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_agent_runtime::sdk::AgentSessionLineageSnapshot;
-use bitfun_core::agentic::coordination::get_global_scheduler;
-use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
-use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
-use bitfun_core::service::session::{
+use openbitfun_agent_runtime::sdk::AgentSessionLineageSnapshot;
+use openbitfun_core::agentic::coordination::get_global_scheduler;
+use openbitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
+use openbitfun_core::service::remote_ssh::normalize_remote_workspace_path;
+use openbitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions,
 };
-use bitfun_core::service::session_usage::SessionUsageReport;
-use bitfun_core::service::workspace::WorkspaceKind;
-use bitfun_product_domains::product_search::{
+use openbitfun_core::service::session_usage::SessionUsageReport;
+use openbitfun_core::service::workspace::WorkspaceKind;
+use openbitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse,
 };
 use serde::{Deserialize, Serialize};

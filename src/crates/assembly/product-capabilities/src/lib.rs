@@ -6,13 +6,13 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeUnavailableReason,
     RuntimeServiceCapability,
 };
-use bitfun_runtime_services::RuntimeServices;
-pub use bitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
-use bitfun_tool_packs::{
+use openbitfun_runtime_services::RuntimeServices;
+pub use openbitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
+use openbitfun_tool_packs::{
     try_product_tool_provider_group_plan_for_ids, ToolPackFeatureGroup, ToolProviderGroupPlan,
 };
 

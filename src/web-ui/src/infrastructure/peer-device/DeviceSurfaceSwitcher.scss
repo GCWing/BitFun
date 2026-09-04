@@ -2,47 +2,47 @@
  * Device surface switcher row above the NavPanel footer.
  * Neutral while rendering this machine, warning-tinted while rendering a peer.
  */
-.bitfun-device-switcher {
+.openbitfun-device-switcher {
   display: flex;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   flex-shrink: 0;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--bf-space-2) var(--bf-space-3);
+  padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
   border: none;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
   background: transparent;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   cursor: pointer;
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-modifier-leading-snug-line-height);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
   text-align: left;
-  transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-              color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+              color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &__trigger {
     inline-size: 100%;
   }
 
   &:hover {
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-action-quiet-hover);
   }
 
   &.is-remote {
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 14%, transparent);
+    color: var(--openbitfun-color-content-primary);
 
-    .bitfun-device-switcher__icon {
-      color: var(--bf-color-status-warning-content);
+    .openbitfun-device-switcher__icon {
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent);
     }
   }
 
@@ -50,7 +50,7 @@
     flex-shrink: 0;
 
     &.is-spinning {
-      animation: bitfun-device-switcher-spin 1s linear infinite;
+      animation: openbitfun-device-switcher-spin 1s linear infinite;
     }
   }
 
@@ -68,10 +68,10 @@
     gap: 3px;
     flex-shrink: 0;
     padding: 1px 5px;
-    border-radius: var(--bf-radius-sm);
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
-    color: var(--bf-color-status-success-content);
-    font-size: var(--bf-type-micro-font-size);
+    border-radius: var(--openbitfun-radius-sm);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 18%, transparent);
+    color: var(--openbitfun-color-status-success-content);
+    font-size: var(--openbitfun-type-micro-font-size);
     font-variant-numeric: tabular-nums;
   }
 
@@ -94,7 +94,7 @@
   &__item-metadata {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__dot {
@@ -102,15 +102,15 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--bf-color-status-success-content);
+    background: var(--openbitfun-color-status-success-content);
 
     &.is-busy {
-      background: var(--bf-color-status-warning-content);
-      animation: bitfun-device-switcher-pulse 1.6s var(--bf-motion-easing-standard) infinite;
+      background: var(--openbitfun-color-status-warning-content);
+      animation: openbitfun-device-switcher-pulse 1.6s var(--openbitfun-motion-easing-standard) infinite;
     }
 
     &.is-offline {
-      background: var(--bf-color-content-muted);
+      background: var(--openbitfun-color-content-muted);
       animation: none;
     }
   }
@@ -118,38 +118,38 @@
   &__tag {
     flex-shrink: 0;
     padding: 1px 5px;
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-action-quiet-hover);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-micro-font-size);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-micro-font-size);
     white-space: nowrap;
 
     &.is-busy {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
-      color: var(--bf-color-status-warning-content);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
+      color: var(--openbitfun-color-status-warning-content);
     }
   }
 
   &__empty,
   &__hint {
-    padding: var(--bf-space-1) var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   }
 
   &__hint {
-    padding-top: var(--bf-space-2);
+    padding-top: var(--openbitfun-space-2);
   }
 }
 
-@keyframes bitfun-device-switcher-spin {
+@keyframes openbitfun-device-switcher-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes bitfun-device-switcher-pulse {
+@keyframes openbitfun-device-switcher-pulse {
   0%,
   100% {
     opacity: 1;
@@ -163,8 +163,8 @@
 // The spinner and the busy pulse are the only motion here and both loop
 // forever; state stays readable from colour and copy without them.
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-device-switcher__icon.is-spinning,
-  .bitfun-device-switcher__dot.is-busy {
+  .openbitfun-device-switcher__icon.is-spinning,
+  .openbitfun-device-switcher__dot.is-busy {
     animation: none;
   }
 }

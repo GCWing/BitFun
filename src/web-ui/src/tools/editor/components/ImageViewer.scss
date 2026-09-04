@@ -2,14 +2,14 @@
  * Image Viewer Styles
  * Following Git panel design style
  */
-.bitfun-image-viewer {
+.openbitfun-image-viewer {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
   overflow: hidden;
-  font-family: var(--bf-type-body-sm-font-family);
+  font-family: var(--openbitfun-type-body-sm-font-family);
 
   &.fullscreen {
     position: fixed;
@@ -17,8 +17,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: var(--bf-layer-fullscreen);
-    background: var(--bf-color-surface-canvas);
+    z-index: var(--openbitfun-layer-fullscreen);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   // Toolbar layout comes from the design-system Toolbar; keep it pinned to the top.
@@ -29,15 +29,15 @@
   &__info {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-3);
-    font-size: var(--bf-type-label-md-font-size);
+    gap: var(--openbitfun-space-3);
+    font-size: var(--openbitfun-type-label-md-font-size);
     flex: 1;
     min-width: 0;
   }
 
   &__filename {
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -45,8 +45,8 @@
 
   &__dimensions,
   &__filesize {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
   }
 
@@ -64,12 +64,12 @@
     position: relative;
     // Checkerboard pattern for transparent images
     // Uses theme CSS variables to adapt to any theme
-    background-color: var(--bf-color-surface-canvas);
+    background-color: var(--openbitfun-color-surface-canvas);
     background-image:
-      linear-gradient(45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
-      linear-gradient(-45deg, var(--bf-color-action-quiet-hover) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, var(--bf-color-action-quiet-hover) 75%),
-      linear-gradient(-45deg, transparent 75%, var(--bf-color-action-quiet-hover) 75%);
+      linear-gradient(45deg, var(--openbitfun-color-action-quiet-hover) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--openbitfun-color-action-quiet-hover) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--openbitfun-color-action-quiet-hover) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--openbitfun-color-action-quiet-hover) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   }
@@ -90,7 +90,7 @@
     max-height: 100%;
     object-fit: contain;
     transition: transform 0.2s ease-out;
-    box-shadow: 0 4px 20px color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
   }
 
   // Loading State
@@ -100,31 +100,31 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
     p {
       margin: 0;
-      font-size: var(--bf-type-body-md-font-size);
+      font-size: var(--openbitfun-type-body-md-font-size);
     }
   }
 
   &__spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid var(--bf-color-field-border-hover);
-    border-top-color: var(--bf-color-accent-default);
+    border: 3px solid var(--openbitfun-color-field-border-hover);
+    border-top-color: var(--openbitfun-color-accent-default);
     border-radius: 50%;
-    animation: bitfun-image-viewer-spin 0.8s linear infinite;
+    animation: openbitfun-image-viewer-spin 0.8s linear infinite;
   }
 
-  @keyframes bitfun-image-viewer-spin {
+  @keyframes openbitfun-image-viewer-spin {
     to {
       transform: rotate(360deg);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .bitfun-image-viewer__spinner {
+    .openbitfun-image-viewer__spinner {
       animation: none;
     }
   }
@@ -141,14 +141,14 @@
 
     p {
       margin: 0;
-      color: var(--bf-color-status-danger-content);
-      font-size: var(--bf-type-body-md-font-size);
+      color: var(--openbitfun-color-status-danger-content);
+      font-size: var(--openbitfun-type-body-md-font-size);
     }
   }
 
   &__error-path {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
     word-break: break-all;
     max-width: 600px;
   }

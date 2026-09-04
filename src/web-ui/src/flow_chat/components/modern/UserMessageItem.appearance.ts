@@ -8,8 +8,8 @@ export const userMessageItemAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'timestamp' }, { id: 'lightbox' }, { id: 'loading' },
   ],
   states: [
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
-    { id: 'failed', selector: { kind: 'self', suffix: '[data-bf-state~="failed"]' } },
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
+    { id: 'failed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="failed"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
   ],
 };

@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -502,7 +502,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
                 && availableSources.length === 0
                 && corruptDiagnostics.length === 0 ? (
                   <ConfigPageRow
-                    className="bitfun-hooks-config__empty"
+                    className="openbitfun-hooks-config__empty"
                     label={<span data-hooks-empty="true">{t('imports.empty')}</span>}
                     multiline
                   >
@@ -633,7 +633,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
 
   if (embedded) {
     return (
-      <div className="bitfun-hooks-config bitfun-hooks-config--embedded">
+      <div className="openbitfun-hooks-config openbitfun-hooks-config--embedded">
         {content}
       </div>
     );

@@ -6,7 +6,7 @@ export type PortalTarget = Element | DocumentFragment | (() => Element | Documen
 /** Default portals stay inside the nearest theme scope; hosts may supply an overlay root. */
 export function resolveLayerPortal(target: PortalTarget | undefined, anchor: HTMLElement | null) {
   if (typeof target === "function") return target();
-  return target ?? anchor?.closest("[data-bf-design-system-root]") ?? anchor?.ownerDocument.body ?? null;
+  return target ?? anchor?.closest("[data-openbitfun-design-system-root]") ?? anchor?.ownerDocument.body ?? null;
 }
 
 export function useAnchoredLayer({ open, anchorRef, layerRef, placement = "bottom", matchWidth = false, revision, point }: {

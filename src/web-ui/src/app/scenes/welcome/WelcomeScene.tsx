@@ -30,24 +30,24 @@ const WelcomeScene: React.FC = () => {
     <section
       className="welcome-scene"
       data-testid="welcome-scene"
-      data-bf-scene="welcome"
-      data-bf-part="root"
+      data-openbitfun-scene="welcome"
+      data-openbitfun-part="root"
       aria-labelledby="welcome-scene-title"
     >
-      <div className="welcome-scene__content" data-bf-scene="welcome" data-bf-part="content">
-        <div className="welcome-scene__greeting" data-bf-scene="welcome" data-bf-part="greeting">
+      <div className="welcome-scene__content" data-openbitfun-scene="welcome" data-openbitfun-part="content">
+        <div className="welcome-scene__greeting" data-openbitfun-scene="welcome" data-openbitfun-part="greeting">
           <h1
             id="welcome-scene-title"
             className="welcome-scene__title"
-            data-bf-scene="welcome"
-            data-bf-part="title"
+            data-openbitfun-scene="welcome"
+            data-openbitfun-part="title"
           >
             {greeting}
           </h1>
           <p
             className="welcome-scene__greeting-label"
-            data-bf-scene="welcome"
-            data-bf-part="subtitle"
+            data-openbitfun-scene="welcome"
+            data-openbitfun-part="subtitle"
           >
             {t('welcomeScene.greeting.subtitle')}
           </p>

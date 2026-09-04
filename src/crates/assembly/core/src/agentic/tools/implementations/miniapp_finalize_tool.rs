@@ -5,7 +5,7 @@ use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolU
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::miniapp::lifecycle::miniapp_runtime_event_payload;
 use crate::miniapp::try_get_global_miniapp_manager;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -29,8 +29,8 @@ impl Tool for FinalizeMiniAppTool {
         "FinalizeMiniApp"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Finalize source files edited for an installed BitFun MiniApp.
+    async fn description(&self) -> OpenBitFunResult<String> {
+        Ok(r#"Finalize source files edited for an installed OpenBitFun MiniApp.
 
 Call this after every successful Read/Write/Edit pass under a MiniApp root returned by InitMiniApp, and after modifying an existing MiniApp. It:
 - reloads source files from disk;
@@ -76,7 +76,7 @@ Returns app_id, version, changed, content_hash, and source_revision."#
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let app_id = input
             .get("app_id")
             .and_then(Value::as_str)
@@ -92,25 +92,27 @@ Returns app_id, version, changed, content_hash, and source_revision."#
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let manager = try_get_global_miniapp_manager()
-            .ok_or_else(|| BitFunError::tool("MiniAppManager not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("MiniAppManager not initialized".to_string()))?;
         let app_id = input
             .get("app_id")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| BitFunError::validation("Missing required field: app_id"))?;
+            .ok_or_else(|| OpenBitFunError::validation("Missing required field: app_id"))?;
         let theme = input.get("theme").and_then(Value::as_str).unwrap_or("dark");
 
         let previous = manager
             .get_meta(app_id)
             .await
-            .map_err(|error| BitFunError::tool(format!("Failed to load MiniApp: {error}")))?;
+            .map_err(|error| OpenBitFunError::tool(format!("Failed to load MiniApp: {error}")))?;
         let app = manager
             .sync_from_fs(app_id, theme, context.workspace_root())
             .await
-            .map_err(|error| BitFunError::tool(format!("Failed to finalize MiniApp: {error}")))?;
+            .map_err(|error| {
+                OpenBitFunError::tool(format!("Failed to finalize MiniApp: {error}"))
+            })?;
         let changed = app.version != previous.version;
         let reason = if changed {
             "agent-finalize"

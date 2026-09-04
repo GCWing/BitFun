@@ -6,7 +6,7 @@ use crate::util::string::shell_single_quote;
 pub(super) const MAX_GREP_BATCH_PATHS: usize = 128;
 pub(super) const MAX_GREP_BATCH_COMMAND_BYTES: usize = 16_384;
 
-const BATCH_END: &str = "\nBITFUN_GREP_BATCH_END\n";
+const BATCH_END: &str = "\nOPENBITFUN_GREP_BATCH_END\n";
 
 /// Accept only literal branches whose union is a conservative byte prefilter.
 /// Escapes, inline flags and all other regex syntax stay with the Rust scanner.
@@ -48,28 +48,28 @@ pub(super) fn literal_alternatives(pattern: &str, case_insensitive: bool) -> Opt
 /// Only the intentionally invalid probe operand suppresses expected stderr.
 pub(super) fn grep_probe_command() -> &'static str {
     r#"command -v grep >/dev/null 2>&1 || exit 127
-bitfun_search_bom_le=$(printf '\377\376') || exit 127
-bitfun_search_bom_be=$(printf '\376\377') || exit 127
+openbitfun_search_bom_le=$(printf '\377\376') || exit 127
+openbitfun_search_bom_be=$(printf '\376\377') || exit 127
 if ! printf 'prefix\000ignored\nliteral.marker\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e 'literal.marker' -- >/dev/null; then
     exit 127
 fi
 if printf 'literalXmarker\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e 'literal.marker' -- >/dev/null; then
     exit 127
 else
-    bitfun_search_status=$?
-    [ "$bitfun_search_status" -eq 1 ] || exit 127
+    openbitfun_search_status=$?
+    [ "$openbitfun_search_status" -eq 1 ] || exit 127
 fi
-if ! printf '\377\376\000\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e "$bitfun_search_bom_le" -e "$bitfun_search_bom_be" -- >/dev/null; then
+if ! printf '\377\376\000\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e "$openbitfun_search_bom_le" -e "$openbitfun_search_bom_be" -- >/dev/null; then
     exit 127
 fi
-if ! printf '\376\377\000\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e "$bitfun_search_bom_le" -e "$bitfun_search_bom_be" -- >/dev/null; then
+if ! printf '\376\377\000\n' | LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -e "$openbitfun_search_bom_le" -e "$openbitfun_search_bom_be" -- >/dev/null; then
     exit 127
 fi
-if LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -- /dev/null/bitfun-grep-probe >/dev/null 2>&1; then
+if LC_ALL=C GREP_OPTIONS= command grep -a -F -q -e 'not-present' -- /dev/null/openbitfun-grep-probe >/dev/null 2>&1; then
     exit 127
 else
-    bitfun_search_status=$?
-    [ "$bitfun_search_status" -gt 1 ] || exit 127
+    openbitfun_search_status=$?
+    [ "$openbitfun_search_status" -gt 1 ] || exit 127
 fi
 exit 0"#
 }
@@ -79,8 +79,8 @@ exit 0"#
 /// uses its own grep process so status and filename framing remain unambiguous.
 pub(super) fn grep_batch_command(literals: &[&str], paths: &[String]) -> String {
     let mut command = String::from(
-        r#"bitfun_search_bom_le=$(printf '\377\376') || exit 2
-bitfun_search_bom_be=$(printf '\376\377') || exit 2
+        r#"openbitfun_search_bom_le=$(printf '\377\376') || exit 2
+openbitfun_search_bom_be=$(printf '\376\377') || exit 2
 set --"#,
     );
     for path in paths {
@@ -88,7 +88,7 @@ set --"#,
         command.push_str(&shell_single_quote(path));
     }
     command.push_str(
-        "\nfor bitfun_search_path do\n    if LC_ALL=C GREP_OPTIONS= command grep -a -F -q",
+        "\nfor openbitfun_search_path do\n    if LC_ALL=C GREP_OPTIONS= command grep -a -F -q",
     );
     for literal in literals {
         command.push_str(" -e ");
@@ -97,17 +97,17 @@ set --"#,
     // A BOM anywhere conservatively retains the file. This can over-select a
     // binary file but cannot lose a match created by UTF-16 BOM transcoding.
     command.push_str(
-        r#" -e "$bitfun_search_bom_le" -e "$bitfun_search_bom_be" -- "$bitfun_search_path" >/dev/null; then
+        r#" -e "$openbitfun_search_bom_le" -e "$openbitfun_search_bom_be" -- "$openbitfun_search_path" >/dev/null; then
         printf '1'
     else
-        bitfun_search_status=$?
-        case "$bitfun_search_status" in
+        openbitfun_search_status=$?
+        case "$openbitfun_search_status" in
             1) printf '0' ;;
-            *) exit "$bitfun_search_status" ;;
+            *) exit "$openbitfun_search_status" ;;
         esac
     fi
 done
-printf '\nBITFUN_GREP_BATCH_END\n'"#,
+printf '\nOPENBITFUN_GREP_BATCH_END\n'"#,
     );
     command
 }
@@ -182,9 +182,9 @@ mod tests {
         );
         assert!(command.contains("set -- '/repo/a'\\''\n\\b' '/repo/$(touch injected)'\n"));
         assert!(command.contains(" -e 'quote'\\'' and ; shell' -e '$(printf injected)'"));
-        assert!(command.contains("-- \"$bitfun_search_path\" >/dev/null"));
-        assert!(!command.contains("< \"$bitfun_search_path\""));
-        assert!(command.contains("*) exit \"$bitfun_search_status\""));
+        assert!(command.contains("-- \"$openbitfun_search_path\" >/dev/null"));
+        assert!(!command.contains("< \"$openbitfun_search_path\""));
+        assert!(command.contains("*) exit \"$openbitfun_search_status\""));
         assert_eq!(
             command.matches("$(printf").count(),
             3,
@@ -237,7 +237,7 @@ mod tests {
         assert!(command.contains("literalXmarker"));
         assert!(command.contains("\\377\\376\\000"));
         assert!(command.contains("\\376\\377\\000"));
-        assert!(command.contains("-- /dev/null/bitfun-grep-probe"));
-        assert!(command.contains("[ \"$bitfun_search_status\" -gt 1 ] || exit 127"));
+        assert!(command.contains("-- /dev/null/openbitfun-grep-probe"));
+        assert!(command.contains("[ \"$openbitfun_search_status\" -gt 1 ] || exit 127"));
     }
 }

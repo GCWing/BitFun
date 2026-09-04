@@ -8,7 +8,6 @@ pub mod analyze_image_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod appearance_publish_tool;
 pub mod ask_user_question_tool;
-pub mod bitfun_control_tool;
 #[cfg(feature = "tools-canvas")]
 pub mod canvas_tools;
 pub mod code_review_tool;
@@ -48,6 +47,7 @@ pub mod miniapp_finalize_tool;
 pub mod miniapp_init_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod miniapp_publish_tool;
+pub mod openbitfun_control_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_deploy_tool;
 #[cfg(feature = "tools-miniapp")]
@@ -84,7 +84,6 @@ pub use analyze_image_tool::AnalyzeImageTool;
 #[cfg(feature = "tools-miniapp")]
 pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
-pub use bitfun_control_tool::BitFunControlTool;
 #[cfg(feature = "tools-canvas")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;
@@ -120,6 +119,7 @@ pub use miniapp_finalize_tool::FinalizeMiniAppTool;
 pub use miniapp_init_tool::InitMiniAppTool;
 #[cfg(feature = "tools-miniapp")]
 pub use miniapp_publish_tool::PublishMiniAppTool;
+pub use openbitfun_control_tool::OpenBitFunControlTool;
 #[cfg(feature = "tools-miniapp")]
 pub use page_deploy_tool::PageDeployTool;
 #[cfg(feature = "tools-miniapp")]

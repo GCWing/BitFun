@@ -1,4 +1,4 @@
-.bitfun-context-drop-zone {
+.openbitfun-context-drop-zone {
   position: relative;
   width: 100%;
   
@@ -14,18 +14,18 @@
   &__overlay {
     position: absolute;
     inset: 0;
-    z-index: var(--bf-layer-floating);
+    z-index: var(--openbitfun-layer-floating);
     
     display: flex;
     align-items: center;
     justify-content: center;
     
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     
-    border: 3px dashed color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
-    border-radius: var(--bf-radius-lg);
+    border: 3px dashed color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
+    border-radius: var(--openbitfun-radius-lg);
     
     pointer-events: none;
     
@@ -36,29 +36,29 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     padding: 0;
   }
   
   &__icon {
-    color: var(--bf-color-accent-default);
-    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent));
+    color: var(--openbitfun-color-accent-default);
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent));
     
     &--disabled {
-      color: var(--bf-color-content-disabled);
+      color: var(--openbitfun-color-content-disabled);
       filter: none;
     }
   }
   
   &__text {
-    font-size: var(--bf-type-body-lg-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-accent-default);
+    font-size: var(--openbitfun-type-body-lg-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-accent-default);
     text-align: center;
-    text-shadow: 0 2px 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+    text-shadow: 0 2px 8px color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
     
     &--disabled {
-      color: var(--bf-color-content-disabled);
+      color: var(--openbitfun-color-content-disabled);
       text-shadow: none;
     }
   }

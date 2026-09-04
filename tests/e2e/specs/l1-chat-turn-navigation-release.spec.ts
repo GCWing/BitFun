@@ -417,9 +417,9 @@ describe('Release long-session turn navigation', () => {
       return;
     }
 
-    const sessionId = process.env.BITFUN_E2E_TURN_NAV_SESSION_ID || DEFAULT_SESSION_ID;
+    const sessionId = process.env.OPENBITFUN_E2E_TURN_NAV_SESSION_ID || DEFAULT_SESSION_ID;
     const targetTurnIndex = Number(
-      process.env.BITFUN_E2E_TURN_NAV_TARGET_INDEX || DEFAULT_TARGET_TURN_INDEX,
+      process.env.OPENBITFUN_E2E_TURN_NAV_TARGET_INDEX || DEFAULT_TARGET_TURN_INDEX,
     );
     const targetTurnId = `${sessionId}-turn-${String(targetTurnIndex).padStart(4, '0')}`;
     const targetTitle = `Synthetic user turn ${targetTurnIndex}`;

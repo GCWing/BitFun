@@ -7,7 +7,7 @@ export type WorkspaceSessionOrdering = 'updated' | 'status' | 'created' | 'name'
 export type WorkspaceSessionShow = 'all' | 'unread' | 'attention';
 export type WorkspaceSessionStatus = 'running' | 'attention' | 'error' | 'completed' | 'idle';
 export type WorkspaceSessionEnvironment = 'local' | 'remote' | 'detached';
-export type WorkspaceSessionSource = 'bitfun' | 'external';
+export type WorkspaceSessionSource = 'openbitfun' | 'external';
 export type WorkspaceSessionWorktree = 'main' | 'worktree';
 
 export interface WorkspaceSessionFilters {
@@ -91,7 +91,7 @@ export const useWorkspaceSessionViewStore = create<WorkspaceSessionViewState>()(
       requestCollapseAll: () => set(state => ({ collapseAllRequestId: state.collapseAllRequestId + 1 })),
     }),
     {
-      name: 'bitfun.workspace-session-view.v2',
+      name: 'openbitfun.workspace-session-view.v2',
       version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: ({ grouping, ordering, show, filters }) => ({ grouping, ordering, show, filters }),
@@ -129,7 +129,7 @@ export function deriveWorkspaceSessionEnvironment(session: Session): WorkspaceSe
 }
 
 export function deriveWorkspaceSessionSource(session: Session): WorkspaceSessionSource {
-  return session.config.agentType?.startsWith('acp:') ? 'external' : 'bitfun';
+  return session.config.agentType?.startsWith('acp:') ? 'external' : 'openbitfun';
 }
 
 export function deriveWorkspaceSessionWorktree(session: Session): WorkspaceSessionWorktree {

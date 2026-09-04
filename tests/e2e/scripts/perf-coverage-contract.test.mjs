@@ -27,23 +27,23 @@ test('performance scripts expose focused startup stability and interaction profi
   );
 
   const startupRunner = readText('tests/e2e/scripts/run-startup-stability.mjs');
-  assert.match(startupRunner, /BITFUN_E2E_PERF_STARTUP_ITERATIONS/);
+  assert.match(startupRunner, /OPENBITFUN_E2E_PERF_STARTUP_ITERATIONS/);
   assert.match(startupRunner, /--samples/);
   assert.match(startupRunner, /--iterations/);
   assert.match(startupRunner, /readIntegerArgOrEnv/);
-  assert.match(startupRunner, /BITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS/);
+  assert.match(startupRunner, /OPENBITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS/);
   assert.match(startupRunner, /collects startup timing from the current build/);
   assert.match(startupRunner, /seenTraceIds/);
   assert.match(startupRunner, /was already reported by an earlier iteration/);
 
   const interactionRunner = readText('tests/e2e/scripts/run-long-session-interaction-matrix.mjs');
-  assert.match(interactionRunner, /BITFUN_E2E_PERF_MATRIX_PROFILE/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_PERF_MATRIX_PROFILE/);
   assert.match(interactionRunner, /first-scroll/);
   assert.match(interactionRunner, /resize-window-width/);
   assert.match(interactionRunner, /turn-navigation/);
   assert.match(interactionRunner, /l1-chat-turn-navigation-release\.spec\.ts/);
-  assert.match(interactionRunner, /BITFUN_E2E_PERF_RAPID_SWITCH_DELAY_MS/);
-  assert.match(interactionRunner, /BITFUN_E2E_PERF_ALLOW_MISSING_REPORTS/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_PERF_RAPID_SWITCH_DELAY_MS/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_PERF_ALLOW_MISSING_REPORTS/);
   assert.match(interactionRunner, /expected performance report was not written/);
 });
 
@@ -83,11 +83,11 @@ test('long session navigation lookup follows current session nav DOM contract', 
 test('long session interaction matrix isolates user data and avoids active-session preload bias', () => {
   const interactionRunner = readText('tests/e2e/scripts/run-long-session-interaction-matrix.mjs');
 
-  assert.match(interactionRunner, /BITFUN_E2E_STORAGE_ROOT/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_STORAGE_ROOT/);
   assert.match(interactionRunner, /generate-long-session-fixture\.mjs/);
-  assert.match(interactionRunner, /BITFUN_E2E_PERF_SESSION_ID/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_PERF_SESSION_ID/);
   assert.match(interactionRunner, /perf-long-session-001/);
-  assert.match(interactionRunner, /BITFUN_E2E_PERF_RAPID_SWITCH_SESSION_IDS/);
+  assert.match(interactionRunner, /OPENBITFUN_E2E_PERF_RAPID_SWITCH_SESSION_IDS/);
   assert.match(interactionRunner, /perf-rapid-c-000/);
   assert.match(interactionRunner, /pruneOldPerfRuns/);
   assert.match(interactionRunner, /MAX_RETAINED_PERF_RUNS/);

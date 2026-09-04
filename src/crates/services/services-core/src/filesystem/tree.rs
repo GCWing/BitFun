@@ -776,7 +776,7 @@ impl FileTreeService {
         if !self.options.include_hidden
             && file_name.starts_with('.')
             && file_name != ".gitignore"
-            && file_name != ".bitfun"
+            && file_name != crate::product_identity::hidden_data_directory()
         {
             return true;
         }

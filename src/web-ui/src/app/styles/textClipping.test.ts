@@ -89,18 +89,18 @@ describe('Truncated product text line boxes', () => {
   });
 
   it.each([
-    ['components/NavPanel/NavPanel.scss', '.bitfun-nav-panel__search-trigger'],
-    ['components/NavPanel/NavPanel.scss', '.bitfun-nav-panel__section-label'],
-    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.bitfun-nav-panel__inline-item'],
-    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.bitfun-nav-panel__inline-item-assistant-name'],
-    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.bitfun-nav-panel__inline-item-workspace-name'],
-    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.bitfun-nav-panel__inline-toggle'],
-    ['components/NavPanel/sections/workspaces/WorkspaceListSection.scss', '.bitfun-nav-panel__workspace-item-label'],
-    ['components/NavPanel/sections/workspaces/WorkspaceListSection.scss', '.bitfun-nav-panel__assistant-item-label'],
+    ['components/NavPanel/NavPanel.scss', '.openbitfun-nav-panel__search-trigger'],
+    ['components/NavPanel/NavPanel.scss', '.openbitfun-nav-panel__section-label'],
+    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.openbitfun-nav-panel__inline-item'],
+    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.openbitfun-nav-panel__inline-item-assistant-name'],
+    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.openbitfun-nav-panel__inline-item-workspace-name'],
+    ['components/NavPanel/sections/sessions/SessionsSection.scss', '.openbitfun-nav-panel__inline-toggle'],
+    ['components/NavPanel/sections/workspaces/WorkspaceListSection.scss', '.openbitfun-nav-panel__workspace-item-label'],
+    ['components/NavPanel/sections/workspaces/WorkspaceListSection.scss', '.openbitfun-nav-panel__assistant-item-label'],
     ['scenes/skills/SkillsScene.scss', '.skills-card__name'],
     ['scenes/skills/SkillsScene.scss', '.skills-card__desc'],
   ])('%s gives %s a font-relative, descender-safe line height', (filename, selector) => {
-    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--bf-type-body-sm-line-height)');
+    expect(compiledRules(filename)(selector)['line-height']).toBe('var(--openbitfun-type-body-sm-line-height)');
   });
 
   it('retains single-line ellipsis and the two-line skills description clamp', () => {
@@ -108,10 +108,10 @@ describe('Truncated product text line boxes', () => {
     expect(skills('.skills-card__name')['text-overflow']).toBe('ellipsis');
     expect(skills('.skills-card__desc')['-webkit-line-clamp']).toBe('2');
     const sessions = compiledRules('components/NavPanel/sections/sessions/SessionsSection.scss');
-    expect(sessions('.bitfun-nav-panel__inline-item-label')['text-overflow']).toBe('ellipsis');
-    expect(sessions('.bitfun-nav-panel__inline-item-label')['line-height']).toBe('inherit');
-    expect(sessions('.bitfun-nav-panel__inline-item').height).toBe('30px');
-    expect(sessions('.bitfun-nav-panel__inline-item.is-assistant-session').height).toBe('auto');
-    expect(sessions('.bitfun-nav-panel__inline-item.is-assistant-session')['min-height']).toBe('42px');
+    expect(sessions('.openbitfun-nav-panel__inline-item-label')['text-overflow']).toBe('ellipsis');
+    expect(sessions('.openbitfun-nav-panel__inline-item-label')['line-height']).toBe('inherit');
+    expect(sessions('.openbitfun-nav-panel__inline-item').height).toBe('30px');
+    expect(sessions('.openbitfun-nav-panel__inline-item.is-assistant-session').height).toBe('auto');
+    expect(sessions('.openbitfun-nav-panel__inline-item.is-assistant-session')['min-height']).toBe('42px');
   });
 });

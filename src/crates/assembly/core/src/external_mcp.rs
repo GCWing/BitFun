@@ -3,14 +3,14 @@ use crate::service::mcp::{
     MCPServerTransport, MCPServerType,
 };
 use async_trait::async_trait;
-use bitfun_external_sources::ExternalMcpCoordinatorSnapshot;
-use bitfun_product_domains::external_sources::{
+use openbitfun_external_sources::ExternalMcpCoordinatorSnapshot;
+use openbitfun_product_domains::external_sources::{
     external_mcp_approval_key, external_mcp_conflict_key, EcosystemId, ExternalMcpActivationState,
     ExternalMcpApprovalRequest, ExternalMcpCatalogEntry, ExternalMcpConflict,
     ExternalMcpConflictCandidate, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
     ExternalSourceDiagnostic, PreparedExternalMcpServer, PreparedExternalMcpTransport,
 };
-use bitfun_services_integrations::mcp::server::MCPServerStartFailure;
+use openbitfun_services_integrations::mcp::server::MCPServerStartFailure;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,7 +79,7 @@ pub(super) const EXTERNAL_MCP_RUNTIME_STATUS_UNAVAILABLE: &str =
     "external_mcp.runtime.status_unavailable";
 
 /// Narrow product-to-runtime port. Product reconciliation works only with
-/// source-neutral prepared MCP data; the concrete BitFun MCP manager remains
+/// source-neutral prepared MCP data; the concrete OpenBitFun MCP manager remains
 /// behind this implementation boundary.
 #[async_trait]
 pub(super) trait ExternalMcpRuntimePort: Send + Sync {
@@ -102,10 +102,10 @@ pub(super) trait ExternalMcpRuntimePort: Send + Sync {
     ) -> Result<(), String>;
 }
 
-pub(super) struct BitFunExternalMcpRuntime;
+pub(super) struct OpenBitFunExternalMcpRuntime;
 
 #[async_trait]
-impl ExternalMcpRuntimePort for BitFunExternalMcpRuntime {
+impl ExternalMcpRuntimePort for OpenBitFunExternalMcpRuntime {
     async fn install(
         &self,
         candidate: &ActiveExternalMcpCandidate,
@@ -318,7 +318,7 @@ pub(super) fn prepared_mcp_config(
         timeouts,
     };
     config.validate().map_err(|_| {
-        "The external MCP configuration is not valid for the BitFun runtime".to_string()
+        "The external MCP configuration is not valid for the OpenBitFun runtime".to_string()
     })?;
     Ok(config)
 }
@@ -565,7 +565,7 @@ fn build_conflict(
     execution_domain_id: &str,
     workspace_key: &str,
     group: &CandidateGroup<'_>,
-    source_names: &BTreeMap<bitfun_product_domains::external_sources::SourceKey, String>,
+    source_names: &BTreeMap<openbitfun_product_domains::external_sources::SourceKey, String>,
     conflict_choices: &BTreeMap<String, String>,
 ) -> ExternalMcpConflict {
     let server_name = group
@@ -594,7 +594,7 @@ fn build_conflict(
             behavior_version: candidate.behavior_version.clone(),
             available: candidate.enabled,
             unavailable_reason: (!candidate.enabled)
-                .then(|| "This BitFun MCP server is disabled".to_string()),
+                .then(|| "This OpenBitFun MCP server is disabled".to_string()),
         });
     }
     for definition in &group.external {

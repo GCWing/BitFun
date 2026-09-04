@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::prompt_cache::{
+use openbitfun_agent_runtime::prompt_cache::{
     prompt_cache_persist_action, prompt_cache_scope_key, reconcile_prompt_cache_restore,
     CachedPromptText, CachedSystemPrompt, CachedUserContext, PromptCacheLookup,
     PromptCachePersistenceWriteAction, PromptCachePolicy, PromptCacheRestoreDecision,

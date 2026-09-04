@@ -1,18 +1,18 @@
 use crate::agentic::core::SessionConfig;
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
-use bitfun_core_types::SessionExecutionTarget;
-pub use bitfun_runtime_ports::{
+use openbitfun_core_types::SessionExecutionTarget;
+pub use openbitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
     WorkspaceServices, WorkspaceShell,
 };
-pub use bitfun_services_core::workspace::{
+pub use openbitfun_services_core::workspace::{
     local_workspace_services, LocalWorkspaceFs, LocalWorkspaceShell,
 };
-use bitfun_services_core::workspace_identity::{
+use openbitfun_services_core::workspace_identity::{
     workspace_session_identity, WorkspaceSessionIdentity, LOCAL_WORKSPACE_SSH_HOST,
 };
 #[cfg(feature = "remote-workspace")]
-pub use bitfun_services_integrations::remote_ssh::{
+pub use openbitfun_services_integrations::remote_ssh::{
     remote_workspace_services, RemoteWorkspaceFs, RemoteWorkspaceShell,
 };
 use std::path::{Path, PathBuf};
@@ -183,7 +183,7 @@ impl WorkspaceBinding {
         if self.is_remote() {
             if self.session_identity.hostname == "_unresolved" {
                 if let Some(connection_id) = self.session_identity.remote_connection_id.as_deref() {
-                    return bitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
+                    return openbitfun_services_core::workspace_identity::unresolved_remote_session_storage_dir(
                         crate::infrastructure::get_path_manager_arc().remote_ssh_mirror_root_dir(),
                         connection_id,
                         self.session_identity.logical_workspace_path(),
@@ -209,10 +209,10 @@ mod tests {
     use super::{session_execution_workspace_root, WorkspaceBackend, WorkspaceBinding};
     use crate::agentic::core::SessionConfig;
     use crate::service::workspace_runtime::WorkspaceRuntimeService;
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
-    use bitfun_services_core::workspace_identity::{
+    use openbitfun_services_core::workspace_identity::{
         remote_workspace_session_mirror_dir, workspace_session_identity,
     };
     use std::path::PathBuf;
@@ -269,8 +269,8 @@ mod tests {
 
     #[test]
     fn worktree_binding_executes_in_worktree_but_persists_in_project() {
-        let project_root = PathBuf::from("/tmp/bitfun-project");
-        let worktree_root = PathBuf::from("/tmp/bitfun-worktrees/wt-1");
+        let project_root = PathBuf::from("/tmp/openbitfun-project");
+        let worktree_root = PathBuf::from("/tmp/openbitfun-worktrees/wt-1");
         let execution_target = SessionExecutionTarget {
             kind: SessionExecutionTargetKind::ManagedWorktree,
             worktree_id: Some("wt-1".to_string()),
@@ -297,5 +297,5 @@ mod tests {
     }
 }
 
-// Workspace-level I/O contracts are owned by bitfun-runtime-ports and the
+// Workspace-level I/O contracts are owned by openbitfun-runtime-ports and the
 // concrete providers are re-exported from their service owner crates above.

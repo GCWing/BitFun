@@ -1,24 +1,24 @@
 // ==================== Panel Root Container ====================
 
-.bitfun-flexible-panel {
+.openbitfun-flexible-panel {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   height: 100%;
-  background: var(--bf-color-surface-workbench);
+  background: var(--openbitfun-color-surface-workbench);
   border: none !important;
   border-radius: 0;
-  backdrop-filter: var(--bf-effect-blur-base);
-  -webkit-backdrop-filter: var(--bf-effect-blur-base);
+  backdrop-filter: var(--openbitfun-effect-blur-base);
+  -webkit-backdrop-filter: var(--openbitfun-effect-blur-base);
   box-shadow: none;
   overflow: hidden;
   transition:
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-  font-family: var(--bf-type-body-sm-font-family);
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  font-family: var(--openbitfun-type-body-sm-font-family);
   position: relative;
 
   &.is-collapsed {
@@ -29,16 +29,16 @@
 
 // ==================== Panel Header ====================
 
-.bitfun-flexible-panel__header {
+.openbitfun-flexible-panel__header {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--bf-space-3);
-  background: var(--bf-color-surface-raised);
+  padding: 0 var(--openbitfun-space-3);
+  background: var(--openbitfun-color-surface-raised);
   border-bottom: none;
-  backdrop-filter: var(--bf-effect-blur-subtle);
-  -webkit-backdrop-filter: var(--bf-effect-blur-subtle);
+  backdrop-filter: var(--openbitfun-effect-blur-subtle);
+  -webkit-backdrop-filter: var(--openbitfun-effect-blur-subtle);
   height: 36px;
   min-height: 36px;
   user-select: none;
@@ -46,28 +46,28 @@
 }
 
 // Header left area
-.bitfun-flexible-panel__header-left {
+.openbitfun-flexible-panel__header-left {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   flex: 1;
   min-width: 0;
 }
 
 // Header right area
-.bitfun-flexible-panel__header-right {
+.openbitfun-flexible-panel__header-right {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
 }
 
 // ==================== Header Elements ====================
 
-.bitfun-flexible-panel__collapse-btn {
+.openbitfun-flexible-panel__collapse-btn {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -78,33 +78,33 @@
   background: none;
   border: none;
   border-radius: 0;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   cursor: pointer;
   transition:
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
 // Content icon
-.bitfun-flexible-panel__content-icon {
+.openbitfun-flexible-panel__content-icon {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 }
 
 // Content info
-.bitfun-flexible-panel__content-info {
+.openbitfun-flexible-panel__content-info {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -114,38 +114,38 @@
   min-width: 0;
 }
 
-.bitfun-flexible-panel__content-title {
+.openbitfun-flexible-panel__content-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-flexible-panel__content-type {
+.openbitfun-flexible-panel__content-type {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--bf-type-label-md-font-size);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 // ==================== Panel Content ====================
 
-.bitfun-flexible-panel__content {
+.openbitfun-flexible-panel__content {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   flex: 1;
   overflow: hidden;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   min-height: 0;
 }
 
 
-.bitfun-flexible-panel__markdown-editor {
+.openbitfun-flexible-panel__markdown-editor {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -156,7 +156,7 @@
 
 // ==================== Loading State ====================
 
-.bitfun-flexible-panel__loading {
+.openbitfun-flexible-panel__loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -164,27 +164,27 @@
   height: 100%;
   padding: 40px 20px;
   text-align: center;
-  color: var(--bf-color-content-secondary);
-  gap: var(--bf-space-3);
+  color: var(--openbitfun-color-content-secondary);
+  gap: var(--openbitfun-space-3);
 
   &::before {
     content: '';
     width: 24px;
     height: 24px;
-    border: 2px solid var(--bf-color-border-default);
-    border-top-color: var(--bf-color-accent-default);
-    border-radius: var(--bf-radius-pill);
-    animation: bitfun-flexible-panel-spin 0.8s linear infinite;
+    border: 2px solid var(--openbitfun-color-border-default);
+    border-top-color: var(--openbitfun-color-accent-default);
+    border-radius: var(--openbitfun-radius-pill);
+    animation: openbitfun-flexible-panel-spin 0.8s linear infinite;
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
   }
 }
 
-@keyframes bitfun-flexible-panel-spin {
+@keyframes openbitfun-flexible-panel-spin {
   from {
     transform: rotate(0deg);
   }
@@ -195,7 +195,7 @@
 
 // ==================== Empty State ====================
 
-.bitfun-flexible-panel__empty-content {
+.openbitfun-flexible-panel__empty-content {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -203,98 +203,98 @@
   height: 100%;
   padding: 40px 20px;
   text-align: center;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 
   h3 {
-    margin: 0 0 var(--bf-space-2) 0;
-    font-size: var(--bf-type-flow-title-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    margin: 0 0 var(--openbitfun-space-2) 0;
+    font-size: var(--openbitfun-type-flow-title-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
   }
 }
 
-.bitfun-flexible-panel__empty-icon {
-  margin-bottom: var(--bf-space-4);
+.openbitfun-flexible-panel__empty-icon {
+  margin-bottom: var(--openbitfun-space-4);
   opacity: 0.5;
 }
 
 // ==================== Code Content ====================
 
-.bitfun-flexible-panel__code-content {
+.openbitfun-flexible-panel__code-content {
   flex: 1;
   overflow: auto;
   padding: 0;
-  background: var(--bf-color-surface-canvas);
-  transition: box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  background: var(--openbitfun-color-surface-canvas);
+  transition: box-shadow var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   pre {
     margin: 0;
-    padding: var(--bf-space-4);
-    background: var(--bf-color-surface-panel);
+    padding: var(--openbitfun-space-4);
+    background: var(--openbitfun-color-surface-panel);
     border: none;
     border-radius: 0;
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     overflow: auto;
   }
 
   code {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &.needs-fix {
     box-shadow: 
-      0 0 4px color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-      0 0 8px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 12px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 20px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-      inset 0 0 30px color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent),
-      inset 0 0 40px color-mix(in srgb, var(--bf-color-status-warning-content) 3%, transparent);
+      0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 3%, transparent);
     border: none;
-    animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+    animation: openbitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
   }
 }
 
-@keyframes bitfun-flexible-panel-yellow-glow-pulse {
+@keyframes openbitfun-flexible-panel-yellow-glow-pulse {
   from {
     box-shadow: 
-      0 0 4px color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-      0 0 8px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 12px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 20px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-      inset 0 0 30px color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent),
-      inset 0 0 40px color-mix(in srgb, var(--bf-color-status-warning-content) 3%, transparent);
+      0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 3%, transparent);
     border: none;
   }
   to {
     box-shadow: 
-      0 0 6px color-mix(in srgb, var(--bf-color-status-warning-content) 35%, transparent),
-      0 0 12px color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-      inset 0 0 16px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent),
-      inset 0 0 25px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 35px color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent),
-      inset 0 0 45px color-mix(in srgb, var(--bf-color-status-warning-content) 6%, transparent);
+      0 0 6px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 35%, transparent),
+      0 0 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+      inset 0 0 16px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent),
+      inset 0 0 25px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 35px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent),
+      inset 0 0 45px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 6%, transparent);
     border: none;
   }
 }
 
 // ==================== Markdown Content ====================
 
-.bitfun-flexible-panel__markdown-content {
+.openbitfun-flexible-panel__markdown-content {
   flex: 1;
   overflow: auto;
-  padding: var(--bf-space-4);
+  padding: var(--openbitfun-space-4);
 }
 
 // Editor container without padding (let editor control spacing)
-.bitfun-flexible-panel__markdown-editor {
+.openbitfun-flexible-panel__markdown-editor {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -304,46 +304,46 @@
   margin: 0;
 }
 
-.bitfun-flexible-panel__markdown-textarea {
+.openbitfun-flexible-panel__markdown-textarea {
   flex: 1;
   width: 100%;
   min-height: 300px;
-  padding: var(--bf-space-3);
-  border: 1px solid var(--bf-color-border-default);
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-body-md-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  padding: var(--openbitfun-space-3);
+  border: 1px solid var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-base);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
   resize: vertical;
   outline: none;
-  transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:focus {
-    border-color: color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
   }
 
   &::placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 }
 
 
-.bitfun-flexible-panel__text-content {
+.openbitfun-flexible-panel__text-content {
   flex: 1;
   overflow: auto;
-  padding: var(--bf-space-4);
+  padding: var(--openbitfun-space-4);
 
   pre {
     margin: 0;
-    padding: var(--bf-space-4);
-    background: var(--bf-color-surface-panel);
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-base);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-body-md-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    padding: var(--openbitfun-space-4);
+    background: var(--openbitfun-color-surface-panel);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     white-space: pre-wrap;
     word-break: break-word;
     overflow: auto;
@@ -352,54 +352,54 @@
 
 // ==================== Unknown Content ====================
 
-.bitfun-flexible-panel__unknown-content {
+.openbitfun-flexible-panel__unknown-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: var(--bf-space-5);
+  padding: var(--openbitfun-space-5);
   text-align: center;
-  color: var(--bf-color-content-secondary);
-  gap: var(--bf-space-3);
+  color: var(--openbitfun-color-content-secondary);
+  gap: var(--openbitfun-space-3);
 
-  .bitfun-flexible-panel__unknown-icon {
+  .openbitfun-flexible-panel__unknown-icon {
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     width: 64px;
     height: 64px;
-    margin-bottom: var(--bf-space-2);
-    color: var(--bf-color-status-warning-content);
+    margin-bottom: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-status-warning-content);
     opacity: 0.6;
   }
 
   h3 {
     margin: 0;
-    font-size: var(--bf-type-flow-title-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-flow-title-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
     max-width: 400px;
   }
 
-  .bitfun-flexible-panel__unknown-meta {
-    margin-top: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    background: var(--bf-color-surface-panel);
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-base);
-    font-family: var(--bf-type-code-md-font-family);
+  .openbitfun-flexible-panel__unknown-meta {
+    margin-top: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    background: var(--openbitfun-color-surface-panel);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    font-family: var(--openbitfun-type-code-md-font-family);
 
     code {
-      font-size: var(--bf-type-label-md-font-size);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      color: var(--openbitfun-color-content-primary);
       background: transparent;
       padding: 0;
     }
@@ -408,47 +408,47 @@
 
 // ==================== Error Message ====================
 
-.bitfun-flexible-panel__error-message {
+.openbitfun-flexible-panel__error-message {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-space-2);
-  padding: var(--bf-space-4);
-  margin: var(--bf-space-4);
-  background: var(--bf-color-status-danger-surface);
-  border: 1px solid var(--bf-color-status-danger-border);
-  border-radius: var(--bf-radius-base);
-  color: var(--bf-color-status-danger-content);
+  gap: var(--openbitfun-space-2);
+  padding: var(--openbitfun-space-4);
+  margin: var(--openbitfun-space-4);
+  background: var(--openbitfun-color-status-danger-surface);
+  border: 1px solid var(--openbitfun-color-status-danger-border);
+  border-radius: var(--openbitfun-radius-base);
+  color: var(--openbitfun-color-status-danger-content);
 
   svg {
     flex-shrink: 0;
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   p {
     margin: 0;
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-status-danger-content);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-status-danger-content);
   }
 }
 
 // ==================== Placeholder ====================
 
-.bitfun-flexible-panel__placeholder {
+.openbitfun-flexible-panel__placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: var(--bf-space-5);
+  padding: var(--openbitfun-space-5);
   text-align: center;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 
   p {
     margin: 0;
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-content-muted);
     font-style: italic;
   }
 }
@@ -459,24 +459,24 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: var(--bf-space-4);
-  gap: var(--bf-space-3);
+  padding: var(--openbitfun-space-4);
+  gap: var(--openbitfun-space-3);
 
   p {
     margin: 0;
-    font-size: var(--bf-type-body-md-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   pre {
     margin: 0;
-    padding: var(--bf-space-3);
-    background: var(--bf-color-surface-panel);
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-base);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    padding: var(--openbitfun-space-3);
+    background: var(--openbitfun-color-surface-panel);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     overflow: auto;
     max-width: 100%;
   }
@@ -484,7 +484,7 @@
 
 // ==================== File Viewer ====================
 
-.bitfun-flexible-panel__file-viewer-content {
+.openbitfun-flexible-panel__file-viewer-content {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -493,37 +493,37 @@
   overflow: hidden;
 }
 
-.bitfun-flexible-panel__file-viewer-header {
-  padding: var(--bf-space-3) var(--bf-space-4);
-  border-bottom: 1px solid var(--bf-color-border-default);
-  background: var(--bf-color-surface-panel);
+.openbitfun-flexible-panel__file-viewer-header {
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-panel);
 
   h4 {
     margin: 0 0 4px 0;
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
-.bitfun-flexible-panel__file-path {
+.openbitfun-flexible-panel__file-path {
   margin: 0;
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-secondary);
-  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  font-family: var(--openbitfun-type-code-md-font-family);
 }
 
-.bitfun-flexible-panel__file-content {
+.openbitfun-flexible-panel__file-content {
   flex: 1;
   overflow: auto;
-  padding: var(--bf-space-4);
+  padding: var(--openbitfun-space-4);
 
   pre {
     margin: 0;
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
-    color: var(--bf-color-content-primary);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
+    color: var(--openbitfun-color-content-primary);
     white-space: pre-wrap;
     word-wrap: break-word;
   }
@@ -531,54 +531,54 @@
 
 // ==================== Code Viewer Container ====================
 
-.bitfun-flexible-panel__code-viewer-container {
+.openbitfun-flexible-panel__code-viewer-container {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   height: 100%;
-  background: var(--bf-color-surface-tertiary);
+  background: var(--openbitfun-color-surface-tertiary);
   margin: 0 !important;
   padding: 0 !important;
   border: none !important;
 
-  .bitfun-flexible-panel__code-content {
+  .openbitfun-flexible-panel__code-content {
     flex: 1;
     overflow: hidden;
-    background: var(--bf-color-surface-canvas);
-    transition: box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    background: var(--openbitfun-color-surface-canvas);
+    transition: box-shadow var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
 
     &.needs-fix {
       box-shadow: 
-        0 0 4px color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-        0 0 8px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-        inset 0 0 12px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-        inset 0 0 20px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-        inset 0 0 30px color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent),
-        inset 0 0 40px color-mix(in srgb, var(--bf-color-status-warning-content) 3%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
-      animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+        0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+        0 0 8px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+        inset 0 0 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+        inset 0 0 20px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent),
+        inset 0 0 30px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent),
+        inset 0 0 40px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 3%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
+      animation: openbitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
     }
   }
 }
 
 // ==================== Image Viewer Container ====================
 
-.bitfun-flexible-panel__image-viewer-container {
+.openbitfun-flexible-panel__image-viewer-container {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
   height: 100%;
-  background: var(--bf-color-surface-tertiary);
+  background: var(--openbitfun-color-surface-tertiary);
   margin: 0 !important;
   padding: 0 !important;
   border: none !important;
 
-  .bitfun-flexible-panel__image-viewer {
+  .openbitfun-flexible-panel__image-viewer {
     flex: 1;
     overflow: hidden;
     margin: 0 !important;
@@ -589,7 +589,7 @@
 
 // ==================== PDF Viewer Container ====================
 
-.bitfun-flexible-panel__pdf-viewer-container {
+.openbitfun-flexible-panel__pdf-viewer-container {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -599,9 +599,9 @@
   margin: 0 !important;
   padding: 0 !important;
   border: none !important;
-  background: var(--bf-color-surface-tertiary);
+  background: var(--openbitfun-color-surface-tertiary);
 
-  .bitfun-flexible-panel__pdf-viewer {
+  .openbitfun-flexible-panel__pdf-viewer {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -611,91 +611,91 @@
   }
 }
 
-.bitfun-html-preview__loading,
-.bitfun-html-preview__error {
+.openbitfun-html-preview__loading,
+.openbitfun-html-preview__error {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   height: 100%;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 // ==================== Panel CodeViewer Style ====================
 
-.bitfun-flexible-panel__panel-code-viewer {
+.openbitfun-flexible-panel__panel-code-viewer {
   border: none !important;
   border-radius: 0 !important;
   height: 100%;
   margin: 0 !important;
   padding: 0 !important;
 
-  .bitfun-flexible-panel__code-viewer-header {
-    background: var(--bf-color-surface-canvas);
+  .openbitfun-flexible-panel__code-viewer-header {
+    background: var(--openbitfun-color-surface-canvas);
     border-bottom: none;
   }
 
-  .bitfun-flexible-panel__file-name {
-    color: var(--bf-color-content-secondary);
+  .openbitfun-flexible-panel__file-name {
+    color: var(--openbitfun-color-content-secondary);
   }
 
-  .bitfun-flexible-panel__file-path {
-    color: var(--bf-color-content-muted);
+  .openbitfun-flexible-panel__file-path {
+    color: var(--openbitfun-color-content-muted);
   }
 
-  .bitfun-flexible-panel__action-btn {
-    color: var(--bf-color-content-muted);
+  .openbitfun-flexible-panel__action-btn {
+    color: var(--openbitfun-color-content-muted);
 
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-neutral-surface);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
   }
 
   &.needs-fix {
     box-shadow: 
-      0 0 4px color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-      0 0 8px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 12px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-      inset 0 0 20px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-      inset 0 0 30px color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent),
-      inset 0 0 40px color-mix(in srgb, var(--bf-color-status-warning-content) 3%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
-    animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
-    transition: box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+      0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
+    animation: openbitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
+    transition: box-shadow var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 }
 
 // ==================== Responsive Design ====================
 
 @media (max-width: 768px) {
-  .bitfun-flexible-panel__header {
-    padding: var(--bf-space-2) var(--bf-space-3);
+  .openbitfun-flexible-panel__header {
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
   }
   
-  .bitfun-flexible-panel__content-title {
-    font-size: var(--bf-type-label-md-font-size);
+  .openbitfun-flexible-panel__content-title {
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
   
-  .bitfun-flexible-panel__content-type {
-    font-size: var(--bf-type-label-sm-font-size);
+  .openbitfun-flexible-panel__content-type {
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
   
-  .bitfun-flexible-panel__code-content,
-  .bitfun-flexible-panel__markdown-content,
-  .bitfun-flexible-panel__text-content {
-    padding: var(--bf-space-3);
+  .openbitfun-flexible-panel__code-content,
+  .openbitfun-flexible-panel__markdown-content,
+  .openbitfun-flexible-panel__text-content {
+    padding: var(--openbitfun-space-3);
   }
 }
 
 // ==================== Terminal Panel Container ====================
 
-.bitfun-flexible-panel__terminal-container {
+.openbitfun-flexible-panel__terminal-container {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bf-color-surface-workbench);
+  background: var(--openbitfun-color-surface-workbench);
   overflow: hidden;
 
   > div {
@@ -710,8 +710,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-flexible-panel__loading::before,
-  .bitfun-flexible-panel .needs-fix {
+  .openbitfun-flexible-panel__loading::before,
+  .openbitfun-flexible-panel .needs-fix {
     animation: none;
     transform: none;
   }

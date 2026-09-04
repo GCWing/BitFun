@@ -3,7 +3,7 @@
 # Built-in Agent Content
 
 This crate owns only immutable built-in Agent prompt bytes shipped with the
-product and the stable lookup keys retained for `bitfun-core` compatibility.
+product and the stable lookup keys retained for `openbitfun-core` compatibility.
 It has no third-party dependencies and is activated only by Core's
 `product-full` assembly.
 
@@ -24,6 +24,6 @@ It has no third-party dependencies and is activated only by Core's
 
 ## Verification
 
-Run `cargo test -p bitfun-agent-content --test prompt_catalog_contracts` after
+Run `cargo test -p openbitfun-agent-content --test prompt_catalog_contracts` after
 changing the catalog, lookup behavior, or prompt paths. Prompt text changes may
 intentionally alter content, but must not silently remove or rename a stable key.

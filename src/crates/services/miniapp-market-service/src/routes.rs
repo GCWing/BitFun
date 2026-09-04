@@ -6,7 +6,9 @@ use crate::auth::{
 use crate::config::MarketConfig;
 use crate::db::{AuthenticatedUser, Database};
 use crate::error::{MarketError, MarketResult};
-use crate::package::{validate_market_package, validate_min_bitfun_version, validate_screenshot};
+use crate::package::{
+    validate_market_package, validate_min_openbitfun_version, validate_screenshot,
+};
 use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
@@ -16,15 +18,17 @@ use axum::routing::{any, get, post, put};
 use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use bitfun_product_domains::miniapp::market::{
+use chrono::Utc;
+use openbitfun_product_domains::miniapp::market::{
     compute_review_bundle_hash, validate_market_category, validate_market_slug, CursorPage,
     MarketLicense, MarketListingDetail, MarketListingSummary, MarketRelease, MarketSort,
     MarketSubmission, MarketSubmissionDraftRequest, MarketSubmissionStatus, MarketUserSummary,
     ReviewDecision, ReviewDecisionRequest, MARKET_CATEGORIES, MARKET_DEFAULT_PAGE_SIZE,
     MARKET_MAX_PAGE_SIZE, MARKET_MAX_SCREENSHOTS, MARKET_PACKAGE_CONTENT_TYPE,
 };
-use bitfun_product_domains::miniapp::types::{MiniAppI18n, MiniAppPermissions, NodePermissions};
-use chrono::Utc;
+use openbitfun_product_domains::miniapp::types::{
+    MiniAppI18n, MiniAppPermissions, NodePermissions,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use similar::TextDiff;
@@ -49,7 +53,7 @@ struct StoredSubmissionMetadata {
     icon: String,
     category: String,
     tags: Vec<String>,
-    min_bitfun_version: String,
+    min_openbitfun_version: String,
     changelog: String,
     license: MarketLicense,
     repository_url: Option<String>,
@@ -643,7 +647,7 @@ async fn create_submission(
         icon: request.icon.trim().to_string(),
         category: request.category.clone(),
         tags: request.tags.clone(),
-        min_bitfun_version: request.min_bitfun_version.clone(),
+        min_openbitfun_version: request.min_openbitfun_version.clone(),
         changelog: request.changelog.trim().to_string(),
         license: request.license.clone(),
         repository_url: request.repository_url.clone(),
@@ -1272,7 +1276,7 @@ async fn summary_from_row(
             avatar_url: row.get("avatar_url"),
         },
         latest_release: row.get::<i64, _>("release_number") as u32,
-        min_bitfun_version: metadata.min_bitfun_version,
+        min_openbitfun_version: metadata.min_openbitfun_version,
         permissions: metadata.permissions,
         screenshot_urls: screenshot_urls_for_release(state, &release_id).await?,
         rating_average: row.get("rating_average"),
@@ -1352,7 +1356,7 @@ fn release_from_row(row: sqlx::sqlite::SqliteRow) -> MarketResult<MarketRelease>
         release_id: row.get("id"),
         listing_id: row.get("listing_id"),
         release_number: row.get::<i64, _>("release_number") as u32,
-        min_bitfun_version: metadata.min_bitfun_version,
+        min_openbitfun_version: metadata.min_openbitfun_version,
         changelog: metadata.changelog,
         package_sha256: row.get("package_sha256"),
         package_size: row.get::<i64, _>("package_size") as u64,
@@ -1453,7 +1457,7 @@ async fn submission_from_row(
         icon: metadata.icon,
         category: metadata.category,
         tags: metadata.tags,
-        min_bitfun_version: metadata.min_bitfun_version,
+        min_openbitfun_version: metadata.min_openbitfun_version,
         changelog: metadata.changelog,
         license: metadata.license,
         repository_url: metadata.repository_url,
@@ -1846,7 +1850,7 @@ fn validate_submission_request(request: &MarketSubmissionDraftRequest) -> Market
             "The selected category is not supported.",
         ));
     }
-    validate_min_bitfun_version(&request.min_bitfun_version)?;
+    validate_min_openbitfun_version(&request.min_openbitfun_version)?;
     if request.name.trim().is_empty()
         || request.description.trim().is_empty()
         || request.changelog.trim().is_empty()
@@ -1928,7 +1932,7 @@ async fn require_submission_write_auth(
         return Err(MarketError::new(
             StatusCode::FORBIDDEN,
             "web_submissions_disabled",
-            "Web submissions are disabled. Use BitFun Desktop to submit MiniApps.",
+            "Web submissions are disabled. Use OpenBitFun Desktop to submit MiniApps.",
         ));
     }
     state.auth.require_csrf(headers, &auth)?;
@@ -2234,7 +2238,7 @@ mod tests {
         let mut first_locales = std::collections::HashMap::new();
         first_locales.insert(
             "zh-CN".to_string(),
-            bitfun_product_domains::miniapp::types::MiniAppLocaleStrings {
+            openbitfun_product_domains::miniapp::types::MiniAppLocaleStrings {
                 name: Some("正则工具".to_string()),
                 description: Some("本地测试".to_string()),
                 tags: Some(vec!["开发".to_string()]),
@@ -2242,7 +2246,7 @@ mod tests {
         );
         first_locales.insert(
             "en-US".to_string(),
-            bitfun_product_domains::miniapp::types::MiniAppLocaleStrings {
+            openbitfun_product_domains::miniapp::types::MiniAppLocaleStrings {
                 name: Some("Regex Tool".to_string()),
                 description: None,
                 tags: None,
@@ -2254,7 +2258,7 @@ mod tests {
             icon: ".*".to_string(),
             category: "developer".to_string(),
             tags: vec!["regex".to_string()],
-            min_bitfun_version: "0.2.14".to_string(),
+            min_openbitfun_version: "1.0.0".to_string(),
             changelog: "Initial".to_string(),
             license: MarketLicense {
                 spdx_expression: Some("MIT".to_string()),
@@ -2326,13 +2330,13 @@ mod tests {
             icon: ".*".to_string(),
             category: "developer".to_string(),
             tags: vec!["regex".to_string(), "offline".to_string()],
-            min_bitfun_version: "0.2.14".to_string(),
+            min_openbitfun_version: "1.0.0".to_string(),
             changelog: "Initial reviewed release.".to_string(),
             license: MarketLicense {
                 spdx_expression: Some("MIT".to_string()),
                 custom_url: None,
             },
-            repository_url: Some("https://github.com/openbitfun/bitfun".to_string()),
+            repository_url: Some("https://github.com/openbitfun/openbitfun".to_string()),
             permissions: MiniAppPermissions {
                 node: Some(NodePermissions {
                     enabled: false,
@@ -2511,7 +2515,7 @@ mod tests {
             icon: "box".to_string(),
             category: "utilities".to_string(),
             tags: vec!["ownership".to_string()],
-            min_bitfun_version: "0.2.19".to_string(),
+            min_openbitfun_version: "1.0.0".to_string(),
             changelog: "Initial release.".to_string(),
             license: MarketLicense {
                 spdx_expression: Some("MIT".to_string()),
@@ -2718,7 +2722,8 @@ mod tests {
             auth,
         });
         let app = api_router(state.clone());
-        let cookie = "bitfun_market_session=web-session-token; bitfun_market_csrf=csrf-token";
+        let cookie =
+            "openbitfun_market_session=web-session-token; openbitfun_market_csrf=csrf-token";
 
         let response = app
             .clone()

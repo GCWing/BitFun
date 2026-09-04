@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-declare module 'virtual:bitfun-canvas-runtime-bundle' {
+declare module 'virtual:openbitfun-canvas-runtime-bundle' {
   const bundle: {
     js: string;
     css: string;
   };
-  export const bitfunCanvasRuntimeBundle: typeof bundle;
+  export const openbitfunCanvasRuntimeBundle: typeof bundle;
   export default bundle;
 }

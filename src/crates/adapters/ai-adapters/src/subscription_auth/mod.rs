@@ -1,6 +1,6 @@
 //! In-app subscription authentication.
 //!
-//! Lets BitFun sign in to another product's subscription (Codex/ChatGPT,
+//! Lets OpenBitFun sign in to another product's subscription (Codex/ChatGPT,
 //! Antigravity/Google, OpenCode, xAI/SuperGrok, Hermes/Nous Portal) with an in-app OAuth flow,
 //! and use the resulting tokens to authenticate AI requests. Secret material
 //! is stored separately from the non-secret account metadata. macOS uses a
@@ -36,7 +36,7 @@ const LOGIN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// OpenCode release whose built-in subscription protocols these adapters mirror.
 pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.25";
 
-/// One of the subscription providers BitFun can sign in to.
+/// One of the subscription providers OpenBitFun can sign in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionProvider {
@@ -156,7 +156,7 @@ pub fn runtime_model_override(
         return Some(provider.suggested().2);
     }
     match (provider, model) {
-        // BitFun used this as its original Codex subscription default. It is
+        // OpenBitFun used this as its original Codex subscription default. It is
         // no longer in OpenCode's current ChatGPT subscription model set.
         (SubscriptionProvider::Codex, "gpt-5-codex") => Some("gpt-5.5"),
         // The retired Grok proxy exposed an unversioned coding-model alias;
@@ -354,7 +354,7 @@ pub(crate) fn build_http_client(
     options: &SubscriptionHttpOptions,
     provider: &str,
 ) -> Result<reqwest::Client> {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     let mut builder = reqwest::Client::builder()
         .tls_backend_rustls()
         .timeout(Duration::from_secs(30))
@@ -452,7 +452,7 @@ pub(crate) fn store_revision_conflict(
     current_revision: u64,
 ) -> anyhow::Error {
     anyhow!(
-        "{} credentials changed in another BitFun process (current revision {current_revision}); retry the operation",
+        "{} credentials changed in another OpenBitFun process (current revision {current_revision}); retry the operation",
         provider.display_label()
     )
 }
@@ -997,10 +997,10 @@ mod tests {
     use super::store::{self, StoredCredential};
     use super::*;
 
-    const STALE_LOGIN_CHILD_METADATA_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_METADATA";
-    const STALE_LOGIN_CHILD_LOADED_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_LOADED";
-    const STALE_LOGIN_CHILD_RESUME_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_RESUME";
-    const STALE_LOGIN_CHILD_OUTCOME_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_OUTCOME";
+    const STALE_LOGIN_CHILD_METADATA_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_METADATA";
+    const STALE_LOGIN_CHILD_LOADED_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_LOADED";
+    const STALE_LOGIN_CHILD_RESUME_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_RESUME";
+    const STALE_LOGIN_CHILD_OUTCOME_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_OUTCOME";
 
     /// Serializes tests that rely on the process-global store path override.
     /// Serializes these tests against the shared on-disk store. Async-aware so
@@ -1012,7 +1012,7 @@ mod tests {
     }
 
     fn temp_store_path() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("bitfun-subauth-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("openbitfun-subauth-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("subscription_auth.json")
     }
@@ -1181,65 +1181,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn legacy_plaintext_store_is_migrated_and_scrubbed() {
+    async fn plaintext_store_is_rejected_without_rewrite() {
         let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
-        let legacy = serde_json::json!({
+        let plaintext = serde_json::json!({
             "opencode": {
                 "type": "oauth",
-                "refresh": "legacy-refresh-secret",
-                "access": "legacy-access-secret",
+                "refresh": "plaintext-refresh-secret",
+                "access": "plaintext-access-secret",
                 "expires": 1_900_000_000_000_i64,
-                "metadata": { "email": "legacy@example.com" }
+                "metadata": { "email": "user@example.com" }
             }
         });
-        std::fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+        let original = serde_json::to_vec_pretty(&plaintext).unwrap();
+        std::fs::write(&path, &original).unwrap();
 
-        let loaded = store::load().await.unwrap();
-        assert!(loaded.contains_key("opencode"));
-
-        let migrated = std::fs::read_to_string(&path).unwrap();
-        assert!(migrated.contains("\"version\": 2"));
-        assert!(migrated.contains("legacy@example.com"));
-        assert!(!migrated.contains("legacy-refresh-secret"));
-        assert!(!migrated.contains("legacy-access-secret"));
-    }
-
-    #[tokio::test]
-    async fn legacy_migration_retries_after_temporary_vault_unavailability() {
-        let _guard = test_lock().lock().await;
-        let path = temp_store_path();
-        store::set_store_path_for_test(path.clone());
-        let legacy = serde_json::json!({
-            "opencode": {
-                "type": "oauth",
-                "refresh": "legacy-retry-refresh",
-                "access": "legacy-retry-access",
-                "expires": 1_900_000_000_000_i64
-            }
-        });
-        std::fs::write(&path, serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
-
-        store::set_test_vault_unavailable(true);
-        let deferred = store::load_with_state().await.unwrap();
-        assert!(deferred.credentials.is_empty());
-        assert!(deferred.vault_unavailable.contains("opencode"));
-        assert!(!deferred.requires_reauthentication.contains("opencode"));
-        let unchanged = std::fs::read_to_string(&path).unwrap();
-        assert!(unchanged.contains("legacy-retry-refresh"));
-        assert!(unchanged.contains("legacy-retry-access"));
-
-        store::set_test_vault_unavailable(false);
-        let migrated = store::load().await.unwrap();
-        assert!(migrated.contains_key("opencode"));
-        let scrubbed = std::fs::read_to_string(&path).unwrap();
-        assert!(scrubbed.contains("\"version\": 2"));
-        assert!(!scrubbed.contains("legacy-retry-refresh"));
-        assert!(!scrubbed.contains("legacy-retry-access"));
-        assert!(store::cleanup_journal_entries_for_assertion()
-            .await
-            .is_empty());
+        let error = store::load().await.unwrap_err();
+        assert!(error.to_string().contains("subscription auth metadata"));
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert!(store::test_vault_entries_for_assertion().is_empty());
     }
 
     #[tokio::test]
@@ -1283,7 +1244,7 @@ mod tests {
         let path = temp_store_path();
         let tmp = path.with_extension("tmp-one");
         let backup = path.with_extension("bak");
-        std::fs::write(&path, b"legacy-plaintext-secret").unwrap();
+        std::fs::write(&path, b"previous-sensitive-metadata").unwrap();
         std::fs::write(&tmp, b"new-metadata").unwrap();
 
         store::set_test_backup_cleanup_failure(&backup, true);
@@ -1291,7 +1252,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"new-metadata");
-        assert_eq!(std::fs::read(&backup).unwrap(), b"legacy-plaintext-secret");
+        assert_eq!(
+            std::fs::read(&backup).unwrap(),
+            b"previous-sensitive-metadata"
+        );
 
         store::set_test_backup_cleanup_failure(&backup, false);
         let next_tmp = path.with_extension("tmp-two");
@@ -1466,17 +1430,18 @@ mod tests {
         let loaded_path = parent.join("child-loaded");
         let resume_path = parent.join("child-resume");
         let outcome_path = parent.join("child-outcome");
-        let mut child =
-            bitfun_services_core::process_manager::create_command(std::env::current_exe().unwrap())
-                .arg("--exact")
-                .arg("subscription_auth::tests::cross_process_stale_login_cas_child")
-                .arg("--nocapture")
-                .env(STALE_LOGIN_CHILD_METADATA_ENV, &path)
-                .env(STALE_LOGIN_CHILD_LOADED_ENV, &loaded_path)
-                .env(STALE_LOGIN_CHILD_RESUME_ENV, &resume_path)
-                .env(STALE_LOGIN_CHILD_OUTCOME_ENV, &outcome_path)
-                .spawn()
-                .expect("spawn stale-login child process");
+        let mut child = openbitfun_services_core::process_manager::create_command(
+            std::env::current_exe().unwrap(),
+        )
+        .arg("--exact")
+        .arg("subscription_auth::tests::cross_process_stale_login_cas_child")
+        .arg("--nocapture")
+        .env(STALE_LOGIN_CHILD_METADATA_ENV, &path)
+        .env(STALE_LOGIN_CHILD_LOADED_ENV, &loaded_path)
+        .env(STALE_LOGIN_CHILD_RESUME_ENV, &resume_path)
+        .env(STALE_LOGIN_CHILD_OUTCOME_ENV, &outcome_path)
+        .spawn()
+        .expect("spawn stale-login child process");
 
         tokio::time::timeout(Duration::from_secs(5), async {
             while !loaded_path.exists() {

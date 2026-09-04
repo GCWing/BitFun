@@ -23,7 +23,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 for arch in amd64 arm64; do
-  container="bitfun-relay-smoke-${arch}"
+  container="openbitfun-relay-smoke-${arch}"
   containers+=("$container")
   echo ">>> Smoke-testing ${IMAGE_REF} on linux/${arch}..."
   docker run -d \
@@ -32,7 +32,7 @@ for arch in amd64 arm64; do
     -e RELAY_PORT=9700 \
     -e RELAY_STATIC_DIR=/app/static \
     -e RELAY_ROOM_WEB_DIR=/app/room-web \
-    -e RELAY_DB_PATH=/app/data/bitfun_relay.db \
+    -e RELAY_DB_PATH=/app/data/openbitfun_relay.db \
     "$IMAGE_REF" >/dev/null
 
   healthy=0

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, Error, HandleDispatchFrom};
-use bitfun_agent_runtime::sdk::AgentSessionRestoreRequest;
-use bitfun_app_server_protocol::session::{
+use openbitfun_agent_runtime::sdk::AgentSessionRestoreRequest;
+use openbitfun_app_server_protocol::session::{
     CancelLineageRequest, CancelLineageResponse, CompactSessionRequest, CompactSessionResponse,
     InspectLineageRequest, InspectLineageResponse, ReadTranscriptRequest, ReadTranscriptResponse,
     RedoSessionRequest, ReloadContextRequest, ReloadContextResponse, ResolveWorkspaceRequest,
@@ -10,15 +10,15 @@ use bitfun_app_server_protocol::session::{
     SessionUsageRequest, SessionUsageResponse, SyncSessionRequest, SyncSessionResponse,
     UndoSessionRequest, WaitForSettlementRequest, WaitForSettlementResponse,
 };
-use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
+use openbitfun_runtime_ports::{AgentSessionWorkspaceBinding, SessionExecutionTarget};
 
-use crate::agent::{runtime_call, BitfunAppRuntime};
+use crate::agent::{runtime_call, OpenBitFunAppRuntime};
 use crate::role::{AppClient, AppServer};
 use crate::schema::*;
 use crate::server::wire;
 
 pub(in crate::server) fn builder(
-    runtime: Arc<BitfunAppRuntime>,
+    runtime: Arc<OpenBitFunAppRuntime>,
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
@@ -35,7 +35,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(|()| RenameSessionResponse {})
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -54,7 +54,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(|()| SetSessionArchivedResponse {})
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -73,7 +73,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(|()| UpdateSessionModelResponse {})
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -92,7 +92,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(|()| UpdateSessionModeResponse {})
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -156,7 +156,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(wire::restore_session_response)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -180,13 +180,13 @@ pub(in crate::server) fn builder(
                         })
                         .await
                         .map_err(|error| {
-                            BitfunAppRuntime::session_runtime_error(&session_id, error)
+                            OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                         })?;
                     let transcript = runtime_call(
                         runtime
                             .runtime()
                             .read_session_transcript(
-                                bitfun_runtime_ports::SessionTranscriptRequest {
+                                openbitfun_runtime_ports::SessionTranscriptRequest {
                                     session_id: session_id.clone(),
                                     turn_id: None,
                                 },
@@ -197,7 +197,7 @@ pub(in crate::server) fn builder(
                         runtime
                             .runtime()
                             .resolve_session_workspace_binding(
-                                bitfun_runtime_ports::AgentSessionWorkspaceRequest {
+                                openbitfun_runtime_ports::AgentSessionWorkspaceRequest {
                                     session_id: session_id.clone(),
                                 },
                             )
@@ -265,7 +265,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(CompactSessionResponse)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -284,7 +284,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(RevertSessionResponse)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -303,7 +303,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(RevertSessionResponse)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -337,7 +337,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(SessionUsageResponse)
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }
@@ -356,7 +356,7 @@ pub(in crate::server) fn builder(
                             .await
                             .map(|_| WaitForSettlementResponse {})
                             .map_err(|error| {
-                                BitfunAppRuntime::session_runtime_error(&session_id, error)
+                                OpenBitFunAppRuntime::session_runtime_error(&session_id, error)
                             }),
                     )
                 }

@@ -33,8 +33,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   FormSection: ({
     children,
@@ -210,21 +210,21 @@ describe('UsageStatisticsConfig', () => {
       timeZone: 'UTC',
     });
 
-    const pageHeader = container.querySelector('[data-bf-component="page-header"]');
+    const pageHeader = container.querySelector('[data-openbitfun-component="page-header"]');
     expect(pageHeader?.querySelector('h2')?.textContent).toBe('title');
     expect(pageHeader?.textContent).toContain('subtitle');
-    expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="distributions"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="modelHitRate"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="trendPanel"]')).not.toBeNull();
-    expect(container.querySelectorAll('.bitfun-usage-stats__donut').length).toBe(3);
-    expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
+    expect(container.querySelector('[data-openbitfun-part="summary"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="distributions"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="modelHitRate"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="trendPanel"]')).not.toBeNull();
+    expect(container.querySelectorAll('.openbitfun-usage-stats__donut').length).toBe(3);
+    expect(container.querySelectorAll('[data-openbitfun-part="trendPanel"] svg').length).toBe(1);
     expect(container.textContent).not.toContain('trend.legend.cacheCreation');
-    expect(container.querySelectorAll('.bitfun-config-page-section')).toHaveLength(4);
-    expect(container.querySelectorAll('[data-bf-part="distributions"] table')).toHaveLength(3);
-    expect(container.querySelectorAll('[data-bf-part="distributions"] th[scope="row"]')).toHaveLength(3);
-    expect(container.querySelector('[data-bf-part="trendPanel"] svg[role="img"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="trendPanel"] table.bitfun-sr-only')).not.toBeNull();
+    expect(container.querySelectorAll('.openbitfun-config-page-section')).toHaveLength(4);
+    expect(container.querySelectorAll('[data-openbitfun-part="distributions"] table')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-openbitfun-part="distributions"] th[scope="row"]')).toHaveLength(3);
+    expect(container.querySelector('[data-openbitfun-part="trendPanel"] svg[role="img"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="trendPanel"] table.openbitfun-sr-only')).not.toBeNull();
     expect(container.textContent).toContain('4.8M');
     // Hit rate rounds down and always keeps two decimal places.
     expect(container.textContent).toContain('95.67%');
@@ -263,7 +263,7 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelectorAll('[data-cache-hit-rate-segment="point"]')).toHaveLength(1);
 
     const hoverCapture = container.querySelector(
-      '.bitfun-usage-stats__trend-svg > rect[fill="transparent"]',
+      '.openbitfun-usage-stats__trend-svg > rect[fill="transparent"]',
     ) as SVGRectElement;
     vi.spyOn(hoverCapture, 'getBoundingClientRect').mockReturnValue({
       left: 0,
@@ -276,7 +276,7 @@ describe('UsageStatisticsConfig', () => {
         clientX: 300,
       }));
     });
-    let tooltipRows = container.querySelectorAll('.bitfun-usage-stats__trend-tooltip-row');
+    let tooltipRows = container.querySelectorAll('.openbitfun-usage-stats__trend-tooltip-row');
     expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('–');
 
     await act(async () => {
@@ -285,7 +285,7 @@ describe('UsageStatisticsConfig', () => {
         clientX: 100,
       }));
     });
-    tooltipRows = container.querySelectorAll('.bitfun-usage-stats__trend-tooltip-row');
+    tooltipRows = container.querySelectorAll('.openbitfun-usage-stats__trend-tooltip-row');
     expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('0.00%');
   });
 
@@ -320,7 +320,7 @@ describe('UsageStatisticsConfig', () => {
     expect(container.textContent).toContain('OpenBitFun');
     expect(container.textContent).toContain('MiniMax');
     expect(container.textContent).toContain('attribution.deletedConfig');
-    expect(container.querySelectorAll('.bitfun-usage-stats__hit-rate-row')).toHaveLength(3);
+    expect(container.querySelectorAll('.openbitfun-usage-stats__hit-rate-row')).toHaveLength(3);
   });
 
   it('shows the empty state when there are no records', async () => {
@@ -335,8 +335,8 @@ describe('UsageStatisticsConfig', () => {
 
     await render();
 
-    expect(container.querySelector('[data-bf-part="empty"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="summary"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="summary"]')).toBeNull();
   });
 
   it('shows a distinct informational state for an older Peer host', async () => {

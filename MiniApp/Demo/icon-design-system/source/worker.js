@@ -6,7 +6,7 @@
 const fs = require('fs/promises');
 const path = require('path');
 
-const APP_DATA_DIR = process.env.BITFUN_APP_DATA || process.cwd();
+const APP_DATA_DIR = process.env.OPENBITFUN_APP_DATA || process.cwd();
 
 const ICONS_DIR = path.join(APP_DATA_DIR, 'icons');
 const LIBRARY_FILE = path.join(APP_DATA_DIR, 'library.json');

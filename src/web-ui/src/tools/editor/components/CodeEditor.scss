@@ -19,7 +19,7 @@ $_editor-padding-desktop: 32px;
   height: 100%;
   width: 100%;
   position: relative;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
 
 
   > .editor-status-bar {
@@ -34,29 +34,29 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-color-surface-scene);
-    color: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-surface-scene);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__loading-spinner {
     width: $_editor-loading-spinner-size;
     height: $_editor-loading-spinner-size;
-    border: $_editor-loading-spinner-border solid var(--bf-color-action-secondary-hover);
-    border-top-color: var(--bf-color-accent-default);
-    border-radius: var(--bf-radius-pill);
-    animation: code-editor-spin var(--bf-motion-duration-lazy) var(--bf-motion-easing-standard) infinite;
-    margin-bottom: var(--bf-space-4);
+    border: $_editor-loading-spinner-border solid var(--openbitfun-color-action-secondary-hover);
+    border-top-color: var(--openbitfun-color-accent-default);
+    border-radius: var(--openbitfun-radius-pill);
+    animation: code-editor-spin var(--openbitfun-motion-duration-lazy) var(--openbitfun-motion-easing-standard) infinite;
+    margin-bottom: var(--openbitfun-space-4);
     box-shadow:
-      0 0 20px color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent),
-      0 0 40px var(--bf-color-action-secondary-hover);
+      0 0 20px color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent),
+      0 0 40px var(--openbitfun-color-action-secondary-hover);
   }
 
   &__loading-text {
     margin: 0;
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-code-md-font-family);
-    animation: code-editor-pulse var(--bf-motion-duration-slow) ease-in-out infinite;
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    animation: code-editor-pulse var(--openbitfun-motion-duration-slow) ease-in-out infinite;
   }
 
   // Error State
@@ -67,7 +67,7 @@ $_editor-padding-desktop: 32px;
     align-items: center;
     justify-content: center;
     height: 100%;
-    background: var(--bf-color-surface-scene);
+    background: var(--openbitfun-color-surface-scene);
     text-align: center;
     padding: $_editor-padding-desktop;
   }
@@ -75,16 +75,16 @@ $_editor-padding-desktop: 32px;
   &__error-icon {
     width: 32px;
     height: 32px;
-    color: var(--bf-color-content-muted);
-    margin-bottom: var(--bf-space-3);
+    color: var(--openbitfun-color-content-muted);
+    margin-bottom: var(--openbitfun-space-3);
     opacity: 0.5;
   }
 
   &__error-message {
-    margin: 0 0 var(--bf-space-3) 0;
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-code-md-font-family);
+    margin: 0 0 var(--openbitfun-space-3) 0;
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   // Editor Content Area
@@ -110,7 +110,7 @@ $_editor-padding-desktop: 32px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 85%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 85%, transparent);
     backdrop-filter: blur(4px);
     z-index: 100;
     animation: code-editor-fade-in 0.2s ease-out;
@@ -128,16 +128,16 @@ $_editor-padding-desktop: 32px;
   // Save Status Indicator
   &__saving-indicator {
     position: absolute;
-    top: var(--bf-space-4);
-    right: var(--bf-space-4);
-    background: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
-    color: var(--bf-color-surface-canvas);
-    padding: var(--bf-space-2) var(--bf-space-4);
-    border-radius: var(--bf-radius-base);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    font-family: var(--bf-type-code-md-font-family);
-    box-shadow: var(--bf-shadow-accent-glow);
+    top: var(--openbitfun-space-4);
+    right: var(--openbitfun-space-4);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent);
+    color: var(--openbitfun-color-surface-canvas);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-4);
+    border-radius: var(--openbitfun-radius-base);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    box-shadow: var(--openbitfun-shadow-accent-glow);
     z-index: 50;
     animation: code-editor-fade-in 0.2s ease-out;
   }
@@ -157,14 +157,14 @@ $_editor-padding-desktop: 32px;
     .monaco-editor {
       .ctrl-hover-underline {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 80%, transparent);
         text-underline-offset: 2px;
         cursor: pointer !important;
       }
 
       .monaco-cross-file-link {
         text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent);
+        text-decoration-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 80%, transparent);
         text-decoration-thickness: 1px;
         text-underline-offset: 2px;
         cursor: pointer !important;
@@ -173,22 +173,22 @@ $_editor-padding-desktop: 32px;
 
     .monaco-hover,
     .monaco-editor-hover {
-      font-size: var(--bf-type-label-sm-font-size) !important;
+      font-size: var(--openbitfun-type-label-sm-font-size) !important;
 
       .hover-row,
       .hover-contents {
-        font-size: var(--bf-type-label-sm-font-size) !important;
-        color: var(--bf-color-content-on-light) !important;
+        font-size: var(--openbitfun-type-label-sm-font-size) !important;
+        color: var(--openbitfun-color-content-on-light) !important;
       }
 
       p, span, div {
-        font-size: var(--bf-type-label-sm-font-size) !important;
-        color: var(--bf-color-content-on-light) !important;
+        font-size: var(--openbitfun-type-label-sm-font-size) !important;
+        color: var(--openbitfun-color-content-on-light) !important;
       }
 
       .markdown-string {
-        font-size: var(--bf-type-label-sm-font-size) !important;
-        color: var(--bf-color-content-on-light) !important;
+        font-size: var(--openbitfun-type-label-sm-font-size) !important;
+        color: var(--openbitfun-color-content-on-light) !important;
       }
     }
   }
@@ -260,7 +260,7 @@ $_editor-padding-desktop: 32px;
 
     &__loading-text,
     &__error-message {
-      font-size: var(--bf-type-label-sm-font-size);
+      font-size: var(--openbitfun-type-label-sm-font-size);
       max-width: 300px;
     }
 
@@ -276,8 +276,8 @@ $_editor-padding-desktop: 32px;
 @media (prefers-contrast: high) {
   .code-editor-tool {
     &__loading-spinner {
-      border-color: var(--bf-color-content-muted);
-      border-top-color: var(--bf-color-content-primary);
+      border-color: var(--openbitfun-color-content-muted);
+      border-top-color: var(--openbitfun-color-content-primary);
     }
 
     &__error-icon {
@@ -292,11 +292,11 @@ $_editor-padding-desktop: 32px;
   body > .monaco-hover,
   body > .monaco-editor-hover,
   .monaco-hover-content {
-    font-size: var(--bf-type-label-sm-font-size) !important;
+    font-size: var(--openbitfun-type-label-sm-font-size) !important;
 
     * {
-      font-size: var(--bf-type-label-sm-font-size) !important;
-      color: var(--bf-color-content-on-light) !important;
+      font-size: var(--openbitfun-type-label-sm-font-size) !important;
+      color: var(--openbitfun-color-content-on-light) !important;
     }
   }
 }

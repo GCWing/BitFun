@@ -1,7 +1,7 @@
 {
   "schemaVersion": 5,
-  "product": "BitFun",
-  "title": "BitFun Playbook",
+  "product": "OpenBitFun",
+  "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "searchAcceptance": [
     {
@@ -207,11 +207,11 @@
       "touch_session_activity"
     ],
     "hostBridges": [
-      "mark_bitfun_control_surface_ready",
-      "mark_bitfun_control_surface_unready",
+      "mark_openbitfun_control_surface_ready",
+      "mark_openbitfun_control_surface_unready",
       "peer_host_invoke_complete",
       "product_control_invoke",
-      "report_bitfun_control_result",
+      "report_openbitfun_control_result",
       "report_ide_control_result",
       "webdriver_bridge_result"
     ],
@@ -265,13 +265,13 @@
         "创建、归档、恢复和分叉会话",
         "暂停、继续或引导正在运行的任务",
         "查看工具调用、权限请求和用量",
-        "用创造模式安全定制正在运行的 BitFun 前端"
+        "用创造模式安全定制正在运行的 OpenBitFun 前端"
       ],
       "highlightsEn": [
         "Create, archive, restore, and fork sessions",
         "Pause, continue, or steer running work",
         "Inspect tool calls, permission requests, and usage",
-        "Safely customize the running BitFun frontend in Creative mode"
+        "Safely customize the running OpenBitFun frontend in Creative mode"
       ],
       "items": [
         {
@@ -332,8 +332,8 @@
         },
         {
           "id": "creative-frontend-authoring",
-          "titleZh": "让创造模式安全修改正在运行的 BitFun 前端",
-          "titleEn": "Let Creative mode safely customize the running BitFun frontend",
+          "titleZh": "让创造模式安全修改正在运行的 OpenBitFun 前端",
+          "titleEn": "Let Creative mode safely customize the running OpenBitFun frontend",
           "control": {
             "kind": "delegate",
             "tools": [
@@ -528,11 +528,11 @@
               "AskUserQuestion"
             ],
             "workflowZh": [
-              "复杂任务用 TodoWrite 维护当前进度；正式计划产物通过 Write 写入项目的 .bitfun/plans 目录",
+              "复杂任务用 TodoWrite 维护当前进度；正式计划产物通过 Write 写入项目的 .openbitfun/plans 目录",
               "缺少会改变结果的用户选择时用 AskUserQuestion；能从仓库或当前上下文查明的信息不重复询问"
             ],
             "workflowEn": [
-              "Use TodoWrite to maintain progress for complex work; create formal plan artifacts with Write under the project's .bitfun/plans directory",
+              "Use TodoWrite to maintain progress for complex work; create formal plan artifacts with Write under the project's .openbitfun/plans directory",
               "Use AskUserQuestion only for a missing choice that changes the outcome; do not ask again for facts available from the repository or current context"
             ]
           },
@@ -594,12 +594,12 @@
       "stepsZh": [
         "打开 AI 助手或新建会话",
         "选择项目、模型和工作模式",
-        "描述目标；BitFun 会在会话中持续记录进度"
+        "描述目标；OpenBitFun 会在会话中持续记录进度"
       ],
       "stepsEn": [
         "Open the AI assistant or create a session",
         "Choose a project, model, and working mode",
-        "Describe the goal; BitFun keeps progress in the session"
+        "Describe the goal; OpenBitFun keeps progress in the session"
       ],
       "agentExamplesZh": [
         "新建一个会话，我们来排查这个构建错误",
@@ -1385,11 +1385,11 @@
             ],
             "workflowZh": [
               "先用 Read 读取当前内容，再根据改动范围选择 Edit 精确替换或 Write 创建/完整写入文件",
-              "文件工具沿用 BitFun 的工作区、权限与变更快照语义；写入后重新读取或查看差异确认结果"
+              "文件工具沿用 OpenBitFun 的工作区、权限与变更快照语义；写入后重新读取或查看差异确认结果"
             ],
             "workflowEn": [
               "Read the current content first, then use Edit for exact replacements or Write for creation/full rewrites",
-              "The file tools preserve BitFun workspace, permission, and change-snapshot semantics; read back or inspect the diff after writing"
+              "The file tools preserve OpenBitFun workspace, permission, and change-snapshot semantics; read back or inspect the diff after writing"
             ]
           },
           "evidence": [
@@ -2255,8 +2255,8 @@
       "categoryId": "workspace",
       "titleZh": "内置浏览器",
       "titleEn": "Built-in browser",
-      "summaryZh": "在 BitFun 内打开网页和本地服务；Agent 可直接读取页面、选择元素并点击、填写、滚动或截图。",
-      "summaryEn": "Open webpages and local services inside BitFun, where an agent can inspect the page and select, click, fill, scroll, or capture elements directly.",
+      "summaryZh": "在 OpenBitFun 内打开网页和本地服务；Agent 可直接读取页面、选择元素并点击、填写、滚动或截图。",
+      "summaryEn": "Open webpages and local services inside OpenBitFun, where an agent can inspect the page and select, click, fill, scroll, or capture elements directly.",
       "keywordsZh": [
         "浏览器",
         "网页",
@@ -2296,8 +2296,8 @@
       "items": [
         {
           "id": "open-urls",
-          "titleZh": "输入完整网址、本地域名或开发服务端口并在 BitFun 内打开",
-          "titleEn": "Open full URLs, local hostnames, or development-service ports inside BitFun",
+          "titleZh": "输入完整网址、本地域名或开发服务端口并在 OpenBitFun 内打开",
+          "titleEn": "Open full URLs, local hostnames, or development-service ports inside OpenBitFun",
           "control": {
             "kind": "delegate"
           },
@@ -2480,12 +2480,12 @@
       "agentControl": {
         "tool": "ControlHub",
         "workflowZh": [
-          "用户给出网址时，用 browser.open_builtin 打开并取得内置页面的 session_id；用户只要求显示内置浏览器且没有网址时，改用 BitFunControl 打开 feature.browser 能力根入口，不得臆造 about:blank",
+          "用户给出网址时，用 browser.open_builtin 打开并取得内置页面的 session_id；用户只要求显示内置浏览器且没有网址时，改用 OpenBitFunControl 打开 feature.browser 能力根入口，不得臆造 about:blank",
           "对同一个 session_id 指定 target 为 builtin，也可用 target_url 或 target_title 定位；快照、点击、填写、滚动和截图等动作与外部 CDP 浏览器共用同一套契约",
           "页面变化后重新快照并使用最新元素引用；只有网络追踪、原始 CDP 和文件输入等协议扩展才切换到 external"
         ],
         "workflowEn": [
-          "When the user supplies a URL, open it with browser.open_builtin and keep the returned built-in session_id; when they only want the built-in browser surface, open the feature.browser capability root with BitFunControl and never invent about:blank",
+          "When the user supplies a URL, open it with browser.open_builtin and keep the returned built-in session_id; when they only want the built-in browser surface, open the feature.browser capability root with OpenBitFunControl and never invent about:blank",
           "Address that session_id with target set to builtin, or locate it by target_url or target_title; snapshots, clicks, fills, scrolling, screenshots, and other portable actions share the external CDP contract",
           "Take a new snapshot after page changes and use fresh element refs; switch to external only for protocol extensions such as network tracing, raw CDP, or file-input injection"
         ]
@@ -2879,8 +2879,8 @@
       "categoryId": "automation",
       "titleZh": "Mini Apps 小应用",
       "titleEn": "Mini Apps",
-      "summaryZh": "在 BitFun 内安装、创建和运行轻量应用，让界面、数据与 Agent 工作流组合在一起。",
-      "summaryEn": "Install, create, and run lightweight apps inside BitFun, combining UI, data, and agent workflows.",
+      "summaryZh": "在 OpenBitFun 内安装、创建和运行轻量应用，让界面、数据与 Agent 工作流组合在一起。",
+      "summaryEn": "Install, create, and run lightweight apps inside OpenBitFun, combining UI, data, and agent workflows.",
       "keywordsZh": [
         "Mini App",
         "小应用",
@@ -3232,18 +3232,18 @@
               "UpdateCanvas"
             ],
             "workflowZh": [
-              "用 CreateCanvas 提交单文件 TSX，并仅从 bitfun/canvas 导入允许的运行时组件",
-              "保留返回的 bitfun-canvas 引用，先 ReadCanvas 获取当前版本，再用 PatchCanvas 做局部改动或 UpdateCanvas 完整更新"
+              "用 CreateCanvas 提交单文件 TSX，并仅从 openbitfun/canvas 导入允许的运行时组件",
+              "保留返回的 openbitfun-canvas 引用，先 ReadCanvas 获取当前版本，再用 PatchCanvas 做局部改动或 UpdateCanvas 完整更新"
             ],
             "workflowEn": [
-              "Use CreateCanvas with a single TSX file and import runtime components only from bitfun/canvas",
-              "Keep the returned bitfun-canvas reference, inspect it with ReadCanvas, then use PatchCanvas for focused changes or UpdateCanvas for a full update"
+              "Use CreateCanvas with a single TSX file and import runtime components only from openbitfun/canvas",
+              "Keep the returned openbitfun-canvas reference, inspect it with ReadCanvas, then use PatchCanvas for focused changes or UpdateCanvas for a full update"
             ]
           },
           "evidence": [
             "command:report_canvas_runtime_ready",
-            "source:src/web-ui/src/tools/bitfun-canvas/reactRuntime.ts#runtime: 'react'",
-            "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#renderedHtml"
+            "source:src/web-ui/src/tools/openbitfun-canvas/reactRuntime.ts#runtime: 'react'",
+            "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#renderedHtml"
           ]
         },
         {
@@ -3300,7 +3300,7 @@
             ]
           },
           "evidence": [
-            "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#lastKnownGoodRevision"
+            "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#lastKnownGoodRevision"
           ]
         },
         {
@@ -3314,7 +3314,7 @@
             "reasonEn": "“Select an element inside Canvas and add its reference to session context” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
-            "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#createCanvasElementContext"
+            "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#createCanvasElementContext"
           ]
         },
         {
@@ -3329,7 +3329,7 @@
           },
           "evidence": [
             "command:report_canvas_runtime_error",
-            "source:src/web-ui/src/tools/bitfun-canvas/BitfunCanvasPanel.tsx#canvas-runtime-auto-repair"
+            "source:src/web-ui/src/tools/openbitfun-canvas/OpenBitFunCanvasPanel.tsx#canvas-runtime-auto-repair"
           ]
         },
         {
@@ -3343,7 +3343,7 @@
             "reasonEn": "“Export the current Canvas as a standalone HTML file” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
-            "source:src/web-ui/src/tools/bitfun-canvas/canvasHtmlExportService.ts#export async function exportCanvasHtml"
+            "source:src/web-ui/src/tools/openbitfun-canvas/canvasHtmlExportService.ts#export async function exportCanvasHtml"
           ]
         }
       ],
@@ -4151,8 +4151,8 @@
       "categoryId": "connect",
       "titleZh": "Remote Connect 与多设备",
       "titleEn": "Remote Connect & devices",
-      "summaryZh": "从手机、Bot 或另一台 BitFun 设备连接当前主机，远程查看会话、回答权限并继续工作。",
-      "summaryEn": "Connect to this host from mobile, a bot, or another BitFun device to inspect sessions, answer permissions, and continue work remotely.",
+      "summaryZh": "从手机、Bot 或另一台 OpenBitFun 设备连接当前主机，远程查看会话、回答权限并继续工作。",
+      "summaryEn": "Connect to this host from mobile, a bot, or another OpenBitFun device to inspect sessions, answer permissions, and continue work remotely.",
       "keywordsZh": [
         "Remote Connect",
         "远程控制",
@@ -4280,8 +4280,8 @@
           "control": {
             "kind": "open",
             "reasonCode": "externalAuth",
-            "reasonZh": "BitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
-            "reasonEn": "BitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
+            "reasonZh": "OpenBitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
+            "reasonEn": "OpenBitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
           },
           "evidence": [
             "command:account_login",
@@ -4336,13 +4336,13 @@
         },
         {
           "id": "settings-sync",
-          "titleZh": "在设备间自动或手动同步 BitFun 设置",
-          "titleEn": "Synchronize BitFun settings across devices automatically or on demand",
+          "titleZh": "在设备间自动或手动同步 OpenBitFun 设置",
+          "titleEn": "Synchronize OpenBitFun settings across devices automatically or on demand",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“在设备间自动或手动同步 BitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Synchronize BitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“在设备间自动或手动同步 OpenBitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Synchronize OpenBitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
             "command:account_sync_settings",
@@ -4353,13 +4353,13 @@
         },
         {
           "id": "peer-device",
-          "titleZh": "进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面",
-          "titleEn": "Enter Peer Device Mode and use another BitFun device as the command and event data plane",
+          "titleZh": "进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面",
+          "titleEn": "Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Enter Peer Device Mode and use another BitFun device as the command and event data plane” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
             "command:peer_control_attach",
@@ -4391,7 +4391,7 @@
       ],
       "destination": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect"
+        "eventName": "openbitfun:open-remote-connect"
       },
       "operations": []
     },
@@ -4401,8 +4401,8 @@
       "categoryId": "connect",
       "titleZh": "Detached Dispatch 远程派发",
       "titleEn": "Detached Dispatch",
-      "summaryZh": "把可持续运行的任务派发到另一台 BitFun 主机；控制端可以断开，目标主机继续执行并保留记录。",
-      "summaryEn": "Dispatch durable work to another BitFun host; the controller may disconnect while the target continues and keeps the record.",
+      "summaryZh": "把可持续运行的任务派发到另一台 OpenBitFun 主机；控制端可以断开，目标主机继续执行并保留记录。",
+      "summaryEn": "Dispatch durable work to another OpenBitFun host; the controller may disconnect while the target continues and keeps the record.",
       "keywordsZh": [
         "派发任务",
         "Detached Dispatch",
@@ -4445,13 +4445,13 @@
         },
         {
           "id": "provision",
-          "titleZh": "为目标主机配置运行环境并安装或更新 BitFun CLI",
-          "titleEn": "Provision the target runtime and install or update the BitFun CLI",
+          "titleZh": "为目标主机配置运行环境并安装或更新 OpenBitFun CLI",
+          "titleEn": "Provision the target runtime and install or update the OpenBitFun CLI",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“为目标主机配置运行环境并安装或更新 BitFun CLI”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Provision the target runtime and install or update the BitFun CLI” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“为目标主机配置运行环境并安装或更新 OpenBitFun CLI”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Provision the target runtime and install or update the OpenBitFun CLI” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
             "command:dispatch_provision_target",
@@ -4571,7 +4571,7 @@
       ],
       "destination": {
         "kind": "event",
-        "eventName": "bitfun:open-remote-connect",
+        "eventName": "openbitfun:open-remote-connect",
         "detail": {
           "group": "account"
         }
@@ -4725,12 +4725,12 @@
         }
       ],
       "stepsZh": [
-        "登录 BitFun 账户",
+        "登录 OpenBitFun 账户",
         "打开 Pages",
         "选择页面并确认发布与可见性"
       ],
       "stepsEn": [
-        "Sign in to a BitFun account",
+        "Sign in to a OpenBitFun account",
         "Open Pages",
         "Choose a page and confirm publishing and visibility"
       ],
@@ -5061,7 +5061,7 @@
         "Choose a preset or import a Petdex pack"
       ],
       "agentControl": {
-        "tool": "BitFunControl",
+        "tool": "OpenBitFunControl",
         "workflowZh": [
           "先用 search 搜索“桌面宠物 / Petdex / companion”，再 get `setting.application.pet` 读取当前选项和受支持操作",
           "用 configure 修改 `enabled`；用 execute 的 `list-pets`、`use-pet`、`delete-pet` 查看、导入/选择或删除角色",
@@ -5159,8 +5159,8 @@
         },
         {
           "id": "launch-at-login",
-          "titleZh": "控制 BitFun 是否在登录系统后自动启动",
-          "titleEn": "Choose whether BitFun launches automatically after system sign-in",
+          "titleZh": "控制 OpenBitFun 是否在登录系统后自动启动",
+          "titleEn": "Choose whether OpenBitFun launches automatically after system sign-in",
           "control": {
             "kind": "direct",
             "operations": [],
@@ -5176,8 +5176,8 @@
         },
         {
           "id": "prevent-sleep",
-          "titleZh": "控制 BitFun 运行期间是否阻止电脑自动睡眠",
-          "titleEn": "Choose whether BitFun prevents the computer from sleeping while it runs",
+          "titleZh": "控制 OpenBitFun 运行期间是否阻止电脑自动睡眠",
+          "titleEn": "Choose whether OpenBitFun prevents the computer from sleeping while it runs",
           "control": {
             "kind": "direct",
             "operations": [],
@@ -5287,15 +5287,15 @@
           "id": "launch-at-login",
           "titleZh": "登录后自动启动",
           "titleEn": "Launch at login",
-          "descriptionZh": "在当前桌面系统登录后自动启动 BitFun。",
-          "descriptionEn": "Launch BitFun automatically after signing in to this desktop system."
+          "descriptionZh": "在当前桌面系统登录后自动启动 OpenBitFun。",
+          "descriptionEn": "Launch OpenBitFun automatically after signing in to this desktop system."
         },
         {
           "id": "prevent-sleep",
           "titleZh": "阻止系统睡眠",
           "titleEn": "Prevent system sleep",
-          "descriptionZh": "在 BitFun 运行期间持有本机睡眠抑制器。",
-          "descriptionEn": "Hold a local sleep inhibitor while BitFun is running."
+          "descriptionZh": "在 OpenBitFun 运行期间持有本机睡眠抑制器。",
+          "descriptionEn": "Hold a local sleep inhibitor while OpenBitFun is running."
         },
         {
           "id": "auto-update",
@@ -5385,7 +5385,7 @@
             ]
           },
           "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.presets.bitfun-tokyo-night.name"
+            "source:src/web-ui/src/locales/zh-CN/settings/application.json#appearance.presets.openbitfun-tokyo-night.name"
           ]
         },
         {
@@ -5465,11 +5465,11 @@
               "PublishAppearance"
             ],
             "workflowZh": [
-              "仅在用户明确要求对外投稿时调用 PublishAppearance，并使用本机绝对 `.bitfun-appearance` 路径及用户确认的许可证",
+              "仅在用户明确要求对外投稿时调用 PublishAppearance，并使用本机绝对 `.openbitfun-appearance` 路径及用户确认的许可证",
               "登录或校验返回待处理状态时展示具体下一步；工具不支持远程 SSH 路径，也不能把提交审核报告为已经上架"
             ],
             "workflowEn": [
-              "Call PublishAppearance only after an explicit external-submission request, using a local absolute `.bitfun-appearance` path and a user-confirmed license",
+              "Call PublishAppearance only after an explicit external-submission request, using a local absolute `.openbitfun-appearance` path and a user-confirmed license",
               "Show the exact next step for pending authentication or validation; remote SSH paths are unsupported and submission for review is not publication"
             ]
           },
@@ -5539,15 +5539,15 @@
           "id": "theme",
           "titleZh": "主题",
           "titleEn": "Theme",
-          "descriptionZh": "使用系统、BitFun 深色或 BitFun 浅色外观。",
-          "descriptionEn": "Use the system, BitFun dark, or BitFun light appearance."
+          "descriptionZh": "使用系统、OpenBitFun 深色或 OpenBitFun 浅色外观。",
+          "descriptionEn": "Use the system, OpenBitFun dark, or OpenBitFun light appearance."
         },
         {
           "id": "language",
           "titleZh": "界面语言",
           "titleEn": "Interface language",
-          "descriptionZh": "设置 BitFun 的界面语言。",
-          "descriptionEn": "Set the BitFun interface language."
+          "descriptionZh": "设置 OpenBitFun 的界面语言。",
+          "descriptionEn": "Set the OpenBitFun interface language."
         }
       ]
     },
@@ -5661,11 +5661,11 @@
       ],
       "agentExamplesZh": [
         "关闭桌面伙伴",
-        "让 BitFun 使用 /path/to/pet 里的萌宠"
+        "让 OpenBitFun 使用 /path/to/pet 里的萌宠"
       ],
       "agentExamplesEn": [
         "Turn off the desktop companion",
-        "Make BitFun use the pet at /path/to/pet"
+        "Make OpenBitFun use the pet at /path/to/pet"
       ],
       "destination": {
         "kind": "settings",
@@ -5676,8 +5676,8 @@
           "id": "list-pets",
           "titleZh": "列出可用萌宠",
           "titleEn": "List available pets",
-          "descriptionZh": "读取当前角色以及 BitFun 已导入的 Petdex 角色。",
-          "descriptionEn": "Read the active character and Petdex characters imported into BitFun."
+          "descriptionZh": "读取当前角色以及 OpenBitFun 已导入的 Petdex 角色。",
+          "descriptionEn": "Read the active character and Petdex characters imported into OpenBitFun."
         },
         {
           "id": "use-pet",
@@ -5690,8 +5690,8 @@
           "id": "delete-pet",
           "titleZh": "删除已导入萌宠",
           "titleEn": "Delete an imported pet",
-          "descriptionZh": "按角色 ID 或 BitFun 包目录删除已导入角色；若正在使用则安全回退到默认角色。",
-          "descriptionEn": "Delete an imported character by ID or BitFun package path, safely falling back when it is active."
+          "descriptionZh": "按角色 ID 或 OpenBitFun 包目录删除已导入角色；若正在使用则安全回退到默认角色。",
+          "descriptionEn": "Delete an imported character by ID or OpenBitFun package path, safely falling back when it is active."
         }
       ],
       "options": [
@@ -6621,8 +6621,8 @@
       "categoryId": "assistant",
       "titleZh": "记忆设置",
       "titleEn": "Memory settings",
-      "summaryZh": "控制 BitFun 是否从会话中提取和使用长期记忆，以及保留、整理和模型策略。",
-      "summaryEn": "Control whether BitFun extracts and uses long-term memory from sessions, including retention, consolidation, and model policy.",
+      "summaryZh": "控制 OpenBitFun 是否从会话中提取和使用长期记忆，以及保留、整理和模型策略。",
+      "summaryEn": "Control whether OpenBitFun extracts and uses long-term memory from sessions, including retention, consolidation, and model policy.",
       "keywordsZh": [
         "记忆设置",
         "长期记忆",
@@ -7255,8 +7255,8 @@
           "id": "worktree-root-path",
           "titleZh": "受管 Worktree 根目录",
           "titleEn": "Managed-worktree root",
-          "descriptionZh": "设置 BitFun 创建受管 Worktree 的统一根目录。",
-          "descriptionEn": "Set the common root where BitFun creates managed worktrees."
+          "descriptionZh": "设置 OpenBitFun 创建受管 Worktree 的统一根目录。",
+          "descriptionEn": "Set the common root where OpenBitFun creates managed worktrees."
         },
         {
           "id": "worktree-branch-prefix",
@@ -7276,8 +7276,8 @@
           "id": "worktree-auto-delete-enabled",
           "titleZh": "自动清理 Worktree",
           "titleEn": "Automatic worktree cleanup",
-          "descriptionZh": "允许 BitFun 自动清理超过保留上限的受管 Worktree。",
-          "descriptionEn": "Allow BitFun to prune managed worktrees beyond the retention limit."
+          "descriptionZh": "允许 OpenBitFun 自动清理超过保留上限的受管 Worktree。",
+          "descriptionEn": "Allow OpenBitFun to prune managed worktrees beyond the retention limit."
         },
         {
           "id": "worktree-auto-delete-limit",
@@ -7542,8 +7542,8 @@
         },
         {
           "id": "browser-auto-connect",
-          "titleZh": "控制 BitFun 启动时是否自动连接浏览器",
-          "titleEn": "Choose whether BitFun reconnects browser control at startup",
+          "titleZh": "控制 OpenBitFun 启动时是否自动连接浏览器",
+          "titleEn": "Choose whether OpenBitFun reconnects browser control at startup",
           "control": {
             "kind": "direct",
             "operations": [],
@@ -7674,8 +7674,8 @@
           "id": "browser-auto-connect",
           "titleZh": "启动时连接浏览器",
           "titleEn": "Connect browser on startup",
-          "descriptionZh": "BitFun 启动后自动尝试连接浏览器控制。",
-          "descriptionEn": "Automatically try to connect browser control after BitFun starts."
+          "descriptionZh": "OpenBitFun 启动后自动尝试连接浏览器控制。",
+          "descriptionEn": "Automatically try to connect browser control after OpenBitFun starts."
         },
         {
           "id": "tool-json-repair",
@@ -8047,8 +8047,8 @@
         },
         {
           "id": "project-hooks",
-          "titleZh": "对可信仓库单独启用项目级 .bitfun/config/hooks.json",
-          "titleEn": "Enable project-level .bitfun/config/hooks.json separately for trusted repositories",
+          "titleZh": "对可信仓库单独启用项目级 .openbitfun/config/hooks.json",
+          "titleEn": "Enable project-level .openbitfun/config/hooks.json separately for trusted repositories",
           "destination": {
             "kind": "settings",
             "pageId": "tools.automation",
@@ -8064,7 +8064,7 @@
             ]
           },
           "evidence": [
-            "source:src/web-ui/src/locales/zh-CN/settings/hooks.json#.bitfun/config/hooks.json"
+            "source:src/web-ui/src/locales/zh-CN/settings/hooks.json#.openbitfun/config/hooks.json"
           ]
         },
         {
@@ -8226,23 +8226,23 @@
       "highlightsZh": [
         "切换 WebSearch 运行时搜索服务",
         "在执行主机上加密保存设备凭据",
-        "配置和查看 BitFun Search HTTP Protocol v1"
+        "配置和查看 OpenBitFun Search HTTP Protocol v1"
       ],
       "highlightsEn": [
         "Switch the WebSearch runtime provider",
         "Store device credentials encrypted on the execution host",
-        "Configure and inspect BitFun Search HTTP Protocol v1"
+        "Configure and inspect OpenBitFun Search HTTP Protocol v1"
       ],
       "items": [
         {
           "id": "provider",
-          "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务",
-          "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider",
+          "titleZh": "在免费 Exa MCP、Exa Search API、Tavily 与 OpenBitFun Search HTTP Protocol 之间选择运行时服务",
+          "titleEn": "Choose free Exa MCP, Exa Search API, Tavily, or OpenBitFun Search HTTP Protocol as the runtime provider",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
-            "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation."
+            "reasonZh": "“在免费 Exa MCP、Exa Search API、Tavily 与 OpenBitFun Search HTTP Protocol 之间选择运行时服务”与各服务的配置状态相关，目前没有一个能安全完成选择、检查和保存整个流程的单一结构化 Command；Agent 会打开精确设置入口，由用户确认配置。",
+            "reasonEn": "“Choose free Exa MCP, Exa Search API, Tavily, or OpenBitFun Search HTTP Protocol as the runtime provider” depends on provider-specific configuration state, and no single structured Command can safely complete selection, validation, and saving; the Agent opens the exact settings entry for user confirmation."
           },
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#providers"
@@ -8250,13 +8250,13 @@
         },
         {
           "id": "http-endpoint",
-          "titleZh": "为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
-          "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol",
+          "titleZh": "为 OpenBitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header",
+          "titleEn": "Configure the endpoint, authentication mode, and restricted credential header for OpenBitFun Search HTTP Protocol",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
-            "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration."
+            "reasonZh": "“为 OpenBitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header”包含 URL、安全限制和认证方式等关联字段，需要在设置页中一起校验并明确保存；Agent 会打开对应入口而不猜测端点配置。",
+            "reasonEn": "“Configure the endpoint, authentication mode, and restricted credential header for OpenBitFun Search HTTP Protocol” combines URL, security restrictions, and authentication fields that must be validated and explicitly saved together in Settings; the Agent opens the corresponding entry instead of guessing endpoint configuration."
           },
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#fields.endpoint",
@@ -8283,13 +8283,13 @@
         },
         {
           "id": "http-protocol",
-          "titleZh": "查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制",
-          "titleEn": "Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1",
+          "titleZh": "查看并复制 OpenBitFun Search HTTP Protocol v1 的请求、响应和传输限制",
+          "titleEn": "Inspect and copy the request, response, and transport limits for OpenBitFun Search HTTP Protocol v1",
           "control": {
             "kind": "open",
             "reasonCode": "visualSelection",
-            "reasonZh": "协议说明仅在选中 BitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
-            "reasonEn": "The protocol specification is shown only when BitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary."
+            "reasonZh": "协议说明仅在选中 OpenBitFun Search HTTP Protocol 时显示，并由设置页提供完整可复制内容；Agent 会打开精确入口，避免用不完整摘要替代产品内协议。",
+            "reasonEn": "The protocol specification is shown only when OpenBitFun Search HTTP Protocol is selected and the Settings page owns the complete copyable content; the Agent opens the exact entry instead of substituting an incomplete summary."
           },
           "evidence": [
             "source:src/web-ui/src/locales/zh-CN/settings/web-search.json#protocol.request.description",
@@ -9436,7 +9436,7 @@
     "miniapp_export": {
       "capabilityId": "feature.miniapps"
     },
-    "bitfun_control_host": {
+    "openbitfun_control_host": {
       "capabilityId": null
     },
     "context_upload": {

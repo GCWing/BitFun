@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const isolatedRoot = await mkdtemp(join(tmpdir(), "bitfun-sdk-consumer-"));
+const isolatedRoot = await mkdtemp(join(tmpdir(), "openbitfun-sdk-consumer-"));
 const packedRoot = join(isolatedRoot, "packed");
 const consumerRoot = join(isolatedRoot, "consumer");
 const workspace = join(isolatedRoot, "workspace");
@@ -43,7 +43,7 @@ try {
     join(consumerRoot, "run.mjs"),
     `
 import assert from "node:assert/strict";
-import { AgentClient } from "@bitfun/agent-sdk";
+import { AgentClient } from "@openbitfun/agent-sdk";
 
 const client = await AgentClient.start({
   cwd: process.cwd(),
@@ -69,9 +69,9 @@ process.stdout.write("local-package-consumer: PASS\\n");
 
   const result = await run(process.execPath, [join(consumerRoot, "run.mjs")], consumerRoot, {
     ...process.env,
-    BITFUN_E2E_STORAGE_GUARD: "1",
-    BITFUN_E2E_USER_ROOT: userRoot,
-    BITFUN_E2E_HOME: userRoot,
+    OPENBITFUN_E2E_STORAGE_GUARD: "1",
+    OPENBITFUN_E2E_USER_ROOT: userRoot,
+    OPENBITFUN_E2E_HOME: userRoot,
     APPDATA: configRoot,
     XDG_CONFIG_HOME: configRoot,
     HOME: userRoot,

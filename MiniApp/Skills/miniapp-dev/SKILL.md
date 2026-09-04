@@ -1,9 +1,9 @@
 ---
 name: miniapp-dev
-description: Develops, maintains, and generates BitFun MiniApps (Zero-Dialect Runtime). Use when (1) working on miniapp framework code under src/crates/assembly/core/src/miniapp/ or src/web-ui/src/app/scenes/miniapps/; or (2) generating / creating / designing a NEW MiniApp for the user — including any request like "做一个小应用 / 生成 MiniApp / 写个 BitFun 小工具 / 创建 mini app". Also triggers on MiniApp, miniapps, bridge, zero-dialect, InitMiniApp, app.fs / app.shell / app.storage, or any work under MiniApp/Demo/ and MiniApp/Skills/.
+description: Develops, maintains, and generates OpenBitFun MiniApps (Zero-Dialect Runtime). Use when (1) working on miniapp framework code under src/crates/assembly/core/src/miniapp/ or src/web-ui/src/app/scenes/miniapps/; or (2) generating / creating / designing a NEW MiniApp for the user — including any request like "做一个小应用 / 生成 MiniApp / 写个 OpenBitFun 小工具 / 创建 mini app". Also triggers on MiniApp, miniapps, bridge, zero-dialect, InitMiniApp, app.fs / app.shell / app.storage, or any work under MiniApp/Demo/ and MiniApp/Skills/.
 ---
 
-# BitFun MiniApp V2 指南
+# OpenBitFun MiniApp V2 指南
 
 > **本 Skill 服务两类工作**：
 >
@@ -29,13 +29,13 @@ description: Develops, maintains, and generates BitFun MiniApps (Zero-Dialect Ru
 - ❌ 左侧色条 + 圆角卡片组合
 - ❌ 标题下加 1-2px 装饰横线
 - ❌ 硬画复杂插画 SVG（用占位框，标注 "Image TBD"）
-- ❌ Inter / Roboto 兜底就完事（用 `var(--bitfun-font-sans)` 优先）
+- ❌ Inter / Roboto 兜底就完事（用 `var(--openbitfun-font-sans)` 优先）
 - ❌ 12px 以下文字 / hit target < 32px
 - ❌ 圆角混用 4/8/12/16（钉 1-2 档全应用统一）
 - ❌ 用装饰性 stats / icon / sparkline 填空白（空白是排版问题，不是内容问题）
 
 ### 颜色与字体
-- **首选** `var(--bitfun-*)` 系列 + fallback，与宿主主题协同（见下文"主题集成"章节的完整变量清单）。
+- **首选** `var(--openbitfun-*)` 系列 + fallback，与宿主主题协同（见下文"主题集成"章节的完整变量清单）。
 - 一个颜色占视觉权重 60-70%（dominant），1-2 个 supporting，1 个 accent——**禁止给所有色块同等权重**。
 - 字号：标题 18-22px / Section 14-15px / 正文 13-14px / Caption 11-12px。
 
@@ -46,7 +46,7 @@ description: Develops, maintains, and generates BitFun MiniApps (Zero-Dialect Ru
 没图标 / 没数据 / 没素材时，用明确的占位（标注尺寸或 "TBD"），并在 README 里登记待补清单——**不要硬画一个糟糕的真实物**。
 
 ### 工具型 vs 展示型
-绝大多数 BitFun MiniApp 是**工具型**——信息密集、操作短、配色冷静，仿照 `regex-playground` / `coding-selfie` / `git-graph` 的克制感。只有用户明确要"对外展示 / 灵感型 / 作品集"时才放飞视觉。
+绝大多数 OpenBitFun MiniApp 是**工具型**——信息密集、操作短、配色冷静，仿照 `regex-playground` / `coding-selfie` / `git-graph` 的克制感。只有用户明确要"对外展示 / 灵感型 / 作品集"时才放飞视觉。
 
 ### 内容守则
 - 不为填空白而加内容——空白说明结构应被简化。
@@ -57,7 +57,7 @@ description: Develops, maintains, and generates BitFun MiniApps (Zero-Dialect Ru
 
 ## 核心哲学：Zero-Dialect Runtime
 
-MiniApp 使用 **标准 Web API + window.app**：UI 侧为 ESM 模块（`ui.js`），后端逻辑在独立 JS Worker 进程（Bun 优先 / Node 回退）中执行。Rust 负责进程管理、权限策略和 Tauri 独占 API；Bridge 从旧的 `require()` shim + `__BITFUN__` 替换为统一的 **window.app** Runtime Adapter。
+MiniApp 使用 **标准 Web API + window.app**：UI 侧为 ESM 模块（`ui.js`），后端逻辑在独立 JS Worker 进程（Bun 优先 / Node 回退）中执行。Rust 负责进程管理、权限策略和 Tauri 独占 API；Bridge 从旧的 `require()` shim + `__OPENBITFUN__` 替换为统一的 **window.app** Runtime Adapter。
 
 ## 代码架构
 
@@ -153,7 +153,7 @@ iframe 内 window.app.call(method, params)
   → useMiniAppBridge 监听
   ├─ 框架原语 (fs.* / shell.* / os.* / net.*)：
   │   ├─ node.enabled = false  → miniAppAPI.hostCall → Tauri invoke('miniapp_host_call')
-  │   │                          → bitfun_core::miniapp::host_dispatch（纯 Rust，无需 Bun/Node）
+  │   │                          → openbitfun_core::miniapp::host_dispatch（纯 Rust，无需 Bun/Node）
   │   └─ node.enabled = true   → miniAppAPI.workerCall → Tauri invoke('miniapp_worker_call')
   │                              → JsWorkerPool（保留旧路径，允许 worker.js 覆写 fs/shell 等）
   ├─ 自定义方法：始终走 worker.call → JsWorkerPool（要求 node.enabled = true 且 worker.js 导出）
@@ -181,7 +181,7 @@ dialog.open / dialog.save / dialog.message
 
 ## 能力边界（重要）
 
-MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通道"。设计 / 生成新小应用前请先比对，能力不在表内的需求请走相应替代方案，**不要假设有 `app.bitfun.*` / `app.workspace.*` / `app.git.*` / `app.session.*` 之类的接口存在。**
+MiniApp 框架**只暴露下列能力**，没有任何"通用 OpenBitFun 后端通道"。设计 / 生成新小应用前请先比对，能力不在表内的需求请走相应替代方案，**不要假设有 `app.openbitfun.*` / `app.workspace.*` / `app.git.*` / `app.session.*` 之类的接口存在。**
 
 | 能力 | 入口 | 说明 |
 |---|---|---|
@@ -199,9 +199,9 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 | 自定义后端 | `app.call('xxx', …)` + `worker.js` | 仅 `node.enabled = true` 时可用，自己实现业务逻辑 |
 | 主题 / i18n | `app.appearanceMode` / `app.locale` / `app.onAppearanceChange` / `app.onLocaleChange` / `app.t(...)` | 见对应章节 |
 
-### 框架**不**直接暴露的 BitFun 后端能力（截至本文档）
+### 框架**不**直接暴露的 OpenBitFun 后端能力（截至本文档）
 
-下面这些 BitFun 内部服务，目前**没有**给小应用开放调用通道：
+下面这些 OpenBitFun 内部服务，目前**没有**给小应用开放调用通道：
 
 - WorkspaceService（结构化工作区索引、统一搜索）
 - GitService（结构化 status / diff / blame，区别于裸 `git` 命令）
@@ -212,10 +212,10 @@ MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通�
 需要这类能力时的合规姿势：
 
 1. **能用裸命令行解决的**（如 git）→ 在 `permissions.shell.allow` 里加命令名，用 `app.shell.exec` 包一层（参考 `builtin-coding-selfie/ui.js` 的 `scanGitWorkspace`）；
-2. **只是要读 BitFun 工作区内的文件**（如某些项目元数据） → 把 `{workspace}` 加到 `permissions.fs.read`，自己用 `app.fs.*` 读 + 在前端解析；
+2. **只是要读 OpenBitFun 工作区内的文件**（如某些项目元数据） → 把 `{workspace}` 加到 `permissions.fs.read`，自己用 `app.fs.*` 读 + 在前端解析；
 3. **必须真调用某个内部服务** → 暂不支持，先记录到需求池。**不要**自己起一个 worker 去模拟服务行为，会和真正的 service 行为漂移。
 
-> 维护者：以后若新增 `app.bitfun.*` / `app.workspace.*` 这类宿主直通通道，请同步更新本节，避免"文档说没有、代码偷偷加了"的不一致。
+> 维护者：以后若新增 `app.openbitfun.*` / `app.workspace.*` 这类宿主直通通道，请同步更新本节，避免"文档说没有、代码偷偷加了"的不一致。
 
 ## window.app 运行时 API
 
@@ -245,61 +245,61 @@ MiniApp 在 iframe 中运行时自动与主应用主题同步，避免界面风�
 | `app.appearanceMode` | 当前主题类型字符串：`'dark'` 或 `'light'`（随主应用切换更新） |
 | `app.onAppearanceChange(fn)` | 注册主题变更回调，参数为 payload：`{ mode, id, vars }` |
 
-### data-bf-appearance-mode 属性
+### data-openbitfun-appearance-mode 属性
 
-编译后的 HTML 根元素 `<html>` 带有 `data-bf-appearance-mode="dark"` 或 `"light"`，便于用 CSS 按主题写样式，例如：
+编译后的 HTML 根元素 `<html>` 带有 `data-openbitfun-appearance-mode="dark"` 或 `"light"`，便于用 CSS 按主题写样式，例如：
 
 ```css
-[data-bf-appearance-mode="light"] .panel { background: #f5f5f5; }
-[data-bf-appearance-mode="dark"] .panel { background: #1a1a1a; }
+[data-openbitfun-appearance-mode="light"] .panel { background: #f5f5f5; }
+[data-openbitfun-appearance-mode="dark"] .panel { background: #1a1a1a; }
 ```
 
-### --bitfun-* CSS 变量
+### --openbitfun-* CSS 变量
 
-宿主会将主应用主题映射为以下 CSS 变量并注入 iframe 的 `:root`。在 MiniApp 的 CSS 中建议用 `var(--bitfun-*, <fallback>)` 引用，以便在 BitFun 内与主应用一致，导出为独立应用时 fallback 生效。
+宿主会将主应用主题映射为以下 CSS 变量并注入 iframe 的 `:root`。在 MiniApp 的 CSS 中建议用 `var(--openbitfun-*, <fallback>)` 引用，以便在 OpenBitFun 内与主应用一致，导出为独立应用时 fallback 生效。
 
 **背景**
 
-- `--bitfun-bg` — 主背景
-- `--bitfun-bg-secondary` — 次级背景（如工具栏、面板）
-- `--bitfun-bg-tertiary` — 第三级背景
-- `--bitfun-bg-elevated` — 浮层/卡片背景
+- `--openbitfun-bg` — 主背景
+- `--openbitfun-bg-secondary` — 次级背景（如工具栏、面板）
+- `--openbitfun-bg-tertiary` — 第三级背景
+- `--openbitfun-bg-elevated` — 浮层/卡片背景
 
 **文字**
 
-- `--bitfun-text` — 主文字
-- `--bitfun-text-secondary` — 次要文字
-- `--bitfun-text-muted` — 弱化文字
+- `--openbitfun-text` — 主文字
+- `--openbitfun-text-secondary` — 次要文字
+- `--openbitfun-text-muted` — 弱化文字
 
 **强调与语义**
 
-- `--bitfun-accent`、`--bitfun-accent-hover` — 强调色及悬停
-- `--bitfun-success`、`--bitfun-warning`、`--bitfun-error`、`--bitfun-info` — 语义色
+- `--openbitfun-accent`、`--openbitfun-accent-hover` — 强调色及悬停
+- `--openbitfun-success`、`--openbitfun-warning`、`--openbitfun-error`、`--openbitfun-info` — 语义色
 
 **边框与元素**
 
-- `--bitfun-border`、`--bitfun-border-subtle` — 边框
-- `--bitfun-element-bg`、`--bitfun-element-hover` — 控件背景与悬停
+- `--openbitfun-border`、`--openbitfun-border-subtle` — 边框
+- `--openbitfun-element-bg`、`--openbitfun-element-hover` — 控件背景与悬停
 
 **圆角与字体**
 
-- `--bitfun-radius`、`--bitfun-radius-lg` — 圆角
-- `--bitfun-font-sans`、`--bitfun-font-mono` — 无衬线与等宽字体
+- `--openbitfun-radius`、`--openbitfun-radius-lg` — 圆角
+- `--openbitfun-font-sans`、`--openbitfun-font-mono` — 无衬线与等宽字体
 
 **滚动条**
 
-- `--bitfun-scrollbar-thumb`、`--bitfun-scrollbar-thumb-hover` — 滚动条滑块
+- `--openbitfun-scrollbar-thumb`、`--openbitfun-scrollbar-thumb-hover` — 滚动条滑块
 
 示例（在 `style.css` 中）：
 
 ```css
 :root {
-  --bg: var(--bitfun-bg, #121214);
-  --text: var(--bitfun-text, #e8e8e8);
-  --accent: var(--bitfun-accent, #60a5fa);
+  --bg: var(--openbitfun-bg, #121214);
+  --text: var(--openbitfun-text, #e8e8e8);
+  --accent: var(--openbitfun-accent, #60a5fa);
 }
 body {
-  font-family: var(--bitfun-font-sans, system-ui, sans-serif);
+  font-family: var(--openbitfun-font-sans, system-ui, sans-serif);
   color: var(--text);
   background: var(--bg);
 }
@@ -307,7 +307,7 @@ body {
 
 ### 同步时机
 
-- iframe 加载后 bridge 会向宿主发送 `bitfun/request-appearance`，宿主回推当前主题变量，iframe 内 `_applyAppearanceVars` 写入 `:root`。
+- iframe 加载后 bridge 会向宿主发送 `openbitfun/request-appearance`，宿主回推当前主题变量，iframe 内 `_applyAppearanceVars` 写入 `:root`。
 - 主应用切换主题时，宿主会向 iframe 发送 `appearanceChange` 事件，bridge 更新变量并触发 `onAppearanceChange` 回调。
 
 ## 国际化（i18n）
@@ -388,7 +388,7 @@ BuiltinApp {
 
 - [ ] 改完 `assets/<app>/*` 任何文件
 - [ ] `builtin.rs` 中对应 `BuiltinApp.version` 已 +1
-- [ ] 本地清掉 `~/.bitfun/miniapps/<app_id>/.builtin-manifest.json` 或直接整目录删，再启动验证 reseed 生效
+- [ ] 本地清掉 `~/.openbitfun/miniapps/<app_id>/.builtin-manifest.json` 或直接整目录删，再启动验证 reseed 生效
 - [ ] meta.json 中的 `version` 字段（用户可见的元数据版本）按需同步（与 reseed 无关，但展示用）
 
 ### 提示
@@ -431,7 +431,7 @@ BuiltinApp {
   单张 ≤ 5 MiB）。没有现成图片时先向用户要，或请用户在「市场 → 我的投稿」
   选择图片/使用「截取当前画面」。
 - **市场展示图建议 16:9，推荐 1920×1080**。第一张是列表卡片封面；建议画面
-  清晰、主体突出，关键信息放在画面中部、不要贴边。市场网页和 BitFun 桌面端
+  清晰、主体突出，关键信息放在画面中部、不要贴边。市场网页和 OpenBitFun 桌面端
   都会按 16:9 居中裁剪；超过 2560px 的边会被服务端缩到 2560，所以
   2560×1440 是有效上限。显示契约见
   `src/miniapp-market-web/README.md` 的「市场展示图规格」。

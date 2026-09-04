@@ -1,16 +1,16 @@
 [package]
-name = "bitfun-transport"
+name = "openbitfun-transport"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun Transport Layer - Cross-platform communication adapters"
+description = "OpenBitFun Transport Layer - Cross-platform communication adapters"
 
 [lib]
-name = "bitfun_transport"
+name = "openbitfun_transport"
 
 [dependencies]
 # Events layer
-bitfun-events = { path = "../../contracts/events" }
+openbitfun-events = { path = "../../contracts/events" }
 
 # Inherited from workspace
 async-trait = { workspace = true }

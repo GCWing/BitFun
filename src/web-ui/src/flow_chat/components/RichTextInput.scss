@@ -7,21 +7,21 @@
   background: transparent;
   border: none !important;
   outline: none !important;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   padding: 0;
   vertical-align: top;
   min-height: 24px;
   max-height: 200px;
   overflow-y: auto;
-  font-family: var(--bf-type-body-sm-font-family);
+  font-family: var(--openbitfun-type-body-sm-font-family);
   white-space: pre-wrap;
   word-wrap: break-word;
   word-break: break-word;
   cursor: text;
   box-shadow: none !important;
-  caret-color: var(--bf-color-accent-default);
+  caret-color: var(--openbitfun-color-accent-default);
 
   // Hide scrollbars while keeping scroll functionality
   scrollbar-width: none; // Firefox
@@ -34,7 +34,7 @@
   // Fallback placeholder via CSS :empty (may not work after browser inserts a <br>)
   &:empty::before {
     content: attr(data-placeholder);
-    color: color-mix(in srgb, var(--bf-color-content-muted) 52%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-content-muted) 52%, transparent);
     pointer-events: none;
   }
 
@@ -44,7 +44,7 @@
     box-shadow: none !important;
   }
 
-  // The global focus ring (`.bitfun-app-layout *:focus-visible`) adds
+  // The global focus ring (`.openbitfun-app-layout *:focus-visible`) adds
   // border-radius for its outline. This input suppresses the ring, and the
   // leftover radius clips the caret where overflow is hidden (capsule mode).
   // Doubled class beats that rule's specificity regardless of load order.
@@ -59,11 +59,11 @@
 }
 
 // Light theme: placeholder slightly softer than body text.
-:root[data-bf-appearance-mode="light"] .rich-text-input,
-:root[data-bf-appearance-mode="light"] .rich-text-input,
+:root[data-openbitfun-appearance-mode="light"] .rich-text-input,
+:root[data-openbitfun-appearance-mode="light"] .rich-text-input,
 .light .rich-text-input {
   &:empty::before {
-    color: color-mix(in srgb, var(--bf-color-content-secondary) 48%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 48%, transparent);
   }
 }
 
@@ -73,16 +73,16 @@
   display: inline-block;
   padding: 2px 8px;
   margin: 0 2px;
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--openbitfun-color-accent-default) 35%, transparent);
   border-radius: 6px;
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
   cursor: pointer;
   user-select: text;
   vertical-align: middle;
-  line-height: var(--bf-type-flow-support-line-height);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -90,26 +90,26 @@
   white-space: nowrap;
   
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
-    border-color: color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 15%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent);
   }
   
   &--active {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
-    color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
-      border-color: color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent);
+      border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent);
     }
   }
   
   &:focus,
   &:focus-visible {
     outline: none;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent);
-    border-color: color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent);
   }
 }
 
@@ -122,76 +122,76 @@
   gap: 4px;
   padding: 2px 6px 2px 8px;
   margin: 0 3px;
-  background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent);
   border: none;
   border-radius: 10px;
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: color-mix(in srgb, var(--bf-color-accent-default) 95%, transparent);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  color: color-mix(in srgb, var(--openbitfun-color-accent-default) 95%, transparent);
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  line-height: var(--bf-type-flow-support-line-height);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   transition:
     background-color 160ms ease,
     color 160ms ease;
   
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent);
   }
   
   // Context type colors.
   &[data-context-type="file"] {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
-    color: color-mix(in srgb, var(--bf-color-accent-default) 95%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-accent-default) 95%, transparent);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent);
     }
   }
   
   &[data-context-type="directory"] {
-    background: color-mix(in srgb, var(--bf-color-accent-secondary) 12%, transparent);
-    color: var(--bf-color-accent-secondary);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-secondary) 12%, transparent);
+    color: var(--openbitfun-color-accent-secondary);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-accent-secondary) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-secondary) 18%, transparent);
     }
   }
   
   &[data-context-type="code-snippet"] {
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
-    color: var(--bf-color-status-success-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+    color: var(--openbitfun-color-status-success-content);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 18%, transparent);
     }
   }
   
   &[data-context-type="mermaid-diagram"] {
-    background: color-mix(in srgb, var(--bf-domain-mermaid-diagram) 12%, transparent);
-    color: var(--bf-domain-mermaid-diagram);
+    background: color-mix(in srgb, var(--openbitfun-domain-mermaid-diagram) 12%, transparent);
+    color: var(--openbitfun-domain-mermaid-diagram);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-domain-mermaid-diagram) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-domain-mermaid-diagram) 18%, transparent);
     }
   }
   
   &[data-context-type="mermaid-node"] {
-    background: color-mix(in srgb, var(--bf-domain-mermaid-diagram) 12%, transparent);
-    color: var(--bf-domain-mermaid-diagram);
+    background: color-mix(in srgb, var(--openbitfun-domain-mermaid-diagram) 12%, transparent);
+    color: var(--openbitfun-domain-mermaid-diagram);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-domain-mermaid-diagram) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-domain-mermaid-diagram) 18%, transparent);
     }
   }
   
   &[data-context-type="image"] {
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
-    color: var(--bf-color-status-warning-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+    color: var(--openbitfun-color-status-warning-content);
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
     }
   }
 }
@@ -201,26 +201,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--bf-type-flow-support-line-height);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
 }
 
 .rich-text-tag-pill--widget-ref {
-  background: color-mix(in srgb, var(--bf-color-status-success-content) 14%, transparent);
-  color: color-mix(in srgb, var(--bf-color-status-success-content) 96%, var(--bf-color-content-primary));
+  background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 14%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 96%, var(--openbitfun-color-content-primary));
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 22%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 22%, transparent);
   }
 }
 
 .rich-text-tag-pill--skill-ref {
-  background: color-mix(in srgb, var(--bf-color-status-warning-content) 16%, transparent);
-  color: color-mix(in srgb, var(--bf-color-status-warning-content) 96%, var(--bf-color-content-primary));
+  background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 16%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 96%, var(--openbitfun-color-content-primary));
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 24%, transparent);
   }
 }
 
@@ -232,11 +232,11 @@
   height: 16px;
   padding: 0 5px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
   color: inherit;
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
   text-transform: uppercase;
 }
 
@@ -244,7 +244,7 @@
   min-width: 18px;
   padding: 0 3px;
   background: transparent;
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   text-transform: none;
 
   svg {
@@ -259,7 +259,7 @@
 }
 
 .rich-text-tag-pill__text--widget-ref {
-  font-family: var(--bf-type-body-sm-font-family);
+  font-family: var(--openbitfun-type-body-sm-font-family);
   max-width: 260px;
 }
 
@@ -279,8 +279,8 @@
   background: transparent;
   color: currentColor;
   opacity: 0.6;
-  font-size: var(--bf-type-flow-section-title-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   cursor: pointer;
   border-radius: 50%;
   transition:
@@ -288,7 +288,7 @@
     opacity 120ms ease;
   
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 20%, transparent);
     opacity: 1;
   }
   
@@ -297,7 +297,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
     opacity: 1;
   }
@@ -310,14 +310,14 @@
   max-width: min(100%, 320px);
   margin: 0 3px;
   padding: 2px 6px 2px 8px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-border-default) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 72%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bf-color-surface-subtle) 82%, transparent);
-  color: var(--bf-color-content-secondary);
-  font-family: var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-subtle) 82%, transparent);
+  color: var(--openbitfun-color-content-secondary);
+  font-family: var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   vertical-align: middle;
   cursor: pointer;
   user-select: none;
@@ -327,13 +327,13 @@
     color 160ms ease;
 
   &:hover {
-    border-color: color-mix(in srgb, var(--bf-color-accent-default) 42%, var(--bf-color-border-default));
-    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, var(--bf-color-surface-subtle));
-    color: var(--bf-color-content-primary);
+    border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 42%, var(--openbitfun-color-border-default));
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, var(--openbitfun-color-surface-subtle));
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
     outline-offset: 1px;
   }
 }
@@ -356,8 +356,8 @@
   border-radius: 50%;
   background: transparent;
   color: currentColor;
-  font-size: var(--bf-type-flow-section-title-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   opacity: 0.6;
   cursor: pointer;
 
@@ -370,7 +370,7 @@
 
 .rich-text-large-paste-dialog__textarea {
   min-height: 280px;
-  font-family: var(--bf-type-code-md-font-family);
+  font-family: var(--openbitfun-type-code-md-font-family);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 #[cfg(feature = "canvas-runtime")]
 use super::*;
 #[cfg(feature = "canvas-runtime")]
-use bitfun_product_domains::canvas::types::{CanvasId, CanvasRevision};
+use openbitfun_product_domains::canvas::types::{CanvasId, CanvasRevision};
 
 #[cfg(feature = "canvas-runtime")]
 mod enabled {
@@ -14,7 +14,7 @@ mod enabled {
             CanvasRevision::new("rev_1"),
             "canvas.tsx",
             source,
-            BITFUN_CANVAS_SDK_VERSION,
+            OPENBITFUN_CANVAS_SDK_VERSION,
             1,
         )
     }
@@ -24,7 +24,7 @@ mod enabled {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack, Text } from 'bitfun/canvas';
+import { Stack, Text } from 'openbitfun/canvas';
 const rows = ['a', 'b'];
 export default function Canvas() {
   return <Stack gap={8}><Text tone="muted">Ready</Text>{rows.map(row => <Text>{row}</Text>)}</Stack>;
@@ -36,20 +36,20 @@ export default function Canvas() {
 
         assert!(result.compiled, "{:?}", result.diagnostics);
         let html = result.payload.unwrap().html;
-        assert!(html.contains("window.BitfunCanvasRuntime.mount"));
-        assert!(html.contains("const h = __BitfunCanvasRuntime.h"));
-        assert!(html.contains("const Fragment = __BitfunCanvasRuntime.Fragment"));
+        assert!(html.contains("window.OpenBitFunCanvasRuntime.mount"));
+        assert!(html.contains("const h = __OpenBitFunCanvasRuntime.h"));
+        assert!(html.contains("const Fragment = __OpenBitFunCanvasRuntime.Fragment"));
         assert!(html.contains("h(Stack"));
         assert!(html.contains("rows.map"));
         assert!(html.contains("h(Text"));
-        assert!(html.contains("bitfun-canvas-save-state"));
-        assert!(html.contains("bitfun-canvas-state"));
-        assert!(html.contains("bitfun-canvas-appearance"));
+        assert!(html.contains("openbitfun-canvas-save-state"));
+        assert!(html.contains("openbitfun-canvas-state"));
+        assert!(html.contains("openbitfun-canvas-appearance"));
         assert!(html.contains("applyHostAppearance"));
-        assert!(html.contains("bitfun-canvas-design-mode"));
-        assert!(html.contains("bitfun-canvas-element-selected"));
-        assert!(html.contains("data-bitfun-canvas-node"));
-        assert!(html.contains("bitfun-canvas-action-result"));
+        assert!(html.contains("openbitfun-canvas-design-mode"));
+        assert!(html.contains("openbitfun-canvas-element-selected"));
+        assert!(html.contains("data-openbitfun-canvas-node"));
+        assert!(html.contains("openbitfun-canvas-action-result"));
         assert!(html.contains("pendingActions"));
         assert!(html.contains("stack: error?.stack ? String(error.stack) : undefined"));
         assert!(html.contains("connect-src 'none'"));
@@ -60,7 +60,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Grid, Stack, Text } from 'bitfun/canvas';
+import { Grid, Stack, Text } from 'openbitfun/canvas';
 
 export default function Canvas() {
   return <Stack><Grid columns={2}><Text>Ready</Text></Grid></Stack>;
@@ -90,7 +90,7 @@ function Grid() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Text as T, Stack } from 'bitfun/canvas';
+import { Text as T, Stack } from 'openbitfun/canvas';
 
 export default function Canvas() {
   return <Stack><T tone="muted">Ready</T></Stack>;
@@ -102,9 +102,9 @@ export default function Canvas() {
 
         assert!(result.compiled, "{:?}", result.diagnostics);
         let html = result.payload.unwrap().html;
-        assert!(html.contains("const T = __BitfunCanvasSDK.Text;"));
+        assert!(html.contains("const T = __OpenBitFunCanvasSDK.Text;"));
         assert!(html.contains("h(T"));
-        assert!(!html.contains("from 'bitfun/canvas'"));
+        assert!(!html.contains("from 'openbitfun/canvas'"));
     }
 
     #[test]
@@ -112,7 +112,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Pill as P } from 'bitfun/canvas';
+import { Pill as P } from 'openbitfun/canvas';
 
 export default function Canvas() {
   return <P label="1" />;
@@ -136,7 +136,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import * as Canvas from 'bitfun/canvas';
+import * as Canvas from 'openbitfun/canvas';
 
 export default function CanvasView() {
   return <Canvas.Stack><Canvas.Text tone="muted">Ready</Canvas.Text></Canvas.Stack>;
@@ -148,7 +148,7 @@ export default function CanvasView() {
 
         assert!(result.compiled, "{:?}", result.diagnostics);
         let html = result.payload.unwrap().html;
-        assert!(html.contains("const Canvas = __BitfunCanvasSDK;"));
+        assert!(html.contains("const Canvas = __OpenBitFunCanvasSDK;"));
         assert!(html.contains("h(Canvas.Stack"));
         assert!(html.contains("h(Canvas.Text"));
     }
@@ -158,7 +158,7 @@ export default function CanvasView() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import * as C from 'bitfun/canvas';
+import * as C from 'openbitfun/canvas';
 
 export default function Canvas() {
   return <C.Table columns={[]} rows={[]} />;
@@ -182,7 +182,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Text as T } from 'bitfun/canvas' with { note: "semi;colon" };
+import { Text as T } from 'openbitfun/canvas' with { note: "semi;colon" };
 
 export default function Canvas() {
   return <T>Ready</T>;
@@ -194,7 +194,7 @@ export default function Canvas() {
 
         assert!(result.compiled, "{:?}", result.diagnostics);
         let html = result.payload.unwrap().html;
-        assert!(html.contains("const T = __BitfunCanvasSDK.Text;"));
+        assert!(html.contains("const T = __OpenBitFunCanvasSDK.Text;"));
         assert!(!html.contains("semi;colon"));
     }
 
@@ -204,7 +204,7 @@ export default function Canvas() {
             &source(
                 r#"
 import React, * as R from 'react';
-import { Text } from 'bitfun/canvas';
+import { Text } from 'openbitfun/canvas';
 
 export default function Canvas() {
   const [count] = React.useState(1);
@@ -217,8 +217,8 @@ export default function Canvas() {
 
         assert!(result.compiled, "{:?}", result.diagnostics);
         let html = result.payload.unwrap().html;
-        assert!(html.contains("const React = __BitfunCanvasReactCompat;"));
-        assert!(html.contains("const R = __BitfunCanvasReactCompat;"));
+        assert!(html.contains("const React = __OpenBitFunCanvasReactCompat;"));
+        assert!(html.contains("const R = __OpenBitFunCanvasReactCompat;"));
         assert!(!html.contains("from 'react'"));
     }
 
@@ -227,7 +227,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack } from 'bitfun/canvas';
+import { Stack } from 'openbitfun/canvas';
 const Canvas = () => <Stack />;
 export default Canvas;
 "#,
@@ -239,8 +239,8 @@ export default Canvas;
         let html = result.payload.unwrap().html;
         assert!(html.contains("const Canvas"));
         assert!(html.contains("h(Stack"));
-        assert!(html.contains("const __BitfunCanvasComponent = Canvas;"));
-        assert!(html.contains("window.BitfunCanvasRuntime.mount(__BitfunCanvasComponent)"));
+        assert!(html.contains("const __OpenBitFunCanvasComponent = Canvas;"));
+        assert!(html.contains("window.OpenBitFunCanvasRuntime.mount(__OpenBitFunCanvasComponent)"));
     }
 
     #[test]
@@ -248,7 +248,7 @@ export default Canvas;
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack } from 'bitfun/canvas';
+import { Stack } from 'openbitfun/canvas';
 export default Canvas;
 "#,
             ),
@@ -267,7 +267,7 @@ export default Canvas;
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack, useHostAppearance } from 'bitfun/canvas';
+import { Stack, useHostAppearance } from 'openbitfun/canvas';
 export default function Canvas() {
   const appearance = useHostAppearance();
   return <Stack style={{ background: appearance.surface.primary, color: appearance.interactive.accent }}>Body</Stack>;
@@ -307,7 +307,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack } from 'bitfun/canvas';
+import { Stack } from 'openbitfun/canvas';
 export default function Canvas() {
   return <Stack><Missing></Stack>;
 }
@@ -331,7 +331,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Text } from 'bitfun/canvas';
+import { Text } from 'openbitfun/canvas';
 export default function Canvas() {
   return <Text>{"</script><div>"}</Text>;
 }
@@ -349,7 +349,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { H1, Text } from 'bitfun/canvas';
+import { H1, Text } from 'openbitfun/canvas';
 export default function Canvas() {
   return <><H1>Title</H1><Text>Body</Text></>;
 }
@@ -370,7 +370,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r##"
-import { Box, Text } from 'bitfun/canvas';
+import { Box, Text } from 'openbitfun/canvas';
 export default function Canvas() {
   return <Box padding={{ x: 12, y: 8 }} background="#fff"><Text>Body</Text></Box>;
 }
@@ -383,7 +383,7 @@ export default function Canvas() {
         let html = result.payload.unwrap().html;
         assert!(html.contains("Stack, Row, Grid, Box, Divider"));
         assert!(html.contains("const Box ="));
-        assert!(html.contains("window.BitfunCanvasSDK = { Stack, Row, Grid, Box"));
+        assert!(html.contains("window.OpenBitFunCanvasSDK = { Stack, Row, Grid, Box"));
         assert!(html.contains("h(Box"));
     }
 
@@ -426,7 +426,7 @@ import {
   mergeStyle,
   useCanvasState,
   useHostAppearance,
-} from 'bitfun/canvas';
+} from 'openbitfun/canvas';
 
 const lines = [
   { type: 'unchanged', content: 'fn main() {}', lineNumber: 1 },
@@ -571,7 +571,7 @@ return () => rowRef.current?.removeAttribute('data-effect');
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Pill, Stack, Table } from 'bitfun/canvas';
+import { Pill, Stack, Table } from 'openbitfun/canvas';
 export default function Canvas() {
   return (
 <Stack>
@@ -605,7 +605,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Pill, Stack, Table, computeDAGLayout } from 'bitfun/canvas';
+import { Pill, Stack, Table, computeDAGLayout } from 'openbitfun/canvas';
 export default function Canvas() {
   const layout = computeDAGLayout({
 nodes: [{ id: 'a' }, { id: 'b' }],
@@ -631,7 +631,7 @@ edges: [{ from: 'a', to: 'b' }],
         let result = compile_canvas_source(
             &source(
                 r#"
-import { BarChart, LineChart, PieChart } from 'bitfun/canvas';
+import { BarChart, LineChart, PieChart } from 'openbitfun/canvas';
 const rows = [{ label: 'A', value: 10 }, { label: 'B', value: 16 }];
 export default function Canvas() {
   return <><BarChart data={rows} /><LineChart data={rows} /><PieChart data={rows} /></>;
@@ -655,7 +655,7 @@ export default function Canvas() {
         let result = compile_canvas_source(
             &source(
                 r##"
-import { Stack, Text, Box, Row, Divider } from 'bitfun/canvas';
+import { Stack, Text, Box, Row, Divider } from 'openbitfun/canvas';
 
 const LAYER_COLORS = [
   { bg: '#1a1a2e', border: '#6c63ff', text: '#c4b5fd' },
@@ -683,7 +683,7 @@ export default function Canvas() {
   {/* Title */}
   <Box padding={{ x: 24, y: 20 }} background="#0f0f1a" borderBottom="1px solid #2d2d4a">
     <Text size={22} weight={700} color="#e2e8f0">
-      BitFun 架构总览
+      OpenBitFun 架构总览
     </Text>
     <Text size={13} color="#94a3b8" margin={{ top: 4 }}>
       Rust 工作空间 + React 前端
@@ -754,7 +754,7 @@ export default function Canvas() {
         let html = result.payload.unwrap().html;
         assert!(html.contains("h(Box"));
         assert!(html.contains("layers.map"));
-        assert!(html.contains("window.BitfunCanvasRuntime.mount(__BitfunCanvasComponent)"));
+        assert!(html.contains("window.OpenBitFunCanvasRuntime.mount(__OpenBitFunCanvasComponent)"));
         assert!(html.contains("reportRuntimeError"));
     }
 }

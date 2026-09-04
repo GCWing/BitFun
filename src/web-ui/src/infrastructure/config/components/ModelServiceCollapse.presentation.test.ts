@@ -27,10 +27,10 @@ describe('model service collapsed presentation', () => {
 
   it('includes the leading card inset in the provider toggle hit area', () => {
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-header\s*\{[\s\S]*?padding-inline:\s*0 var\(--bf-space-4\)/,
+      /&__provider-group-header\s*\{[\s\S]*?padding-inline:\s*0 var\(--openbitfun-space-4\)/,
     );
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-toggle\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?padding-inline-start:\s*var\(--bf-space-4\)/,
+      /&__provider-group-toggle\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?padding-inline-start:\s*var\(--openbitfun-space-4\)/,
     );
   });
 
@@ -42,15 +42,15 @@ describe('model service collapsed presentation', () => {
 
   it('keeps the enable switch at the trailing edge and reveals secondary model actions on interaction', () => {
     expect(modelSettingsSource).toMatch(
-      /<span className="bitfun-model-settings__model-enable">[\s\S]*?<Switch[\s\S]*?<div[\s\S]*?className="bitfun-model-settings__model-actions"/,
+      /<span className="openbitfun-model-settings__model-enable">[\s\S]*?<Switch[\s\S]*?<div[\s\S]*?className="openbitfun-model-settings__model-actions"/,
     );
-    expect(modelSettingsSource).toContain('data-bf-part="modelActions"');
+    expect(modelSettingsSource).toContain('data-openbitfun-part="modelActions"');
     expect(modelSettingsSource).toContain('toggleOnRowClick');
   });
 
   it('uses the semantic highlight color for each provider model count', () => {
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-count\s*\{[\s\S]*?color:\s*var\(--bf-color-content-required-indicator\)/,
+      /&__provider-group-count\s*\{[\s\S]*?color:\s*var\(--openbitfun-color-content-required-indicator\)/,
     );
   });
 });

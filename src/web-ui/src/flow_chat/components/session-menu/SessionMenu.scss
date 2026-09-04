@@ -4,12 +4,12 @@
  */
 $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
-.bitfun-session-menu {
+.openbitfun-session-menu {
   position: relative;
   pointer-events: auto;
 }
 
-.bitfun-session-menu__trigger {
+.openbitfun-session-menu__trigger {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
@@ -18,8 +18,8 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--bf-color-content-muted);
-  border-radius: var(--bf-radius-sm);
+  color: var(--openbitfun-color-content-muted);
+  border-radius: var(--openbitfun-radius-sm);
   cursor: pointer;
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -28,8 +28,8 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
     opacity 160ms ease;
 
   &:hover:not(:disabled) {
-    background: var(--bf-color-action-secondary-hover);
-    color: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-action-secondary-hover);
+    color: var(--openbitfun-color-accent-default);
     transform: scale(1.1);
   }
 
@@ -39,53 +39,53 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
 
   &:disabled {
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
     transform: none;
   }
 
   &--open {
-    background: var(--bf-color-action-neutral-surface);
-    color: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-accent-default);
   }
 }
 
-.bitfun-session-menu__dropdown {
+.openbitfun-session-menu__dropdown {
   --session-menu-entry-y: -4px;
-  --bf-overlay-menu-inline-size: min(220px, calc(100vw - 16px));
-  --bf-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
+  --openbitfun-overlay-menu-inline-size: min(220px, calc(100vw - 16px));
+  --openbitfun-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
   position: fixed;
-  z-index: var(--bf-layer-popover);
+  z-index: var(--openbitfun-layer-popover);
   animation: session-menu-appear 0.2s $session-menu-timing;
   transform-origin: top left;
 
-  &[data-bf-placement='top'] {
+  &[data-openbitfun-placement='top'] {
     --session-menu-entry-y: 4px;
     transform-origin: bottom left;
   }
 
 }
 
-.bitfun-session-menu__actions {
+.openbitfun-session-menu__actions {
   flex: 0 0 auto;
 }
 
-.bitfun-session-menu__scroll {
+.openbitfun-session-menu__scroll {
   min-height: 0;
 }
 
-.bitfun-session-menu__item {
+.openbitfun-session-menu__item {
   &--new {
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
 
-    &:hover .bitfun-session-menu__item-icon {
-      background: var(--bf-color-action-secondary-pressed);
-      color: var(--bf-color-accent-default);
+    &:hover .openbitfun-session-menu__item-icon {
+      background: var(--openbitfun-color-action-secondary-pressed);
+      color: var(--openbitfun-color-accent-default);
     }
   }
 }
 
 /* Round plus badge on the "new session" rows, matching the sidebar header. */
-.bitfun-session-menu__item-icon {
+.openbitfun-session-menu__item-icon {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
@@ -93,12 +93,12 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--bf-color-action-secondary-hover);
-  color: var(--bf-color-accent-default);
+  background: var(--openbitfun-color-action-secondary-hover);
+  color: var(--openbitfun-color-accent-default);
   transition: background 0.1s ease, color 0.1s ease;
 }
 
-.bitfun-session-menu__item-label {
+.openbitfun-session-menu__item-label {
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -106,7 +106,7 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
-.bitfun-session-menu__divider {
+.openbitfun-session-menu__divider {
   margin: 4px 8px;
 }
 

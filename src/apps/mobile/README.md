@@ -1,6 +1,6 @@
-# BitFun Native Mobile Apps
+# OpenBitFun Native Mobile Apps
 
-This directory contains the native mobile product surfaces for BitFun:
+This directory contains the native mobile product surfaces for OpenBitFun:
 
 - `android/`: Android application code and resources.
 - `ios/`: iOS application code and resources.

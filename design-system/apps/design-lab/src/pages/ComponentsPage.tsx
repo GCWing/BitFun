@@ -62,8 +62,8 @@ import {
   type ContrastMode,
   type DensityMode,
   type TokenOverrides,
-} from "@bitfun/ui";
-import { componentRegistry, type ComponentMeta } from "@bitfun/ui/registry";
+} from "@openbitfun/ui";
+import { componentRegistry, type ComponentMeta } from "@openbitfun/ui/registry";
 import { useI18n } from "../i18n";
 import {
   getComponentCategoryLabel,

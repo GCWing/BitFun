@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { GrepSearchToolCard } from '@bitfun/ui/flow-chat';
+import { GrepSearchToolCard } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
@@ -107,7 +107,7 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
   }
 
   return (
-    <div ref={cardRootRef} data-bf-adapter="grep-search" data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-openbitfun-adapter="grep-search" data-tool-card-id={toolId ?? ''}>
       <GrepSearchToolCard
         action={renderAction()}
         status={status}

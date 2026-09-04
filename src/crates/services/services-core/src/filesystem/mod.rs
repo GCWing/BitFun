@@ -2,7 +2,7 @@
 //!
 //! This module owns local file operations, directory listings, file-tree
 //! construction, and search primitives. Product/runtime adapters in
-//! `bitfun-core` may still layer remote-workspace routing or legacy error
+//! `openbitfun-core` may still layer remote-workspace routing or legacy error
 //! mapping on top of these primitives.
 
 mod content_preview;

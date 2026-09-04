@@ -57,7 +57,7 @@ const manifest = {
 };
 
 if (manualAssetsDir) {
-  const installerName = `BitFun_${version}_windows-x86_64-installer.exe`;
+  const installerName = `OpenBitFun_${version}_windows-x86_64-installer.exe`;
   const installerPath = join(manualAssetsDir, installerName);
   const signaturePath = `${installerPath}.sig`;
   if (!existsSync(installerPath) || !existsSync(signaturePath)) {

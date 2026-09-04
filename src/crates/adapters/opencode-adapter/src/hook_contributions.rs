@@ -4,11 +4,11 @@
 //! This module does not load or invoke Hook handlers. The production caller is
 //! the existing managed-package read projection in `source_adapter`.
 
-use bitfun_product_domains::external_hook_contributions::{
+use openbitfun_product_domains::external_hook_contributions::{
     ExternalHookContributionDeclaration, ExternalHookContributionId, ExternalHookPoint,
     ExternalHookRiskCapability, ExternalHookSafetyDeclaration,
 };
-use bitfun_product_domains::external_sources::{ExternalSourceContractError, SourceKey};
+use openbitfun_product_domains::external_sources::{ExternalSourceContractError, SourceKey};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
@@ -182,10 +182,10 @@ mod tests {
         map_hook_contributions, OpenCodeHookDescriptor, OpenCodeHookMappingError,
         OpenCodeLocalHookHandlerId, OpenCodeToolHookEvent, OPENCODE_PLUGIN_PROVIDER_ID,
     };
-    use bitfun_product_domains::external_hook_contributions::{
+    use openbitfun_product_domains::external_hook_contributions::{
         ExternalHookPoint, ExternalHookRiskCapability,
     };
-    use bitfun_product_domains::external_sources::SourceKey;
+    use openbitfun_product_domains::external_sources::SourceKey;
     use std::collections::BTreeSet;
 
     fn source(source_id: &str) -> SourceKey {

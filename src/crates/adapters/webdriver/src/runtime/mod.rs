@@ -14,7 +14,7 @@ use crate::server::AppState;
 pub(crate) mod api;
 pub(crate) mod script;
 
-const BRIDGE_EVENT: &str = "bitfun_webdriver_result";
+const BRIDGE_EVENT: &str = "openbitfun_webdriver_result";
 static BRIDGE_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]

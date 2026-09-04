@@ -1,5 +1,5 @@
 //! Search results arrive over ACP as the model-facing *text* the harness wrote,
-//! while BitFun's Grep/Glob cards read counts and a file list off a structured
+//! while OpenBitFun's Grep/Glob cards read counts and a file list off a structured
 //! object. Without a translation the cards render every search as "0 matches /
 //! 0 files" even though the search itself succeeded.
 //!

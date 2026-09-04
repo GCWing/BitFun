@@ -24,7 +24,7 @@ interface WorkspaceDragPayload {
   variant: SessionNavigationScope;
 }
 
-const WORKSPACE_DRAG_MIME_TYPE = 'application/x-bitfun-workspace';
+const WORKSPACE_DRAG_MIME_TYPE = 'application/x-openbitfun-workspace';
 const WORKSPACE_DROP_SETTLE_MS = 160;
 const WORKSPACE_DROP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
@@ -152,7 +152,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
 
     // Measure only the workspace card, not the wrapper that includes the drop-line.
     const itemEl = event.currentTarget.querySelector<HTMLElement>(
-      '.bitfun-nav-panel__workspace-item'
+      '.openbitfun-nav-panel__workspace-item'
     );
     const rect = itemEl
       ? itemEl.getBoundingClientRect()
@@ -232,13 +232,13 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   }, [reorderOpenedWorkspacesInSection, t, variant]);
 
   return (
-    <div data-bf-component="workspace-list-section" data-bf-part="root" data-bf-state={draggedWorkspaceId ? 'dragging' : undefined}
-      className={`bitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}
+    <div data-openbitfun-component="workspace-list-section" data-openbitfun-part="root" data-openbitfun-state={draggedWorkspaceId ? 'dragging' : undefined}
+      className={`openbitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}
       data-testid="nav-workspace-list"
       data-workspace-list={variant}
     >
       {variant !== 'assistants' && grouping === 'all' && workspaces.length > 0 ? (
-        <div className="bitfun-nav-panel__workspace-all-sessions" data-testid="nav-workspace-all-sessions">
+        <div className="openbitfun-nav-panel__workspace-all-sessions" data-testid="nav-workspace-all-sessions">
           <SessionsSection
             workspaceScopes={workspaceScopes}
             isVisible
@@ -248,9 +248,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
         </div>
       ) : workspaces.length === 0 ? (
         <div
-          data-bf-component="workspace-list-section"
-          data-bf-part="empty"
-          className="bitfun-nav-panel__workspace-list-empty"
+          data-openbitfun-component="workspace-list-section"
+          data-openbitfun-part="empty"
+          className="openbitfun-nav-panel__workspace-list-empty"
           data-testid="nav-workspace-list-empty"
           data-workspace-list={variant}
         >
@@ -261,16 +261,16 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
           const workspace = group.workspace;
           return (
             <div
-              data-bf-component="workspace-list-section"
-              data-bf-part="item"
-              data-bf-state={workspace.id === activeWorkspaceId ? 'selected' : undefined}
+              data-openbitfun-component="workspace-list-section"
+              data-openbitfun-part="item"
+              data-openbitfun-state={workspace.id === activeWorkspaceId ? 'selected' : undefined}
               key={workspace.id}
               ref={(element) => {
                 if (element) workspaceRowRefs.current.set(workspace.id, element);
                 else workspaceRowRefs.current.delete(workspace.id);
               }}
               className={[
-                'bitfun-nav-panel__workspace-drop-target',
+                'openbitfun-nav-panel__workspace-drop-target',
                 draggedWorkspaceId && draggedWorkspaceId !== workspace.id && 'is-drag-active',
                 dropTarget?.workspaceId === workspace.id && 'is-drop-target',
                 dropTarget?.workspaceId === workspace.id && dropTarget.position === 'before' && 'is-before',
@@ -294,7 +294,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
                 onDragEnd={handleDragEnd}
               />
               {dropTarget?.workspaceId === workspace.id ? (
-                <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
+                <div data-openbitfun-component="workspace-list-section" data-openbitfun-part="dropLine" className="openbitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
               ) : null}
             </div>
           );

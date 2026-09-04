@@ -6,8 +6,8 @@
     "serverList": {
       "title": "MCP Server List",
       "description": "MCP servers and JSON configuration",
-      "desktopUnavailable": "Manage BitFun MCP in Desktop.",
-      "remoteUnavailable": "BitFun MCP management is unavailable during a remote connection.",
+      "desktopUnavailable": "Manage OpenBitFun MCP in Desktop.",
+      "remoteUnavailable": "OpenBitFun MCP management is unavailable during a remote connection.",
       "loadFailed": "MCP servers could not be loaded."
     }
   },
@@ -20,7 +20,7 @@
     "unavailable": "External MCP is temporarily unavailable.",
     "empty": "No external MCP found.",
     "import": {
-      "preview": "Import into BitFun",
+      "preview": "Import into OpenBitFun",
       "confirm": "Import {{count}} supported server(s) as disabled native entries?",
       "apply": "Import",
       "cancel": "Cancel",
@@ -184,7 +184,7 @@
   },
   "modal": {
     "remoteAuthTitle": "Remote auth: {{serverName}}",
-    "remoteOAuthHint": "Use OAuth to connect this remote MCP server. BitFun will listen on a local callback URL and reconnect the server after authorization.",
+    "remoteOAuthHint": "Use OAuth to connect this remote MCP server. OpenBitFun will listen on a local callback URL and reconnect the server after authorization.",
     "remoteOAuthCurrentStatus": "OAuth state: {{status}}",
     "remoteOAuthRedirectUri": "Callback URL: {{redirectUri}}",
     "remoteOAuthStatus": "OAuth status: {{status}} - {{message}}",
@@ -198,7 +198,7 @@
     "loadFailed": "MCP configuration could not be loaded.",
     "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
     "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",
-    "secretWarning": "env, headers, and URLs may contain API keys. Inspect and save the configuration only in BitFun; do not paste it into online JSON validators.",
+    "secretWarning": "env, headers, and URLs may contain API keys. Inspect and save the configuration only in OpenBitFun; do not paste it into online JSON validators.",
     "discardTitle": "Discard MCP JSON changes?",
     "discardMessage": "Closing now will lose the unsaved MCP configuration changes.",
     "discardConfirm": "Discard changes",
@@ -273,7 +273,7 @@
     "operationFailed": "{{context}} Failed",
     "suggestions": {
       "jsonFormat": [
-        "Use BitFun's inline syntax location to check the format; do not upload configuration that may contain secrets",
+        "Use OpenBitFun's inline syntax location to check the format; do not upload configuration that may contain secrets",
         "Ensure all strings use double quotes",
         "Check for extra commas",
         "Verify all brackets are properly closed"

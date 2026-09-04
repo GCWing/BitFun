@@ -54,7 +54,7 @@ input.on('line', (line) => {
         reply(message.id, {
           protocolVersion: '2025-06-18',
           capabilities: { tools: {} },
-          serverInfo: { name: 'BitFun delayed E2E MCP', version: '1.0.0' },
+          serverInfo: { name: 'OpenBitFun delayed E2E MCP', version: '1.0.0' },
         });
       }, initializeDelayMs);
       break;

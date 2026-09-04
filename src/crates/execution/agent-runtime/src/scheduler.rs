@@ -2,7 +2,7 @@
 
 use crate::events::turn_outcome_kind;
 use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
     AgentInputAttachment, AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
     DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,

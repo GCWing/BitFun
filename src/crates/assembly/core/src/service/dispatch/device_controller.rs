@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use base64::Engine as _;
-use bitfun_services_integrations::remote_ssh::dispatch_ssh::{
+use openbitfun_services_integrations::remote_ssh::dispatch_ssh::{
     self, harden_result_directory, DispatchSshProbe,
 };
 use serde_json::{json, Value};
@@ -847,7 +847,7 @@ async fn load_device_record(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_services_core::dispatch_workspace::sha256_bytes;
+    use openbitfun_services_core::dispatch_workspace::sha256_bytes;
     use std::sync::Mutex;
 
     #[test]
@@ -896,13 +896,13 @@ mod tests {
                         .is_some_and(|value| !value.is_empty()));
                     Ok(json!({
                         "changed": true,
-                        "branch": "bitfun/dispatch/job-1",
+                        "branch": "openbitfun/dispatch/job-1",
                         "baseCommit": "0".repeat(40),
                         "headCommit": "1".repeat(40),
                         "commitCount": 1,
                         "changes": [{ "status": "A", "path": "new.txt" }],
                         "truncatedChanges": false,
-                        "bundlePath": "/home/u/.bitfun/dispatch/workspaces/job-1/result.bundle",
+                        "bundlePath": "/home/u/.openbitfun/dispatch/workspaces/job-1/result.bundle",
                         "bundleSha256": self.declared_digest,
                         "bundleSize": self.bundle.len() as u64,
                     }))

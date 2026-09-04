@@ -16,16 +16,16 @@
   --markdown-code-block-pad-x: #{markdown.$code-block-pad-x};
   --markdown-table-cell-pad-y: #{markdown.$table-cell-pad-y};
   --markdown-table-cell-pad-x: #{markdown.$table-cell-pad-x};
-  --markdown-primary-color: var(--bf-color-accent-hover);
-  --private-markdown-inline-code-text-light: var(--bf-color-content-primary);
-  --private-markdown-inline-code-hover-text-light: var(--bf-color-content-primary);
-  --private-markdown-code-bg-light: color-mix(in srgb, var(--bf-color-content-on-dark) 92%, var(--bf-color-surface-canvas));
-  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--bf-color-content-on-dark) 86%, var(--bf-color-surface-canvas));
-  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-color-surface-canvas) 92%, var(--bf-color-content-on-dark) 8%);
-  --markdown-inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4.5%, transparent);
-  --markdown-inline-code-border: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-  --markdown-pre-bg: var(--bf-color-surface-canvas);
-  --markdown-pre-border: var(--bf-color-border-subtle);
+  --markdown-primary-color: var(--openbitfun-color-accent-hover);
+  --private-markdown-inline-code-text-light: var(--openbitfun-color-content-primary);
+  --private-markdown-inline-code-hover-text-light: var(--openbitfun-color-content-primary);
+  --private-markdown-code-bg-light: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 92%, var(--openbitfun-color-surface-canvas));
+  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 86%, var(--openbitfun-color-surface-canvas));
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 92%, var(--openbitfun-color-content-on-dark) 8%);
+  --markdown-inline-code-bg: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4.5%, transparent);
+  --markdown-inline-code-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+  --markdown-pre-bg: var(--openbitfun-color-surface-canvas);
+  --markdown-pre-border: var(--openbitfun-color-border-subtle);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg};
   --markdown-blockquote-border: #{markdownCode.$bq-border};
   --markdown-table-border: #{markdownTable.$border};
@@ -43,11 +43,11 @@
   max-width: 100%;
   margin: 0;
   padding: 0;
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-flow-body-font-family);
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-flow-body-line-height);
-  letter-spacing: var(--bf-type-flow-body-letter-spacing);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-flow-body-font-family);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-flow-body-line-height);
+  letter-spacing: var(--openbitfun-type-flow-body-letter-spacing);
   text-align: left;
   word-wrap: break-word;
   cursor: text;
@@ -72,7 +72,7 @@
 
 .markdown-renderer p {
   display: block;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -90,38 +90,38 @@
   margin: var(--markdown-heading-gap-before) 0 var(--markdown-heading-gap-after);
   padding: 0;
   border: 0;
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-flow-title-font-family);
-  font-weight: var(--bf-type-flow-title-font-weight);
-  letter-spacing: var(--bf-type-flow-title-letter-spacing);
-  line-height: var(--bf-type-flow-title-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-flow-title-font-family);
+  font-weight: var(--openbitfun-type-flow-title-font-weight);
+  letter-spacing: var(--openbitfun-type-flow-title-letter-spacing);
+  line-height: var(--openbitfun-type-flow-title-line-height);
 }
 
 .markdown-renderer h1 {
-  font-size: var(--bf-type-flow-title-font-size);
+  font-size: var(--openbitfun-type-flow-title-font-size);
 }
 
 .markdown-renderer h2 {
-  font-size: var(--bf-type-flow-lead-font-size);
+  font-size: var(--openbitfun-type-flow-lead-font-size);
 }
 
 .markdown-renderer h3 {
-  font-size: var(--bf-type-flow-body-font-size);
+  font-size: var(--openbitfun-type-flow-body-font-size);
 }
 
 .markdown-renderer h4,
 .markdown-renderer h5,
 .markdown-renderer h6 {
-  font-size: var(--bf-type-flow-body-font-size);
+  font-size: var(--openbitfun-type-flow-body-font-size);
 }
 
 .markdown-renderer h4,
 .markdown-renderer h5 {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .markdown-renderer h6 {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .markdown-renderer p + h1,
@@ -143,7 +143,7 @@
 .markdown-renderer ol {
   margin: 0;
   padding-left: 1.35rem;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: inherit;
   line-height: inherit;
 }
@@ -184,14 +184,14 @@
 
 .markdown-renderer ul > li::marker,
 .markdown-renderer ol > li::marker {
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
 }
 
 .markdown-renderer code {
   display: inline;
-  font-family: var(--bf-type-flow-code-font-family);
+  font-family: var(--openbitfun-type-flow-code-font-family);
 }
 
 .markdown-renderer .inline-code {
@@ -200,11 +200,11 @@
   border: 1px solid var(--markdown-inline-code-border);
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
-  color: var(--bf-color-content-secondary);
-  font-family: var(--bf-type-flow-code-font-family);
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-family: var(--openbitfun-type-flow-code-font-family);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   white-space: nowrap;
   vertical-align: baseline;
   user-select: text !important;
@@ -214,9 +214,9 @@
 }
 
 .markdown-renderer .inline-code:hover {
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 7.5%, transparent);
-  border-color: color-mix(in srgb, var(--bf-color-content-on-dark) 14%, transparent);
-  color: var(--bf-color-content-primary);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 7.5%, transparent);
+  border-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 14%, transparent);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .markdown-renderer pre {
@@ -224,12 +224,12 @@
   padding: var(--markdown-code-block-pad-y) var(--markdown-code-block-pad-x);
   overflow: auto;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--bf-control-flow-chat-card-radius);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
   background: var(--markdown-pre-bg);
   box-shadow: none;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-code-font-size);
-  line-height: var(--bf-type-flow-code-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-code-font-size);
+  line-height: var(--openbitfun-type-flow-code-line-height);
   transition: border-color 0.2s ease;
 }
 
@@ -248,7 +248,7 @@
   background: transparent;
   box-shadow: none;
   color: inherit;
-  font-family: var(--bf-type-flow-code-font-family);
+  font-family: var(--openbitfun-type-flow-code-font-family);
   font-size: inherit !important;
   font-weight: inherit;
   line-height: inherit;
@@ -267,7 +267,7 @@
   margin: var(--markdown-code-block-gap) 0;
   overflow: hidden;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--bf-control-flow-chat-card-radius);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
   background: var(--markdown-code-bg-elevated);
   box-shadow: none;
   transition: border-color 0.2s ease;
@@ -281,21 +281,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bf-control-flow-chat-control-gap);
+  gap: var(--openbitfun-control-flow-chat-control-gap);
   min-height: 1.86rem;
   padding: 0.26rem 0.45rem 0.26rem 0.62rem;
   flex-shrink: 0;
   border-bottom: 1px solid var(--markdown-pre-border);
-  background: color-mix(in srgb, var(--bf-color-surface-canvas) 94%, var(--bf-color-content-on-dark) 6%);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 94%, var(--openbitfun-color-content-on-dark) 6%);
 }
 
 .markdown-renderer .code-block-lang {
-  color: var(--bf-color-content-muted);
-  font-family: var(--bf-type-flow-micro-font-family);
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
-  line-height: var(--bf-type-flow-meta-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-family: var(--openbitfun-type-flow-micro-font-family);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
   text-transform: uppercase;
   user-select: none;
 }
@@ -314,17 +314,17 @@
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  font-size: var(--bf-type-flow-code-font-size) !important;
-  line-height: var(--bf-type-flow-code-line-height) !important;
+  font-size: var(--openbitfun-type-flow-code-font-size) !important;
+  line-height: var(--openbitfun-type-flow-code-line-height) !important;
 }
 
 .markdown-renderer .code-block-wrapper pre code,
 .markdown-renderer .code-block-wrapper code[style] {
   background: transparent !important;
   border: none !important;
-  font-family: var(--bf-type-flow-code-font-family);
-  font-size: var(--bf-type-flow-code-font-size) !important;
-  line-height: var(--bf-type-flow-code-line-height) !important;
+  font-family: var(--openbitfun-type-flow-code-font-family);
+  font-size: var(--openbitfun-type-flow-code-font-size) !important;
+  line-height: var(--openbitfun-type-flow-code-line-height) !important;
 }
 
 .markdown-renderer .copy-button {
@@ -340,7 +340,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   opacity: 0.9;
   transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
@@ -351,7 +351,7 @@
 }
 
 .markdown-renderer .copy-button:hover {
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
   color: var(--markdown-primary-color);
 }
 
@@ -360,7 +360,7 @@
 }
 
 .markdown-renderer .copy-button.copy-success {
-  color: var(--bf-color-status-success-content);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .markdown-renderer pre:has(.code-block-wrapper),
@@ -387,7 +387,7 @@
   border-left: 3px solid var(--markdown-blockquote-border);
   border-radius: 0 6px 6px 0;
   background: var(--markdown-blockquote-bg);
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-style: normal;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
@@ -405,16 +405,16 @@
 .markdown-renderer details {
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   padding: 0.62rem 0.72rem;
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-control-flow-chat-card-radius);
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
 }
 
 .markdown-renderer summary {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   cursor: pointer;
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .markdown-renderer details[open] > summary {
@@ -427,7 +427,7 @@
   padding: 0;
   border: 0;
   border-radius: 1px;
-  background: color-mix(in srgb, var(--bf-color-content-muted) 26%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-muted) 26%, transparent);
 }
 
 /* inline-block so multiple badges / linked images can sit on one row (shields, etc.) */
@@ -438,7 +438,7 @@
   height: auto;
   margin: 0.35rem 0.25rem;
   vertical-align: middle;
-  border-radius: var(--bf-control-flow-chat-card-radius);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
 }
 
 /* README-style centered badge rows: each badge is often its own <p> inside a div */
@@ -474,11 +474,11 @@
   box-sizing: border-box;
   margin: 0.35rem 0.25rem;
   padding: 0 0.3em;
-  border: 1px dashed color-mix(in srgb, var(--bf-color-content-muted) 35%, transparent);
-  border-radius: var(--bf-control-flow-chat-card-radius);
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  border: 1px dashed color-mix(in srgb, var(--openbitfun-color-content-muted) 35%, transparent);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   overflow-wrap: anywhere;
   vertical-align: middle;
 }
@@ -493,7 +493,7 @@
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   overflow: auto;
   border: 1px solid var(--markdown-table-border);
-  border-radius: var(--bf-control-flow-chat-card-radius);
+  border-radius: var(--openbitfun-control-flow-chat-card-radius);
   background: var(--markdown-table-surface);
   box-shadow: var(--markdown-table-shadow);
 }
@@ -502,15 +502,15 @@
   width: 100%;
   border-spacing: 0;
   border-collapse: collapse;
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .markdown-renderer .table-wrapper th,
 .markdown-renderer .table-wrapper td {
   padding: var(--markdown-table-cell-pad-y) var(--markdown-table-cell-pad-x);
   border-bottom: 1px solid var(--markdown-table-cell-border);
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   text-align: left;
   vertical-align: top;
 }
@@ -523,8 +523,8 @@
 .markdown-renderer .table-wrapper th {
   background: var(--markdown-table-header-bg);
   color: var(--markdown-table-header-fg);
-  font-family:var(--bf-type-body-sm-font-family);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .markdown-renderer .table-wrapper tr:last-child td {
@@ -551,7 +551,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--bf-color-link-default);
+  color: var(--openbitfun-color-link-default);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
@@ -563,7 +563,7 @@
 .markdown-renderer .file-link:hover,
 .markdown-renderer .visualization-link:hover,
 .markdown-renderer .tab-link:hover {
-  color: var(--bf-color-link-hover);
+  color: var(--openbitfun-color-link-hover);
   text-decoration-thickness: 1.5px;
 }
 
@@ -579,18 +579,18 @@
   max-width: min(520px, 80vw);
   overflow-wrap: anywhere;
   text-align: left;
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .markdown-renderer strong {
-  color: var(--bf-color-content-primary);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .markdown-renderer em {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font-style: italic;
 }
 
@@ -609,15 +609,15 @@
   will-change: auto;
 }
 
-:root[data-bf-appearance-mode="light"] .markdown-renderer,
-:root[data-bf-appearance-mode="light"] .markdown-renderer,
-[data-bf-appearance-mode="light"] .markdown-renderer,
+:root[data-openbitfun-appearance-mode="light"] .markdown-renderer,
+:root[data-openbitfun-appearance-mode="light"] .markdown-renderer,
+[data-openbitfun-appearance-mode="light"] .markdown-renderer,
 .light .markdown-renderer {
   --markdown-code-bg-elevated: var(--private-markdown-code-bg-light);
-  --markdown-inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-light) 5%, transparent);
-  --markdown-inline-code-border: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+  --markdown-inline-code-bg: color-mix(in srgb, var(--openbitfun-color-content-on-light) 5%, transparent);
+  --markdown-inline-code-border: color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
   --markdown-pre-bg: var(--private-markdown-code-bg-light);
-  --markdown-pre-border: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+  --markdown-pre-border: color-mix(in srgb, var(--openbitfun-color-content-muted) 12%, transparent);
   --markdown-blockquote-bg: #{markdownCode.$bq-bg-light};
   --markdown-blockquote-border: #{markdownCode.$bq-border-light};
   --markdown-table-border: #{markdownTable.$border-light};
@@ -636,27 +636,27 @@
   }
 
   .inline-code:hover {
-    background: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-    border-color: color-mix(in srgb, var(--bf-color-content-on-light) 18%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 8%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-content-on-light) 18%, transparent);
     color: var(--private-markdown-inline-code-hover-text-light);
   }
 
   .code-block-toolbar {
     background: var(--private-markdown-code-toolbar-bg-light);
-    border-bottom-color: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--openbitfun-color-content-muted) 12%, transparent);
   }
 
   .copy-button {
-    color: var(--bf-color-overlay-scrim);
+    color: var(--openbitfun-color-overlay-scrim);
   }
 
   .copy-button:hover {
-    background: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
-    color: var(--bf-color-link-default);
+    background: color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
+    color: var(--openbitfun-color-link-default);
   }
 
   .copy-button.copy-success {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 
   blockquote,
@@ -665,7 +665,7 @@
   }
 }
 
-:root[data-bf-appearance-mode='dark'] .markdown-renderer {
-  --markdown-code-bg-elevated: color-mix(in srgb, var(--bf-color-surface-canvas) 94%, var(--bf-color-content-on-dark) 6%);
-  --markdown-pre-border: color-mix(in srgb, var(--bf-color-content-on-dark) 9%, transparent);
+:root[data-openbitfun-appearance-mode='dark'] .markdown-renderer {
+  --markdown-code-bg-elevated: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 94%, var(--openbitfun-color-content-on-dark) 6%);
+  --markdown-pre-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 9%, transparent);
 }

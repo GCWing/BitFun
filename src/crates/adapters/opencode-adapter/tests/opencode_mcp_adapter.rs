@@ -1,7 +1,7 @@
-use bitfun_opencode_adapter::{
+use openbitfun_opencode_adapter::{
     OpenCodeCommandProviderOptions, OpenCodeMcpProvider, OpenCodeMcpProviderOptions,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
     ExternalSourceContext, ExternalSourceScope, PreparedExternalMcpImportTransport,
@@ -54,9 +54,9 @@ fn options(user_config_dir: PathBuf) -> OpenCodeMcpProviderOptions {
 
 #[test]
 fn opencode_config_dir_keeps_xdg_user_config_when_read_from_environment() {
-    const CHILD_MARKER: &str = "BITFUN_OPENCODE_MCP_ENV_CHILD";
-    const CHILD_XDG: &str = "BITFUN_OPENCODE_MCP_ENV_XDG";
-    const CHILD_EXPLICIT: &str = "BITFUN_OPENCODE_MCP_ENV_EXPLICIT";
+    const CHILD_MARKER: &str = "OPENBITFUN_OPENCODE_MCP_ENV_CHILD";
+    const CHILD_XDG: &str = "OPENBITFUN_OPENCODE_MCP_ENV_XDG";
+    const CHILD_EXPLICIT: &str = "OPENBITFUN_OPENCODE_MCP_ENV_EXPLICIT";
 
     if std::env::var_os(CHILD_MARKER).is_some() {
         let xdg = PathBuf::from(std::env::var_os(CHILD_XDG).expect("child XDG path"));

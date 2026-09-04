@@ -33,13 +33,13 @@ const DARK_SUCCESS = getDesignSystemThemeString('dark', 'color.status.success.co
 const DARK_WARNING = getDesignSystemThemeString('dark', 'color.status.warning.content');
 const DARK_ERROR = getDesignSystemThemeString('dark', 'color.status.danger.content');
 
-export const bitfunDarkPalette: AppearancePalette = {
+export const openBitFunDarkPalette: AppearancePalette = {
 
-  id: 'bitfun-dark',
+  id: 'openbitfun-dark',
   name: 'Dark',
   type: 'dark',
   description: 'Default dark appearance',
-  author: 'BitFun Team',
+  author: 'OpenBitFun Team',
   version: '2.1.0',
 
 

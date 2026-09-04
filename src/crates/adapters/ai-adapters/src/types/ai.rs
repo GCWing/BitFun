@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use bitfun_core_types::{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo};
+pub use openbitfun_core_types::{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo};
 
 /// Gemini API response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,8 +39,8 @@ pub struct GeminiUsage {
     pub cache_creation_token_count: Option<u32>,
 }
 
-impl From<bitfun_agent_stream::UnifiedTokenUsage> for GeminiUsage {
-    fn from(usage: bitfun_agent_stream::UnifiedTokenUsage) -> Self {
+impl From<openbitfun_agent_stream::UnifiedTokenUsage> for GeminiUsage {
+    fn from(usage: openbitfun_agent_stream::UnifiedTokenUsage) -> Self {
         Self {
             prompt_token_count: usage.prompt_token_count,
             candidates_token_count: usage.candidates_token_count,
@@ -52,7 +52,7 @@ impl From<bitfun_agent_stream::UnifiedTokenUsage> for GeminiUsage {
     }
 }
 
-impl From<GeminiUsage> for bitfun_agent_stream::UnifiedTokenUsage {
+impl From<GeminiUsage> for openbitfun_agent_stream::UnifiedTokenUsage {
     fn from(usage: GeminiUsage) -> Self {
         Self {
             prompt_token_count: usage.prompt_token_count,
@@ -112,7 +112,7 @@ mod tests {
             cache_creation_token_count: Some(20),
         };
 
-        let unified: bitfun_agent_stream::UnifiedTokenUsage = usage.clone().into();
+        let unified: openbitfun_agent_stream::UnifiedTokenUsage = usage.clone().into();
         assert_eq!(unified.prompt_token_count, usage.prompt_token_count);
         assert_eq!(unified.candidates_token_count, usage.candidates_token_count);
         assert_eq!(unified.total_token_count, usage.total_token_count);

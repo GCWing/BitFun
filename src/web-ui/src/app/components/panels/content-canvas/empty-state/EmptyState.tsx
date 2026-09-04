@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 ;
 
 import './EmptyState.scss';
-import { Icon, Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@openbitfun/ui';
 
 export interface EmptyStateProps {
   onClose?: () => void;
@@ -25,9 +25,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose, children }) => 
   }, [onClose]);
 
   return (
-    <div data-bf-component="content-canvas" data-bf-part="empty" data-bf-state="empty" className="canvas-empty-state">
+    <div data-openbitfun-component="content-canvas" data-openbitfun-part="empty" data-openbitfun-state="empty" className="canvas-empty-state">
       {onClose && (
-        <div className="canvas-empty-state__toolbar" data-bf-component="content-canvas" data-bf-part="emptyToolbar">
+        <div className="canvas-empty-state__toolbar" data-openbitfun-component="content-canvas" data-openbitfun-part="emptyToolbar">
           <Tooltip content={t('tabs.close')}>
             <button
               className="canvas-empty-state__close-btn"
@@ -40,8 +40,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onClose, children }) => 
       )}
       <div
         className={`canvas-empty-state__content${hasEmbeddedContent ? ' canvas-empty-state__content--embedded' : ''}`}
-        data-bf-component="content-canvas"
-        data-bf-part="emptyContent"
+        data-openbitfun-component="content-canvas"
+        data-openbitfun-part="emptyContent"
       >
         {hasEmbeddedContent ? children : (
           <div className="canvas-empty-state__message">

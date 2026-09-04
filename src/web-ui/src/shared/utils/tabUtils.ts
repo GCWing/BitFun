@@ -49,7 +49,7 @@ export interface OpenCanvasArtifactTabOptions {
 
 function isRightPanelCollapsed(): boolean {
   try {
-    const layoutState = (window as any).__BITFUN_LAYOUT_STATE__;
+    const layoutState = (window as any).__OPENBITFUN_LAYOUT_STATE__;
     return layoutState?.rightPanelCollapsed ?? false;
   } catch {
     return false;
@@ -102,10 +102,10 @@ export function openCanvasArtifactTab(options: OpenCanvasArtifactTabOptions): bo
     return false;
   }
 
-  const duplicateCheckKey = `bitfun-canvas-${artifactReference}`;
+  const duplicateCheckKey = `openbitfun-canvas-${artifactReference}`;
   createTab({
-    type: 'bitfun-canvas',
-    title: options.title?.trim() || 'BitFun Canvas',
+    type: 'openbitfun-canvas',
+    title: options.title?.trim() || 'OpenBitFun Canvas',
     data: {
       artifactReference,
       source: options.source,

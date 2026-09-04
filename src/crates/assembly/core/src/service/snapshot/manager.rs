@@ -11,9 +11,9 @@ use crate::service::workspace_runtime::{
     get_workspace_runtime_service_arc, WorkspaceRuntimeContext, WorkspaceRuntimeTarget,
 };
 use async_trait::async_trait;
-use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
-use bitfun_services_core::workspace_identity::WorkspaceSessionIdentity;
 use log::{debug, info, warn};
+use openbitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
+use openbitfun_services_core::workspace_identity::WorkspaceSessionIdentity;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -552,7 +552,7 @@ fn bound_snapshot_context(
         WorkspaceRuntimeTarget::LocalWorkspace { workspace_root } => {
             if identity.remote_connection_id.is_some()
                 || identity.hostname
-                    != bitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
+                    != openbitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
                 || snapshot_workspace_key(workspace_root)
                     != snapshot_workspace_key(Path::new(&identity.logical_workspace_path))
             {
@@ -865,14 +865,14 @@ impl Tool for WrappedTool {
         self.original_tool.name()
     }
 
-    async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+    async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
         Ok(self.original_tool.description().await?)
     }
 
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
-    ) -> crate::util::errors::BitFunResult<String> {
+    ) -> crate::util::errors::OpenBitFunResult<String> {
         self.original_tool.description_with_context(context).await
     }
 
@@ -937,7 +937,7 @@ impl Tool for WrappedTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> crate::util::errors::BitFunResult<Vec<bitfun_agent_tools::PermissionIntent>> {
+    ) -> crate::util::errors::OpenBitFunResult<Vec<openbitfun_agent_tools::PermissionIntent>> {
         self.original_tool.permission_intents(input, context)
     }
 
@@ -987,7 +987,7 @@ impl Tool for WrappedTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+    ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
         let mut snapshot_warning = None;
         let prepared = if Self::is_file_modification_tool_name(self.name()) {
             debug!(
@@ -1079,14 +1079,14 @@ impl WrappedTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> crate::util::errors::BitFunResult<()> {
+    ) -> crate::util::errors::OpenBitFunResult<()> {
         if !matches!(self.name(), "Delete" | "delete_file") {
             return Ok(());
         }
 
         let raw_path = self
             .extract_file_path(input, context)
-            .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?;
+            .map_err(|error| crate::util::errors::OpenBitFunError::Tool(error.to_string()))?;
         let resolved = context.resolve_tool_path(raw_path.to_string_lossy().as_ref())?;
         if resolved.is_runtime_artifact() {
             return Ok(());
@@ -1094,13 +1094,13 @@ impl WrappedTool {
         let workspace_fs = context.file_system_for_path(&resolved)?;
         match workspace_fs.metadata(&resolved.resolved_path, false).await {
             Ok(Some(metadata)) if matches!(metadata.kind, WorkspacePathKind::Symlink | WorkspacePathKind::Other) => {
-                Err(crate::util::errors::BitFunError::Tool(format!(
+                Err(crate::util::errors::OpenBitFunError::Tool(format!(
                     "Snapshot-tracked Delete cannot remove a symbolic link or reparse point because rollback cannot restore the link object: {}. The delete was not performed",
                     resolved.logical_path
                 )))
             }
             Ok(_) => Ok(()),
-            Err(error) => Err(crate::util::errors::BitFunError::Tool(format!(
+            Err(error) => Err(crate::util::errors::OpenBitFunError::Tool(format!(
                 "Failed to inspect Delete target for Snapshot safety: path={} error={}",
                 resolved.logical_path, error
             ))),
@@ -1113,16 +1113,16 @@ impl WrappedTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> crate::util::errors::BitFunResult<Option<PreparedFileModification>> {
+    ) -> crate::util::errors::OpenBitFunResult<Option<PreparedFileModification>> {
         let session_id = context.session_id.clone().ok_or_else(|| {
-            crate::util::errors::BitFunError::Tool(
+            crate::util::errors::OpenBitFunError::Tool(
                 "session_id is required in ToolUseContext".to_string(),
             )
         })?;
 
         let raw_path = match self.extract_file_path(input, context) {
             Ok(path) => path,
-            Err(e) => return Err(crate::util::errors::BitFunError::Tool(e.to_string())),
+            Err(e) => return Err(crate::util::errors::OpenBitFunError::Tool(e.to_string())),
         };
 
         let resolved = context.resolve_tool_path(raw_path.to_string_lossy().as_ref())?;
@@ -1131,7 +1131,7 @@ impl WrappedTool {
             return Ok(None);
         }
         let binding = context.workspace.as_ref().ok_or_else(|| {
-            crate::util::errors::BitFunError::Tool(
+            crate::util::errors::OpenBitFunError::Tool(
                 "workspace is required in ToolUseContext for snapshot tracking".into(),
             )
         })?;
@@ -1144,16 +1144,16 @@ impl WrappedTool {
             None,
         )
         .await
-        .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?;
+        .map_err(|error| crate::util::errors::OpenBitFunError::Tool(error.to_string()))?;
         let file_path = PathBuf::from(&resolved.resolved_path);
         let file_existed_before = workspace_fs
             .metadata(&resolved.resolved_path, true)
             .await
-            .map_err(|error| crate::util::errors::BitFunError::Tool(error.to_string()))?
+            .map_err(|error| crate::util::errors::OpenBitFunError::Tool(error.to_string()))?
             .is_some();
         let is_create_tool = matches!(self.name(), "Write" | "write_file" | "create_file");
         if !file_existed_before && !is_create_tool {
-            return Err(crate::util::errors::BitFunError::Tool(format!(
+            return Err(crate::util::errors::OpenBitFunError::Tool(format!(
                 "File not found: {}",
                 resolved.logical_path
             )));
@@ -1175,7 +1175,7 @@ impl WrappedTool {
                 context.tool_call_id.clone(),
             )
             .await
-            .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
+            .map_err(|e| crate::util::errors::OpenBitFunError::Tool(e.to_string()))?;
         let intercept_ms = crate::util::elapsed_ms_u64(intercept_started_at);
 
         debug!(
@@ -1430,8 +1430,10 @@ mod tests {
 
     impl TestWorkspace {
         fn new() -> Self {
-            let path = std::env::temp_dir()
-                .join(format!("bitfun-snapshot-manager-test-{}", Uuid::new_v4()));
+            let path = std::env::temp_dir().join(format!(
+                "openbitfun-snapshot-manager-test-{}",
+                Uuid::new_v4()
+            ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
             Self { path }
         }
@@ -1460,7 +1462,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -1477,7 +1479,7 @@ mod tests {
             "Write"
         }
 
-        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+        async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
             Ok(self.short_description())
         }
 
@@ -1493,7 +1495,7 @@ mod tests {
             &self,
             _input: &serde_json::Value,
             _context: &ToolUseContext,
-        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+        ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             let mut file = std::fs::OpenOptions::new()
                 .create(true)
@@ -1505,7 +1507,7 @@ mod tests {
                 block_metadata_storage(metadata_dir);
             }
             if self.fail_after_mutation {
-                return Err(crate::util::errors::BitFunError::Tool(
+                return Err(crate::util::errors::OpenBitFunError::Tool(
                     "original tool error after mutation".to_string(),
                 ));
             }
@@ -1729,7 +1731,7 @@ mod tests {
     #[tokio::test]
     async fn wrapped_remote_mutation_preserves_tool_error_without_repeating() {
         let workspace = TestWorkspace::new();
-        let remote_root = format!("/bitfun-tests/snapshot-single-call/{}", Uuid::new_v4());
+        let remote_root = format!("/openbitfun-tests/snapshot-single-call/{}", Uuid::new_v4());
         let connection_id = format!("snapshot-test-{}", Uuid::new_v4());
         let mut context = tool_context(PathBuf::from(&remote_root), "failed-remote-tool");
         context.workspace = Some(WorkspaceBinding::new_remote(
@@ -1737,7 +1739,7 @@ mod tests {
             PathBuf::from(&remote_root),
             connection_id.clone(),
             "test".into(),
-            bitfun_services_core::workspace_identity::WorkspaceSessionIdentity {
+            openbitfun_services_core::workspace_identity::WorkspaceSessionIdentity {
                 hostname: "test-host".into(),
                 logical_workspace_path: remote_root.clone(),
                 remote_connection_id: Some(connection_id),

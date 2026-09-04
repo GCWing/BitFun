@@ -32,18 +32,18 @@
     "discardConfirm": "放弃修改"
   },
   "security": {
-    "secretWarning": "ACP JSON 和环境变量可能包含 API 密钥或访问令牌。BitFun 会把它们保存到当前执行主机的配置中；请勿粘贴到在线 JSON 校验工具、聊天或工单中。"
+    "secretWarning": "ACP JSON 和环境变量可能包含 API 密钥或访问令牌。OpenBitFun 会把它们保存到当前执行主机的配置中；请勿粘贴到在线 JSON 校验工具、聊天或工单中。"
   },
   "installConfirm": {
     "title": "安装 {{name}} CLI？",
-    "message": "目标主机：{{host}}。BitFun 将执行“{{command}}”，把 npm 包全局安装到该主机；这会修改该主机的全局命令环境，并可能需要网络与写入权限。",
+    "message": "目标主机：{{host}}。OpenBitFun 将执行“{{command}}”，把 npm 包全局安装到该主机；这会修改该主机的全局命令环境，并可能需要网络与写入权限。",
     "localHost": "当前执行主机",
     "packageUnknown": "无法确认此 Agent 的安装包，已取消安装",
     "confirm": "在目标主机安装"
   },
   "presets": {
     "opencode": { "description": "原生支持 ACP。" },
-    "dsh": { "description": "通过 BitFun 内置 ACP 桥接，沿用 dsh 的模型与 API 密钥。" },
+    "dsh": { "description": "通过 OpenBitFun 内置 ACP 桥接，沿用 dsh 的模型与 API 密钥。" },
     "omp": { "description": "原生支持 ACP。" },
     "claudeCode": { "description": "通过官方 ACP 适配器连接。" },
     "codex": { "description": "通过官方 ACP 适配器连接。" }
@@ -74,7 +74,7 @@
     "permissionDenied": "权限不足",
     "partialDetail": "CLI 已就绪，但 ACP 适配器还未配置。",
     "cliMissingDetail": "未检测到对应命令，请确认已安装并加入 PATH。",
-    "selfManagedCliMissingDetail": "{{name}} 需要在 BitFun 外单独安装。请安装 {{command}} CLI 并确认它已加入 PATH，然后刷新检测。",
+    "selfManagedCliMissingDetail": "{{name}} 需要在 OpenBitFun 外单独安装。请安装 {{command}} CLI 并确认它已加入 PATH，然后刷新检测。",
     "acpMissingDetail": "ACP 适配器暂不可用。",
     "pathInvalidDetail": "命令路径无法解析，请确认路径有效。",
     "versionMismatchDetail": "检测到的版本与当前运行环境不匹配。",

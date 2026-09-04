@@ -21,8 +21,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
-  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   IconButton: ({ icon, loading: _loading, size: _size, variant: _variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
     icon?: ReactNode;
     loading?: boolean;
@@ -140,8 +140,8 @@ describe('PendingQueuePanel', () => {
       );
     });
 
-    const title = container.querySelector('[data-bf-part="title"]');
-    const attachmentBadge = container.querySelector('[data-bf-part="attachmentCount"]');
+    const title = container.querySelector('[data-openbitfun-part="title"]');
+    const attachmentBadge = container.querySelector('[data-openbitfun-part="attachmentCount"]');
 
     expect(title?.textContent).toBe('pendingQueue.title1');
     expect(attachmentBadge?.textContent).toBe('3');
@@ -195,7 +195,7 @@ describe('PendingQueuePanel', () => {
     });
 
     const preview = container.querySelector<HTMLElement>(
-      '.bitfun-pending-queue-panel__preview',
+      '.openbitfun-pending-queue-panel__preview',
     );
     expect(preview).not.toBeNull();
     expect(preview?.getAttribute('role')).toBeNull();

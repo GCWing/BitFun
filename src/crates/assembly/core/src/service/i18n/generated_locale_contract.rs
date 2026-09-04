@@ -89,11 +89,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "connectionMethods.bitfunServer",
-        value: "BitFun Server",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhCN,
         key: "connectionMethods.botFeishu",
         value: "飞书机器人",
     },
@@ -121,6 +116,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhCN,
         key: "connectionMethods.ngrok",
         value: "Ngrok",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "connectionMethods.openbitfunServer",
+        value: "OpenBitFun Server",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -170,12 +170,12 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
         key: "product.name",
-        value: "BitFun",
+        value: "OpenBitFun",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
         key: "product.remote",
-        value: "BitFun Remote",
+        value: "OpenBitFun Remote",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -259,11 +259,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "connectionMethods.bitfunServer",
-        value: "BitFun Server",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhTW,
         key: "connectionMethods.botFeishu",
         value: "飛書機器人",
     },
@@ -291,6 +286,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhTW,
         key: "connectionMethods.ngrok",
         value: "Ngrok",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "connectionMethods.openbitfunServer",
+        value: "OpenBitFun Server",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -340,12 +340,12 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
         key: "product.name",
-        value: "BitFun",
+        value: "OpenBitFun",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
         key: "product.remote",
-        value: "BitFun Remote",
+        value: "OpenBitFun Remote",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -429,11 +429,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
-        key: "connectionMethods.bitfunServer",
-        value: "BitFun Server",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::EnUS,
         key: "connectionMethods.botFeishu",
         value: "Feishu Bot",
     },
@@ -461,6 +456,11 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "connectionMethods.ngrok",
         value: "Ngrok",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "connectionMethods.openbitfunServer",
+        value: "OpenBitFun Server",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
@@ -510,12 +510,12 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
         key: "product.name",
-        value: "BitFun",
+        value: "OpenBitFun",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
         key: "product.remote",
-        value: "BitFun Remote",
+        value: "OpenBitFun Remote",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,

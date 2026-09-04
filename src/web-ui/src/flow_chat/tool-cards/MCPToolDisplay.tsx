@@ -6,9 +6,9 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Disclosure, Spinner } from '@bitfun/ui';
+import { Disclosure, Spinner } from '@openbitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@bitfun/ui/flow-chat';
+import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@openbitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { MCPAPI, MCP_APPS_PROTOCOL_VERSION, type McpUiResourceCsp, type McpUiResourcePermissions, type McpUiMessageParams, type McpUiMessageResult, type McpAppMessageEvent, type McpAppMessageResponseEvent } from '@/infrastructure/api/service-api/MCPAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -380,7 +380,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               id,
               result: {
                 protocolVersion: MCP_APPS_PROTOCOL_VERSION,
-                hostInfo: { name: 'BitFun', version: '1.0.0' },
+                hostInfo: { name: 'OpenBitFun', version: '1.0.0' },
                 hostCapabilities: {
                   openLinks: {},
                   serverTools: { listChanged: true },
@@ -697,7 +697,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       icon={<span className="mcp-icon">{renderToolIcon()}</span>}
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
-        <span className="mcp-tool-info" data-bf-component="mcp-tool-display" data-bf-part="info">
+        <span className="mcp-tool-info" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="info">
           <span className="tool-name">{toolName}</span>
         </span>
       }
@@ -730,8 +730,8 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     const inputContent = hasToolInput ? (
       <div
         className="content-item content-item-input"
-        data-bf-component="mcp-tool-display"
-        data-bf-part="input"
+        data-openbitfun-component="mcp-tool-display"
+        data-openbitfun-part="input"
       >
         <Disclosure
           className="mcp-input-disclosure"
@@ -759,19 +759,19 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     ) : null;
 
     return (
-      <div data-bf-component="mcp-tool-display" data-bf-part="expanded" data-bf-state="expanded" className="mcp-expanded-content">
+      <div data-openbitfun-component="mcp-tool-display" data-openbitfun-part="expanded" data-openbitfun-state="expanded" className="mcp-expanded-content">
         {!hasMcpAppState && inputContent}
         {/* MCP App: sandboxed iframe for ui:// resources */}
         {mcpAppState && (
-          <div className="content-item content-item-mcp-app" data-bf-component="mcp-tool-display" data-bf-part="item">
+          <div className="content-item content-item-mcp-app" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="item">
             {mcpAppState.loading && (
-              <div className="mcp-app-loading" data-bf-component="mcp-tool-display" data-bf-part="loading" data-bf-state="loading">
+              <div className="mcp-app-loading" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="loading" data-openbitfun-state="loading">
                 <Spinner size="sm" />
                 <span>{t('toolCards.mcp.loadingApp')}</span>
               </div>
             )}
             {mcpAppState.error && (
-              <div className="mcp-app-error" data-bf-component="mcp-tool-display" data-bf-part="error" data-bf-state="error">
+              <div className="mcp-app-error" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="error" data-openbitfun-state="error">
                 <span>{t('toolCards.mcp.appLoadError')}: {mcpAppState.error}</span>
               </div>
             )}
@@ -779,8 +779,8 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               <iframe
                 ref={mcpAppIframeRef}
                 className="mcp-app-iframe"
-                data-bf-component="mcp-tool-display"
-                data-bf-part="iframe"
+                data-openbitfun-component="mcp-tool-display"
+                data-openbitfun-part="iframe"
                 sandbox="allow-scripts allow-forms"
                 title="MCP App"
                 srcDoc={mcpAppState.html}
@@ -796,9 +796,9 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           const isUiResource = item.type === 'resource' && item.resource?.uri?.startsWith('ui://');
           if (isUiResource && mcpAppState) return null;
           return (
-            <div data-bf-component="mcp-tool-display" data-bf-part="item" key={index} className={`content-item content-item-${item.type}`}>
+            <div data-openbitfun-component="mcp-tool-display" data-openbitfun-part="item" key={index} className={`content-item content-item-${item.type}`}>
               {item.type === 'text' && (
-                <div className="text-content" data-bf-component="mcp-tool-display" data-bf-part="text">
+                <div className="text-content" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="text">
                   <div className="mcp-copyable-content">
                     <pre>{item.text}</pre>
                     {typeof item.text === 'string' && item.text.length > 0 && (
@@ -817,12 +817,12 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
                 </div>
               )}
               {item.type === 'image' && item.data && (
-                <div className="image-content" data-bf-component="mcp-tool-display" data-bf-part="image">
+                <div className="image-content" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="image">
                   <img src={`data:${item.mime_type ?? 'image/png'};base64,${item.data}`} alt="" />
                 </div>
               )}
               {item.type === 'resource' && item.resource && (
-                <div className="resource-content" data-bf-component="mcp-tool-display" data-bf-part="resource">
+                <div className="resource-content" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="resource">
                   <div className="resource-name">{item.resource.name || 'Resource'}</div>
                   <div className="resource-uri">{item.resource.uri}</div>
                   {item.resource.description && (
@@ -838,14 +838,14 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderErrorContent = () => (
-    <div className="error-content" data-bf-component="mcp-tool-display" data-bf-part="error" data-bf-state="error">
+    <div className="error-content" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="error" data-openbitfun-state="error">
       <div className="error-message">{getErrorMessage()}</div>
     </div>
   );
 
   return (
-    <div data-bf-component="mcp-tool-display" data-bf-part="root"
-      data-bf-state={[isExpanded && 'expanded', isFailed && 'error'].filter(Boolean).join(' ') || undefined}
+    <div data-openbitfun-component="mcp-tool-display" data-openbitfun-part="root"
+      data-openbitfun-state={[isExpanded && 'expanded', isFailed && 'error'].filter(Boolean).join(' ') || undefined}
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
       style={{ '--private-mcp-tool-identity-color': APPEARANCE_DOMAIN_TOKENS.toolIdentity.mcp } as React.CSSProperties}

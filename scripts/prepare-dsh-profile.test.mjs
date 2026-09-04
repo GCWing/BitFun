@@ -17,7 +17,7 @@ import { getDshProfileRebuildPlan } from './prepare-dsh-profile.mjs';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function createPackageTree() {
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-dsh-profile-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-dsh-profile-'));
   const packageDir = path.join(root, 'packages', 'dsh-acp');
   const outDir = path.join(packageDir, 'dist-profile');
   const prepareScriptPath = path.join(root, 'scripts', 'prepare-dsh-profile.mjs');
@@ -40,8 +40,8 @@ function createPackageTree() {
   return { root, packageDir, outDir, prepareScriptPath };
 }
 
-function writeStamp(outDir, stamp = { profile: 'bitfun-acp', content: 'abc' }) {
-  const stampPath = path.join(outDir, '.bitfun-bridge.json');
+function writeStamp(outDir, stamp = { profile: 'openbitfun-acp', content: 'abc' }) {
+  const stampPath = path.join(outDir, '.openbitfun-bridge.json');
   writeFileSync(stampPath, `${JSON.stringify(stamp)}\n`);
   return stampPath;
 }
@@ -84,7 +84,7 @@ test('rebuilds when force is requested', () => {
 test('rebuilds when the stamp is incomplete', () => {
   const { root, packageDir, outDir, prepareScriptPath } = createPackageTree();
   try {
-    writeStamp(outDir, { profile: 'bitfun-acp' });
+    writeStamp(outDir, { profile: 'openbitfun-acp' });
     const plan = getDshProfileRebuildPlan({ packageDir, outDir, prepareScriptPath });
     assert.equal(plan.shouldBuild, true);
     assert.match(plan.reason, /incomplete/);

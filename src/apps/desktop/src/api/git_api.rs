@@ -2,22 +2,22 @@
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_core::infrastructure::storage::StorageOptions;
-use bitfun_core::service::git::{
+use log::{error, info};
+use openbitfun_core::infrastructure::storage::StorageOptions;
+use openbitfun_core::service::git::{
     build_git_changed_files_args, build_git_diff_args, parse_name_status_output, GitAddParams,
     GitChangedFile, GitChangedFilesParams, GitCommitParams, GitDiffParams, GitFileStatus,
     GitLogParams, GitPullParams, GitPushParams, GitService,
 };
-use bitfun_core::service::git::{
+use openbitfun_core::service::git::{
     trust, GitBranch, GitCommit, GitError, GitOperationResult, GitRepository, GitStatus,
     GitTrustOutcome, GitTrustReport, GitTrustState,
 };
-use bitfun_core::service::remote_ssh::{
+use openbitfun_core::service::remote_ssh::{
     build_remote_git_command as build_remote_git_command_shared, is_remote_path,
     lookup_remote_connection, normalize_remote_workspace_path,
 };
-use bitfun_core::service::workspace::WorktreeTopologyFreshness;
-use log::{error, info};
+use openbitfun_core::service::workspace::WorktreeTopologyFreshness;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::State;
@@ -80,7 +80,7 @@ async fn resolve_remote_git_target(
 
     if is_remote_path(repository_path).await {
         return Err(format!(
-            "Remote workspace is not registered with BitFun SSH state: no single SSH connection \
+            "Remote workspace is not registered with OpenBitFun SSH state: no single SSH connection \
              matches {repository_path}"
         ));
     }
@@ -698,7 +698,7 @@ fn remote_git_diagnostic(output: &RemoteGitOutput) -> String {
 
 /// Whether a remote `rev-parse --is-inside-work-tree` found a repository.
 ///
-/// Mirrors the local [`bitfun_core::service::git::utils::is_git_repository`]:
+/// Mirrors the local [`openbitfun_core::service::git::utils::is_git_repository`]:
 /// a repository Git refuses on ownership grounds still *is* one, and answering
 /// `false` there hides the recovery affordance behind "not a repository".
 fn remote_probe_found_repository(output: &RemoteGitOutput) -> bool {
@@ -1379,7 +1379,7 @@ pub async fn git_get_graph(
     repository_path: String,
     max_count: Option<usize>,
     branch_name: Option<String>,
-) -> Result<bitfun_core::service::git::GitGraph, String> {
+) -> Result<openbitfun_core::service::git::GitGraph, String> {
     info!(
         "Getting git graph: repository_path={}, max_count={:?}, branch_name={:?}",
         repository_path, max_count, branch_name
@@ -1487,7 +1487,7 @@ pub async fn git_cherry_pick_continue(
 pub async fn git_list_worktrees(
     state: State<'_, AppState>,
     request: GitRepositoryRequest,
-) -> Result<Vec<bitfun_core::service::git::GitWorktreeInfo>, String> {
+) -> Result<Vec<openbitfun_core::service::git::GitWorktreeInfo>, String> {
     info!("Listing worktrees for '{}'", request.repository_path);
 
     if resolve_remote_git_target(&request.repository_path)
@@ -1517,7 +1517,7 @@ pub async fn git_list_worktrees(
 pub async fn git_add_worktree(
     state: State<'_, AppState>,
     request: GitAddWorktreeRequest,
-) -> Result<bitfun_core::service::git::GitWorktreeInfo, String> {
+) -> Result<openbitfun_core::service::git::GitWorktreeInfo, String> {
     let create_branch = request.create_branch.unwrap_or(false);
     info!(
         "Adding worktree for branch '{}' in '{}' (create_branch: {})",

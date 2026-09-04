@@ -170,9 +170,9 @@ describe('dispatchJobStore', () => {
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
       baselineWorktreeId: 'worktree-1',
-      baselineWorktreePath: '/controller/.bitfun/worktrees/baseline',
+      baselineWorktreePath: '/controller/.openbitfun/worktrees/baseline',
       baseCommit: 'abc123',
-      branch: 'bitfun/dispatch/job-rest',
+      branch: 'openbitfun/dispatch/job-rest',
       remoteUrl: 'git@example.test:team/repo.git',
       syncedHeadCommit: 'def456',
       lastCursor: 900,
@@ -189,8 +189,8 @@ describe('dispatchJobStore', () => {
       reasoningPreset: 'high',
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
-      branch: 'bitfun/dispatch/job-rest',
-      baselineWorktreePath: '/controller/.bitfun/worktrees/baseline',
+      branch: 'openbitfun/dispatch/job-rest',
+      baselineWorktreePath: '/controller/.openbitfun/worktrees/baseline',
       syncedHeadCommit: 'def456',
       cursor: 0,
     });
@@ -209,8 +209,8 @@ describe('dispatchJobStore', () => {
         displayName: 'build-host',
       },
       sourceWorkspacePath: '/source',
-      baselineWorktreePath: '/source/.bitfun/worktrees/baseline',
-      branch: 'bitfun/dispatch/job-1',
+      baselineWorktreePath: '/source/.openbitfun/worktrees/baseline',
+      branch: 'openbitfun/dispatch/job-1',
       syncedHeadCommit: 'def456',
       workspacePath: '/target/repo',
       promptPreview: 'Dispatch test',
@@ -221,8 +221,8 @@ describe('dispatchJobStore', () => {
     }]);
 
     expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
-      branch: 'bitfun/dispatch/job-1',
-      baselineWorktreePath: '/source/.bitfun/worktrees/baseline',
+      branch: 'openbitfun/dispatch/job-1',
+      baselineWorktreePath: '/source/.openbitfun/worktrees/baseline',
       syncedHeadCommit: 'def456',
     });
   });
@@ -346,7 +346,7 @@ describe('dispatchJobStore', () => {
       baselineProjectWorkspacePath: '/controller/main-project',
       baselineWorktreeId: 'worktree-1',
       baselineWorktreePath: '/controller/baselines/job-stable-project',
-      branch: 'bitfun/dispatch/job-stable-project',
+      branch: 'openbitfun/dispatch/job-stable-project',
       workspacePath: '/target/repo',
       promptPreview: 'Prompt preview',
       lastCursor: 0,

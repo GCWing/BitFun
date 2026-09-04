@@ -9,7 +9,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: var(--bf-space-8) var(--bf-space-6);
+  padding: var(--openbitfun-space-8) var(--openbitfun-space-6);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -19,7 +19,7 @@
 .welcome-panel__content {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-6);
+  gap: var(--openbitfun-space-6);
   width: 100%;
   max-width: 640px;
 }
@@ -29,44 +29,44 @@
 .welcome-panel__greeting {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
 .welcome-panel__greeting-inner {
   display: flex;
   flex-direction: row;
   align-items: flex-end;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
 }
 
 .welcome-panel__greeting-text {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
   min-width: 0;
 }
 
 .welcome-panel__heading {
   margin: 0;
-  font-size: var(--bf-type-heading-display-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-flow-meta-line-height);
-  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+  font-size: var(--openbitfun-type-heading-display-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
+  letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
 }
 
 .welcome-panel__tagline {
   margin: 6px 0 0;
-  font-size: var(--bf-type-flow-lead-font-size);
-  color: var(--bf-color-content-muted);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-size: var(--openbitfun-type-flow-lead-font-size);
+  color: var(--openbitfun-color-content-muted);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 /* ── Divider ── */
 
 .welcome-panel__divider {
   height: 1px;
-  background: var(--bf-color-border-subtle);
+  background: var(--openbitfun-color-border-subtle);
 }
 
 /* ── Narrative ── */
@@ -77,9 +77,9 @@
 
 .welcome-panel__narrative-text {
   margin: 0;
-  font-size: var(--bf-type-flow-lead-font-size);
-  line-height: var(--bf-type-flow-body-line-height);
-  color: var(--bf-color-content-muted);
+  font-size: var(--openbitfun-type-flow-lead-font-size);
+  line-height: var(--openbitfun-type-flow-body-line-height);
+  color: var(--openbitfun-color-content-muted);
 }
 
 /* Lead text, chips, and trail text share one typographic line (baseline-aligned) */
@@ -105,10 +105,10 @@
   background: none;
   border: none;
   border-radius: 5px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font-size: inherit;
-  font-family:var(--bf-type-body-sm-font-family);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   line-height: inherit;
   cursor: default;
   vertical-align: baseline;
@@ -120,11 +120,11 @@
 }
 
 .welcome-panel__inline-btn--interactive:hover:not(:disabled) {
-  background: var(--bf-color-surface-subtle);
+  background: var(--openbitfun-color-surface-subtle);
 }
 
 .welcome-panel__inline-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--bf-color-accent-hover) 40%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
   outline-offset: 1px;
 }
 
@@ -133,7 +133,7 @@
 }
 
 .welcome-panel__inline-btn--active {
-  background: var(--bf-color-surface-subtle);
+  background: var(--openbitfun-color-surface-subtle);
 }
 
 .welcome-panel__inline-btn:disabled {
@@ -158,7 +158,7 @@
 }
 
 .welcome-panel__narrative-clean {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 /* ── Context row: workspace + branch always on the same line ── */
@@ -173,9 +173,9 @@
 .welcome-panel__context-sep {
   padding: 0 2px;
   line-height: inherit;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   opacity: 0.4;
-  font-weight: var(--bf-type-body-sm-font-weight);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
   user-select: none;
 }
 
@@ -217,11 +217,11 @@
 
 @media (max-width: 480px) {
   .welcome-panel {
-    padding: var(--bf-space-5) var(--bf-space-4);
+    padding: var(--openbitfun-space-5) var(--openbitfun-space-4);
   }
 
   .welcome-panel__heading {
-    font-size: var(--bf-type-flow-page-title-font-size);
+    font-size: var(--openbitfun-type-flow-page-title-font-size);
   }
 }
 

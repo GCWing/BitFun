@@ -63,7 +63,7 @@ describe('AppearanceBackgroundMedia', () => {
       posterUrl: 'blob:test-poster',
     }} />);
 
-    expect(html).toContain('data-bf-background-media="video"');
+    expect(html).toContain('data-openbitfun-background-media="video"');
     expect(html).toContain('src="blob:test-motion"');
     expect(html).toContain('poster="blob:test-poster"');
     expect(html).toContain('autoplay=""');

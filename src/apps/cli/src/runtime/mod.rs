@@ -2,18 +2,20 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
-use bitfun_core::agentic::system::AgenticSystem;
-use bitfun_core::product_assembly::{ProductAssemblyPlan, ProductServiceCapabilityAvailability};
-use bitfun_core::product_runtime::{
+use openbitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
+use openbitfun_core::agentic::system::AgenticSystem;
+use openbitfun_core::product_assembly::{
+    ProductAssemblyPlan, ProductServiceCapabilityAvailability,
+};
+use openbitfun_core::product_runtime::{
     build_local_runtime_services, ensure_product_dialog_scheduler, CoreAgentRuntimeCompatibility,
     CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime, CoreProductEventQueueOwner,
 };
-use bitfun_core::runtime_ports::PluginRuntimeAvailability;
-use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
-use bitfun_core::service::token_usage::TokenUsageService;
-use bitfun_runtime_ports::LocalWorkspaceSnapshotPort;
-use bitfun_runtime_services::RuntimeServices;
+use openbitfun_core::runtime_ports::PluginRuntimeAvailability;
+use openbitfun_core::service::remote_connect::account_runtime::AccountRuntime;
+use openbitfun_core::service::token_usage::TokenUsageService;
+use openbitfun_runtime_ports::LocalWorkspaceSnapshotPort;
+use openbitfun_runtime_services::RuntimeServices;
 
 use crate::account::{build_account_runtime, CliAccountRoutingHost};
 use crate::product_assembly::{assemble_acp_runtime_parts, assemble_cli_runtime_parts};

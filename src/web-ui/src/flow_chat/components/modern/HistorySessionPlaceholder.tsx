@@ -1,4 +1,4 @@
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import React from 'react';
 import { AlertCircle, LoaderCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

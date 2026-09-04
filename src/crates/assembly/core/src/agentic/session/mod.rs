@@ -26,7 +26,7 @@ pub use session_store_port::*;
 pub use token_anchor::*;
 pub use turn_skill_agent_snapshot_store::*;
 
-pub use bitfun_runtime_ports::{
+pub use openbitfun_runtime_ports::{
     SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution,
     SessionTurnLoadTiming, SessionViewRestoreRequest, SessionViewRestoreTiming,
 };

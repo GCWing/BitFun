@@ -1,0 +1,178 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { INSTALLER_LANGUAGES, type InstallerUiLanguage } from '../i18n/languages';
+import logoMarkDark from '../assets/openbitfun-mark-dark.png';
+import logoMarkLight from '../assets/openbitfun-mark-light.png';
+import packageInfo from '../../package.json';
+
+interface LanguageSelectProps {
+  onSelect: (lang: InstallerUiLanguage) => void;
+}
+
+export function LanguageSelect({ onSelect }: LanguageSelectProps) {
+  const { i18n } = useTranslation();
+  const [selected, setSelected] = useState<InstallerUiLanguage>('en');
+
+  const handleSelect = (code: InstallerUiLanguage) => {
+    setSelected(code);
+    i18n.changeLanguage(code);
+  };
+
+  const handleContinue = () => {
+    if (selected) onSelect(selected);
+  };
+
+  return (
+    <div style={{
+      flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', overflow: 'hidden',
+    }}>
+      <div style={{
+        flex: '0 0 42%',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        position: 'relative', overflow: 'hidden',
+        background: 'var(--openbitfun-color-surface-canvas)',
+      }}>
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0, right: 0, width: 1,
+          backgroundImage: `linear-gradient(180deg, var(--openbitfun-color-border-subtle) 0%, var(--openbitfun-color-border-subtle) 50%, transparent 50%, transparent 100%)`,
+          backgroundSize: '1px 8px', pointerEvents: 'none', zIndex: 10,
+        }} />
+
+        <div style={{
+          textAlign: 'center', maxWidth: 280, padding: '0 24px',
+          animation: 'heroContentFadeIn 0.8s ease-out 0.3s both',
+        }}>
+          <picture style={{ display: 'block', width: 56, height: 56, margin: '0 auto 16px' }}>
+            <source media="(prefers-color-scheme: dark)" srcSet={logoMarkLight} />
+            <img src={logoMarkDark} alt="OpenBitFun" style={{
+              display: 'block', width: '100%', height: '100%', objectFit: 'contain',
+              filter: 'drop-shadow(0 0 40px color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent))',
+            }} />
+          </picture>
+          <h1 style={{
+            fontFamily: 'var(--openbitfun-type-display-md-font-family)',
+            fontSize: 'var(--openbitfun-type-display-md-font-size)',
+            fontWeight: 'var(--openbitfun-type-heading-page-font-weight)',
+            color: 'var(--openbitfun-color-content-primary)',
+            letterSpacing: 'var(--openbitfun-type-display-md-letter-spacing)',
+            lineHeight: 'var(--openbitfun-type-display-md-line-height)',
+            margin: '0 0 16px 0',
+            textShadow: '0 0 60px color-mix(in srgb, var(--openbitfun-color-accent-default) 15%, transparent)',
+          }}>OpenBitFun</h1>
+        </div>
+
+        <div style={{
+          position: 'absolute',
+          bottom: 24,
+          left: 0,
+          right: 0,
+          zIndex: 2,
+          animation: 'fadeIn 1s ease-out 0.8s both',
+        }}>
+          <div style={{
+            maxWidth: 280,
+            margin: '0 auto',
+            padding: '0 24px',
+            textAlign: 'center',
+            fontSize: 'var(--openbitfun-type-support-font-size)',
+            color: 'var(--openbitfun-color-content-muted)',
+            opacity: 0.6,
+            letterSpacing: 'var(--openbitfun-type-modifier-tracking-wider-letter-spacing)',
+          }}>
+            Version {packageInfo.version}
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+      }}>
+        <div className="page-scroll" style={{ padding: '24px 32px 18px' }}>
+          <div className="page-container page-container--center" style={{ maxWidth: 320 }}>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 16,
+              width: '100%',
+              animation: 'fadeIn 0.5s ease-out',
+            }}>
+              <div className="section-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                Select Language / {'\u9009\u62e9\u8bed\u8a00'}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {INSTALLER_LANGUAGES.map((lang) => {
+                  const isSelected = selected === lang.uiCode;
+                  return (
+                    <button
+                      key={lang.uiCode}
+                      onClick={() => handleSelect(lang.uiCode)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '14px 16px', width: '100%',
+                        background: isSelected
+                          ? 'color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent)'
+                          : 'var(--openbitfun-color-surface-subtle)',
+                        border: 'none',
+                        borderRadius: 'var(--openbitfun-radius-sm)',
+                        cursor: 'pointer', textAlign: 'left',
+                        transition: 'all 0.25s ease',
+                        outline: 'none',
+                        fontFamily: 'var(--openbitfun-type-label-lg-font-family)',
+                        boxShadow: 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'var(--openbitfun-color-action-neutral-surface)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'var(--openbitfun-color-surface-subtle)';
+                        }
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: 'var(--openbitfun-type-label-lg-font-size)',
+                          fontWeight: 'var(--openbitfun-type-label-lg-font-weight)',
+                          color: isSelected ? 'var(--openbitfun-color-content-primary)' : 'var(--openbitfun-color-content-secondary)',
+                          transition: 'color 0.2s ease',
+                        }}>{lang.nativeName}</div>
+                        <div style={{
+                          fontSize: 'var(--openbitfun-type-support-font-size)',
+                          color: 'var(--openbitfun-color-content-muted)', opacity: 0.7,
+                          marginTop: 2,
+                        }}>{lang.label}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="page-footer page-footer--center">
+          <button
+            className={`btn ${selected ? 'btn-primary' : ''}`}
+            onClick={handleContinue}
+            disabled={!selected}
+            style={{
+              justifyContent: 'center',
+            }}
+          >
+            {INSTALLER_LANGUAGES.find(language => language.uiCode === selected)?.continueLabel}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

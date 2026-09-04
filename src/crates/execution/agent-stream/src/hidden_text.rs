@@ -167,8 +167,8 @@ mod tests {
     fn memory_tag() -> HiddenTextTag {
         HiddenTextTag::new(
             "memory_citation",
-            "<bitfun-mem-citation>",
-            "</bitfun-mem-citation>",
+            "<openbitfun-mem-citation>",
+            "</openbitfun-mem-citation>",
         )
     }
 
@@ -176,8 +176,8 @@ mod tests {
     fn streams_hidden_tag_across_chunk_boundaries() {
         let mut parser = HiddenTextStreamParser::new(vec![memory_tag()]);
 
-        let first = parser.push_str("hello <bitfun-mem-");
-        let second = parser.push_str("citation>doc</bitfun-mem-citation> world");
+        let first = parser.push_str("hello <openbitfun-mem-");
+        let second = parser.push_str("citation>doc</openbitfun-mem-citation> world");
         let tail = parser.finish();
 
         assert_eq!(first.visible_text, "hello ");
@@ -193,7 +193,7 @@ mod tests {
     fn auto_closes_unterminated_hidden_tag_at_finish() {
         let mut parser = HiddenTextStreamParser::new(vec![memory_tag()]);
 
-        let first = parser.push_str("x<bitfun-mem-citation>doc");
+        let first = parser.push_str("x<openbitfun-mem-citation>doc");
         let tail = parser.finish();
 
         assert_eq!(first.visible_text, "x");
@@ -206,11 +206,11 @@ mod tests {
     fn preserves_partial_open_tag_at_finish_when_not_complete() {
         let mut parser = HiddenTextStreamParser::new(vec![memory_tag()]);
 
-        let first = parser.push_str("hello <bitfun-mem-");
+        let first = parser.push_str("hello <openbitfun-mem-");
         let tail = parser.finish();
 
         assert_eq!(first.visible_text, "hello ");
-        assert_eq!(tail.visible_text, "<bitfun-mem-");
+        assert_eq!(tail.visible_text, "<openbitfun-mem-");
         assert!(tail.hidden_blocks.is_empty());
     }
 

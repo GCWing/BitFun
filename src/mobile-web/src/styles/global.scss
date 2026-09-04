@@ -41,11 +41,11 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--bf-type-body-md-font-family);
-  font-size: var(--bf-type-body-md-font-size);
-  line-height: var(--bf-type-body-md-line-height);
-  color: var(--bf-color-content-primary);
-  background: var(--bf-color-surface-canvas);
+  font-family: var(--openbitfun-type-body-md-font-family);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  line-height: var(--openbitfun-type-body-md-line-height);
+  color: var(--openbitfun-color-content-primary);
+  background: var(--openbitfun-color-surface-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -54,8 +54,8 @@ body {
   height: 100%;
   height: 100dvh;
   width: 100%;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -73,11 +73,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bf-color-scrollbar-thumb);
+  background: var(--openbitfun-color-scrollbar-thumb);
   border-radius: var(--size-radius-full);
 
   &:hover {
-    background: var(--bf-color-scrollbar-thumb-hover);
+    background: var(--openbitfun-color-scrollbar-thumb-hover);
   }
 }
 
@@ -126,7 +126,7 @@ body {
 .nav-page {
   position: absolute;
   inset: 0;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   z-index: 1;
 }
 
@@ -181,8 +181,8 @@ body {
 .spinner {
   width: 28px;
   height: 28px;
-  border: 2.5px solid var(--bf-color-border-subtle);
-  border-top-color: var(--bf-color-accent-default);
+  border: 2.5px solid var(--openbitfun-color-border-subtle);
+  border-top-color: var(--openbitfun-color-accent-default);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -222,10 +222,10 @@ html.theme-switching {
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--bf-color-status-warning-content);
-  color: var(--bf-color-action-primary-content);
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-lg-font-weight);
+  background: var(--openbitfun-color-status-warning-content);
+  color: var(--openbitfun-color-action-primary-content);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-lg-font-weight);
   animation: slideDown var(--motion-fast) var(--easing-standard);
 
   button {

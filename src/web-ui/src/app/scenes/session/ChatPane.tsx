@@ -156,14 +156,14 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   }, [addPanelTab]);
 
   return (
-    <div data-bf-component="chat-pane" data-bf-part="root"
-      className="bitfun-chat-pane__content"
+    <div data-openbitfun-component="chat-pane" data-openbitfun-part="root"
+      className="openbitfun-chat-pane__content"
       data-shortcut-scope="chat"
       data-fullscreen={isFullscreen}
       data-testid="chat-pane"
     >
       <FlowChatContainer
-        className="bitfun-chat-pane__chat-container"
+        className="openbitfun-chat-pane__chat-container"
         isViewportActive={isSceneActive}
         isRightPanelOpen={isRightPanelOpen}
         onToggleRightPanel={onToggleRightPanel}

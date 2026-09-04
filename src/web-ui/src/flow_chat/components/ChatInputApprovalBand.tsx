@@ -12,10 +12,10 @@
  */
 
 import React, { useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Icon } from '@bitfun/ui';
+import { Tooltip, Icon } from '@openbitfun/ui';
 import type {
   PermissionReplyKind,
   PermissionRequest,
@@ -171,49 +171,49 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
 
   return (
     <div
-      data-bf-component="permission-request-panel"
-      data-bf-part="root"
-      data-bf-state={[responding && 'responding', error && 'error'].filter(Boolean).join(' ')}
-      className="bitfun-chat-input-approval"
+      data-openbitfun-component="permission-request-panel"
+      data-openbitfun-part="root"
+      data-openbitfun-state={[responding && 'responding', error && 'error'].filter(Boolean).join(' ')}
+      className="openbitfun-chat-input-approval"
       role="group"
       aria-label={t('permission.title')}
       data-testid="chat-input-approval-band"
       data-approval-scope={effectiveScope}
     >
       <div
-        data-bf-component="permission-request-panel"
-        data-bf-part="request"
-        className="bitfun-chat-input-approval__request"
+        data-openbitfun-component="permission-request-panel"
+        data-openbitfun-part="request"
+        className="openbitfun-chat-input-approval__request"
       >
         <ShieldAlert
-          className="bitfun-chat-input-approval__icon"
+          className="openbitfun-chat-input-approval__icon"
           size={14}
           strokeWidth={2.1}
           aria-hidden
         />
-        <span className="bitfun-chat-input-approval__action">
+        <span className="openbitfun-chat-input-approval__action">
           {permissionActionLabel(request.action, t)}
         </span>
-        <span className="bitfun-chat-input-approval__separator" aria-hidden>·</span>
+        <span className="openbitfun-chat-input-approval__separator" aria-hidden>·</span>
         <CopyableTextPreview
           as="code"
           text={resourceSummary}
           emptyText=""
-          className="bitfun-chat-input-approval__resource copyable-text-preview--theme-font"
+          className="openbitfun-chat-input-approval__resource copyable-text-preview--theme-font"
           tooltipContent={request.resources.join('\n') || undefined}
           tooltipPlacement="top"
         />
         {request.delegation ? (
-          <span className="bitfun-chat-input-approval__owner">
+          <span className="openbitfun-chat-input-approval__owner">
             {t('permission.subagentOwner', { subagent: request.delegation.subagentType })}
           </span>
         ) : (
-          <span className="bitfun-chat-input-approval__owner">{request.source.identity}</span>
+          <span className="openbitfun-chat-input-approval__owner">{request.source.identity}</span>
         )}
         {canAnswerAll ? (
           <Tooltip content={t('permission.batchCount', { count: pendingCount })} placement="top">
             <span
-              className="bitfun-chat-input-approval__count"
+              className="openbitfun-chat-input-approval__count"
               data-testid="chat-input-approval-pending-count"
             >
               +{pendingCount - 1}
@@ -226,33 +226,33 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           line rather than hiding in a tooltip. */}
       {error ? (
         <p
-          data-bf-component="permission-request-panel"
-          data-bf-part="error"
-          className="bitfun-chat-input-approval__note bitfun-chat-input-approval__note--error"
+          data-openbitfun-component="permission-request-panel"
+          data-openbitfun-part="error"
+          className="openbitfun-chat-input-approval__note openbitfun-chat-input-approval__note--error"
           role="alert"
         >
           {t('permission.responseFailed')}
         </p>
       ) : risk ? (
         <p
-          data-bf-component="permission-request-panel"
-          data-bf-part="risk"
-          className="bitfun-chat-input-approval__note"
+          data-openbitfun-component="permission-request-panel"
+          data-openbitfun-part="risk"
+          className="openbitfun-chat-input-approval__note"
         >
           {risk}
         </p>
       ) : null}
 
       <div
-        data-bf-component="permission-request-panel"
-        data-bf-part="actions"
-        className="bitfun-chat-input-approval__actions"
+        data-openbitfun-component="permission-request-panel"
+        data-openbitfun-part="actions"
+        className="openbitfun-chat-input-approval__actions"
       >
         {canAnswerAll ? (
           <div
-            data-bf-component="permission-request-panel"
-            data-bf-part="scope"
-            className="bitfun-chat-input-approval__scope"
+            data-openbitfun-component="permission-request-panel"
+            data-openbitfun-part="scope"
+            className="openbitfun-chat-input-approval__scope"
             role="radiogroup"
             aria-label={t('permission.scopeLabel')}
           >
@@ -263,8 +263,8 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
                 role="radio"
                 aria-checked={effectiveScope === option}
                 className={[
-                  'bitfun-chat-input-approval__scope-option',
-                  effectiveScope === option && 'bitfun-chat-input-approval__scope-option--active',
+                  'openbitfun-chat-input-approval__scope-option',
+                  effectiveScope === option && 'openbitfun-chat-input-approval__scope-option--active',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -278,7 +278,7 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           </div>
         ) : null}
 
-        <span className="bitfun-chat-input-approval__spacer" />
+        <span className="openbitfun-chat-input-approval__spacer" />
 
         {/* Rejecting is the safe answer, so it leads and never depends on
             anything else being in the right state. */}

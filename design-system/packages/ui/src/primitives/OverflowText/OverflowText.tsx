@@ -127,7 +127,7 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
         ref={setElementRef}
         style={resolvedStyle}
       >
-        <span className={styles.content} data-bf-part="content" ref={contentRef}>
+        <span className={styles.content} data-openbitfun-part="content" ref={contentRef}>
           {children}
         </span>
       </span>

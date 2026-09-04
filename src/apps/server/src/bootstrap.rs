@@ -2,14 +2,14 @@
 //!
 //! Mirrors the Desktop app's init sequence without any Tauri dependency.
 
-use bitfun_core::agentic::{agents, coordination, system, tools};
-use bitfun_core::infrastructure::ai::AIClientFactory;
-use bitfun_core::infrastructure::try_get_path_manager_arc;
-use bitfun_core::product_runtime::{
+use openbitfun_core::agentic::{agents, coordination, system, tools};
+use openbitfun_core::infrastructure::ai::AIClientFactory;
+use openbitfun_core::infrastructure::try_get_path_manager_arc;
+use openbitfun_core::product_runtime::{
     ensure_product_dialog_scheduler, CoreProductEventQueueOwner, CoreRuntimeServicesProvider,
 };
-use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
-use bitfun_core::service::{config, filesystem, mcp, token_usage, workspace};
+use openbitfun_core::runtime_ownership::CoreRuntimeOwnership;
+use openbitfun_core::service::{config, filesystem, mcp, token_usage, workspace};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -39,7 +39,7 @@ pub(crate) struct ServerAppState {
 ///
 /// The optional `workspace` path, when provided, is opened automatically.
 pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerAppState>> {
-    log::info!("Initializing BitFun server core services");
+    log::info!("Initializing OpenBitFun server core services");
 
     system::select_agentic_system_profile(system::DeliveryProfile::ProductFull)?;
 
@@ -50,7 +50,7 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     // Initialize the global I18nService so server-mode bot/remote-connect
     // consumers observe the same runtime locale lifecycle as Desktop.
     if let Err(e) =
-        bitfun_core::service::i18n::initialize_global_i18n_service(Some(config_service.clone()))
+        openbitfun_core::service::i18n::initialize_global_i18n_service(Some(config_service.clone()))
             .await
     {
         log::warn!(
@@ -88,21 +88,21 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
     let token_usage_service = agentic_system.token_usage_service.clone();
 
     // Cron service
-    let cron_service = bitfun_core::service::cron::CronService::new(
+    let cron_service = openbitfun_core::service::cron::CronService::new(
         path_manager.clone(),
         coordinator.clone(),
         scheduler.clone(),
     )
     .await?;
-    bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
+    openbitfun_core::service::cron::set_global_cron_service(cron_service.clone());
     coordinator.subscribe_internal(
         "cron_jobs".to_string(),
-        bitfun_core::service::cron::CronEventSubscriber::new(cron_service.clone()),
+        openbitfun_core::service::cron::CronEventSubscriber::new(cron_service.clone()),
     );
     cron_service.start();
 
     // Function agents
-    let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
+    let _ = openbitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
         ai_client_factory.clone(),
     );
     // 4. Services
@@ -160,12 +160,12 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
             .map(|w| w.root_path)
     };
 
-    if let Err(error) = bitfun_core::plugin_host::initialize_configured_plugin_host(
-        bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
+    if let Err(error) = openbitfun_core::plugin_host::initialize_configured_plugin_host(
+        openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
     )
     .await
     {
-        bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+        openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
             "server startup",
             initial_workspace_path.as_deref(),
             error,
@@ -173,15 +173,15 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         .await;
     }
     if let Some(workspace_path) = initial_workspace_path.as_ref() {
-        if let Err(error) = bitfun_core::plugin_host::ensure_configured_plugin_instance(
-            bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
+        if let Err(error) = openbitfun_core::plugin_host::ensure_configured_plugin_instance(
+            openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled,
             workspace_path.clone(),
             workspace_path.clone(),
             None,
         )
         .await
         {
-            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "server workspace activation",
                 Some(workspace_path),
                 error,
@@ -206,6 +206,6 @@ pub(crate) async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<
         start_time: std::time::Instant::now(),
     });
 
-    log::info!("BitFun server core services initialized");
+    log::info!("OpenBitFun server core services initialized");
     Ok(state)
 }

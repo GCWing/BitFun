@@ -1,4 +1,4 @@
-# BitFun 产品架构演进计划
+# OpenBitFun 产品架构演进计划
 
 本文把现有架构债务整理为可独立验收的工作流。稳定边界见
 [产品运行时架构](../architecture/product-architecture.md)，专项细节见
@@ -28,11 +28,11 @@
 | 范围 | 当前事实 | 近期结论 |
 |---|---|---|
 | 编译依赖 | `assembly/core -> apps/relay-server` 已移除；通用检查覆盖 normal/build/dev 依赖及 optional/target 变体 | 后续反向依赖和未知 crate 层级直接失败 |
-| 公开面 | `bitfun-core` 仍有迁移期 re-export；CLI 主会话客户端已仅消费 Runtime SDK，其他产品入口仍保留兼容路径 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
+| 公开面 | `openbitfun-core` 仍有迁移期 re-export；CLI 主会话客户端已仅消费 Runtime SDK，其他产品入口仍保留兼容路径 | 按入口逐项迁移，不做全仓逐 symbol 台账或批量删除 |
 | CLI/TUI | 宿主 `ACTION_SPECS` 已统一 Slash、Palette、Help、Keymap 与 dispatch；启动页及活动 turn 的 Linux PTY / Windows ConPTY 行为由进程级契约保护 | 保持现有 renderer 与交互规格，只按真实故障样例补可靠性契约；macOS 活动 PTY 另行验收 |
 | OpenCode | Prompt Command、受支持的单文件 JavaScript Tool 和 Subagent 安全子集已分别通过能力专属 provider 接入；受管 package plugin 仍只有静态预览 | 先收敛三条已交付路径的诊断、运行时提示和配置失败语义，再按真实阻塞样例评估下一能力切片 |
 | HarmonyOS PC | 未来平台目标，当前未实现 | 目标、问题、风险和旧设计闭环见平台规约；具体工作后续分别立项 |
-| 入口迁移 | CLI 已消费 Runtime Parts；Desktop 主交互消费由现有 owner 构造的窄口径 Runtime SDK 门面，完整 Desktop Runtime Parts 尚未组装；CLI 与 ACP 选择经过评审的 Core owner feature closure，Desktop 仍保留 `bitfun-core/product-full` 兼容 owner | 保持单一运行时 owner，按真实端口逐项迁移，不批量删除兼容门面或用桩服务提前声明能力 |
+| 入口迁移 | CLI 已消费 Runtime Parts；Desktop 主交互消费由现有 owner 构造的窄口径 Runtime SDK 门面，完整 Desktop Runtime Parts 尚未组装；CLI 与 ACP 选择经过评审的 Core owner feature closure，Desktop 仍保留 `openbitfun-core/product-full` 兼容 owner | 保持单一运行时 owner，按真实端口逐项迁移，不批量删除兼容门面或用桩服务提前声明能力 |
 
 ## 3. 工作流一：边界与依赖可信
 
@@ -93,7 +93,7 @@ App 保持不变。
 3. Subagent 安全子集经模型、工具和同名冲突确认后接入现有 Subagent owner，仅支持 fresh single-run。
 
 已实现路径已经收敛运行时依赖与配置失败：Node.js 在当前进程首次检查时不可用时，只提示修复、刷新和可继续使用其他功能；
-当前宿主没有可靠的刷新前后证据，因此不主动建议或触发重启。读取 BitFun 模型配置失败时阻止外部 Subagent 激活并显示独立原因，不能伪装成
+当前宿主没有可靠的刷新前后证据，因此不主动建议或触发重启。读取 OpenBitFun 模型配置失败时阻止外部 Subagent 激活并显示独立原因，不能伪装成
 “请求模型不存在”。同名冲突的待选择和当前选择保持可见，TUI 通过通用 `/tools` 与 `/agents` 入口按能力和来源分组；
 `/agents` 同时容纳主 Agent、Subagent 和外部来源管理，不再创建 `/subagents` 或 `external-*` 平行命令。随后只有官方 import 型 tool、
 package plugin、Hook 或 TUI contribution 的真实样例证明当前 owner/契约不足时，才增加对应的最小切片。原始
@@ -121,7 +121,7 @@ HarmonyOS 手机 Remote App 不在该平台执行范围内。
 
 ## 8. 工作流六：能力对外复用从一个真实消费者开始
 
-本工作流不与前五项绑定成一次性交付。启动条件是某项现有 BitFun 能力已经有清楚 owner、稳定调用路径，以及
+本工作流不与前五项绑定成一次性交付。启动条件是某项现有 OpenBitFun 能力已经有清楚 owner、稳定调用路径，以及
 一个具名仓库外试点消费者、具体用例、验收 owner 和冻结宿主版本；不能为了“未来 SDK”先创建全量 Memory、
 Context、Workflow、Subagent 或 Scheduler 接口。
 
@@ -131,9 +131,9 @@ Context、Workflow、Subagent 或 Scheduler 接口。
 2. 优先通过 MCP/Skill/sidecar 接入一个宿主；只有该用例确实需要生命周期拦截时，才增加一个版本锁定的 Host Hook/
    Plugin adapter。
 3. 为该宿主冻结分发单元、注册作用域，以及 install/register、enable、disable、uninstall、升级和失败恢复语义；
-   物理安装状态以宿主为准，BitFun 不伪造成功。
+   物理安装状态以宿主为准，OpenBitFun 不伪造成功。
 4. 证明身份映射、权限上限、取消、Generation、事件损失、成本归属和降级后，再评估第二个宿主或第二项能力。
-5. 只有非 `bitfun-core` 嵌入方能在最小依赖下稳定运行，才冻结和发布 Agent Runtime SDK 子接口。
+5. 只有非 `openbitfun-core` 嵌入方能在最小依赖下稳定运行，才冻结和发布 Agent Runtime SDK 子接口。
 
 退出条件：外部消费者从注册/安装、启用、调用、停用/卸载到恢复端到端可用；宿主矩阵只把该切片标为
 native/translated/degraded；未实现能力保持 unsupported/experimental；没有引入第二状态 owner、通用服务定位器、

@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .content,
   .messageRow,
   .icon,
@@ -11,58 +11,58 @@
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-layout-confirm-dialog-content-gap);
+    gap: var(--openbitfun-layout-confirm-dialog-content-gap);
   }
 
   .messageRow {
     display: flex;
     min-inline-size: 0;
     align-items: flex-start;
-    gap: var(--bf-layout-confirm-dialog-message-gap);
+    gap: var(--openbitfun-layout-confirm-dialog-message-gap);
   }
 
   .icon {
     display: inline-flex;
-    flex: 0 0 var(--bf-layout-confirm-dialog-icon-size);
+    flex: 0 0 var(--openbitfun-layout-confirm-dialog-icon-size);
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-layout-confirm-dialog-icon-size);
-    block-size: var(--bf-layout-confirm-dialog-icon-size);
-    border-radius: var(--bf-radius-pill);
-    color: var(--bf-color-status-info-content);
-    background: var(--bf-color-status-info-surface);
+    inline-size: var(--openbitfun-layout-confirm-dialog-icon-size);
+    block-size: var(--openbitfun-layout-confirm-dialog-icon-size);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-status-info-content);
+    background: var(--openbitfun-color-status-info-surface);
   }
 
   .icon > svg,
-  .icon > [data-bf-component="icon"] {
-    inline-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
-    block-size: var(--bf-layout-confirm-dialog-icon-glyph-size);
+  .icon > [data-openbitfun-component="icon"] {
+    inline-size: var(--openbitfun-layout-confirm-dialog-icon-glyph-size);
+    block-size: var(--openbitfun-layout-confirm-dialog-icon-glyph-size);
   }
 
-  .icon[data-bf-status="success"] {
-    color: var(--bf-color-status-success-content);
-    background: var(--bf-color-status-success-surface);
+  .icon[data-openbitfun-status="success"] {
+    color: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-surface);
   }
 
-  .icon[data-bf-status="warning"] {
-    color: var(--bf-color-status-warning-content);
-    background: var(--bf-color-status-warning-surface);
+  .icon[data-openbitfun-status="warning"] {
+    color: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
-  .icon[data-bf-status="danger"] {
-    color: var(--bf-color-status-danger-content);
-    background: var(--bf-color-status-danger-surface);
+  .icon[data-openbitfun-status="danger"] {
+    color: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   .message {
     min-inline-size: 0;
     flex: 1 1 auto;
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-body-md-font-family);
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-body-md-font-weight);
-    line-height: var(--bf-type-body-md-line-height);
-    letter-spacing: var(--bf-type-body-md-letter-spacing);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-body-md-font-family);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-body-md-font-weight);
+    line-height: var(--openbitfun-type-body-md-line-height);
+    letter-spacing: var(--openbitfun-type-body-md-letter-spacing);
   }
 
   .message > :first-child {
@@ -76,25 +76,25 @@
   .preview {
     overflow: auto;
     min-inline-size: 0;
-    max-block-size: var(--bf-layout-confirm-dialog-preview-max-block-size);
-    padding-block: var(--bf-layout-confirm-dialog-preview-padding-block);
-    padding-inline: var(--bf-layout-confirm-dialog-preview-padding-inline);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-layout-confirm-dialog-preview-radius);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-tertiary);
-    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+    max-block-size: var(--openbitfun-layout-confirm-dialog-preview-max-block-size);
+    padding-block: var(--openbitfun-layout-confirm-dialog-preview-padding-block);
+    padding-inline: var(--openbitfun-layout-confirm-dialog-preview-padding-inline);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-layout-confirm-dialog-preview-radius);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-tertiary);
+    scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
     scrollbar-width: thin;
   }
 
   .preview pre {
     margin: 0;
     color: inherit;
-    font-family: var(--bf-type-code-sm-font-family);
-    font-size: var(--bf-type-code-sm-font-size);
-    font-weight: var(--bf-type-code-sm-font-weight);
-    line-height: var(--bf-type-code-sm-line-height);
-    letter-spacing: var(--bf-type-code-sm-letter-spacing);
+    font-family: var(--openbitfun-type-code-sm-font-family);
+    font-size: var(--openbitfun-type-code-sm-font-size);
+    font-weight: var(--openbitfun-type-code-sm-font-weight);
+    line-height: var(--openbitfun-type-code-sm-line-height);
+    letter-spacing: var(--openbitfun-type-code-sm-letter-spacing);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -102,7 +102,7 @@
   @media (forced-colors: active) {
     .icon,
     .preview {
-      border: var(--bf-border-width-default) solid CanvasText;
+      border: var(--openbitfun-border-width-default) solid CanvasText;
       color: CanvasText;
       background: Canvas;
     }

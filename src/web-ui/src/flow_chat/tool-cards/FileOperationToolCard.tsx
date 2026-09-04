@@ -13,7 +13,7 @@ import path from 'path-browserify';
 import type { ToolCardProps } from '../types/flow-chat';
 import {
   FileOperationToolCard as FileOperationCardView,
-} from '@bitfun/ui/flow-chat';
+} from '@openbitfun/ui/flow-chat';
 import { useSnapshotState } from '../../tools/snapshot_system/hooks/useSnapshotState';
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../../tools/snapshot_system/core/SnapshotEventBus';
 import { useOptionalCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
@@ -806,7 +806,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   return (
     <div
       ref={cardRootRef}
-      data-bf-adapter="file-operation-tool-card"
+      data-openbitfun-adapter="file-operation-tool-card"
       data-testid="chat-file-change-card"
       data-tool-card-id={toolId ?? ''}
       data-status={status}

@@ -25,6 +25,6 @@ export const acpAgentsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'remoteAgents' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-bf-view', values: ['local', 'ssh', 'json'] },
+    { id: 'view', attribute: 'data-openbitfun-view', values: ['local', 'ssh', 'json'] },
   ],
 };

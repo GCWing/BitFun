@@ -17,7 +17,7 @@ const log = createLogger('PeerDeviceTransport');
  * Commands that must always hit the local Tauri host, even in peer mode.
  *
  * Derived from the Product Operation Registry
- * (`bitfun_product_domains::remote_surface`) through the generated
+ * (`openbitfun_product_domains::remote_surface`) through the generated
  * `remoteSurface.ts`; the desktop and CLI peer hosts refuse the same set from
  * the same registry, so this list is never edited by hand. Account + cloud turn
  * APIs stay on the controller; peer history uses HostInvoke restore. See

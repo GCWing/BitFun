@@ -3,7 +3,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::service::session::SessionTranscriptExportOptions;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -23,12 +23,12 @@ impl SessionHistoryTool {
     }
 
     fn validate_session_id(session_id: &str) -> Result<(), String> {
-        bitfun_core_types::validate_session_id(session_id)
+        openbitfun_core_types::validate_session_id(session_id)
     }
 
-    fn resolve_session_id(&self, session_id: &str) -> BitFunResult<String> {
+    fn resolve_session_id(&self, session_id: &str) -> OpenBitFunResult<String> {
         let session_id = session_id.trim().to_string();
-        Self::validate_session_id(&session_id).map_err(BitFunError::tool)?;
+        Self::validate_session_id(&session_id).map_err(OpenBitFunError::tool)?;
         Ok(session_id)
     }
 }
@@ -52,7 +52,7 @@ impl Tool for SessionHistoryTool {
         "SessionHistory"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(
             r#"Use this tool when you need the history of an agent session.
 
@@ -219,16 +219,16 @@ Examples:
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let params: SessionHistoryInput = serde_json::from_value(input.clone())
-            .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("Invalid input: {}", e)))?;
 
         let session_id = self.resolve_session_id(&params.session_id)?;
         let (display_workspace, session_storage_dir) =
             CoreServiceAgentRuntime::resolve_session_workspace_paths(&session_id)
                 .await
                 .ok_or_else(|| {
-                    BitFunError::NotFound(format!(
+                    OpenBitFunError::NotFound(format!(
                         "Workspace for session '{}' could not be resolved",
                         session_id
                     ))
@@ -236,7 +236,9 @@ Examples:
         let display_workspace = display_workspace.to_string_lossy().into_owned();
         let coordinator =
             crate::agentic::coordination::get_global_coordinator().ok_or_else(|| {
-                BitFunError::service("Core coordinator is unavailable for SessionHistory export")
+                OpenBitFunError::service(
+                    "Core coordinator is unavailable for SessionHistory export",
+                )
             })?;
         let transcript = coordinator
             .export_visible_persisted_session_transcript(

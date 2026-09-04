@@ -1,7 +1,7 @@
 .flowchat-flow-item {
-  margin: 0 0 var(--bf-control-flow-chat-flow-item-gap) 0;
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 /* A run of collapsed ambient tools reads like consecutive transcript lines.
@@ -9,12 +9,12 @@
  * card gap between each one-line row. Expanded ambient cards retain section
  * spacing because they are content surfaces rather than line items. */
 .flowchat-flow-item:has(
-  > .flow-tool-card-wrapper[data-bf-attention='ambient']
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']
+  > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
+    [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
 ):has(
   + .flowchat-flow-item
-    > .flow-tool-card-wrapper[data-bf-attention='ambient']
-      [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']
+    > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
+      [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
 ) {
   margin-bottom: 0;
 }
@@ -22,22 +22,22 @@
 .flow-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
 .flow-tool-card-note {
   margin-inline-start: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
-  opacity: var(--bf-opacity-muted);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  opacity: var(--openbitfun-opacity-muted);
 }
 
 .flow-tool-card-wrapper--permission-pending > :first-child {
-  outline: var(--bf-border-width-default) solid var(--bf-color-status-warning-border);
-  outline-offset: calc(-1 * var(--bf-border-width-default));
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-status-warning-surface);
+  outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-status-warning-border);
+  outline-offset: calc(-1 * var(--openbitfun-border-width-default));
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-status-warning-surface);
 }
 
 @media (forced-colors: active) {

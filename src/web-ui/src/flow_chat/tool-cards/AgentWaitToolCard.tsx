@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { flowChatStore } from '../store/FlowChatStore';
 import type { Session, ToolCardProps, ToolCardDisplayContext } from '../types/flow-chat';
 import { isAcpFlowSession } from '../utils/acpSession';
-import { AgentWaitToolCard as AgentWaitToolCardView } from '@bitfun/ui/flow-chat';
+import { AgentWaitToolCard as AgentWaitToolCardView } from '@openbitfun/ui/flow-chat';
 
 const RUNNING_STATUSES = new Set(['pending', 'preparing', 'running', 'streaming', 'receiving']);
 

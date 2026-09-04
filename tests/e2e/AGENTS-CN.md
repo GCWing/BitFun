@@ -8,7 +8,7 @@
 
 ## 这里最重要的内容
 
-这里是桌面端 E2E 测试，使用 WebDriverIO 和 BitFun 内置 WebDriver。
+这里是桌面端 E2E 测试，使用 WebDriverIO 和 OpenBitFun 内置 WebDriver。
 
 根据 `E2E-TESTING-GUIDE.md`：
 
@@ -26,7 +26,7 @@
 ## 命令
 
 ```bash
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 pnpm --dir tests/e2e install
 pnpm --dir tests/e2e run test:l0
 pnpm --dir tests/e2e run test:l0:all

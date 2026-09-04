@@ -1,4 +1,4 @@
-import { Alert, Button, Combobox, ConfirmDialog, Select, Switch, Tooltip, type ComboboxOption } from '@bitfun/ui';
+import { Alert, Button, Combobox, ConfirmDialog, Select, Switch, Tooltip, type ComboboxOption } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
@@ -119,7 +119,7 @@ function LaunchAtLoginSetting() {
         description={t('launchAtLogin.toggleDescription')}
         align="center"
       >
-        <div data-bf-component="application-settings" data-bf-part="launchAtLogin">
+        <div data-openbitfun-component="application-settings" data-openbitfun-part="launchAtLogin">
           <Switch
             checked={enabled}
             onChange={(e) => {
@@ -216,7 +216,7 @@ function AutoUpdateSetting() {
         description={t('autoUpdate.toggleDescription')}
         align="center"
       >
-        <div data-bf-component="application-settings" data-bf-part="autoUpdate">
+        <div data-openbitfun-component="application-settings" data-openbitfun-part="autoUpdate">
           <Switch
             checked={enabled}
             onChange={(e) => {
@@ -311,7 +311,7 @@ function PreventSleepSetting() {
         description={t('preventSleep.toggleDescription')}
         align="center"
       >
-        <div data-bf-component="application-settings" data-bf-part="preventSleep">
+        <div data-openbitfun-component="application-settings" data-openbitfun-part="preventSleep">
           <Switch
             checked={enabled}
             onChange={(event) => {
@@ -475,8 +475,8 @@ function LoggingSection() {
   }
 
   return (
-    <div className="bitfun-logging-config" data-bf-component="application-settings" data-bf-part="logging">
-      <div className="bitfun-logging-config__content">
+    <div className="openbitfun-logging-config" data-openbitfun-component="application-settings" data-openbitfun-part="logging">
+      <div className="openbitfun-logging-config__content">
         <ConfigMessage message={message} />
 
         {runtimeInfo?.previousUnexpectedExit?.detected && (
@@ -532,14 +532,14 @@ function LoggingSection() {
             description={t('logging.path.description')}
             multiline
           >
-            <div className="bitfun-logging-config__path-row" data-bf-component="application-settings" data-bf-part="logPath">
-              <div className="bitfun-logging-config__path-box">
+            <div className="openbitfun-logging-config__path-row" data-openbitfun-component="application-settings" data-openbitfun-part="logPath">
+              <div className="openbitfun-logging-config__path-box">
                 {runtimeInfo?.sessionLogDir || '-'}
               </div>
               <Tooltip content={t('logging.actions.openFolderTooltip')} placement="top">
                 <button
                   type="button"
-                  className="bitfun-logging-config__open-btn"
+                  className="openbitfun-logging-config__open-btn"
                   onClick={handleOpenFolder}
                   disabled={openingFolder || !runtimeInfo?.sessionLogDir}
                 >
@@ -718,8 +718,8 @@ function TerminalSection() {
   }
 
   return (
-    <div className="bitfun-terminal-config" data-bf-component="application-settings" data-bf-part="terminal">
-      <div className="bitfun-terminal-config__content">
+    <div className="openbitfun-terminal-config" data-openbitfun-component="application-settings" data-openbitfun-part="terminal">
+      <div className="openbitfun-terminal-config__content">
         <ConfigMessage message={message} />
 
         <ConfigPageSection
@@ -746,7 +746,7 @@ function TerminalSection() {
                 disabled={saving}
               />
             ) : (
-              <div className="bitfun-terminal-config__no-shells">{t('terminal.controls.noShells')}</div>
+              <div className="openbitfun-terminal-config__no-shells">{t('terminal.controls.noShells')}</div>
             )}
           </ConfigPageRow>
 
@@ -860,7 +860,7 @@ function WindowBehaviorSetting() {
         description={t('windowBehavior.closeButtonDescription')}
         align="center"
       >
-        <div data-bf-component="application-settings" data-bf-part="windowBehavior">
+        <div data-openbitfun-component="application-settings" data-openbitfun-part="windowBehavior">
           <Select
             value={behavior}
             onValueChange={(v) => { void handleChange(v as string); }}
@@ -968,7 +968,7 @@ function NotificationSettings() {
         description={t('notifications.dialogCompletion.description')}
         align="center"
       >
-        <div data-bf-component="application-settings" data-bf-part="notifications">
+        <div data-openbitfun-component="application-settings" data-openbitfun-part="notifications">
           <Switch
             checked={dialogNotify}
             onChange={(e) => { void handleDialogNotifyToggle(e.target.checked); }}
@@ -1016,16 +1016,16 @@ const ApplicationSettingsPage: React.FC<ApplicationSettingsPageProps> = ({ page 
 
   return (
     <ConfigPageLayout
-      className="bitfun-application-settings"
-      data-bf-component="application-settings"
-      data-bf-part="root"
-      data-bf-view={page}
+      className="openbitfun-application-settings"
+      data-openbitfun-component="application-settings"
+      data-openbitfun-part="root"
+      data-openbitfun-view={page}
     >
       <ConfigPageHeader title={title} subtitle={subtitle} />
       <ConfigPageContent
-        className="bitfun-application-settings__content"
-        data-bf-component="application-settings"
-        data-bf-part="content"
+        className="openbitfun-application-settings__content"
+        data-openbitfun-component="application-settings"
+        data-openbitfun-part="content"
       >
         {page === 'general' ? (
           <>

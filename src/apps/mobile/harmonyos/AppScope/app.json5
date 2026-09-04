@@ -1,11 +1,11 @@
 {
   "app": {
-    "bundleName": "com.bitfun.app",
-    "vendor": "example",
+    "bundleName": "com.openbitfun.app",
+    "vendor": "OpenBitFun",
     "versionCode": 1,
-    "versionName": "0.0.1",
+    "versionName": "1.0.0",
     "buildVersion": "1",
-    "icon": "$media:bitfun_icon",
+    "icon": "$media:openbitfun-app-icon",
     "label": "$string:app_name",
     "configuration": "$profile:configuration"
   }

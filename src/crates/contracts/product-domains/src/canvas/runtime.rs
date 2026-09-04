@@ -1,4 +1,4 @@
-use super::sdk_contract_generated::{BITFUN_CANVAS_RUNTIME_VERSION, BITFUN_CANVAS_SDK_VERSION};
+use super::sdk_contract_generated::{OPENBITFUN_CANVAS_RUNTIME_VERSION, OPENBITFUN_CANVAS_SDK_VERSION};
 use crate::canvas::types::{CanvasCompiledPayload, CanvasDiagnostic, CanvasId, CanvasRevision};
 use serde::{Deserialize, Serialize};
 
@@ -24,9 +24,9 @@ pub struct CanvasCompileResult {
 }
 
 fn default_sdk_version() -> String {
-    BITFUN_CANVAS_SDK_VERSION.to_string()
+    OPENBITFUN_CANVAS_SDK_VERSION.to_string()
 }
 
 fn default_runtime_version() -> String {
-    BITFUN_CANVAS_RUNTIME_VERSION.to_string()
+    OPENBITFUN_CANVAS_RUNTIME_VERSION.to_string()
 }

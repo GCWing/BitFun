@@ -1,6 +1,6 @@
 //! Windows-native correction for the persisted main-window state.
 //!
-//! BitFun drives [tauri_plugin_window_state] explicitly (`with_state_flags`
+//! OpenBitFun drives [tauri_plugin_window_state] explicitly (`with_state_flags`
 //! empty at registration, explicit save/restore around known geometry
 //! boundaries). The plugin captures geometry through generic window queries.
 //! On Windows the main window is undecorated, and when a quit happens while a

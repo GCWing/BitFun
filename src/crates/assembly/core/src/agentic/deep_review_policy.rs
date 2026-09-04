@@ -1,15 +1,15 @@
 //! Deep Review core compatibility facade.
 //!
 //! Runtime-owned policy, budget, queue, manifest, and shared-context state live
-//! in `bitfun-agent-runtime::deep_review`. Core only keeps product config
+//! in `openbitfun-agent-runtime::deep_review`. Core only keeps product config
 //! loading here so existing callers keep their paths while ownership moves down.
 
 use crate::service::config::global::GlobalConfigManager;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use log::warn;
 use serde_json::Value;
 
-pub use bitfun_agent_runtime::deep_review::{
+pub use openbitfun_agent_runtime::deep_review::{
     adaptive_review_max_focused_calls, apply_deep_review_queue_control,
     canonical_review_worker_agent_type, classify_deep_review_capacity_error,
     clear_deep_review_queue_control_for_tool, deep_review_active_reviewer_count,
@@ -48,9 +48,9 @@ pub use bitfun_agent_runtime::deep_review::{
 
 const DEFAULT_REVIEW_TEAM_CONFIG_PATH: &str = "ai.review_teams.default";
 
-pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecutionPolicy> {
+pub async fn load_default_deep_review_policy() -> OpenBitFunResult<DeepReviewExecutionPolicy> {
     let config_service = GlobalConfigManager::get_service().await.map_err(|error| {
-        BitFunError::config(format!(
+        OpenBitFunError::config(format!(
             "Failed to load DeepReview execution policy because config service is unavailable: {}",
             error
         ))
@@ -69,7 +69,7 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
             None
         }
         Err(error) => {
-            return Err(BitFunError::config(format!(
+            return Err(OpenBitFunError::config(format!(
                 "Failed to load DeepReview execution policy from {}: {}",
                 DEFAULT_REVIEW_TEAM_CONFIG_PATH, error
             )));
@@ -81,8 +81,8 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
     ))
 }
 
-pub fn is_missing_default_review_team_config_error(error: &BitFunError) -> bool {
-    matches!(error, BitFunError::NotFound(message)
+pub fn is_missing_default_review_team_config_error(error: &OpenBitFunError) -> bool {
+    matches!(error, OpenBitFunError::NotFound(message)
         if message == &format!("Config path '{}' not found", DEFAULT_REVIEW_TEAM_CONFIG_PATH))
 }
 
@@ -93,23 +93,24 @@ mod tests {
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewRunManifestGate,
         DeepReviewStrategyLevel, DeepReviewSubagentRole, REVIEW_WORKER_AGENT_TYPE,
     };
-    use crate::util::errors::BitFunError;
+    use crate::util::errors::OpenBitFunError;
     use serde_json::json;
 
     #[test]
     fn only_missing_default_review_team_path_can_fallback_to_defaults() {
-        let matching =
-            BitFunError::NotFound("Config path 'ai.review_teams.default' not found".to_string());
+        let matching = OpenBitFunError::NotFound(
+            "Config path 'ai.review_teams.default' not found".to_string(),
+        );
         assert!(is_missing_default_review_team_config_error(&matching));
 
         let different_path =
-            BitFunError::NotFound("Config path 'ai.review_teams.other' not found".to_string());
+            OpenBitFunError::NotFound("Config path 'ai.review_teams.other' not found".to_string());
         assert!(!is_missing_default_review_team_config_error(
             &different_path
         ));
 
         let other_error =
-            BitFunError::config("Config path 'ai.review_teams.default' not found".to_string());
+            OpenBitFunError::config("Config path 'ai.review_teams.default' not found".to_string());
         assert!(!is_missing_default_review_team_config_error(&other_error));
     }
 

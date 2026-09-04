@@ -2,11 +2,11 @@
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
-use bitfun_product_domains::canvas::{
+use openbitfun_product_domains::canvas::{
     parse_canvas_artifact_ref, CanvasDiagnostic, CanvasDiagnosticCategory,
     CanvasDiagnosticSeverity, CanvasRevision, CanvasSnapshot, CanvasState, CanvasStoragePort,
 };
-use bitfun_services_integrations::canvas::CanvasService;
+use openbitfun_services_integrations::canvas::CanvasService;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -145,7 +145,7 @@ pub async fn save_canvas_state(
         values: request.values,
         value_versions: request.value_versions,
         updated_at: request.updated_at,
-        schema_version: bitfun_product_domains::canvas::CANVAS_CURRENT_STATE_SCHEMA_VERSION,
+        schema_version: openbitfun_product_domains::canvas::CANVAS_CURRENT_STATE_SCHEMA_VERSION,
     };
     let saved = service
         .save_state(reference.session_id, canvas_state)

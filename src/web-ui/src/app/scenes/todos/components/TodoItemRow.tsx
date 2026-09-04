@@ -5,7 +5,7 @@
  * several rows with different times.
  */
 
-import { Icon, IconButton, Switch, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Switch, Tooltip } from '@openbitfun/ui';
 import React from 'react';
 import { CalendarClock } from 'lucide-react';
 
@@ -69,15 +69,15 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
   return (
     <div
       className={[
-        'bf-todos__row',
-        isRunning ? 'bf-todos__row--running' : '',
-        isOverdue ? 'bf-todos__row--overdue' : '',
-        job.enabled ? '' : 'bf-todos__row--disabled',
-        isSelected ? 'bf-todos__row--selected' : '',
+        'openbitfun-todos__row',
+        isRunning ? 'openbitfun-todos__row--running' : '',
+        isOverdue ? 'openbitfun-todos__row--overdue' : '',
+        job.enabled ? '' : 'openbitfun-todos__row--disabled',
+        isSelected ? 'openbitfun-todos__row--selected' : '',
       ].filter(Boolean).join(' ')}
-      data-bf-scene="todos"
-      data-bf-part="row"
-      data-bf-state={rowState || undefined}
+      data-openbitfun-scene="todos"
+      data-openbitfun-part="row"
+      data-openbitfun-state={rowState || undefined}
       data-testid="todos-row"
       role="group"
       tabIndex={0}
@@ -90,60 +90,60 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
         }
       }}
     >
-      <div className="bf-todos__row-icon" data-bf-scene="todos" data-bf-part="rowIcon">
+      <div className="openbitfun-todos__row-icon" data-openbitfun-scene="todos" data-openbitfun-part="rowIcon">
         <CalendarClock size={19} aria-hidden="true" />
       </div>
 
-      <div className="bf-todos__row-body" data-bf-scene="todos" data-bf-part="rowBody">
-        <div className="bf-todos__row-title-line">
-          <span className="bf-todos__row-name">{job.name}</span>
+      <div className="openbitfun-todos__row-body" data-openbitfun-scene="todos" data-openbitfun-part="rowBody">
+        <div className="openbitfun-todos__row-title-line">
+          <span className="openbitfun-todos__row-name">{job.name}</span>
           {isRunning ? (
             <span
-              className="bf-todos__row-badge bf-todos__row-badge--running"
-              data-bf-scene="todos"
-              data-bf-part="rowBadge"
+              className="openbitfun-todos__row-badge openbitfun-todos__row-badge--running"
+              data-openbitfun-scene="todos"
+              data-openbitfun-part="rowBadge"
             >
               {t('shared:statuses.running')}
             </span>
           ) : isNextRun ? (
-            <span className="bf-todos__row-badge" data-bf-scene="todos" data-bf-part="rowBadge">
+            <span className="openbitfun-todos__row-badge" data-openbitfun-scene="todos" data-openbitfun-part="rowBadge">
               {t('badges.nextRun')}
             </span>
           ) : null}
           {isOverdue ? (
             <span
-              className="bf-todos__row-badge bf-todos__row-badge--warn"
-              data-bf-scene="todos"
-              data-bf-part="rowBadge"
+              className="openbitfun-todos__row-badge openbitfun-todos__row-badge--warn"
+              data-openbitfun-scene="todos"
+              data-openbitfun-part="rowBadge"
             >
               {t('badges.overdue')}
             </span>
           ) : null}
         </div>
-        <div className="bf-todos__row-meta">
+        <div className="openbitfun-todos__row-meta">
           <span>{resolveJobWorkspaceLabel(job, workspaces)}</span>
-          <span className="bf-todos__row-meta-sep" aria-hidden="true">·</span>
+          <span className="openbitfun-todos__row-meta-sep" aria-hidden="true">·</span>
           <span>{formatScheduleSummary(job.schedule, t, formatDate)}</span>
-          <span className="bf-todos__row-meta-sep" aria-hidden="true">·</span>
+          <span className="openbitfun-todos__row-meta-sep" aria-hidden="true">·</span>
           <span>{formatJobTargetLabel(job, t)}</span>
           {relativeLabel ? (
             <>
-              <span className="bf-todos__row-meta-sep" aria-hidden="true">·</span>
+              <span className="openbitfun-todos__row-meta-sep" aria-hidden="true">·</span>
               <span title={timeLabel ?? undefined}>{relativeLabel}</span>
             </>
           ) : null}
         </div>
         {job.state.lastError ? (
-          <p className="bf-todos__row-error" data-bf-scene="todos" data-bf-part="rowError">
+          <p className="openbitfun-todos__row-error" data-openbitfun-scene="todos" data-openbitfun-part="rowError">
             {job.state.lastError}
           </p>
         ) : null}
       </div>
 
       <div
-        className="bf-todos__row-actions"
-        data-bf-scene="todos"
-        data-bf-part="rowActions"
+        className="openbitfun-todos__row-actions"
+        data-openbitfun-scene="todos"
+        data-openbitfun-part="rowActions"
         onClick={(event) => event.stopPropagation()}
         role="presentation"
       >
@@ -152,7 +152,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
           aria-label={t('actions.toggleEnabled')}
           onChange={(event) => onToggleEnabled(job, event.currentTarget.checked)}
         />
-        <div className="bf-todos__row-action-buttons">
+        <div className="openbitfun-todos__row-action-buttons">
           <Tooltip content={t('actions.edit')}>
             <IconButton
               type="button"

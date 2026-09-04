@@ -1,12 +1,12 @@
 # One-click Relay Deploy
 
 Desktop wizard that SSHes to a user-owned Linux host, installs Docker when it
-is missing, pulls the signed BitFun Relay image, and starts it. Account import
+is missing, pulls the signed OpenBitFun Relay image, and starts it. Account import
 remains optional.
 
 Entry points:
 
-- Remote Connect → My BitFun → login form → “一键部署到自己的服务器”
+- Remote Connect → My OpenBitFun → login form → “一键部署到自己的服务器”
 - Remote Connect → Network Relay → Self-Hosted → same action (must open this
   wizard, not an external README)
 
@@ -33,7 +33,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    remote script. The Desktop package version does not pin Relay deployment.
 
 4. **Always start by digest.** Tags are discovery metadata, not an execution
-   identity. One-click deploy sets `BITFUN_REQUIRE_IMAGE_DIGEST=1`; Docker pulls
+   identity. One-click deploy sets `OPENBITFUN_REQUIRE_IMAGE_DIGEST=1`; Docker pulls
    and runs `<repository>@sha256:...`, so every manifest and layer remains
    content-addressed.
 
@@ -55,7 +55,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
    `relay_deploy.rs` embeds it with `include_str!`. Do not fork that behavior
    back into a Rust string template.
 
-8. **Preserve the container contract.** Keep container name `bitfun-relay`,
+8. **Preserve the container contract.** Keep container name `openbitfun-relay`,
    volumes `relay-server_relay-db` and `relay-server_room-web`, selected port,
    `/app/data`, `/app/room-web`, and `/app/relay-admin` stable across upgrades.
 
@@ -73,11 +73,11 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
     passwords to the remote as env/script args.
 
 12. **“Already deployed” is container-aware, not only selected-port health.**
-    Changing the listen port must not hide a running `bitfun-relay`. “Create
+    Changing the listen port must not hide a running `openbitfun-relay`. “Create
     account” must use the running container's actual published port.
 
 13. **Port conflict ≠ our Relay.** `port_busy && !port_owned_by_relay` blocks
-    deploy; busy-because-bitfun-relay does not.
+    deploy; busy-because-openbitfun-relay does not.
 
 14. **Privilege handling stays interactive and minimal.** Never call `sudo -v`
     unconditionally. Detect root / passwordless sudo / interactive sudo. A
@@ -85,7 +85,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
     route, repairs ownership, and continues without requiring a new login.
 
 15. **`DOCKER_CONFIG` must remain usable by the SSH user.** Root installation
-    keeps the user's HOME, so hand `~/.bitfun` back before continuing. Repair or
+    keeps the user's HOME, so hand `~/.openbitfun` back before continuing. Repair or
     relocate an unreadable Docker config before any pull. Do not forward the
     user's config into an unrelated root home.
 
@@ -95,7 +95,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
     host-side defense even when the client already normalized bytes.
 
 17. **`sg -c` takes one string.** Quote every Docker argument with
-    `bitfun_shell_join` (`shell_join` in `common.sh`); never interpolate `$*`
+    `openbitfun_shell_join` (`shell_join` in `common.sh`); never interpolate `$*`
     directly through the second shell.
 
 18. **Prepare-phase death must surface as failure.** Keep reporting `preparing`

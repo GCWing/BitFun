@@ -15,19 +15,19 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  animation: tv-page-reveal 0.32s var(--bf-motion-easing-decelerate) both;
+  animation: tv-page-reveal 0.32s var(--openbitfun-motion-easing-decelerate) both;
 
   // ── Editor bar (back button) ─────────────────────────────────────────────
   &__editor-bar {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    padding: var(--bf-space-3) clamp(16px, 2.2vw, 28px);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    padding: var(--openbitfun-space-3) clamp(16px, 2.2vw, 28px);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     background: linear-gradient(
       to bottom,
-      var(--bf-color-surface-scene) 0%,
-      var(--bf-color-surface-subtle) 100%
+      var(--openbitfun-color-surface-scene) 0%,
+      var(--openbitfun-color-surface-subtle) 100%
     );
   }
 
@@ -45,21 +45,21 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid var(--bf-color-border-subtle);
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+    border-right: 1px solid var(--openbitfun-color-border-subtle);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
 
     @media (max-width: 960px) { width: 260px; min-width: 220px; }
   }
 
   &__panel-label {
     flex-shrink: 0;
-    padding: 10px var(--bf-space-4);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-muted);
+    padding: 10px var(--openbitfun-space-4);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__composer {
@@ -74,8 +74,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 56px var(--bf-space-10) var(--bf-space-12);
-  gap: var(--bf-space-6);
+  padding: 56px var(--openbitfun-space-10) var(--openbitfun-space-12);
+  gap: var(--openbitfun-space-6);
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
@@ -84,7 +84,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     text-align: center;
     max-width: 400px;
   }
@@ -95,34 +95,34 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-lg);
-    color: var(--bf-color-content-muted);
-    background: var(--bf-color-surface-subtle);
-    margin-bottom: var(--bf-space-2);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-lg);
+    color: var(--openbitfun-color-content-muted);
+    background: var(--openbitfun-color-surface-subtle);
+    margin-bottom: var(--openbitfun-space-2);
   }
 
   &__title {
     margin: 0;
-    font-size: var(--bf-type-flow-section-title-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
-    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+    font-size: var(--openbitfun-type-flow-section-title-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
   }
 
   &__sub {
     margin: 0;
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-muted);
-    line-height: var(--bf-type-modifier-leading-spacious-line-height);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    line-height: var(--openbitfun-type-modifier-leading-spacious-line-height);
   }
 
   &__section-label {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
     align-self: flex-start;
     width: 100%;
     max-width: 520px;
@@ -139,23 +139,23 @@
   &__tpl {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-4);
-    padding: 13px var(--bf-space-4);
+    gap: var(--openbitfun-space-4);
+    padding: 13px var(--openbitfun-space-4);
     background: transparent;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
     cursor: pointer;
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     text-align: left;
-    font-family: var(--bf-type-body-sm-font-family);
+    font-family: var(--openbitfun-type-body-sm-font-family);
 
     &:hover {
-      background: var(--bf-color-surface-subtle);
-      border-color: var(--bf-color-field-border-hover);
+      background: var(--openbitfun-color-surface-subtle);
+      border-color: var(--openbitfun-color-field-border-hover);
     }
   }
 
@@ -167,7 +167,7 @@
     align-items: center;
     justify-content: center;
     border: 1px solid;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
   }
 
   &__tpl-body {
@@ -179,14 +179,14 @@
   }
 
   &__tpl-name {
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__tpl-desc {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -194,43 +194,43 @@
 
   &__tpl-cnt {
     flex-shrink: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-disabled);
-    background: var(--bf-color-action-neutral-surface-hover);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-disabled);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
     padding: 2px 7px;
     border-radius: 2px;
   }
 
   &__tpl-arrow {
     flex-shrink: 0;
-    color: var(--bf-color-content-disabled);
-    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    color: var(--openbitfun-color-content-disabled);
+    transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     .tv-onboard__tpl:hover & {
       transform: translateX(2px);
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
   }
 
   &__blank {
-    margin-top: var(--bf-space-2);
+    margin-top: var(--openbitfun-space-2);
     background: transparent;
-    border: 1px dashed var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    padding: 7px var(--bf-space-6);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
+    border: 1px dashed var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-sm);
+    padding: 7px var(--openbitfun-space-6);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     cursor: pointer;
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
-    font-family: var(--bf-type-body-sm-font-family);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+    font-family: var(--openbitfun-type-body-sm-font-family);
 
     &:hover {
-      color: var(--bf-color-content-secondary);
-      border-color: var(--bf-color-field-border-hover);
+      color: var(--openbitfun-color-content-secondary);
+      border-color: var(--openbitfun-color-field-border-hover);
     }
   }
 }

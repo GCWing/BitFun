@@ -1,4 +1,4 @@
-pub use bitfun_core_types::{
+pub use openbitfun_core_types::{
     AIConfig, ModelRequestContext, ProxyConfig, ReasoningPresetAction, ReasoningPresetDescriptor,
 };
 

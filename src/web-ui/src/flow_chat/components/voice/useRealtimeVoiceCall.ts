@@ -21,7 +21,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { RealtimePcmPlayer } from './realtimeVoiceAudio';
 import { applyRealtimeAsrSnapshot } from './realtimeVoiceTranscript';
 import {
-  runBitFunVoiceTask,
+  runOpenBitFunVoiceTask,
   runMiniAppVoiceTask,
   summarizeVoiceTaskConclusion,
   VoiceTaskCancelledError,
@@ -99,7 +99,7 @@ function silentPcm16Base64(sampleRate: number): string {
  * tools together with the usual permission policy.
  *
  * Extension rule for future agents:
- * - Add direct BitFun client operations here and in the Rust Voice schema.
+ * - Add direct OpenBitFun client operations here and in the Rust Voice schema.
  * - Add workspace execution abilities to the normal Agent tool registry; do
  *   not mirror individual Agent tools into Voice.
  * - Keep the parser, dispatcher, provider schema, and focused tests in sync.
@@ -134,10 +134,10 @@ interface ActiveVoiceTask {
 }
 
 function parseFunctionCall(call: SpeechRealtimeFunctionCall): VoiceFunctionCommand {
-  if (call.name === 'get_bitfun_client_context') {
+  if (call.name === 'get_openbitfun_client_context') {
     return { kind: 'get_client_context' };
   }
-  if (call.name === 'stop_bitfun_task') {
+  if (call.name === 'stop_openbitfun_task') {
     return { kind: 'stop_task' };
   }
   const rawArguments = JSON.parse(call.arguments || '{}') as unknown;
@@ -148,13 +148,13 @@ function parseFunctionCall(call: SpeechRealtimeFunctionCall): VoiceFunctionComma
     workspace_id?: unknown;
     activate_workspace?: unknown;
   };
-  if (call.name === 'switch_bitfun_workspace') {
+  if (call.name === 'switch_openbitfun_workspace') {
     if (typeof parsed.workspace_id !== 'string' || !parsed.workspace_id.trim()) {
       throw new Error('Workspace switch did not include an exact workspace_id');
     }
     return { kind: 'switch_workspace', workspaceReference: parsed.workspace_id.trim() };
   }
-  if (call.name !== 'run_bitfun_task') {
+  if (call.name !== 'run_openbitfun_task') {
     throw new Error(`Unsupported realtime voice function: ${call.name}`);
   }
   if (!parsed || typeof parsed.task !== 'string' || !parsed.task.trim()) {
@@ -269,10 +269,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       else load();
     };
     load();
-    window.addEventListener('bitfun:realtime-voice-config-changed', handleConfigChanged);
+    window.addEventListener('openbitfun:realtime-voice-config-changed', handleConfigChanged);
     return () => {
       active = false;
-      window.removeEventListener('bitfun:realtime-voice-config-changed', handleConfigChanged);
+      window.removeEventListener('openbitfun:realtime-voice-config-changed', handleConfigChanged);
     };
   }, []);
 
@@ -294,7 +294,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       try {
         await speechAPI.speakRealtimeText(sessionId, spokenText);
       } catch (firstError) {
-        log.warn('Failed to enqueue BitFun task speech; retrying once', {
+        log.warn('Failed to enqueue OpenBitFun task speech; retrying once', {
           sessionId,
           firstError,
         });
@@ -314,7 +314,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       .catch(() => undefined)
       .then(send);
     spokenProgressQueueRef.current = queued.catch(error => {
-      log.warn('Failed to speak BitFun task update after retry', { sessionId, error });
+      log.warn('Failed to speak OpenBitFun task update after retry', { sessionId, error });
       setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
     });
     return queued;
@@ -530,7 +530,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           call.callId,
           JSON.stringify({
             ok: false,
-            error: 'A BitFun task is already running through the client voice assistant',
+            error: 'A OpenBitFun task is already running through the client voice assistant',
             context: buildVoiceClientContext(
               activeTaskContext(activeTaskRef.current),
               callTargetRef.current,
@@ -612,7 +612,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
               workspacePath: miniAppTarget.workspacePath,
             }, signal),
           })
-        : await runBitFunVoiceTask(taskCommand.task, {
+        : await runOpenBitFunVoiceTask(taskCommand.task, {
             ...observerOptions,
             workspace: workspace!,
             showSession: taskCommand.activateWorkspace,
@@ -655,7 +655,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
             outcome_spoken: outcomeSpoken,
           }),
         ).catch(sendError => {
-          log.warn('Failed to return BitFun task cancellation to realtime voice session', {
+          log.warn('Failed to return OpenBitFun task cancellation to realtime voice session', {
             sendError,
           });
         });
@@ -677,7 +677,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
         setTaskProgressText('');
         setStatus(t('voiceCall.call.status.error'));
       }
-      log.error('BitFun client voice tool failed', { callId: call.callId, tool: call.name, error });
+      log.error('OpenBitFun client voice tool failed', { callId: call.callId, tool: call.name, error });
       await speechAPI.sendRealtimeToolResult(
         callSessionId,
         call.callId,
@@ -687,7 +687,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           ...(outcomeSpoken === undefined ? {} : { outcome_spoken: outcomeSpoken }),
         }),
       ).catch(sendError => {
-        log.warn('Failed to return BitFun task error to realtime voice session', { sendError });
+        log.warn('Failed to return OpenBitFun task error to realtime voice session', { sendError });
       });
     } finally {
       if (activeTaskRef.current?.callId === call.callId) {

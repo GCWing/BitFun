@@ -19,12 +19,12 @@ describe('AgentCompanionPetService built-in presets', () => {
     invoke.mockReset();
   });
 
-  it('defaults to the blue-golden cat while retaining the previous Bitfun preset', async () => {
+  it('defaults to the blue-golden cat while retaining the previous OpenBitFun preset', async () => {
     const { DEFAULT_AGENT_COMPANION_PET, listAgentCompanionPets } = await import('./AgentCompanionPetService');
 
     const pets = await listAgentCompanionPets();
     const blueGolden = pets.find(pet => pet.id === 'blue-golden');
-    const bitfun = pets.find(pet => pet.id === 'bitfun');
+    const openbitfun = pets.find(pet => pet.id === 'openbitfun');
 
     expect(DEFAULT_AGENT_COMPANION_PET).toMatchObject({
       id: 'blue-golden',
@@ -39,10 +39,10 @@ describe('AgentCompanionPetService built-in presets', () => {
       previewSrc: '/agent-companion-pets/blue-golden/spritesheet.png',
     });
     expect(pets[0]).toMatchObject(DEFAULT_AGENT_COMPANION_PET);
-    expect(bitfun).toMatchObject({
-      displayName: 'Bitfun',
-      packagePath: '/agent-companion-pets/bitfun',
-      spritesheetPath: '/agent-companion-pets/bitfun/spritesheet.webp',
+    expect(openbitfun).toMatchObject({
+      displayName: 'OpenBitFun',
+      packagePath: '/agent-companion-pets/openbitfun',
+      spritesheetPath: '/agent-companion-pets/openbitfun/spritesheet.webp',
     });
     expect(invoke).not.toHaveBeenCalled();
   });

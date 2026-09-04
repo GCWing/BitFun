@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bitfun_services_integrations::function_agents::FunctionAgentGitService;
+use openbitfun_services_integrations::function_agents::FunctionAgentGitService;
 
 struct TestTempDir {
     path: PathBuf,
@@ -17,7 +17,7 @@ impl TestTempDir {
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "bitfun-function-agent-service-{}-{}-{}",
+            "openbitfun-function-agent-service-{}-{}-{}",
             label,
             std::process::id(),
             suffix
@@ -65,7 +65,7 @@ async fn git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_co
 fn init_git_repo(repo: &Path) {
     git(repo, &["init", "-b", "main"]);
     git(repo, &["config", "user.email", "test@example.com"]);
-    git(repo, &["config", "user.name", "BitFun Test"]);
+    git(repo, &["config", "user.name", "OpenBitFun Test"]);
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -73,7 +73,7 @@ fn git(repo: &Path, args: &[&str]) {
 }
 
 fn git_with_env(repo: &Path, args: &[&str], envs: &[(&str, &str)]) {
-    let mut command = bitfun_services_core::process_manager::create_command("git");
+    let mut command = openbitfun_services_core::process_manager::create_command("git");
     command.args(args).current_dir(repo);
     for (key, value) in envs {
         command.env(key, value);

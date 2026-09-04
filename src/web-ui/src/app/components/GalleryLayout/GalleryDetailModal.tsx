@@ -7,7 +7,7 @@ import {
   DialogHeading,
   DialogTitle,
   type DialogSize,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import './GalleryDetailModal.scss';
 
 interface GalleryDetailModalProps {
@@ -60,8 +60,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   const descriptionContent = description?.trim() ? (
     <p
       className="gallery-detail-modal__description"
-      data-bf-component="gallery-detail-modal"
-      data-bf-part="description"
+      data-openbitfun-component="gallery-detail-modal"
+      data-openbitfun-part="description"
       data-testid={descriptionTestId}
     >
       {description.trim()}
@@ -70,8 +70,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   const badgesContent = badges ? (
     <div
       className="gallery-detail-modal__badges"
-      data-bf-component="gallery-detail-modal"
-      data-bf-part="badges"
+      data-openbitfun-component="gallery-detail-modal"
+      data-openbitfun-part="badges"
     >
       {badges}
     </div>
@@ -79,8 +79,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   const metaContent = meta ? (
     <div
       className="gallery-detail-modal__meta"
-      data-bf-component="gallery-detail-modal"
-      data-bf-part="meta"
+      data-openbitfun-component="gallery-detail-modal"
+      data-openbitfun-part="meta"
     >
       {meta}
     </div>
@@ -112,20 +112,20 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
           usesHeroTitle ? 'gallery-detail-modal--hero-title' : '',
           stableHeight ? 'gallery-detail-modal--stable-height' : '',
         ].filter(Boolean).join(' ')}
-        data-bf-component="gallery-detail-modal"
-        data-bf-part="root"
-        data-bf-state={appearanceState || undefined}
+        data-openbitfun-component="gallery-detail-modal"
+        data-openbitfun-part="root"
+        data-openbitfun-state={appearanceState || undefined}
       >
         <div
           className="gallery-detail-modal__hero"
-          data-bf-component="gallery-detail-modal"
-          data-bf-part="hero"
+          data-openbitfun-component="gallery-detail-modal"
+          data-openbitfun-part="hero"
         >
           {icon ? (
             <div
               className="gallery-detail-modal__icon"
-              data-bf-component="gallery-detail-modal"
-              data-bf-part="icon"
+              data-openbitfun-component="gallery-detail-modal"
+              data-openbitfun-part="icon"
               style={iconGradient ? ({ '--gallery-detail-gradient': iconGradient } as React.CSSProperties) : undefined}
             >
               {icon}
@@ -133,16 +133,16 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
           ) : null}
           <div
             className="gallery-detail-modal__summary"
-            data-bf-component="gallery-detail-modal"
-            data-bf-part="summary"
+            data-openbitfun-component="gallery-detail-modal"
+            data-openbitfun-part="summary"
           >
             {usesHeroTitle ? (
               <>
                 <h2
                   id={heroTitleId}
                   className="gallery-detail-modal__title"
-                  data-bf-component="gallery-detail-modal"
-                  data-bf-part="title"
+                  data-openbitfun-component="gallery-detail-modal"
+                  data-openbitfun-part="title"
                   data-testid={titleTestId}
                 >
                   {title}
@@ -166,8 +166,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
           {heroActions ? (
             <div
               className="gallery-detail-modal__hero-actions"
-              data-bf-component="gallery-detail-modal"
-              data-bf-part="heroActions"
+              data-openbitfun-component="gallery-detail-modal"
+              data-openbitfun-part="heroActions"
             >
               {heroActions}
             </div>
@@ -177,8 +177,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
         {children ? (
           <div
             className="gallery-detail-modal__content"
-            data-bf-component="gallery-detail-modal"
-            data-bf-part="content"
+            data-openbitfun-component="gallery-detail-modal"
+            data-openbitfun-part="content"
           >
             {children}
           </div>
@@ -187,8 +187,8 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
         {actions ? (
           <div
             className="gallery-detail-modal__actions"
-            data-bf-component="gallery-detail-modal"
-            data-bf-part="actions"
+            data-openbitfun-component="gallery-detail-modal"
+            data-openbitfun-part="actions"
           >
             {actions}
           </div>

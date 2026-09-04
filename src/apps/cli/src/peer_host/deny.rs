@@ -1,6 +1,6 @@
 //! CLI peer host command policy, derived from the Product Operation Registry.
 //!
-//! The registry (`bitfun_product_domains::remote_surface`) is the single owner
+//! The registry (`openbitfun_product_domains::remote_surface`) is the single owner
 //! of which HostInvoke commands a CLI peer host may run on a controller's
 //! behalf, which it must refuse because the controller keeps them, and which
 //! it cannot implement. This module only exposes the CLI-side predicates the
@@ -8,7 +8,7 @@
 //! tables from the same registry, so the three surfaces cannot drift apart.
 //! See `docs/architecture/remote-surface-contract.md`.
 
-use bitfun_product_domains::remote_surface::{
+use openbitfun_product_domains::remote_surface::{
     peer_host_verdict, peer_stance, retired_reason, PeerHostKind, PeerHostVerdict, PeerRefusal,
     PeerStance,
 };
@@ -124,9 +124,9 @@ mod tests {
     #[test]
     fn product_control_presentation_callbacks_stay_on_the_controller_device() {
         for command in [
-            "mark_bitfun_control_surface_ready",
-            "mark_bitfun_control_surface_unready",
-            "report_bitfun_control_result",
+            "mark_openbitfun_control_surface_ready",
+            "mark_openbitfun_control_surface_unready",
+            "report_openbitfun_control_result",
         ] {
             assert!(is_local_only_command(command), "{command}");
         }

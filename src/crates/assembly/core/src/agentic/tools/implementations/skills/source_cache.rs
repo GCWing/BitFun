@@ -1,4 +1,4 @@
-use bitfun_services_integrations::file_watch::{
+use openbitfun_services_integrations::file_watch::{
     FileWatchEventKind, FileWatchService, FileWatcherConfig,
 };
 use std::collections::BTreeMap;

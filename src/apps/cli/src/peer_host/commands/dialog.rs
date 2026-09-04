@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use tokio::sync::Mutex as AsyncMutex;
 
-use bitfun_agent_runtime::sdk::AgentUserAnswersRequest;
-use bitfun_runtime_ports::{
+use openbitfun_agent_runtime::sdk::AgentUserAnswersRequest;
+use openbitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
     DialogSubmissionPolicy, DialogTriggerSource,
 };

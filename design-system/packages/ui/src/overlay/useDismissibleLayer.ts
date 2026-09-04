@@ -38,7 +38,7 @@ export function useDismissibleLayer({
   scope,
 }: UseDismissibleLayerOptions): symbol {
   const stack = useOverlayLayerStack();
-  const identityRef = useRef(Symbol("bitfun-overlay-layer"));
+  const identityRef = useRef(Symbol("openbitfun-overlay-layer"));
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 

@@ -1,4 +1,4 @@
-import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@bitfun/ui';
+import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@openbitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Bot, CircleUserRound, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
@@ -185,11 +185,11 @@ const EcosystemCompatibilityScene: React.FC = () => {
     const refreshClients = () => {
       void loadCompatibility(false);
     };
-    window.addEventListener('bitfun:acp-clients-changed', refreshClients);
-    window.addEventListener('bitfun:acp-requirements-changed', refreshClients);
+    window.addEventListener('openbitfun:acp-clients-changed', refreshClients);
+    window.addEventListener('openbitfun:acp-requirements-changed', refreshClients);
     return () => {
-      window.removeEventListener('bitfun:acp-clients-changed', refreshClients);
-      window.removeEventListener('bitfun:acp-requirements-changed', refreshClients);
+      window.removeEventListener('openbitfun:acp-clients-changed', refreshClients);
+      window.removeEventListener('openbitfun:acp-requirements-changed', refreshClients);
     };
   }, [loadCompatibility]);
 
@@ -294,7 +294,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
       setOwnerSurface('acp');
       return;
     }
-    window.dispatchEvent(new CustomEvent('bitfun:create-acp-session', {
+    window.dispatchEvent(new CustomEvent('openbitfun:create-acp-session', {
       detail: { clientId: client.id },
     }));
     notification.info(t('run.starting', { name: client.name || client.id }), { duration: 2400 });
@@ -741,14 +741,14 @@ const EcosystemCompatibilityScene: React.FC = () => {
     <div
       className="ecosystem-compatibility"
       data-testid="ecosystem-compatibility-scene"
-      data-bf-scene="ecosystem-compatibility"
-      data-bf-part="root"
+      data-openbitfun-scene="ecosystem-compatibility"
+      data-openbitfun-part="root"
     >
       <aside
         className="ecosystem-compatibility__sidebar"
         aria-label={t('sidebar.label')}
-        data-bf-scene="ecosystem-compatibility"
-        data-bf-part="sidebar"
+        data-openbitfun-scene="ecosystem-compatibility"
+        data-openbitfun-part="sidebar"
       >
         <div className="ecosystem-compatibility__sidebar-header">
           <SearchField
@@ -773,8 +773,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
 
         <ScrollArea
           className="ecosystem-compatibility__product-groups"
-          data-bf-scene="ecosystem-compatibility"
-          data-bf-part="productList"
+          data-openbitfun-scene="ecosystem-compatibility"
+          data-openbitfun-part="productList"
         >
           {GROUP_ORDER.map((group) => {
             const runtimes = filteredRuntimes.filter((runtime) => runtime.group === group);
@@ -828,13 +828,13 @@ const EcosystemCompatibilityScene: React.FC = () => {
 
       <main
         className="ecosystem-compatibility__main"
-        data-bf-scene="ecosystem-compatibility"
-        data-bf-part="main"
+        data-openbitfun-scene="ecosystem-compatibility"
+        data-openbitfun-part="main"
       >
         <header
           className="ecosystem-compatibility__product-header"
-          data-bf-scene="ecosystem-compatibility"
-          data-bf-part="header"
+          data-openbitfun-scene="ecosystem-compatibility"
+          data-openbitfun-part="header"
         >
           <div className="ecosystem-compatibility__product-identity">
             <span className="ecosystem-compatibility__product-logo" aria-hidden="true">
@@ -886,8 +886,8 @@ const EcosystemCompatibilityScene: React.FC = () => {
 
         <ScrollArea
           className="ecosystem-compatibility__content"
-          data-bf-scene="ecosystem-compatibility"
-          data-bf-part="content"
+          data-openbitfun-scene="ecosystem-compatibility"
+          data-openbitfun-part="content"
         >
           {loading ? (
             <div className="ecosystem-compatibility__loading" role="status">

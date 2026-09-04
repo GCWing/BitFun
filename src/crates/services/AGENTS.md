@@ -16,7 +16,7 @@ OS/network capabilities.
 | `miniapp-market-service` | Concrete SQLite, artifact storage, GitHub OAuth, package validation, and HTTP behavior for the MiniApp market | [README.md](miniapp-market-service/README.md) |
 | `skin-market-service` | Concrete SQLite, artifact storage, Appearance package validation, review, and HTTP behavior for the Skin market | [README.md](skin-market-service/README.md) |
 | `relay-service` | Reusable Remote Connect relay state, storage, and HTTP/WebSocket routes shared by standalone and embedded hosts | [AGENTS.md](relay-service/AGENTS.md) |
-| `page-function-runtime` | Embedded JS Page Function runtime (rquickjs) for BitFun Pages | [AGENTS.md](page-function-runtime/AGENTS.md) |
+| `page-function-runtime` | Embedded JS Page Function runtime (rquickjs) for OpenBitFun Pages | [AGENTS.md](page-function-runtime/AGENTS.md) |
 | `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## Placement Rules

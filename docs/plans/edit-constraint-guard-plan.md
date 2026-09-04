@@ -26,7 +26,7 @@ agent 返回可解释的拒绝原因。约束属于用户会话状态，必须�
 网络出口、仓库历史净化和评测审计属于评测管道。产品工具保持普通用户预期的 Web 与 Git
 能力，guard 代码不得出现 benchmark 名称或站点黑名单。
 
-`updatedInput` 依然通过 BitFun 工具管道执行，因此可由本设计守住。Native hook handler
+`updatedInput` 依然通过 OpenBitFun 工具管道执行，因此可由本设计守住。Native hook handler
 命令本身是一个外部进程；如果 handler 绕过 `updatedInput` 直接写文件，该副作不会进入工具
 `validate_input`。这类 hook 的信任、启用和进程隔离属于 Native hook 安全边界；严格评测
 环境应禁用不可信 hook 或在外层 sandbox 中限制它，不应把外部进程副作误认为工具守卫可见。
@@ -86,7 +86,7 @@ turn 抽取与文件来源记录；旧格式中缺少 turn id 的来源记录不
    约束而被拒绝。
 7. 命中约束时返回 403 和结构化 `edit_constraint_guard` 元数据，并标记该失败不可被
    input rewrite 放宽，不执行写入。
-8. 设置 `BITFUN_EDIT_CONSTRAINT_TELEMETRY=1` 后，guard 决策和成功的直接文件工具操作写入
+8. 设置 `OPENBITFUN_EDIT_CONSTRAINT_TELEMETRY=1` 后，guard 决策和成功的直接文件工具操作写入
    session-scoped JSONL，用于产品诊断；默认不创建 JSONL。该开关不影响 AI provider 请求审计。
 
 撤销只接受当前 active constraint id，且只有真实用户提交的 turn 可以授权撤销。含糊表达、

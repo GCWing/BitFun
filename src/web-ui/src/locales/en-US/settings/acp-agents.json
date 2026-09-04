@@ -32,18 +32,18 @@
     "discardConfirm": "Discard changes"
   },
   "security": {
-    "secretWarning": "ACP JSON and environment variables may contain API keys or access tokens. BitFun saves them in the configuration on the current execution host. Do not paste them into online JSON validators, chats, or support tickets."
+    "secretWarning": "ACP JSON and environment variables may contain API keys or access tokens. OpenBitFun saves them in the configuration on the current execution host. Do not paste them into online JSON validators, chats, or support tickets."
   },
   "installConfirm": {
     "title": "Install {{name}} CLI?",
-    "message": "Target host: {{host}}. BitFun will run “{{command}}” to install the npm package globally on that host. This changes the host's global command environment and may require network and write access.",
+    "message": "Target host: {{host}}. OpenBitFun will run “{{command}}” to install the npm package globally on that host. This changes the host's global command environment and may require network and write access.",
     "localHost": "Current execution host",
-    "packageUnknown": "BitFun could not verify the install package for this Agent, so installation was cancelled",
+    "packageUnknown": "OpenBitFun could not verify the install package for this Agent, so installation was cancelled",
     "confirm": "Install on target host"
   },
   "presets": {
     "opencode": { "description": "Native ACP support." },
-    "dsh": { "description": "Uses BitFun's bundled ACP bridge and the model settings from dsh." },
+    "dsh": { "description": "Uses OpenBitFun's bundled ACP bridge and the model settings from dsh." },
     "omp": { "description": "Native ACP support." },
     "claudeCode": { "description": "Connects through the official ACP adapter." },
     "codex": { "description": "Connects through the official ACP adapter." }
@@ -74,7 +74,7 @@
     "permissionDenied": "Permission denied",
     "partialDetail": "The CLI is ready, but the ACP adapter is not configured.",
     "cliMissingDetail": "No CLI command was found on PATH.",
-    "selfManagedCliMissingDetail": "{{name}} is configured separately from BitFun. Install the {{command}} CLI and make sure it is on PATH, then refresh detection.",
+    "selfManagedCliMissingDetail": "{{name}} is configured separately from OpenBitFun. Install the {{command}} CLI and make sure it is on PATH, then refresh detection.",
     "acpMissingDetail": "The ACP adapter is not available yet.",
     "pathInvalidDetail": "The command path could not be resolved.",
     "versionMismatchDetail": "The detected version does not match the expected runtime.",

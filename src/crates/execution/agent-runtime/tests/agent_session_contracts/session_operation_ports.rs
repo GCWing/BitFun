@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     AgentRuntimeBuilder, AgentSessionForkAtTurnRequest, AgentSessionForkPort,
     AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
     AgentSessionUsageRequest, AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult,
     AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentTurnSettlementResult,
     AgentTurnSettlementStatus, PortErrorKind, PortResult, SessionUsageReport,
 };
-use bitfun_agent_runtime::sdk::{AgentSessionCreateRequest, AgentSessionCreateResult};
+use openbitfun_agent_runtime::sdk::{AgentSessionCreateRequest, AgentSessionCreateResult};
 
 #[derive(Default)]
 struct FakeSubmissionPort;
@@ -188,7 +188,7 @@ async fn missing_new_ports_preserve_the_v1_runtime_error_shape() {
 
     assert!(matches!(
         error,
-        bitfun_agent_runtime::sdk::RuntimeError::Port(ref port_error)
+        openbitfun_agent_runtime::sdk::RuntimeError::Port(ref port_error)
             if port_error.kind == PortErrorKind::NotAvailable
     ));
 }

@@ -1,6 +1,6 @@
 # OpenCode 插件运行时适配设计
 
-本文定义 BitFun 如何在自己的运行时中加载和执行 OpenCode 服务插件、自定义工具和稳定钩子。总体能力状态见
+本文定义 OpenBitFun 如何在自己的运行时中加载和执行 OpenCode 服务插件、自定义工具和稳定钩子。总体能力状态见
 [`opencode-extension-compatibility.md`](opencode-extension-compatibility.md)，配置来源见
 [`opencode-config-assets-adapter-design.md`](opencode-config-assets-adapter-design.md)，通用进程与调用边界见
 [`plugin-runtime-design.md`](plugin-runtime-design.md)，终端插件见
@@ -18,13 +18,13 @@ Node worker `load/invoke/cancel/dispose`、现有 Tool Runtime 注册、同名�
 不能把当前 standalone Tool 的 Node 子集写成完整运行时兼容。
 
 2026-07 的前瞻检查显示 OpenCode `v2` 仍以 Bun 作为 package manager、开发和默认编译路径，同时提供 Node 26 SEA
-并行构建与 Node 启动器。该分支尚未形成稳定运行时承诺，因此 BitFun 保持 `ScriptToolRuntime`/worker protocol
+并行构建与 Node 启动器。该分支尚未形成稳定运行时承诺，因此 OpenBitFun 保持 `ScriptToolRuntime`/worker protocol
 运行时中立：当前 `.js` 子集使用系统 Node；只有固定的 TypeScript、Zod、`$` 或 package plugin 样例证明需要时，
 才增加 Node 转译或 Bun-compatible 脚本执行后端，不把任一物理运行时固化进插件内部 ABI。
 
 ## 1. 核心决策
 
-BitFun 自行实现 OpenCode 插件兼容链路，不启动完整 OpenCode Runtime：
+OpenBitFun 自行实现 OpenCode 插件兼容链路，不启动完整 OpenCode Runtime：
 
 - package plugin 的第三方 JS/TS 在 Plugin Host 子进程中运行；兼容进程级事实相同的插件默认共享 Host，详细
   复用、拆分、更新和恢复规则统一由[插件运行时设计](plugin-runtime-design.md)定义。
@@ -33,7 +33,7 @@ BitFun 自行实现 OpenCode 插件兼容链路，不启动完整 OpenCode Runti
   若随产品交付运行时，发布前必须完成对应平台的许可证、签名、更新和体积验证。
 - 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.4` 兼容模块使用 npm 配置、`@npmcli/arborist`、
   `package-lock.json` 和 `ignoreScripts: true`；后续 OpenCode 版本改变实现时随兼容版本更新。
-- 执行进程提供 OpenCode 兼容上下文和插件接口；插件无需感知 BitFun Rust 内部类型。
+- 执行进程提供 OpenCode 兼容上下文和插件接口；插件无需感知 OpenBitFun Rust 内部类型。
 - OpenCode Adapter 把插件调用、钩子变换和工具结果转换成类型化进程消息。
 - Rust 主应用内的 `PluginRuntimeClient` 当前负责调用路由、期限、同一插件实例串行化、`idempotency_key` 结果、响应校验、
   故障诊断；队列上限、取消后的结果失效和旧连接结果拒绝，是端口具备相应身份后的目标能力。它不是 Host。
@@ -41,9 +41,9 @@ BitFun 自行实现 OpenCode 插件兼容链路，不启动完整 OpenCode Runti
 - 可执行来源首次按来源、插件身份和执行域确认；激活后的默认本地运行策略以兼容性为先，不把严格沙箱作为插件可用的
   前置条件，用户、产品和组织可以按需收紧。
 
-这里的“自行实现兼容链路”只表示 BitFun 负责来源发现、依赖准备、Plugin Host 监督、OpenCode API 适配、进程通信、
+这里的“自行实现兼容链路”只表示 OpenBitFun 负责来源发现、依赖准备、Plugin Host 监督、OpenCode API 适配、进程通信、
 Rust 能力转发和状态恢复；并不表示重写 JavaScript 引擎，也不表示在后台启动 OpenCode 的 Agent Runtime。插件工厂和钩子
-在所选脚本执行后端中运行，需要 BitFun 能力时通过兼容接口转发给 Rust 归属模块。
+在所选脚本执行后端中运行，需要 OpenBitFun 能力时通过兼容接口转发给 Rust 归属模块。
 
 当前 standalone Tool 路径使用的 `ScriptToolRuntime` 是与提供方无关的窄端口，`NodeScriptToolRuntime` 只用于受支持的单文件 JavaScript standalone Tool。
 它不把 Node 固化进插件内部 ABI，也不承担 OpenCode 格式、审批或冲突规则；后续 Node 转译或 Bun-compatible services 实现可以替换物理执行实现而
@@ -88,7 +88,7 @@ flowchart LR
                     -> 结果/变换 -> Process service -> Adapter -> Client 校验 -> 归属模块提交
 ```
 
-插件执行进程是兼容载体，不是第二智能体内核。它不拥有 BitFun 会话状态、最终工具结果、配置文件写入或
+插件执行进程是兼容载体，不是第二智能体内核。它不拥有 OpenBitFun 会话状态、最终工具结果、配置文件写入或
 权限存储。
 Product Assembly 只选择并构造已编译的 adapter/provider，再注入 `PluginRuntimeBinding`、`ScriptToolRuntime` 和产品
 能力/策略上限；它不发现来源或 import 插件。OpenCode 来源适配器把配置快照和生态顺序提供给现有
@@ -99,11 +99,11 @@ Product Assembly 只选择并构造已编译的 adapter/provider，再注入 `Pl
 
 | 开发部分 | 负责 | 不能承担 |
 |---|---|---|
-| OpenCode 来源适配器 + `ExternalSourceControlPlane` | 前者保留生态解析与顺序，后者维护来源身份、监听、候选快照和切换决定 | 写 BitFun 配置、保存凭据、决定产品提示、管理 Plugin Host 或提交贡献 |
+| OpenCode 来源适配器 + `ExternalSourceControlPlane` | 前者保留生态解析与顺序，后者维护来源身份、监听、候选快照和切换决定 | 写 OpenBitFun 配置、保存凭据、决定产品提示、管理 Plugin Host 或提交贡献 |
 | 外部来源目录与激活策略 | 展示来源、能力摘要和适用范围，保存用户加载偏好，并结合各归属模块与组织上限给出自动应用、待确认或限制结论 | 解释 OpenCode 加载顺序、import module、管理 Plugin Host 或代替调用时权限判断 |
 | 依赖准备服务 | 按兼容版本管理 npm 配置、Arborist、package-lock、缓存和安装锁 | 执行插件代码或擅自启用安装脚本 |
-| `ScriptToolRuntime` 与 services 实现 | 选择脚本执行后端，唯一持有 Plugin Host 进程树/句柄，负责物理健康探测和资源回收 | 把 Rust 侧实现命名为 Host、理解 OpenCode Hook 语义、把物理后端固化进插件 ABI 或提交 BitFun 业务状态 |
-| Plugin Host 内的 OpenCode 适配库 | 加载真实模块，提供插件工厂上下文、`client`、`$` 和生态入口 API | 暴露 Rust 内部类型或自行修改 BitFun 存储 |
+| `ScriptToolRuntime` 与 services 实现 | 选择脚本执行后端，唯一持有 Plugin Host 进程树/句柄，负责物理健康探测和资源回收 | 把 Rust 侧实现命名为 Host、理解 OpenCode Hook 语义、把物理后端固化进插件 ABI 或提交 OpenBitFun 业务状态 |
+| Plugin Host 内的 OpenCode 适配库 | 加载真实模块，提供插件工厂上下文、`client`、`$` 和生态入口 API | 暴露 Rust 内部类型或自行修改 OpenBitFun 存储 |
 | 进程协议适配器 | 把工具、Hook、Client 和生命周期调用转换成类型化消息 | 使用任意 JSON 和字符串事件替代所有接口 |
 | `PluginRuntimeClient` | 当前负责期限、同一插件串行调用、重复请求结果、响应校验与故障诊断；目标再增加队列上限、取消后的结果失效、旧连接结果拒绝和进程失联处理 | 持有 OS 进程句柄/进程树、拥有插件生命周期，或决定 OpenCode 加载顺序、权限结果和工具结果 |
 | Tool / Config / Permission / Session / Provider / Event 归属模块 | 校验并提交最终状态 | 直接加载第三方 JS/TS 模块 |
@@ -142,7 +142,7 @@ Product Assembly 只选择并构造已编译的 adapter/provider，再注入 `Pl
   OpenCode 稳定版默认禁用，不能因“默认开放”而扩大权限。
 - 提供真实 `$` shell 语义、`directory`、`worktree`、`project` 和兼容 Client。
 - 复现 OpenCode 稳定版的插件加载顺序、钩子顺序、命名和覆盖行为。
-- 不因缺少 BitFun 专用清单或未声明静态工具集合阻止发现；风险由实际能力摘要决定，不用一个“高风险”标签
+- 不因缺少 OpenBitFun 专用清单或未声明静态工具集合阻止发现；风险由实际能力摘要决定，不用一个“高风险”标签
   代替来源、插件身份和执行域确认以及 import 前策略重算。
 
 ### 3.2 可选受限策略
@@ -151,7 +151,7 @@ Product Assembly 只选择并构造已编译的 adapter/provider，再注入 `Pl
 
 | 控制层 | 可执行机制 | 控制粒度 |
 |---|---|---|
-| 经插件兼容接口 / Tool Runtime 的 BitFun 能力 | 在 Rust 归属模块检查来源、凭据、文件范围、工具覆盖、配置写入、模型请求修改和界面贡献 | 可按调用和贡献细分 |
+| 经插件兼容接口 / Tool Runtime 的 OpenBitFun 能力 | 在 Rust 归属模块检查来源、凭据、文件范围、工具覆盖、配置写入、模型请求修改和界面贡献 | 可按调用和贡献细分 |
 | 脚本运行时直接文件、网络、环境和子进程能力 | 兼容模式使用当前执行用户；受限模式只能依赖真实操作系统或容器边界 | 只能按执行环境粗粒度限制；边界无法落实时停用插件 |
 
 用户、产品或组织可以选择兼容/受限策略，并在插件兼容接口调整自己有权修改的细项。策略必须满足：
@@ -181,7 +181,7 @@ Permission 归属模块拦截。插件激活后的默认兼容策略接受这一
 OpenCode 项目和用户目录可以直接成为兼容来源。OpenCode 来源适配器把解析结果提交给
 `ExternalSourceControlPlane` 形成候选快照；只有
 来源、插件身份和执行域已经确认且 import 前策略重算通过的候选才生成可启动的执行版本记录，但不要求作者手工构造
-`.bitfun/plugins`：
+`.openbitfun/plugins`：
 
 | 记录内容 | 目的 |
 |---|---|
@@ -200,13 +200,13 @@ OpenCode 项目和用户目录可以直接成为兼容来源。OpenCode 来源�
 软件包版本/完整性、远程内容，或 import 前已知的文件/网络/进程权限、凭据、环境变量、依赖安装行为、执行位置发生未获
 更新策略覆盖的变化时保持 `pending-preparation`，不能先 import 再提示。
 
-执行版本记录是 BitFun 的内部缓存和诊断信息，不是源码备份、新的插件包规范或用户确认记录，也不要求所有动态 import 在启动前
+执行版本记录是 OpenBitFun 的内部缓存和诊断信息，不是源码备份、新的插件包规范或用户确认记录，也不要求所有动态 import 在启动前
 形成完整依赖清单。本地开发插件缺少 package-lock 或完整性元数据时仍可运行，但旧 worker 崩溃或产品重启后，
 只有保留了内容摘要匹配的完整软件包或文件副本，才能重建旧版本；本地原位源码已变化且没有精确字节时，必须显示
 “上一版本不可恢复”，不能从当前来源重建后仍冒充旧版本。运行时发现新依赖后只更新当前版本记录，不能追溯改写
 旧版本身份。
 
-BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 兼容来源与原生包最终进入相同 Plugin Host
+OpenBitFun 原生 `openbitfun.plugin.json` 包继续使用现有来源校验；OpenCode 兼容来源与原生包最终进入相同 Plugin Host
 可靠性边界，但来源格式、安装和更新生命周期不必相同。
 
 ## 5. 工具与插件加载
@@ -260,7 +260,7 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
   `plugin_origins`：包括各配置来源以及 `ConfigPaths.directories` 中的全局配置目录、项目 `.opencode`、
   `~/.opencode` 和 `OPENCODE_CONFIG_DIR` 目录扫描结果；不能简化成四级 global/project 顺序。
 - Internal auth/provider 插件先于所有 external 插件；`--pure` / `OPENCODE_PURE` 只跳过 external 插件。
-- 稳定版会跳过已经内置的旧认证包名。BitFun 只有在存在行为等价的内置替代时才应用该别名；否则不得静默
+- 稳定版会跳过已经内置的旧认证包名。OpenBitFun 只有在存在行为等价的内置替代时才应用该别名；否则不得静默
   跳过，必须继续加载或报告缺失的替代能力。
 - 已经允许执行的来源，其依赖和插件文件可以并行准备，但插件工厂和 Hook 激活必须按确定顺序提交。
 - npm spec 按解析后的 package name 去重，版本是否相同不影响身份，后来源胜出；file spec 按解析后的精确
@@ -270,7 +270,7 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 未知 pure/禁用开关不能按“继续加载”处理。无法解释时应停止 external 插件候选的激活并给出一次明确诊断，避免
 用户期望纯净启动时仍执行第三方代码。
 
-稳定版的软件包缓存命中后不会主动刷新 bare `latest`。BitFun 必须先复现这一实际加载行为；“检查更新”和更新通知
+稳定版的软件包缓存命中后不会主动刷新 bare `latest`。OpenBitFun 必须先复现这一实际加载行为；“检查更新”和更新通知
 属于明确的产品增强。只有用户触发更新、配置 spec 变化或更新策略明确允许时才重新解析版本，并按第 9 节准备
 候选版本，不能把后台静默换包宣称为 OpenCode 等价行为。
 
@@ -280,7 +280,7 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 
 - 运行时新增或缺失工具只更新本次真实贡献和差异诊断。
 - 用户策略对能力类别有限制时，超出上限的贡献被拒绝，其他贡献继续注册。
-- BitFun 产品边界优先于 OpenCode 的静默覆盖顺序：同名外部 Tool、BitFun 内置和 MCP 候选形成包含身份与内容版本
+- OpenBitFun 产品边界优先于 OpenCode 的静默覆盖顺序：同名外部 Tool、OpenBitFun 内置和 MCP 候选形成包含身份与内容版本
   的冲突内容摘要；候选集合来自静态识别定义，不因某个 worker 暂不可用而消失。用户选择前保留当前本地实现；显式选择
 外部实现后，任一候选变化或加载失败都要求重新选择，不静默回退。生态内原始顺序仍由 OpenCode adapter 解释。
 - 产品或组织可保护少量安全关键工具。保护冲突必须在加载状态中可见，不能静默改名或丢弃。
@@ -311,11 +311,11 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 - `config` 变换作用于当前兼容结果，不直接覆盖来源文件。
 - `chat.headers` 和 `shell.env` 的敏感值不进入日志或普通诊断。
 - 单个 Hook 抛错只使本次 Hook 调用失败。是否终止当前命令/工具按照 OpenCode 行为和调用类型决定，不升级为
-  BitFun 主进程故障。
+  OpenBitFun 主进程故障。
 
 ### 6.3 Permission Hook
 
-默认兼容策略下，`permission.ask` 可以按照 OpenCode 语义修改 ask/deny/allow。BitFun 用户或组织设置了不可
+默认兼容策略下，`permission.ask` 可以按照 OpenCode 语义修改 ask/deny/allow。OpenBitFun 用户或组织设置了不可
 突破上限时：
 
 - deny 可以继续收紧；
@@ -327,13 +327,13 @@ BitFun 原生 `bitfun.plugin.json` 包继续使用现有来源校验；OpenCode 
 
 插件工厂获得与 OpenCode 对齐的上下文：
 
-| 上下文 | BitFun 实现 |
+| 上下文 | OpenBitFun 实现 |
 |---|---|
 | `project` | 当前执行域的项目身份和兼容字段。 |
 | `directory` | 实际插件工作目录。 |
 | `worktree` | 实际工作树根；Remote 时是远端路径。 |
 | `serverUrl` | 指向 worker 执行域内真实可访问的回环兼容服务；它实现固定版本中插件实际需要的 OpenCode 路由，而不是暴露完整外部 Server。 |
-| `client` | 插件专用方法代理，经类型化进程通信映射到 BitFun 归属模块。 |
+| `client` | 插件专用方法代理，经类型化进程通信映射到 OpenBitFun 归属模块。 |
 | `$` | 默认兼容策略提供真实 shell；受限策略可提供受控替代并返回差异。 |
 
 Client 方法按固定版本建立接口清单：
@@ -346,9 +346,9 @@ Client 方法按固定版本建立接口清单：
 
 `client` 与回环 `serverUrl` 复用同一组 Rust 能力处理器。插件直接 `fetch(serverUrl)` 时，已声明支持的路由返回
 OpenCode 兼容响应；未支持路由返回版本化的 `404/501` 与诊断，不挂起连接或伪造成功。该回环服务只对对应
-worker 可见，不能自动成为 BitFun 面向外部用户的 OpenCode Server 兼容承诺。
+worker 可见，不能自动成为 OpenBitFun 面向外部用户的 OpenCode Server 兼容承诺。
 
-该接口只存在于 OpenCode adapter 与 Plugin Host 之间，不是独立架构层或 BitFun 公共 SDK，也不要求其他产品
+该接口只存在于 OpenCode adapter 与 Plugin Host 之间，不是独立架构层或 OpenBitFun 公共 SDK，也不要求其他产品
 入口使用 OpenCode 类型。
 
 ## 8. 可靠性与鲁棒降级
@@ -359,7 +359,7 @@ worker 可见，不能自动成为 BitFun 面向外部用户的 OpenCode Server 
 [插件运行时设计](plugin-runtime-design.md)为准，本文件不重复定义第二套模型。OpenCode 特有要求只有两点：
 
 - 插件初始化与 Hook 链保持固定版本的确定顺序；单个初始化异常且 Host 仍健康时回滚该插件贡献并继续加载。
-- OpenCode 稳定实现允许同进程插件观察 `globalThis`、进程环境或模块缓存。BitFun 默认共享 Plugin Host，但只保证
+- OpenCode 稳定实现允许同进程插件观察 `globalThis`、进程环境或模块缓存。OpenBitFun 默认共享 Plugin Host，但只保证
   官方 PluginInput、Hook 顺序和显式接口；既不主动切断，也不承诺未文档化的插件间全局协作。
 
 ### 8.2 调用协议
@@ -437,7 +437,7 @@ OpenCode 特有规则：来源已经允许执行时可直接准备，动态贡�
 
 当前仍需保留并逐步迁移的边界：
 
-- `bitfun.plugin.json` 不是所有 OpenCode 插件的强制作者格式。
+- `openbitfun.plugin.json` 不是所有 OpenCode 插件的强制作者格式。
 - 静态候选不是完整工具真实定义；当前 standalone Tool 路径在 load 时核对预期 export，不匹配就拒绝加载；完整 Plugin Host 后续比较动态贡献差异。
 - 无 custom tool 的插件仍可因 Hook、auth 或 provider 被启用。
 - `client/server` 不再一律拒绝；由 OpenCode adapter 的插件兼容接口映射到现有归属模块。

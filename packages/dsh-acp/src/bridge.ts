@@ -13,7 +13,7 @@
  * machinery verbatim and replaces only the `session/event` dispatch with a full
  * translation to ACP session updates.
  *
- * @module @bitfun/dsh-acp/bridge
+ * @module @openbitfun/dsh-acp/bridge
  */
 
 import type { Context } from '@deepseek-ai/cordis'

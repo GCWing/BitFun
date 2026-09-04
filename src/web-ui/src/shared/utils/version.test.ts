@@ -3,7 +3,7 @@ import type { VersionInfo } from '../types/version';
 import { formatDisplayedVersion } from './version';
 
 const productionInfo: VersionInfo = {
-  name: 'BitFun',
+  name: 'OpenBitFun',
   version: '1.2.2',
   buildDate: '2026-08-06T00:00:00Z',
   buildTimestamp: 0,

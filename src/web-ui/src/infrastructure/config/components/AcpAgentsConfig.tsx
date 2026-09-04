@@ -11,7 +11,7 @@ import {
   Textarea,
   Tooltip,
   type StatusPillTone,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, CircleAlert, EyeOff, FileJson, Save, Server } from 'lucide-react';
@@ -43,7 +43,7 @@ import './AcpAgentsConfig.scss';
 
 const log = createLogger('AcpAgentsConfig');
 const HIDDEN_REMOTE_CONNECTION_IDS_STORAGE_KEY =
-  'bitfun:settings:acp-agents:hidden-remote-connections:v1';
+  'openbitfun:settings:acp-agents:hidden-remote-connections:v1';
 
 function loadHiddenRemoteConnectionIds(): Set<string> {
   try {
@@ -95,7 +95,7 @@ interface AcpClientPreset {
 // package (their CLI binary is launched directly).
 const NATIVE_ACP_PRESET_IDS = new Set(['opencode', 'dsh', 'omp']);
 
-// Presets BitFun cannot install on the user's behalf — the agent must be
+// Presets OpenBitFun cannot install on the user's behalf — the agent must be
 // installed manually (e.g. omp targets bun and ships via its own installer).
 // The UI hides the one-click "Install CLI" action for these.
 const SELF_MANAGED_INSTALL_PRESET_IDS = new Set(['omp']);
@@ -114,14 +114,14 @@ const PRESETS: AcpClientPreset[] = [
     command: 'opencode',
     args: ['acp'],
   },
-  // BitFun ships the ACP bridge for DeepSeek Harness and installs it into the
+  // OpenBitFun ships the ACP bridge for DeepSeek Harness and installs it into the
   // user's own dsh as a profile on first launch, so the only setup left is the
   // harness itself and the model the user picks inside it.
   {
     id: 'dsh',
     name: 'DeepSeek Harness',
     command: 'dsh',
-    args: ['--profile', 'bitfun-acp'],
+    args: ['--profile', 'openbitfun-acp'],
   },
   {
     id: 'omp',
@@ -432,7 +432,7 @@ function CapabilityStatusPill({
   return (
     <StatusPill
       aria-label={title}
-      data-bf-state={item ? (item.installed ? 'installed' : 'missing') : checking ? 'checking' : 'unknown'}
+      data-openbitfun-state={item ? (item.installed ? 'installed' : 'missing') : checking ? 'checking' : 'unknown'}
       leading={icon}
       title={title}
       tone={tone}
@@ -454,7 +454,7 @@ function AgentStatusPill({
   return (
     <StatusPill
       aria-label={title ? `${label}. ${title}` : label}
-      data-bf-state={status}
+      data-openbitfun-state={status}
       leading={status === 'checking' ? <Spinner size="xs" /> : undefined}
       title={title}
       tone={agentStatusTone(status)}
@@ -796,9 +796,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
       }
       void loadConfig({ showLoading: false });
     };
-    window.addEventListener('bitfun:acp-clients-changed', handleAcpClientsChanged);
+    window.addEventListener('openbitfun:acp-clients-changed', handleAcpClientsChanged);
     return () => {
-      window.removeEventListener('bitfun:acp-clients-changed', handleAcpClientsChanged);
+      window.removeEventListener('openbitfun:acp-clients-changed', handleAcpClientsChanged);
     };
   }, [dirty, jsonDirty, loadConfig]);
 
@@ -1289,9 +1289,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
   if (loading || loadFailed) {
     return (
       <ConfigPageLayout
-        className="bitfun-acp-agents"
-        data-bf-component="acp-agents-config"
-        data-bf-part="root"
+        className="openbitfun-acp-agents"
+        data-openbitfun-component="acp-agents-config"
+        data-openbitfun-part="root"
       >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
@@ -1311,10 +1311,10 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
 
   return (
     <ConfigPageLayout
-      className="bitfun-acp-agents"
-      data-bf-component="acp-agents-config"
-      data-bf-part="root"
-      data-bf-view={activeView}
+      className="openbitfun-acp-agents"
+      data-openbitfun-component="acp-agents-config"
+      data-openbitfun-part="root"
+      data-openbitfun-view={activeView}
     >
       <ConfigPageHeader
         title={t('title')}
@@ -1332,15 +1332,15 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
       />
 
       <ConfigPageContent
-        data-bf-component="acp-agents-config"
-        data-bf-part="content"
+        data-openbitfun-component="acp-agents-config"
+        data-openbitfun-part="content"
         aria-busy={saving}
         {...(saving ? { inert: '' } : {})}
       >
         <TabGroup
-          className="bitfun-acp-agents__tabs"
-          data-bf-component="acp-agents-config"
-          data-bf-part="tabs"
+          className="openbitfun-acp-agents__tabs"
+          data-openbitfun-component="acp-agents-config"
+          data-openbitfun-part="tabs"
           items={viewTabs}
           onValueChange={handleViewChange}
           value={activeView}
@@ -1349,27 +1349,27 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
           <ConfigMessage message={{ type: 'warning', text: t('security.secretWarning') }} />
         )}
         <ConfigPageSectionStack
-          className="bitfun-acp-agents__manager"
-          data-bf-component="acp-agents-config"
-          data-bf-part="manager"
+          className="openbitfun-acp-agents__manager"
+          data-openbitfun-component="acp-agents-config"
+          data-openbitfun-part="manager"
         >
           {activeView === 'local' && (
           <div
-            className="bitfun-acp-agents__toolbar"
-            data-bf-component="acp-agents-config"
-            data-bf-part="toolbar"
+            className="openbitfun-acp-agents__toolbar"
+            data-openbitfun-component="acp-agents-config"
+            data-openbitfun-part="toolbar"
           >
             <Input
-              className="bitfun-acp-agents__search"
+              className="openbitfun-acp-agents__search"
               value={registrySearch}
               onChange={(event) => setRegistrySearch(event.target.value)}
               placeholder={t('registry.searchPlaceholder')}
               leading={<Icon name="search" size="sm" />}
               size="md"
             />
-            <div className="bitfun-acp-agents__toolbar-actions">
+            <div className="openbitfun-acp-agents__toolbar-actions">
               <Select
-                className="bitfun-acp-agents__filter-select"
+                className="openbitfun-acp-agents__filter-select"
                 options={registryFilterOptions}
                 value={registryFilter}
                 onValueChange={(value) => setRegistryFilter(value as RegistryFilter)}
@@ -1397,9 +1397,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
             >
               <Textarea
                 ref={jsonEditorRef}
-                className="bitfun-acp-agents__json-textarea"
-                data-bf-component="acp-agents-config"
-                data-bf-part="jsonEditor"
+                className="openbitfun-acp-agents__json-textarea"
+                data-openbitfun-component="acp-agents-config"
+                data-openbitfun-part="jsonEditor"
                 value={jsonConfig}
                 onChange={(event) => {
                   const nextValue = event.target.value;
@@ -1425,9 +1425,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                 disabled={saving}
               />
               <div
-                className="bitfun-acp-agents__json-actions"
-                data-bf-component="acp-agents-config"
-                data-bf-part="jsonActions"
+                className="openbitfun-acp-agents__json-actions"
+                data-openbitfun-component="acp-agents-config"
+                data-openbitfun-part="jsonActions"
               >
                 <Button variant="outline" size="sm" onClick={() => {
                   setJsonConfig(jsonBaseline);
@@ -1464,18 +1464,18 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
             )}
           >
           {loading ? (
-            <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+            <div className="openbitfun-acp-agents__empty" data-openbitfun-component="acp-agents-config" data-openbitfun-part="empty">
               {t('clients.loading')}
             </div>
           ) : registryPresets.length === 0 && visibleCustomClientRows.length === 0 ? (
-            <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+            <div className="openbitfun-acp-agents__empty" data-openbitfun-component="acp-agents-config" data-openbitfun-part="empty">
               {t('registry.empty')}
             </div>
           ) : (
             <div
-              className="bitfun-acp-agents__registry-list"
-              data-bf-component="acp-agents-config"
-              data-bf-part="registryList"
+              className="openbitfun-acp-agents__registry-list"
+              data-openbitfun-component="acp-agents-config"
+              data-openbitfun-part="registryList"
             >
               {registryPresets.map(preset => {
                 const clientConfig = config.acpClients[preset.id] ?? defaultConfigForPreset(preset);
@@ -1530,40 +1530,40 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                 return (
                   <div
                     key={preset.id}
-                    className="bitfun-acp-agents__registry-row"
-                    data-bf-component="acp-agents-config"
-                    data-bf-part="registryRow"
+                    className="openbitfun-acp-agents__registry-row"
+                    data-openbitfun-component="acp-agents-config"
+                    data-openbitfun-part="registryRow"
                   >
                     <div
-                      className="bitfun-acp-agents__registry-main"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="registryMain"
+                      className="openbitfun-acp-agents__registry-main"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="registryMain"
                     >
-                      <span className="bitfun-acp-agents__registry-icon">
+                      <span className="openbitfun-acp-agents__registry-icon">
                         <Bot size={16} />
                       </span>
-                      <div className="bitfun-acp-agents__registry-copy">
-                        <span className="bitfun-acp-agents__registry-name">{preset.name}</span>
-                        <p className="bitfun-acp-agents__registry-description">
+                      <div className="openbitfun-acp-agents__registry-copy">
+                        <span className="openbitfun-acp-agents__registry-name">{preset.name}</span>
+                        <p className="openbitfun-acp-agents__registry-description">
                           {getPresetDescription(preset.id)}
                         </p>
                       </div>
                     </div>
                     <div
-                      className="bitfun-acp-agents__status-cell"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="status"
+                      className="openbitfun-acp-agents__status-cell"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="status"
                     >
                       <AgentStatusPill status={status} label={statusLabel} title={statusTitle} />
                     </div>
                     <div
-                      className="bitfun-acp-agents__confirmation-cell"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="confirmation"
+                      className="openbitfun-acp-agents__confirmation-cell"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="confirmation"
                     >
                       {showSelect ? (
                         <Select
-                          className="bitfun-acp-agents__confirmation-select"
+                          className="openbitfun-acp-agents__confirmation-select"
                           options={permissionOptions}
                           value={clientConfig.permissionMode}
                           onValueChange={(value) => patchClientConfig(preset.id, {
@@ -1672,40 +1672,40 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                 return (
                   <div
                     key={clientId}
-                    className="bitfun-acp-agents__registry-row"
-                    data-bf-component="acp-agents-config"
-                    data-bf-part="registryRow"
+                    className="openbitfun-acp-agents__registry-row"
+                    data-openbitfun-component="acp-agents-config"
+                    data-openbitfun-part="registryRow"
                   >
                     <div
-                      className="bitfun-acp-agents__registry-main"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="registryMain"
+                      className="openbitfun-acp-agents__registry-main"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="registryMain"
                     >
-                      <span className="bitfun-acp-agents__registry-icon">
+                      <span className="openbitfun-acp-agents__registry-icon">
                         <Bot size={16} />
                       </span>
-                      <div className="bitfun-acp-agents__registry-copy">
-                        <span className="bitfun-acp-agents__registry-name">{displayName}</span>
-                        <p className="bitfun-acp-agents__registry-description bitfun-acp-agents__registry-command">
+                      <div className="openbitfun-acp-agents__registry-copy">
+                        <span className="openbitfun-acp-agents__registry-name">{displayName}</span>
+                        <p className="openbitfun-acp-agents__registry-description openbitfun-acp-agents__registry-command">
                           {[clientConfig.command, ...clientConfig.args].join(' ')}
                         </p>
                       </div>
                     </div>
                     <div
-                      className="bitfun-acp-agents__status-cell"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="status"
+                      className="openbitfun-acp-agents__status-cell"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="status"
                     >
                       <AgentStatusPill status={status} label={statusLabel} title={statusTitle} />
                     </div>
                     <div
-                      className="bitfun-acp-agents__confirmation-cell"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="confirmation"
+                      className="openbitfun-acp-agents__confirmation-cell"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="confirmation"
                     >
                       {status === 'enabled' || status === 'ready' ? (
                         <Select
-                          className="bitfun-acp-agents__confirmation-select"
+                          className="openbitfun-acp-agents__confirmation-select"
                           options={permissionOptions}
                           value={clientConfig.permissionMode}
                           onValueChange={(value) => patchClientConfig(clientId, {
@@ -1759,14 +1759,14 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
             ) : undefined}
           >
             {visibleRemoteConnectionRows.length === 0 ? (
-              <div className="bitfun-acp-agents__empty" data-bf-component="acp-agents-config" data-bf-part="empty">
+              <div className="openbitfun-acp-agents__empty" data-openbitfun-component="acp-agents-config" data-openbitfun-part="empty">
                 {t(remoteConnectionRows.length === 0 ? 'remote.empty' : 'remote.emptyVisible')}
               </div>
             ) : (
               <div
-                className="bitfun-acp-agents__remote-list"
-                data-bf-component="acp-agents-config"
-                data-bf-part="remoteList"
+                className="openbitfun-acp-agents__remote-list"
+                data-openbitfun-component="acp-agents-config"
+                data-openbitfun-part="remoteList"
               >
                 {visibleRemoteConnectionRows.map(connection => {
                   const hostLabel = [connection.username, connection.host]
@@ -1837,31 +1837,31 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                   return (
                     <div
                       key={connection.id}
-                      className="bitfun-acp-agents__remote-server"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="remoteServer"
+                      className="openbitfun-acp-agents__remote-server"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="remoteServer"
                     >
                       <div
-                        className="bitfun-acp-agents__remote-head"
-                        data-bf-component="acp-agents-config"
-                        data-bf-part="remoteHeader"
+                        className="openbitfun-acp-agents__remote-head"
+                        data-openbitfun-component="acp-agents-config"
+                        data-openbitfun-part="remoteHeader"
                       >
                         <div
-                          className="bitfun-acp-agents__registry-main"
-                          data-bf-component="acp-agents-config"
-                          data-bf-part="registryMain"
+                          className="openbitfun-acp-agents__registry-main"
+                          data-openbitfun-component="acp-agents-config"
+                          data-openbitfun-part="registryMain"
                         >
-                          <span className="bitfun-acp-agents__registry-icon">
+                          <span className="openbitfun-acp-agents__registry-icon">
                             <Server size={16} />
                           </span>
-                          <div className="bitfun-acp-agents__registry-copy">
-                            <span className="bitfun-acp-agents__registry-name">
+                          <div className="openbitfun-acp-agents__registry-copy">
+                            <span className="openbitfun-acp-agents__registry-name">
                               {connection.name || connection.id}
                             </span>
-                            <p className="bitfun-acp-agents__registry-description">
+                            <p className="openbitfun-acp-agents__registry-description">
                               {hostLabel || connection.id}
                             </p>
-                            <div className="bitfun-acp-agents__remote-summary">
+                            <div className="openbitfun-acp-agents__remote-summary">
                               <StatusPill
                                 leading={remoteChecking ? <Spinner size="xs" /> : undefined}
                                 tone={remoteChecking ? 'info' : availableCount > 0 ? 'success' : 'neutral'}
@@ -1876,7 +1876,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                             </div>
                           </div>
                         </div>
-                        <div className="bitfun-acp-agents__remote-actions">
+                        <div className="openbitfun-acp-agents__remote-actions">
                           <Button
                             variant="outline"
                             size="sm"
@@ -1906,9 +1906,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                         </div>
                       </div>
                       <div
-                        className="bitfun-acp-agents__remote-agent-list"
-                        data-bf-component="acp-agents-config"
-                        data-bf-part="remoteAgents"
+                        className="openbitfun-acp-agents__remote-agent-list"
+                        data-openbitfun-component="acp-agents-config"
+                        data-openbitfun-part="remoteAgents"
                       >
                         {remoteRows.map(row => {
                           const statusLabel = getStatusLabel({
@@ -1939,27 +1939,27 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                           return (
                             <div
                               key={row.clientId}
-                              className="bitfun-acp-agents__registry-row bitfun-acp-agents__registry-row--remote"
-                              data-bf-component="acp-agents-config"
-                              data-bf-part="registryRow"
+                              className="openbitfun-acp-agents__registry-row openbitfun-acp-agents__registry-row--remote"
+                              data-openbitfun-component="acp-agents-config"
+                              data-openbitfun-part="registryRow"
                             >
                               <div
-                                className="bitfun-acp-agents__registry-main"
-                                data-bf-component="acp-agents-config"
-                                data-bf-part="registryMain"
+                                className="openbitfun-acp-agents__registry-main"
+                                data-openbitfun-component="acp-agents-config"
+                                data-openbitfun-part="registryMain"
                               >
-                                <span className="bitfun-acp-agents__registry-icon">
+                                <span className="openbitfun-acp-agents__registry-icon">
                                   <Bot size={16} />
                                 </span>
-                                <div className="bitfun-acp-agents__registry-copy">
-                                  <span className="bitfun-acp-agents__registry-name">{row.displayName}</span>
-                                  <p className="bitfun-acp-agents__registry-description">{row.description}</p>
+                                <div className="openbitfun-acp-agents__registry-copy">
+                                  <span className="openbitfun-acp-agents__registry-name">{row.displayName}</span>
+                                  <p className="openbitfun-acp-agents__registry-description">{row.description}</p>
                                 </div>
                               </div>
                               <div
-                                className="bitfun-acp-agents__capabilities"
-                                data-bf-component="acp-agents-config"
-                                data-bf-part="capabilities"
+                                className="openbitfun-acp-agents__capabilities"
+                                data-openbitfun-component="acp-agents-config"
+                                data-openbitfun-part="capabilities"
                               >
                                 <CapabilityStatusPill
                                   icon={<Icon name="terminal" size="xs" />}
@@ -1983,16 +1983,16 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                 )}
                               </div>
                               <div
-                                className="bitfun-acp-agents__status-cell"
-                                data-bf-component="acp-agents-config"
-                                data-bf-part="status"
+                                className="openbitfun-acp-agents__status-cell"
+                                data-openbitfun-component="acp-agents-config"
+                                data-openbitfun-part="status"
                               >
                                 <AgentStatusPill status={row.status} label={statusLabel} title={statusTitle} />
                               </div>
                               <div
-                                className="bitfun-acp-agents__confirmation-cell"
-                                data-bf-component="acp-agents-config"
-                                data-bf-part="confirmation"
+                                className="openbitfun-acp-agents__confirmation-cell"
+                                data-openbitfun-component="acp-agents-config"
+                                data-openbitfun-part="confirmation"
                               >
                                 {canInstallCli ? (
                                   <Button
@@ -2021,7 +2021,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                 ) : row.status === 'enabled' || row.status === 'ready' ? (
                                   row.clientConfig ? (
                                     <Select
-                                      className="bitfun-acp-agents__confirmation-select"
+                                      className="openbitfun-acp-agents__confirmation-select"
                                       options={permissionOptions}
                                       value={row.clientConfig.permissionMode}
                                       onValueChange={(value) => patchClientConfig(row.clientId, {
@@ -2068,9 +2068,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
             )}
             {showHiddenRemoteConnections && hiddenRemoteConnectionRows.length > 0 && (
               <div
-                className="bitfun-acp-agents__hidden-remote-list"
-                data-bf-component="acp-agents-config"
-                data-bf-part="hiddenRemoteList"
+                className="openbitfun-acp-agents__hidden-remote-list"
+                data-openbitfun-component="acp-agents-config"
+                data-openbitfun-part="hiddenRemoteList"
               >
                 {hiddenRemoteConnectionRows.map(connection => {
                   const hostLabel = [connection.username, connection.host]
@@ -2079,19 +2079,19 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                   return (
                     <div
                       key={connection.id}
-                      className="bitfun-acp-agents__hidden-remote-row"
-                      data-bf-component="acp-agents-config"
-                      data-bf-part="hiddenRemoteRow"
+                      className="openbitfun-acp-agents__hidden-remote-row"
+                      data-openbitfun-component="acp-agents-config"
+                      data-openbitfun-part="hiddenRemoteRow"
                     >
-                      <div className="bitfun-acp-agents__registry-main">
-                        <span className="bitfun-acp-agents__registry-icon">
+                      <div className="openbitfun-acp-agents__registry-main">
+                        <span className="openbitfun-acp-agents__registry-icon">
                           <Server size={16} />
                         </span>
-                        <div className="bitfun-acp-agents__registry-copy">
-                          <span className="bitfun-acp-agents__registry-name">
+                        <div className="openbitfun-acp-agents__registry-copy">
+                          <span className="openbitfun-acp-agents__registry-name">
                             {connection.name || connection.id}
                           </span>
-                          <p className="bitfun-acp-agents__registry-description">
+                          <p className="openbitfun-acp-agents__registry-description">
                             {hostLabel || connection.id}
                           </p>
                         </div>

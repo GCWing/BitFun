@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use bitfun_core::service::git::GitService;
+use openbitfun_core::service::git::GitService;
 
 use crate::peer_host::args::{get_string, request_value};
 

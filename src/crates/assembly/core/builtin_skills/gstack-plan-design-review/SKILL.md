@@ -17,9 +17,9 @@ to find missing design decisions and ADD THEM TO THE PLAN before implementation.
 
 The output of this skill is a better plan, not a document about the plan.
 
-## BitFun Dispatch
+## OpenBitFun Dispatch
 
-When this skill is invoked by BitFun, this skill supplies the design-review lens. Use existing Task sub-agents for independent UI/UX discovery only when they add evidence, then keep design decisions in the main session.
+When this skill is invoked by OpenBitFun, this skill supplies the design-review lens. Use existing Task sub-agents for independent UI/UX discovery only when they add evidence, then keep design decisions in the main session.
 
 - Do not assume a Designer sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer a matching custom design/frontend/accessibility sub-agent if available; otherwise use `Explore` for component/style-system discovery, design docs, screenshots, routes, styles, and UI tests.
@@ -38,9 +38,9 @@ choices.
 Do NOT make any code changes. Do NOT start implementation. Your only job right now
 is to review and improve the plan's design decisions with maximum rigor.
 
-### The BitFun image/design capability — YOUR PRIMARY TOOL
+### The OpenBitFun image/design capability — YOUR PRIMARY TOOL
 
-You have the **BitFun image/design capability**, an AI mockup generator that creates real visual mockups
+You have the **OpenBitFun image/design capability**, an AI mockup generator that creates real visual mockups
 from design briefs. This is your signature capability. Use it by default, not as an
 afterthought.
 
@@ -56,7 +56,7 @@ Commands: `generate` (single mockup), `variants` (multiple directions), `compare
 (side-by-side review board), `iterate` (refine with feedback), `check` (cross-model
 quality gate via GPT-4o vision), `evolve` (improve from screenshot).
 
-Setup is handled by the DESIGN SETUP section below. If `BitFun image/design capability is available` is printed,
+Setup is handled by the DESIGN SETUP section below. If `OpenBitFun image/design capability is available` is printed,
 the designer is available and you should use it.
 
 ## Design Principles
@@ -128,10 +128,10 @@ Report findings before proceeding to Step 0.
 
 ## DESIGN SETUP
 
-Use BitFun built-in image/design and browser/computer-use capabilities. Do not install, build, or call external `design` or `browse` binaries. Generate mockups, comparison boards, screenshots, and visual QA artifacts through BitFun tools; if a visual generation capability is not available in the current session, fall back to HTML wireframes and code-level design review.
+Use OpenBitFun built-in image/design and browser/computer-use capabilities. Do not install, build, or call external `design` or `browse` binaries. Generate mockups, comparison boards, screenshots, and visual QA artifacts through OpenBitFun tools; if a visual generation capability is not available in the current session, fall back to HTML wireframes and code-level design review.
 
 **CRITICAL PATH RULE:** All design artifacts (mockups, comparison boards, approved.json)
-MUST be saved to `$HOME/.bitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
+MUST be saved to `$HOME/.openbitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
 `docs/designs/`, `/tmp/`, or any project-local directory. Design artifacts are USER
 data, not project files. They persist across branches, conversations, and workspaces.
 
@@ -156,37 +156,37 @@ AskUserQuestion: "I've rated this plan {N}/10 on design completeness. The bigges
 
 **STOP.** Do NOT proceed until user responds.
 
-## Step 0.5: Visual Mockups (DEFAULT when BitFun image/design capability is available)
+## Step 0.5: Visual Mockups (DEFAULT when OpenBitFun image/design capability is available)
 
 If the plan involves any UI — screens, pages, components, visual changes — AND the
-BitFun image/design capability is available (`BitFun image/design capability is available` was printed during setup), **generate
+OpenBitFun image/design capability is available (`OpenBitFun image/design capability is available` was printed during setup), **generate
 mockups immediately.** Do not ask permission. This is the default behavior.
 
-Tell the user: "Generating visual mockups with the BitFun image/design capability. This is how we
+Tell the user: "Generating visual mockups with the OpenBitFun image/design capability. This is how we
 review design — real visuals, not text descriptions."
 
 The ONLY time you skip mockups is when:
-- `BitFun image/design capability is unavailable` was printed (visual generation unavailable)
+- `OpenBitFun image/design capability is unavailable` was printed (visual generation unavailable)
 - The plan has zero UI scope (pure backend/API/infrastructure)
 
 If the user explicitly says "skip mockups" or "text only", respect that. Otherwise, generate.
 
 **PLAN MODE EXCEPTION — ALWAYS RUN:** These commands write design artifacts to
-`$HOME/.bitfun/team/projects/$SLUG/designs/` (user config directory, not project files).
+`$HOME/.openbitfun/team/projects/$SLUG/designs/` (user config directory, not project files).
 Mockups are design artifacts that inform the plan, not code changes. The gstack
 designer outputs PNGs and HTML comparison boards for human review during the
 planning phase. Generating mockups during planning is the whole point.
 
 Allowed commands under this exception:
-- `mkdir -p $HOME/.bitfun/team/projects/$SLUG/designs/...`
-- `BitFun image/design capability generate`, `BitFun image/design capability variants`, `BitFun image/design capability compare`, `BitFun image/design capability iterate`, `BitFun image/design capability evolve`, `BitFun image/design capability check`
+- `mkdir -p $HOME/.openbitfun/team/projects/$SLUG/designs/...`
+- `OpenBitFun image/design capability generate`, `OpenBitFun image/design capability variants`, `OpenBitFun image/design capability compare`, `OpenBitFun image/design capability iterate`, `OpenBitFun image/design capability evolve`, `OpenBitFun image/design capability check`
 - `open` (fallback for viewing boards when `agent-browser` is not available)
 
 First, set up the output directory. Name it after the screen/feature being designed and today's date:
 
 ```bash
 SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
-_DESIGN_DIR=$HOME/.bitfun/team/projects/$SLUG/designs/<screen-name>-$(date +%Y%m%d)
+_DESIGN_DIR=$HOME/.openbitfun/team/projects/$SLUG/designs/<screen-name>-$(date +%Y%m%d)
 mkdir -p "$_DESIGN_DIR"
 echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
@@ -201,13 +201,13 @@ The sequential constraint here is specific to plan-design-review's inline patter
 For each UI screen/section in scope, construct a design brief from the plan's description (and DESIGN.md if present) and generate variants:
 
 ```bash
-BitFun image/design capability variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir "$_DESIGN_DIR/"
+OpenBitFun image/design capability variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 After generation, run a cross-model quality check on each variant:
 
 ```bash
-BitFun image/design capability check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
+OpenBitFun image/design capability check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
 Flag any variants that fail the quality check. Offer to regenerate failures.
@@ -222,7 +222,7 @@ feedback output. Showing mockups inline is a degraded experience.
 Create the comparison board and serve it over HTTP:
 
 ```bash
-BitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
+OpenBitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
 This command generates the board HTML, starts an HTTP server on a random port,
@@ -284,8 +284,8 @@ the approved variant.
 1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
    `"remix"`, or custom text)
 2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
-3. Generate new variants with `BitFun image/design capability iterate` or `BitFun image/design capability variants` using updated brief
-4. Create new board: `BitFun image/design capability compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
+3. Generate new variants with `OpenBitFun image/design capability iterate` or `OpenBitFun image/design capability variants` using updated brief
+4. Create new board: `OpenBitFun image/design capability compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
 5. Reload the board in the user's browser (same tab):
    `curl -s -X POST http://127.0.0.1:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
 6. The board auto-refreshes. **AskUserQuestion again** with the same board URL to
@@ -295,7 +295,7 @@ the approved variant.
 AskUserQuestion response instead of using the board. Use their text response
 as the feedback.
 
-**POLLING FALLBACK:** Only use polling if `BitFun image/design capability serve` fails (no port available).
+**POLLING FALLBACK:** Only use polling if `OpenBitFun image/design capability serve` fails (no port available).
 In that case, show each variant inline using the Read tool (so the user can see them),
 then use AskUserQuestion:
 "The comparison board server failed to start. I've shown the variants above.
@@ -325,7 +325,7 @@ Note which direction was approved. This becomes the visual reference for all sub
 
 **Multiple variants/screens:** If the user asked for multiple variants (e.g., "5 versions of the homepage"), generate ALL as separate variant sets with their own comparison boards. Each screen/variant set gets its own subdirectory under `designs/`. Complete all mockup generation and user selection before starting review passes.
 
-**If `BitFun image/design capability is unavailable`:** Tell the user: "The BitFun image/design capability isn't set up yet. Proceeding with text-only review, but you're missing the best part." Then proceed to review passes with text-based review.
+**If `OpenBitFun image/design capability is unavailable`:** Tell the user: "The OpenBitFun image/design capability isn't set up yet. Proceeding with text-only review, but you're missing the best part." Then proceed to review passes with text-based review.
 
 ## Design Outside Voices (parallel)
 
@@ -342,13 +342,13 @@ If user chooses B, skip this step and continue.
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-**If a suitable BitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
+**If a suitable OpenBitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
 
 1. **outside-voice sub-agent design voice** (via ExecCommand):
 ```bash
 TMPERR_DESIGN=$(mktemp /tmp/codex-design-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
 HARD REJECTION — flag if ANY apply:
 1. Generic SaaS card grid as first impression
@@ -380,7 +380,7 @@ Use a 5-minute timeout (`timeout: 300000`). After the command completes, read st
 cat "$TMPERR_DESIGN" && rm -f "$TMPERR_DESIGN"
 ```
 
-2. **Independent design subagent** (via BitFun Task tool):
+2. **Independent design subagent** (via OpenBitFun Task tool):
 Dispatch a subagent with this prompt:
 "Read the plan file at [plan-file-path]. You are an independent senior product designer reviewing this plan. You have NOT seen any prior review. Evaluate:
 
@@ -407,7 +407,7 @@ Present subagent output under a `INDEPENDENT SUBAGENT (design completeness):` he
 ```
 DESIGN OUTSIDE VOICES — LITMUS SCORECARD:
 ═══════════════════════════════════════════════════════════════
-  Check                                    BitFun  outside-voice sub-agent  Consensus
+  Check                                    OpenBitFun  outside-voice sub-agent  Consensus
   ─────────────────────────────────────── ─────── ─────── ─────────
   1. Brand unmistakable in first screen?   —       —      —
   2. One strong visual anchor?             —       —      —
@@ -431,7 +431,7 @@ Fill in each cell from the outside-voice sub-agent and subagent outputs. CONFIRM
 
 **Log the result:**
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "codex-only", "subagent-only", or "unavailable".
 
@@ -449,19 +449,19 @@ Pattern:
 
 Re-run loop: invoke /plan-design-review again → re-rate → sections at 8+ get a quick pass, sections below 8 get full treatment.
 
-### "Show me what 10/10 looks like" (uses BitFun image/design capability)
+### "Show me what 10/10 looks like" (uses OpenBitFun image/design capability)
 
-If `BitFun image/design capability is available` was printed during setup AND a dimension rates below 7/10,
+If `OpenBitFun image/design capability is available` was printed during setup AND a dimension rates below 7/10,
 offer to generate a visual mockup showing what the improved version would look like:
 
 ```bash
-BitFun image/design capability generate --brief "<description of what 10/10 looks like for this dimension>" --output /tmp/gstack-ideal-<dimension>.png
+OpenBitFun image/design capability generate --brief "<description of what 10/10 looks like for this dimension>" --output /tmp/gstack-ideal-<dimension>.png
 ```
 
 Show the mockup to the user via the Read tool. This makes the gap between
 "what the plan describes" and "what it should look like" visceral, not abstract.
 
-If the BitFun image/design capability is not available, skip this and continue with text-based
+If the OpenBitFun image/design capability is not available, skip this and continue with text-based
 descriptions of what 10/10 looks like.
 
 ## Review Sections (7 passes, after scope is agreed)
@@ -470,7 +470,7 @@ descriptions of what 10/10 looks like.
 
 ## Prior Learnings
 
-Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
+Use only OpenBitFun in-session memory, project docs, `.openbitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior OpenBitFun context applied: <source>`.
 
 ### Pass 1: Information Architecture
 Rate 0-10: Does the plan define what the user sees first, second, third?
@@ -577,7 +577,7 @@ Source: [OpenAI "Designing Delightful Frontends with GPT-5.4"](https://developer
 - "Hero section" → what makes this hero feel like THIS product?
 - "Clean, modern UI" → meaningless. Replace with actual design decisions.
 - "Dashboard with widgets" → what makes this NOT every other dashboard?
-If visual mockups were generated in Step 0.5, evaluate them against the AI slop blacklist above. Read each mockup image using the Read tool. Does the mockup fall into generic patterns (3-column grid, centered hero, stock-photo feel)? If so, flag it and offer to regenerate with more specific direction via `BitFun image/design capability iterate --feedback "..."`.
+If visual mockups were generated in Step 0.5, evaluate them against the AI slop blacklist above. Read each mockup image using the Read tool. Does the mockup fall into generic patterns (3-column grid, centered hero, stock-photo feel)? If so, flag it and offer to regenerate with more specific direction via `OpenBitFun image/design capability iterate --feedback "..."`.
 **STOP.** AskUserQuestion once per issue. Do NOT batch. Recommend + WHY.
 
 ### Pass 5: Design System Alignment
@@ -609,7 +609,7 @@ If mockups were generated in Step 0.5 and review passes changed significant desi
 
 AskUserQuestion: "The review passes changed [list major design changes]. Want me to regenerate mockups to reflect the updated plan? This ensures the visual reference matches what we're actually building."
 
-If yes, use `BitFun image/design capability iterate` with feedback summarizing the changes, or `BitFun image/design capability variants` with an updated brief. Save to the same `$_DESIGN_DIR` directory.
+If yes, use `OpenBitFun image/design capability iterate` with feedback summarizing the changes, or `OpenBitFun image/design capability variants` with an updated brief. Save to the same `$_DESIGN_DIR` directory.
 
 ## CRITICAL RULE — How to ask questions
 Follow the AskUserQuestion format from the Preamble above. Additional rules for plan design reviews:
@@ -619,7 +619,7 @@ Follow the AskUserQuestion format from the Preamble above. Additional rules for 
 * **Map to Design Principles above.** One sentence connecting your recommendation to a specific principle.
 * Label with issue NUMBER + option LETTER (e.g., "3A", "3B").
 * **Escape hatch:** If a section has no issues, say so and move on. If a gap has an obvious fix, state what you'll add and move on — don't waste a question on it. Only use AskUserQuestion when there is a genuine design choice with meaningful tradeoffs.
-* **NEVER use AskUserQuestion to ask which variant the user prefers.** Always create a comparison board first (`BitFun image/design capability compare --serve`) and open it in the browser. The board has rating controls, comments, remix/regenerate buttons, and structured feedback output. Use AskUserQuestion ONLY to notify the user the board is open and wait for them to finish — not to present variants inline and ask "which do you prefer?" That is a degraded experience.
+* **NEVER use AskUserQuestion to ask which variant the user prefers.** Always create a comparison board first (`OpenBitFun image/design capability compare --serve`) and open it in the browser. The board has rating controls, comments, remix/regenerate buttons, and structured feedback output. Use AskUserQuestion ONLY to notify the user the board is open and wait for them to finish — not to present variants inline and ask "which do you prefer?" That is a degraded experience.
 
 ## Required Outputs
 
@@ -682,7 +682,7 @@ If visual mockups were generated during this review, add to the plan file:
 
 | Screen/Section | Mockup Path | Direction | Notes |
 |----------------|-------------|-----------|-------|
-| [screen name]  | $HOME/.bitfun/team/projects/$SLUG/designs/[folder]/[filename].png | [brief description] | [constraints from review] |
+| [screen name]  | $HOME/.openbitfun/team/projects/$SLUG/designs/[folder]/[filename].png | [brief description] | [constraints from review] |
 ```
 
 Include the full path to each approved mockup (the variant the user chose), a one-line description of the direction, and any constraints. The implementer reads this to know exactly which visual to build from. These persist across conversations and workspaces. If no mockups were generated, omit this section.
@@ -692,13 +692,13 @@ Include the full path to each approved mockup (the variant the user chose), a on
 After producing the Completion Summary above, persist the review result.
 
 **PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes review metadata to
-`$HOME/.bitfun/team/` (user config directory, not project files). The skill preamble
-already writes to `$HOME/.bitfun/team/sessions/` and `$HOME/.bitfun/team/analytics/` — this is
+`$HOME/.openbitfun/team/` (user config directory, not project files). The skill preamble
+already writes to `$HOME/.openbitfun/team/sessions/` and `$HOME/.openbitfun/team/analytics/` — this is
 the same pattern. The review dashboard depends on this data. Skipping this
 command breaks the review readiness dashboard in /ship.
 
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 
 Substitute values from the Completion Summary:
@@ -715,7 +715,7 @@ Substitute values from the Completion Summary:
 After completing the review, read the review log and config to display the dashboard.
 
 ```bash
-true # BitFun reads review context from the current session
+true # OpenBitFun reads review context from the current session
 ```
 
 Parse the output. Find the most recent entry for each skill (plan-ceo-review, plan-eng-review, review, plan-design-review, design-review-lite, adversarial-review, outside-voice-review, outside-voice-plan-review). Ignore entries with timestamps older than 7 days. For the Eng Review row, show whichever is more recent between `review` (diff-scoped pre-landing review) and `plan-eng-review` (plan-stage architecture review). Append "(DIFF)" or "(PLAN)" to the status to distinguish. For the Adversarial row, show whichever is more recent between `adversarial-review` (new auto-scaled) and `outside-voice-review` (legacy). For Design Review, show whichever is more recent between `plan-design-review` (full visual audit) and `design-review-lite` (code-level check). Append "(FULL)" or "(LITE)" to the status to distinguish. For the Outside Voice row, show the most recent `outside-voice-plan-review` entry — this captures outside voices from both /plan-ceo-review and /plan-eng-review.
@@ -746,7 +746,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance.
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both BitFun adversarial subagent and outside-voice sub-agent adversarial challenge. Large diffs (200+ lines) additionally get outside-voice sub-agent structured review with P1 gate. No configuration needed.
+- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both OpenBitFun adversarial subagent and outside-voice sub-agent adversarial challenge. Large diffs (200+ lines) additionally get outside-voice sub-agent structured review with P1 gate. No configuration needed.
 - **Outside Voice (optional):** Independent plan review from a different AI model. Offered after all review sections complete in /plan-ceo-review and /plan-eng-review. Falls back to independent subagent if outside-voice sub-agent is unavailable. Never gates shipping.
 
 **Verdict logic:**
@@ -801,7 +801,7 @@ Produce this markdown table:
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | \`/plan-ceo-review\` | Scope & strategy | {runs} | {status} | {findings} |
-| outside-voice sub-agent Review | \`BitFun Task outside-voice review\` | Independent 2nd opinion | {runs} | {status} | {findings} |
+| outside-voice sub-agent Review | \`OpenBitFun Task outside-voice review\` | Independent 2nd opinion | {runs} | {status} | {findings} |
 | Eng Review | \`/plan-eng-review\` | Architecture & tests (required) | {runs} | {status} | {findings} |
 | Design Review | \`/plan-design-review\` | UI/UX gaps | {runs} | {status} | {findings} |
 \`\`\`
@@ -809,7 +809,7 @@ Produce this markdown table:
 Below the table, add these lines (omit any that are empty/not applicable):
 
 - **CODEX:** (only if outside-voice-review ran) — one-line summary of codex fixes
-- **CROSS-MODEL:** (only if both BitFun and outside-voice sub-agent reviews exist) — overlap analysis
+- **CROSS-MODEL:** (only if both OpenBitFun and outside-voice sub-agent reviews exist) — overlap analysis
 - **UNRESOLVED:** total unresolved decisions across all reviews
 - **VERDICT:** list reviews that are CLEAR (e.g., "CEO + ENG CLEARED — ready to implement").
   If Eng Review is not CLEAR and not skipped globally, append "eng review required".
@@ -836,7 +836,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun has no external telemetry helper
+true # OpenBitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -844,7 +844,7 @@ true # BitFun has no external telemetry helper
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
+`inferred` (AI deduction), `cross-model` (both OpenBitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

@@ -1,18 +1,18 @@
-//! BitFun-managed plugin package discovery and trust persistence.
+//! OpenBitFun-managed plugin package discovery and trust persistence.
 //!
-//! This module reads only BitFun-managed package roots. Ecosystem-specific
+//! This module reads only OpenBitFun-managed package roots. Ecosystem-specific
 //! file interpretation remains in the corresponding adapter.
 
-use bitfun_product_domains::plugin_source::{
+use fs2::FileExt;
+use openbitfun_product_domains::plugin_source::{
     PluginActivationAuthority, PluginPackageInput, PluginPackageManifest,
     PluginPackageSourceIdentity, PluginPackageTrustLevel, PluginSourceContractError,
-    PluginTrustStore,
+    PluginTrustStore, PLUGIN_TRUST_STORE_SCHEMA_VERSION,
 };
-pub use bitfun_product_domains::plugin_source::{
+pub use openbitfun_product_domains::plugin_source::{
     PluginPackageTrustLevel as ManagedPluginTrustLevel,
     PluginTrustDecision as ManagedPluginTrustDecision,
 };
-use fs2::FileExt;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::task;
 
-const PLUGIN_MANIFEST_FILE: &str = "bitfun.plugin.json";
+const PLUGIN_MANIFEST_FILE: &str = "openbitfun.plugin.json";
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_PACKAGE_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_PACKAGE_BYTES: u64 = 16 * 1024 * 1024;
@@ -1651,10 +1651,18 @@ impl ProductPluginSourceStore {
                 source,
             }
         })?;
-        let migrated_from_v1 = persisted
+        if let Some(schema_version) = persisted
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
-            == Some(1);
+            .and_then(|version| u16::try_from(version).ok())
+        {
+            if schema_version != PLUGIN_TRUST_STORE_SCHEMA_VERSION {
+                return Err(PluginSourceContractError::UnsupportedTrustStoreSchema(
+                    schema_version,
+                )
+                .into());
+            }
+        }
         let store = serde_json::from_value::<PluginTrustStore>(persisted).map_err(|source| {
             PluginSourceStoreError::TrustDeserialize {
                 path: self.trust_path.clone(),
@@ -1662,25 +1670,6 @@ impl ProductPluginSourceStore {
             }
         })?;
         store.validate()?;
-        if migrated_from_v1 {
-            self.persist_trust_store_locked(
-                &store,
-                file_guard,
-                TrustFileExpectation::Identity(identity),
-            )
-            .await?;
-            let (_, migrated_identity) =
-                read_trust_file(&self.trust_path).await.map_err(|source| {
-                    PluginSourceStoreError::TrustRead {
-                        path: self.trust_path.clone(),
-                        source,
-                    }
-                })?;
-            return Ok(LoadedTrustStore {
-                store,
-                identity: Some(migrated_identity),
-            });
-        }
         Ok(LoadedTrustStore {
             store,
             identity: Some(identity),
@@ -3163,7 +3152,7 @@ mod tests {
         ProductPluginSourceStore, ScannedFileReadError, SecureManagedRoot,
         MAX_OPERATION_READ_BYTES, MAX_PACKAGE_FILE_BYTES, MAX_TRUST_STORE_BYTES,
     };
-    use bitfun_product_domains::plugin_source::{
+    use openbitfun_product_domains::plugin_source::{
         PluginPackageTrustLevel, PluginSourceContractError, PluginTrustDecision,
     };
     use sha2::{Digest, Sha256};
@@ -3384,7 +3373,7 @@ mod tests {
             }],
         });
         tokio::fs::write(
-            package.join("bitfun.plugin.json"),
+            package.join("openbitfun.plugin.json"),
             serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
         )
         .await
@@ -3403,7 +3392,7 @@ mod tests {
             let temp = tempfile::tempdir().expect("tempdir");
             let workspace = temp.path().join("workspace");
             let fixture = Self {
-                workspace_root: workspace.join(".bitfun/plugins"),
+                workspace_root: workspace.join(".openbitfun/plugins"),
                 trust_path: temp.path().join("state/trust.json"),
                 workspace,
                 _temp: temp,
@@ -3545,30 +3534,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn schema_v1_store_is_persisted_as_v2_on_first_successful_read() {
+    async fn pre_openbitfun_trust_store_is_rejected_without_modification() {
         let fixture = ManagedPluginFixture::new().await;
         tokio::fs::create_dir_all(fixture.trust_path.parent().expect("trust state directory"))
             .await
             .expect("create trust state directory");
+        let original = br#"{"schemaVersion":1,"epoch":7,"records":[]}"#;
         tokio::fs::write(
             &fixture.trust_path,
-            br#"{"schemaVersion":1,"epoch":7,"records":[]}"#,
+            original,
         )
         .await
-        .expect("write schema-v1 trust store");
+        .expect("write pre-OpenBitFun trust store");
 
         let snapshot = fixture.service().refresh(&fixture.workspace).await;
-        let persisted: serde_json::Value = serde_json::from_slice(
-            &tokio::fs::read(&fixture.trust_path)
-                .await
-                .expect("read migrated trust store"),
-        )
-        .expect("parse migrated trust store");
+        let persisted = tokio::fs::read(&fixture.trust_path)
+            .await
+            .expect("read rejected trust store");
 
-        assert!(snapshot.issues.is_empty());
-        assert_eq!(persisted["schemaVersion"], 2);
-        assert_eq!(persisted["activationEpoch"], 7);
-        assert_eq!(persisted["activationRecords"], serde_json::json!([]));
+        assert_eq!(persisted, original);
+        assert_eq!(snapshot.issues.len(), 1);
+        assert_eq!(snapshot.issues[0].code, "trust_store_invalid");
+        assert!(snapshot.issues[0].message.contains("pre-OpenBitFun"));
+        assert!(snapshot.issues[0]
+            .message
+            .contains("explicit data migration tool"));
+        assert!(snapshot.trust_epoch.is_none());
     }
 
     #[tokio::test]
@@ -3720,7 +3711,9 @@ mod tests {
         let service = fixture.service();
         fixture.activate(&service, "acme.demo").await;
         tokio::fs::write(
-            fixture.workspace_root.join("acme.demo/bitfun.plugin.json"),
+            fixture
+                .workspace_root
+                .join("acme.demo/openbitfun.plugin.json"),
             b"{not-json",
         )
         .await
@@ -4289,7 +4282,7 @@ mod tests {
             .await
             .expect("initialize trust store");
         let loaded_identity = loaded.identity.expect("persisted trust identity");
-        let replacement = bitfun_product_domains::plugin_source::PluginTrustStore::new(
+        let replacement = openbitfun_product_domains::plugin_source::PluginTrustStore::new(
             loaded.store.epoch().saturating_add(1),
         );
 
@@ -4330,11 +4323,13 @@ mod tests {
                 })
             })
             .collect::<Vec<_>>();
-        let store: bitfun_product_domains::plugin_source::PluginTrustStore =
+        let store: openbitfun_product_domains::plugin_source::PluginTrustStore =
             serde_json::from_value(serde_json::json!({
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "epoch": 2,
-                "records": records
+                "records": records,
+                "activationEpoch": 2,
+                "activationRecords": []
             }))
             .expect("deserialize large trust store");
         store
@@ -4534,7 +4529,7 @@ mod tests {
         assert_eq!(
             discovery.packages[0].identity.content_hash,
             PluginPackageManifest::parse_json(
-                &tokio::fs::read_to_string(root.join("acme.demo/bitfun.plugin.json"))
+                &tokio::fs::read_to_string(root.join("acme.demo/openbitfun.plugin.json"))
                     .await
                     .expect("read manifest")
             )
@@ -4563,7 +4558,7 @@ mod tests {
     async fn fixed_package_reads_are_serialized_per_service_instance() {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
-        let workspace_root = workspace.join(".bitfun/plugins");
+        let workspace_root = workspace.join(".openbitfun/plugins");
         let user_root = temp.path().join("user/plugins");
         tokio::fs::create_dir_all(&user_root)
             .await
@@ -4610,7 +4605,7 @@ mod tests {
         let service = ManagedPluginSourceService::new(
             temp.path().join("user/plugins"),
             temp.path().join("user"),
-            workspace.join(".bitfun/plugins"),
+            workspace.join(".openbitfun/plugins"),
             workspace.clone(),
             temp.path().join("trust.json"),
         );
@@ -4661,7 +4656,7 @@ mod tests {
     async fn selected_package_load_ignores_unrelated_invalid_package_content() {
         let temp = tempfile::tempdir().expect("tempdir");
         let workspace = temp.path().join("workspace");
-        let workspace_root = workspace.join(".bitfun/plugins");
+        let workspace_root = workspace.join(".openbitfun/plugins");
         let user_root = temp.path().join("user/plugins");
         tokio::fs::create_dir_all(&user_root)
             .await
@@ -4683,7 +4678,7 @@ mod tests {
             .await
             .expect("create unrelated package");
         tokio::fs::write(
-            workspace_root.join("broken.unrelated/bitfun.plugin.json"),
+            workspace_root.join("broken.unrelated/openbitfun.plugin.json"),
             b"not json",
         )
         .await
@@ -4807,7 +4802,7 @@ mod tests {
             }],
         });
         tokio::fs::write(
-            package.join("bitfun.plugin.json"),
+            package.join("openbitfun.plugin.json"),
             serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
         )
         .await
@@ -4878,8 +4873,8 @@ mod tests {
         tokio::fs::create_dir_all(outside.join("plugins"))
             .await
             .expect("create outside plugins");
-        symlink(&outside, workspace.join(".bitfun")).expect("link workspace plugin parent");
-        let root = workspace.join(".bitfun/plugins");
+        symlink(&outside, workspace.join(".openbitfun")).expect("link workspace plugin parent");
+        let root = workspace.join(".openbitfun/plugins");
         let store = ProductPluginSourceStore::new(
             vec![PluginPackageRoot::new(root, PluginPackageScope::Workspace)
                 .with_containment_root(workspace)],
@@ -5094,7 +5089,7 @@ mod tests {
         assert!(matches!(
             error,
             PluginSourceStoreError::Contract(
-                bitfun_product_domains::plugin_source::PluginSourceContractError::InvalidTrustTransition
+                openbitfun_product_domains::plugin_source::PluginSourceContractError::InvalidTrustTransition
             )
         ));
         assert!(!trust_path.exists());

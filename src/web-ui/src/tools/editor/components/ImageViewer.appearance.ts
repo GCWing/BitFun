@@ -6,5 +6,5 @@ export const imageViewerAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'container' }, { id: 'loading' }, { id: 'error' },
     { id: 'imageWrapper' }, { id: 'image' },
   ],
-  states: [{ id: 'fullscreen', selector: { kind: 'self', suffix: '[data-bf-state~="fullscreen"]' } }],
+  states: [{ id: 'fullscreen', selector: { kind: 'self', suffix: '[data-openbitfun-state~="fullscreen"]' } }],
 };

@@ -8,7 +8,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 90%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 90%, transparent);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -19,13 +19,13 @@
 .snapshot-fullscreen-container {
   width: 95vw;
   height: 95vh;
-  background: var(--bf-color-surface-panel);
+  background: var(--openbitfun-color-surface-panel);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-  box-shadow: 0 20px 60px color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
 }
 
 /* Header toolbar */
@@ -34,8 +34,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--bf-color-surface-canvas);
-  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  background: var(--openbitfun-color-surface-canvas);
+  border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
   flex-shrink: 0;
 }
 
@@ -51,9 +51,9 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: color-mix(in srgb, var(--bf-color-accent-hover) 10%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-hover) 10%, transparent);
   border-radius: 6px;
-  color: var(--bf-color-accent-hover);
+  color: var(--openbitfun-color-accent-hover);
 }
 
 .session-details {
@@ -63,27 +63,27 @@
 }
 
 .session-title {
-  font-size: var(--bf-type-flow-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-flow-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .session-stats {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--bf-type-flow-control-font-size);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .session-stats .additions {
-  color: var(--bf-color-code-change-added);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-code-change-added);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .session-stats .deletions {
-  color: var(--bf-color-code-change-removed);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-code-change-removed);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .header-actions {
@@ -95,7 +95,7 @@
 .header-divider {
   width: 1px;
   height: 24px;
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
   margin: 0 4px;
 }
 
@@ -105,8 +105,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 93%, var(--bf-color-content-on-dark));
-  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 93%, var(--openbitfun-color-content-on-dark));
+  border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -133,7 +133,7 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 60%, transparent);
   cursor: pointer;
   transition:
     background-color 160ms ease,
@@ -141,44 +141,44 @@
     color 160ms ease;
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: var(--bf-type-flow-control-font-size);
+  font-size: var(--openbitfun-type-flow-control-font-size);
   border: 1px solid transparent;
 }
 
 .file-tab:hover {
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 80%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 80%, transparent);
 }
 
 .file-tab.active {
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
-  border-color: color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
+  border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent);
 }
 
 .file-tab .file-name {
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-flow-support-font-size);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-flow-support-font-size);
 }
 
 .file-tab .file-status {
-  font-size: var(--bf-type-flow-micro-font-size);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
 }
 
 .file-tab .file-status[data-status="pending"] {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
 }
 
 .file-tab .file-status[data-status="accepted"] {
-  color: var(--bf-domain-git-added);
+  color: var(--openbitfun-domain-git-added);
 }
 
 .file-tab .file-status[data-status="rejected"] {
-  color: var(--bf-domain-git-deleted);
+  color: var(--openbitfun-domain-git-deleted);
 }
 
 .file-tab .file-status[data-status="partial"] {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 /* Current file header */
@@ -187,8 +187,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
-  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 96%, var(--openbitfun-color-content-on-dark));
+  border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
   flex-shrink: 0;
 }
 
@@ -206,7 +206,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 60%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 60%, transparent);
   flex-shrink: 0;
 }
 
@@ -219,16 +219,16 @@
 }
 
 .file-details .file-name {
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
-  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 90%, transparent);
+  font-family: var(--openbitfun-type-code-md-font-family);
 }
 
 .file-details .file-path-full {
-  font-size: var(--bf-type-flow-support-font-size);
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
-  font-family: var(--bf-type-code-md-font-family);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 50%, transparent);
+  font-family: var(--openbitfun-type-code-md-font-family);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -247,7 +247,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 88%, var(--bf-color-content-on-dark));
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 88%, var(--openbitfun-color-content-on-dark));
 }
 
 /* Override WebDiffViewer for fullscreen layout */
@@ -276,21 +276,21 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
-  font-size: var(--bf-type-body-md-font-size);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 90%, transparent);
+  font-size: var(--openbitfun-type-body-md-font-size);
 }
 
 .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 20%, transparent);
-  border-top: 2px solid var(--bf-color-accent-default);
+  border: 2px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 20%, transparent);
+  border-top: 2px solid var(--openbitfun-color-accent-default);
   border-radius: 50%;
   animation: snapshot-fullscreen-diff-spin 1s linear infinite;
 }
@@ -313,11 +313,11 @@
   }
 
   .session-title {
-    font-size: var(--bf-type-body-md-font-size);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
   .session-stats {
-    font-size: var(--bf-type-flow-control-font-size);
+    font-size: var(--openbitfun-type-flow-control-font-size);
   }
 
   .file-navigation {
@@ -329,11 +329,11 @@
   }
 
   .file-details .file-name {
-    font-size: var(--bf-type-flow-control-font-size);
+    font-size: var(--openbitfun-type-flow-control-font-size);
   }
 
   .file-details .file-path-full {
-    font-size: var(--bf-type-flow-micro-font-size);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
   }
 
   /* Hide file status text on small screens */
@@ -371,13 +371,13 @@
 
 /* File count badge */
 .diff-stats .file-count {
-  background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
-  color: var(--bf-color-accent-default);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
+  color: var(--openbitfun-color-accent-default);
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent);
 }
 
 /* Ensure icons render correctly */

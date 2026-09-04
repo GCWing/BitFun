@@ -49,13 +49,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   return (
     <label
       className={classNames(styles.root, className)}
-      data-bf-component="checkbox"
+      data-openbitfun-component="checkbox"
       data-disabled={disabled ? "true" : "false"}
       data-indeterminate={indeterminate ? "true" : "false"}
       data-invalid={invalid ? "true" : "false"}
       data-size={size}
     >
-      <span className={styles.control} data-bf-part="control">
+      <span className={styles.control} data-openbitfun-part="control">
         <input
           {...props}
           aria-invalid={invalid || undefined}
@@ -70,7 +70,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           ref={inputRef}
           type="checkbox"
         />
-        <span aria-hidden="true" className={styles.box} data-bf-part="box">
+        <span aria-hidden="true" className={styles.box} data-openbitfun-part="box">
           <svg className={styles.icon} viewBox="0 0 16 16">
             {indeterminate
               ? <path d="M4 8h8" />
@@ -79,7 +79,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         </span>
       </span>
       {hasContent && (
-        <span className={styles.content} data-bf-part="content">
+        <span className={styles.content} data-openbitfun-part="content">
           {label !== undefined && <span className={styles.label}>{label}</span>}
           {description !== undefined && <span className={styles.description}>{description}</span>}
           {children}

@@ -134,7 +134,7 @@ fn compile_internal(
 
     let html = if source.html.trim().is_empty() {
         let appearance_attr = format!(
-            " data-bf-appearance-mode=\"{}\"",
+            " data-openbitfun-appearance-mode=\"{}\"",
             escape_html_attr(appearance_mode)
         );
         format!(
@@ -246,7 +246,7 @@ fn escape_html_attr(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Inject data-bf-appearance-mode on the first <html> tag.
+/// Inject data-openbitfun-appearance-mode on the first <html> tag.
 fn inject_data_appearance_mode(html: &str, appearance_mode: &str) -> String {
     let safe = escape_html_attr(appearance_mode);
     if let Some(idx) = html.find("<html") {
@@ -254,10 +254,10 @@ fn inject_data_appearance_mode(html: &str, appearance_mode: &str) -> String {
         let rest = &html[after_html..];
         if let Some(close) = rest.find('>') {
             let tag = &html[idx..after_html + close + 1];
-            if tag.contains("data-bf-appearance-mode=") {
+            if tag.contains("data-openbitfun-appearance-mode=") {
                 return html.to_string();
             }
-            let insert = format!(" data-bf-appearance-mode=\"{}\"", safe);
+            let insert = format!(" data-openbitfun-appearance-mode=\"{}\"", safe);
             return format!(
                 "{}{}>{}",
                 &html[..after_html + close],
@@ -374,7 +374,7 @@ mod tests {
         let compiled = compile_with_request(&source, &permissions, &request).unwrap();
 
         assert_eq!(compiled, legacy);
-        assert!(compiled.contains("data-bf-appearance-mode=\"dark\""));
+        assert!(compiled.contains("data-openbitfun-appearance-mode=\"dark\""));
         assert!(compiled.contains("console.log('ready');"));
         assert!(compiled.contains("event === 'chat:userMessage'"));
         assert!(compiled.contains("_chatUserMessagePending"));
@@ -386,7 +386,7 @@ mod tests {
     fn inject_data_appearance_mode_skips_existing_attribute() {
         let source = MiniAppSource {
             html:
-                r#"<!DOCTYPE html><html lang="zh-CN" data-bf-appearance-mode="dark"><body></body></html>"#
+                r#"<!DOCTYPE html><html lang="zh-CN" data-openbitfun-appearance-mode="dark"><body></body></html>"#
                     .to_string(),
             css: String::new(),
             ui_js: String::new(),
@@ -404,7 +404,9 @@ mod tests {
 
         let compiled = compile_with_request(&source, &permissions, &request).unwrap();
         assert_eq!(
-            compiled.matches("data-bf-appearance-mode=\"dark\"").count(),
+            compiled
+                .matches("data-openbitfun-appearance-mode=\"dark\"")
+                .count(),
             1
         );
     }

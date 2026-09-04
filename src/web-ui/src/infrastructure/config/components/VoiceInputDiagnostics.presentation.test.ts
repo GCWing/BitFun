@@ -13,7 +13,7 @@ describe('VoiceInputDiagnostics presentation', () => {
   it('refreshes microphones from the device dropdown without a separate refresh action', () => {
     const source = readSource('./VoiceInputDiagnostics.tsx');
     const deviceSelect = source.match(
-      /<Select[\s\S]*?data-bf-part="deviceSelect"[\s\S]*?\/>/,
+      /<Select[\s\S]*?data-openbitfun-part="deviceSelect"[\s\S]*?\/>/,
     )?.[0] ?? '';
 
     expect(deviceSelect).toContain('onPointerDown={() => void loadMicrophones()}');
@@ -41,7 +41,7 @@ describe('VoiceInputDiagnostics presentation', () => {
 
     expect(source.match(/className="voice-input-config__balanced-row"/g)).toHaveLength(1);
     expect(microphoneRow).not.toContain('voice-input-config__balanced-row');
-    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
+    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@openbitfun\/ui';/);
     expect(source).toContain('className="voice-input-config__diagnostic-button"');
     expect(source).not.toContain('Activity');
     expect(source).not.toContain('voice-input-config__level');
@@ -57,12 +57,12 @@ describe('VoiceInputDiagnostics presentation', () => {
     expect(source).toContain("t('diagnostics.recognition.transcribing')");
     expect(balancedRowRule).toContain('--row-grid-cols: minmax(0, 2fr) minmax(0, 3fr)');
     expect(buttonRule).toContain('flex: 0 0 auto');
-    expect(waveformRule).toContain('color: var(--bf-color-accent-default)');
+    expect(waveformRule).toContain('color: var(--openbitfun-color-accent-default)');
     expect(waveformBarRule).toContain('transition: transform 80ms linear');
-    expect(feedbackRule).toContain('padding: 0 var(--bf-space-5) var(--bf-space-4)');
+    expect(feedbackRule).toContain('padding: 0 var(--openbitfun-space-5) var(--openbitfun-space-4)');
     expect(feedbackRule).toContain('text-align: start');
-    expect(resultRule).toContain('font-family: var(--bf-type-body-sm-font-family)');
-    expect(resultRule).toContain('font-weight: var(--bf-type-body-sm-font-weight)');
+    expect(resultRule).toContain('font-family: var(--openbitfun-type-body-sm-font-family)');
+    expect(resultRule).toContain('font-weight: var(--openbitfun-type-body-sm-font-weight)');
     expect(resultRule).not.toContain('border-left');
     expect(styles).toMatch(/prefers-reduced-motion:[\s\S]*?&?__waveform-bar|prefers-reduced-motion:[\s\S]*?\.voice-input-config__waveform-bar/);
   });

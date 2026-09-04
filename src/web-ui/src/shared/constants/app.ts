@@ -2,25 +2,25 @@
 
 
 export const APP_INFO = {
-  name: 'BitFun',
+  name: 'OpenBitFun',
   version: '1.0.0',
   description: 'AI code analysis and visualization tool',
-  author: 'BitFun Team',
-  homepage: 'https://bitfun.dev'
+  author: 'OpenBitFun Team',
+  homepage: 'https://openbitfun.dev'
 } as const;
 
 
 export const STORAGE_KEYS = {
-  LANGUAGE: 'bitfun-language',
-  LEFT_PANEL_WIDTH: 'bitfun-left-panel-width',
-  LEFT_PANEL_COLLAPSED: 'bitfun-left-panel-collapsed',
-  RIGHT_PANEL_COLLAPSED: 'bitfun-right-panel-collapsed',
-  RECENT_WORKSPACES: 'bitfun-recent-workspaces',
-  USER_PREFERENCES: 'bitfun-user-preferences',
-  MODEL_CONFIGS: 'bitfun-model-configs',
-  CHAT_HISTORY: 'bitfun-chat-history',
-  DIFF_CLOSE_WARNING_DISABLED: 'bitfun-diff-close-warning-disabled',
-  MANUAL_TERMINAL_PROFILES: 'bitfun-manual-terminal-profiles'
+  LANGUAGE: 'openbitfun-language',
+  LEFT_PANEL_WIDTH: 'openbitfun-left-panel-width',
+  LEFT_PANEL_COLLAPSED: 'openbitfun-left-panel-collapsed',
+  RIGHT_PANEL_COLLAPSED: 'openbitfun-right-panel-collapsed',
+  RECENT_WORKSPACES: 'openbitfun-recent-workspaces',
+  USER_PREFERENCES: 'openbitfun-user-preferences',
+  MODEL_CONFIGS: 'openbitfun-model-configs',
+  CHAT_HISTORY: 'openbitfun-chat-history',
+  DIFF_CLOSE_WARNING_DISABLED: 'openbitfun-diff-close-warning-disabled',
+  MANUAL_TERMINAL_PROFILES: 'openbitfun-manual-terminal-profiles'
 } as const;
 
 

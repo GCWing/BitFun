@@ -1,11 +1,11 @@
-@layer bf.components {
-  .root { display: inline-flex; align-items: center; justify-content: center; inline-size: var(--bf-control-height-md); block-size: var(--bf-control-height-md); overflow: hidden; flex: 0 0 auto; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-radius-pill); color: var(--bf-color-content-secondary); background: var(--bf-color-action-neutral-surface); font-family: var(--bf-type-label-selected-font-family); font-size: var(--bf-type-label-selected-font-size); font-weight: var(--bf-type-label-selected-font-weight); line-height: var(--bf-type-label-selected-line-height); letter-spacing: var(--bf-type-label-selected-letter-spacing); }
-  .root[data-size="sm"] { inline-size: var(--bf-control-height-sm); block-size: var(--bf-control-height-sm); font-size: var(--bf-type-label-sm-font-size); }
-  .root[data-size="lg"] { inline-size: var(--bf-control-height-lg); block-size: var(--bf-control-height-lg); }
-  .root[data-bf-shape="square"] { border-radius: var(--bf-radius-base); }
+@layer openbitfun.components {
+  .root { display: inline-flex; align-items: center; justify-content: center; inline-size: var(--openbitfun-control-height-md); block-size: var(--openbitfun-control-height-md); overflow: hidden; flex: 0 0 auto; border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); border-radius: var(--openbitfun-radius-pill); color: var(--openbitfun-color-content-secondary); background: var(--openbitfun-color-action-neutral-surface); font-family: var(--openbitfun-type-label-selected-font-family); font-size: var(--openbitfun-type-label-selected-font-size); font-weight: var(--openbitfun-type-label-selected-font-weight); line-height: var(--openbitfun-type-label-selected-line-height); letter-spacing: var(--openbitfun-type-label-selected-letter-spacing); }
+  .root[data-size="sm"] { inline-size: var(--openbitfun-control-height-sm); block-size: var(--openbitfun-control-height-sm); font-size: var(--openbitfun-type-label-sm-font-size); }
+  .root[data-size="lg"] { inline-size: var(--openbitfun-control-height-lg); block-size: var(--openbitfun-control-height-lg); }
+  .root[data-openbitfun-shape="square"] { border-radius: var(--openbitfun-radius-base); }
   .image { inline-size: 100%; block-size: 100%; object-fit: cover; }
   .content { display: inline-flex; align-items: center; justify-content: center; inline-size: 100%; block-size: 100%; }
-  .content > :where(svg, img), .content > [data-bf-component="icon"] { inline-size: 55%; block-size: 55%; }
+  .content > :where(svg, img), .content > [data-openbitfun-component="icon"] { inline-size: 55%; block-size: 55%; }
   .group { display: inline-flex; align-items: center; }
-  .group > .root + .root { margin-inline-start: calc(var(--bf-space-2) * -1); }
+  .group > .root + .root { margin-inline-start: calc(var(--openbitfun-space-2) * -1); }
 }

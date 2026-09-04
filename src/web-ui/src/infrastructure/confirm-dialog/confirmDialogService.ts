@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { create } from 'zustand';
-import type { ConfirmDialogType } from '@bitfun/ui';
+import type { ConfirmDialogType } from '@openbitfun/ui';
 
 export type ConfirmDialogChoice = 'confirm' | 'secondary' | 'cancel';
 

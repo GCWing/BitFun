@@ -3,7 +3,7 @@ use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -21,12 +21,12 @@ impl AgentDeleteTool {
         Self
     }
 
-    fn parse_agent_ids(input: &Value) -> BitFunResult<Vec<String>> {
-        let object = input
-            .as_object()
-            .ok_or_else(|| BitFunError::tool("AgentDelete input must be an object".to_string()))?;
+    fn parse_agent_ids(input: &Value) -> OpenBitFunResult<Vec<String>> {
+        let object = input.as_object().ok_or_else(|| {
+            OpenBitFunError::tool("AgentDelete input must be an object".to_string())
+        })?;
         if let Some(field) = object.keys().find(|field| field.as_str() != "agent_ids") {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "AgentDelete does not accept field '{field}'"
             )));
         }
@@ -34,12 +34,12 @@ impl AgentDeleteTool {
             Some(value @ Value::String(_)) => vec![value],
             Some(Value::Array(values)) => values.iter().collect(),
             Some(_) => {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "agent_ids must be a string or an array of strings".to_string(),
                 ));
             }
             None => {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "agent_ids is required for AgentDelete".to_string(),
                 ));
             }
@@ -53,27 +53,28 @@ impl AgentDeleteTool {
                 .map(str::trim)
                 .filter(|agent_id| !agent_id.is_empty())
                 .ok_or_else(|| {
-                    BitFunError::tool("agent_ids must contain only non-empty strings".to_string())
+                    OpenBitFunError::tool(
+                        "agent_ids must contain only non-empty strings".to_string(),
+                    )
                 })?;
             if seen.insert(agent_id.to_string()) {
                 agent_ids.push(agent_id.to_string());
             }
         }
         if agent_ids.is_empty() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "agent_ids must contain at least one agent ID".to_string(),
             ));
         }
         Ok(agent_ids)
     }
 
-    fn ensure_context_allowed(context: &ToolUseContext) -> BitFunResult<()> {
-        let agent_type = context
-            .agent_type
-            .as_deref()
-            .ok_or_else(|| BitFunError::tool("agent_type is required in context".to_string()))?;
+    fn ensure_context_allowed(context: &ToolUseContext) -> OpenBitFunResult<()> {
+        let agent_type = context.agent_type.as_deref().ok_or_else(|| {
+            OpenBitFunError::tool("agent_type is required in context".to_string())
+        })?;
         if !is_swarm_planner_agent_type(agent_type) {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "AgentDelete is available only to Ultra and SwarmPlanner".to_string(),
             ));
         }
@@ -91,7 +92,7 @@ impl Tool for AgentDeleteTool {
         true
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok("Permanently delete one or more direct child agents and their entire descendant subtrees. Active work is cancelled before the sessions and pending results are removed.".to_string())
     }
 
@@ -122,7 +123,7 @@ impl Tool for AgentDeleteTool {
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let resources = Self::parse_agent_ids(input)?
             .into_iter()
             .map(|agent_id| format!("delete:{agent_id}"))
@@ -162,15 +163,14 @@ impl Tool for AgentDeleteTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         Self::ensure_context_allowed(context)?;
         let agent_ids = Self::parse_agent_ids(input)?;
-        let session_id = context
-            .session_id
-            .as_deref()
-            .ok_or_else(|| BitFunError::tool("session_id is required in context".to_string()))?;
+        let session_id = context.session_id.as_deref().ok_or_else(|| {
+            OpenBitFunError::tool("session_id is required in context".to_string())
+        })?;
         let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("coordinator not initialized".to_string()))?;
         let deleted_agents = coordinator
             .delete_direct_child_agents(session_id, &agent_ids)
             .await?;
@@ -208,7 +208,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 

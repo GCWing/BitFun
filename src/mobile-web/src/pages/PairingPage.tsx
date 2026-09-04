@@ -11,10 +11,10 @@ interface PairingPageProps {
   onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
 }
 
-const MOBILE_INSTALL_ID_KEY = 'bitfun.mobile.install_id';
-const MOBILE_USER_ID_KEY = 'bitfun.mobile.user_id';
-const MOBILE_LOCK_UNTIL_KEY = 'bitfun.mobile.user_id_lock_until';
-const MOBILE_FAILURE_COUNT_KEY = 'bitfun.mobile.user_id_failure_count';
+const MOBILE_INSTALL_ID_KEY = 'openbitfun.mobile.install_id';
+const MOBILE_USER_ID_KEY = 'openbitfun.mobile.user_id';
+const MOBILE_LOCK_UNTIL_KEY = 'openbitfun.mobile.user_id_lock_until';
+const MOBILE_FAILURE_COUNT_KEY = 'openbitfun.mobile.user_id_failure_count';
 const MAX_FAILED_USER_ID_ATTEMPTS = 3;
 const USER_ID_LOCKOUT_MS = 60_000;
 

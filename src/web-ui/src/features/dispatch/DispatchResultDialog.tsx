@@ -1,4 +1,4 @@
-import { Alert, Button, ScrollArea, Dialog, DialogBody, DialogClose, DialogHeader, Icon } from '@bitfun/ui';
+import { Alert, Button, ScrollArea, Dialog, DialogBody, DialogClose, DialogHeader, Icon } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -83,13 +83,13 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
       <DialogBody inset="none">
       <div
         className="dispatch-result-dialog"
-        data-bf-component="dispatch-result-dialog"
-        data-bf-part="root"
+        data-openbitfun-component="dispatch-result-dialog"
+        data-openbitfun-part="root"
       >
         <div
           className="dispatch-result-dialog__header"
-          data-bf-component="dispatch-result-dialog"
-          data-bf-part="header"
+          data-openbitfun-component="dispatch-result-dialog"
+          data-openbitfun-part="header"
         >
           <h2 id={DIALOG_TITLE_ID} className="dispatch-result-dialog__title">
             {t('dispatch.syncTitle')}
@@ -103,8 +103,8 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
 
         <ScrollArea
           className="dispatch-result-dialog__body"
-          data-bf-component="dispatch-result-dialog"
-          data-bf-part="body"
+          data-openbitfun-component="dispatch-result-dialog"
+          data-openbitfun-part="body"
         >
           {error ? (
             <Alert tone="error" message={error} closable onClose={() => setError(null)} />
@@ -194,8 +194,8 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
 
         <div
           className="dispatch-result-dialog__actions"
-          data-bf-component="dispatch-result-dialog"
-          data-bf-part="actions"
+          data-openbitfun-component="dispatch-result-dialog"
+          data-openbitfun-part="actions"
         >
           <Button variant="outline" size="sm" onClick={onClose}>
             {t('dispatch.syncClose')}

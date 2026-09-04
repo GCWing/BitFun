@@ -66,10 +66,10 @@ fn forward_subagent_invocation_context(
     context: &ToolUseContext,
     subagent_context: &mut HashMap<String, String>,
 ) {
-    use bitfun_agent_runtime::permission::{
+    use openbitfun_agent_runtime::permission::{
         AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
     };
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+    use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     for key in [
         USER_INPUT_AVAILABLE_CONTEXT_KEY,
@@ -95,7 +95,7 @@ fn forward_subagent_invocation_context(
         .custom_data
         .get(PERMISSION_MODE_CONTEXT_KEY)
         .and_then(Value::as_str)
-        .and_then(bitfun_runtime_ports::PermissionMode::parse)
+        .and_then(openbitfun_runtime_ports::PermissionMode::parse)
     {
         subagent_context.insert(
             PERMISSION_MODE_CONTEXT_KEY.to_string(),
@@ -132,28 +132,28 @@ async fn child_delegation_policy(
     coordinator: &crate::agentic::coordination::ConversationCoordinator,
     subagent_type: Option<&str>,
     target_session_id: Option<&str>,
-) -> BitFunResult<bitfun_runtime_ports::DelegationPolicy> {
+) -> OpenBitFunResult<openbitfun_runtime_ports::DelegationPolicy> {
     let target_type = target_session_id
         .and_then(|session_id| coordinator.get_session_manager().get_session(session_id))
         .map(|session| session.agent_type);
     let parent_policy = context.delegation_policy();
-    if parent_policy.scope == bitfun_runtime_ports::DelegationScope::Swarm {
+    if parent_policy.scope == openbitfun_runtime_ports::DelegationScope::Swarm {
         if let Some(target_type) = target_type.as_deref() {
             let target_depth = match target_session_id {
                 Some(session_id) => coordinator
                     .swarm_depth_for_session(session_id)
                     .await?
                     .ok_or_else(|| {
-                        BitFunError::tool(
+                        OpenBitFunError::tool(
                             "Swarm agent session is missing its persisted tree node".to_string(),
                         )
                     })?,
                 None => parent_policy.nesting_depth,
             };
-            return Ok(bitfun_runtime_ports::DelegationPolicy {
+            return Ok(openbitfun_runtime_ports::DelegationPolicy {
                 allow_subagent_spawn: target_type == "SwarmPlanner",
                 nesting_depth: target_depth,
-                scope: bitfun_runtime_ports::DelegationScope::Swarm,
+                scope: openbitfun_runtime_ports::DelegationScope::Swarm,
             });
         }
     }
@@ -167,7 +167,7 @@ async fn child_delegation_policy(
 impl TaskTool {
     async fn derive_parent_permission_runtime_ceiling(
         context: &ToolUseContext,
-    ) -> BitFunResult<PermissionRuntimeCeiling> {
+    ) -> OpenBitFunResult<PermissionRuntimeCeiling> {
         crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(
             context.agent_type.as_deref(),
             context.workspace_root(),
@@ -202,7 +202,7 @@ impl TaskTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         self.call_task_impl_with_deep_review_mode(input, context, false)
             .await
     }
@@ -211,7 +211,7 @@ impl TaskTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         self.call_task_impl_with_deep_review_mode(input, context, true)
             .await
     }
@@ -221,14 +221,13 @@ impl TaskTool {
         input: &Value,
         context: &ToolUseContext,
         is_deep_review_parent: bool,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let start_time = std::time::Instant::now();
         let invocation = Self::parse_invocation(input, is_deep_review_parent)?;
 
-        let session_id = context
-            .session_id
-            .clone()
-            .ok_or_else(|| BitFunError::tool("session_id is required in context".to_string()))?;
+        let session_id = context.session_id.clone().ok_or_else(|| {
+            OpenBitFunError::tool("session_id is required in context".to_string())
+        })?;
 
         if invocation.action == TaskAction::Cancel {
             return Self::cancel_background_runs(&session_id, invocation).await;
@@ -241,12 +240,12 @@ impl TaskTool {
     async fn cancel_background_runs(
         parent_session_id: &str,
         invocation: TaskInvocation,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let agent_id = invocation.target_agent_id.as_deref().ok_or_else(|| {
-            BitFunError::tool("agent_id is required when action is cancel".to_string())
+            OpenBitFunError::tool("agent_id is required when action is cancel".to_string())
         })?;
         let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("coordinator not initialized".to_string()))?;
         let target_session_id = coordinator
             .resolve_agent_id(parent_session_id, agent_id)
             .await?;
@@ -281,17 +280,16 @@ impl TaskTool {
         invocation: TaskInvocation,
         start_time: Instant,
         session_id: String,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         Self::ensure_delegation_allowed(context)?;
         let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("coordinator not initialized".to_string()))?;
 
         let description = invocation.description.clone();
         let requested_agent_id = invocation.requested_agent_id.clone();
-        let mut prompt = invocation
-            .prompt
-            .clone()
-            .ok_or_else(|| BitFunError::tool("Required parameter missing: prompt".to_string()))?;
+        let mut prompt = invocation.prompt.clone().ok_or_else(|| {
+            OpenBitFunError::tool("Required parameter missing: prompt".to_string())
+        })?;
         let context_mode = invocation.context_mode;
         let target_session_id = match invocation.target_agent_id.as_deref() {
             Some(agent_id) => Some(coordinator.resolve_agent_id(&session_id, agent_id).await?),
@@ -304,12 +302,12 @@ impl TaskTool {
         if let Some(requested_type) = invocation.subagent_type.as_deref() {
             let requested_is_swarm = is_swarm_delegate_agent_type(requested_type);
             if parent_is_swarm_planner && !requested_is_swarm {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "Swarm planners may launch only SwarmPlanner, SwarmWorker, or SwarmReviewer; got {requested_type}"
                 )));
             }
             if !parent_is_swarm_planner && requested_is_swarm {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "agent_type {requested_type} is available only inside an Ultra Swarm"
                 )));
             }
@@ -329,7 +327,7 @@ impl TaskTool {
             };
             let target_is_swarm = is_swarm_delegate_agent_type(&target_agent_type);
             if parent_is_swarm_planner != target_is_swarm {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "The target agent is outside the current delegation scope".to_string(),
                 ));
             }
@@ -354,7 +352,7 @@ impl TaskTool {
                     None
                 } else {
                     let subagent_type = invocation.subagent_type.clone().ok_or_else(|| {
-                        BitFunError::tool(
+                        OpenBitFunError::tool(
                             "subagent_type is required when fork_context is false or omitted and agent_id is not provided"
                                 .to_string(),
                         )
@@ -367,7 +365,7 @@ impl TaskTool {
                             !parent_is_swarm_planner && !context.is_remote(),
                         )
                         .ok_or_else(|| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "candidate_unavailable: subagent_type {} changed before the invocation could start",
                                 subagent_type
                             ))
@@ -384,7 +382,7 @@ impl TaskTool {
                         &binding.logical_id,
                         &binding.runtime_agent_key,
                     ) {
-                        return Err(BitFunError::tool(format!(
+                        return Err(OpenBitFunError::tool(format!(
                             "subagent_type {} is not valid, must be one of: {}",
                             subagent_type,
                             all_agent_types.join(", ")
@@ -397,7 +395,7 @@ impl TaskTool {
                             inherit_parent_model,
                         )
                     {
-                        return Err(BitFunError::tool(
+                        return Err(OpenBitFunError::tool(
                             "external_subagent_model_override_unsupported: external subagents use the approved model binding"
                                 .to_string(),
                         ));
@@ -425,7 +423,7 @@ impl TaskTool {
             .map(|path| path.to_string_lossy().into_owned());
         let effective_workspace_path = if subagent_type.is_some() {
             Some(current_workspace_path.clone().ok_or_else(|| {
-                BitFunError::tool(
+                OpenBitFunError::tool(
                     "current workspace is required when creating a fresh subagent session"
                         .to_string(),
                 )
@@ -434,12 +432,11 @@ impl TaskTool {
             None
         };
 
-        let tool_call_id = context
-            .tool_call_id
-            .clone()
-            .ok_or_else(|| BitFunError::tool("tool_call_id is required in context".to_string()))?;
+        let tool_call_id = context.tool_call_id.clone().ok_or_else(|| {
+            OpenBitFunError::tool("tool_call_id is required in context".to_string())
+        })?;
         let dialog_turn_id = context.dialog_turn_id.clone().ok_or_else(|| {
-            BitFunError::tool("dialog_turn_id is required in context".to_string())
+            OpenBitFunError::tool("dialog_turn_id is required in context".to_string())
         })?;
         let mut deep_review_effective_policy: Option<DeepReviewExecutionPolicy> = None;
         let mut deep_review_active_guard: Option<DeepReviewActiveReviewerGuard<'static>> = None;
@@ -452,10 +449,12 @@ impl TaskTool {
         let mut deep_review_run_manifest: Option<Value> = None;
         if is_deep_review_parent {
             let subagent_type = subagent_type.as_deref().ok_or_else(|| {
-                BitFunError::tool("subagent_type is required for DeepReview Task calls".to_string())
+                OpenBitFunError::tool(
+                    "subagent_type is required for DeepReview Task calls".to_string(),
+                )
             })?;
             let base_policy = load_default_deep_review_policy().await.map_err(|error| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Failed to load DeepReview execution policy: {}",
                     error
                 ))
@@ -498,7 +497,7 @@ impl TaskTool {
                 .map(FocusedReviewAssignment::from_manifest)
                 .transpose()
                 .map_err(|violation| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "DeepReview Task policy violation: {}",
                         violation.to_tool_error_message()
                     ))
@@ -508,14 +507,14 @@ impl TaskTool {
             let role = policy
                 .classify_subagent(subagent_type)
                 .map_err(|violation| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "DeepReview Task policy violation: {}",
                         violation.to_tool_error_message()
                     ))
                 })?;
             deep_review_subagent_role = Some(role);
             if requested_auto_retry && !is_retry {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "auto_retry requires retry=true for DeepReview Task calls".to_string(),
                 ));
             }
@@ -524,7 +523,7 @@ impl TaskTool {
                 .and_then(DeepReviewRunManifestGate::from_value)
             {
                 gate.ensure_active(subagent_type).map_err(|violation| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "DeepReview Task policy violation: {}",
                         violation.to_tool_error_message()
                     ))
@@ -551,7 +550,7 @@ impl TaskTool {
                                     ),
                                 );
                             }
-                            return Err(BitFunError::tool(format!(
+                            return Err(OpenBitFunError::tool(format!(
                                 "DeepReview Task policy violation: {}",
                                 violation.to_tool_error_message()
                             )));
@@ -568,7 +567,7 @@ impl TaskTool {
                             &dialog_turn_id,
                             LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
                         );
-                        BitFunError::tool(format!(
+                        OpenBitFunError::tool(format!(
                             "DeepReview Task policy violation: {}",
                             violation.to_tool_error_message()
                         ))
@@ -579,7 +578,7 @@ impl TaskTool {
                 .get_subagent_is_readonly(subagent_type)
                 .unwrap_or(false);
             if !is_readonly {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "DeepReview Task policy violation: {}",
                     json!({
                         "code": "deep_review_subagent_not_readonly",
@@ -594,7 +593,7 @@ impl TaskTool {
                 .get_subagent_is_review(subagent_type)
                 .unwrap_or(false);
             if !is_review {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "DeepReview Task policy violation: {}",
                     json!({
                         "code": "deep_review_subagent_not_review",
@@ -688,7 +687,7 @@ impl TaskTool {
                             }
                         },
                         Err(violation) => {
-                            return Err(BitFunError::tool(format!(
+                            return Err(OpenBitFunError::tool(format!(
                                 "DeepReview Task policy violation: {}",
                                 violation.to_tool_error_message()
                             )));
@@ -701,7 +700,7 @@ impl TaskTool {
                     conc_policy
                         .check_launch_allowed(active_reviewers, role, judge_pending)
                         .map_err(|violation| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "DeepReview concurrency policy violation: {}",
                                 violation.to_tool_error_message()
                             ))
@@ -736,7 +735,7 @@ impl TaskTool {
                         LaunchReviewAgentTool::auto_retry_suppression_reason(violation.code),
                     );
                 }
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "DeepReview Task policy violation: {}",
                     violation.to_tool_error_message()
                 ))
@@ -859,7 +858,7 @@ impl TaskTool {
 
     async fn start_background_task(
         request: BackgroundTaskStartRequest<'_>,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let BackgroundTaskStartRequest {
             coordinator,
             context,
@@ -923,7 +922,7 @@ impl TaskTool {
         })
         .await
         .map_err(|error| {
-            BitFunError::tool(format!("Background subagent task failed to join: {error}"))
+            OpenBitFunError::tool(format!("Background subagent task failed to join: {error}"))
         })??;
 
         Ok(vec![ToolResult::Result {
@@ -975,7 +974,7 @@ impl TaskTool {
         start_time: Instant,
         supports_follow_up: bool,
         external_generation_lease: Option<crate::agentic::agents::ExternalSubagentGenerationLease>,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let mut deep_review_active_guard = deep_review_active_guard;
         let mut provider_capacity_retry =
             deep_review_task_adapter::DeepReviewProviderCapacityRetryRuntime::default();
@@ -1033,7 +1032,7 @@ impl TaskTool {
             })
             .await
             .map_err(|error| {
-                BitFunError::tool(format!("Foreground subagent task failed to join: {error}"))
+                OpenBitFunError::tool(format!("Foreground subagent task failed to join: {error}"))
             })?;
 
             match execution_result {
@@ -1072,14 +1071,14 @@ impl TaskTool {
                     if matches!(
                         deep_review_subagent_role,
                         Some(DeepReviewSubagentRole::Reviewer)
-                    ) && matches!(error, BitFunError::Cancelled(_))
+                    ) && matches!(error, OpenBitFunError::Cancelled(_))
                         && !context
                             .cancellation_token()
                             .as_ref()
                             .is_some_and(|token| token.is_cancelled())
                     {
                         let reason = match &error {
-                            BitFunError::Cancelled(reason) => reason.as_str(),
+                            OpenBitFunError::Cancelled(reason) => reason.as_str(),
                             _ => "",
                         };
                         return Ok(vec![
@@ -1217,7 +1216,7 @@ impl TaskTool {
                                                     }
                                                 }
                                                 Err(violation) => {
-                                                    return Err(BitFunError::tool(format!(
+                                                    return Err(OpenBitFunError::tool(format!(
                                                         "DeepReview Task policy violation: {}",
                                                         violation.to_tool_error_message()
                                                     )));
@@ -1292,8 +1291,8 @@ impl TaskTool {
         };
 
         let (mut data, mut result_for_assistant) =
-            bitfun_agent_runtime::subagent_task::subagent_task_completion_result(
-                bitfun_agent_runtime::subagent_task::SubagentTaskCompletionResultInput {
+            openbitfun_agent_runtime::subagent_task::subagent_task_completion_result(
+                openbitfun_agent_runtime::subagent_task::SubagentTaskCompletionResultInput {
                     delegate_target_label: &delegate_target_label,
                     result_text: &result.text,
                     context_mode: context_mode.as_str(),
@@ -1332,9 +1331,11 @@ impl TaskTool {
 #[cfg(test)]
 mod target_context_tests {
     use super::*;
-    use bitfun_agent_runtime::deep_review::{append_tool_use_context_data, ReviewTargetEvidence};
-    use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+    use openbitfun_agent_runtime::deep_review::{
+        append_tool_use_context_data, ReviewTargetEvidence,
+    };
+    use openbitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
+    use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     fn parent_tool_context() -> ToolUseContext {
         ToolUseContext {
@@ -1348,7 +1349,7 @@ mod target_context_tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -1471,7 +1472,7 @@ mod target_context_tests {
 
     #[test]
     fn child_context_inherits_the_parent_resolved_permission_mode() {
-        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+        use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 
         let mut parent = parent_tool_context();
         parent.custom_data.insert(
@@ -1487,7 +1488,7 @@ mod target_context_tests {
 
     #[test]
     fn child_context_rejects_an_unparseable_permission_mode() {
-        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+        use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 
         let mut parent = parent_tool_context();
         parent.custom_data.insert(
@@ -1505,7 +1506,7 @@ mod target_context_tests {
 
     #[test]
     fn child_context_leaves_unset_permission_mode_for_global_fallback() {
-        use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+        use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
 
         let parent = parent_tool_context();
         let mut child = HashMap::new();

@@ -25,7 +25,7 @@
   // the preceding Turn while keeping the first message aligned to the list
   // header and steering messages grouped with the active Turn.
   &[data-item-type='user-message']:not([data-virtual-index='0']) {
-    padding-top: var(--bf-control-flow-chat-turn-gap);
+    padding-top: var(--openbitfun-control-flow-chat-turn-gap);
   }
 
   /* Turn spacing has one owner: this virtual-row boundary. Remove only the
@@ -81,8 +81,8 @@
   &[data-ambient-tool-run-continuation-after='true']
     > .model-round-item
     > .flowchat-flow-item:last-child:has(
-      > .flow-tool-card-wrapper[data-bf-attention='ambient']
-        [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']
+      > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
+        [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
     ) {
     margin-bottom: 0;
   }
@@ -111,25 +111,25 @@
   }
 
   &--search-match {
-    outline: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 35%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
   }
 
   &--search-current {
-    outline: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 75%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 75%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent);
   }
 }
 
-::highlight(bitfun-flowchat-search-current) {
+::highlight(openbitfun-flowchat-search-current) {
   color: inherit;
-  background: color-mix(in srgb, var(--bf-color-accent-default) 42%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 42%, transparent);
 }
 
-::highlight(bitfun-flowchat-search-match) {
+::highlight(openbitfun-flowchat-search-match) {
   color: inherit;
-  background: color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 16%, transparent);
 }

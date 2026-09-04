@@ -8,9 +8,9 @@ mod workspace;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
-use bitfun_core::infrastructure::ai::AIClientFactory;
-use bitfun_core::service::config::{AuthConfig, GlobalConfig};
-use bitfun_core::service::git::trust;
+use openbitfun_core::infrastructure::ai::AIClientFactory;
+use openbitfun_core::service::config::{AuthConfig, GlobalConfig};
+use openbitfun_core::service::git::trust;
 use serde::de::DeserializeOwned;
 
 use protocol::{
@@ -31,7 +31,7 @@ struct ModelReadiness {
     available_models: Vec<String>,
     default_model: Option<String>,
     diagnostic: Option<String>,
-    model_catalog: bitfun_core::AIModelCatalog,
+    model_catalog: openbitfun_core::AIModelCatalog,
 }
 
 impl ModelReadiness {
@@ -124,7 +124,7 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         .map(inspect_workspace)
         .transpose()?;
     let mut capabilities: Vec<String> =
-        bitfun_services_core::dispatch_contract::DISPATCH_BASE_TARGET_CAPABILITIES
+        openbitfun_services_core::dispatch_contract::DISPATCH_BASE_TARGET_CAPABILITIES
             .iter()
             .map(|capability| capability.to_string())
             .collect();
@@ -132,20 +132,22 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
     // fact, not a runtime one, so it is advertised regardless of whether this
     // platform can host detached workers.
     capabilities.push(
-        bitfun_services_core::dispatch_contract::DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY
+        openbitfun_services_core::dispatch_contract::DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY
             .to_string(),
     );
     if runner::is_supported() {
         capabilities.push(
-            bitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
+            openbitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
                 .to_string(),
         );
         capabilities.push(
-            bitfun_services_core::dispatch_contract::DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY
+            openbitfun_services_core::dispatch_contract::DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY
                 .to_string(),
         );
     }
     Ok(DispatchProbeResponse {
+        product_id: openbitfun_services_core::product_identity::product_id().to_string(),
+        data_namespace: openbitfun_services_core::product_identity::data_namespace().to_string(),
         protocol_version: DISPATCH_PROTOCOL_VERSION,
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
         os: std::env::consts::OS.to_string(),
@@ -165,7 +167,7 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
     if !runner::is_supported() {
         bail!("dispatch detached workers are supported only on Linux and macOS");
     }
-    bitfun_agent_runtime::session_control::validate_session_id(&request.session_id)
+    openbitfun_agent_runtime::session_control::validate_session_id(&request.session_id)
         .map_err(anyhow::Error::msg)?;
     let mut intent = request.clone();
     // Setup audit is observational metadata. A retry after an ambiguous SSH
@@ -285,16 +287,16 @@ async fn query(request: DispatchQueryRequest) -> Result<serde_json::Value> {
     let job = store.load_job(&request.job_id)?;
     match request.kind {
         DispatchQueryKind::UsageReport => {
-            let path_manager = bitfun_core::infrastructure::PathManager::new()
-                .map_err(|error| anyhow::anyhow!("resolve BitFun storage root: {error}"))?;
-            let persistence = bitfun_core::agentic::persistence::PersistenceManager::new(
+            let path_manager = openbitfun_core::infrastructure::PathManager::new()
+                .map_err(|error| anyhow::anyhow!("resolve OpenBitFun storage root: {error}"))?;
+            let persistence = openbitfun_core::agentic::persistence::PersistenceManager::new(
                 std::sync::Arc::new(path_manager),
             )
             .map_err(|error| anyhow::anyhow!("open session persistence: {error}"))?;
-            let report = bitfun_core::service::session_usage::generate_session_usage_report(
+            let report = openbitfun_core::service::session_usage::generate_session_usage_report(
                 &persistence,
                 None,
-                bitfun_core::service::session_usage::SessionUsageReportRequest {
+                openbitfun_core::service::session_usage::SessionUsageReportRequest {
                     session_id: job.request.session_id.clone(),
                     workspace_path: Some(job.request.workspace_path.clone()),
                     remote_connection_id: None,
@@ -370,7 +372,7 @@ fn answer(request: DispatchAnswerRequest) -> Result<DispatchAnswerResponse> {
     }
     if matches!(
         &request.reply,
-        bitfun_agent_runtime::sdk::PermissionReply::Reject {
+        openbitfun_agent_runtime::sdk::PermissionReply::Reject {
             feedback: Some(feedback)
         } if feedback.len() > MAX_DISPATCH_TEXT_BYTES
     ) {
@@ -585,10 +587,10 @@ fn reconcile_worker_liveness_with_spawn(
 }
 
 async fn inspect_model_readiness() -> Result<ModelReadiness> {
-    bitfun_core::service::config::initialize_global_config()
+    openbitfun_core::service::config::initialize_global_config()
         .await
         .map_err(|error| anyhow!("Failed to initialize target model configuration: {error}"))?;
-    let config_service = bitfun_core::service::config::get_global_config_service()
+    let config_service = openbitfun_core::service::config::get_global_config_service()
         .await
         .map_err(|error| anyhow!("Failed to read target model configuration: {error}"))?;
     let config: GlobalConfig = config_service
@@ -596,9 +598,9 @@ async fn inspect_model_readiness() -> Result<ModelReadiness> {
         .await
         .map_err(|error| anyhow!("Failed to load target model configuration: {error}"))?;
     let mut model_catalog =
-        bitfun_core::get_ai_model_catalog()
+        openbitfun_core::get_ai_model_catalog()
             .await
-            .unwrap_or(bitfun_core::AIModelCatalog {
+            .unwrap_or(openbitfun_core::AIModelCatalog {
                 version: 0,
                 models: Vec::new(),
                 provider_catalog: Default::default(),
@@ -687,7 +689,7 @@ async fn validate_reasoning_preset(model_id: &str, preset: Option<&str>) -> Resu
     if preset == "auto" {
         return Ok(());
     }
-    let catalog = bitfun_core::get_ai_model_catalog()
+    let catalog = openbitfun_core::get_ai_model_catalog()
         .await
         .map_err(|error| anyhow!("Failed to load target reasoning catalog: {error}"))?;
     let supported = catalog
@@ -852,7 +854,7 @@ fn classify_repository_probe(result: Result<GitProbeOutput, GitProbeOutput>) -> 
 /// below matches Git's English prose, and a localized host would otherwise make
 /// an ownership rejection unrecognizable.
 fn git_probe(workspace: &Path, args: &[&str]) -> Result<GitProbeOutput, GitProbeOutput> {
-    let output = bitfun_services_core::process_manager::create_command("git")
+    let output = openbitfun_services_core::process_manager::create_command("git")
         .env("LC_ALL", "C")
         .arg("-C")
         .arg(workspace)
@@ -924,7 +926,7 @@ fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
         bail!("dispatch setup audit exceeds the 32-event safety limit");
     }
     for event in &request.setup_audit {
-        if !bitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
+        if !openbitfun_services_core::dispatch_contract::dispatch_supported_setup_audit_actions()
             .any(|action| action == event.action)
         {
             bail!("dispatch setup audit contains an unsupported action");

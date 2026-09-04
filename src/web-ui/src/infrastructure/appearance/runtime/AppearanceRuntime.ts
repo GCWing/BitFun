@@ -12,7 +12,7 @@ import type {
 } from '../types';
 
 const log = createLogger('AppearanceRuntime');
-const STYLE_ATTRIBUTE = 'data-bf-appearance-runtime';
+const STYLE_ATTRIBUTE = 'data-openbitfun-appearance-runtime';
 
 interface PreparedRendererTransaction {
   id: AppearanceRendererId;
@@ -115,10 +115,10 @@ export class AppearanceRuntime {
     this.assetGenerations.clear();
     this.activeAssetRevision = null;
     const root = document.documentElement;
-    root.removeAttribute('data-bf-appearance');
-    root.removeAttribute('data-bf-appearance-mode');
-    root.removeAttribute('data-bf-appearance-revision');
-    root.removeAttribute('data-bf-appearance-root');
+    root.removeAttribute('data-openbitfun-appearance');
+    root.removeAttribute('data-openbitfun-appearance-mode');
+    root.removeAttribute('data-openbitfun-appearance-revision');
+    root.removeAttribute('data-openbitfun-appearance-root');
     this.snapshot = null;
     this.emit();
   }
@@ -169,11 +169,11 @@ export class AppearanceRuntime {
     }
 
     const root = document.documentElement;
-    root.setAttribute('data-bf-appearance-root', 'true');
-    root.setAttribute('data-bf-appearance', next.id);
-    root.setAttribute('data-bf-appearance-mode', next.mode);
+    root.setAttribute('data-openbitfun-appearance-root', 'true');
+    root.setAttribute('data-openbitfun-appearance', next.id);
+    root.setAttribute('data-openbitfun-appearance-mode', next.mode);
     // Revision is the activation switch because every generated selector is revision-scoped.
-    root.setAttribute('data-bf-appearance-revision', String(next.revision));
+    root.setAttribute('data-openbitfun-appearance-revision', String(next.revision));
     document.querySelectorAll<HTMLStyleElement>(`style[${STYLE_ATTRIBUTE}]`).forEach(node => {
       if (node !== nextStyle) node.remove();
     });
@@ -253,8 +253,8 @@ export class AppearanceRuntime {
         return adapter.apply(next?.mermaid, previous?.mermaid, context);
       case 'generative-widget':
         return adapter.apply(next?.['generative-widget'], previous?.['generative-widget'], context);
-      case 'bitfun-canvas':
-        return adapter.apply(next?.['bitfun-canvas'], previous?.['bitfun-canvas'], context);
+      case 'openbitfun-canvas':
+        return adapter.apply(next?.['openbitfun-canvas'], previous?.['openbitfun-canvas'], context);
     }
   }
 
@@ -301,10 +301,10 @@ export class AppearanceRuntime {
     const declarations = document.createElement('div').style;
     Object.entries(assets).forEach(([id, asset]) => {
       if (asset.definition.kind !== 'image' || !asset.url) return;
-      declarations.setProperty(`--bf-appearance-asset-${id.replace(/\./g, '-')}`, `url("${asset.url}")`);
+      declarations.setProperty(`--openbitfun-appearance-asset-${id.replace(/\./g, '-')}`, `url("${asset.url}")`);
     });
     if (!declarations.cssText) return '';
-    return `:root[data-bf-appearance="${appearanceId}"][data-bf-appearance-revision="${revision}"]{${declarations.cssText}}`;
+    return `:root[data-openbitfun-appearance="${appearanceId}"][data-openbitfun-appearance-revision="${revision}"]{${declarations.cssText}}`;
   }
 
   private revokeAssetUrls(urls: ReadonlyMap<string, string>): void {

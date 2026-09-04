@@ -2,7 +2,7 @@
  * SettingsScene styles.
  */
 
-.bitfun-settings-scene {
+.openbitfun-settings-scene {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -11,32 +11,32 @@
 
   &__loading {
     flex: 1;
-    padding: var(--bf-space-6);
+    padding: var(--openbitfun-space-6);
   }
 
   &__loading-line,
   &__loading-block {
-    border-radius: var(--bf-radius-md);
-    background: var(--bf-color-action-quiet-hover);
+    border-radius: var(--openbitfun-radius-md);
+    background: var(--openbitfun-color-action-quiet-hover);
     opacity: 0.65;
   }
 
   &__loading-line {
     height: 14px;
     max-width: 360px;
-    margin-bottom: var(--bf-space-3);
+    margin-bottom: var(--openbitfun-space-3);
 
     &--title {
       height: 20px;
       max-width: 220px;
-      margin-bottom: var(--bf-space-5);
+      margin-bottom: var(--openbitfun-space-5);
     }
   }
 
   &__loading-block {
     height: 160px;
     max-width: 720px;
-    margin-top: var(--bf-space-6);
+    margin-top: var(--openbitfun-space-6);
   }
 
   &__content-stack {
@@ -54,7 +54,7 @@
     min-height: 0;
     overflow: hidden;
 
-    > .bitfun-view-transition-boundary__view {
+    > .openbitfun-view-transition-boundary__view {
       width: 100%;
       height: 100%;
     }
@@ -82,9 +82,9 @@
 
   &__draft-list {
     display: grid;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     margin: 0;
-    padding-inline-start: var(--bf-space-5);
-    color: var(--bf-color-content-secondary);
+    padding-inline-start: var(--openbitfun-space-5);
+    color: var(--openbitfun-color-content-secondary);
   }
 }

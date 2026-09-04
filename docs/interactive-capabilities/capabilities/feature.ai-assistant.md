@@ -23,8 +23,8 @@ Work with AI in project context, create sessions, continue tasks, answer permiss
   - Rename, archive, restore, delete, fork, and export sessions
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为会话选择模型、工作模式、记忆模式与权限模式
   - Choose the model, work mode, memory mode, and permission mode per session
-- **由专用 Agent 工具控制 / Delegated Agent tool** · `FrontendWorkbench` / `Read` / `Write` / `Edit` · 让创造模式安全修改正在运行的 BitFun 前端
-  - Let Creative mode safely customize the running BitFun frontend
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `FrontendWorkbench` / `Read` / `Write` / `Edit` · 让创造模式安全修改正在运行的 OpenBitFun 前端
+  - Let Creative mode safely customize the running OpenBitFun frontend
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 开始、引导、打断、取消或恢复一次 Agent 运行
   - Start, steer, interrupt, cancel, or recover an agent turn
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并逐个或批量回答等待中的权限请求
@@ -54,10 +54,10 @@ Work with AI in project context, create sessions, continue tasks, answer permiss
    Open the AI assistant or create a session
 2. 选择项目、模型和工作模式
    Choose a project, model, and working mode
-3. 描述目标；BitFun 会在会话中持续记录进度
-   Describe the goal; BitFun keeps progress in the session
+3. 描述目标；OpenBitFun 会在会话中持续记录进度
+   Describe the goal; OpenBitFun keeps progress in the session
 
-入口 / Entry: BitFun 对应场景
+入口 / Entry: OpenBitFun 对应场景
 
 ## Agent 可替你做什么 / What an agent can do for you
 

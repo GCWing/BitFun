@@ -1,4 +1,4 @@
-import { ScrollArea } from '@bitfun/ui';
+import { ScrollArea } from '@openbitfun/ui';
 import React, { lazy, Suspense, useEffect, useRef } from 'react';
 import type { SettingsPageProps } from '../settingsTypes';
 import './AutomationSettingsPage.scss';
@@ -8,10 +8,10 @@ const HooksConfig = lazy(() => import('@/infrastructure/config/components/HooksC
 
 function AutomationSettingsLoading() {
   return (
-    <div className="bitfun-automation-settings-page__loading" aria-busy="true" aria-hidden="true">
+    <div className="openbitfun-automation-settings-page__loading" aria-busy="true" aria-hidden="true">
       <span />
       <span />
-      <span className="bitfun-automation-settings-page__loading-block" />
+      <span className="openbitfun-automation-settings-page__loading-block" />
     </div>
   );
 }
@@ -27,15 +27,15 @@ const AutomationSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigatio
 
   return (
     <ScrollArea
-      className="bitfun-automation-settings-page"
-      data-bf-component="automation-settings-page"
-      data-bf-part="root"
+      className="openbitfun-automation-settings-page"
+      data-openbitfun-component="automation-settings-page"
+      data-openbitfun-part="root"
     >
       <section
         ref={quickActionsSectionRef}
-        className="bitfun-automation-settings-page__section"
-        data-bf-component="automation-settings-page"
-        data-bf-part="quickActions"
+        className="openbitfun-automation-settings-page__section"
+        data-openbitfun-component="automation-settings-page"
+        data-openbitfun-part="quickActions"
       >
         <Suspense fallback={<AutomationSettingsLoading />}>
           <QuickActionsConfig />
@@ -43,9 +43,9 @@ const AutomationSettingsPage: React.FC<SettingsPageProps> = ({ viewId, navigatio
       </section>
       <section
         ref={hooksSectionRef}
-        className="bitfun-automation-settings-page__section bitfun-automation-settings-page__section--hooks"
-        data-bf-component="automation-settings-page"
-        data-bf-part="hooks"
+        className="openbitfun-automation-settings-page__section openbitfun-automation-settings-page__section--hooks"
+        data-openbitfun-component="automation-settings-page"
+        data-openbitfun-part="hooks"
       >
         <Suspense fallback={<AutomationSettingsLoading />}>
           <HooksConfig />

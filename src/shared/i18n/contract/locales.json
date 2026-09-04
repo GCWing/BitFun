@@ -44,7 +44,7 @@
       "loading": "surface-minimal"
     },
     "installer": {
-      "resourceRoot": "BitFun-Installer/src/i18n/locales",
+      "resourceRoot": "OpenBitFun-Installer/src/i18n/locales",
       "loading": "surface-minimal"
     },
     "core": {

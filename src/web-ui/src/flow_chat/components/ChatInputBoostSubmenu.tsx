@@ -1,7 +1,7 @@
 import React, { useCallback, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Menu, MenuItem, Icon } from '@bitfun/ui';
+import { Menu, MenuItem, Icon } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 
@@ -37,21 +37,21 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
     setOpen(true);
     if (focusFirstItem) {
       requestAnimationFrame(() => {
-        submenuRef.current?.querySelector<HTMLButtonElement>('[data-bf-menu-item]')?.focus();
+        submenuRef.current?.querySelector<HTMLButtonElement>('[data-openbitfun-menu-item]')?.focus();
       });
     }
   }, [setOpen]);
 
   return (
     <div
-      className="bitfun-chat-input__boost-submenu-host"
+      className="openbitfun-chat-input__boost-submenu-host"
       data-testid={testId}
     >
       <MenuItem
         ref={triggerRef}
-        data-bf-component="chat-input"
-        data-bf-part="boostSubmenuTrigger"
-        data-bf-state={open ? 'open' : undefined}
+        data-openbitfun-component="chat-input"
+        data-openbitfun-part="boostSubmenuTrigger"
+        data-openbitfun-state={open ? 'open' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={panelId}
@@ -82,11 +82,11 @@ export const ChatInputBoostSubmenu: React.FC<ChatInputBoostSubmenuProps> = ({
         <Menu
           ref={submenuRef}
           id={panelId}
-          className="bitfun-chat-input__boost-submenu-panel"
-          data-bf-component="chat-input"
-          data-bf-part="boostSubmenuPanel"
-          data-bf-state="open"
-          data-bf-placement={layout ? `${layout.placement}-${layout.alignment}` : 'right-start'}
+          className="openbitfun-chat-input__boost-submenu-panel"
+          data-openbitfun-component="chat-input"
+          data-openbitfun-part="boostSubmenuPanel"
+          data-openbitfun-state="open"
+          data-openbitfun-placement={layout ? `${layout.placement}-${layout.alignment}` : 'right-start'}
           style={{
             top: layout?.top ?? 0,
             left: layout?.left ?? 0,

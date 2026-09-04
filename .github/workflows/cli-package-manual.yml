@@ -168,14 +168,14 @@ jobs:
           set -euo pipefail
           cargo build --release \
             --target ${{ matrix.platform.target }} \
-            -p bitfun-cli
+            -p openbitfun-cli
 
       - name: Build CLI (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
           RUSTFLAGS: -C target-feature=+crt-static
-        run: cargo build --release --target ${{ matrix.platform.target }} -p bitfun-cli
+        run: cargo build --release --target ${{ matrix.platform.target }} -p openbitfun-cli
 
       - name: Test installer (Unix)
         if: runner.os != 'Windows'
@@ -216,7 +216,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: bitfun-cli-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short_sha }}-${{ matrix.platform.name }}
+          name: openbitfun-cli-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short_sha }}-${{ matrix.platform.name }}
           if-no-files-found: error
           path: |
             ${{ steps.stage.outputs.archive || steps.stage-windows.outputs.archive }}

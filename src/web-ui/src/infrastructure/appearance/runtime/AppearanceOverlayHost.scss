@@ -6,8 +6,8 @@
  * moves the contest: the overlay's own z-index then competes, in the root
  * stacking context, with whatever container it escaped from. A container that
  * legitimately floats above app content — the floating mini chat panel at
- * `var(--bf-layer-overlay) + 1`, a maximized canvas — therefore paints over popovers that
- * use the ordinary `var(--bf-layer-dropdown)` level, which reads as a dead control: the menu
+ * `var(--openbitfun-layer-overlay) + 1`, a maximized canvas — therefore paints over popovers that
+ * use the ordinary `var(--openbitfun-layer-dropdown)` level, which reads as a dead control: the menu
  * opens behind the panel, and the panel's own backdrop takes the clicks.
  *
  * So the host itself takes one level, above every container that hosts app UI
@@ -21,16 +21,16 @@
  * no transform, filter, backdrop-filter, will-change or contain — or every
  * viewport-anchored overlay would shift.
  */
-#bitfun-appearance-overlay-host {
+#openbitfun-appearance-overlay-host {
   position: fixed;
   inset: 0;
-  z-index: var(--bf-layer-overlay-host);
+  z-index: var(--openbitfun-layer-overlay-host);
   // The layer spans the viewport; only the overlays in it are hit-testable.
   pointer-events: none;
 }
 
 // Hand hit testing back to the overlays themselves. Zero specificity, so an
 // overlay that deliberately opts out — a tooltip — keeps its own declaration.
-:where(#bitfun-appearance-overlay-host) > :where(*) {
+:where(#openbitfun-appearance-overlay-host) > :where(*) {
   pointer-events: auto;
 }

@@ -66,5 +66,5 @@ createServer((request, response) => {
   });
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
-  process.stdout.write(`BitFun Playbook: http://127.0.0.1:${port}/\n`);
+  process.stdout.write(`OpenBitFun Playbook: http://127.0.0.1:${port}/\n`);
 });

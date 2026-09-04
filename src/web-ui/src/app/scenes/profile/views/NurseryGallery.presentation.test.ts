@@ -26,15 +26,15 @@ describe('Nursery gallery presentation', () => {
     const gallerySection = stylesheet.slice(galleryStart, galleryEnd);
 
     expect(gallerySection).toMatch(
-      /\.nursery-gallery \{\s+background: var\(--bf-color-surface-scene\);/,
+      /\.nursery-gallery \{\s+background: var\(--openbitfun-color-surface-scene\);/,
     );
-    expect(gallerySection).toContain('background: var(--bf-color-surface-raised);');
-    expect(gallerySection).toContain('color: var(--bf-color-content-primary);');
-    expect(gallerySection).toContain('color: var(--bf-color-content-muted);');
-    expect(gallerySection).toContain('border: 1px solid var(--bf-color-border-subtle);');
-    expect(gallerySection).not.toContain('--bf-color-content-on-dark');
-    expect(gallerySection).not.toContain('--bf-color-content-on-light');
-    expect(gallerySection).not.toContain('--bf-color-overlay-scrim');
+    expect(gallerySection).toContain('background: var(--openbitfun-color-surface-raised);');
+    expect(gallerySection).toContain('color: var(--openbitfun-color-content-primary);');
+    expect(gallerySection).toContain('color: var(--openbitfun-color-content-muted);');
+    expect(gallerySection).toContain('border: 1px solid var(--openbitfun-color-border-subtle);');
+    expect(gallerySection).not.toContain('--openbitfun-color-content-on-dark');
+    expect(gallerySection).not.toContain('--openbitfun-color-content-on-light');
+    expect(gallerySection).not.toContain('--openbitfun-color-overlay-scrim');
   });
 
   it('uses a compact layered pill for the default configuration action', () => {
@@ -51,12 +51,12 @@ describe('Nursery gallery presentation', () => {
     expect(source).toContain('className="nursery-defaults__action-label"');
     expect(source).toContain('className="nursery-defaults__action-chevron"');
     expect(actionMarkup).toContain('<button');
-    expect(actionMarkup).not.toContain('data-bf-component');
+    expect(actionMarkup).not.toContain('data-openbitfun-component');
     expect(actionMarkup).not.toContain('variant=');
     expect(actionSection).toContain('width: 168px;');
     expect(actionSection).toContain('height: 48px;');
     expect(actionSection).toContain('border: 0;');
-    expect(actionSection).toContain('border-radius: var(--bf-radius-pill);');
+    expect(actionSection).toContain('border-radius: var(--openbitfun-radius-pill);');
     expect(actionSection).toContain('width: 44px;');
     expect(actionSection).toContain('background-image: radial-gradient(');
     expect(actionSection).toContain('mask-image: radial-gradient(');
@@ -71,17 +71,17 @@ describe('Nursery gallery presentation', () => {
 
     expect(cardSection).toContain('&__main {');
     expect(cardSection).toContain('min-height: 168px;');
-    expect(cardSection).toContain('padding: var(--bf-space-3) 14px;');
+    expect(cardSection).toContain('padding: var(--openbitfun-space-3) 14px;');
     expect(cardSection).toContain('min-height: 52px;');
     expect(cardSection).toContain('&__session-actions {');
-    expect(cardSection).toContain('border-top: 1px solid var(--bf-color-border-subtle);');
+    expect(cardSection).toContain('border-top: 1px solid var(--openbitfun-color-border-subtle);');
     expect(cardSection).not.toContain('min-height: clamp(310px, 23.8vw, 366px);');
     expect(cardSection).not.toContain('height: 100%;');
     expect(cardSection).not.toContain('--assistant-card-action-bg');
     expect(cardSection).not.toContain('&__new-session-btn {');
     expect(cardSection).not.toContain('&__set-primary-btn {');
     expect(cardSection).not.toContain('&__delete-btn {');
-    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@bitfun\/ui';/);
+    expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@openbitfun\/ui';/);
     expect(source).toContain('leadingIcon={<Icon name="settings"');
     expect(source).toContain('trailingIcon={<Icon name="chevron-right"');
     expect(source).toContain('leadingIcon={<Icon name="side-chat" size="lg" />}');

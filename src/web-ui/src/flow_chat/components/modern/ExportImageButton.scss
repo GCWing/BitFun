@@ -11,9 +11,9 @@
      Padding matches ModelRoundItem (3rem ≈ 48px each side) so the
      effective content width is identical to the live chat. */
   padding: 24px 48px;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   box-sizing: border-box;
-  font-family:var(--bf-type-body-sm-font-family);
+  font-family:var(--openbitfun-type-body-sm-font-family);
   /* Use a fixed 800px layout context so text wraps at exactly the same
      width regardless of the wrapper's position or viewport. */
   container-type: inline-size;
@@ -21,9 +21,9 @@
   /* Prevent unwanted wrapping of short inline text */
   .thinking-label,
   .thinking-collapsed-header,
-  [data-bf-component='flow-chat-tool-card'][data-bf-part='action'],
-  [data-bf-component='flow-chat-tool-card'][data-bf-part='content'],
-  [data-bf-component='flow-chat-tool-card'][data-bf-part='extra'],
+  [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='action'],
+  [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='content'],
+  [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='extra'],
   .export-content__title,
   .export-content__subtitle,
   .export-content__timestamp,
@@ -62,7 +62,7 @@
     gap: 12px;
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--bf-color-border-default);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
   }
 
   &__logo {
@@ -90,22 +90,22 @@
   }
 
   &__title {
-    font-size: var(--bf-type-flow-title-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-flow-title-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
     display: inline-block;
   }
 
   &__subtitle {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
     display: inline-block;
   }
 
   &__timestamp {
     margin-left: auto;
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
     display: inline-block;
     flex-shrink: 0;
   }
@@ -116,13 +116,13 @@
   }
 
   &__user-bubble {
-    background: var(--bf-color-action-neutral-surface-hover);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 12px;
     padding: 14px 16px;
-    font-size: var(--bf-type-body-md-font-size);
-    line-height: var(--bf-type-flow-body-line-height);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    line-height: var(--openbitfun-type-flow-body-line-height);
+    color: var(--openbitfun-color-content-primary);
     white-space: pre-wrap !important;
     word-break: break-word;
     word-wrap: break-word;
@@ -174,8 +174,8 @@
     
     // Hide tool card action buttons and expanded content.
     .tool-card__actions,
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='actionRegion'],
-    [data-bf-component='flow-chat-tool-card'][data-bf-part='expanded'] {
+    [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='actionRegion'],
+    [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='expanded'] {
       display: none !important;
     }
   }
@@ -184,13 +184,13 @@
   &__footer {
     margin-top: 20px;
     padding-top: 14px;
-    border-top: 1px solid var(--bf-color-border-default);
+    border-top: 1px solid var(--openbitfun-color-border-default);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     
     span {
@@ -201,8 +201,8 @@
   }
 
   &__footer-brand {
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-secondary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
   }
 }

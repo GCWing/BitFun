@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-codex-adapter"
+name = "openbitfun-codex-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Codex static source adapter for BitFun"
+description = "Codex static source adapter for OpenBitFun"
 autotests = false
 
 [lib]
-name = "bitfun_codex_adapter"
+name = "openbitfun_codex_adapter"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-services-core = { path = "../../services/services-core" }
-bitfun-static-hook-support = { path = "../static-hook-support" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-services-core = { path = "../../services/services-core" }
+openbitfun-static-hook-support = { path = "../static-hook-support" }
 dirs = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }

@@ -1,30 +1,30 @@
 (() => {
-  const root = document.getElementById('bitfun-canvas-root');
+  const root = document.getElementById('openbitfun-canvas-root');
   let appearance = makeAppearance({
     type: 'auto',
-    bg: 'var(--bitfun-canvas-bg)',
-    panel: 'var(--bitfun-canvas-panel)',
-    fg: 'var(--bitfun-canvas-fg)',
-    muted: 'var(--bitfun-canvas-muted)',
-    border: 'var(--bitfun-canvas-border)',
-    accent: 'var(--bitfun-canvas-accent)',
-    success: 'var(--bitfun-canvas-success)',
-    warning: 'var(--bitfun-canvas-warning)',
-    danger: 'var(--bitfun-canvas-danger)',
-    info: 'var(--bitfun-canvas-info)',
+    bg: 'var(--openbitfun-canvas-bg)',
+    panel: 'var(--openbitfun-canvas-panel)',
+    fg: 'var(--openbitfun-canvas-fg)',
+    muted: 'var(--openbitfun-canvas-muted)',
+    border: 'var(--openbitfun-canvas-border)',
+    accent: 'var(--openbitfun-canvas-accent)',
+    success: 'var(--openbitfun-canvas-success)',
+    warning: 'var(--openbitfun-canvas-warning)',
+    danger: 'var(--openbitfun-canvas-danger)',
+    info: 'var(--openbitfun-canvas-info)',
   });
   function makeAppearance(tokens) {
     const readToken = (value, fallback) => value === undefined || value === null || value === '' ? fallback : String(value);
-    const bg = readToken(tokens.bg, 'var(--bitfun-canvas-bg)');
-    const panel = readToken(tokens.panel, 'var(--bitfun-canvas-panel)');
-    const fg = readToken(tokens.fg, 'var(--bitfun-canvas-fg)');
-    const muted = readToken(tokens.muted, 'var(--bitfun-canvas-muted)');
-    const border = readToken(tokens.border, 'var(--bitfun-canvas-border)');
-    const accent = readToken(tokens.accent, 'var(--bitfun-canvas-accent)');
-    const success = readToken(tokens.success, 'var(--bitfun-canvas-success)');
-    const warning = readToken(tokens.warning, 'var(--bitfun-canvas-warning)');
-    const danger = readToken(tokens.danger, 'var(--bitfun-canvas-danger)');
-    const info = readToken(tokens.info, 'var(--bitfun-canvas-info)');
+    const bg = readToken(tokens.bg, 'var(--openbitfun-canvas-bg)');
+    const panel = readToken(tokens.panel, 'var(--openbitfun-canvas-panel)');
+    const fg = readToken(tokens.fg, 'var(--openbitfun-canvas-fg)');
+    const muted = readToken(tokens.muted, 'var(--openbitfun-canvas-muted)');
+    const border = readToken(tokens.border, 'var(--openbitfun-canvas-border)');
+    const accent = readToken(tokens.accent, 'var(--openbitfun-canvas-accent)');
+    const success = readToken(tokens.success, 'var(--openbitfun-canvas-success)');
+    const warning = readToken(tokens.warning, 'var(--openbitfun-canvas-warning)');
+    const danger = readToken(tokens.danger, 'var(--openbitfun-canvas-danger)');
+    const info = readToken(tokens.info, 'var(--openbitfun-canvas-info)');
     const token = (value, fields = {}) => Object.assign(new String(value), {
       toString() { return value; },
       valueOf() { return value; },
@@ -91,14 +91,14 @@
     for (const key of allowed) {
       const value = nextAppearance[key];
       if (typeof value === 'string' && value.trim()) {
-        rootStyle.setProperty(`--bitfun-canvas-${key}`, value.trim());
+        rootStyle.setProperty(`--openbitfun-canvas-${key}`, value.trim());
       }
     }
     const type = nextAppearance.type === 'dark' || nextAppearance.type === 'light' ? nextAppearance.type : 'auto';
     document.documentElement.style.colorScheme = type === 'auto' ? 'light dark' : type;
     appearance = makeAppearance({
       ...appearance,
-      ...Object.fromEntries(allowed.map(key => [key, getComputedStyle(document.documentElement).getPropertyValue(`--bitfun-canvas-${key}`).trim() || appearance[key]])),
+      ...Object.fromEntries(allowed.map(key => [key, getComputedStyle(document.documentElement).getPropertyValue(`--openbitfun-canvas-${key}`).trim() || appearance[key]])),
       type,
     });
   }
@@ -158,8 +158,8 @@
   function markCanvasNode(value, component) {
     for (const item of toArray(value)) {
       if (item instanceof Element) {
-        if (!item.dataset.bitfunCanvasNode) item.dataset.bitfunCanvasNode = `node-${++nodeSeq}`;
-        if (!item.dataset.bitfunCanvasComponent) item.dataset.bitfunCanvasComponent = component;
+        if (!item.dataset.openbitfunCanvasNode) item.dataset.openbitfunCanvasNode = `node-${++nodeSeq}`;
+        if (!item.dataset.openbitfunCanvasComponent) item.dataset.openbitfunCanvasComponent = component;
       }
     }
     return value;
@@ -190,8 +190,8 @@
     const text = (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim();
     const rect = element.getBoundingClientRect();
     return {
-      nodeId: element.dataset.bitfunCanvasNode || null,
-      component: element.dataset.bitfunCanvasComponent || element.tagName.toLowerCase(),
+      nodeId: element.dataset.openbitfunCanvasNode || null,
+      component: element.dataset.openbitfunCanvasComponent || element.tagName.toLowerCase(),
       tagName: element.tagName.toLowerCase(),
       selector: elementSelector(element),
       text: text.length > 180 ? `${text.slice(0, 180)}...` : text,
@@ -205,7 +205,7 @@
   }
   function inspectableElement(target) {
     if (!(target instanceof Element) || !root || !root.contains(target) || target === root) return null;
-    return target.closest('[data-bitfun-canvas-node]') || target;
+    return target.closest('[data-openbitfun-canvas-node]') || target;
   }
   function clearInspectHighlight() {
     if (!inspectElement) return;
@@ -226,13 +226,13 @@
       outlineOffset: element.style.outlineOffset,
       cursor: element.style.cursor,
     });
-    element.style.outline = '2px solid var(--bitfun-canvas-accent)';
+    element.style.outline = '2px solid var(--openbitfun-canvas-accent)';
     element.style.outlineOffset = '2px';
     element.style.cursor = 'crosshair';
   }
   function setDesignMode(enabled) {
     designMode = Boolean(enabled);
-    document.body.dataset.bitfunCanvasDesignMode = designMode ? 'true' : 'false';
+    document.body.dataset.openbitfunCanvasDesignMode = designMode ? 'true' : 'false';
     document.body.style.cursor = designMode ? 'crosshair' : '';
     if (!designMode) clearInspectHighlight();
   }
@@ -249,7 +249,7 @@
     event.stopPropagation();
     highlightInspectElement(element);
     window.parent?.postMessage({
-      type: 'bitfun-canvas-element-selected',
+      type: 'openbitfun-canvas-element-selected',
       reference: elementReference(element),
     }, '*');
   }, true);
@@ -269,7 +269,7 @@
       flushEffects();
       if (!readySent) {
         readySent = true;
-        window.parent?.postMessage({ type: 'bitfun-canvas-ready' }, '*');
+        window.parent?.postMessage({ type: 'openbitfun-canvas-ready' }, '*');
       }
     } catch (error) {
       reportRuntimeError(error);
@@ -278,16 +278,16 @@
   function reportRuntimeError(error) {
     if (root) root.replaceChildren(errorView(error));
     window.parent?.postMessage({
-      type: 'bitfun-canvas-runtime-error',
+      type: 'openbitfun-canvas-runtime-error',
       message: String(error?.message || error),
       name: error?.name ? String(error.name) : undefined,
       stack: error?.stack ? String(error.stack) : undefined,
     }, '*');
   }
   function errorView(error) {
-    return el('main', { style: { maxWidth: '860px', margin: '0 auto', padding: '12px', border: '1px solid var(--bitfun-canvas-border)', borderRadius: '8px' } }, [
+    return el('main', { style: { maxWidth: '860px', margin: '0 auto', padding: '12px', border: '1px solid var(--openbitfun-canvas-border)', borderRadius: '8px' } }, [
       el('h1', { style: { margin: '0 0 8px', fontSize: '18px' } }, ['Canvas runtime error']),
-      el('pre', { style: { whiteSpace: 'pre-wrap', margin: 0, color: 'var(--bitfun-canvas-danger)' } }, [String(error?.stack || error?.message || error)])
+      el('pre', { style: { whiteSpace: 'pre-wrap', margin: 0, color: 'var(--openbitfun-canvas-danger)' } }, [String(error?.stack || error?.message || error)])
     ]);
   }
   window.addEventListener('error', event => {
@@ -354,30 +354,30 @@
   }
   const usageColorSequence = ['gray', 'purple', 'green', 'yellow', 'pink', 'blue', 'orange'];
   const categoryPaletteLight = {
-    gray: 'var(--bitfun-canvas-muted)',
-    purple: 'var(--bitfun-canvas-accent)',
-    green: 'var(--bitfun-canvas-success)',
-    yellow: 'var(--bitfun-canvas-warning)',
-    cyan: 'var(--bitfun-canvas-info)',
-    pink: 'var(--bitfun-canvas-danger)',
-    blue: 'var(--bitfun-canvas-accent)',
-    orange: 'var(--bitfun-canvas-warning)',
+    gray: 'var(--openbitfun-canvas-muted)',
+    purple: 'var(--openbitfun-canvas-accent)',
+    green: 'var(--openbitfun-canvas-success)',
+    yellow: 'var(--openbitfun-canvas-warning)',
+    cyan: 'var(--openbitfun-canvas-info)',
+    pink: 'var(--openbitfun-canvas-danger)',
+    blue: 'var(--openbitfun-canvas-accent)',
+    orange: 'var(--openbitfun-canvas-warning)',
   };
   const categoryPaletteDark = categoryPaletteLight;
   const canvasTokensLight = {
-    bg: 'var(--bitfun-canvas-panel)',
-    panel: 'var(--bitfun-canvas-bg)',
-    elevated: 'var(--bitfun-canvas-bg)',
-    chrome: 'var(--bitfun-canvas-panel)',
-    text: 'var(--bitfun-canvas-fg)',
-    textSecondary: 'var(--bitfun-canvas-muted)',
-    textMuted: 'var(--bitfun-canvas-muted)',
-    border: 'var(--bitfun-canvas-border)',
-    accent: 'var(--bitfun-canvas-accent)',
-    success: 'var(--bitfun-canvas-success)',
-    warning: 'var(--bitfun-canvas-warning)',
-    danger: 'var(--bitfun-canvas-danger)',
-    info: 'var(--bitfun-canvas-info)',
+    bg: 'var(--openbitfun-canvas-panel)',
+    panel: 'var(--openbitfun-canvas-bg)',
+    elevated: 'var(--openbitfun-canvas-bg)',
+    chrome: 'var(--openbitfun-canvas-panel)',
+    text: 'var(--openbitfun-canvas-fg)',
+    textSecondary: 'var(--openbitfun-canvas-muted)',
+    textMuted: 'var(--openbitfun-canvas-muted)',
+    border: 'var(--openbitfun-canvas-border)',
+    accent: 'var(--openbitfun-canvas-accent)',
+    success: 'var(--openbitfun-canvas-success)',
+    warning: 'var(--openbitfun-canvas-warning)',
+    danger: 'var(--openbitfun-canvas-danger)',
+    info: 'var(--openbitfun-canvas-info)',
   };
   const canvasTokens = canvasTokensLight;
   const canvasPaletteLight = categoryPaletteLight;
@@ -429,23 +429,23 @@
     return el(as, { style: { margin: 0, color: color || toneColor(tone), fontSize: sizeValue(size), fontWeight: weightValue(weight), fontStyle: italic ? 'italic' : undefined, ...truncateStyle, ...commonStyle(props, style) } }, children);
   };
   const Code = component('code', { fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: '12px', background: 'rgba(127,127,127,0.12)', borderRadius: '4px', padding: '1px 4px' });
-  const Link = ({ children, href, style } = {}) => el('a', { href, target: '_blank', rel: 'noreferrer', style: { color: 'var(--bitfun-canvas-accent)', textDecoration: 'none', ...style } }, children);
+  const Link = ({ children, href, style } = {}) => el('a', { href, target: '_blank', rel: 'noreferrer', style: { color: 'var(--openbitfun-canvas-accent)', textDecoration: 'none', ...style } }, children);
   const Card = ({ children, variant = 'default', size = 'base', style, ...props } = {}) => el('section', {
     ...props,
     style: {
       border: variant === 'borderless' ? '0' : '1px solid rgba(127,127,127,0.20)',
       borderRadius: variant === 'borderless' ? 0 : '8px',
-      background: variant === 'borderless' ? 'transparent' : 'var(--bitfun-canvas-bg)',
+      background: variant === 'borderless' ? 'transparent' : 'var(--openbitfun-canvas-bg)',
       overflow: 'hidden',
       ...style,
     }
   }, children);
   const CardHeader = ({ children, trailing, style } = {}) => el('header', { style: { minHeight: '34px', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between', padding: '9px 12px', borderBottom: '1px solid rgba(127,127,127,0.16)', fontSize: '12px', fontWeight: 650, lineHeight: 1.25, ...style } }, [
     el('div', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, children),
-    trailing ? el('div', { style: { flexShrink: 0, color: 'var(--bitfun-canvas-muted)' } }, trailing) : null
+    trailing ? el('div', { style: { flexShrink: 0, color: 'var(--openbitfun-canvas-muted)' } }, trailing) : null
   ]);
   const CardBody = ({ children, style } = {}) => el('div', { style: { padding: '12px', ...style } }, children);
-  const Empty = ({ description = 'No data', children, style } = {}) => el('div', { style: { display: 'grid', placeItems: 'center', gap: '6px', minHeight: '96px', padding: '18px', border: '1px dashed rgba(127,127,127,0.24)', borderRadius: '8px', color: 'var(--bitfun-canvas-muted)', textAlign: 'center', ...style } }, [
+  const Empty = ({ description = 'No data', children, style } = {}) => el('div', { style: { display: 'grid', placeItems: 'center', gap: '6px', minHeight: '96px', padding: '18px', border: '1px dashed rgba(127,127,127,0.24)', borderRadius: '8px', color: 'var(--openbitfun-canvas-muted)', textAlign: 'center', ...style } }, [
     el('div', { style: { fontSize: '13px' } }, [description]),
     children || null,
   ]);
@@ -455,7 +455,7 @@
     const selected = list.find(item => item.key === selectedKey) ?? list[0];
     return el('div', { style: { display: 'grid', gap: '10px', ...style } }, [
       list.length ? el('div', { role: 'tablist', style: { display: 'flex', gap: '6px', borderBottom: '1px solid rgba(127,127,127,0.16)' } }, list.map(item =>
-        el('button', { role: 'tab', 'aria-selected': item.key === selected?.key, disabled: item.disabled, onClick: () => onChange?.(item.key), style: { border: 0, borderBottom: item.key === selected?.key ? '2px solid var(--bitfun-canvas-accent)' : '2px solid transparent', background: 'transparent', color: item.key === selected?.key ? 'var(--bitfun-canvas-fg)' : 'var(--bitfun-canvas-muted)', padding: '6px 8px', font: 'inherit', cursor: item.disabled ? 'default' : 'pointer' } }, [item.label])
+        el('button', { role: 'tab', 'aria-selected': item.key === selected?.key, disabled: item.disabled, onClick: () => onChange?.(item.key), style: { border: 0, borderBottom: item.key === selected?.key ? '2px solid var(--openbitfun-canvas-accent)' : '2px solid transparent', background: 'transparent', color: item.key === selected?.key ? 'var(--openbitfun-canvas-fg)' : 'var(--openbitfun-canvas-muted)', padding: '6px 8px', font: 'inherit', cursor: item.disabled ? 'default' : 'pointer' } }, [item.label])
       )) : null,
       selected ? el('div', { role: 'tabpanel' }, selected.children) : children,
     ]);
@@ -475,9 +475,9 @@
     return el('div', { role: 'alert', 'aria-live': type === 'error' ? 'assertive' : 'polite', style: { display: 'grid', gridTemplateColumns: showIcon ? '18px minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: '9px', border: '1px solid rgba(127,127,127,0.20)', borderLeft: `3px solid ${color}`, borderRadius: '8px', padding: '10px 12px', background: 'rgba(127,127,127,0.04)', ...style } }, [
       showIcon ? el('span', { 'aria-hidden': true, style: { display: 'grid', placeItems: 'center', width: 18, height: 18, borderRadius: 999, color, fontSize: '11px', fontWeight: 700 } }, [alertIcon(type)]) : null,
       el('span', { style: { minWidth: 0, display: 'grid', gap: '3px' } }, [
-        title ? el('strong', { style: { color: 'var(--bitfun-canvas-fg)', fontSize: '13px', lineHeight: 1.35 } }, [title]) : null,
-        message || children ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [message ?? children]) : null,
-        description ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [description]) : null,
+        title ? el('strong', { style: { color: 'var(--openbitfun-canvas-fg)', fontSize: '13px', lineHeight: 1.35 } }, [title]) : null,
+        message || children ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [message ?? children]) : null,
+        description ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [description]) : null,
       ]),
     ]);
   };
@@ -486,7 +486,7 @@
     const isButton = typeof onClick === 'function';
     const tag = isButton ? 'button' : 'span';
     const compact = size === 'sm';
-    return el(tag, { title, disabled, onClick, style: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: compact ? '0' : '1px solid rgba(127,127,127,0.22)', borderRadius: '999px', padding: compact ? '1px 6px' : '2px 8px', background: active ? 'rgba(52,120,246,0.16)' : 'rgba(127,127,127,0.05)', color: 'var(--bitfun-canvas-fg)', font: 'inherit', fontSize: compact ? '11px' : '12px', lineHeight: '18px', cursor: isButton && !disabled ? 'pointer' : 'default', opacity: disabled ? 0.55 : 1, ...style } }, [leadingContent, children, keyboardHint ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', marginLeft: 2 } }, [keyboardHint]) : null]);
+    return el(tag, { title, disabled, onClick, style: { display: 'inline-flex', alignItems: 'center', gap: '5px', border: compact ? '0' : '1px solid rgba(127,127,127,0.22)', borderRadius: '999px', padding: compact ? '1px 6px' : '2px 8px', background: active ? 'rgba(52,120,246,0.16)' : 'rgba(127,127,127,0.05)', color: 'var(--openbitfun-canvas-fg)', font: 'inherit', fontSize: compact ? '11px' : '12px', lineHeight: '18px', cursor: isButton && !disabled ? 'pointer' : 'default', opacity: disabled ? 0.55 : 1, ...style } }, [leadingContent, children, keyboardHint ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', marginLeft: 2 } }, [keyboardHint]) : null]);
   };
   function Chevron({ expanded } = {}) {
     return svg('svg', { width: 12, height: 12, viewBox: '0 0 12 12', fill: 'none', style: { transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 120ms ease', flexShrink: 0 } }, [
@@ -497,13 +497,13 @@
     const key = `collapsible:${title || ''}`;
     const [open, setOpen] = useCanvasState(key, Boolean(defaultOpen));
     return el('section', { style: { ...style } }, [
-      el('button', { onClick: () => setOpen(!open), style: { width: '100%', minHeight: '28px', display: 'flex', alignItems: 'center', gap: '7px', border: 0, padding: '4px 0', background: 'transparent', color: 'var(--bitfun-canvas-fg)', font: 'inherit', cursor: 'pointer', textAlign: 'left' } }, [
+      el('button', { onClick: () => setOpen(!open), style: { width: '100%', minHeight: '28px', display: 'flex', alignItems: 'center', gap: '7px', border: 0, padding: '4px 0', background: 'transparent', color: 'var(--openbitfun-canvas-fg)', font: 'inherit', cursor: 'pointer', textAlign: 'left' } }, [
         Chevron({ expanded: open }),
         leading || null,
         el('span', { style: { fontSize: '13px', fontWeight: 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, [title]),
-        count !== undefined ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [String(count)]) : null,
+        count !== undefined ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [String(count)]) : null,
         el('span', { style: { flex: 1 } }),
-        trailing ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px', flexShrink: 0 } }, trailing) : null,
+        trailing ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px', flexShrink: 0 } }, trailing) : null,
       ]),
       open ? el('div', { style: { marginLeft: '18px', paddingTop: '6px', paddingBottom: '4px' } }, children) : null,
     ]);
@@ -647,7 +647,7 @@
     layout.map = layout.nodes.map.bind(layout.nodes);
     return layout;
   }
-  const Stat = ({ value, label, tone, style } = {}) => el('div', { style: { display: 'grid', gap: '2px', ...style } }, [el('strong', { style: { color: toneColor(tone), fontSize: '22px', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' } }, [value]), el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [label])]);
+  const Stat = ({ value, label, tone, style } = {}) => el('div', { style: { display: 'grid', gap: '2px', ...style } }, [el('strong', { style: { color: toneColor(tone), fontSize: '22px', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' } }, [value]), el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [label])]);
   const Table = ({ headers = [], rows = [], columnAlign = [], rowTone = [], framed = true, striped = false, stickyHeader = false, style, emptyMessage = 'No rows' } = {}) => {
     headers = Array.isArray(headers) ? headers : [];
     rows = Array.isArray(rows) ? rows : [];
@@ -660,9 +660,9 @@
         tone ? el('span', { style: { display: 'inline-block', width: 6, height: 6, borderRadius: 99, marginRight: 7, background: toneColor(tone), verticalAlign: 'middle' } }) : null,
         content,
       ]);
-    }))) : [el('tr', {}, [el('td', { colspan: headers.length || 1, style: { ...cellStyle(false), color: 'var(--bitfun-canvas-muted)' } }, [emptyMessage])])];
-    return el('div', { style: { overflow: 'auto', border: framed ? '1px solid rgba(127,127,127,0.20)' : 0, borderRadius: framed ? '8px' : 0, background: 'var(--bitfun-canvas-bg)', ...style } }, [el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '12px' } }, [
-      el('thead', {}, [el('tr', {}, headers.map((h, index) => el('th', { style: { ...cellStyle(true, columnAlign[index]), position: stickyHeader ? 'sticky' : undefined, top: stickyHeader ? 0 : undefined, background: 'var(--bitfun-canvas-panel)' } }, [h])))]),
+    }))) : [el('tr', {}, [el('td', { colspan: headers.length || 1, style: { ...cellStyle(false), color: 'var(--openbitfun-canvas-muted)' } }, [emptyMessage])])];
+    return el('div', { style: { overflow: 'auto', border: framed ? '1px solid rgba(127,127,127,0.20)' : 0, borderRadius: framed ? '8px' : 0, background: 'var(--openbitfun-canvas-bg)', ...style } }, [el('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: '12px' } }, [
+      el('thead', {}, [el('tr', {}, headers.map((h, index) => el('th', { style: { ...cellStyle(true, columnAlign[index]), position: stickyHeader ? 'sticky' : undefined, top: stickyHeader ? 0 : undefined, background: 'var(--openbitfun-canvas-panel)' } }, [h])))]),
       el('tbody', {}, bodyRows)
     ])]);
   };
@@ -670,9 +670,9 @@
     const entries = Array.isArray(items) ? items : Object.entries(items || {}).map(([label, value]) => ({ label, value }));
     const columnCount = Math.max(1, Math.min(4, Math.floor(Number(columns) || 1)));
     return el('dl', { style: { display: 'grid', gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`, gap: compact ? '6px' : '10px', margin: 0, ...style } }, entries.length ? entries.map((item, index) => el('div', { key: item.key || index, style: { minWidth: 0, padding: compact ? '0 0 6px' : '8px 0', borderBottom: '1px solid rgba(127,127,127,0.16)' } }, [
-      el('dt', { style: { margin: 0, color: 'var(--bitfun-canvas-muted)', fontSize: '11px', lineHeight: 1.35 } }, [item.label]),
+      el('dt', { style: { margin: 0, color: 'var(--openbitfun-canvas-muted)', fontSize: '11px', lineHeight: 1.35 } }, [item.label]),
       el('dd', { style: { margin: '2px 0 0', color: toneColor(item.tone), fontSize: compact ? '12px' : '13px', fontWeight: 560, overflowWrap: 'anywhere' } }, [item.value]),
-    ])) : [el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+    ])) : [el('div', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
   };
   const Timeline = ({ items = [], emptyMessage = 'No events', style } = {}) => {
     items = Array.isArray(items) ? items : [];
@@ -680,12 +680,12 @@
     el('span', { style: { display: 'grid', placeItems: 'center', width: 18, height: 18, marginTop: 1, borderRadius: 999, background: 'rgba(127,127,127,0.12)', color: toneColor(item.tone), fontSize: '10px', fontWeight: 700 } }, [item.icon || '']),
     el('span', { style: { minWidth: 0, display: 'grid', gap: '2px' } }, [
       el('span', { style: { display: 'flex', gap: '8px', alignItems: 'baseline', justifyContent: 'space-between', minWidth: 0 } }, [
-        el('strong', { style: { minWidth: 0, color: 'var(--bitfun-canvas-fg)', fontSize: '13px' } }, [item.title]),
-        item.time ? el('time', { style: { flex: '0 0 auto', color: 'var(--bitfun-canvas-muted)', fontSize: '11px' } }, [item.time]) : null,
+        el('strong', { style: { minWidth: 0, color: 'var(--openbitfun-canvas-fg)', fontSize: '13px' } }, [item.title]),
+        item.time ? el('time', { style: { flex: '0 0 auto', color: 'var(--openbitfun-canvas-muted)', fontSize: '11px' } }, [item.time]) : null,
       ]),
-      item.description ? el('span', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [item.description]) : null,
+      item.description ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px', overflowWrap: 'anywhere' } }, [item.description]) : null,
     ]),
-  ])) : [el('li', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+  ])) : [el('li', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
   };
   function fileTreeKey(item, index, depth) {
     return item.key || item.path || `${depth}-${index}-${String(item.name || '')}`;
@@ -695,9 +695,9 @@
       const children = Array.isArray(item.children) ? item.children : [];
       const isFolder = item.type === 'folder' || children.length > 0;
       const row = el('span', { style: { display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, padding: '3px 0', paddingLeft: `${depth * 16}px` } }, [
-        el('span', { style: { flex: '0 0 auto', width: 14, color: isFolder ? 'var(--bitfun-canvas-accent)' : 'var(--bitfun-canvas-muted)' } }, [isFolder ? '▸' : '•']),
+        el('span', { style: { flex: '0 0 auto', width: 14, color: isFolder ? 'var(--openbitfun-canvas-accent)' : 'var(--openbitfun-canvas-muted)' } }, [isFolder ? '▸' : '•']),
         el('span', { style: { minWidth: 0, color: toneColor(item.tone), fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, [item.name || item.path]),
-        item.meta ? el('span', { style: { flex: '0 0 auto', marginLeft: 'auto', color: 'var(--bitfun-canvas-muted)', fontSize: '11px' } }, [item.meta]) : null,
+        item.meta ? el('span', { style: { flex: '0 0 auto', marginLeft: 'auto', color: 'var(--openbitfun-canvas-muted)', fontSize: '11px' } }, [item.meta]) : null,
       ]);
       if (!isFolder) return el('div', { key: fileTreeKey(item, index, depth) }, [row]);
       return el('details', { key: fileTreeKey(item, index, depth), open: defaultExpanded }, [
@@ -708,14 +708,14 @@
   }
   const FileTree = ({ items = [], defaultExpanded = true, emptyMessage = 'No files', style } = {}) => {
     items = Array.isArray(items) ? items : [];
-    return el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid rgba(127,127,127,0.20)', borderRadius: '8px', padding: '8px 10px', background: 'rgba(127,127,127,0.04)', ...style } }, items.length ? renderFileTreeItems(items, 0, defaultExpanded) : [el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
+    return el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid rgba(127,127,127,0.20)', borderRadius: '8px', padding: '8px 10px', background: 'rgba(127,127,127,0.04)', ...style } }, items.length ? renderFileTreeItems(items, 0, defaultExpanded) : [el('div', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [emptyMessage])]);
   };
   const ProgressBar = ({ value = 0, max = 100, label, tone = 'primary', showValue = true, style } = {}) => {
     const safeMax = Math.max(1, Number(max) || 100);
     const safeValue = Math.max(0, Math.min(safeMax, Number(value) || 0));
     const percent = Math.round(safeValue / safeMax * 100);
     return el('div', { style }, [
-      label || showValue ? el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '5px', color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [
+      label || showValue ? el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '5px', color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [
         el('span', {}, [label]),
         showValue ? el('span', { style: { fontVariantNumeric: 'tabular-nums' } }, [`${percent}%`]) : null,
       ]) : null,
@@ -733,7 +733,7 @@
       height: 12,
       borderRadius: 3,
       background: categoryColor(color),
-      border: '1px solid var(--bitfun-canvas-border)',
+      border: '1px solid var(--openbitfun-canvas-border)',
       flex: '0 0 auto',
       ...style,
     },
@@ -752,7 +752,7 @@
     const safeTotal = Math.max(positiveSegmentValue(total), segmentTotal, 1);
     const remainder = Math.max(0, safeTotal - segmentTotal);
     return el('div', { style }, [
-      topLeftLabel || topRightLabel ? el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: 'var(--bitfun-canvas-muted)', fontSize: '12px', lineHeight: 1.35 } }, [
+      topLeftLabel || topRightLabel ? el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: 'var(--openbitfun-canvas-muted)', fontSize: '12px', lineHeight: 1.35 } }, [
         el('span', {}, [topLeftLabel]),
         el('span', { style: { marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' } }, [topRightLabel]),
       ]) : null,
@@ -763,9 +763,9 @@
     ]);
   };
   function todoStatusColor(status) {
-    if (status === 'completed') return 'var(--bitfun-canvas-success)';
-    if (status === 'in_progress') return 'var(--bitfun-canvas-warning)';
-    return 'var(--bitfun-canvas-muted)';
+    if (status === 'completed') return 'var(--openbitfun-canvas-success)';
+    if (status === 'in_progress') return 'var(--openbitfun-canvas-warning)';
+    return 'var(--openbitfun-canvas-muted)';
   }
   function todoStatusLabel(status) {
     if (status === 'completed') return 'completed';
@@ -781,7 +781,7 @@
   function TodoMarker({ status } = {}) {
     const color = todoStatusColor(status);
     const completed = status === 'completed';
-    return el('span', { 'aria-hidden': true, style: { width: 14, height: 14, marginTop: 2, flex: '0 0 auto', display: 'inline-grid', placeItems: 'center', borderRadius: status === 'in_progress' ? 999 : 3, border: `1.5px solid ${color}`, background: completed ? color : 'transparent', color: 'var(--bitfun-canvas-panel)', fontSize: '10px', lineHeight: 1, fontWeight: 800 } }, [completed ? '✓' : '']);
+    return el('span', { 'aria-hidden': true, style: { width: 14, height: 14, marginTop: 2, flex: '0 0 auto', display: 'inline-grid', placeItems: 'center', borderRadius: status === 'in_progress' ? 999 : 3, border: `1.5px solid ${color}`, background: completed ? color : 'transparent', color: 'var(--openbitfun-canvas-panel)', fontSize: '10px', lineHeight: 1, fontWeight: 800 } }, [completed ? '✓' : '']);
   }
   const TodoList = ({ todos = [], dimmedTodoIds, onTodoClick, style } = {}) => {
     const list = Array.isArray(todos) ? todos : [];
@@ -800,7 +800,7 @@
         borderRadius: 6,
         padding: '6px 7px',
         background: 'transparent',
-        color: 'var(--bitfun-canvas-fg)',
+        color: 'var(--openbitfun-canvas-fg)',
         font: 'inherit',
         textAlign: 'left',
         opacity: isDimmed ? 0.5 : 1,
@@ -809,7 +809,7 @@
       const body = [
         TodoMarker({ status: todo.status }),
         el('span', { style: { minWidth: 0, display: 'grid', gap: 2 } }, [
-          el('span', { style: { color: todo.status === 'completed' ? 'var(--bitfun-canvas-muted)' : 'var(--bitfun-canvas-fg)', fontSize: '12px', lineHeight: 1.45, textDecoration: todo.status === 'completed' ? 'line-through' : undefined, overflowWrap: 'anywhere' } }, [content]),
+          el('span', { style: { color: todo.status === 'completed' ? 'var(--openbitfun-canvas-muted)' : 'var(--openbitfun-canvas-fg)', fontSize: '12px', lineHeight: 1.45, textDecoration: todo.status === 'completed' ? 'line-through' : undefined, overflowWrap: 'anywhere' } }, [content]),
           el('span', { style: { color: todoStatusColor(todo.status), fontSize: '10px', lineHeight: 1.2 } }, [todoStatusLabel(todo.status)]),
         ]),
       ];
@@ -824,11 +824,11 @@
     const completed = list.filter(todo => todo.status === 'completed').length;
     const key = `todo-list-card:${list.map(todo => todo.id).join('|')}`;
     const [open, setOpen] = useCanvasState(key, Boolean(defaultExpanded));
-    return el('section', { style: { border: '1px solid var(--bitfun-canvas-border)', borderRadius: '8px', background: 'var(--bitfun-canvas-bg)', overflow: 'hidden', ...style } }, [
-      el('button', { type: 'button', 'aria-expanded': open, onClick: () => setOpen(!open), style: { width: '100%', minHeight: 34, display: 'flex', alignItems: 'center', gap: 8, border: 0, borderBottom: open ? '1px solid var(--bitfun-canvas-border)' : 0, background: 'transparent', color: 'var(--bitfun-canvas-fg)', padding: '8px 10px', font: 'inherit', cursor: 'pointer', textAlign: 'left' } }, [
-        el('span', { 'aria-hidden': true, style: { color: 'var(--bitfun-canvas-muted)', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' } }, ['›']),
+    return el('section', { style: { border: '1px solid var(--openbitfun-canvas-border)', borderRadius: '8px', background: 'var(--openbitfun-canvas-bg)', overflow: 'hidden', ...style } }, [
+      el('button', { type: 'button', 'aria-expanded': open, onClick: () => setOpen(!open), style: { width: '100%', minHeight: 34, display: 'flex', alignItems: 'center', gap: 8, border: 0, borderBottom: open ? '1px solid var(--openbitfun-canvas-border)' : 0, background: 'transparent', color: 'var(--openbitfun-canvas-fg)', padding: '8px 10px', font: 'inherit', cursor: 'pointer', textAlign: 'left' } }, [
+        el('span', { 'aria-hidden': true, style: { color: 'var(--openbitfun-canvas-muted)', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' } }, ['›']),
         el('span', { style: { fontWeight: 650, fontSize: '12px' } }, ['Tasks']),
-        el('span', { style: { marginLeft: 'auto', color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, [`${completed}/${list.length} done`]),
+        el('span', { style: { marginLeft: 'auto', color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, [`${completed}/${list.length} done`]),
       ]),
       open ? el('div', { style: { padding: 8 } }, [TodoList({ todos: list, dimmedTodoIds, onTodoClick })]) : null,
     ]);
@@ -836,55 +836,55 @@
   const Button = ({ children, variant = 'secondary', onClick, disabled, type = 'button', style } = {}) => {
     const primary = variant === 'primary';
     const ghost = variant === 'ghost';
-    return el('button', { type, onClick, disabled, style: { border: ghost ? '1px solid transparent' : '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', background: primary ? 'var(--bitfun-canvas-accent)' : ghost ? 'transparent' : 'rgba(127,127,127,0.06)', color: primary ? '#fff' : 'var(--bitfun-canvas-fg)', padding: '4px 10px', minHeight: '24px', font: 'inherit', fontSize: '12px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, children);
+    return el('button', { type, onClick, disabled, style: { border: ghost ? '1px solid transparent' : '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', background: primary ? 'var(--openbitfun-canvas-accent)' : ghost ? 'transparent' : 'rgba(127,127,127,0.06)', color: primary ? '#fff' : 'var(--openbitfun-canvas-fg)', padding: '4px 10px', minHeight: '24px', font: 'inherit', fontSize: '12px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, children);
   };
   const Toggle = ({ checked, onChange, label, disabled, size = 'sm', style } = {}) => {
     const width = size === 'md' ? 34 : 28;
     const height = size === 'md' ? 20 : 16;
     const knob = height - 4;
-    return el('button', { disabled, onClick: () => onChange?.(!checked), style: { width, height, border: 0, borderRadius: 999, background: checked ? 'var(--bitfun-canvas-accent)' : 'rgba(127,127,127,0.20)', padding: 2, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, [
+    return el('button', { disabled, onClick: () => onChange?.(!checked), style: { width, height, border: 0, borderRadius: 999, background: checked ? 'var(--openbitfun-canvas-accent)' : 'rgba(127,127,127,0.20)', padding: 2, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, [
       el('span', { style: { display: 'block', width: knob, height: knob, borderRadius: 999, background: '#fff', transform: `translateX(${checked ? width - height : 0}px)` } }),
       label ? el('span', {}, [label]) : null,
     ]);
   };
-  const Checkbox = ({ checked, onChange, disabled, label, style } = {}) => el('label', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '12px', opacity: disabled ? 0.55 : 1, ...style } }, [el('input', { type: 'checkbox', checked, disabled, onChange: event => onChange?.(event.target.checked), style: { accentColor: 'var(--bitfun-canvas-accent)' } }), label]);
+  const Checkbox = ({ checked, onChange, disabled, label, style } = {}) => el('label', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '12px', opacity: disabled ? 0.55 : 1, ...style } }, [el('input', { type: 'checkbox', checked, disabled, onChange: event => onChange?.(event.target.checked), style: { accentColor: 'var(--openbitfun-canvas-accent)' } }), label]);
   const Select = ({ value, options = [], placeholder, disabled, onChange, style } = {}) => {
     options = Array.isArray(options) ? options : [];
-    return el('select', { value, disabled, onChange: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', ...style } }, [placeholder ? el('option', { value: '' }, [placeholder]) : null, ...options.map(option => typeof option === 'string' ? el('option', { value: option }, [option]) : el('option', { value: option.value, disabled: option.disabled }, [option.label]))]);
+    return el('select', { value, disabled, onChange: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--openbitfun-canvas-panel)', color: 'var(--openbitfun-canvas-fg)', ...style } }, [placeholder ? el('option', { value: '' }, [placeholder]) : null, ...options.map(option => typeof option === 'string' ? el('option', { value: option }, [option]) : el('option', { value: option.value, disabled: option.disabled }, [option.label]))]);
   };
-  const TextInput = ({ value, placeholder, disabled, type = 'text', onChange, style } = {}) => el('input', { value, placeholder, disabled, type, onInput: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', ...style } });
-  const Input = ({ value, placeholder, disabled, type = 'text', onChange, label, hint, prefix, suffix, error, errorMessage, style } = {}) => el('label', { style: { display: 'grid', gap: '5px', color: 'var(--bitfun-canvas-fg)', fontSize: '12px', ...style } }, [
+  const TextInput = ({ value, placeholder, disabled, type = 'text', onChange, style } = {}) => el('input', { value, placeholder, disabled, type, onInput: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', minHeight: '28px', padding: '4px 8px', background: 'var(--openbitfun-canvas-panel)', color: 'var(--openbitfun-canvas-fg)', ...style } });
+  const Input = ({ value, placeholder, disabled, type = 'text', onChange, label, hint, prefix, suffix, error, errorMessage, style } = {}) => el('label', { style: { display: 'grid', gap: '5px', color: 'var(--openbitfun-canvas-fg)', fontSize: '12px', ...style } }, [
     label ? el('span', { style: { fontWeight: 600 } }, [label]) : null,
-    el('span', { style: { display: 'flex', alignItems: 'center', gap: '6px', border: `1px solid ${error ? 'var(--bitfun-canvas-danger)' : 'rgba(127,127,127,0.22)'}`, borderRadius: '6px', minHeight: '30px', padding: '0 8px', background: 'var(--bitfun-canvas-panel)' } }, [
+    el('span', { style: { display: 'flex', alignItems: 'center', gap: '6px', border: `1px solid ${error ? 'var(--openbitfun-canvas-danger)' : 'rgba(127,127,127,0.22)'}`, borderRadius: '6px', minHeight: '30px', padding: '0 8px', background: 'var(--openbitfun-canvas-panel)' } }, [
       prefix || null,
-      el('input', { value, placeholder, disabled, type, onInput: event => onChange?.(event.target.value), style: { flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: 'var(--bitfun-canvas-fg)', font: 'inherit' } }),
+      el('input', { value, placeholder, disabled, type, onInput: event => onChange?.(event.target.value), style: { flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', color: 'var(--openbitfun-canvas-fg)', font: 'inherit' } }),
       suffix || null,
     ]),
-    error && errorMessage ? el('span', { style: { color: 'var(--bitfun-canvas-danger)' } }, [errorMessage]) : hint ? el('span', { style: { color: 'var(--bitfun-canvas-muted)' } }, [hint]) : null,
+    error && errorMessage ? el('span', { style: { color: 'var(--openbitfun-canvas-danger)' } }, [errorMessage]) : hint ? el('span', { style: { color: 'var(--openbitfun-canvas-muted)' } }, [hint]) : null,
   ]);
-  const TextArea = ({ value, placeholder, disabled, rows = 3, onChange, style } = {}) => el('textarea', { value, placeholder, disabled, rows, onInput: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', padding: '7px 8px', background: 'var(--bitfun-canvas-panel)', color: 'var(--bitfun-canvas-fg)', font: 'inherit', fontSize: '13px', resize: 'vertical', width: '100%', boxSizing: 'border-box', ...style } });
+  const TextArea = ({ value, placeholder, disabled, rows = 3, onChange, style } = {}) => el('textarea', { value, placeholder, disabled, rows, onInput: event => onChange?.(event.target.value), style: { border: '1px solid rgba(127,127,127,0.22)', borderRadius: '6px', padding: '7px 8px', background: 'var(--openbitfun-canvas-panel)', color: 'var(--openbitfun-canvas-fg)', font: 'inherit', fontSize: '13px', resize: 'vertical', width: '100%', boxSizing: 'border-box', ...style } });
   const IconButton = ({ children, onClick, disabled, title, variant = 'default', size = 'md', style } = {}) => {
     const px = size === 'sm' ? 18 : 24;
-    return el('button', { title, onClick, disabled, style: { width: px, height: px, display: 'inline-grid', placeItems: 'center', border: 0, borderRadius: variant === 'circle' ? 999 : 5, background: variant === 'circle' ? 'rgba(127,127,127,0.12)' : 'transparent', color: 'var(--bitfun-canvas-muted)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, children);
+    return el('button', { title, onClick, disabled, style: { width: px, height: px, display: 'inline-grid', placeItems: 'center', border: 0, borderRadius: variant === 'circle' ? 999 : 5, background: variant === 'circle' ? 'rgba(127,127,127,0.12)' : 'transparent', color: 'var(--openbitfun-canvas-muted)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1, ...style } }, children);
   };
   const DiffStats = ({ additions = 0, deletions = 0, style } = {}) => {
     if (!additions && !deletions) return null;
     return el('span', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontVariantNumeric: 'tabular-nums', ...style } }, [
-      additions ? el('span', { style: { color: 'var(--bitfun-canvas-success)' } }, [`+${additions}`]) : null,
-      deletions ? el('span', { style: { color: 'var(--bitfun-canvas-danger)' } }, [`-${deletions}`]) : null,
+      additions ? el('span', { style: { color: 'var(--openbitfun-canvas-success)' } }, [`+${additions}`]) : null,
+      deletions ? el('span', { style: { color: 'var(--openbitfun-canvas-danger)' } }, [`-${deletions}`]) : null,
     ]);
   };
   function diffLineStyle(type) {
-    if (type === 'added') return { background: 'rgba(36,138,61,0.12)', color: 'var(--bitfun-canvas-fg)', accent: 'var(--bitfun-canvas-success)', sign: '+' };
-    if (type === 'removed') return { background: 'rgba(209,36,47,0.12)', color: 'var(--bitfun-canvas-fg)', accent: 'var(--bitfun-canvas-danger)', sign: '-' };
-    return { background: 'transparent', color: 'var(--bitfun-canvas-fg)', accent: 'transparent', sign: ' ' };
+    if (type === 'added') return { background: 'rgba(36,138,61,0.12)', color: 'var(--openbitfun-canvas-fg)', accent: 'var(--openbitfun-canvas-success)', sign: '+' };
+    if (type === 'removed') return { background: 'rgba(209,36,47,0.12)', color: 'var(--openbitfun-canvas-fg)', accent: 'var(--openbitfun-canvas-danger)', sign: '-' };
+    return { background: 'transparent', color: 'var(--openbitfun-canvas-fg)', accent: 'transparent', sign: ' ' };
   }
   const DiffView = ({ lines = [], showLineNumbers = true, coloredLineNumbers = true, showAccentStrip = true, style } = {}) => el('div', { style: { overflow: 'auto', fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: '12px', lineHeight: 1.55, background: 'rgba(127,127,127,0.035)', ...style } }, normalizeDiffLines(lines).map((line, index) => {
     const meta = diffLineStyle(line.type);
     return el('div', { style: { display: 'grid', gridTemplateColumns: `${showAccentStrip ? '3px ' : ''}${showLineNumbers ? '52px ' : ''}18px minmax(0,1fr)`, minWidth: '100%', background: meta.background, color: meta.color, whiteSpace: 'pre' } }, [
       showAccentStrip ? el('span', { style: { background: meta.accent } }) : null,
-      showLineNumbers ? el('span', { style: { color: coloredLineNumbers && line.type !== 'unchanged' ? meta.accent : 'var(--bitfun-canvas-muted)', textAlign: 'right', padding: '0 8px', userSelect: 'none' } }, [line.lineNumber ?? index + 1]) : null,
-      el('span', { style: { color: meta.accent === 'transparent' ? 'var(--bitfun-canvas-muted)' : meta.accent, userSelect: 'none' } }, [meta.sign]),
+      showLineNumbers ? el('span', { style: { color: coloredLineNumbers && line.type !== 'unchanged' ? meta.accent : 'var(--openbitfun-canvas-muted)', textAlign: 'right', padding: '0 8px', userSelect: 'none' } }, [line.lineNumber ?? index + 1]) : null,
+      el('span', { style: { color: meta.accent === 'transparent' ? 'var(--openbitfun-canvas-muted)' : meta.accent, userSelect: 'none' } }, [meta.sign]),
       el('span', { style: { paddingRight: '10px' } }, [line.content || '']),
     ]);
   }));
@@ -974,13 +974,13 @@
     return { labels, series };
   }
   function chartShell(title, height, style, child) {
-    return el('div', { style: { border: '1px solid var(--bitfun-canvas-border)', borderRadius: '8px', padding: '10px', background: 'rgba(127,127,127,0.04)', ...style } }, [
+    return el('div', { style: { border: '1px solid var(--openbitfun-canvas-border)', borderRadius: '8px', padding: '10px', background: 'rgba(127,127,127,0.04)', ...style } }, [
       title ? el('div', { style: { fontWeight: 650, marginBottom: '8px' } }, [title]) : null,
-      child || el('div', { style: { minHeight: `${height}px`, display: 'grid', placeItems: 'center', color: 'var(--bitfun-canvas-muted)' } }, ['No chart data'])
+      child || el('div', { style: { minHeight: `${height}px`, display: 'grid', placeItems: 'center', color: 'var(--openbitfun-canvas-muted)' } }, ['No chart data'])
     ]);
   }
   function chartLegend(series) {
-    return el('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, series.map(entry => el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, [
+    return el('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px', color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, series.map(entry => el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, [
       el('span', { style: { width: '9px', height: '9px', borderRadius: '999px', background: entry.color } }),
       entry.name
     ])));
@@ -1010,10 +1010,10 @@
       });
     });
     const axis = [
-      svg('line', { x1: padding.left, y1: padding.top + innerHeight, x2: width - padding.right, y2: padding.top + innerHeight, stroke: 'var(--bitfun-canvas-border)' }),
-      svg('line', { x1: padding.left, y1: padding.top, x2: padding.left, y2: padding.top + innerHeight, stroke: 'var(--bitfun-canvas-border)' }),
-      svg('text', { x: padding.left - 8, y: padding.top + 10, 'text-anchor': 'end', fill: 'var(--bitfun-canvas-muted)', 'font-size': 11 }, [String(max)]),
-      ...labels.map((label, index) => svg('text', { x: padding.left + index * groupWidth + groupWidth / 2, y: height - 12, 'text-anchor': 'middle', fill: 'var(--bitfun-canvas-muted)', 'font-size': 11 }, [label])),
+      svg('line', { x1: padding.left, y1: padding.top + innerHeight, x2: width - padding.right, y2: padding.top + innerHeight, stroke: 'var(--openbitfun-canvas-border)' }),
+      svg('line', { x1: padding.left, y1: padding.top, x2: padding.left, y2: padding.top + innerHeight, stroke: 'var(--openbitfun-canvas-border)' }),
+      svg('text', { x: padding.left - 8, y: padding.top + 10, 'text-anchor': 'end', fill: 'var(--openbitfun-canvas-muted)', 'font-size': 11 }, [String(max)]),
+      ...labels.map((label, index) => svg('text', { x: padding.left + index * groupWidth + groupWidth / 2, y: height - 12, 'text-anchor': 'middle', fill: 'var(--openbitfun-canvas-muted)', 'font-size': 11 }, [label])),
     ];
     return chartShell(props.title || 'Bar chart', height, props.style, el('div', {}, [
       svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': props.title || 'Bar chart', style: { width: '100%', height: `${height}px`, display: 'block' } }, [...axis, ...bars]),
@@ -1042,10 +1042,10 @@
       ];
     });
     const axis = [
-      svg('line', { x1: padding.left, y1: padding.top + innerHeight, x2: width - padding.right, y2: padding.top + innerHeight, stroke: 'var(--bitfun-canvas-border)' }),
-      svg('line', { x1: padding.left, y1: padding.top, x2: padding.left, y2: padding.top + innerHeight, stroke: 'var(--bitfun-canvas-border)' }),
-      svg('text', { x: padding.left - 8, y: padding.top + 10, 'text-anchor': 'end', fill: 'var(--bitfun-canvas-muted)', 'font-size': 11 }, [String(max)]),
-      ...labels.map((label, index) => svg('text', { x: padding.left + (labels.length > 1 ? index * step : innerWidth / 2), y: height - 12, 'text-anchor': 'middle', fill: 'var(--bitfun-canvas-muted)', 'font-size': 11 }, [label])),
+      svg('line', { x1: padding.left, y1: padding.top + innerHeight, x2: width - padding.right, y2: padding.top + innerHeight, stroke: 'var(--openbitfun-canvas-border)' }),
+      svg('line', { x1: padding.left, y1: padding.top, x2: padding.left, y2: padding.top + innerHeight, stroke: 'var(--openbitfun-canvas-border)' }),
+      svg('text', { x: padding.left - 8, y: padding.top + 10, 'text-anchor': 'end', fill: 'var(--openbitfun-canvas-muted)', 'font-size': 11 }, [String(max)]),
+      ...labels.map((label, index) => svg('text', { x: padding.left + (labels.length > 1 ? index * step : innerWidth / 2), y: height - 12, 'text-anchor': 'middle', fill: 'var(--openbitfun-canvas-muted)', 'font-size': 11 }, [label])),
     ];
     return chartShell(props.title || 'Line chart', height, props.style, el('div', {}, [
       svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': props.title || 'Line chart', style: { width: '100%', height: `${height}px`, display: 'block' } }, [...axis, ...lines]),
@@ -1076,7 +1076,7 @@
     let angle = -Math.PI / 2;
     const slices = entries.map(entry => {
       const nextAngle = angle + (entry.value / total) * Math.PI * 2;
-      const path = svg('path', { d: piePath(cx, cy, radius, angle, nextAngle), fill: entry.color, stroke: 'var(--bitfun-canvas-bg)', 'stroke-width': 2 });
+      const path = svg('path', { d: piePath(cx, cy, radius, angle, nextAngle), fill: entry.color, stroke: 'var(--openbitfun-canvas-bg)', 'stroke-width': 2 });
       angle = nextAngle;
       return path;
     });
@@ -1085,7 +1085,7 @@
       const percent = Math.round(entry.value / total * 100);
       return [
         svg('rect', { x: 330, y: y - 10, width: 10, height: 10, rx: 2, fill: entry.color }),
-        svg('text', { x: 348, y, fill: 'var(--bitfun-canvas-fg)', 'font-size': 12 }, [`${entry.label} (${percent}%)`]),
+        svg('text', { x: 348, y, fill: 'var(--openbitfun-canvas-fg)', 'font-size': 12 }, [`${entry.label} (${percent}%)`]),
       ];
     }).flat();
     return chartShell(props.title || 'Pie chart', height, props.style, svg('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': props.title || 'Pie chart', style: { width: '100%', height: `${height}px`, display: 'block' } }, [...slices, ...legend]));
@@ -1114,7 +1114,7 @@
       return svg('g', {}, [
         svg('path', { d: diagramEdgePath(edge, layout.direction), stroke: color, 'stroke-width': 1.5, opacity: edge.isBackEdge ? 0.5 : 0.75, fill: 'none' }),
         svg('circle', { cx: edge.targetX, cy: edge.targetY, r: 3, fill: color, opacity: 0.8 }),
-        meta.label ? svg('text', { x: (edge.sourceX + edge.targetX) / 2, y: (edge.sourceY + edge.targetY) / 2 - 4, 'text-anchor': 'middle', fill: 'var(--bitfun-canvas-muted)', 'font-size': 10 }, [String(meta.label).slice(0, 18)]) : null,
+        meta.label ? svg('text', { x: (edge.sourceX + edge.targetX) / 2, y: (edge.sourceY + edge.targetY) / 2 - 4, 'text-anchor': 'middle', fill: 'var(--openbitfun-canvas-muted)', 'font-size': 10 }, [String(meta.label).slice(0, 18)]) : null,
       ]);
     });
     const nodeEls = layout.nodes.map(layoutNode => {
@@ -1123,16 +1123,16 @@
       const description = diagramNodeDescription(node);
       const color = toneColor(node.tone);
       return svg('g', { transform: `translate(${layoutNode.x} ${layoutNode.y})` }, [
-        svg('rect', { width: layoutNode.width, height: layoutNode.height, rx: 6, fill: 'var(--bitfun-canvas-bg)', stroke: color, 'stroke-width': 1.25 }),
-        svg('text', { x: 12, y: description ? 18 : layoutNode.height / 2 + 4, fill: 'var(--bitfun-canvas-fg)', 'font-size': 12, 'font-weight': 650 }, [String(title).slice(0, 22)]),
-        description ? svg('text', { x: 12, y: 34, fill: 'var(--bitfun-canvas-muted)', 'font-size': 10 }, [String(description).slice(0, 26)]) : null,
+        svg('rect', { width: layoutNode.width, height: layoutNode.height, rx: 6, fill: 'var(--openbitfun-canvas-bg)', stroke: color, 'stroke-width': 1.25 }),
+        svg('text', { x: 12, y: description ? 18 : layoutNode.height / 2 + 4, fill: 'var(--openbitfun-canvas-fg)', 'font-size': 12, 'font-weight': 650 }, [String(title).slice(0, 22)]),
+        description ? svg('text', { x: 12, y: 34, fill: 'var(--openbitfun-canvas-muted)', 'font-size': 10 }, [String(description).slice(0, 26)]) : null,
       ]);
     });
     return svg('svg', { viewBox: `0 0 ${Math.max(layout.width, 1)} ${Math.max(layout.height, 1)}`, role: 'img', 'aria-label': label, style: { width: '100%', minWidth: `${layout.width}px`, height: `${layout.height}px`, display: 'block' } }, [...edgeEls, ...nodeEls]);
   }
   function diagramShell(title, height, style, child) {
-    return el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid var(--bitfun-canvas-border)', borderRadius: '8px', padding: '10px', background: 'rgba(127,127,127,0.04)', ...style } }, [
-      title ? el('div', { style: { marginBottom: '10px', color: 'var(--bitfun-canvas-fg)', fontSize: '12px', fontWeight: 650 } }, [title]) : null,
+    return el('div', { style: { minWidth: 0, overflow: 'auto', border: '1px solid var(--openbitfun-canvas-border)', borderRadius: '8px', padding: '10px', background: 'rgba(127,127,127,0.04)', ...style } }, [
+      title ? el('div', { style: { marginBottom: '10px', color: 'var(--openbitfun-canvas-fg)', fontSize: '12px', fontWeight: 650 } }, [title]) : null,
       el('div', { style: { minHeight: `${height}px` } }, [child])
     ]);
   }
@@ -1140,7 +1140,7 @@
     const nodes = Array.isArray(props.nodes) ? props.nodes : [];
     const edges = normalizeDAGEdges(props.edges);
     const layout = computeDAGLayout({ nodes, edges, direction: props.direction, nodeWidth: props.nodeWidth || 160, nodeHeight: props.nodeHeight || 46, rankGap: props.rankGap || 64, nodeGap: props.nodeGap || 48, padding: props.padding || 24 });
-    return diagramShell(props.title, props.height || layout.height, props.style, nodes.length ? renderDiagramSvg(layout, nodes, edges, props.title || 'Dependency graph') : el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, ['No graph nodes']));
+    return diagramShell(props.title, props.height || layout.height, props.style, nodes.length ? renderDiagramSvg(layout, nodes, edges, props.title || 'Dependency graph') : el('div', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, ['No graph nodes']));
   }
   function flowNodes(steps) {
     if (!Array.isArray(steps)) return [];
@@ -1154,13 +1154,13 @@
     const nodes = Array.isArray(props.nodes) && props.nodes.length ? props.nodes : stepNodes;
     const edges = Array.isArray(props.edges) && props.edges.length ? normalizeDAGEdges(props.edges) : flowEdges(nodes);
     const layout = computeDAGLayout({ nodes, edges, direction: props.direction || 'horizontal', nodeWidth: props.nodeWidth || 150, nodeHeight: props.nodeHeight || 46, rankGap: props.rankGap || 54, nodeGap: props.nodeGap || 36, padding: props.padding || 20 });
-    return diagramShell(props.title, props.height || layout.height, props.style, nodes.length ? renderDiagramSvg(layout, nodes, edges, props.title || 'Flow diagram') : el('div', { style: { color: 'var(--bitfun-canvas-muted)', fontSize: '12px' } }, ['No flow steps']));
+    return diagramShell(props.title, props.height || layout.height, props.style, nodes.length ? renderDiagramSvg(layout, nodes, edges, props.title || 'Flow diagram') : el('div', { style: { color: 'var(--openbitfun-canvas-muted)', fontSize: '12px' } }, ['No flow steps']));
   }
   function toneColor(tone) {
-    return tone === 'muted' || tone === 'secondary' || tone === 'tertiary' || tone === 'quaternary' ? 'var(--bitfun-canvas-muted)' : tone === 'success' ? 'var(--bitfun-canvas-success)' : tone === 'warning' ? 'var(--bitfun-canvas-warning)' : tone === 'danger' ? 'var(--bitfun-canvas-danger)' : tone === 'info' ? 'var(--bitfun-canvas-info)' : tone === 'neutral' ? 'var(--bitfun-canvas-muted)' : 'var(--bitfun-canvas-fg)';
+    return tone === 'muted' || tone === 'secondary' || tone === 'tertiary' || tone === 'quaternary' ? 'var(--openbitfun-canvas-muted)' : tone === 'success' ? 'var(--openbitfun-canvas-success)' : tone === 'warning' ? 'var(--openbitfun-canvas-warning)' : tone === 'danger' ? 'var(--openbitfun-canvas-danger)' : tone === 'info' ? 'var(--openbitfun-canvas-info)' : tone === 'neutral' ? 'var(--openbitfun-canvas-muted)' : 'var(--openbitfun-canvas-fg)';
   }
   function weightValue(weight) { return weight === 'medium' ? 500 : weight === 'semibold' ? 650 : weight === 'bold' ? 700 : 400; }
-  function cellStyle(head, align = 'left') { return { textAlign: align, padding: '7px 9px', borderBottom: '1px solid rgba(127,127,127,0.16)', fontWeight: head ? 650 : 400, color: head ? 'var(--bitfun-canvas-fg)' : undefined }; }
+  function cellStyle(head, align = 'left') { return { textAlign: align, padding: '7px 9px', borderBottom: '1px solid rgba(127,127,127,0.16)', fontWeight: head ? 650 : 400, color: head ? 'var(--openbitfun-canvas-fg)' : undefined }; }
   function useHostAppearance() { return { ...appearance, tokens: appearance }; }
   function depsChanged(previous, next) {
     if (!Array.isArray(next)) return true;
@@ -1249,19 +1249,19 @@
     return action => new Promise((resolve, reject) => {
       const requestId = `action-${++actionSeq}`;
       pendingActions.set(requestId, { resolve, reject });
-      window.parent?.postMessage({ type: 'bitfun-canvas-action', requestId, action }, '*');
+      window.parent?.postMessage({ type: 'openbitfun-canvas-action', requestId, action }, '*');
     });
   }
   function persistState() {
     if (!hostStateReady) return;
     window.parent?.postMessage({
-      type: 'bitfun-canvas-save-state',
+      type: 'openbitfun-canvas-save-state',
       values: Object.fromEntries(state.entries())
     }, '*');
   }
   window.addEventListener('message', event => {
     const data = event.data || {};
-    if (data.type === 'bitfun-canvas-action-result') {
+    if (data.type === 'openbitfun-canvas-action-result') {
       const pending = pendingActions.get(data.requestId);
       if (!pending) return;
       pendingActions.delete(data.requestId);
@@ -1269,16 +1269,16 @@
       else pending.resolve(data.result ?? null);
       return;
     }
-    if (data.type === 'bitfun-canvas-appearance') {
+    if (data.type === 'openbitfun-canvas-appearance') {
       applyHostAppearance(data.appearance);
       rerender();
       return;
     }
-    if (data.type === 'bitfun-canvas-design-mode') {
+    if (data.type === 'openbitfun-canvas-design-mode') {
       setDesignMode(data.enabled);
       return;
     }
-    if (data.type !== 'bitfun-canvas-state' && data.type !== 'bitfun-canvas-load-state-result' && data.type !== 'bitfun-canvas-save-state-result') return;
+    if (data.type !== 'openbitfun-canvas-state' && data.type !== 'openbitfun-canvas-load-state-result' && data.type !== 'openbitfun-canvas-save-state-result') return;
     const values = data.state && typeof data.state === 'object' && data.state.values && typeof data.state.values === 'object'
       ? data.state.values
       : {};
@@ -1309,6 +1309,6 @@
       };
     });
   }
-  window.BitfunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, normalizeDiffLines, mergeStyle, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostAppearance, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
-  window.BitfunCanvasRuntime = { h, Fragment, mount(component) { renderFn = component; rerender(); } };
+  window.OpenBitFunCanvasSDK = { Stack, Row, Grid, Box, Divider, Spacer, H1, H2, H3, Text, Code, Link, Card, CardHeader, CardBody, Alert, Callout, CollapsibleSection, Empty, Tabs, Pill, Stat, Table, KeyValueList, Timeline, FileTree, ProgressBar, Swatch, UsageBar, TodoList, TodoListCard, DependencyGraph, FlowDiagram, BarChart, LineChart, PieChart, Button, Toggle, Checkbox, Select, Input, TextInput, TextArea, IconButton, DiffStats, DiffView, computeDAGLayout, normalizeDiffLines, mergeStyle, usageColorSequence, categoryPaletteLight, categoryPaletteDark, canvasPaletteLight, canvasPaletteDark, canvasTokensLight, canvasTokens, useHostAppearance, useCanvasState, useCanvasAction, useState, useRef, useEffect, useCallback, useMemo };
+  window.OpenBitFunCanvasRuntime = { h, Fragment, mount(component) { renderFn = component; rerender(); } };
 })();

@@ -50,7 +50,7 @@ const MAX_RESPONSE_TELEMETRY_CHARS: usize = 4_000;
 const MAX_MODEL_ATTEMPTS: usize = 2;
 const MAX_RECURSIVE_INSPECTION_ENTRIES: usize = 100_000;
 const TELEMETRY_RELATIVE_PATH: &str = "telemetry/edit-constraint-guard.jsonl";
-const TELEMETRY_ENV: &str = "BITFUN_EDIT_CONSTRAINT_TELEMETRY";
+const TELEMETRY_ENV: &str = "OPENBITFUN_EDIT_CONSTRAINT_TELEMETRY";
 
 const EXTRACTION_SYSTEM_PROMPT: &str = r#"You update the active file-edit prohibitions for a software task.
 

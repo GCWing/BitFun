@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(not(target_os = "macos"))]
-const KEYRING_SERVICE: &str = "openbitfun.bitfun.miniapp-market.v1";
+const KEYRING_SERVICE: &str = "openbitfun.miniapp-market.v1";
 const CREDENTIAL_ENTRY: &str = "github-oauth";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,13 +51,13 @@ fn open_entry() -> Result<keyring_core::Entry, String> {
 
 #[cfg(target_os = "macos")]
 fn macos_credential_vault(
-) -> Result<bitfun_services_core::credential_vault::CredentialVault, String> {
+) -> Result<openbitfun_services_core::credential_vault::CredentialVault, String> {
     let base = dirs::config_dir()
         .ok_or_else(|| "system config directory unavailable".to_string())?
-        .join("bitfun")
+        .join(openbitfun_services_core::product_identity::data_namespace())
         .join("data");
     Ok(
-        bitfun_services_core::credential_vault::CredentialVault::new(
+        openbitfun_services_core::credential_vault::CredentialVault::new(
             base.join(".market_credentials_vault.key"),
             base.join("market_credentials_vault.json"),
         ),

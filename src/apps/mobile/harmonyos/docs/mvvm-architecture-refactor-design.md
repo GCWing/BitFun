@@ -204,7 +204,7 @@ source scripts/ohos-env.sh
 | `SettingsSheet.ets` | 297 | 4 | 8 | — | — |
 | `CreateSessionSheet.ets` | 226 | — | 4 | 2 | — |
 | `MarkdownContent.ets` | 199 | — | 1 | — | — |
-| `BitFunAccountLoginPage.ets` | 146 | 5 | — | — | — |
+| `OpenBitFunAccountLoginPage.ets` | 146 | 5 | — | — | — |
 | `StreamingMarkdownContent.ets` | 142 | 1 | 3 | — | 3 |
 | `FileReferenceCard.ets` | 85 | — | 8 | — | — |
 | `ThinkingBlock.ets` | 67 | 1 | 5 | — | — |
@@ -464,7 +464,7 @@ HAP、完整 LocalTest 与窄屏真机 Local → Remote → Local 往返均通�
 
 1. 先迁 5 个小文件（`DefaultAccountAvatar` 18、`ConversationSourceSwitcher` 40、`AppRoot` 48、`ChatStatusBar` 60、`ThinkingBlock` 67）——`AppRoot` 无任何状态装饰器，是纯粹的 `@Component` → `@ComponentV2` 改名，可作为第一个 commit 验证工具链；
 2. 迁 `@Link` / `@Watch` 三个特殊文件（`CreateSessionSheet` 226、`StreamingMarkdownContent` 142、`RemoteControlSettingsSheet` 872）——语义变化集中在这里，单独处理便于 review；
-3. 迁剩余中等文件（`FileReferenceCard` 85、`BitFunAccountLoginPage` 146、`MarkdownContent` 199、`SettingsSheet` 297、`ModelServiceSettingsPanel` 662）；
+3. 迁剩余中等文件（`FileReferenceCard` 85、`OpenBitFunAccountLoginPage` 146、`MarkdownContent` 199、`SettingsSheet` 297、`ModelServiceSettingsPanel` 662）；
 4. 最后迁 `AppSidebar`（908）与 `ConnectView`（1344）——这两个占 V1 总量 44%，且是 S6 的拆分目标，**先迁后拆**：若先拆再迁，会在拆分过程中制造 V1/V2 交界，把两类风险叠在同一个 commit 里。
 
 **风险**：中。集中在 `@Prop` → `@Param` 的 79 处——**不能批量替换**，每一处都要确认子组件是否本地改写。`StreamingMarkdownContent` 尤其要小心：它的 3 个 `@Prop` 全部带 `@Watch`，流式 Markdown 的增量渲染依赖这套回调时序。
@@ -547,7 +547,7 @@ hdc -t 5ZU0226202001116 file recv /data/local/tmp/s.jpeg ./s.jpeg
 
 设备侧注意事项（已踩过的坑）：
 
-- bundle 名是 **`com.bitfun.app`**，和手表端共用一个 bundle。2026-08-10 从脚手架遗留的 `com.example.bitfun_mobile` 改过来的，原因是 `distributedKVStore` 按 bundleName + storeId 隔离，跨设备同步的前提是同一个 app —— bundle 不一致时手机和手表各自建的是两个互不相干的库，手机↔手表的凭证交接物理上跑不通。改动的代价是已装的旧包等于另一个 app，数据不通、要重新登录；
+- bundle 名是 **`com.openbitfun.app`**，和手表端共用一个 bundle。2026-08-10 从脚手架遗留的 `com.example.openbitfun_mobile` 改过来的，原因是 `distributedKVStore` 按 bundleName + storeId 隔离，跨设备同步的前提是同一个 app —— bundle 不一致时手机和手表各自建的是两个互不相干的库，手机↔手表的凭证交接物理上跑不通。改动的代价是已装的旧包等于另一个 app，数据不通、要重新登录；
 - `hdc` 必须带 `-t <serial>`，否则报 `[Fail]ExecuteCommand need connect-key`（列出了两个 target）；
 - 外屏分辨率 1080×2444；点击用 `hdc -t <id> shell uinput -T -c X Y`。
 

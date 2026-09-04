@@ -5,7 +5,7 @@ pub const LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID: &str = "sensevoice-small-int8";
 pub const LOCAL_SENSEVOICE_SMALL_INT8_MODEL_REF: &str = "local:sensevoice-small-int8";
 pub const LOCAL_QWEN3_ASR_0_6B_INT8_MODEL_ID: &str = "qwen3-asr-0.6b-int8";
 pub const LOCAL_QWEN3_ASR_0_6B_INT8_MODEL_REF: &str = "local:qwen3-asr-0.6b-int8";
-pub(super) use bitfun_core_types::speech::{
+pub(super) use openbitfun_core_types::speech::{
     SpeechModelInstallState, SpeechModelProgress, SpeechModelStatus, SpeechTranscriptionResult,
 };
 

@@ -11,13 +11,13 @@ import {
 describe('additionalModePromptReference', () => {
   it('creates and parses the Review capsule token', () => {
     const token = createAdditionalModePromptReferenceToken('review');
-    expect(token).toBe('[[bitfun-additional-mode:review]]');
+    expect(token).toBe('[[openbitfun-additional-mode:review]]');
     expect(parseAdditionalModePromptReferenceToken(token)).toEqual({
       id: 'review',
       displayText: 'Review',
       promptCommand: '/review',
     });
-    expect(parseAdditionalModePromptReferenceToken('[[bitfun-additional-mode:unknown]]')).toBeNull();
+    expect(parseAdditionalModePromptReferenceToken('[[openbitfun-additional-mode:unknown]]')).toBeNull();
   });
 
   it('finds and appends mode capsules without exposing command text', () => {

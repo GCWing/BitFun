@@ -41,7 +41,7 @@ impl RuntimeOwnershipKey {
         })?;
 
         let mut hasher = Sha256::new();
-        hasher.update(b"bitfun-runtime-ownership-v2\0");
+        hasher.update(b"openbitfun-runtime-ownership-v2\0");
         hasher.update(product_identity.as_bytes());
         hasher.update(b"\0");
         hash_canonical_path(&mut hasher, &canonical_workspace);

@@ -15,11 +15,11 @@ $_section-gap: 12px;
   justify-content: space-between;
   height: $_statusbar-height;
   padding: $_statusbar-padding;
-  background: var(--bf-color-surface-scene);
-  border-top: 1px solid var(--bf-color-border-subtle);
-  font-size: var(--bf-type-meta-font-size);
-  font-family: var(--bf-type-code-md-font-family);
-  color: var(--bf-color-content-muted);
+  background: var(--openbitfun-color-surface-scene);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  color: var(--openbitfun-color-content-muted);
   user-select: none;
   flex-shrink: 0;
 
@@ -48,12 +48,12 @@ $_section-gap: 12px;
       cursor: pointer;
 
       &:hover {
-        background: var(--bf-color-surface-subtle);
-        color: var(--bf-color-content-secondary);
+        background: var(--openbitfun-color-surface-subtle);
+        color: var(--openbitfun-color-content-secondary);
       }
 
       &:active {
-        background: var(--bf-color-action-neutral-surface-hover);
+        background: var(--openbitfun-color-action-neutral-surface-hover);
       }
     }
   }
@@ -62,27 +62,27 @@ $_section-gap: 12px;
   &__separator {
     width: 1px;
     height: 12px;
-    background: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-border-subtle);
     flex-shrink: 0;
   }
 
   // Selection Info
   &__selection {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.7;
     margin-left: 4px;
   }
 
   // Read-only Badge
   &__readonly {
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
-    color: var(--bf-color-status-warning-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
+    color: var(--openbitfun-color-status-warning-content);
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
   }
 
 }
@@ -110,12 +110,12 @@ $_section-gap: 12px;
     border-top-width: 2px;
 
     &__indicator--modified {
-      fill: var(--bf-color-status-warning-content);
-      color: var(--bf-color-status-warning-content);
+      fill: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     &__indicator--saved {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 }

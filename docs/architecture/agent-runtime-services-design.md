@@ -7,7 +7,7 @@ crate 内部结构和行为保护要求。本文件记录设计约束，不记�
 结果见 [`product-customization-blueprint.md`](product-customization-blueprint.md)；CLI 入口、配置兼容和
 CLI Agent 体验边界见 [`cli-product-line-design.md`](cli-product-line-design.md)；能力 Provider 如何装配、对外能力接口与
 多宿主 adapter 的状态、权限、并发和兼容边界见
-[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK 的
+[`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 OpenBitFun Agent SDK 的
 用户心智、SDK Host、Headless CLI/ACP/Server 关系、竞品基线和能力发布门槛见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 GUI/TUI/Remote 多实例、Headless CLI Embedded、
 Shared Agent Runtime 与 Plugin Host 的进程关系见
@@ -15,8 +15,8 @@ Shared Agent Runtime 与 Plugin Host 的进程关系见
 
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
 新增公共类型前必须有真实生产调用方、版本边界和验证路径。现有 `agent-runtime::sdk` 是
-Rust Runtime SDK（当前 preview），不是公开 Python/TypeScript BitFun Agent SDK。CLI、ACP、
-Desktop 仍复用 `bitfun-core` 的兼容 owner；只有 Desktop 与本机兼容 Server Host 选择 `product-full`。CLI 与 CLI 托管的 ACP server 已消费各自的产品组装结果；
+Rust Runtime SDK（当前 preview），不是公开 Python/TypeScript OpenBitFun Agent SDK。CLI、ACP、
+Desktop 仍复用 `openbitfun-core` 的兼容 owner；只有 Desktop 与本机兼容 Server Host 选择 `product-full`。CLI 与 CLI 托管的 ACP server 已消费各自的产品组装结果；
 Desktop 主交互只消费由现有 Core 归属模块构造的少量应用接口，尚未组装完整 Desktop profile。这些接入都不等于
 协调器、调度器、持久化或工具执行 owner 已迁移；ACP 的完整持久化历史、模型/模式目录与提供方配置、MCP、客户端路径与
 Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型/模式写入已通过 Agent Runtime API 回到 Core owner。
@@ -30,7 +30,7 @@ Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型/�
 
 - 智能体内核可被 Desktop、CLI、Server、Remote、ACP、Web 和公开 SDK adapter 调用；这些入口共享应用用例，
   不共享 UI、协议或公开语言包。
-- 智能体内核对外提供稳定、窄口径的 Rust 运行时接口，而不是暴露 `bitfun-core`、产品命令路径或具体管理器。
+- 智能体内核对外提供稳定、窄口径的 Rust 运行时接口，而不是暴露 `openbitfun-core`、产品命令路径或具体管理器。
 - 产品特性把内核能力组装为用户侧能力，可能同时触达 Rust 和 UI，但不拥有内核状态机或平台实现。
 - 运行时内部接口、能力服务接口、扩展接口和主机内部 ABI 分层表达；OpenCode / ACP / 插件适配器仅承担映射和注册。
 - 智能体内核不感知平台差异、工具实现差异、界面宿主差异和构建形态差异。
@@ -41,13 +41,13 @@ Desktop 的其余入口仍保留明确的兼容边界，活动会话的模型/�
 ### 1.1 Rust Runtime SDK（当前 preview）与公开 Agent SDK
 
 当前 `agent-runtime::sdk` 是低层 **Rust Runtime SDK**，成熟度为 preview：它通过 Rust 类型化端口服务 Desktop、CLI、
-ACP 等现有入口，也可用于受控 Rust 嵌入。它不是 Python/TypeScript **BitFun Agent SDK**。两者调用同一个
+ACP 等现有入口，也可用于受控 Rust 嵌入。它不是 Python/TypeScript **OpenBitFun Agent SDK**。两者调用同一个
 Agent Runtime，不形成两套 Agent loop。
 
 | 入口 | 面向谁 | 主要接口 | 不暴露 |
 |---|---|---|---|
-| Rust Runtime SDK | BitFun 内部入口、低层 Rust 嵌入 | Query/Session/Turn/事件等类型化 Rust 用例；builder 和 registry 仅用于内部装配 | Tauri/React、具体 manager、生态原始对象 |
-| BitFun Agent SDK | Python/TypeScript 应用开发者 | `AgentClient`、query/session、async Message/Event/Result、typed callback | builder、port、registry、Product Assembly、SDK Host protocol |
+| Rust Runtime SDK | OpenBitFun 内部入口、低层 Rust 嵌入 | Query/Session/Turn/事件等类型化 Rust 用例；builder 和 registry 仅用于内部装配 | Tauri/React、具体 manager、生态原始对象 |
+| OpenBitFun Agent SDK | Python/TypeScript 应用开发者 | `AgentClient`、query/session、async Message/Event/Result、typed callback | builder、port、registry、Product Assembly、SDK Host protocol |
 
 公开 Agent SDK 必须覆盖以下用户用例，而不是要求调用方自行装配 Runtime：
 
@@ -56,7 +56,7 @@ Agent Runtime，不形成两套 Agent loop。
 | 运行 Agent | `client.query()`、异步流、结构化 Result、取消和执行上限 |
 | 管理上下文 | Session create/resume/fork/close；Query start/cancel/steer；Turn 只承载只读身份与已提交事实 |
 | 使用能力 | 内置 Tool、既有 MCP、Subagent、Skill 和明确的来源状态 |
-| 控制副作用 | Permission 与 Hook callback；最终策略仍由 BitFun owner 决定 |
+| 控制副作用 | Permission 与 Hook callback；最终策略仍由 OpenBitFun owner 决定 |
 | 扩展应用 | Python/TypeScript 函数 Tool 和用户输入 callback |
 | 运维 | 类型化错误、用量/成本/缓存、trace、checkpoint/恢复事实和 capability 状态 |
 
@@ -84,7 +84,7 @@ v4 将活动 Turn 的文本 steer 纳入 `AgentDialogTurnPort`，复用同一个
 身份校验；默认端口实现仍返回 `NotAvailable`，未选择该能力的 provider 不需要建立第二套 queue 或 transport。
 
 v6 将完整 Rust Runtime SDK 从空默认编译面移入 `agent-runtime` owner feature。现有 Rust embedder
-迁移时在 `bitfun-agent-runtime` 依赖上显式选择 `features = ["agent-runtime"]`；启用后 `sdk` 模块、
+迁移时在 `openbitfun-agent-runtime` 依赖上显式选择 `features = ["agent-runtime"]`；启用后 `sdk` 模块、
 公开路径和运行时行为保持不变。只消费 Hook 设置的调用方选择
 `native-hook-settings`，不需要继承完整 Runtime。DeepResearch 编号策略归
 `agent-workflows`，不再通过 Agent Runtime feature 暴露。仓库内最小 SDK example 通过
@@ -101,7 +101,7 @@ Product Assembly 选择并在 `agent-workflows` / 现有产品 owner 中执行�
 v10 让 Turn settlement 返回 Runtime 确认的终态、最终回答和结束原因。现有 Rust embedder 需要接收
 `AgentTurnSettlementResult`；CLI 和 App Server adapter 可在不扩展各自 wire contract 的情况下丢弃返回值。
 
-只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
+只要外部调用方仍必须导入 `openbitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
 注册表、理解 ACP/内部端口或依赖全局可变状态，公开 SDK 发布边界就不成立。公开 SDK 的完整
 术语、能力等价和版本要求以 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md) 为准。
 
@@ -133,11 +133,11 @@ v10 让 Turn settlement 返回 Runtime 确认的终态、最终回答和结束�
 | 接口边界 | 本文件补充的内容 | 不在本文件重复定义 |
 |---|---|---|
 | 前后端能力接口 | 智能体内核如何产出会话、事件、权限和诊断事实 | 宿主协议 DTO、插件状态视图字段、产品形态状态词 |
-| BitFun 与插件接口 | 插件贡献如何进入内核、执行层和安全模块 | 具体生态接口、未预算界面贡献字段、OpenCode 原始 payload |
+| OpenBitFun 与插件接口 | 插件贡献如何进入内核、执行层和安全模块 | 具体生态接口、未预算界面贡献字段、OpenCode 原始 payload |
 | 插件运行时接口 | `PluginRuntimeBinding` 如何注入 Agent Runtime 内部 builder | `PluginRuntimeClient`、dispatch/read schema、进程边界；这些由插件运行时文档和 `runtime-ports` 代码定义 |
 | 外部生态兼容接口 | 不进入 Agent Runtime API 或公开 SDK；各生态 adapter 只作为来源或宿主边界的翻译边界 | OpenCode client/server facade、Claude/Codex/Trae Hook 细节、配置导入细节、跨生态稳定 payload |
 
-OpenCode 适配器、ACP 桥接和未来插件运行时必须先映射到主架构定义的接口边界，再由产品组装注册。它们不能直接写智能体内核权威状态；通过插件兼容接口、Tool Runtime 或界面宿主调用的 BitFun 能力必须经过相应权限与审计路径。插件脚本直接使用 Bun 文件、网络或进程接口产生的副作用不在这项保证内：没有可执行的操作系统隔离时，严格策略必须禁用相应插件或明确报告 `policy-limited`，不能宣称已被沙箱拦截。
+OpenCode 适配器、ACP 桥接和未来插件运行时必须先映射到主架构定义的接口边界，再由产品组装注册。它们不能直接写智能体内核权威状态；通过插件兼容接口、Tool Runtime 或界面宿主调用的 OpenBitFun 能力必须经过相应权限与审计路径。插件脚本直接使用 Bun 文件、网络或进程接口产生的副作用不在这项保证内：没有可执行的操作系统隔离时，严格策略必须禁用相应插件或明确报告 `policy-limited`，不能宣称已被沙箱拦截。
 
 当前 Agentic 前端事件视图属于事件归属子接口：智能体内核产生提供方无关 `AgenticEvent`，`events` 层只为
 现有 Desktop Tauri 和 peer host 只转换 `event_name` 与 `payload`，不定义跨协议的事件类型、版本、回放或保留语义。
@@ -156,7 +156,7 @@ Server/WebSocket 或 OpenCode v1/v2 的版本化事件清单必须随真实消�
 |---|---|---|---|---|
 | 产品组装接口 | `src/crates/assembly/*` | 特性包、内核接口、执行层接口、运行时服务、平台提供方 | 智能体内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出类型化运行时部件 |
 | 产品特性接口 | `product-capabilities`、`product-domains`、对应入口归属模块 | 内核接口、能力状态只读接口、能力/副作用接口、领域接口 | OS 具体实现、Tauri 句柄、执行层具体实现、最终权限策略 | 把内核能力映射为用户功能、入口视图和默认策略 |
-| Rust 内核接口 | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | 稳定接口、通用 Agent/Tool/Hook 注册接口、类型化服务 | `bitfun-core`、命名产品工作流、Tauri、Web UI、ACP 协议、提供方具体实现 | 会话 / 轮次 / 事件 / 权限 / 调度 / 上下文等 SDK 候选接口 |
+| Rust 内核接口 | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | 稳定接口、通用 Agent/Tool/Hook 注册接口、类型化服务 | `openbitfun-core`、命名产品工作流、Tauri、Web UI、ACP 协议、提供方具体实现 | 会话 / 轮次 / 事件 / 权限 / 调度 / 上下文等 SDK 候选接口 |
 | 执行层接口 | `agent-workflows`、`tool-contracts`、`tool-provider-groups`、`tool-execution` | 稳定接口、运行时端口、注入的服务端口 | 产品注册表、UI、具体文件系统/Git/终端/MCP 客户端 | 命名工作流策略、工具、skills、MCP 工具桥接、沙箱和执行语义 |
 | 扩展接口 | `PluginRuntimeClient` / OpenCode 兼容 / ACP 适配器归属模块 | Rust 内核接口、工具/事件/权限子接口、能力/副作用接口 | Web UI React 实现、Tauri 状态、内核权威状态写入 | 把外部生态能力转换为工具、Hook 变换、界面贡献和诊断 |
 | 平台/提供方适配器接口 | `services/*`、`adapters/*`、app-local provider | 运行时端口、稳定 DTO、允许的第三方库 | 产品特性、智能体内核状态机、UI 命令 | 实现文件系统、终端、网络、远端、Git、MCP 传输、AI 提供方等边界外 I/O |
@@ -164,8 +164,8 @@ Server/WebSocket 或 OpenCode v1/v2 的版本化事件清单必须随真实消�
 
 禁止依赖：
 
-- `contracts/*` 或 `runtime-ports` 依赖 `bitfun-core`、assembly、apps、UI 或具体服务。
-- `agent-runtime` 依赖 `bitfun-core`、Tauri、Web UI、ACP 协议、AI 提供方具体实现、MCP 客户端具体实现或 OS 服务管理器。
+- `contracts/*` 或 `runtime-ports` 依赖 `openbitfun-core`、assembly、apps、UI 或具体服务。
+- `agent-runtime` 依赖 `openbitfun-core`、Tauri、Web UI、ACP 协议、AI 提供方具体实现、MCP 客户端具体实现或 OS 服务管理器。
 - `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品注册表、产品权限策略或具体 UI。
 - 禁止 `agent-runtime` 反向依赖 `agent-workflows`；命名工作流可以消费 Runtime / contracts，Runtime 不感知工作流名称。
 - 禁止 `agent-workflows` 依赖具体文件系统/Git/终端管理器；具体 I/O 由 Services 持有，工作流只保留无 I/O 决策或通过窄端口调用。
@@ -200,27 +200,27 @@ Server/WebSocket 或 OpenCode v1/v2 的版本化事件清单必须随真实消�
 
 所属 crate：
 
-- `bitfun-core-types`
-- `bitfun-events`
-- `bitfun-runtime-ports`
+- `openbitfun-core-types`
+- `openbitfun-events`
+- `openbitfun-runtime-ports`
 
 建议模块：
 
 ```text
-bitfun-core-types
+openbitfun-core-types
   error/
   identity/
   artifact/
   usage/
   surface/
 
-bitfun-events
+openbitfun-events
   runtime/
   tool/
   permission/
   product/
 
-bitfun-runtime-ports
+openbitfun-runtime-ports
   agent/
   service/
   permission/
@@ -256,7 +256,7 @@ pub trait WorkspacePort: Send + Sync {
 
 ### 2.2 运行时服务
 
-目标归属 crate：`bitfun-runtime-services`。
+目标归属 crate：`openbitfun-runtime-services`。
 
 职责：
 
@@ -269,7 +269,7 @@ pub trait WorkspacePort: Send + Sync {
 建议内部模块：
 
 ```text
-bitfun-runtime-services
+openbitfun-runtime-services
   bundle.rs             # RuntimeServices / narrow service views
   builder.rs            # 类型化 builder
   capability.rs         # capability ids 与 availability
@@ -369,7 +369,7 @@ pub trait SecurityDecisionPort: Send + Sync {
 约束：
 
 - UI 只展示 decision 和 user options，不成为最终授权来源。
-- 插件通过 BitFun 兼容接口请求的能力/副作用必须声明，未知或超声明调用默认受限；脚本运行时的直接副作用不能靠该声明推断为已拦截。
+- 插件通过 OpenBitFun 兼容接口请求的能力/副作用必须声明，未知或超声明调用默认受限；脚本运行时的直接副作用不能靠该声明推断为已拦截。
 - `allow_in_sandbox` 只能在实际 sandbox 或隔离路径存在时返回。
 - 远程、ACP、MCP、插件、browser/desktop 和 cloud task 必须携带执行域。
 - 模型输出只能辅助解释和候选判断，不能直接写权限、审计或策略状态。
@@ -378,7 +378,7 @@ pub trait SecurityDecisionPort: Send + Sync {
 
 ### 3.1 Agent Runtime / Agent Runtime API
 
-目标归属 crate：`bitfun-agent-runtime`。
+目标归属 crate：`openbitfun-agent-runtime`。
 
 目标职责：
 
@@ -458,7 +458,7 @@ model-round cancellation token、结构化 AgentInput 或更复杂的事件游�
 
 兼容边界：
 
-- `bitfun-agent-runtime` 只能依赖稳定接口、工具运行时、运行时服务接口和注入的提供方。
+- `openbitfun-agent-runtime` 只能依赖稳定接口、工具运行时、运行时服务接口和注入的提供方。
 - 权限规划按纯决策与产品编排分层：
   - Agent Runtime 持有 `PermissionIntent` 的策略、约束层与记忆授权判定；
   - Core 产品管线持有 workspace/remote scope 投影、平台大小写事实、grant store IO、native Hook 顺序、
@@ -474,7 +474,7 @@ model-round cancellation token、结构化 AgentInput 或更复杂的事件游�
 建议内部模块：
 
 ```text
-bitfun-agent-runtime
+openbitfun-agent-runtime
   lib.rs
   runtime.rs            # AgentRuntime 公共接口
   config.rs             # RuntimeConfig
@@ -584,8 +584,8 @@ impl AgentRuntime {
 
 所属 crate：
 
-- `tool-contracts`（Cargo package: `bitfun-agent-tools`）
-- `tool-provider-groups`（Cargo package: `bitfun-tool-packs`）
+- `tool-contracts`（Cargo package: `openbitfun-agent-tools`）
+- `tool-provider-groups`（Cargo package: `openbitfun-tool-packs`）
 - `tool-execution`（Cargo package: `tool-runtime`）
 
 目标职责：
@@ -677,7 +677,7 @@ pub struct ToolExecutionContext {
 
 ### 3.3 工作流层
 
-目标归属 crate：`bitfun-agent-workflows`。
+目标归属 crate：`openbitfun-agent-workflows`。
 
 职责：
 
@@ -707,7 +707,7 @@ agent-workflows
 
 产品组装是组装根，不是另一个业务内核。当前 `src/crates/assembly/product-capabilities` 已提供
 `DeliveryProfile`、静态能力计划、Agent ID / 原子工具组选择、运行时服务校验和插件运行时绑定；
-`src/crates/assembly/core` 仍承担 `bitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
+`src/crates/assembly/core` 仍承担 `openbitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
 通过 `assemble(ProductAssemblyInput)` 产生 `ProductRuntimeParts`，本文件不再为它定义第二套目标接口。
 
 当前 CLI、CLI 托管的 ACP server 与独立 SDK Host 已使用类型化 `RuntimeServices`，分别以
@@ -769,7 +769,7 @@ Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSn
 - 具体运行时服务通过 `RuntimeServicesBuilder` / provider registry 构造。
 - CLI 只选择 `DeliveryProfile::Cli` 一次；必需服务缺失时组装失败，不回退到静态计划或另一 profile。
 - CLI 的 ACP stdio 入口只选择 `DeliveryProfile::Acp` 一次；组装或 Rust Runtime SDK 构造失败时在接受 stdio 请求前退出。
-- 独立 `bitfun-sdk-host` 只选择 `DeliveryProfile::Sdk` 一次；stdio framing 与进程 bootstrap 留在 app，
+- 独立 `openbitfun-sdk-host` 只选择 `DeliveryProfile::Sdk` 一次；stdio framing 与进程 bootstrap 留在 app，
   `interfaces/sdk-host` 只保留版本化协议和连接用例。Host 不通过 CLI 启动，也不使用 CLI submission source。
 - CLI 的 `json` 输出为单结果文档，`stream-json` 直接复用现有 Agent 事件对象；协议层不新增
   `schema_version`、`sequence` 或平行事件 taxonomy。
@@ -885,11 +885,11 @@ Provider 装配同样按需增加，不提前为 Memory、Context、Workflow、S
 
 - Agent Runtime 只接收 `PluginRuntimeBinding`，不创建 Plugin Host、不发现插件来源、不加载 OpenCode 适配器。
 - `PluginRuntimeClient` 是 Agent Runtime 内部可调用边界，不进入 Agent Runtime API、公开 SDK、能力服务接口或产品入口 DTO。
-- OpenCode 适配层位于 `PluginRuntimeClient` 与 Plugin Host 的边界；Agent Runtime 不依赖 `bitfun-opencode-adapter`，也不按具体生态类型分支。
-- 插件贡献进入 Agent Runtime 前必须已经转换成 BitFun 类型化工具、Hook 输入/输出、诊断或明确不支持；
+- OpenCode 适配层位于 `PluginRuntimeClient` 与 Plugin Host 的边界；Agent Runtime 不依赖 `openbitfun-opencode-adapter`，也不按具体生态类型分支。
+- 插件贡献进入 Agent Runtime 前必须已经转换成 OpenBitFun 类型化工具、Hook 输入/输出、诊断或明确不支持；
   OpenCode 原始对象不能进入业务状态。
 - 工具贡献必须复用工具 ABI；事件订阅必须复用事件清单；权限候选必须复用安全模块。
-- BitFun 能力输出到外部宿主时不反向经过 `PluginRuntimeClient`。对外能力接口调用现有 owner，再由 MCP、Skill、
+- OpenBitFun 能力输出到外部宿主时不反向经过 `PluginRuntimeClient`。对外能力接口调用现有 owner，再由 MCP、Skill、
   Plugin、Hook、SDK 或 Server adapter 映射；只有需要运行第三方代码的 import 路径才使用 Plugin Host。
 
 本文件不定义 `UiContributionDescriptor`、OpenCode client/server facade、泛 hook registry、来源发现接口或多生态能力矩阵。这些能力只有在存在真实产品消费方、公开接口预算和安全评审后，才允许进入对应归属文档和代码。
@@ -898,7 +898,7 @@ Provider 装配同样按需增加，不提前为 Memory、Context、Workflow、S
 
 | 风险 | 保护方式 |
 |---|---|
-| 外部生态接口反向成为内部归属模块 | OpenCode adapter 只作边界转换，输出 BitFun 接口对象或诊断 |
+| 外部生态接口反向成为内部归属模块 | OpenCode adapter 只作边界转换，输出 OpenBitFun 接口对象或诊断 |
 | Agent Runtime 直接感知具体适配器 | Agent Runtime 只依赖 `PluginRuntimeBinding` / `PluginRuntimeClient` |
 | 插件越权修改权限或状态 | Hook 可按 OpenCode 语义变换允许字段；最终校验、策略上限、审计和状态写入由归属模块完成 |
 | 工具 ABI 与内置/MCP/插件分裂 | custom tool 统一进入可调用工具集合、提供方身份和权限/副作用过滤路径 |
@@ -906,7 +906,7 @@ Provider 装配同样按需增加，不提前为 Memory、Context、Workflow、S
 
 ### 4.5 ACP 扩展方式
 
-`bitfun-acp` 保持集成归属。
+`openbitfun-acp` 保持集成归属。
 
 CLI 托管的 ACP 服务端使用 `DeliveryProfile::Acp` 组装一个 Agent Runtime，通过 Rust Runtime SDK 处理会话创建/列举、轮次提交/取消、
 交互响应和只读 Agent 事件订阅。ACP 只把共享运行时事实映射成协议更新；标准输入输出、连接、权限 RPC 与通知生命周期
@@ -1111,10 +1111,10 @@ Product 测试：
 
 已经成立：
 
-- `bitfun-agent-runtime` 不依赖 `bitfun-core`，Rust Runtime SDK 已有最小测试保护。
-- `bitfun-runtime-services` 提供类型化服务注入；工具 contracts、provider groups 与 execution 已分层。
-- `bitfun-agent-workflows` 已接管 DeepResearch 的无 I/O 报告后处理；没有建立通用工作流 registry 或第二套执行引擎。
-- `bitfun-core` 可继续作为 `product-full` 兼容接口，避免迁移期间一次性重写入口。
+- `openbitfun-agent-runtime` 不依赖 `openbitfun-core`，Rust Runtime SDK 已有最小测试保护。
+- `openbitfun-runtime-services` 提供类型化服务注入；工具 contracts、provider groups 与 execution 已分层。
+- `openbitfun-agent-workflows` 已接管 DeepResearch 的无 I/O 报告后处理；没有建立通用工作流 registry 或第二套执行引擎。
+- `openbitfun-core` 可继续作为 `product-full` 兼容接口，避免迁移期间一次性重写入口。
 - CLI 已以 `DeliveryProfile::Cli` 构造真实 Runtime Parts 和 Rust Runtime SDK；本地 Agent 入口、会话、用量和
   Peer Host 共用一个调用级上下文与广播事件源，审批策略不再写回全局配置。Peer Host 通过该 Rust 接口提交/精确取消
   turn、处理基础会话控制、更新会话模型并处理工具确认/拒绝；本地工作区快照准备、文件清单、统计和文件回滚通过独立 owner port 复用 Core 实现，

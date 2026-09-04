@@ -13,11 +13,11 @@ describe('CreateAgentPage presentation contract', () => {
   it('keeps the reference-led header and two-panel information hierarchy', () => {
     const source = readLocalFile('./CreateAgentPage.tsx');
 
-    expect(source).not.toContain('Logo-ICON-128.png');
+    expect(source).not.toMatch(/openbitfun-(?:mark|app-icon)/);
     expect(source).toContain('th-create-page__panel--definition');
     expect(source).toContain('th-create-page__panel--capabilities');
-    expect(source.match(/data-bf-part="column"/g)).toHaveLength(2);
-    expect(source).toContain('data-bf-part="tool"');
+    expect(source.match(/data-openbitfun-part="column"/g)).toHaveLength(2);
+    expect(source).toContain('data-openbitfun-part="tool"');
     expect(source).toContain("t('agentsOverview.form.basicInformation')");
     expect(source).toContain("t('agentsOverview.form.contextPolicy')");
     expect(source).toContain("t('agentsOverview.form.prompt')");
@@ -39,7 +39,7 @@ describe('CreateAgentPage presentation contract', () => {
     const source = readLocalFile('./CreateAgentPage.tsx');
 
     expect(source).toContain('const selectedContextSections = VISIBLE_CONTEXT_SECTIONS.filter');
-    expect(source).toContain('data-bf-part="contextPreview"');
+    expect(source).toContain('data-openbitfun-part="contextPreview"');
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain('aria-describedby="custom-agent-runtime-context-preview"');
     expect(source).toContain("t('agentsOverview.form.contextPreviewEmpty')");
@@ -56,10 +56,10 @@ describe('CreateAgentPage presentation contract', () => {
       /\.th-create-page__panel \{[\s\S]*border: 1px solid[\s\S]*border-radius:/,
     );
     expect(stylesheet).toMatch(
-      /\.th-create-page__panel \{[\s\S]*background: var\(--bf-color-surface-scene\);[\s\S]*box-shadow: none;/,
+      /\.th-create-page__panel \{[\s\S]*background: var\(--openbitfun-color-surface-scene\);[\s\S]*box-shadow: none;/,
     );
     expect(stylesheet).not.toContain(
-      'var(--bf-color-action-neutral-surface) 84%',
+      'var(--openbitfun-color-action-neutral-surface) 84%',
     );
     expect(stylesheet).toMatch(
       /\.th-create-panel__context-options \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;/,

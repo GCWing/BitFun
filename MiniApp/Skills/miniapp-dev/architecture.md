@@ -79,7 +79,7 @@ state.miniapp_manager.set_workspace_path(Some(workspace_info.root_path.clone()))
 - `http(s)://` → `_rpc('net.fetch', ...)` 绕过 CORS
 - 其他（data: URL 等）→ 原始 fetch
 
-### __BITFUN__ 全局对象
+### __OPENBITFUN__ 全局对象
 - `appId`, `appDataDir`, `workspaceDir`, `theme`
 - `showOpenDialog(opts)` → `_rpc('dialog.open', opts)`
 - `showSaveDialog(opts)` → `_rpc('dialog.save', opts)`

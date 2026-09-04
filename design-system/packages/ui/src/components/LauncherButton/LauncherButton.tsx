@@ -26,17 +26,17 @@ export const LauncherButton = forwardRef<
     <button
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="launcher-button"
-      data-bf-part="root"
+      data-openbitfun-component="launcher-button"
+      data-openbitfun-part="root"
       ref={ref}
       type={type}
     >
       {leadingIcon !== undefined && leadingIcon !== null && (
-        <span aria-hidden="true" className={styles.icon} data-bf-part="icon">
+        <span aria-hidden="true" className={styles.icon} data-openbitfun-part="icon">
           {leadingIcon}
         </span>
       )}
-      <span className={styles.label} data-bf-part="label">
+      <span className={styles.label} data-openbitfun-part="label">
         {children}
       </span>
     </button>

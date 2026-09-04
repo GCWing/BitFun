@@ -34,8 +34,8 @@ import { parseArgs } from 'node:util'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** The profile directory BitFun materializes this build into. */
-export const PROFILE_NAME = 'bitfun-acp'
+/** The profile directory OpenBitFun materializes this build into. */
+export const PROFILE_NAME = 'openbitfun-acp'
 
 /**
  * The oldest `@deepseek-ai/dsh` this build is known to boot against. The bridge
@@ -56,8 +56,8 @@ const VENDORED = {
   '@deepseek-ai/dsh-agent-spine-demo': '0.1.0-rc.6',
 }
 
-/** Basename of the build stamp BitFun compares before re-materializing. */
-const STAMP_FILENAME = '.bitfun-bridge.json'
+/** Basename of the build stamp OpenBitFun compares before re-materializing. */
+const STAMP_FILENAME = '.openbitfun-bridge.json'
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
@@ -156,7 +156,7 @@ function vendor(name, version) {
 }
 
 /**
- * Hash every file in the output so BitFun can tell one build from another.
+ * Hash every file in the output so OpenBitFun can tell one build from another.
  *
  * A version string is not enough: during development the bridge's version
  * stands still while its code changes, and a stale profile on disk would look

@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useMemo, useRef } from 'react';
 import { Bot, Cpu, Database, FolderKanban, Play, ShieldCheck, Square } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -202,18 +202,18 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
       <DialogBody className="miniapp-detail-dialog__body" inset="none">
         <ScrollArea
           className="miniapp-detail-modal"
-          data-bf-component="mini-app-detail-modal"
-          data-bf-part="root"
-          data-bf-state={[
+          data-openbitfun-component="mini-app-detail-modal"
+          data-openbitfun-part="root"
+          data-openbitfun-state={[
             snapshot.isActive && 'running',
             snapshot.isCustomizing && 'customizing',
           ].filter(Boolean).join(' ') || undefined}
-          data-bf-source={source}
+          data-openbitfun-source={source}
           data-miniapp-id={displayedApp.id}
         >
-        <section className="miniapp-detail-modal__hero" data-bf-component="mini-app-detail-modal" data-bf-part="hero">
-          <div className="miniapp-detail-modal__icon-stage" data-bf-component="mini-app-detail-modal" data-bf-part="iconStage">
-            <div className="miniapp-detail-modal__icon" data-bf-component="mini-app-detail-modal" data-bf-part="icon">
+        <section className="miniapp-detail-modal__hero" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="hero">
+          <div className="miniapp-detail-modal__icon-stage" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="iconStage">
+            <div className="miniapp-detail-modal__icon" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="icon">
               {renderMiniAppIcon(displayedApp.icon || 'box', 72)}
             </div>
             {snapshot.isActive ? (
@@ -225,7 +225,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
             ) : null}
           </div>
 
-          <div className="miniapp-detail-modal__summary" data-bf-component="mini-app-detail-modal" data-bf-part="summary">
+          <div className="miniapp-detail-modal__summary" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="summary">
             <div className="miniapp-detail-modal__identity">
               <h3 className="miniapp-detail-modal__name">{localizedName}</h3>
               <span className="miniapp-detail-modal__version" data-testid="miniapp-detail-version">v{version}</span>
@@ -236,7 +236,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
               </p>
             ) : null}
             {localizedTags.length ? (
-              <div className="miniapp-detail-modal__tags" data-bf-component="mini-app-detail-modal" data-bf-part="tags">
+              <div className="miniapp-detail-modal__tags" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="tags">
                 {localizedTags.map((tag) => (
                   <span key={tag} className="miniapp-detail-modal__tag">{tag}</span>
                 ))}
@@ -245,7 +245,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
           </div>
         </section>
 
-        <section className="miniapp-detail-modal__highlights" data-bf-component="mini-app-detail-modal" data-bf-part="highlights">
+        <section className="miniapp-detail-modal__highlights" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="highlights">
           <h4 className="miniapp-detail-modal__section-title">{t('detail.highlights')}</h4>
           <div className="miniapp-detail-modal__highlight-grid">
             {capabilities.map((capability) => {
@@ -254,8 +254,8 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
                 <div
                   key={capability.kind}
                   className="miniapp-detail-modal__highlight"
-                  data-bf-component="mini-app-detail-modal"
-                  data-bf-part="highlight"
+                  data-openbitfun-component="mini-app-detail-modal"
+                  data-openbitfun-part="highlight"
                   data-capability={capability.kind}
                   data-testid="miniapp-detail-capability"
                 >
@@ -272,12 +272,12 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
           </div>
         </section>
 
-        <footer className="miniapp-detail-modal__footer" data-bf-component="mini-app-detail-modal" data-bf-part="footer">
-          <div className="miniapp-detail-modal__status" data-bf-component="mini-app-detail-modal" data-bf-part="status">
+        <footer className="miniapp-detail-modal__footer" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="footer">
+          <div className="miniapp-detail-modal__status" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="status">
             <Icon name="check-circle" size="lg" aria-hidden="true" />
             <span data-testid="miniapp-detail-status">{statusCopy}</span>
           </div>
-          <div className="miniapp-detail-modal__actions" data-bf-component="mini-app-detail-modal" data-bf-part="actions">
+          <div className="miniapp-detail-modal__actions" data-openbitfun-component="mini-app-detail-modal" data-openbitfun-part="actions">
             {snapshot.isActive && onStop ? (
               <Button
                 variant="outline"

@@ -4,16 +4,16 @@
 .feature-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 55%, transparent);
-  z-index: calc(var(--bf-layer-modal) + 10);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 55%, transparent);
+  z-index: calc(var(--openbitfun-layer-modal) + 10);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: bitfun-feature-modal-backdrop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: openbitfun-feature-modal-backdrop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   &--exiting {
-    animation: bitfun-feature-modal-backdrop-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+    animation: openbitfun-feature-modal-backdrop-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 }
 
@@ -25,10 +25,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: bitfun-feature-modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: openbitfun-feature-modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   &--exiting {
-    animation: bitfun-feature-modal-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+    animation: openbitfun-feature-modal-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
   }
 
   // Fixed portrait sizes
@@ -54,11 +54,11 @@
 
     // Thin scrollbar
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-color-border-default) transparent;
+    scrollbar-color: var(--openbitfun-color-border-default) transparent;
     &::-webkit-scrollbar { width: 4px; }
     &::-webkit-scrollbar-track { background: transparent; }
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-color-border-default);
+      background: var(--openbitfun-color-border-default);
       border-radius: 2px;
     }
   }
@@ -69,20 +69,20 @@
     will-change: opacity, transform;
 
     &[data-state='active'][data-direction='forward'] {
-      animation: bitfun-feature-page-forward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      animation: openbitfun-feature-page-forward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
 
     &[data-state='active'][data-direction='backward'] {
-      animation: bitfun-feature-page-backward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      animation: openbitfun-feature-page-backward-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
     }
 
     &[data-state='leaving'][data-direction='forward'] {
-      animation: bitfun-feature-page-forward-out 140ms ease both;
+      animation: openbitfun-feature-page-forward-out 140ms ease both;
       pointer-events: none;
     }
 
     &[data-state='leaving'][data-direction='backward'] {
-      animation: bitfun-feature-page-backward-out 140ms ease both;
+      animation: openbitfun-feature-page-backward-out 140ms ease both;
       pointer-events: none;
     }
   }
@@ -93,8 +93,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 24px 14px;
-    border-top: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-canvas);
+    border-top: 1px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-surface-canvas);
     flex-shrink: 0;
   }
 
@@ -108,24 +108,24 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--bf-color-surface-tertiary);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-tertiary);
+    border: 1px solid var(--openbitfun-color-border-default);
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-      width var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      width var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
     &--active {
       width: 18px;
       border-radius: 3px;
-      background: var(--bf-color-accent-default);
-      border-color: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-accent-default);
+      border-color: var(--openbitfun-color-accent-default);
     }
 
     @media (hover: hover) and (pointer: fine) {
       &:hover:not(&--active) {
-        background: var(--bf-color-content-muted);
+        background: var(--openbitfun-color-content-muted);
       }
     }
   }
@@ -133,7 +133,7 @@
   &__nav {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
 }
@@ -154,7 +154,7 @@
     width: 100%;
     max-height: 220px;
     overflow: hidden;
-    background: var(--bf-color-surface-panel);
+    background: var(--openbitfun-color-surface-panel);
     flex-shrink: 0;
 
     img, video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -165,7 +165,7 @@
     flex-shrink: 0;
     width: 180px;
     overflow: hidden;
-    background: var(--bf-color-surface-panel);
+    background: var(--openbitfun-color-surface-panel);
   }
 
   &--fullscreen_media {
@@ -201,7 +201,7 @@
       width: 28px;
       height: 3px;
       border-radius: 2px;
-      background: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-accent-default);
       flex-shrink: 0;
     }
   }
@@ -209,11 +209,11 @@
   // Large display title
   &__title {
     margin: 0;
-    font-size: var(--bf-type-heading-dialog-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    color: var(--bf-color-content-primary);
-    line-height: var(--bf-type-modifier-leading-dense-line-height);
-    letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
+    font-size: var(--openbitfun-type-heading-dialog-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
+    letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
     // Tight, impactful — like a magazine headline
   }
 
@@ -221,23 +221,23 @@
   &__rule {
     width: 100%;
     height: 1px;
-    background: var(--bf-color-border-default);
+    background: var(--openbitfun-color-border-default);
     margin: 20px 0;
     flex-shrink: 0;
   }
 
   // Body text: comfortable reading
   &__body {
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-spacious-line-height);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-spacious-line-height);
     flex: 1;
 
     // First paragraph lead: slightly larger
     p:first-child {
-      font-size: var(--bf-type-body-md-font-size);
-      color: var(--bf-color-content-primary);
-      line-height: var(--bf-type-body-lg-line-height);
+      font-size: var(--openbitfun-type-body-md-font-size);
+      color: var(--openbitfun-color-content-primary);
+      line-height: var(--openbitfun-type-body-lg-line-height);
       margin: 0 0 1em;
     }
 
@@ -249,19 +249,19 @@
 
     // Inline code
     code {
-      background: var(--bf-color-surface-panel);
-      border: 1px solid var(--bf-color-border-default);
-      border-radius: var(--bf-radius-sm);
+      background: var(--openbitfun-color-surface-panel);
+      border: 1px solid var(--openbitfun-color-border-default);
+      border-radius: var(--openbitfun-radius-sm);
       padding: 1px 5px;
-      font-size: var(--bf-type-label-sm-font-size);
-      font-family: var(--bf-type-code-md-font-family);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      font-family: var(--openbitfun-type-code-md-font-family);
+      color: var(--openbitfun-color-content-primary);
       white-space: nowrap;
     }
 
     strong {
-      color: var(--bf-color-content-primary);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
 
     // Bullet lists (rendered as <p> with leading dash from markdown)
@@ -270,27 +270,27 @@
       width: 100%;
       border-collapse: collapse;
       margin: 0.5em 0 1em;
-      font-size: var(--bf-type-label-sm-font-size);
+      font-size: var(--openbitfun-type-label-sm-font-size);
 
       th, td {
         padding: 6px 12px;
         text-align: left;
-        border: 1px solid var(--bf-color-border-default);
-        line-height: var(--bf-type-body-sm-line-height);
+        border: 1px solid var(--openbitfun-color-border-default);
+        line-height: var(--openbitfun-type-body-sm-line-height);
         vertical-align: middle;
       }
 
       thead th {
-        background: var(--bf-color-surface-panel);
-        font-weight: var(--bf-type-label-selected-font-weight);
-        color: var(--bf-color-content-primary);
-        font-size: var(--bf-type-meta-font-size);
-        letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+        background: var(--openbitfun-color-surface-panel);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
+        color: var(--openbitfun-color-content-primary);
+        font-size: var(--openbitfun-type-meta-font-size);
+        letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
         text-transform: uppercase;
       }
 
       tbody tr:nth-child(even) {
-        background: color-mix(in srgb, var(--bf-color-surface-panel) 50%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-surface-panel) 50%, transparent);
       }
     }
   }
@@ -318,41 +318,41 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 }
 
 // ─── Keyframes ────────────────────────────────────────────────────────────────
-@keyframes bitfun-feature-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes bitfun-feature-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes openbitfun-feature-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes openbitfun-feature-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 
-@keyframes bitfun-feature-modal-in {
+@keyframes openbitfun-feature-modal-in {
   from { opacity: 0; transform: scale(0.985) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes bitfun-feature-modal-out {
+@keyframes openbitfun-feature-modal-out {
   from { opacity: 1; transform: scale(1); }
   to   { opacity: 0; transform: scale(0.985); }
 }
 
-@keyframes bitfun-feature-page-forward-in {
+@keyframes openbitfun-feature-page-forward-in {
   from { opacity: 0; transform: translateX(8px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes bitfun-feature-page-forward-out {
+@keyframes openbitfun-feature-page-forward-out {
   from { opacity: 1; transform: translateX(0); }
   to { opacity: 0; transform: translateX(-6px); }
 }
 
-@keyframes bitfun-feature-page-backward-in {
+@keyframes openbitfun-feature-page-backward-in {
   from { opacity: 0; transform: translateX(-8px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes bitfun-feature-page-backward-out {
+@keyframes openbitfun-feature-page-backward-out {
   from { opacity: 1; transform: translateX(0); }
   to { opacity: 0; transform: translateX(6px); }
 }

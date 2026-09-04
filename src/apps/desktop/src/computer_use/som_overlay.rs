@@ -21,9 +21,9 @@
 
 #![allow(dead_code)]
 
-use bitfun_core::agentic::tools::computer_use_host::InteractiveElement;
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use image::{Rgba, RgbaImage};
+use openbitfun_core::agentic::tools::computer_use_host::InteractiveElement;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::io::Cursor;
 
 /// Render the SoM overlay onto `jpeg_bytes` and return a fresh JPEG.
@@ -34,9 +34,9 @@ pub(crate) fn render_overlay(
     jpeg_bytes: &[u8],
     elements: &[InteractiveElement],
     jpeg_quality: Option<u8>,
-) -> BitFunResult<Vec<u8>> {
+) -> OpenBitFunResult<Vec<u8>> {
     let img = image::load_from_memory_with_format(jpeg_bytes, image::ImageFormat::Jpeg)
-        .map_err(|e| BitFunError::tool(format!("som_overlay: decode JPEG failed: {e}")))?
+        .map_err(|e| OpenBitFunError::tool(format!("som_overlay: decode JPEG failed: {e}")))?
         .to_rgba8();
     let mut canvas: RgbaImage = img;
 
@@ -118,7 +118,7 @@ pub(crate) fn render_overlay(
             rgb.height(),
             image::ExtendedColorType::Rgb8,
         )
-        .map_err(|e| BitFunError::tool(format!("som_overlay: encode JPEG failed: {e}")))?;
+        .map_err(|e| OpenBitFunError::tool(format!("som_overlay: encode JPEG failed: {e}")))?;
     Ok(out)
 }
 

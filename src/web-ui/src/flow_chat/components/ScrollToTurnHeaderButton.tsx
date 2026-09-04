@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 import './ScrollToTurnHeaderButton.scss';
 
 interface ScrollToTurnHeaderButtonProps {
@@ -25,16 +25,16 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
   const { t } = useTranslation('flow-chat');
 
   return (
-    <div data-bf-component="scroll-to-turn-header-button" data-bf-part="root" data-bf-state={visible ? 'visible' : ''}
+    <div data-openbitfun-component="scroll-to-turn-header-button" data-openbitfun-part="root" data-openbitfun-state={visible ? 'visible' : ''}
       className={`scroll-to-turn-header-trigger ${visible ? 'scroll-to-turn-header-trigger--visible' : ''} ${className}`}
       aria-hidden={!visible}
     >
-      <div data-bf-component="scroll-to-turn-header-button" data-bf-part="gradient" className="scroll-to-turn-header-trigger__gradient" />
-      <div data-bf-component="scroll-to-turn-header-button" data-bf-part="content" className="scroll-to-turn-header-trigger__content">
+      <div data-openbitfun-component="scroll-to-turn-header-button" data-openbitfun-part="gradient" className="scroll-to-turn-header-trigger__gradient" />
+      <div data-openbitfun-component="scroll-to-turn-header-button" data-openbitfun-part="content" className="scroll-to-turn-header-trigger__content">
         <Tooltip content={turnLabel || t('scroll.toCurrentTurn')}>
           <button
-            data-bf-component="scroll-to-turn-header-button"
-            data-bf-part="button"
+            data-openbitfun-component="scroll-to-turn-header-button"
+            data-openbitfun-part="button"
             className="scroll-to-turn-header-trigger__btn"
             onClick={onClick}
             aria-label={turnLabel || t('scroll.toCurrentTurn')}

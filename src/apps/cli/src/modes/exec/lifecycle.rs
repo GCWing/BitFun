@@ -11,12 +11,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
     PortErrorKind, RuntimeError, TurnTokenUsage,
 };
-use bitfun_agent_tools::effective_tool_invocation;
-use bitfun_events::{AgenticEvent, ToolEventIdentity};
+use openbitfun_agent_tools::effective_tool_invocation;
+use openbitfun_events::{AgenticEvent, ToolEventIdentity};
 use tokio::time::Instant;
 
 use crate::agent::runtime_client::CliAgentRuntimeClient;
@@ -259,11 +259,11 @@ pub(super) fn settlement_failure(
 }
 
 pub(super) fn resolve_cancelled_turn_observation(
-    observed_terminal: Result<bitfun_events::AgenticEventEnvelope>,
+    observed_terminal: Result<openbitfun_events::AgenticEventEnvelope>,
     settlement: std::result::Result<(), RuntimeError>,
     session_id: &str,
     turn_id: &str,
-) -> std::result::Result<bitfun_events::AgenticEventEnvelope, (ExitKind, String)> {
+) -> std::result::Result<openbitfun_events::AgenticEventEnvelope, (ExitKind, String)> {
     match settlement {
         Err(error) => Err(settlement_failure(error, session_id, turn_id)),
         Ok(()) => observed_terminal.map_err(|error| {
@@ -385,19 +385,19 @@ pub(crate) fn emit_preflight_json_error(
 }
 
 pub(super) fn serialize_stream_envelope(
-    envelope: &bitfun_events::AgenticEventEnvelope,
+    envelope: &openbitfun_events::AgenticEventEnvelope,
 ) -> Result<String> {
     Ok(serde_json::to_string(envelope)?)
 }
 
-pub(super) fn session_in_use_stream_envelope() -> bitfun_events::AgenticEventEnvelope {
-    bitfun_events::AgenticEventEnvelope::new(
+pub(super) fn session_in_use_stream_envelope() -> openbitfun_events::AgenticEventEnvelope {
+    openbitfun_events::AgenticEventEnvelope::new(
         AgenticEvent::SystemError {
             session_id: None,
             error: SESSION_IN_USE_ERROR_CODE.to_string(),
             recoverable: true,
         },
-        bitfun_events::AgenticEventPriority::Critical,
+        openbitfun_events::AgenticEventPriority::Critical,
     )
 }
 
@@ -695,13 +695,13 @@ impl ExecMode {
         let mut terminal_message: Option<String> = None;
         let mut assistant_text = String::new();
         let mut usage: Option<ExecTokenUsage> = None;
-        let mut deferred_terminal_envelope: Option<bitfun_events::AgenticEventEnvelope> = None;
+        let mut deferred_terminal_envelope: Option<openbitfun_events::AgenticEventEnvelope> = None;
         let mut terminal_exit_kind: Option<ExitKind> = None;
         let mut final_stream_error: Option<String> = None;
         let mut cancellation_observation: Option<
             Result<(
-                Vec<bitfun_events::AgenticEventEnvelope>,
-                bitfun_events::AgenticEventEnvelope,
+                Vec<openbitfun_events::AgenticEventEnvelope>,
+                openbitfun_events::AgenticEventEnvelope,
             )>,
         > = None;
         let mut cancellation_settlement: Option<std::result::Result<(), RuntimeError>> = None;
@@ -838,7 +838,7 @@ impl ExecMode {
                             parent_session_id == &session_id && subagent_turn_id == event_turn_id
                         }) {
                             self.emit_stream_envelope(&envelope)?;
-                            use bitfun_events::ToolEventData;
+                            use openbitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started {
                                     identity, params, ..
@@ -1214,7 +1214,7 @@ impl ExecMode {
 
     async fn project_exec_nonterminal_event(
         &self,
-        envelope: &bitfun_events::AgenticEventEnvelope,
+        envelope: &openbitfun_events::AgenticEventEnvelope,
         session_id: &str,
         turn_id: &str,
         assistant_text: &mut String,
@@ -1268,7 +1268,7 @@ impl ExecMode {
                 tool_event,
                 ..
             } if event_turn_id == turn_id => {
-                use bitfun_events::ToolEventData;
+                use openbitfun_events::ToolEventData;
                 match tool_event {
                     ToolEventData::ConfirmationNeeded { .. } => {}
                     ToolEventData::Started {
@@ -1373,7 +1373,10 @@ impl ExecMode {
         Ok(session_id)
     }
 
-    fn emit_stream_envelope(&self, envelope: &bitfun_events::AgenticEventEnvelope) -> Result<()> {
+    fn emit_stream_envelope(
+        &self,
+        envelope: &openbitfun_events::AgenticEventEnvelope,
+    ) -> Result<()> {
         if self.output_format == ExecOutputFormat::StreamJson {
             let stdout = std::io::stdout();
             let mut stdout = stdout.lock();
@@ -1384,13 +1387,13 @@ impl ExecMode {
     }
 
     fn emit_stream_error(&self, session_id: &str, message: &str) -> Result<()> {
-        let envelope = bitfun_events::AgenticEventEnvelope::new(
+        let envelope = openbitfun_events::AgenticEventEnvelope::new(
             AgenticEvent::SystemError {
                 session_id: Some(session_id.to_string()),
                 error: message.to_string(),
                 recoverable: false,
             },
-            bitfun_events::AgenticEventPriority::Critical,
+            openbitfun_events::AgenticEventPriority::Critical,
         );
         self.emit_stream_envelope(&envelope)
     }
@@ -1417,13 +1420,13 @@ impl ExecMode {
 
     async fn observe_cancelled_turn_settlement(
         &self,
-        event_rx: &mut tokio::sync::broadcast::Receiver<bitfun_events::AgenticEventEnvelope>,
+        event_rx: &mut tokio::sync::broadcast::Receiver<openbitfun_events::AgenticEventEnvelope>,
         session_id: &str,
         turn_id: &str,
     ) -> (
         Result<(
-            Vec<bitfun_events::AgenticEventEnvelope>,
-            bitfun_events::AgenticEventEnvelope,
+            Vec<openbitfun_events::AgenticEventEnvelope>,
+            openbitfun_events::AgenticEventEnvelope,
         )>,
         std::result::Result<(), RuntimeError>,
     ) {
@@ -1435,12 +1438,12 @@ impl ExecMode {
 }
 
 pub(super) async fn drain_interrupted_turn_events(
-    event_rx: &mut tokio::sync::broadcast::Receiver<bitfun_events::AgenticEventEnvelope>,
+    event_rx: &mut tokio::sync::broadcast::Receiver<openbitfun_events::AgenticEventEnvelope>,
     session_id: &str,
     turn_id: &str,
 ) -> Result<(
-    Vec<bitfun_events::AgenticEventEnvelope>,
-    bitfun_events::AgenticEventEnvelope,
+    Vec<openbitfun_events::AgenticEventEnvelope>,
+    openbitfun_events::AgenticEventEnvelope,
 )> {
     let deadline = Instant::now() + TURN_SETTLEMENT_TIMEOUT;
     let mut buffered = Vec::new();

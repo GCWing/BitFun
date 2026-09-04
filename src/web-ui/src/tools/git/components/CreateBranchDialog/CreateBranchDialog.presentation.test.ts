@@ -6,10 +6,10 @@ describe('CreateBranchDialog scroll layout', () => {
   it('keeps the scrollbar on the dialog edge and the content inset', () => {
     const stylesheet = readFileSync(resolve(__dirname, 'CreateBranchDialog.scss'), 'utf8');
 
-    expect(stylesheet).toContain('padding-block: var(--bf-space-5);');
-    expect(stylesheet).toContain('padding-inline: var(--bf-space-5) 0;');
+    expect(stylesheet).toContain('padding-block: var(--openbitfun-space-5);');
+    expect(stylesheet).toContain('padding-inline: var(--openbitfun-space-5) 0;');
     expect(stylesheet).toMatch(
-      /&__scroll\s*\{[\s\S]*?padding-inline-end: var\(--bf-space-5\);/,
+      /&__scroll\s*\{[\s\S]*?padding-inline-end: var\(--openbitfun-space-5\);/,
     );
   });
 });

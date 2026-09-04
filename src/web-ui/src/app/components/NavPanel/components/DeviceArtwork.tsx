@@ -18,10 +18,10 @@ export function getDeviceArtworkKind(
 export function DeviceArtwork({ device }: { device: DeviceOverviewDevice }) {
   const artwork = getDeviceArtworkKind(device);
   return (
-    <div className="bitfun-device-overview__artwork" data-artwork={artwork} aria-hidden="true">
+    <div className="openbitfun-device-overview__artwork" data-artwork={artwork} aria-hidden="true">
       {artwork === 'macbook-air'
         ? <img src={macbookAir} alt="" width={202} height={202} draggable={false} />
-        : <span className="bitfun-device-overview__artwork-glyph" />}
+        : <span className="openbitfun-device-overview__artwork-glyph" />}
     </div>
   );
 }

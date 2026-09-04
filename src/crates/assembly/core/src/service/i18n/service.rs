@@ -53,7 +53,7 @@ impl I18nService {
     }
 
     /// Initializes the i18n service.
-    pub async fn initialize(&self) -> BitFunResult<()> {
+    pub async fn initialize(&self) -> OpenBitFunResult<()> {
         let mut initialized = self.initialized.write().await;
         if *initialized {
             warn!("I18nService already initialized");
@@ -99,7 +99,7 @@ impl I18nService {
     }
 
     /// Loads all locale bundles.
-    async fn load_all_bundles(&self) -> BitFunResult<()> {
+    async fn load_all_bundles(&self) -> OpenBitFunResult<()> {
         let mut bundles = self.bundles.write().await;
 
         for locale in LOCALE_RESOURCE_REGISTRY {
@@ -133,7 +133,7 @@ impl I18nService {
     /// Persistence is owned by the caller through `app.language`, which is the
     /// canonical cross-runtime source of truth. Keeping this method memory-only
     /// avoids reviving `i18n.currentLanguage` writes on every runtime switch.
-    pub async fn set_locale(&self, locale: LocaleId) -> BitFunResult<()> {
+    pub async fn set_locale(&self, locale: LocaleId) -> OpenBitFunResult<()> {
         let old_locale = {
             let mut current = self.current_locale.write().await;
             let old = *current;
@@ -185,17 +185,8 @@ impl I18nService {
     }
 
     fn format_shared_term(locale: LocaleId, key: &str) -> Option<String> {
-        let shared_key = Self::legacy_shared_term_key(key)?;
+        let shared_key = key.strip_prefix("shared.")?;
         generated_shared_term(locale, shared_key).map(str::to_string)
-    }
-
-    fn legacy_shared_term_key(key: &str) -> Option<&str> {
-        match key {
-            // Keep backend callers of the legacy Fluent id working while the
-            // product name is owned by the shared i18n term catalog.
-            "app-name" => Some("product.name"),
-            _ => key.strip_prefix("shared."),
-        }
     }
 
     /// Formats a message.
@@ -268,7 +259,7 @@ pub async fn get_global_i18n_service() -> Option<Arc<I18nService>> {
 }
 
 /// Updates the global i18n service locale if it has been initialized.
-pub async fn sync_global_i18n_service_locale(locale: LocaleId) -> BitFunResult<bool> {
+pub async fn sync_global_i18n_service_locale(locale: LocaleId) -> OpenBitFunResult<bool> {
     if let Some(service) = get_global_i18n_service().await {
         service.set_locale(locale).await?;
         Ok(true)
@@ -286,7 +277,7 @@ pub async fn set_global_i18n_service(service: Arc<I18nService>) {
 /// Initializes the global i18n service.
 pub async fn initialize_global_i18n_service(
     config_service: Option<Arc<ConfigService>>,
-) -> BitFunResult<Arc<I18nService>> {
+) -> OpenBitFunResult<Arc<I18nService>> {
     let service = match config_service {
         Some(cs) => Arc::new(I18nService::with_config_service(cs)),
         None => Arc::new(I18nService::new()),
@@ -312,25 +303,6 @@ mod tests {
                 .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
                 .await,
             "Review: Strict"
-        );
-    }
-
-    #[tokio::test]
-    async fn translate_keeps_legacy_app_name_alias_on_shared_product_name() {
-        let service = I18nService::new();
-        service.initialize().await.unwrap();
-
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::EnUS, "app-name", None)
-                .await,
-            "BitFun"
-        );
-        assert_eq!(
-            service
-                .translate_with_locale(&LocaleId::ZhTW, "app-name", None)
-                .await,
-            "BitFun"
         );
     }
 

@@ -52,14 +52,14 @@ describe('session metadata startup scheduling', () => {
   });
 
   it('keeps deferred metadata tied to the startup overlay handoff', () => {
-    expect(SESSION_METADATA_DEFERRED_SIGNAL).toBe('bitfun:startup-overlay-hidden');
+    expect(SESSION_METADATA_DEFERRED_SIGNAL).toBe('openbitfun:startup-overlay-hidden');
     expect(SESSION_METADATA_DEFERRED_FALLBACK_MS).toBe(10000);
     expect(SESSION_METADATA_DEFERRED_FRAME_COUNT).toBe(1);
   });
 
   it('uses a stable bounded stagger for background workspace metadata', () => {
-    const first = getDeferredSessionMetadataDelayMs('D:\\workspace\\BitFun');
-    const second = getDeferredSessionMetadataDelayMs('D:\\workspace\\BitFun');
+    const first = getDeferredSessionMetadataDelayMs('D:\\workspace\\OpenBitFun');
+    const second = getDeferredSessionMetadataDelayMs('D:\\workspace\\OpenBitFun');
     const other = getDeferredSessionMetadataDelayMs('D:\\workspace\\Other');
 
     expect(first).toBe(second);

@@ -32,8 +32,8 @@ interface SelectSpyProps {
 
 const selectProps: Record<string, SelectSpyProps> = {};
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -190,7 +190,7 @@ describe('ReasoningPresetEditor models-dev binding', () => {
     expect(model?.options ?? []).toHaveLength(0);
   });
 
-  it('lists a provider outside the BitFun built-in overlay', () => {
+  it('lists a provider outside the OpenBitFun built-in overlay', () => {
     render({ catalog: { source: 'models_dev', provider: 'github-copilot', model: '' }, presets: [] });
     const model = selectProps['reasoningPresets.catalogModel'];
     expect(model?.options?.map(o => o.value)).toEqual(['gpt-5.1-codex']);
@@ -216,7 +216,7 @@ describe('ReasoningPresetEditor models-dev binding', () => {
       'OpenAI (chat/completions)',
     );
 
-    const warning = activeContainer?.querySelector('[data-bf-part="unavailableWarning"]');
+    const warning = activeContainer?.querySelector('[data-openbitfun-part="unavailableWarning"]');
     expect(warning?.textContent).toContain('reasoningPresets.unavailableTitle');
     expect(warning?.textContent).toContain('OpenAI (chat/completions)');
     expect(warning?.textContent).toContain('Low, High');

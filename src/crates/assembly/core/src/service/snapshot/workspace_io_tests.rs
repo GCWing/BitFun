@@ -9,12 +9,12 @@ use super::snapshot_system::FileSnapshotSystem;
 use super::types::{FileOperation, OperationType};
 use crate::agentic::session::revert::{SessionRevertPhase, SessionRevertState};
 use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
     WorkspaceMetadata, WorkspacePathKind, WorkspaceShell,
 };
-use bitfun_services_core::workspace::LocalWorkspaceFs;
-use bitfun_services_core::workspace_identity::WorkspaceSessionIdentity;
+use openbitfun_services_core::workspace::LocalWorkspaceFs;
+use openbitfun_services_core::workspace_identity::WorkspaceSessionIdentity;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -642,7 +642,7 @@ async fn wrapped_remote_write_and_delete_produce_recorded_history_without_a_remo
     use crate::service::workspace_runtime::{
         set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
     };
-    use bitfun_runtime_ports::{ToolRuntimeHandles, WorkspaceServices};
+    use openbitfun_runtime_ports::{ToolRuntimeHandles, WorkspaceServices};
 
     let temp = tempfile::tempdir().unwrap();
     let runtime = Arc::new(WorkspaceRuntimeService::new(Arc::new(

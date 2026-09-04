@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::post_call_hooks::{
+use openbitfun_agent_runtime::post_call_hooks::{
     resolve_deep_review_shared_context_tool_use, run_successful_tool_post_call_hooks,
     DeepReviewSharedContextToolUseFacts, SuccessfulToolPostCallHookExecutor,
 };
@@ -113,7 +113,7 @@ fn deep_review_measurement_decision_preserves_remote_paths_and_ignores_runtime_u
     assert!(
         resolve_deep_review_shared_context_tool_use(DeepReviewSharedContextToolUseFacts {
             tool_name: "Read",
-            input: &json!({ "file_path": "bitfun://runtime/session/output.txt" }),
+            input: &json!({ "file_path": "openbitfun://runtime/session/output.txt" }),
             custom_data: &custom_data,
             workspace_root: Some(Path::new("/workspace")),
             is_remote: false,

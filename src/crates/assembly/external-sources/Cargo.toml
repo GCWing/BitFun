@@ -1,5 +1,5 @@
 [package]
-name = "bitfun-external-sources"
+name = "openbitfun-external-sources"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,11 +7,11 @@ description = "Ecosystem-neutral external source lifecycle coordination"
 autotests = false
 
 [lib]
-name = "bitfun_external_sources"
+name = "openbitfun_external_sources"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
 futures = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }

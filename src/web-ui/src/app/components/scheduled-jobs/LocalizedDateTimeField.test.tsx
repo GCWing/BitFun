@@ -52,7 +52,7 @@ describe('LocalizedDateTimeField picker action', () => {
       'button[aria-label="dateTimeField.openPicker"]',
     );
 
-    expect(pickerButton?.dataset.bfComponent).toBe('icon-button');
+    expect(pickerButton?.dataset.openbitfunComponent).toBe('icon-button');
     expect(pickerButton?.getAttribute('aria-expanded')).toBe('false');
 
     act(() => pickerButton?.click());

@@ -12,7 +12,7 @@ export const flowChatTurnRailAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'tooltipMessage' },
   ],
   states: [
-    { id: 'current', selector: { kind: 'self', suffix: '[data-bf-state~="current"]' } },
-    { id: 'visible', selector: { kind: 'self', suffix: '[data-bf-state~="visible"]' } },
+    { id: 'current', selector: { kind: 'self', suffix: '[data-openbitfun-state~="current"]' } },
+    { id: 'visible', selector: { kind: 'self', suffix: '[data-openbitfun-state~="visible"]' } },
   ],
 };

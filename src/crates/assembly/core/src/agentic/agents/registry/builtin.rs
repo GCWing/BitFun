@@ -3,8 +3,8 @@ use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
 use crate::agentic::agents::registry::catalog::{builtin_agent_specs, builtin_agent_specs_for_ids};
 use crate::agentic::agents::{Agent, AgentCategory, SubAgentSource};
-use bitfun_agent_runtime::agents as runtime_agents;
 use log::error;
+use openbitfun_agent_runtime::agents as runtime_agents;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -74,8 +74,8 @@ impl AgentRegistry {
         Self::from_builtin_agents(Self::build_builtin_agents())
     }
 
-    pub(crate) fn for_profile(profile: bitfun_product_capabilities::DeliveryProfile) -> Self {
-        let plan = bitfun_product_capabilities::product_assembly_plan_for_profile(profile);
+    pub(crate) fn for_profile(profile: openbitfun_product_capabilities::DeliveryProfile) -> Self {
+        let plan = openbitfun_product_capabilities::product_assembly_plan_for_profile(profile);
         Self::from_builtin_agents(Self::build_builtin_agents_for_ids(plan.agent_ids()))
     }
 

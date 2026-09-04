@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import {
   BookOpenCheck,
   Compass,
@@ -12,8 +12,8 @@ import {
   Swords,
   UsersRound,
 } from 'lucide-react';
-import { StatusPill, type StatusPillTone } from '@bitfun/ui';
-import { AmbientToolCard, AmbientToolCardHeader } from '@bitfun/ui/flow-chat';
+import { StatusPill, type StatusPillTone } from '@openbitfun/ui';
+import { AmbientToolCard, AmbientToolCardHeader } from '@openbitfun/ui/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import type {
   DeepResearchPhaseId,
@@ -103,8 +103,8 @@ const PhaseGroup: React.FC<{ markers: PhaseMarker[] }> = ({ markers }) => {
   return (
     <div
       className="deep-research-protocol__phase-list"
-      data-bf-component="deep-research-protocol"
-      data-bf-part="phaseList"
+      data-openbitfun-component="deep-research-protocol"
+      data-openbitfun-part="phaseList"
     >
       {markers.map((marker, index) => {
         const presentation = PHASE_PRESENTATION[marker.phaseId];
@@ -159,21 +159,21 @@ const SubquestionGroup: React.FC<{ markers: SubquestionMarker[] }> = ({ markers 
         <ol
           aria-label={t('deepResearchProtocol.subquestions.title')}
           className="deep-research-protocol__list"
-          data-bf-component="deep-research-protocol"
-          data-bf-part="list"
+          data-openbitfun-component="deep-research-protocol"
+          data-openbitfun-part="list"
         >
           {markers.map(marker => (
             <li
               className="deep-research-protocol__list-item"
-              data-bf-component="deep-research-protocol"
-              data-bf-part="listItem"
+              data-openbitfun-component="deep-research-protocol"
+              data-openbitfun-part="listItem"
               key={marker.id}
             >
               <StatusPill tone="neutral">{marker.id}</StatusPill>
               <span
                 className="deep-research-protocol__item-title"
-                data-bf-component="deep-research-protocol"
-                data-bf-part="itemTitle"
+                data-openbitfun-component="deep-research-protocol"
+                data-openbitfun-part="itemTitle"
               >
                 {marker.title}
               </span>
@@ -207,8 +207,8 @@ const CitationGroup: React.FC<{ markers: CitationMarker[] }> = ({ markers }) => 
           extra={(
             <span
               className="deep-research-protocol__summary"
-              data-bf-component="deep-research-protocol"
-              data-bf-part="summary"
+              data-openbitfun-component="deep-research-protocol"
+              data-openbitfun-part="summary"
             >
               {corroborated && <span>{corroborated}</span>}
               <StatusPill tone="info">{t('deepResearchProtocol.citations.count', { count })}</StatusPill>
@@ -241,14 +241,14 @@ const VerdictGroup: React.FC<{ markers: VerdictMarker[] }> = ({ markers }) => {
         <ul
           aria-label={t('deepResearchProtocol.verdicts.title')}
           className="deep-research-protocol__list"
-          data-bf-component="deep-research-protocol"
-          data-bf-part="list"
+          data-openbitfun-component="deep-research-protocol"
+          data-openbitfun-part="list"
         >
           {markers.map(marker => (
             <li
               className="deep-research-protocol__list-item"
-              data-bf-component="deep-research-protocol"
-              data-bf-part="listItem"
+              data-openbitfun-component="deep-research-protocol"
+              data-openbitfun-part="listItem"
               key={marker.subquestionId}
             >
               <StatusPill tone="neutral">{marker.subquestionId}</StatusPill>
@@ -257,8 +257,8 @@ const VerdictGroup: React.FC<{ markers: VerdictMarker[] }> = ({ markers }) => {
               </StatusPill>
               <span
                 className="deep-research-protocol__confidence"
-                data-bf-component="deep-research-protocol"
-                data-bf-part="confidence"
+                data-openbitfun-component="deep-research-protocol"
+                data-openbitfun-part="confidence"
               >
                 {t('deepResearchProtocol.verdicts.confidence', {
                   value: formatNumber(marker.confidence, {
@@ -299,8 +299,8 @@ export const DeepResearchProtocolGroup: React.FC<DeepResearchProtocolGroupProps>
   return (
     <div
       className="deep-research-protocol__group"
-      data-bf-component="deep-research-protocol"
-      data-bf-part="root"
+      data-openbitfun-component="deep-research-protocol"
+      data-openbitfun-part="root"
     >
       {content}
     </div>

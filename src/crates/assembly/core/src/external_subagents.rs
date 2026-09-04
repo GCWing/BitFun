@@ -1,7 +1,7 @@
 //! Product-level activation and routing for provider-neutral external subagents.
 //!
 //! Ecosystem parsing stays in adapters and discovery lifecycle stays in the
-//! external-sources coordinator. This module only resolves current BitFun
+//! external-sources coordinator. This module only resolves current OpenBitFun
 //! model/tool facts, applies persisted user decisions, and installs immutable
 //! generation entries in the existing agent registry.
 
@@ -20,12 +20,12 @@ use crate::infrastructure::ai::reasoning_catalog::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig, AIModelConfig};
-use crate::util::BitFunError;
-use bitfun_ai_adapters::models_dev::ModelsDevCatalog;
-use bitfun_external_sources::ExternalSubagentCoordinatorSnapshot;
-use bitfun_product_domains::external_sources::EcosystemId;
-use bitfun_product_domains::external_sources::{ExternalSourceScope, ProviderId, SourceKey};
-use bitfun_product_domains::external_subagents::{
+use crate::util::OpenBitFunError;
+use openbitfun_ai_adapters::models_dev::ModelsDevCatalog;
+use openbitfun_external_sources::ExternalSubagentCoordinatorSnapshot;
+use openbitfun_product_domains::external_sources::EcosystemId;
+use openbitfun_product_domains::external_sources::{ExternalSourceScope, ProviderId, SourceKey};
+use openbitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_conflict_key,
     external_subagent_model_binding_key, ExternalSubagentActivationState,
     ExternalSubagentCompatibilityState, ExternalSubagentConflict,
@@ -41,7 +41,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-pub(super) const DISABLED_SUBAGENT_CONFLICT_CHOICE: &str = "__bitfun_disabled__";
+pub(super) const DISABLED_SUBAGENT_CONFLICT_CHOICE: &str = "__openbitfun_disabled__";
 static MODEL_CONFIG_UNAVAILABLE_LOGGED: AtomicBool = AtomicBool::new(false);
 
 pub(super) struct ExternalSubagentDecisions<'a> {
@@ -346,7 +346,7 @@ fn host_tool_name(capability: ExternalSubagentToolCapability) -> &'static str {
     }
 }
 
-fn log_model_config_unavailable(stage: &str, error: &BitFunError) {
+fn log_model_config_unavailable(stage: &str, error: &OpenBitFunError) {
     if claim_model_config_outage_log(&MODEL_CONFIG_UNAVAILABLE_LOGGED) {
         log::warn!(
             "External subagent model configuration unavailable: stage={}, category={}",
@@ -360,27 +360,27 @@ fn claim_model_config_outage_log(logged: &AtomicBool) -> bool {
     !logged.swap(true, Ordering::Relaxed)
 }
 
-fn model_config_error_category(error: &BitFunError) -> &'static str {
+fn model_config_error_category(error: &OpenBitFunError) -> &'static str {
     match error {
-        BitFunError::Configuration(message) if message.contains("not initialized") => {
+        OpenBitFunError::Configuration(message) if message.contains("not initialized") => {
             "service_not_initialized"
         }
-        BitFunError::Configuration(message) if message.contains("service is None") => {
+        OpenBitFunError::Configuration(message) if message.contains("service is None") => {
             "service_missing"
         }
-        BitFunError::Configuration(message)
+        OpenBitFunError::Configuration(message)
             if message.contains("Failed to deserialize config value") =>
         {
             "config_deserialization_failed"
         }
-        BitFunError::Configuration(message) if message.contains("Config path") => {
+        OpenBitFunError::Configuration(message) if message.contains("Config path") => {
             "config_path_unavailable"
         }
-        BitFunError::Configuration(_) => "configuration_error",
-        BitFunError::Deserialization(_) => "deserialization_error",
-        BitFunError::Serialization(_) => "serialization_error",
-        BitFunError::Io(_) => "io_error",
-        BitFunError::Service(_) => "service_error",
+        OpenBitFunError::Configuration(_) => "configuration_error",
+        OpenBitFunError::Deserialization(_) => "deserialization_error",
+        OpenBitFunError::Serialization(_) => "serialization_error",
+        OpenBitFunError::Io(_) => "io_error",
+        OpenBitFunError::Service(_) => "service_error",
         _ => "other_error",
     }
 }
@@ -389,9 +389,9 @@ fn local_candidate_fact(info: &AgentInfo, model: &str) -> LocalCandidateFact {
     let mut tools = info.default_tools.clone();
     tools.sort();
     let source = match info.source {
-        AgentSource::Builtin => "BitFun built-in",
-        AgentSource::User => "BitFun user",
-        AgentSource::Project => "BitFun project",
+        AgentSource::Builtin => "OpenBitFun built-in",
+        AgentSource::User => "OpenBitFun user",
+        AgentSource::Project => "OpenBitFun project",
         AgentSource::External => "External",
     };
     let path_identity = info.path.as_deref().unwrap_or_default();
@@ -516,7 +516,9 @@ fn configured_reasoning_effort(
     resolve_default_reasoning_preset(&project_model_reasoning_catalog(model, models_dev))
         .and_then(|preset| {
             preset.actions.iter().rev().find_map(|action| match action {
-                bitfun_core_types::ReasoningPresetAction::Effort { value } => Some(value.clone()),
+                openbitfun_core_types::ReasoningPresetAction::Effort { value } => {
+                    Some(value.clone())
+                }
                 _ => None,
             })
         })
@@ -620,7 +622,7 @@ fn resolve_model_request(
     let (automatic_model, automatic_method) = match &definition.requested_model {
         // An omitted external model means "use the caller's current model" in
         // both OpenCode and Claude Code. It must not be guessed from a
-        // same-name BitFun subagent default: that couples an external profile
+        // same-name OpenBitFun subagent default: that couples an external profile
         // to an unrelated local definition and changes behavior on collisions.
         ExternalSubagentModelRequest::Default => (
             if ai_config.is_some() {
@@ -954,7 +956,10 @@ fn resolve_external_candidate(
     workspace_root: Option<&Path>,
     execution_domain_id: &str,
     definition: &ExternalSubagentDefinition,
-    sources: &BTreeMap<SourceKey, &bitfun_product_domains::external_sources::ExternalSourceRecord>,
+    sources: &BTreeMap<
+        SourceKey,
+        &openbitfun_product_domains::external_sources::ExternalSourceRecord,
+    >,
     provider_labels: &BTreeMap<ProviderId, String>,
     facts: &ProductFacts,
     model_bindings: &BTreeMap<String, ExternalSubagentModelBindingTarget>,
@@ -1499,11 +1504,11 @@ mod tests {
             std::sync::OnceLock::new();
         BINDINGS.get_or_init(BTreeMap::new)
     }
-    use bitfun_product_domains::external_sources::{
+    use openbitfun_product_domains::external_sources::{
         EcosystemId, ExecutionDomainId, ExternalSourceCatalogEntry, ExternalSourceHealth,
         ExternalSourceLifecycleState, ExternalSourceRecord,
     };
-    use bitfun_product_domains::external_subagents::{
+    use openbitfun_product_domains::external_subagents::{
         ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
         ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentLocalId,
         ExternalSubagentMode, ExternalSubagentModelBindingMethod,
@@ -1511,7 +1516,7 @@ mod tests {
         ExternalSubagentProvenanceRef, ExternalSubagentToolCapability, ExternalSubagentToolRequest,
         ExternalSubagentToolSelector, SecretText,
     };
-    use bitfun_product_domains::tool_permissions::{
+    use openbitfun_product_domains::tool_permissions::{
         PermissionConstraintLayer, PermissionEffect, PermissionRule,
     };
 
@@ -1823,7 +1828,7 @@ mod tests {
             model_name: "fast-model".to_string(),
             base_url: "https://api.fake.example/v1".to_string(),
             reasoning: Some(crate::service::config::types::ReasoningConfig {
-                catalog: bitfun_core_types::ReasoningCatalogBinding::ModelsDev {
+                catalog: openbitfun_core_types::ReasoningCatalogBinding::ModelsDev {
                     provider: "fake".to_string(),
                     model: "fast-model".to_string(),
                 },
@@ -2232,7 +2237,7 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_bitfun_model_config_is_recoverable_without_claiming_model_mismatch() {
+    fn unavailable_openbitfun_model_config_is_recoverable_without_claiming_model_mismatch() {
         let empty_set = BTreeSet::new();
         let empty_map = BTreeMap::new();
         let definition_snapshot = snapshot("behavior-v1", "catalog-v1");
@@ -2349,7 +2354,7 @@ mod tests {
     }
 
     #[test]
-    fn executable_and_file_mutation_capabilities_use_bitfun_builtin_tools() {
+    fn executable_and_file_mutation_capabilities_use_openbitfun_builtin_tools() {
         assert_eq!(
             host_tool_name(ExternalSubagentToolCapability::ExecuteCommand),
             "ExecCommand"
@@ -2372,7 +2377,7 @@ mod tests {
         logged.store(false, Ordering::Relaxed);
         assert!(claim_model_config_outage_log(&logged));
 
-        let error = BitFunError::config(
+        let error = OpenBitFunError::config(
             "Failed to deserialize config value at 'ai': invalid value 'sk-sensitive'",
         );
         let category = model_config_error_category(&error);
@@ -2700,7 +2705,7 @@ mod tests {
                 logical_id: "reviewer".to_string(),
                 candidate_id: "local_subagent:reviewer".to_string(),
                 display_name: "Local reviewer".to_string(),
-                source_label: "BitFun project".to_string(),
+                source_label: "OpenBitFun project".to_string(),
                 behavior_version: "local-v1".to_string(),
             },
         );
@@ -2727,7 +2732,7 @@ mod tests {
         assert_eq!(preview.conflicts[0].candidates.len(), 2);
         assert!(
             !preview.conflicts[0].candidates[0].external,
-            "the BitFun/local candidate must be shown before external candidates"
+            "the OpenBitFun/local candidate must be shown before external candidates"
         );
         let external_id = preview.conflicts[0]
             .candidates
@@ -2860,7 +2865,7 @@ mod tests {
                 logical_id: "reviewer".to_string(),
                 candidate_id: "local_subagent:reviewer".to_string(),
                 display_name: "Local reviewer".to_string(),
-                source_label: "BitFun project".to_string(),
+                source_label: "OpenBitFun project".to_string(),
                 behavior_version: "local-v1".to_string(),
             },
         );

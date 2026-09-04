@@ -45,7 +45,7 @@ export const Composer = forwardRef<HTMLFieldSetElement, ComposerProps>(
         aria-disabled={resolvedDisabled || undefined}
         aria-invalid={resolvedInvalid || undefined}
         className={classNames(styles.root, className)}
-        data-bf-component="composer"
+        data-openbitfun-component="composer"
         data-disabled={resolvedDisabled ? "true" : "false"}
         data-has-context={contextBar !== undefined && contextBar !== null ? "true" : "false"}
         data-invalid={resolvedInvalid ? "true" : "false"}
@@ -53,16 +53,16 @@ export const Composer = forwardRef<HTMLFieldSetElement, ComposerProps>(
         ref={ref}
       >
         {contextBar !== undefined && contextBar !== null && (
-          <div className={styles.context} data-bf-part="context">
+          <div className={styles.context} data-openbitfun-part="context">
             {contextBar}
           </div>
         )}
-        <div className={styles.surface} data-bf-part="surface">
-          <div className={styles.editor} data-bf-part="editor">
+        <div className={styles.surface} data-openbitfun-part="surface">
+          <div className={styles.editor} data-openbitfun-part="editor">
             {children}
           </div>
           {toolbar !== undefined && toolbar !== null && (
-            <div className={styles.toolbar} data-bf-part="toolbar">
+            <div className={styles.toolbar} data-openbitfun-part="toolbar">
               {toolbar}
             </div>
           )}
@@ -83,21 +83,21 @@ function renderComposerBar({
     <div
       {...props}
       className={classNames(styles.bar, className)}
-      data-bf-part={part}
+      data-openbitfun-part={part}
       ref={ref}
     >
       {leading !== undefined && leading !== null && (
-        <div className={styles.barLeading} data-bf-part="bar-leading">
+        <div className={styles.barLeading} data-openbitfun-part="bar-leading">
           {leading}
         </div>
       )}
       {children !== undefined && children !== null && (
-        <div className={styles.barContent} data-bf-part="bar-content">
+        <div className={styles.barContent} data-openbitfun-part="bar-content">
           {children}
         </div>
       )}
       {trailing !== undefined && trailing !== null && (
-        <div className={styles.barTrailing} data-bf-part="bar-trailing">
+        <div className={styles.barTrailing} data-openbitfun-part="bar-trailing">
           {trailing}
         </div>
       )}
@@ -124,7 +124,7 @@ export const ComposerDivider = forwardRef<HTMLSpanElement, ComposerDividerProps>
         {...props}
         aria-hidden="true"
         className={classNames(styles.divider, className)}
-        data-bf-part="divider"
+        data-openbitfun-part="divider"
         ref={ref}
       />
     );

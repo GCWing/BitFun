@@ -88,8 +88,8 @@ vi.mock('./components/ToolGroupPicker', () => ({
   ),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button type="button" onClick={onClick}>{children}</button>
   ),
@@ -254,7 +254,7 @@ describeWithJsdom('AgentsScene', () => {
     });
 
     expect(container.querySelector('[data-testid="create-agent-page"]')).toBeTruthy();
-    expect(container.querySelector('.bitfun-agents-scene--page')).toBeTruthy();
+    expect(container.querySelector('.openbitfun-agents-scene--page')).toBeTruthy();
   }, 10_000);
 
   it('keeps agent subpages stretched across the active scene viewport', () => {
@@ -302,12 +302,12 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
     expect(agentCardStyles).toContain('height: 148px;');
     expect(coreCardSurfaceStyles).toContain('height: 148px;');
-    expect(agentCardStyles).toContain('border-radius: var(--bf-radius-lg);');
-    expect(coreCardSurfaceStyles).toContain('border-radius: var(--bf-radius-lg);');
-    expect(agentCardStyles).toContain('background: var(--bf-color-surface-raised);');
-    expect(coreCardSurfaceStyles).toContain('background: var(--bf-color-surface-raised);');
-    expect(agentCardStyles).toContain('box-shadow: var(--bf-shadow-xs);');
-    expect(coreCardSurfaceStyles).toContain('box-shadow: var(--bf-shadow-xs);');
+    expect(agentCardStyles).toContain('border-radius: var(--openbitfun-radius-lg);');
+    expect(coreCardSurfaceStyles).toContain('border-radius: var(--openbitfun-radius-lg);');
+    expect(agentCardStyles).toContain('background: var(--openbitfun-color-surface-raised);');
+    expect(coreCardSurfaceStyles).toContain('background: var(--openbitfun-color-surface-raised);');
+    expect(agentCardStyles).toContain('box-shadow: var(--openbitfun-shadow-xs);');
+    expect(coreCardSurfaceStyles).toContain('box-shadow: var(--openbitfun-shadow-xs);');
     expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
     expect(coreCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
     expect(agentCardStyles).toContain('inset-block: 12px;');
@@ -324,7 +324,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(agentCardSource).not.toContain('--agent-card-gradient');
     expect(coreCardSource).not.toContain('getAlphaColor');
     expect(coreCardSource).not.toContain('--core-card-gradient');
-    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-color-content-primary\);[\s\S]*?\.core-agent-card__status-icon \{[\s\S]*?color: var\(--bf-color-status-success-content\);/);
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--openbitfun-color-content-primary\);[\s\S]*?\.core-agent-card__status-icon \{[\s\S]*?color: var\(--openbitfun-color-status-success-content\);/);
     expect(coreCardSurfaceStyles).not.toContain('$gradient');
     expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
     expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');
@@ -344,19 +344,19 @@ describeWithJsdom('AgentsScene', () => {
     const balanced = container.querySelector<HTMLElement>('[data-testid="agents-harness-balanced"]');
     const ultimate = container.querySelector<HTMLElement>('[data-testid="agents-harness-ultimate"]');
     const creative = container.querySelector<HTMLElement>('[data-testid="agents-harness-creative"]');
-    expect(container.querySelectorAll('.bitfun-agents-scene__harness-profile')).toHaveLength(3);
-    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node')).toHaveLength(3);
-    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node.is-default')).toHaveLength(1);
-    expect(container.querySelector('.bitfun-agents-scene__harness-presentation')).toBeTruthy();
-    expect(container.querySelector('.bitfun-agents-scene__harness-track')).toBeTruthy();
-    expect(container.querySelector('.bitfun-agents-scene__harness-creative')).toBe(creative);
-    expect(container.querySelector('.bitfun-agents-scene__harness-step')).toBeNull();
-    expect(container.querySelector('.bitfun-agents-scene__harness-card')).toBeNull();
+    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-profile')).toHaveLength(3);
+    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-rail-node')).toHaveLength(3);
+    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-rail-node.is-default')).toHaveLength(1);
+    expect(container.querySelector('.openbitfun-agents-scene__harness-presentation')).toBeTruthy();
+    expect(container.querySelector('.openbitfun-agents-scene__harness-track')).toBeTruthy();
+    expect(container.querySelector('.openbitfun-agents-scene__harness-creative')).toBe(creative);
+    expect(container.querySelector('.openbitfun-agents-scene__harness-step')).toBeNull();
+    expect(container.querySelector('.openbitfun-agents-scene__harness-card')).toBeNull();
     expect(minimal).toBeTruthy();
     expect(minimal?.tagName).toBe('DIV');
-    expect(container.querySelector('.bitfun-agents-scene__harness-step-status')).toBeNull();
-    expect(minimal?.dataset.bfState).toBeUndefined();
-    expect(ultimate?.dataset.bfState).toBeUndefined();
+    expect(container.querySelector('.openbitfun-agents-scene__harness-step-status')).toBeNull();
+    expect(minimal?.dataset.openbitfunState).toBeUndefined();
+    expect(ultimate?.dataset.openbitfunState).toBeUndefined();
     expect(minimal?.dataset.harnessGear).toBe('1');
     expect(balanced?.dataset.harnessGear).toBe('2');
     expect(ultimate?.dataset.harnessGear).toBe('3');
@@ -364,7 +364,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(minimal?.textContent).toContain('harnessZone.profiles.minimal.purpose');
     expect(minimal?.textContent).not.toContain('harnessZone.connected');
     expect(ultimate?.textContent).not.toContain('harnessZone.comingSoon');
-    expect(creative?.querySelector('[data-bf-name="creative"]')).toBeTruthy();
+    expect(creative?.querySelector('[data-openbitfun-name="creative"]')).toBeTruthy();
 
     expect(notificationInfoMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();

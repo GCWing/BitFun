@@ -10,7 +10,7 @@ use super::state_store::AnnouncementStateStore;
 use super::tips_pool::builtin_tips;
 use super::types::{AnnouncementCard, AnnouncementState, TriggerCondition};
 use crate::infrastructure::app_paths::PathManager;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -28,7 +28,7 @@ pub struct AnnouncementScheduler {
 
 impl AnnouncementScheduler {
     /// Create a new scheduler and load persisted state from disk.
-    pub async fn new(path_manager: &Arc<PathManager>) -> BitFunResult<Self> {
+    pub async fn new(path_manager: &Arc<PathManager>) -> OpenBitFunResult<Self> {
         let store = AnnouncementStateStore::new(path_manager);
         let remote_fetcher = RemoteFetcher::new(path_manager);
         let state = store.load().await?;
@@ -50,7 +50,7 @@ impl AnnouncementScheduler {
     ///
     /// Should be called once during application startup (non-blocking – awaited
     /// inside the Tauri `setup` callback or from `announcement_api`).
-    pub async fn run(&self, locale: &str) -> BitFunResult<Vec<AnnouncementCard>> {
+    pub async fn run(&self, locale: &str) -> OpenBitFunResult<Vec<AnnouncementCard>> {
         let (open_count, is_version_first_open) = {
             let mut state = self.state.write().await;
             let is_version_first_open = state.last_seen_version != self.current_version;
@@ -120,7 +120,7 @@ impl AnnouncementScheduler {
     }
 
     /// Record that the user has seen (opened the modal for) a card.
-    pub async fn mark_seen(&self, id: &str) -> BitFunResult<()> {
+    pub async fn mark_seen(&self, id: &str) -> OpenBitFunResult<()> {
         {
             let mut state = self.state.write().await;
             state.seen_ids.insert(id.to_string());
@@ -129,7 +129,7 @@ impl AnnouncementScheduler {
     }
 
     /// Dismiss a card for the current version cycle.
-    pub async fn dismiss(&self, id: &str) -> BitFunResult<()> {
+    pub async fn dismiss(&self, id: &str) -> OpenBitFunResult<()> {
         {
             let mut state = self.state.write().await;
             state.dismissed_ids.insert(id.to_string());
@@ -138,7 +138,7 @@ impl AnnouncementScheduler {
     }
 
     /// Permanently suppress a card.
-    pub async fn never_show(&self, id: &str) -> BitFunResult<()> {
+    pub async fn never_show(&self, id: &str) -> OpenBitFunResult<()> {
         {
             let mut state = self.state.write().await;
             state.never_show_ids.insert(id.to_string());
@@ -150,7 +150,7 @@ impl AnnouncementScheduler {
     // Private helpers
     // ──────────────────────────────────────────────────────────────────────
 
-    async fn save_current_state(&self) -> BitFunResult<()> {
+    async fn save_current_state(&self) -> OpenBitFunResult<()> {
         let _save_guard = self.save_lock.lock().await;
         let state_snapshot = self.state.read().await.clone();
         self.store.save(&state_snapshot).await

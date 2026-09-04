@@ -1,5 +1,5 @@
 use super::{RemoteDirEntry, RemoteFileService, RemoteWorkspaceEntry};
-use bitfun_services_core::filesystem::{
+use openbitfun_services_core::filesystem::{
     FileSearchOutcome, FileSearchProgressSink, FileSearchResult, FileSearchResultGroup,
     SearchMatchType,
 };

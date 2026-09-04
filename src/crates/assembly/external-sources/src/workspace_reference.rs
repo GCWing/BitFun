@@ -1,9 +1,9 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceContext,
     ExternalSourceDiagnostic, ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState,
     ExternalSourceProviderError, ExternalWatchRoot, ProviderId,
 };
-use bitfun_product_domains::workspace_references::{
+use openbitfun_product_domains::workspace_references::{
     ExternalWorkspaceReferenceDefinition, ExternalWorkspaceReferenceProviderIdentity,
     ExternalWorkspaceReferenceProviderSnapshot, ExternalWorkspaceReferenceSourceProvider,
 };

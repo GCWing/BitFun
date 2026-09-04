@@ -5,7 +5,7 @@ use crate::{
     PluginInstanceOpenRequest, PluginPrepareRequest, StreamDescriptor, DEFAULT_MAX_FRAME_BYTES,
 };
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     HookFunctionGeneration, HookFunctionRegistrationBatch, HookFunctionRegistrationSink,
     HookFunctionReverseAsk, HookFunctionReverseMetadata, HookFunctionReverseReply,
     HookFunctionReverseSink, HookFunctionStartRequest, HookFunctionToolContext,
@@ -392,15 +392,18 @@ async fn client_opens_a_typed_plugin_instance() {
             .await
             .expect("instance open request should be readable");
         assert_eq!(request["method"], "host.instance.open");
-        assert_eq!(request["params"]["instanceID"], "bitfun:test-instance");
-        assert_eq!(request["params"]["plugins"][0]["spec"], "bitfun-demo-echo");
+        assert_eq!(request["params"]["instanceID"], "openbitfun:test-instance");
+        assert_eq!(
+            request["params"]["plugins"][0]["spec"],
+            "openbitfun-demo-echo"
+        );
         write_frame(
             &mut host_stream,
             &json!({
                 "jsonrpc": "2.0",
                 "id": request["id"],
                 "result": {
-                    "instanceID": "bitfun:test-instance",
+                    "instanceID": "openbitfun:test-instance",
                     "generationKey": "generation-fixture",
                     "revision": "revision-fixture"
                 }
@@ -414,7 +417,7 @@ async fn client_opens_a_typed_plugin_instance() {
     let result = client
         .open_instance(
             PluginInstanceOpenRequest {
-                instance_id: "bitfun:test-instance".to_string(),
+                instance_id: "openbitfun:test-instance".to_string(),
                 generation_key: "generation-fixture".to_string(),
                 revision: "revision-fixture".to_string(),
                 project: json!({"id": "project", "worktree": "C:/workspace"}),
@@ -422,7 +425,7 @@ async fn client_opens_a_typed_plugin_instance() {
                 directory: "C:/workspace".to_string(),
                 worktree: "C:/workspace".to_string(),
                 plugins: vec![PluginDeclaration {
-                    spec: "bitfun-demo-echo".to_string(),
+                    spec: "openbitfun-demo-echo".to_string(),
                     options: None,
                     base_directory: None,
                 }],
@@ -435,7 +438,7 @@ async fn client_opens_a_typed_plugin_instance() {
         .await
         .expect("instance open should resolve");
 
-    assert_eq!(result["instanceID"], "bitfun:test-instance");
+    assert_eq!(result["instanceID"], "openbitfun:test-instance");
     host.await.expect("fake host should finish");
 }
 
@@ -453,7 +456,10 @@ async fn client_prepares_typed_plugins() {
             request["params"]["configurationFingerprint"],
             "fixture-prewarm"
         );
-        assert_eq!(request["params"]["plugins"][0]["spec"], "bitfun-demo-echo");
+        assert_eq!(
+            request["params"]["plugins"][0]["spec"],
+            "openbitfun-demo-echo"
+        );
         write_frame(
             &mut host_stream,
             &json!({
@@ -462,19 +468,19 @@ async fn client_prepares_typed_plugins() {
                 "result": {
                     "reviewDigest": "0".repeat(64),
                     "reviewed": [{
-                        "spec": "bitfun-demo-echo",
+                        "spec": "openbitfun-demo-echo",
                         "source": "npm",
-                        "identity": "npm:bitfun-demo-echo",
-                        "canonicalSource": "bitfun-demo-echo",
+                        "identity": "npm:openbitfun-demo-echo",
+                        "canonicalSource": "openbitfun-demo-echo",
                         "baseDirectory": "C:/workspace",
                         "optionsDigest": "1".repeat(64)
                     }],
                     "prepared": [{
-                        "spec": "bitfun-demo-echo",
-                        "identity": "npm:bitfun-demo-echo",
+                        "spec": "openbitfun-demo-echo",
+                        "identity": "npm:openbitfun-demo-echo",
                         "source": "npm",
-                        "target": "bitfun-demo-echo",
-                        "entry": "C:/cache/bitfun-demo-echo/index.js",
+                        "target": "openbitfun-demo-echo",
+                        "entry": "C:/cache/openbitfun-demo-echo/index.js",
                         "cache": "hit",
                         "contentHash": "2".repeat(64)
                     }],
@@ -492,7 +498,7 @@ async fn client_prepares_typed_plugins() {
         .prepare_plugins(
             PluginPrepareRequest {
                 plugins: vec![PluginDeclaration {
-                    spec: "bitfun-demo-echo".to_string(),
+                    spec: "openbitfun-demo-echo".to_string(),
                     options: None,
                     base_directory: None,
                 }],
@@ -509,7 +515,7 @@ async fn client_prepares_typed_plugins() {
     assert_eq!(result.reviewed_count, 1);
     assert_eq!(result.failed_count, 0);
     assert_eq!(
-        result.content_digests.get("npm:bitfun-demo-echo"),
+        result.content_digests.get("npm:openbitfun-demo-echo"),
         Some(&"2".repeat(64))
     );
     host.await.expect("fake host should finish");

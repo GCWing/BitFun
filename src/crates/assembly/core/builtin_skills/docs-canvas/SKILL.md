@@ -1,7 +1,7 @@
 ---
 name: docs-canvas
 description: >-
-  Render a documentation-style BitFun Canvas that organizes architecture
+  Render a documentation-style OpenBitFun Canvas that organizes architecture
   notes, API references, walkthroughs, runbooks, and how-tos into a navigable
   layout with sections, tables of contents, diagrams, and cross-references.
   Use when the user asks for a docs canvas, documentation overview,
@@ -20,7 +20,7 @@ Build a canvas that presents documentation — architecture notes, API reference
 
 ## Prerequisites
 
-Read `bitfun-canvas` first. It contains the generation policy, design guidance, slop rules, self-check, Canvas runtime rules, and SDK usage notes.
+Read `openbitfun-canvas` first. It contains the generation policy, design guidance, slop rules, self-check, Canvas runtime rules, and SDK usage notes.
 
 ## Gather the source material
 

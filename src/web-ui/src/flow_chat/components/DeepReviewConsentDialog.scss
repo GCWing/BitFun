@@ -3,9 +3,9 @@
 }
 
 .deep-review-consent {
-  --deep-review-accent: var(--bf-color-accent-hover);
-  --deep-review-accent-strong: var(--bf-color-accent-hover);
-  --deep-review-warm: var(--bf-color-status-warning-content);
+  --deep-review-accent: var(--openbitfun-color-accent-hover);
+  --deep-review-accent-strong: var(--openbitfun-color-accent-hover);
+  --deep-review-warm: var(--openbitfun-color-status-warning-content);
   display: flex;
   position: relative;
   flex-direction: column;
@@ -14,7 +14,7 @@
   background:
     radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--deep-review-accent) 13%, transparent), transparent 34%),
     radial-gradient(circle at 96% 8%, color-mix(in srgb, var(--deep-review-warm) 9%, transparent), transparent 30%),
-    var(--bf-color-surface-canvas);
+    var(--openbitfun-color-surface-canvas);
 }
 
 .deep-review-consent__header {
@@ -29,13 +29,13 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: color-mix(in srgb, var(--deep-review-accent) 78%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-accent) 78%, var(--openbitfun-color-content-primary));
   background: color-mix(in srgb, var(--deep-review-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--deep-review-accent) 22%, transparent);
 }
 
 .deep-review-consent__fact-icon--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--openbitfun-color-content-primary));
   background: color-mix(in srgb, var(--deep-review-warm) 12%, transparent);
   border-color: color-mix(in srgb, var(--deep-review-warm) 24%, transparent);
 }
@@ -45,28 +45,28 @@
 
   h3 {
     margin: 4px 0 0;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-heading-dialog-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
-    line-height: var(--bf-type-flow-meta-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-heading-dialog-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
   }
 }
 
 .deep-review-consent__eyebrow {
-  color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--bf-color-content-muted));
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--openbitfun-color-content-muted));
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   text-transform: uppercase;
 }
 
 .deep-review-consent__body {
   margin: 8px 0 0;
   max-width: 640px;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .deep-review-consent__close {
@@ -81,17 +81,17 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--deep-review-warm) 30%, var(--bf-color-border-subtle));
+  border: 1px solid color-mix(in srgb, var(--deep-review-warm) 30%, var(--openbitfun-color-border-subtle));
   border-radius: 8px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--deep-review-warm) 10%, transparent), transparent 72%),
-    color-mix(in srgb, var(--deep-review-warm) 5%, var(--bf-color-surface-raised));
+    color-mix(in srgb, var(--deep-review-warm) 5%, var(--openbitfun-color-surface-raised));
 
   p {
     margin: 4px 0 0;
-    color: color-mix(in srgb, var(--bf-color-content-secondary) 72%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-body-line-height);
+    color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 72%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-body-line-height);
   }
 }
 
@@ -110,9 +110,9 @@
 
   p {
     margin: 4px 0 0;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
 
@@ -126,15 +126,15 @@
     align-items: center;
     min-height: 20px;
     padding: 0;
-    color: color-mix(in srgb, var(--bf-color-content-secondary) 70%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 70%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
 
 .deep-review-consent__summary-stats .deep-review-consent__summary-stat--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--openbitfun-color-content-primary));
 }
 
 .deep-review-consent__impact-grid {
@@ -155,18 +155,18 @@
   }
 
   span {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-flow-meta-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
   }
 
   strong {
     margin-top: 3px;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
 
@@ -174,9 +174,9 @@
   display: grid;
   gap: 3px;
   padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--deep-review-accent) 18%, var(--bf-color-border-subtle));
+  border: 1px solid color-mix(in srgb, var(--deep-review-accent) 18%, var(--openbitfun-color-border-subtle));
   border-radius: 6px;
-  background: color-mix(in srgb, var(--deep-review-accent) 6%, var(--bf-color-surface-raised));
+  background: color-mix(in srgb, var(--deep-review-accent) 6%, var(--openbitfun-color-surface-raised));
 
   strong,
   span {
@@ -185,16 +185,16 @@
   }
 
   strong {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-flow-meta-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
   }
 
   span {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
 
@@ -209,13 +209,13 @@
   flex-direction: column;
   gap: 10px;
   padding: 10px 0 0;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 
   p {
     margin: 4px 0 0;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
 
@@ -225,16 +225,16 @@
   text-align: left;
 
   strong {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-flow-meta-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
   }
 
   span {
-    color: color-mix(in srgb, var(--bf-color-content-secondary) 70%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 70%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     text-align: left;
   }
 }
@@ -243,14 +243,14 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: color-mix(in srgb, var(--bf-color-content-secondary) 72%, var(--bf-color-content-primary));
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
+  color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 72%, var(--openbitfun-color-content-primary));
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
   text-transform: uppercase;
 }
 
 .deep-review-consent__reviewer-group-title--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--openbitfun-color-content-primary));
 }
 
 .deep-review-consent__skipped-list {
@@ -268,23 +268,23 @@
     align-items: center;
     min-height: 28px;
     padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, var(--deep-review-warm) 20%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, var(--deep-review-warm) 20%, var(--openbitfun-color-border-subtle));
     border-radius: 6px;
     background: color-mix(in srgb, var(--deep-review-warm) 6%, transparent);
-    color: color-mix(in srgb, var(--bf-color-content-secondary) 72%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-meta-line-height);
+    color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 72%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
 
     span {
       min-width: 0;
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       overflow-wrap: anywhere;
     }
 
     strong {
-      color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--bf-color-content-primary));
-      font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-type-heading-page-font-weight);
+      color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--openbitfun-color-content-primary));
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      font-weight: var(--openbitfun-type-heading-page-font-weight);
       text-align: right;
       white-space: normal;
     }
@@ -293,8 +293,8 @@
 
 li.deep-review-consent__skipped-more {
   grid-template-columns: minmax(0, 1fr);
-  background: color-mix(in srgb, var(--bf-color-surface-canvas) 82%, transparent);
-  color: var(--bf-color-content-muted);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 82%, transparent);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .deep-review-consent__fact-icon {
@@ -302,18 +302,18 @@ li.deep-review-consent__skipped-more {
   height: 22px;
   border: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--deep-review-accent) 72%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-accent) 72%, var(--openbitfun-color-content-primary));
 }
 
 .deep-review-consent__fact-icon--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--bf-color-content-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--openbitfun-color-content-primary));
 }
 
 .deep-review-consent__fact-title {
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-control-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  line-height: var(--bf-type-flow-meta-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
 }
 
 .deep-review-consent__footer {
@@ -322,7 +322,7 @@ li.deep-review-consent__skipped-more {
   justify-content: flex-end;
   gap: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .deep-review-consent__actions {

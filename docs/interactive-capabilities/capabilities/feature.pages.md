@@ -34,20 +34,20 @@ Save page versions and publish them to public or private URLs while managing tit
 
 ## 怎么用 / How to use it
 
-1. 登录 BitFun 账户
-   Sign in to a BitFun account
+1. 登录 OpenBitFun 账户
+   Sign in to a OpenBitFun account
 2. 打开 Pages
    Open Pages
 3. 选择页面并确认发布与可见性
    Choose a page and confirm publishing and visibility
 
-入口 / Entry: BitFun 对应场景
+入口 / Entry: OpenBitFun 对应场景
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

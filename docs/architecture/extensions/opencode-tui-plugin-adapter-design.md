@@ -1,8 +1,8 @@
 # OpenCode 终端界面插件适配设计
 
-本文定义 OpenCode TUI Plugin v1 如何适配到 BitFun 基于 Ratatui 的终端界面。总体能力矩阵见
+本文定义 OpenCode TUI Plugin v1 如何适配到 OpenBitFun 基于 Ratatui 的终端界面。总体能力矩阵见
 [`opencode-extension-compatibility.md`](opencode-extension-compatibility.md)，插件执行进程和兼容 Client 见
-[`opencode-plugin-runtime-adapter-design.md`](opencode-plugin-runtime-adapter-design.md)，BitFun CLI/TUI 归属模块见
+[`opencode-plugin-runtime-adapter-design.md`](opencode-plugin-runtime-adapter-design.md)，OpenBitFun CLI/TUI 归属模块见
 [`cli-product-line-design.md`](../cli-product-line-design.md)。
 外部来源的首次确认和变化提示见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
@@ -11,10 +11,10 @@ OpenCode `v1.18.4` 已包含独立终端插件入口，依据稳定版
 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/tui.ts)
 和
 [`packages/opencode/specs/tui-plugins.md`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/opencode/specs/tui-plugins.md)。
-它没有 experimental 前缀，仓库称其为当前 v1 体系，但公共文档成熟度低，因此 BitFun 必须按 release commit
+它没有 experimental 前缀，仓库称其为当前 v1 体系，但公共文档成熟度低，因此 OpenBitFun 必须按 release commit
 锁定样例并监控变化。
 
-本文是目标设计。当前 BitFun 尚未加载 `@opencode-ai/plugin/tui` 或运行 OpenCode 的终端组件。
+本文是目标设计。当前 OpenBitFun 尚未加载 `@opencode-ai/plugin/tui` 或运行 OpenCode 的终端组件。
 
 ## 1. 目标与非目标
 
@@ -22,7 +22,7 @@ OpenCode `v1.18.4` 已包含独立终端插件入口，依据稳定版
 
 1. 覆盖 OpenCode 终端插件的发现、加载、顺序、插件参数/元数据、生命周期和非渲染接口。
 2. 将 Route、Command、Keymap、Dialog、Prompt、Theme、Attention、State、KV、Client 和 Event 映射到
-   BitFun TUI 归属模块；Toast 必须等 CLI 建立类型化状态/通知 owner 后再映射。
+   OpenBitFun TUI 归属模块；Toast 必须等 CLI 建立类型化状态/通知 owner 后再映射。
 3. 对需要 OpenTUI/Solid 原始组件运行时的能力明确降级，不以“存在构建期 TUI 布局选择”冒充兼容。
 4. 插件渲染或事件异常不能卡住终端输入、破坏终端恢复或拖垮 Agent 会话。
 5. 保持服务和终端入口的启停、贡献和普通错误归因分离；两者可以共享 Plugin Host，进程失效时共同失效。
@@ -41,7 +41,7 @@ OpenCode 终端插件能力分为两类，适配策略不同：
 
 | 类别 | 示例 | 适配判断 |
 |---|---|---|
-| 宿主操作和声明 | 命令、键位、导航、通知、Prompt、Theme、Attention、State、KV、Client、Event、插件启停 | 可以通过 OpenCode adapter 的插件兼容接口和 BitFun TUI 归属模块良好适配。 |
+| 宿主操作和声明 | 命令、键位、导航、通知、Prompt、Theme、Attention、State、KV、Client、Event、插件启停 | 可以通过 OpenCode adapter 的插件兼容接口和 OpenBitFun TUI 归属模块良好适配。 |
 | 原始组件渲染 | Route component、Slot component、自定义 Dialog、`CliRenderer`、Solid/OpenTUI 节点 | 与 Ratatui 组件运行时不等价，首期只能降级或使用宿主提供的结构化容器。 |
 
 这个区分不是安全限制，而是两种渲染器、组件模型、焦点和生命周期不兼容造成的技术边界。
@@ -81,7 +81,7 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 | 插件状态与诊断服务 | 插件入口启停、加载错误、渲染降级和恢复动作 | 把 TUI 插件失败升级为 Agent 会话失败 |
 
 目标不是增加一套“通用界面扩展框架”。每项 OpenCode TUI API 只映射到已有或本阶段从真实终端路径补齐的最小
-消费接口；若 BitFun 没有真实消费位置，则返回具体降级或不支持，不预先发布新的 GUI/TUI 公共组件契约。
+消费接口；若 OpenBitFun 没有真实消费位置，则返回具体降级或不支持，不预先发布新的 GUI/TUI 公共组件契约。
 
 ## 4. 发现、加载和生命周期
 
@@ -89,7 +89,7 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 
 - 一个软件包可以同时提供 server 和 tui 入口，但必须解析到两个各自只导出 `server` 或 `tui` 的独立模块，
   不能从同一模块导出两者；两个入口独立启用。
-- TUI 插件只从合并后的 `tui.json/jsonc` `plugin` 列表加载；OpenCode 不自动扫描 TUI 插件目录。BitFun 不把
+- TUI 插件只从合并后的 `tui.json/jsonc` `plugin` 列表加载；OpenCode 不自动扫描 TUI 插件目录。OpenBitFun 不把
   服务插件目录发现规则错误复用到 TUI 入口。
 - 外部 TUI 插件自动进入来源清单，但首次按来源、插件身份、入口类型、执行域和能力摘要确认；确认前不准备依赖、import 模块
   或启动 Plugin Host。server 入口的确认不能自动授权同包的 tui 入口。
@@ -113,7 +113,7 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 - 启用、停用、重载和 dispose 不阻塞 TUI 输入线程；状态变更通过事件归约提交。
 - 清理按注册的反向顺序等待执行，并使用统一的插件清理预算和 Host 进程退出总预算；超时或异常后继续终端恢复。
 
-插件入口完成首次激活后，BitFun 默认兼容策略允许 TUI 插件按 OpenCode 行为加载。用户或产品策略可以禁用终端插件、声音、系统通知、
+插件入口完成首次激活后，OpenBitFun 默认兼容策略允许 TUI 插件按 OpenCode 行为加载。用户或产品策略可以禁用终端插件、声音、系统通知、
 工具覆盖或特定槽位，但策略差异必须显示为 `policy-limited`。
 
 ## 5. 能力映射
@@ -123,7 +123,7 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 下表逐项对应稳定版 `TuiPluginApi`，不能用“界面能力”等分组名代替接口清单。`options` 和 `meta` 是传给
 插件函数的第二、第三参数，不属于 `api` 对象。
 
-| OpenCode 接口 | BitFun 适配 |
+| OpenCode 接口 | OpenBitFun 适配 |
 |---|---|
 | `api.app.version` | 返回通过 `engines.opencode` 检查的固定兼容版本；该协议没有 renderer 能力协商，不能仅靠版本号宣称插件全部能力可用。 |
 | `api.attention.notify`、`api.attention.soundboard.registerPack/activate/current/list` | 转换为终端注意提示、平台通知和声音包操作。 |
@@ -148,13 +148,13 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 | `api.plugins.list/activate/deactivate/add/install` | 逐项映射查询、启停、当前会话加载和安装。 |
 | `api.lifecycle.signal/onDispose` | 传播取消，反向执行清理并应用统一的有界总预算。 |
 
-稳定源码中定义了 `TuiWorkspace` 类型，但它不在 `TuiPluginApi`，BitFun 不把它误列为插件接口。
+稳定源码中定义了 `TuiWorkspace` 类型，但它不在 `TuiPluginApi`，OpenBitFun 不把它误列为插件接口。
 
 ### 5.2 配置、元数据与生命周期
 
-| OpenCode API | BitFun 映射 | 兼容边界 |
+| OpenCode API | OpenBitFun 映射 | 兼容边界 |
 |---|---|---|
-| `api.app.version` | 返回当前固定的 OpenCode TUI 兼容版本，不冒充 BitFun 产品版本 | 协议没有能力位；renderer 依赖必须按插件运行结果判定，见下文。 |
+| `api.app.version` | 返回当前固定的 OpenCode TUI 兼容版本，不冒充 OpenBitFun 产品版本 | 协议没有能力位；renderer 依赖必须按插件运行结果判定，见下文。 |
 | `api.tuiConfig` | 精确提供 `$schema`、`theme`、`plugin`，并把 `tui.scroll_speed`、`tui.scroll_acceleration`、`tui.diff_style` 展开到顶层，再补 `leader_timeout`、`attention`、`plugin_enabled`、`keybinds` | 不暴露一个额外 `tui` 属性；字段由固定 `TuiConfigView` fixture 生成并保持实时只读。 |
 | `options` | 第二参数是从 `[spec, options]` 提取后的 options record；字符串 spec 时为 `undefined` | 未知 option 由插件解释，适配器只做大小和可序列化检查。 |
 | `meta` | 第三参数精确提供 id/source/spec/entry、requested/version/modified、first_time/last_time/time_changed/load_count/fingerprint/state | `state` 只为 `first|updated|same`；字段来自实际加载记录，不伪造缺失信息。 |
@@ -164,16 +164,16 @@ TUI 与服务插件的兼容接口共享来源、依赖、Client、事件、期�
 `options`、`meta` 和 `tuiConfig` 的字段表从固定版 `packages/plugin/src/tui.ts` 生成 fixture；实现与验收不再手写
 近似摘要。插件初始化时调用原始 renderer/JSX 能力并且该能力是插件成立前提时，整个插件入口返回
 `unsupported(renderer-required)` 而不是“部分激活”；只在后续懒路径调用时仍可能得到同一稳定错误。
-由于 `api.app.version` 没有能力位，BitFun 无法让插件在版本分支前识别这一差异，这是需明确确认的协议限制。
+由于 `api.app.version` 没有能力位，OpenBitFun 无法让插件在版本分支前识别这一差异，这是需明确确认的协议限制。
 
 ### 5.3 Route 与导航
 
-| OpenCode 能力 | BitFun 映射 | 兼容程度 |
+| OpenCode 能力 | OpenBitFun 映射 | 兼容程度 |
 |---|---|---|
 | Route id、注册、最后注册者胜出 | TUI Route Registry 保存来源和顺序 | 等价适配 |
 | `route.navigate` 与只读 `route.current` | TUI State/Effect 事件 | 原生映射；稳定接口没有单独 back 方法。 |
 | Route `render()` 返回的任意 Solid/OpenTUI component | 首期不直接嵌入；导航进入安全降级页并提供返回动作 | 不完整，见第 8 节 |
-| BitFun 额外提供的结构化页面 | Markdown/列表/状态等宿主视图 | 仅属 BitFun 增强，不能计为现有 OpenCode 插件兼容 |
+| OpenBitFun 额外提供的结构化页面 | Markdown/列表/状态等宿主视图 | 仅属 OpenBitFun 增强，不能计为现有 OpenCode 插件兼容 |
 
 Route 注册成功不代表原始组件可渲染。若只有 route id 可识别、component 不可承载，状态必须显示
 “Route 已注册、renderer 不支持”，不能打开空白页面或卡住导航。
@@ -188,8 +188,8 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 
 ### 5.5 Keys、Keymap、Layer、Binding 与 Mode
 
-- `api.keys.formatSequence/formatBindings` 按 OpenCode 字符串规则实现，不使用 BitFun 自有显示格式猜测。
-- OpenCode command、layer、binding、mode 转成 BitFun TUI Input 事件和可解释绑定视图。
+- `api.keys.formatSequence/formatBindings` 按 OpenCode 字符串规则实现，不使用 OpenBitFun 自有显示格式猜测。
+- OpenCode command、layer、binding、mode 转成 OpenBitFun TUI Input 事件和可解释绑定视图。
 - leader、组合键、禁用和模式条件保留；平台不支持的按键产生明确 fallback。
 - Keymap Hook 不能直接修改 Ratatui 状态；它提交绑定变更，由 Input 归属模块在同一次状态提交中切换。
 - 冲突或插件停用后重新计算最终映射，旧 handler 不继续接收按键。
@@ -201,7 +201,7 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 
 | 能力 | 映射 | 降级 |
 |---|---|---|
-| 文本/选择/确认 Dialog | BitFun TUI Dialog 归属模块 | 交互结果等价，布局不逐像素一致。 |
+| 文本/选择/确认 Dialog | OpenBitFun TUI Dialog 归属模块 | 交互结果等价，布局不逐像素一致。 |
 | Toast | CLI 当前没有对应 owner；首期返回明确不支持 | 建立类型化状态/通知 owner 后，才允许按宿主能力进入状态行或日志视图。 |
 | Prompt `current/set/reset/blur/focus/submit` | Input/Effect 归属模块 | 受当前输入状态和取消语义约束；稳定 `PromptRef` 没有 append。 |
 | `api.ui.DialogAlert`、`api.ui.DialogConfirm` | worker 适配库把文本属性转成类型化宿主对话 | 布局不等价，交互结果和取消语义对齐。 |
@@ -227,7 +227,7 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 注册顺序、插件身份和清理生命周期，但不能渲染任意已有插件的槽位内容。所有当前 host slot 的内容统一标记
 `unsupported(renderer-required)`，不创建空白占位、不永久占用布局，也不把“名称已识别”计为功能兼容。
 
-如果某个插件只需要文本或状态，BitFun 可以额外提供结构化终端贡献接口，但这属于 BitFun 增强，现有 OpenCode
+如果某个插件只需要文本或状态，OpenBitFun 可以额外提供结构化终端贡献接口，但这属于 OpenBitFun 增强，现有 OpenCode
 插件不会自动改用，不能用它替代原始 slot 兼容度。只有未来终端子表面桥能够承载原始组件后，slot 内容才可
 提升为等价适配。
 
@@ -237,7 +237,7 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 ### 5.8 Theme
 
 - `current/selected/has/set/install/mode/ready` 映射到 TUI Theme 消费接口；固定 API 不额外提供主题列举方法。
-- OpenCode 主题 JSON 先按自身键和覆盖顺序解析，再映射到 BitFun 终端语义色。
+- OpenCode 主题 JSON 先按自身键和覆盖顺序解析，再映射到 OpenBitFun 终端语义色。
 - 终端不支持 truecolor 时降级到 ANSI 或 monochrome，并保留原主题 id 和来源。
 - 插件停用不自动删除用户已经显式安装的主题；临时主题预览随插件生命周期清理。
 - `oc-themes` 主题专用软件包按 OpenCode 元数据状态同步；无 `./tui` 入口仍可安装，并在插件与主题来源状态中可见。
@@ -251,9 +251,9 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 
 ### 5.10 State、KV、Client 与 Events
 
-- `api.tuiConfig` 和 TUI synced state 通过实时兼容视图映射，不暴露 BitFun 内部 reducer 对象。状态至少覆盖
+- `api.tuiConfig` 和 TUI synced state 通过实时兼容视图映射，不暴露 OpenBitFun 内部 reducer 对象。状态至少覆盖
   config、provider、path、vcs、session count/diff/todo/messages/status/permission/question、part、上游 LSP 字段事实和 MCP。
-  LSP 只用于版本化 schema 识别和明确的 `unsupported` 状态；BitFun 不消费或发布 LSP Runtime 状态，不创建 DTO、
+  LSP 只用于版本化 schema 识别和明确的 `unsupported` 状态；OpenBitFun 不消费或发布 LSP Runtime 状态，不创建 DTO、
   启动进程，也不从 Remote 回退到本机。
 - OpenCode v1 的 `api.kv` 是同一 TUI 应用共享的 KV，不按插件命名空间隔离。默认兼容策略必须保持共享键和
   ready 语义；这意味着插件可能发生键冲突。用户选择受限策略时可以按插件隔离，但必须显示兼容降级。
@@ -272,12 +272,12 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 - TUI 发起的安装请求进入统一插件来源/依赖流程，不在界面进程直接修改依赖目录。
 - 默认本地策略允许安装和启用，过程异步展示；失败不改变其他插件状态。
 - 两类入口独立启停：停用 tui 不自动停用同包 server 入口。
-- OpenCode TUI API 有运行时 `list`，但稳定版 CLI 没有外部插件的 uninstall/list/update 命令。BitFun 可以提供
-  额外管理命令，但必须标为 BitFun 增强，不能把推测行为标为 OpenCode 等价兼容。
-- BitFun 增强的卸载入口必须显示将修改的配置层、server/tui 入口和受影响项目；卸载先撤下对应贡献、处理
+- OpenCode TUI API 有运行时 `list`，但稳定版 CLI 没有外部插件的 uninstall/list/update 命令。OpenBitFun 可以提供
+  额外管理命令，但必须标为 OpenBitFun 增强，不能把推测行为标为 OpenCode 等价兼容。
+- OpenBitFun 增强的卸载入口必须显示将修改的配置层、server/tui 入口和受影响项目；卸载先撤下对应贡献、处理
   在途调用，再移除配置引用。共享缓存只有在没有其他来源引用时才能回收。
 - 显式 `pkg@version` 固定版本且不检查更新。稳定版规范称 bare `pkg` 可在缓存过期时刷新，但同一提交的实际
-  `Npm.add` 在缓存命中后直接复用。BitFun 的兼容加载先遵循可执行源码；“检查更新/更新”单独查询 bare spec 的
+  `Npm.add` 在缓存命中后直接复用。OpenBitFun 的兼容加载先遵循可执行源码；“检查更新/更新”单独查询 bare spec 的
   新版本，显示工具、Hook、依赖和权限差异后再切换。该源码/规范差异保留为固定样例，后续 OpenCode 修正任一侧时
   只更新版本化适配规则。
 
@@ -300,7 +300,7 @@ Route 注册成功不代表原始组件可渲染。若只有 route id 可识别�
 
 ### 8.1 原始 `CliRenderer` 和组件树
 
-OpenCode TUI Plugin 可以持有原始 `CliRenderer` 并注册 Solid/OpenTUI component；BitFun CLI 使用 Rust
+OpenCode TUI Plugin 可以持有原始 `CliRenderer` 并注册 Solid/OpenTUI component；OpenBitFun CLI 使用 Rust
 Ratatui。二者在以下方面不兼容：
 
 - 组件实例和响应式生命周期。

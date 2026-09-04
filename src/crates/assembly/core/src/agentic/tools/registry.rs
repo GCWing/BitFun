@@ -4,13 +4,13 @@ use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
 use crate::agentic::tools::product_runtime::{
     resolve_product_readonly_enabled_tools, ProductToolRuntime,
 };
-use crate::util::errors::BitFunResult;
-use bitfun_agent_tools::{
+use crate::util::errors::OpenBitFunResult;
+use log::{debug, info, trace, warn};
+use openbitfun_agent_tools::{
     DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecoratorRef,
     ToolRegistry as AgentToolRegistry,
 };
-use bitfun_product_capabilities::DeliveryProfile;
-use log::{debug, info, trace, warn};
+use openbitfun_product_capabilities::DeliveryProfile;
 use std::sync::Arc;
 
 pub(in crate::agentic::tools) type ToolRef = Arc<dyn Tool>;
@@ -56,7 +56,7 @@ fn notify_external_tool_registry_changed() {
     crate::external_sources::notify_external_tool_registry_changed();
 }
 
-pub use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
+pub use openbitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
 
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
 pub struct ToolRegistry {
@@ -87,7 +87,7 @@ impl ToolRegistry {
     ///
     /// The default production decorator preserves snapshot-aware wrapping while
     /// allowing future owner crates to replace this concrete service coupling
-    /// through the `bitfun-runtime-ports` interface.
+    /// through the `openbitfun-runtime-ports` interface.
     pub fn with_tool_decorator(tool_decorator: ProductToolDecoratorRef) -> Self {
         ProductToolRuntime::with_tool_decorator(tool_decorator)
             .create_registry()
@@ -275,7 +275,7 @@ pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
 }
 
 /// Get readonly tools
-pub async fn get_readonly_tools() -> BitFunResult<Vec<Arc<dyn Tool>>> {
+pub async fn get_readonly_tools() -> OpenBitFunResult<Vec<Arc<dyn Tool>>> {
     Ok(resolve_product_readonly_enabled_tools().await)
 }
 
@@ -384,7 +384,7 @@ mod tests {
     };
     use crate::agentic::tools::product_runtime::ProductToolRuntime;
     use async_trait::async_trait;
-    use bitfun_agent_tools::{DynamicToolProvider, ToolDecorator};
+    use openbitfun_agent_tools::{DynamicToolProvider, ToolDecorator};
     use serde_json::json;
     use serde_json::Value;
     use std::sync::Arc;
@@ -401,7 +401,7 @@ mod tests {
             &self.name
         }
 
-        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+        async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
             Ok("dynamic test tool".to_string())
         }
 
@@ -444,7 +444,7 @@ mod tests {
             &self,
             _input: &Value,
             _context: &ToolUseContext,
-        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+        ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
             Ok(Vec::new())
         }
     }
@@ -508,7 +508,7 @@ mod tests {
             &self.name
         }
 
-        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+        async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
             Ok("decorated test tool".to_string())
         }
 
@@ -532,7 +532,7 @@ mod tests {
             &self,
             _input: &Value,
             _context: &ToolUseContext,
-        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+        ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
             Ok(Vec::new())
         }
     }
@@ -586,7 +586,7 @@ mod tests {
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
-            "BitFunControl",
+            "OpenBitFunControl",
             "GetFileDiff",
             "CreateCanvas",
             "ReadCanvas",
@@ -638,7 +638,7 @@ mod tests {
     #[cfg(feature = "product-full")]
     #[test]
     fn product_capability_provider_plan_covers_registry_manifest_without_owning_order() {
-        let assembly = bitfun_product_capabilities::default_product_capability_assembly();
+        let assembly = openbitfun_product_capabilities::default_product_capability_assembly();
         let mut provider_tools = assembly
             .tool_provider_group_plan()
             .iter()
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn product_capability_provider_plan_keeps_owner_group_order() {
-        let assembly = bitfun_product_capabilities::default_product_capability_assembly();
+        let assembly = openbitfun_product_capabilities::default_product_capability_assembly();
         let provider_ids = assembly
             .tool_provider_group_plan()
             .iter()
@@ -1026,15 +1026,15 @@ mod tests {
         let refreshed_generation = registry.current_snapshot_generation();
 
         assert!(refreshed_generation > removed_generation);
-        let error = bitfun_agent_tools::validate_deferred_tool_usage(
+        let error = openbitfun_agent_tools::validate_deferred_tool_usage(
             "mcp__github__search_repos",
             &["mcp__github__search_repos".to_string()],
-            &[bitfun_agent_tools::LoadedDeferredToolSpec {
+            &[openbitfun_agent_tools::LoadedDeferredToolSpec {
                 tool_name: "mcp__github__search_repos".to_string(),
                 catalog_generation: loaded_generation,
             }],
             refreshed_generation,
-            bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME,
+            openbitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME,
         )
         .expect_err("refresh must invalidate the previously loaded MCP spec");
 

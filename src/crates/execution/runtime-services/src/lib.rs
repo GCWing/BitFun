@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, RemoteCapabilityPort,
     RemoteConnectionPort, RemoteExecPort, RemoteProjectionPort, RemoteWorkspacePort,
     RuntimeEventSink, RuntimeServiceCapability, RuntimeServicePort, SessionStorePort, TerminalPort,

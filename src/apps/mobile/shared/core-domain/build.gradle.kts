@@ -14,7 +14,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.bitfun.mobile.core.domain"
+        namespace = "com.openbitfun.mobile.core.domain"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
         withHostTest {}

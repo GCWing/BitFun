@@ -4,19 +4,19 @@
 use super::worktree_topology::global_worktree_topology_service;
 use super::WorktreeTopologyFreshness;
 use crate::util::{errors::*, FrontMatterMarkdown};
-use bitfun_services_core::workspace_identity::{
-    canonicalize_local_workspace_root, local_workspace_roots_equal,
-    local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
-    normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
+use log::warn;
+use openbitfun_services_core::workspace_identity::{
+    canonicalize_local_workspace_root, local_workspace_stable_storage_id,
+    normalize_local_workspace_root_for_stable_id, normalize_remote_workspace_path,
+    remote_workspace_stable_id, LOCAL_WORKSPACE_SSH_HOST,
 };
-use log::{info, warn};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-pub use bitfun_runtime_ports::RelatedPath;
+pub use openbitfun_runtime_ports::RelatedPath;
 
 /// Workspace type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -53,8 +53,8 @@ pub enum WorkspaceKind {
 
 /// Stable identity of the assistant workspace that owns the primary role.
 ///
-/// Workspace ids can be rekeyed when storage paths are normalized, so the
-/// primary selection is persisted using the assistant identity instead.
+/// Local workspace ids are derived from canonical storage paths, so the primary
+/// selection is persisted using the assistant identity instead of that path-derived id.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PrimaryAssistantKey {
@@ -352,14 +352,14 @@ impl WorkspaceInfo {
     }
 
     /// Creates a new workspace record.
-    pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> BitFunResult<Self> {
+    pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self> {
         Self::new_inner(root_path, options, true).await
     }
 
     pub(crate) async fn new_without_worktree(
         root_path: PathBuf,
         options: WorkspaceOpenOptions,
-    ) -> BitFunResult<Self> {
+    ) -> OpenBitFunResult<Self> {
         Self::new_inner(root_path, options, false).await
     }
 
@@ -367,7 +367,7 @@ impl WorkspaceInfo {
         root_path: PathBuf,
         options: WorkspaceOpenOptions,
         load_worktree: bool,
-    ) -> BitFunResult<Self> {
+    ) -> OpenBitFunResult<Self> {
         let default_name = root_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -383,16 +383,52 @@ impl WorkspaceInfo {
         let now = chrono::Utc::now();
         let is_remote = workspace_kind == WorkspaceKind::Remote;
         let (id, resolved_root_path) = if is_remote {
-            let id = options
+            let ssh_host = options
+                .remote_ssh_host
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    OpenBitFunError::config(
+                        "Remote workspace requires a non-empty sshHost in the current OpenBitFun format",
+                    )
+                })?;
+            options
+                .remote_connection_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    OpenBitFunError::config(
+                        "Remote workspace requires a non-empty connectionId in the current OpenBitFun format",
+                    )
+                })?;
+
+            let normalized_root = normalize_remote_workspace_path(&root_path.to_string_lossy());
+            if !normalized_root.starts_with('/') {
+                return Err(OpenBitFunError::config(format!(
+                    "Remote workspace path must be an absolute POSIX path: {}",
+                    root_path.display()
+                )));
+            }
+            let expected_id = remote_workspace_stable_id(ssh_host, &normalized_root);
+            let supplied_id = options
                 .stable_workspace_id
                 .as_ref()
                 .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            (id, root_path.clone())
+                .filter(|s| !s.is_empty());
+            if supplied_id
+                .as_deref()
+                .is_some_and(|supplied| supplied != expected_id)
+            {
+                return Err(OpenBitFunError::config(format!(
+                    "Remote workspace id does not match its sshHost and root path: expected {expected_id}"
+                )));
+            }
+            (expected_id, PathBuf::from(normalized_root))
         } else {
             let (canonical_pb, norm_str) =
-                canonicalize_local_workspace_root(&root_path).map_err(BitFunError::service)?;
+                canonicalize_local_workspace_root(&root_path).map_err(OpenBitFunError::service)?;
             let id = local_workspace_stable_storage_id(&norm_str);
             (id, canonical_pb)
         };
@@ -612,7 +648,7 @@ impl WorkspaceInfo {
     }
 
     /// Scans the workspace.
-    async fn scan_workspace(&mut self, options: ScanOptions) -> BitFunResult<()> {
+    async fn scan_workspace(&mut self, options: ScanOptions) -> OpenBitFunResult<()> {
         let mut stats = WorkspaceStatistics {
             total_files: 0,
             total_directories: 0,
@@ -640,7 +676,8 @@ impl WorkspaceInfo {
         stats: &'a mut WorkspaceStatistics,
         options: &'a ScanOptions,
         depth: usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = BitFunResult<()>> + 'a + Send>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = OpenBitFunResult<()>> + 'a + Send>>
+    {
         Box::pin(async move {
             if let Some(max_depth) = options.max_depth {
                 if depth > max_depth {
@@ -648,12 +685,12 @@ impl WorkspaceInfo {
                 }
             }
 
-            let mut read_dir = fs::read_dir(dir)
-                .await
-                .map_err(|e| BitFunError::service(format!("Failed to read directory: {}", e)))?;
+            let mut read_dir = fs::read_dir(dir).await.map_err(|e| {
+                OpenBitFunError::service(format!("Failed to read directory: {}", e))
+            })?;
 
             while let Some(entry) = read_dir.next_entry().await.map_err(|e| {
-                BitFunError::service(format!("Failed to read directory entry: {}", e))
+                OpenBitFunError::service(format!("Failed to read directory entry: {}", e))
             })? {
                 let path = entry.path();
                 let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -670,10 +707,9 @@ impl WorkspaceInfo {
                     continue;
                 }
 
-                let metadata = entry
-                    .metadata()
-                    .await
-                    .map_err(|e| BitFunError::service(format!("Failed to read metadata: {}", e)))?;
+                let metadata = entry.metadata().await.map_err(|e| {
+                    OpenBitFunError::service(format!("Failed to read metadata: {}", e))
+                })?;
 
                 if metadata.is_file() {
                     stats.total_files += 1;
@@ -845,113 +881,8 @@ impl WorkspaceManager {
         }
     }
 
-    /// Reassigns a workspace id (e.g. migrating from UUID to `local_*` stable id).
-    pub fn rekey_workspace_id(&mut self, old_id: &str, new_id: String) -> BitFunResult<()> {
-        if old_id == new_id.as_str() {
-            return Ok(());
-        }
-        let Some(mut workspace) = self.workspaces.remove(old_id) else {
-            return Err(BitFunError::service(format!(
-                "rekey_workspace_id: workspace not found: {}",
-                old_id
-            )));
-        };
-        if self.workspaces.contains_key(&new_id) {
-            self.workspaces.insert(old_id.to_string(), workspace);
-            return Err(BitFunError::service(format!(
-                "rekey_workspace_id: target id already exists: {}",
-                new_id
-            )));
-        }
-        workspace.id = new_id.clone();
-        if workspace.workspace_kind != WorkspaceKind::Remote {
-            if let Ok((pb, _)) = canonicalize_local_workspace_root(&workspace.root_path) {
-                workspace.root_path = pb;
-            }
-            workspace.metadata.insert(
-                "sshHost".to_string(),
-                serde_json::json!(LOCAL_WORKSPACE_SSH_HOST),
-            );
-        }
-        self.workspaces.insert(new_id.clone(), workspace);
-
-        for id in &mut self.opened_workspace_ids {
-            if id.as_str() == old_id {
-                *id = new_id.clone();
-            }
-        }
-        if let Some(ref mut cur) = self.current_workspace_id {
-            if cur.as_str() == old_id {
-                *cur = new_id.clone();
-            }
-        }
-        for rid in &mut self.recent_workspaces {
-            if rid.as_str() == old_id {
-                *rid = new_id.clone();
-            }
-        }
-        for rid in &mut self.recent_assistant_workspaces {
-            if rid.as_str() == old_id {
-                *rid = new_id.clone();
-            }
-        }
-        Ok(())
-    }
-
-    /// Migrates persisted local/assistant workspaces from legacy UUID ids to `local_*` stable ids.
-    /// Returns a map from **old** id to **new** id for callers that still hold persisted workspace ids.
-    pub fn migrate_local_workspace_ids_to_stable_storage(&mut self) -> HashMap<String, String> {
-        let mut id_remap: HashMap<String, String> = HashMap::new();
-        let old_ids: Vec<String> = self.workspaces.keys().cloned().collect();
-        for old_id in old_ids {
-            let Some(ws) = self.workspaces.get(&old_id).cloned() else {
-                continue;
-            };
-            if ws.workspace_kind == WorkspaceKind::Remote {
-                continue;
-            }
-            if old_id.starts_with("local_") {
-                continue;
-            }
-            let Ok(norm) = normalize_local_workspace_root_for_stable_id(&ws.root_path) else {
-                continue;
-            };
-            let new_id = local_workspace_stable_storage_id(&norm);
-            if new_id == old_id {
-                continue;
-            }
-            if self.workspaces.contains_key(&new_id) {
-                info!(
-                    "Dropping duplicate local workspace record (legacy id {}) in favor of stable id {}",
-                    old_id, new_id
-                );
-                self.workspaces.remove(&old_id);
-                self.opened_workspace_ids.retain(|x| x != &old_id);
-                self.recent_workspaces.retain(|x| x != &old_id);
-                self.recent_assistant_workspaces.retain(|x| x != &old_id);
-                if self.current_workspace_id.as_deref() == Some(old_id.as_str()) {
-                    self.current_workspace_id = Some(new_id.clone());
-                }
-                id_remap.insert(old_id, new_id);
-                continue;
-            }
-            match self.rekey_workspace_id(&old_id, new_id.clone()) {
-                Ok(()) => {
-                    id_remap.insert(old_id, new_id);
-                }
-                Err(e) => {
-                    warn!(
-                        "migrate_local_workspace_ids_to_stable_storage: failed to rekey {}: {}",
-                        old_id, e
-                    );
-                }
-            }
-        }
-        id_remap
-    }
-
     /// Opens a workspace.
-    pub async fn open_workspace(&mut self, path: PathBuf) -> BitFunResult<WorkspaceInfo> {
+    pub async fn open_workspace(&mut self, path: PathBuf) -> OpenBitFunResult<WorkspaceInfo> {
         self.open_workspace_with_options(path, WorkspaceOpenOptions::default())
             .await
     }
@@ -961,7 +892,7 @@ impl WorkspaceManager {
         &mut self,
         path: PathBuf,
         options: WorkspaceOpenOptions,
-    ) -> BitFunResult<WorkspaceInfo> {
+    ) -> OpenBitFunResult<WorkspaceInfo> {
         let worktree =
             WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached).await;
         self.open_workspace_with_resolved_worktree(path, options, worktree)
@@ -973,7 +904,7 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
         worktree: Option<WorkspaceWorktreeInfo>,
-    ) -> BitFunResult<WorkspaceInfo> {
+    ) -> OpenBitFunResult<WorkspaceInfo> {
         self.upsert_workspace_with_options(path, options, true, Some(worktree))
             .await
     }
@@ -984,7 +915,7 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
         refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
-    ) -> BitFunResult<WorkspaceInfo> {
+    ) -> OpenBitFunResult<WorkspaceInfo> {
         self.upsert_workspace_with_options(path, options, false, refresh_worktree)
             .await
     }
@@ -995,19 +926,19 @@ impl WorkspaceManager {
         options: WorkspaceOpenOptions,
         keep_opened: bool,
         refresh_worktree: Option<Option<WorkspaceWorktreeInfo>>,
-    ) -> BitFunResult<WorkspaceInfo> {
+    ) -> OpenBitFunResult<WorkspaceInfo> {
         let is_remote = options.workspace_kind == WorkspaceKind::Remote;
 
         if !is_remote {
             if !path.exists() {
-                return Err(BitFunError::service(format!(
+                return Err(OpenBitFunError::service(format!(
                     "Workspace path does not exist: {:?}",
                     path
                 )));
             }
 
             if !path.is_dir() {
-                return Err(BitFunError::service(format!(
+                return Err(OpenBitFunError::service(format!(
                     "Workspace path is not a directory: {:?}",
                     path
                 )));
@@ -1015,24 +946,22 @@ impl WorkspaceManager {
         }
 
         let existing_workspace_id = if is_remote {
-            let desired = options
-                .remote_connection_id
+            let host = options
+                .remote_ssh_host
                 .as_deref()
                 .map(str::trim)
-                .filter(|s| !s.is_empty());
+                .filter(|value| !value.is_empty());
+            let path_norm = normalize_remote_workspace_path(&path.to_string_lossy());
             let stable = options
                 .stable_workspace_id
                 .as_deref()
                 .map(str::trim)
-                .filter(|s| !s.is_empty());
-            let host_opt = options
-                .remote_ssh_host
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty());
-            let path_norm = normalize_remote_workspace_path(&path.to_string_lossy());
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .or_else(|| host.map(|host| remote_workspace_stable_id(host, &path_norm)));
 
-            let by_stable = stable
+            stable
+                .as_deref()
                 .and_then(|sid| self.workspaces.get(sid))
                 .and_then(|w| {
                     if w.workspace_kind == WorkspaceKind::Remote
@@ -1043,82 +972,17 @@ impl WorkspaceManager {
                     } else {
                         None
                     }
-                });
-
-            if let Some(id) = by_stable {
-                Some(id)
-            } else {
-                self.workspaces
-                    .values()
-                    .find(|w| {
-                        if w.workspace_kind != WorkspaceKind::Remote {
-                            return false;
-                        }
-                        if normalize_remote_workspace_path(&w.root_path.to_string_lossy())
-                            != path_norm
-                        {
-                            return false;
-                        }
-                        let existing = w.remote_ssh_connection_id();
-                        let conn_ok = match desired {
-                            Some(d) => existing == Some(d),
-                            None => existing.is_none(),
-                        };
-                        if !conn_ok {
-                            return false;
-                        }
-                        if let Some(h) = host_opt {
-                            match w
-                                .metadata
-                                .get("sshHost")
-                                .and_then(|v| v.as_str())
-                                .map(str::trim)
-                                .filter(|s| !s.is_empty())
-                            {
-                                None => true,
-                                Some(wh) => wh == h,
-                            }
-                        } else {
-                            true
-                        }
-                    })
-                    .map(|w| w.id.clone())
-            }
+                })
         } else {
             let canon_norm = match normalize_local_workspace_root_for_stable_id(&path) {
                 Ok(n) => n,
-                Err(e) => return Err(BitFunError::service(e)),
+                Err(e) => return Err(OpenBitFunError::service(e)),
             };
             let stable_local_id = local_workspace_stable_storage_id(&canon_norm);
 
-            if self.workspaces.contains_key(&stable_local_id) {
-                Some(stable_local_id)
-            } else {
-                let legacy_id = self
-                    .workspaces
-                    .iter()
-                    .find(|(wid, w)| {
-                        w.workspace_kind != WorkspaceKind::Remote
-                            && wid.as_str() != stable_local_id.as_str()
-                            && local_workspace_roots_equal(&w.root_path, &path)
-                    })
-                    .map(|(wid, _)| wid.clone());
-
-                if let Some(legacy) = legacy_id {
-                    match self.rekey_workspace_id(&legacy, stable_local_id.clone()) {
-                        Ok(()) => Some(stable_local_id),
-                        Err(e) => {
-                            warn!(
-                                "Could not rekey local workspace {} -> {}: {}",
-                                legacy, stable_local_id, e
-                            );
-                            Some(legacy)
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
+            self.workspaces
+                .contains_key(&stable_local_id)
+                .then_some(stable_local_id)
         };
 
         if let Some(workspace_id) = existing_workspace_id {
@@ -1171,7 +1035,7 @@ impl WorkspaceManager {
                 self.touch_workspace_access(&workspace_id, options.add_to_recent);
             }
             return self.workspaces.get(&workspace_id).cloned().ok_or_else(|| {
-                BitFunError::service(format!(
+                OpenBitFunError::service(format!(
                     "Workspace '{}' disappeared after selecting it",
                     workspace_id
                 ))
@@ -1207,7 +1071,7 @@ impl WorkspaceManager {
     }
 
     /// Closes the current workspace.
-    pub fn close_current_workspace(&mut self) -> BitFunResult<()> {
+    pub fn close_current_workspace(&mut self) -> OpenBitFunResult<()> {
         let current_workspace_id = self.current_workspace_id.clone();
         match current_workspace_id {
             Some(workspace_id) => self.close_workspace(&workspace_id),
@@ -1216,9 +1080,9 @@ impl WorkspaceManager {
     }
 
     /// Closes the specified workspace.
-    pub fn close_workspace(&mut self, workspace_id: &str) -> BitFunResult<()> {
+    pub fn close_workspace(&mut self, workspace_id: &str) -> OpenBitFunResult<()> {
         if !self.workspaces.contains_key(workspace_id) {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "Workspace not found: {}",
                 workspace_id
             )));
@@ -1249,13 +1113,13 @@ impl WorkspaceManager {
     }
 
     /// Sets the active workspace among already opened workspaces.
-    pub fn set_active_workspace(&mut self, workspace_id: &str) -> BitFunResult<()> {
+    pub fn set_active_workspace(&mut self, workspace_id: &str) -> OpenBitFunResult<()> {
         if !self
             .opened_workspace_ids
             .iter()
             .any(|id| id == workspace_id)
         {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "Workspace is not opened: {}",
                 workspace_id
             )));
@@ -1265,7 +1129,7 @@ impl WorkspaceManager {
     }
 
     /// Sets the current workspace.
-    pub fn set_current_workspace(&mut self, workspace_id: String) -> BitFunResult<()> {
+    pub fn set_current_workspace(&mut self, workspace_id: String) -> OpenBitFunResult<()> {
         self.set_current_workspace_with_recent_policy(workspace_id, true)
     }
 
@@ -1273,9 +1137,9 @@ impl WorkspaceManager {
         &mut self,
         workspace_id: String,
         add_to_recent: bool,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if !self.workspaces.contains_key(&workspace_id) {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "Workspace not found: {}",
                 workspace_id
             )));
@@ -1371,12 +1235,12 @@ impl WorkspaceManager {
     pub fn set_primary_assistant_workspace(
         &mut self,
         workspace_id: &str,
-    ) -> BitFunResult<Option<PrimaryAssistantKey>> {
+    ) -> OpenBitFunResult<Option<PrimaryAssistantKey>> {
         let workspace = self.workspaces.get(workspace_id).ok_or_else(|| {
-            BitFunError::service(format!("Workspace not found: {}", workspace_id))
+            OpenBitFunError::service(format!("Workspace not found: {}", workspace_id))
         })?;
         let key = PrimaryAssistantKey::from_workspace(workspace).ok_or_else(|| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Workspace is not an assistant workspace: {}",
                 workspace_id
             ))
@@ -1445,7 +1309,7 @@ impl WorkspaceManager {
     }
 
     /// Removes a workspace.
-    pub fn remove_workspace(&mut self, workspace_id: &str) -> BitFunResult<()> {
+    pub fn remove_workspace(&mut self, workspace_id: &str) -> OpenBitFunResult<()> {
         if self.workspaces.remove(workspace_id).is_some() {
             if self.current_workspace_id.as_ref() == Some(&workspace_id.to_string()) {
                 self.current_workspace_id = None;
@@ -1458,7 +1322,7 @@ impl WorkspaceManager {
 
             Ok(())
         } else {
-            Err(BitFunError::service(format!(
+            Err(OpenBitFunError::service(format!(
                 "Workspace not found: {}",
                 workspace_id
             )))
@@ -1466,7 +1330,7 @@ impl WorkspaceManager {
     }
 
     /// Cleans up invalid workspaces.
-    pub async fn cleanup_invalid_workspaces(&mut self) -> BitFunResult<usize> {
+    pub async fn cleanup_invalid_workspaces(&mut self) -> OpenBitFunResult<usize> {
         let mut invalid_workspaces = Vec::new();
 
         for (workspace_id, workspace) in &self.workspaces {
@@ -1638,7 +1502,7 @@ impl WorkspaceManager {
             .filter(|id| {
                 self.workspaces
                     .get(id)
-                    .map(|workspace| workspace.workspace_kind == WorkspaceKind::Normal)
+                    .map(|workspace| workspace.workspace_kind != WorkspaceKind::Assistant)
                     .unwrap_or(false)
             })
             .collect();

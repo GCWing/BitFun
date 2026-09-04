@@ -1,7 +1,7 @@
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__workspace-list {
     display: flex;
     flex-direction: column;
@@ -9,13 +9,13 @@
     min-width: 0;
     max-width: 100%;
     // Separate peer session groups more clearly than a parent row and its children.
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     min-width: 0;
     max-width: 100%;
     padding: 2px 0 0;
 
     &.is-dragging {
-      .bitfun-nav-panel__workspace-item {
+      .openbitfun-nav-panel__workspace-item {
         cursor: default;
       }
     }
@@ -34,22 +34,22 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-width: 0;
     max-width: 100%;
   }
 
   &__workspace-group-title {
-    margin: 0 var(--bf-space-1);
-    padding: 0 var(--bf-space-1);
+    margin: 0 var(--openbitfun-space-1);
+    padding: 0 var(--openbitfun-space-1);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
     text-transform: uppercase;
   }
 
@@ -69,24 +69,24 @@
     border: none;
     border-radius: 999px;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 70%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 70%, transparent);
     }
   }
 
   &__workspace-list-empty {
-    margin: 0 var(--bf-space-1);
-    padding: var(--bf-space-2);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 55%, transparent);
+    margin: 0 var(--openbitfun-space-1);
+    padding: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 55%, transparent);
   }
 
   &__workspace-item {
@@ -97,20 +97,20 @@
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
     min-width: 0;
     max-width: 100%;
-    padding: 2px var(--bf-space-1);
-    border-radius: var(--bf-radius-base);
+    padding: 2px var(--openbitfun-space-1);
+    border-radius: var(--openbitfun-radius-base);
     background: transparent;
     border: 1px solid transparent;
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.is-dragging {
       opacity: 0.42;
 
-      .bitfun-nav-panel__workspace-item-card {
+      .openbitfun-nav-panel__workspace-item-card {
         cursor: default;
       }
     }
@@ -126,20 +126,20 @@
     }
 
     &:not(.is-active) {
-      .bitfun-nav-panel__workspace-item-card {
+      .openbitfun-nav-panel__workspace-item-card {
         gap: 1px;
 
         &:hover {
-          color: var(--bf-color-content-secondary);
+          color: var(--openbitfun-color-content-secondary);
 
-          .bitfun-nav-panel__workspace-item-collapse-btn,
-          .bitfun-nav-panel__workspace-item-name-btn {
+          .openbitfun-nav-panel__workspace-item-collapse-btn,
+          .openbitfun-nav-panel__workspace-item-name-btn {
             background: transparent;
           }
         }
       }
 
-      .bitfun-nav-panel__workspace-item-collapse-btn {
+      .openbitfun-nav-panel__workspace-item-collapse-btn {
         border-radius: 6px 0 0 6px;
 
         &:hover {
@@ -147,17 +147,17 @@
         }
       }
 
-      .bitfun-nav-panel__workspace-item-name-cluster {
+      .openbitfun-nav-panel__workspace-item-name-cluster {
         border-radius: 0 6px 6px 0;
       }
 
-      .bitfun-nav-panel__workspace-item-name-btn {
+      .openbitfun-nav-panel__workspace-item-name-btn {
         border-radius: 0;
       }
     }
 
     &:not(:hover):not(:focus-within):not(.is-menu-open) {
-      .bitfun-nav-panel__workspace-item-branch {
+      .openbitfun-nav-panel__workspace-item-branch {
         max-width: 0;
         margin-left: 0;
         padding-left: 0;
@@ -167,7 +167,7 @@
         pointer-events: none;
       }
 
-      .bitfun-nav-panel__workspace-item-menu {
+      .openbitfun-nav-panel__workspace-item-menu {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
@@ -185,21 +185,21 @@
     min-height: 30px;
     overflow: hidden;
     border-radius: 6px;
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-canvas);
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-canvas);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
 
 
     &:hover {
-      .bitfun-nav-panel__workspace-item-icon-default {
+      .openbitfun-nav-panel__workspace-item-icon-default {
         opacity: 0;
         transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__workspace-item-icon-toggle {
+      .openbitfun-nav-panel__workspace-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }
@@ -207,15 +207,15 @@
   }
 
   &__workspace-item:not(.is-active) &__workspace-item-card {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
 
     &:hover {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
   &__workspace-item.is-active &__workspace-item-card {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__workspace-item:not(.is-active) &__workspace-item-icon {
@@ -241,14 +241,14 @@
     cursor: pointer;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 60%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 60%, transparent);
 
-      .bitfun-nav-panel__workspace-item-icon-default {
+      .openbitfun-nav-panel__workspace-item-icon-default {
         opacity: 0;
         transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__workspace-item-icon-toggle {
+      .openbitfun-nav-panel__workspace-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }
@@ -273,7 +273,7 @@
     max-width: 100%;
     padding: 0 4px;
     /** Row actions appear on hover and widen the reserved gutter — glide instead of snapping. */
-    transition: padding-right var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: padding-right var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__workspace-item-name-row {
@@ -284,11 +284,11 @@
     width: 100%;
   }
 
-  &__workspace-item[data-bf-state~='remote'] &__workspace-item-name-row {
-    gap: var(--bf-space-2);
+  &__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-name-row {
+    gap: var(--openbitfun-space-2);
   }
 
-  &__workspace-item[data-bf-state~='remote'] &__workspace-item-name-btn {
+  &__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-name-btn {
     flex: 1 1 0;
     max-width: none;
   }
@@ -333,8 +333,8 @@
     align-items: center;
     justify-content: center;
     color: inherit;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     opacity: 1;
     transform: scale(1);
   }
@@ -348,22 +348,22 @@
     height: 36px;
     flex-shrink: 0;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 22%, transparent);
+    color: var(--openbitfun-color-content-primary);
     overflow: hidden;
 
-    .bitfun-nav-panel__workspace-item-avatar-letter {
-      font-size: var(--bf-type-body-lg-font-size);
-      font-weight: var(--bf-type-heading-page-font-weight);
-      line-height: var(--bf-type-modifier-leading-none-line-height);
+    .openbitfun-nav-panel__workspace-item-avatar-letter {
+      font-size: var(--openbitfun-type-body-lg-font-size);
+      font-weight: var(--openbitfun-type-heading-page-font-weight);
+      line-height: var(--openbitfun-type-modifier-leading-none-line-height);
       text-transform: uppercase;
-      transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                  transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                  transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
       opacity: 1;
       transform: scale(1);
     }
 
-    .bitfun-nav-panel__workspace-item-icon-toggle {
+    .openbitfun-nav-panel__workspace-item-icon-toggle {
       position: absolute;
       display: inline-flex;
       align-items: center;
@@ -371,10 +371,10 @@
       inset: 0;
       opacity: 0;
       transform: scale(0.7);
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
 
       svg {
-        transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+        transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
       }
 
       &.is-collapsed svg {
@@ -403,8 +403,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__workspace-item-icon-default {
@@ -418,7 +418,7 @@
     color: inherit;
 
     svg {
-      transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     }
 
     &.is-collapsed svg {
@@ -432,17 +432,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__workspace-item:not(.is-active) &__workspace-item-label {
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__workspace-item.is-active &__workspace-item-label {
-    font-weight: var(--bf-type-heading-page-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__workspace-item-title {
@@ -469,42 +469,42 @@
     overflow: hidden;
   }
 
-  &__workspace-item[data-bf-state~='remote'] &__workspace-item-label {
+  &__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-label {
     text-overflow: clip;
   }
 
   &__workspace-item-remote {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     flex: 0 0 auto;
     margin-left: auto;
     min-height: 24px;
-    padding: 0 var(--bf-space-2);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 62%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    padding: 0 var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 62%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
     cursor: default;
     transition:
-      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.is-connected {
-      background: var(--bf-color-status-success-surface);
-      color: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-surface);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     &.is-error,
     &.is-disconnected {
-      background: var(--bf-color-status-danger-surface);
-      color: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-surface);
+      color: var(--openbitfun-color-status-danger-content);
     }
 
     &.is-connecting {
-      background: var(--bf-color-status-warning-surface);
-      color: var(--bf-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-surface);
+      color: var(--openbitfun-color-status-warning-content);
     }
   }
 
@@ -534,24 +534,24 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
 
     &.is-connected {
-      background: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-content);
     }
 
     &.is-error,
     &.is-disconnected {
-      background: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-content);
     }
 
     &.is-unknown {
-      background: var(--bf-color-content-muted);
+      background: var(--openbitfun-color-content-muted);
     }
 
     &.is-connecting {
-      background: var(--bf-color-status-warning-content);
-      animation: bitfun-status-dot-pulse 1.4s ease-in-out infinite;
+      background: var(--openbitfun-color-status-warning-content);
+      animation: openbitfun-status-dot-pulse 1.4s ease-in-out infinite;
     }
   }
 
@@ -568,26 +568,26 @@
     font: inherit;
     vertical-align: middle;
     cursor: pointer;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
       opacity: 0.88;
     }
 
     &.is-green {
-      background: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-content);
     }
 
     &.is-yellow {
-      background: var(--bf-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-content);
     }
 
     &.is-gray {
-      background: color-mix(in srgb, var(--bf-color-content-muted) 78%, var(--bf-color-action-neutral-surface-hover));
+      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 78%, var(--openbitfun-color-action-neutral-surface-hover));
     }
 
     &.is-red {
-      background: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -596,7 +596,7 @@
   }
 
   &__workspace-index-tooltip {
-    --bitfun-index-tone: var(--bf-color-content-secondary);
+    --openbitfun-index-tone: var(--openbitfun-color-content-secondary);
 
     display: flex;
     flex-direction: column;
@@ -606,18 +606,18 @@
     max-width: none;
     box-sizing: border-box;
     padding: 12px 0 16px;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
 
     &.is-green {
-      --bitfun-index-tone: var(--bf-color-status-success-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-success-content);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--bf-color-status-warning-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-warning-content);
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--bf-color-status-danger-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -642,25 +642,25 @@
     height: 10px;
     margin-top: 3px;
     border-radius: 50%;
-    background: var(--bitfun-index-tone);
+    background: var(--openbitfun-index-tone);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 18%, transparent),
-      0 0 10px color-mix(in srgb, var(--bitfun-index-tone) 26%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-index-tone) 18%, transparent),
+      0 0 10px color-mix(in srgb, var(--openbitfun-index-tone) 26%, transparent);
 
     &.is-green {
-      --bitfun-index-tone: var(--bf-color-status-success-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-success-content);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--bf-color-status-warning-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-warning-content);
     }
 
     &.is-gray {
-      --bitfun-index-tone: color-mix(in srgb, var(--bf-color-content-muted) 75%, var(--bf-color-action-neutral-surface-hover));
+      --openbitfun-index-tone: color-mix(in srgb, var(--openbitfun-color-content-muted) 75%, var(--openbitfun-color-action-neutral-surface-hover));
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--bf-color-status-danger-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -673,10 +673,10 @@
   }
 
   &__workspace-index-tooltip-title {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__workspace-index-tooltip-badge {
@@ -684,50 +684,50 @@
     align-items: center;
     padding: 3px 8px;
     border-radius: 999px;
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     white-space: nowrap;
-    border: 1px solid color-mix(in srgb, var(--bitfun-index-tone) 24%, transparent);
-    background: color-mix(in srgb, var(--bitfun-index-tone) 10%, transparent);
-    color: color-mix(in srgb, var(--bitfun-index-tone) 78%, var(--bf-color-content-primary));
+    border: 1px solid color-mix(in srgb, var(--openbitfun-index-tone) 24%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-index-tone) 10%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-index-tone) 78%, var(--openbitfun-color-content-primary));
 
     &.is-green {
-      --bitfun-index-tone: var(--bf-color-status-success-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-success-content);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--bf-color-status-warning-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-warning-content);
     }
 
     &.is-gray {
-      --bitfun-index-tone: color-mix(in srgb, var(--bf-color-content-muted) 75%, var(--bf-color-action-neutral-surface-hover));
+      --openbitfun-index-tone: color-mix(in srgb, var(--openbitfun-color-content-muted) 75%, var(--openbitfun-color-action-neutral-surface-hover));
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--bf-color-status-danger-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-danger-content);
     }
   }
 
   &__workspace-index-tooltip-phase {
-    font-size: var(--bf-type-micro-font-size);
-    color: var(--bf-color-content-muted);
-    line-height: var(--bf-type-meta-line-height);
+    font-size: var(--openbitfun-type-micro-font-size);
+    color: var(--openbitfun-color-content-muted);
+    line-height: var(--openbitfun-type-meta-line-height);
   }
 
   &__workspace-index-tooltip-summary {
     padding: 10px 12px;
     border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--bitfun-index-tone) 12%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, var(--openbitfun-index-tone) 12%, var(--openbitfun-color-border-subtle));
     background:
       linear-gradient(
         180deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 7%, transparent),
-        color-mix(in srgb, var(--bf-color-surface-subtle) 92%, transparent)
+        color-mix(in srgb, var(--openbitfun-index-tone) 7%, transparent),
+        color-mix(in srgb, var(--openbitfun-color-surface-subtle) 92%, transparent)
       );
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 
   &__workspace-index-tooltip-progress {
@@ -736,10 +736,10 @@
     gap: 6px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 56%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 76%, transparent);
-    font-size: var(--bf-type-micro-font-size);
-    color: var(--bf-color-content-secondary);
+    background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 56%, transparent);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-subtle) 76%, transparent);
+    font-size: var(--openbitfun-type-micro-font-size);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__workspace-index-tooltip-progress-head {
@@ -751,8 +751,8 @@
 
   &__workspace-index-tooltip-progress-value {
     font-variant-numeric: tabular-nums;
-    color: color-mix(in srgb, var(--bitfun-index-tone) 76%, var(--bf-color-content-primary));
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: color-mix(in srgb, var(--openbitfun-index-tone) 76%, var(--openbitfun-color-content-primary));
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__workspace-index-tooltip-progress-bar {
@@ -760,49 +760,49 @@
     height: 6px;
     border-radius: 999px;
     overflow: hidden;
-    background: color-mix(in srgb, var(--bf-color-action-neutral-surface-pressed) 68%, transparent);
-    box-shadow: inset 0 1px 1px color-mix(in srgb, var(--bf-color-content-on-light) 22%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-pressed) 68%, transparent);
+    box-shadow: inset 0 1px 1px color-mix(in srgb, var(--openbitfun-color-content-on-light) 22%, transparent);
   }
 
   &__workspace-index-tooltip-progress-fill {
     display: block;
     height: 100%;
     border-radius: inherit;
-    box-shadow: 0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 28%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--openbitfun-index-tone) 28%, transparent);
 
     &.is-green {
-      --bitfun-index-tone: var(--bf-color-status-success-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-success-content);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 82%, var(--bf-color-content-on-dark) 18%),
-        var(--bitfun-index-tone)
+        color-mix(in srgb, var(--openbitfun-index-tone) 82%, var(--openbitfun-color-content-on-dark) 18%),
+        var(--openbitfun-index-tone)
       );
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--bf-color-status-warning-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-warning-content);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 84%, var(--bf-color-content-on-dark) 16%),
-        var(--bitfun-index-tone)
+        color-mix(in srgb, var(--openbitfun-index-tone) 84%, var(--openbitfun-color-content-on-dark) 16%),
+        var(--openbitfun-index-tone)
       );
     }
 
     &.is-gray {
-      --bitfun-index-tone: color-mix(in srgb, var(--bf-color-content-muted) 75%, var(--bf-color-action-neutral-surface-hover));
+      --openbitfun-index-tone: color-mix(in srgb, var(--openbitfun-color-content-muted) 75%, var(--openbitfun-color-action-neutral-surface-hover));
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 88%, var(--bf-color-content-on-dark) 12%),
-        var(--bitfun-index-tone)
+        color-mix(in srgb, var(--openbitfun-index-tone) 88%, var(--openbitfun-color-content-on-dark) 12%),
+        var(--openbitfun-index-tone)
       );
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--bf-color-status-danger-content);
+      --openbitfun-index-tone: var(--openbitfun-color-status-danger-content);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 84%, var(--bf-color-content-on-dark) 16%),
-        var(--bitfun-index-tone)
+        color-mix(in srgb, var(--openbitfun-index-tone) 84%, var(--openbitfun-color-content-on-dark) 16%),
+        var(--openbitfun-index-tone)
       );
     }
   }
@@ -811,26 +811,26 @@
   &__workspace-index-tooltip-error {
     padding: 8px 10px;
     border-radius: 9px;
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-    border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 78%, transparent);
-    background: color-mix(in srgb, var(--bf-color-surface-subtle) 92%, transparent);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-subtle) 78%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-subtle) 92%, transparent);
   }
 
   &__workspace-index-tooltip-meta {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
 
     &.is-warning {
-      color: color-mix(in srgb, var(--bf-color-status-warning-content) 84%, var(--bf-color-content-primary));
-      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
+      color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 84%, var(--openbitfun-color-content-primary));
+      border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, transparent);
     }
   }
 
   &__workspace-index-tooltip-error {
-    color: color-mix(in srgb, var(--bf-color-status-danger-content) 88%, var(--bf-color-content-primary));
-    border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 22%, transparent);
-    background: color-mix(in srgb, var(--bf-color-status-danger-content) 11%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 88%, var(--openbitfun-color-content-primary));
+    border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 22%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 11%, transparent);
   }
 
   &__workspace-index-tooltip-actions {
@@ -851,11 +851,11 @@
     flex-shrink: 0;
     padding: 1px 6px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-action-secondary-hover) 88%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    background: color-mix(in srgb, var(--openbitfun-color-action-secondary-hover) 88%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     white-space: nowrap;
   }
 
@@ -868,13 +868,13 @@
     max-width: 96px;
     padding: 1px 6px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 75%, transparent);
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-micro-font-size);
-    transition: max-width var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                padding var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                margin-left var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 75%, transparent);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    transition: max-width var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                padding var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                margin-left var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     span {
       overflow: hidden;
@@ -897,8 +897,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                visibility var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                visibility var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__workspace-item-menu-trigger {
@@ -910,15 +910,15 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover,
     &.is-open {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }
 
@@ -932,11 +932,11 @@
     max-block-size: min(560px, calc(100vh - 16px));
     z-index: 10000;
     transform-origin: top left;
-    animation: bitfun-footer-menu-in var(--bf-motion-duration-fast) var(--bf-motion-easing-decelerate) forwards;
+    animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
   }
 
   &__workspace-acp-menu-trigger.is-open {
-    background: var(--bf-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   &__workspace-acp-submenu {
@@ -955,7 +955,7 @@
     min-width: 0;
     max-width: 100%;
     overflow-x: clip;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     opacity: 1;
 
     &.is-collapsed {
@@ -965,7 +965,7 @@
       pointer-events: none;
     }
 
-    .bitfun-nav-panel__inline-list {
+    .openbitfun-nav-panel__inline-list {
       // Let the row own the full selection surface; indent only its content below.
       margin-left: 0;
       margin-right: 0;
@@ -974,21 +974,21 @@
       padding-right: 0;
       // Shared by the rows below and by the "show more" toggle, which is their
       // sibling — without this the toggle label sits 26px left of the titles.
-      --bf-nav-session-rail: 30px;
+      --openbitfun-nav-session-rail: 30px;
     }
 
-    .bitfun-nav-panel__inline-item {
+    .openbitfun-nav-panel__inline-item {
       height: 30px;
     }
 
-    .bitfun-nav-panel__inline-empty {
-      padding-left: var(--bf-space-1);
+    .openbitfun-nav-panel__inline-empty {
+      padding-left: var(--openbitfun-space-1);
     }
   }
 
   &__workspace-drop-target {
     position: relative;
-    border-radius: var(--bf-radius-base);
+    border-radius: var(--openbitfun-radius-base);
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -997,14 +997,14 @@
     gap: 0;
 
     &.is-drag-active {
-      .bitfun-nav-panel__workspace-item {
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-border-subtle) 80%, transparent);
+      .openbitfun-nav-panel__workspace-item {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-border-subtle) 80%, transparent);
       }
     }
 
     &.is-drop-target {
-      .bitfun-nav-panel__workspace-item {
-        border-color: color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent);
+      .openbitfun-nav-panel__workspace-item {
+        border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent);
       }
     }
   }
@@ -1016,7 +1016,7 @@
     z-index: 2;
     height: 2px;
     margin: 0;
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
     border-radius: 999px;
     pointer-events: none;
 
@@ -1031,7 +1031,7 @@
 }
 
 // ── Assistant-mode row item (standalone styles, not shared with pro mode) ────────────
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__assistant-item {
     position: relative;
     display: flex;
@@ -1040,20 +1040,20 @@
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
     min-width: 0;
     max-width: 100%;
-    padding: var(--bf-space-1);
-    border-radius: var(--bf-radius-base);
+    padding: var(--openbitfun-space-1);
+    border-radius: var(--openbitfun-radius-base);
     background: transparent;
     border: 1px solid transparent;
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.is-dragging {
       opacity: 0.42;
 
-      .bitfun-nav-panel__assistant-item-card {
+      .openbitfun-nav-panel__assistant-item-card {
         cursor: default;
       }
     }
@@ -1064,7 +1064,7 @@
     }
 
     &:not(:hover):not(:focus-within):not(.is-menu-open) {
-      .bitfun-nav-panel__assistant-item-menu {
+      .openbitfun-nav-panel__assistant-item-menu {
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
@@ -1082,20 +1082,20 @@
     max-width: 100%;
     min-height: 30px;
     border-radius: 6px;
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-canvas);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-canvas);
     overflow: hidden;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      .bitfun-nav-panel__assistant-item-group-icon {
+      .openbitfun-nav-panel__assistant-item-group-icon {
         opacity: 0;
         transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__assistant-item-icon-toggle {
+      .openbitfun-nav-panel__assistant-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }
@@ -1103,16 +1103,16 @@
   }
 
   &__assistant-item:not(.is-active) &__assistant-item-card {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     gap: 1px;
 
     &:hover {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
   &__assistant-item.is-active &__assistant-item-card {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
 
     &:hover {
       background: transparent;
@@ -1134,14 +1134,14 @@
     cursor: pointer;
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-action-neutral-surface-hover) 60%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-action-neutral-surface-hover) 60%, transparent);
 
-      .bitfun-nav-panel__assistant-item-group-icon {
+      .openbitfun-nav-panel__assistant-item-group-icon {
         opacity: 0;
         transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__assistant-item-icon-toggle {
+      .openbitfun-nav-panel__assistant-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }
@@ -1185,8 +1185,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     opacity: 1;
     transform: scale(1);
   }
@@ -1199,12 +1199,12 @@
     inset: 0;
     opacity: 0;
     transform: scale(0.7);
-    color: var(--bf-color-content-primary);
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    color: var(--openbitfun-color-content-primary);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     svg {
-      transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     }
 
     &.is-collapsed svg {
@@ -1241,17 +1241,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__assistant-item:not(.is-active) &__assistant-item-label {
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__assistant-item.is-active &__assistant-item-label {
-    font-weight: var(--bf-type-heading-page-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__assistant-item-menu {
@@ -1262,8 +1262,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                visibility var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                visibility var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__assistant-item-menu-trigger {
@@ -1275,15 +1275,15 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover,
     &.is-open {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }
 
@@ -1293,7 +1293,7 @@
     min-width: 0;
     max-width: 100%;
     overflow-x: clip;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     opacity: 1;
 
     &.is-collapsed {
@@ -1303,7 +1303,7 @@
       pointer-events: none;
     }
 
-    .bitfun-nav-panel__inline-list {
+    .openbitfun-nav-panel__inline-list {
       // Let the row own the full selection surface; indent only its content below.
       margin-left: 0;
       margin-right: 0;
@@ -1312,20 +1312,20 @@
       padding-right: 0;
       // Shared by the rows below and by the "show more" toggle, which is their
       // sibling — without this the toggle label sits 26px left of the titles.
-      --bf-nav-session-rail: 30px;
+      --openbitfun-nav-session-rail: 30px;
     }
 
-    .bitfun-nav-panel__inline-item {
+    .openbitfun-nav-panel__inline-item {
       height: 30px;
     }
 
-    .bitfun-nav-panel__inline-empty {
-      padding-left: var(--bf-space-1);
+    .openbitfun-nav-panel__inline-empty {
+      padding-left: var(--openbitfun-space-1);
     }
   }
 }
 
-@keyframes bitfun-status-dot-pulse {
+@keyframes openbitfun-status-dot-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
@@ -1333,24 +1333,24 @@
 // Workspace rows use the same compact surface language as the rest of the
 // desktop navigation. Status pulses remain untouched because they carry live
 // indexing/connection meaning.
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__workspace-list {
     padding-top: 1px;
   }
 
   &__workspace-group {
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
   }
 
   &__workspace-group-title {
     min-height: 22px;
     margin: 0 6px;
-    padding: 0 var(--bf-space-2);
+    padding: 0 var(--openbitfun-space-2);
     @include nav-font.nav-panel-text-group;
   }
 
   &__workspace-group-title-action {
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -1363,9 +1363,9 @@
 
   &__workspace-item,
   &__assistant-item {
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
     padding: 0;
-    border-radius: var(--bf-radius-base);
+    border-radius: var(--openbitfun-radius-base);
     transition:
       border-color 120ms ease,
       background 120ms ease,
@@ -1374,7 +1374,7 @@
 
   &__workspace-item-card,
   &__assistant-item-card {
-    border-radius: var(--bf-radius-base);
+    border-radius: var(--openbitfun-radius-base);
     background: transparent;
     box-shadow: none;
     transition:
@@ -1403,12 +1403,12 @@
 
   &__workspace-item-label,
   &__assistant-item-label {
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
   }
 
   &__workspace-item.is-active &__workspace-item-label,
   &__assistant-item.is-active &__assistant-item-label {
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__workspace-item-collapse-btn,
@@ -1424,7 +1424,7 @@
 
   &__workspace-item-menu-trigger,
   &__assistant-item-menu-trigger {
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -1442,36 +1442,36 @@
 
   &__workspace-item-menu-popover {
     transform-origin: top left;
-    animation: bitfun-workspace-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-workspace-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__workspace-item:hover,
-  .bitfun-nav-panel__assistant-item:hover,
-  .bitfun-nav-panel__workspace-item-card:hover,
-  .bitfun-nav-panel__assistant-item-card:hover {
+  .openbitfun-nav-panel__workspace-item:hover,
+  .openbitfun-nav-panel__assistant-item:hover,
+  .openbitfun-nav-panel__workspace-item-card:hover,
+  .openbitfun-nav-panel__assistant-item-card:hover {
     transform: none;
     box-shadow: none;
   }
 
-  .bitfun-nav-panel__workspace-item-card:hover,
-  .bitfun-nav-panel__assistant-item-card:hover {
+  .openbitfun-nav-panel__workspace-item-card:hover,
+  .openbitfun-nav-panel__assistant-item-card:hover {
     @include shell-surfaces.navigation-hover-feedback;
   }
 
-  .bitfun-nav-panel__workspace-item.is-active .bitfun-nav-panel__workspace-item-card:hover,
-  .bitfun-nav-panel__assistant-item.is-active .bitfun-nav-panel__assistant-item-card:hover {
+  .openbitfun-nav-panel__workspace-item.is-active .openbitfun-nav-panel__workspace-item-card:hover,
+  .openbitfun-nav-panel__assistant-item.is-active .openbitfun-nav-panel__assistant-item-card:hover {
     @include shell-surfaces.navigation-selection-feedback;
   }
 
-  .bitfun-nav-panel__workspace-item.is-active:has(.bitfun-nav-panel__workspace-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__workspace-item-card:hover,
-  .bitfun-nav-panel__assistant-item.is-active:has(.bitfun-nav-panel__assistant-item-sessions .bitfun-nav-panel__inline-item.is-active) .bitfun-nav-panel__assistant-item-card:hover {
+  .openbitfun-nav-panel__workspace-item.is-active:has(.openbitfun-nav-panel__workspace-item-sessions .openbitfun-nav-panel__inline-item.is-active) .openbitfun-nav-panel__workspace-item-card:hover,
+  .openbitfun-nav-panel__assistant-item.is-active:has(.openbitfun-nav-panel__assistant-item-sessions .openbitfun-nav-panel__inline-item.is-active) .openbitfun-nav-panel__assistant-item-card:hover {
     background: transparent;
   }
 }
 
-@keyframes bitfun-workspace-popover-in {
+@keyframes openbitfun-workspace-popover-in {
   from {
     opacity: 0;
     transform: scale(0.98);
@@ -1483,15 +1483,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-panel__workspace-item-menu-popover,
-  .bitfun-nav-panel__workspace-acp-submenu {
+  .openbitfun-nav-panel__workspace-item-menu-popover,
+  .openbitfun-nav-panel__workspace-acp-submenu {
     animation: none;
   }
 }
 
 // Workspace and assistant rows follow the same hierarchy as session titles:
 // ordinary 13px labels, quieter metadata, and a consistent 30px primary row.
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__workspace-group-title {
     @include nav-font.nav-panel-text-group;
   }
@@ -1527,14 +1527,14 @@
 
   &__workspace-item.is-active:has(&__workspace-item-sessions &__inline-item.is-active) &__workspace-item-icon,
   &__assistant-item.is-active:has(&__assistant-item-sessions &__inline-item.is-active) &__assistant-item-avatar {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__workspace-item-remote,
   &__workspace-item-badge {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-type-meta-font-size);
+    font-size: var(--openbitfun-type-meta-font-size);
   }
 
   &__workspace-item-menu-trigger,

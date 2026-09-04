@@ -1,6 +1,6 @@
 //! Prompt-loop owner facts and reminder ordering.
 
-use bitfun_core_types::{SessionExecutionTarget, SessionExecutionTargetKind};
+use openbitfun_core_types::{SessionExecutionTarget, SessionExecutionTargetKind};
 use serde::{Deserialize, Serialize};
 
 const SKILL_LISTING_TITLE: &str = "# Skill Listing";
@@ -47,7 +47,7 @@ pub fn render_prompt_environment_info(facts: PromptEnvironmentFacts<'_>) -> Stri
         format!(
             r#"# Environment Information
 <environment_details>
-- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only.
+- Local OpenBitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only.
 - Local client architecture: {}
 - {}
 </environment_details>
@@ -88,7 +88,7 @@ pub struct RuntimeContextNeeds {
     /// `ControlHub` is available. Distinct from `computer_use` because in remote
     /// workspaces `ControlHub` stays available (browser/terminal on the local
     /// client) while `ComputerUse` is disabled, and the agent should NOT receive
-    /// the prominent "Local BitFun client OS" block that belongs to desktop
+    /// the prominent "Local OpenBitFun client OS" block that belongs to desktop
     /// automation.
     pub control_hub: bool,
 }
@@ -226,12 +226,12 @@ pub fn render_runtime_context_reminder(facts: &RuntimeContextFacts) -> Option<St
         let mut local_client_lines = Vec::new();
         if facts.remote_execution.is_some() && facts.needs.workspace_tools {
             local_client_lines.push(
-                "- Computer use and UI automation operate on the local BitFun desktop, even when workspace file and shell tools target a remote host."
+                "- Computer use and UI automation operate on the local OpenBitFun desktop, even when workspace file and shell tools target a remote host."
                     .to_string(),
             );
         }
         local_client_lines.push(format!(
-            "- Local BitFun client OS: {} ({})",
+            "- Local OpenBitFun client OS: {} ({})",
             facts.host_os, facts.host_family
         ));
         local_client_lines.push(format!("- Local client architecture: {}", facts.host_arch));
@@ -532,19 +532,19 @@ fn control_hub_browser_text_only_guidance() -> Vec<String> {
 
 fn runtime_computer_use_key_chord_guidance(host_os: &str) -> &'static str {
     match host_os {
-        "macos" => "- Computer use / `key_chord`: the local BitFun desktop is macOS. Use `command`, `option`, `control`, and `shift` modifier names.",
-        "windows" => "- Computer use / `key_chord`: the local BitFun desktop is Windows. Use `meta`/`super` for the Windows key, plus `alt`, `control`, and `shift`.",
-        "linux" => "- Computer use / `key_chord`: the local BitFun desktop is Linux. Use `control`, `alt`, `shift`, and `meta`/`super` as appropriate for the desktop environment.",
-        _ => "- Computer use / `key_chord`: match modifier names to the local BitFun desktop OS.",
+        "macos" => "- Computer use / `key_chord`: the local OpenBitFun desktop is macOS. Use `command`, `option`, `control`, and `shift` modifier names.",
+        "windows" => "- Computer use / `key_chord`: the local OpenBitFun desktop is Windows. Use `meta`/`super` for the Windows key, plus `alt`, `control`, and `shift`.",
+        "linux" => "- Computer use / `key_chord`: the local OpenBitFun desktop is Linux. Use `control`, `alt`, `shift`, and `meta`/`super` as appropriate for the desktop environment.",
+        _ => "- Computer use / `key_chord`: match modifier names to the local OpenBitFun desktop OS.",
     }
 }
 
 fn computer_use_key_chord_guidance(host_os: &str) -> &'static str {
     match host_os {
-        "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
-        "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
-        "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for shell scripts and system commands) 2) Keyboard shortcuts: control+a/c/x/v (clipboard) 3) UI control (AX/OCR/mouse) only when above fail.",
-        _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
+        "macos" => "Computer use / `key_chord`: the **local OpenBitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
+        "windows" => "Computer use / `key_chord`: the **local OpenBitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
+        "linux" => "Computer use / `key_chord`: the **local OpenBitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for shell scripts and system commands) 2) Keyboard shortcuts: control+a/c/x/v (clipboard) 3) UI control (AX/OCR/mouse) only when above fail.",
+        _ => "Computer use / `key_chord`: match modifier names to the **local OpenBitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
     }
 }
 

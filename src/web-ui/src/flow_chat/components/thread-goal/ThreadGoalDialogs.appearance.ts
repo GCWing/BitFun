@@ -14,5 +14,5 @@ export const threadGoalDialogsAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'edit', propertyProfile: 'control', visualRole: 'control' },
     { id: 'resume', propertyProfile: 'control', visualRole: 'control' },
   ],
-  states: [{ id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } }],
+  states: [{ id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } }],
 };

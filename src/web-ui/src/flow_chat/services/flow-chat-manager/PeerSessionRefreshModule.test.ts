@@ -170,7 +170,7 @@ describe('PeerSessionRefreshModule re-attach after a surface switch', () => {
       sessions: new Map([
         ['session-1', {
           sessionId: 'session-1',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'ready',
           isHistorical: false,
           isTransient: false,
@@ -574,7 +574,7 @@ describe('PeerSessionRefreshModule dead subscription recovery', () => {
       sessions: new Map([
         ['session-1', {
           sessionId: 'session-1',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'ready',
           isHistorical: false,
           isTransient: false,
@@ -661,7 +661,7 @@ describe('PeerSessionRefreshModule dead subscription recovery', () => {
 
 describe('isSessionProjectionAttachable', () => {
   const base = {
-    workspacePath: '/repo/BitFun',
+    workspacePath: '/repo/OpenBitFun',
     isTransient: false,
     isHistorical: false,
     historyState: 'ready' as const,
@@ -721,7 +721,7 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
       sessions: new Map([
         ['session-new', {
           sessionId: 'session-new',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'new',
           isHistorical: false,
           isTransient: false,
@@ -745,7 +745,7 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
 
     expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
       'session-new',
-      '/repo/BitFun',
+      '/repo/OpenBitFun',
       expect.objectContaining({ requireActiveSession: false }),
     );
     cleanup();
@@ -758,7 +758,7 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
       sessions: new Map([
         ['session-meta', {
           sessionId: 'session-meta',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'metadata-only',
           isHistorical: true,
           isTransient: false,
@@ -795,14 +795,14 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
       sessions: new Map([
         ['session-active', {
           sessionId: 'session-active',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'new',
           isHistorical: false,
           isTransient: false,
         }],
         ['session-bg', {
           sessionId: 'session-bg',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'new',
           isHistorical: false,
           isTransient: false,
@@ -829,7 +829,7 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
 
     expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
       'session-bg',
-      '/repo/BitFun',
+      '/repo/OpenBitFun',
       expect.objectContaining({ requireActiveSession: false }),
     );
     cleanup();
@@ -860,14 +860,14 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
       sessions: new Map([
         ['session-active', {
           sessionId: 'session-active',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'new',
           isHistorical: false,
           isTransient: false,
         }],
         ['session-bg', {
           sessionId: 'session-bg',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'new',
           isHistorical: false,
           isTransient: false,
@@ -903,7 +903,7 @@ describe('PeerSessionRefreshModule attach eligibility after a surface switch', (
 
     expect(refreshPeerSessionSnapshot).toHaveBeenCalledWith(
       'session-bg',
-      '/repo/BitFun',
+      '/repo/OpenBitFun',
       expect.objectContaining({ requireActiveSession: false }),
     );
     cleanup();
@@ -956,7 +956,7 @@ describe('PeerSessionRefreshModule journal apply', () => {
         {
           sessionId: 'session-1',
           title: 'Live',
-          workspacePath: '/repo/BitFun',
+          workspacePath: '/repo/OpenBitFun',
           historyState: 'ready',
           isHistorical: false,
           isTransient: false,

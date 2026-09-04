@@ -60,7 +60,7 @@ UiState or an Intent declared there, and no module above it is visible to them.
 - `android/` is its own build root and pulls `shared/` in with
   `includeBuild("../shared")`, so the arrow points one way only: the app knows
   the shared build, never the reverse. That makes app dependencies read as
-  coordinates — `implementation("com.bitfun.mobile:core-feature")` — rather than
+  coordinates — `implementation("com.openbitfun.mobile:core-feature")` — rather than
   `project(":core-feature")`. Both spellings are subject to the seam rule below.
 - `core-feature` is the only shared module the apps may reference. Everything
   crossing that seam is a UiState or an Intent, never a repository or a DTO.
@@ -79,9 +79,9 @@ UiState or an Intent declared there, and no module above it is visible to them.
   the local SDK path and is not committed.
 - The Android app builds from `android/`: `./gradlew :app:assembleDebug` and
   `:app:installDebug`; release verification is `./gradlew :app:assembleRelease`.
-  Release signing is enabled only when all four `BITFUN_ANDROID_KEYSTORE`,
-  `BITFUN_ANDROID_KEYSTORE_PASSWORD`, `BITFUN_ANDROID_KEY_ALIAS`, and
-  `BITFUN_ANDROID_KEY_PASSWORD` environment variables are present. Signing
+  Release signing is enabled only when all four `OPENBITFUN_ANDROID_KEYSTORE`,
+  `OPENBITFUN_ANDROID_KEYSTORE_PASSWORD`, `OPENBITFUN_ANDROID_KEY_ALIAS`, and
+  `OPENBITFUN_ANDROID_KEY_PASSWORD` environment variables are present. Signing
   files and values must never be committed. AGP 9 compiles Kotlin itself — applying
   `org.jetbrains.kotlin.android` is an error, not a no-op, and
   `kotlin { jvmToolchain(...) }` is no longer available in an app module.

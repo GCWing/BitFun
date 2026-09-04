@@ -2,7 +2,7 @@
 
 #[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-pub use bitfun_product_domains::product_search::{
+pub use openbitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse, SessionSearchDiagnostic,
     SessionSearchDiagnosticCode, SessionSearchHit, SessionSearchHitKind, SessionSearchMatchField,
     PRODUCT_SEARCH_CAPABILITY_ID,

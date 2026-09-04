@@ -30,8 +30,8 @@ test("interpolates known parameters without deleting unresolved placeholders", (
     "Showing 4 of 12",
   );
   assert.equal(
-    interpolateMessage("Hello {name} from {place}", { name: "BitFun" }),
-    "Hello BitFun from {place}",
+    interpolateMessage("Hello {name} from {place}", { name: "OpenBitFun" }),
+    "Hello OpenBitFun from {place}",
   );
 });
 
@@ -43,8 +43,8 @@ test("uses the English message before returning the missing key", () => {
   };
 
   assert.equal(
-    translateFromCatalog(catalog, "zh-CN", "greeting", { name: "BitFun" }),
-    "Hello BitFun",
+    translateFromCatalog(catalog, "zh-CN", "greeting", { name: "OpenBitFun" }),
+    "Hello OpenBitFun",
   );
   assert.equal(
     translateFromCatalog(catalog, "zh-CN", "missing"),

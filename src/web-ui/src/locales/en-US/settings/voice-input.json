@@ -55,7 +55,7 @@
     "loading": "Loading realtime voice settings…",
     "enabled": {
       "label": "Enable the client voice assistant",
-      "description": "Talk to Volcengine's end-to-end realtime voice model from the bottom-right client launcher, let it understand workspace state, and start BitFun tasks."
+      "description": "Talk to Volcengine's end-to-end realtime voice model from the bottom-right client launcher, let it understand workspace state, and start OpenBitFun tasks."
     },
     "apiKey": {
       "label": "Volcengine API key",
@@ -79,25 +79,25 @@
       "unsaved": "You have unsaved realtime voice changes."
     },
     "call": {
-      "title": "BitFun realtime call",
+      "title": "OpenBitFun realtime call",
       "button": "Start a realtime voice call",
       "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",
       "switchToVoice": "Switch to realtime voice",
       "switchToChat": "Return to text chat",
-      "empty": "Just start talking. When you ask for work, I will start a new BitFun session.",
+      "empty": "Just start talking. When you ask for work, I will start a new OpenBitFun session.",
       "mute": "Mute microphone",
       "unmute": "Unmute microphone",
       "hangUp": "Hang up",
       "settings": "Realtime voice settings",
       "configureFirst": "Configure a Volcengine realtime voice API key first.",
       "startFailed": "Failed to start the realtime voice call",
-      "taskComplete": "The BitFun task is complete. I am preparing the result.",
-      "taskFailed": "The BitFun task failed. I am preparing an explanation.",
-      "taskStopping": "Stopping the current BitFun task…",
-      "taskStopped": "The current BitFun task has stopped.",
+      "taskComplete": "The OpenBitFun task is complete. I am preparing the result.",
+      "taskFailed": "The OpenBitFun task failed. I am preparing an explanation.",
+      "taskStopping": "Stopping the current OpenBitFun task…",
+      "taskStopped": "The current OpenBitFun task has stopped.",
       "taskAlreadyComplete": "The task already finished, so there is nothing to stop.",
-      "noActiveTask": "There is no BitFun task running right now.",
+      "noActiveTask": "There is no OpenBitFun task running right now.",
       "taskOutcome": {
         "completed": "The task is complete. {{conclusion}}",
         "completedWithoutConclusion": "The task is complete, but it returned no written conclusion.",
@@ -121,13 +121,13 @@
         "audioPlaybackFailed": "Voice playback failed. Check the system audio output."
       },
       "taskPhases": {
-        "starting": "Creating a new BitFun session.",
-        "working": "BitFun is still working on the task. I will keep following it.",
-        "using_tools": "BitFun is using tools to move the task forward.",
-        "waiting_approval": "The task is waiting for your approval in BitFun.",
-        "needs_input": "BitFun needs more information in the task session.",
-        "finishing": "The main work is done and BitFun is preparing the final result.",
-        "stopping": "Stopping the current BitFun task."
+        "starting": "Creating a new OpenBitFun session.",
+        "working": "OpenBitFun is still working on the task. I will keep following it.",
+        "using_tools": "OpenBitFun is using tools to move the task forward.",
+        "waiting_approval": "The task is waiting for your approval in OpenBitFun.",
+        "needs_input": "OpenBitFun needs more information in the task session.",
+        "finishing": "The main work is done and OpenBitFun is preparing the final result.",
+        "stopping": "Stopping the current OpenBitFun task."
       }
     }
   },
@@ -237,7 +237,7 @@
     }
   },
   "messages": {
-    "unsupported": "Voice input is available in the BitFun desktop app.",
+    "unsupported": "Voice input is available in the OpenBitFun desktop app.",
     "loadFailed": "Failed to load voice input settings",
     "modelsLoadFailed": "Failed to load local speech model status.",
     "retry": "Try again",

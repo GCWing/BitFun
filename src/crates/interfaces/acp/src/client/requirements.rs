@@ -4,8 +4,8 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bitfun_core::service::remote_ssh::{SSHCommandOptions, SSHConnectionManager};
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::service::remote_ssh::{SSHCommandOptions, SSHConnectionManager};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use tokio::process::Command;
 
 use super::builtin_clients::builtin_acp_client_preset;
@@ -282,9 +282,9 @@ pub(crate) async fn probe_remote_npx_adapter(
     item
 }
 
-pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> BitFunResult<()> {
+pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> OpenBitFunResult<()> {
     let npm_path = find_executable("npm")
-        .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
+        .ok_or_else(|| OpenBitFunError::service("npm is not available on PATH".to_string()))?;
     let args = npm_predownload_args(package, bin);
 
     match run_command_with_timeout(
@@ -295,12 +295,12 @@ pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> BitFunR
     .await
     {
         Ok(output) if output.status.success() => Ok(()),
-        Ok(output) => Err(BitFunError::service(format!(
+        Ok(output) => Err(OpenBitFunError::service(format!(
             "Failed to predownload ACP adapter '{}': {}",
             package,
             command_error_summary(&output.stderr, &output.stdout)
         ))),
-        Err(error) => Err(BitFunError::service(format!(
+        Err(error) => Err(OpenBitFunError::service(format!(
             "Failed to predownload ACP adapter '{}': {}",
             package, error
         ))),
@@ -318,19 +318,19 @@ fn npm_predownload_args(package: &str, bin: &str) -> [String; 6] {
     ]
 }
 
-pub(crate) async fn install_npm_cli_package(package: &str) -> BitFunResult<()> {
+pub(crate) async fn install_npm_cli_package(package: &str) -> OpenBitFunResult<()> {
     let npm_path = find_executable("npm")
-        .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
+        .ok_or_else(|| OpenBitFunError::service("npm is not available on PATH".to_string()))?;
     let args = ["install", "-g", package];
 
     match run_command_with_timeout(npm_path.as_os_str(), args, CLI_INSTALL_TIMEOUT).await {
         Ok(output) if output.status.success() => Ok(()),
-        Ok(output) => Err(BitFunError::service(format!(
+        Ok(output) => Err(OpenBitFunError::service(format!(
             "Failed to install ACP agent CLI '{}': {}",
             package,
             command_error_summary(&output.stderr, &output.stdout)
         ))),
-        Err(error) => Err(BitFunError::service(format!(
+        Err(error) => Err(OpenBitFunError::service(format!(
             "Failed to install ACP agent CLI '{}': {}",
             package, error
         ))),
@@ -341,7 +341,7 @@ pub(crate) async fn install_remote_npm_cli_package(
     ssh_manager: &SSHConnectionManager,
     connection_id: &str,
     package: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let command = remote_user_shell_command(&format!("npm install -g {}", shell_escape(package)));
     let timeout_ms = u64::try_from(CLI_INSTALL_TIMEOUT.as_millis()).unwrap_or(u64::MAX);
     match ssh_manager
@@ -356,20 +356,20 @@ pub(crate) async fn install_remote_npm_cli_package(
         .await
     {
         Ok(output) if output.exit_code == 0 && !output.timed_out && !output.interrupted => Ok(()),
-        Ok(output) if output.timed_out => Err(BitFunError::service(format!(
+        Ok(output) if output.timed_out => Err(OpenBitFunError::service(format!(
             "Failed to install remote ACP agent CLI '{}': command timed out",
             package
         ))),
-        Ok(output) if output.interrupted => Err(BitFunError::service(format!(
+        Ok(output) if output.interrupted => Err(OpenBitFunError::service(format!(
             "Failed to install remote ACP agent CLI '{}': command was cancelled",
             package
         ))),
-        Ok(output) => Err(BitFunError::service(format!(
+        Ok(output) => Err(OpenBitFunError::service(format!(
             "Failed to install remote ACP agent CLI '{}': {}",
             package,
             remote_command_error_summary(&output.stderr, &output.stdout)
         ))),
-        Err(error) => Err(BitFunError::service(format!(
+        Err(error) => Err(OpenBitFunError::service(format!(
             "Failed to install remote ACP agent CLI '{}': {}",
             package, error
         ))),
@@ -413,7 +413,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let mut command = bitfun_core::util::process_manager::create_tokio_command(program);
+    let mut command = openbitfun_core::util::process_manager::create_tokio_command(program);
     command.args(args);
     apply_command_environment(&mut command, None);
     match tokio::time::timeout(timeout, command.output()).await {
@@ -681,31 +681,37 @@ mod tests {
     #[test]
     fn command_search_paths_keep_configured_path_first() {
         let configured_paths = env::join_paths([
-            PathBuf::from("/tmp/bitfun-acp-first"),
-            PathBuf::from("/tmp/bitfun-acp-second"),
+            PathBuf::from("/tmp/openbitfun-acp-first"),
+            PathBuf::from("/tmp/openbitfun-acp-second"),
         ])
         .expect("test paths should be joinable");
 
         let paths = command_search_paths(Some(&configured_paths));
 
-        assert_eq!(paths.first(), Some(&PathBuf::from("/tmp/bitfun-acp-first")));
-        assert_eq!(paths.get(1), Some(&PathBuf::from("/tmp/bitfun-acp-second")));
+        assert_eq!(
+            paths.first(),
+            Some(&PathBuf::from("/tmp/openbitfun-acp-first"))
+        );
+        assert_eq!(
+            paths.get(1),
+            Some(&PathBuf::from("/tmp/openbitfun-acp-second"))
+        );
     }
 
     #[test]
     fn find_executable_uses_configured_path() {
-        let test_dir = env::temp_dir().join(format!("bitfun-acp-{}", uuid::Uuid::new_v4()));
+        let test_dir = env::temp_dir().join(format!("openbitfun-acp-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&test_dir).expect("test dir should be created");
 
         #[cfg(windows)]
-        let file_name = "bitfun-test-tool.EXE";
+        let file_name = "openbitfun-test-tool.EXE";
         #[cfg(not(windows))]
-        let file_name = "bitfun-test-tool";
+        let file_name = "openbitfun-test-tool";
 
         let executable = test_dir.join(file_name);
         std::fs::write(&executable, b"").expect("test executable should be written");
 
-        let found = find_executable_with_path("bitfun-test-tool", Some(test_dir.as_os_str()));
+        let found = find_executable_with_path("openbitfun-test-tool", Some(test_dir.as_os_str()));
 
         let _ = std::fs::remove_dir_all(&test_dir);
         assert_eq!(found, Some(executable));
@@ -723,7 +729,7 @@ mod tests {
 
     #[test]
     fn probe_npm_adapter_skips_npm_probe_when_npx_is_available() {
-        let test_dir = env::temp_dir().join(format!("bitfun-acp-{}", uuid::Uuid::new_v4()));
+        let test_dir = env::temp_dir().join(format!("openbitfun-acp-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&test_dir).expect("test dir should be created");
         let npm_marker = test_dir.join("npm-was-run");
 

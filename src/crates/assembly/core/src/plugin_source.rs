@@ -1,25 +1,25 @@
 //! Compatibility facade for managed plugin package review.
 //!
-//! Product assembly supplies BitFun path ownership. Concrete discovery,
+//! Product assembly supplies OpenBitFun path ownership. Concrete discovery,
 //! integrity checks, locking, and trust persistence are service concerns.
 
-use bitfun_services_integrations::plugin_source::ManagedPluginSourceService;
+use openbitfun_services_integrations::plugin_source::ManagedPluginSourceService;
 use std::path::Path;
 
 pub type ManagedPluginTrustLevel =
-    bitfun_services_integrations::plugin_source::ManagedPluginTrustLevel;
+    openbitfun_services_integrations::plugin_source::ManagedPluginTrustLevel;
 pub type ManagedPluginTrustDecision =
-    bitfun_services_integrations::plugin_source::ManagedPluginTrustDecision;
+    openbitfun_services_integrations::plugin_source::ManagedPluginTrustDecision;
 pub type ManagedPluginPackageView =
-    bitfun_services_integrations::plugin_source::ManagedPluginPackageView;
+    openbitfun_services_integrations::plugin_source::ManagedPluginPackageView;
 pub type ManagedPluginSourceIssue =
-    bitfun_services_integrations::plugin_source::ManagedPluginSourceIssue;
+    openbitfun_services_integrations::plugin_source::ManagedPluginSourceIssue;
 pub type ManagedPluginSourceSnapshot =
-    bitfun_services_integrations::plugin_source::ManagedPluginSourceSnapshot;
+    openbitfun_services_integrations::plugin_source::ManagedPluginSourceSnapshot;
 pub type ManagedPluginSourceError =
-    bitfun_services_integrations::plugin_source::ManagedPluginSourceError;
+    openbitfun_services_integrations::plugin_source::ManagedPluginSourceError;
 
-/// Refresh BitFun-managed user and workspace package roots.
+/// Refresh OpenBitFun-managed user and workspace package roots.
 pub async fn refresh_managed_plugin_sources(
     workspace: &Path,
 ) -> Result<ManagedPluginSourceSnapshot, ManagedPluginSourceError> {

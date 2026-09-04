@@ -1,13 +1,13 @@
 [package]
-name = "bitfun-product-domains"
+name = "openbitfun-product-domains"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun product domain owner crate"
+description = "OpenBitFun product domain owner crate"
 autotests = false
 
 [lib]
-name = "bitfun_product_domains"
+name = "openbitfun_product_domains"
 crate-type = ["rlib"]
 
 [[test]]
@@ -37,6 +37,7 @@ required-features = ["miniapp"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+semver = { workspace = true }
 dirs = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

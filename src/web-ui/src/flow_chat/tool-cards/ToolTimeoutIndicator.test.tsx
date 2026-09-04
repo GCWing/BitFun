@@ -114,7 +114,7 @@ describe('ToolTimeoutIndicator', () => {
         root!.unmount();
       });
     }
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container?.remove();
     dom?.window.close();
     vi.unstubAllGlobals();
@@ -212,7 +212,7 @@ describe('ToolTimeoutIndicator', () => {
     });
 
     const popover = document.querySelector<HTMLElement>('.timeout-extend-popover');
-    expect(popover?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(popover?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(popover?.style.visibility).toBe('visible');
   });
 });

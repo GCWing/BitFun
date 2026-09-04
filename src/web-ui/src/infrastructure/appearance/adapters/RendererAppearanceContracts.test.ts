@@ -16,8 +16,8 @@ describe('renderer appearance contracts', () => {
     expect(settings).toBeDefined();
     expect(themeTokenAppearanceAdapter.validate({
       ...settings,
-      tokens: { ...settings?.tokens, '--bf-color-unregistered': '#ffffff' },
-    })).toContain('Unsupported root token name: --bf-color-unregistered');
+      tokens: { ...settings?.tokens, '--openbitfun-color-unregistered': '#ffffff' },
+    })).toContain('Unsupported root token name: --openbitfun-color-unregistered');
   });
 
   it('accepts every built-in Widget payload and rejects unregistered variables', () => {
@@ -36,7 +36,7 @@ describe('renderer appearance contracts', () => {
   it('enforces Monaco theme names before Monaco is attached', async () => {
     const adapter = new MonacoAppearanceAdapter();
     const validSettings = {
-      id: 'appearance-bitfun-linglong',
+      id: 'appearance-openbitfun-linglong',
       base: 'vs-dark' as const,
       inherit: true,
       rules: [],
@@ -44,13 +44,13 @@ describe('renderer appearance contracts', () => {
     };
 
     expect(adapter.validate(validSettings)).toEqual([]);
-    expect(adapter.validate({ ...validSettings, id: 'appearance.bitfun-linglong' })).toContain(
+    expect(adapter.validate({ ...validSettings, id: 'appearance.openbitfun-linglong' })).toContain(
       'id must contain only lowercase letters, digits, and hyphens',
     );
     await expect(adapter.apply(
-      { ...validSettings, id: 'appearance.bitfun-linglong' },
+      { ...validSettings, id: 'appearance.openbitfun-linglong' },
       undefined,
-      { revision: 1, appearanceId: 'bitfun-linglong', mode: 'dark', globals: {}, assets: {} },
+      { revision: 1, appearanceId: 'openbitfun-linglong', mode: 'dark', globals: {}, assets: {} },
     )).rejects.toThrow('Invalid Monaco appearance');
   });
 
@@ -79,7 +79,7 @@ describe('renderer appearance contracts', () => {
 
   it('passes the projected light theme to Monaco defineTheme', async () => {
     const settings = builtinAppearancePackages
-      .find(pkg => pkg.id === 'bitfun-light')
+      .find(pkg => pkg.id === 'openbitfun-light')
       ?.renderers?.monaco?.settings;
     expect(settings).toBeDefined();
 
@@ -97,7 +97,7 @@ describe('renderer appearance contracts', () => {
     const adapter = new MonacoAppearanceAdapter();
     await adapter.apply(settings!, undefined, {
       revision: 1,
-      appearanceId: 'bitfun-light',
+      appearanceId: 'openbitfun-light',
       mode: 'light',
       globals: {},
       assets: {},

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Menu, MenuItem } from '@bitfun/ui';
+import { Menu, MenuItem } from '@openbitfun/ui';
 
 import { ChatInputBoostSubmenu } from './ChatInputBoostSubmenu';
 import { HarnessProfileSelector } from './HarnessProfileSelector';
@@ -80,13 +80,13 @@ describe('ChatInputBoostSubmenu', () => {
 
     const trigger = container.querySelector<HTMLElement>('[role="menuitem"]');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
-    expect(document.body.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    expect(document.body.querySelector('.openbitfun-chat-input__boost-submenu-panel')).toBeNull();
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(trigger?.getAttribute('aria-expanded')).toBe('true');
-    expect(document.body.querySelector('.bitfun-chat-input__boost-submenu-panel')).not.toBeNull();
+    expect(document.body.querySelector('.openbitfun-chat-input__boost-submenu-panel')).not.toBeNull();
 
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
@@ -147,19 +147,19 @@ describe('ChatInputBoostSubmenu', () => {
 
       expect(triggers.map(item => item.getAttribute('aria-expanded')))
         .toEqual(triggers.map(item => item === trigger ? 'true' : 'false'));
-      const panels = document.querySelectorAll('.bitfun-chat-input__boost-submenu-panel, .bitfun-harness-selector__menu');
+      const panels = document.querySelectorAll('.openbitfun-chat-input__boost-submenu-panel, .openbitfun-harness-selector__menu');
       expect(panels).toHaveLength(1);
       expect(panels[0].id).toBe(trigger.getAttribute('aria-controls'));
       if (trigger === harness) {
-        expect((panels[0] as HTMLElement).dataset.bfPage).toBe('profiles');
+        expect((panels[0] as HTMLElement).dataset.openbitfunPage).toBe('profiles');
         act(() => document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-other"]')!.click());
-        expect((panels[0] as HTMLElement).dataset.bfPage).toBe('agents');
+        expect((panels[0] as HTMLElement).dataset.openbitfunPage).toBe('agents');
       }
     }
 
     act(() => modes.click());
     expect(modes.getAttribute('aria-expanded')).toBe('false');
-    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    expect(document.querySelector('.openbitfun-chat-input__boost-submenu-panel')).toBeNull();
   });
 
   it.each(['Escape', 'ArrowLeft'])('closes only the active flyout with %s and returns focus', key => {
@@ -167,11 +167,11 @@ describe('ChatInputBoostSubmenu', () => {
     const trigger = container.querySelector<HTMLButtonElement>('[data-testid="skills"] [aria-haspopup="menu"]')!;
     act(() => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
     act(() => vi.advanceTimersByTime(20));
-    const panel = document.querySelector<HTMLElement>('.bitfun-chat-input__boost-submenu-panel')!;
+    const panel = document.querySelector<HTMLElement>('.openbitfun-chat-input__boost-submenu-panel')!;
     expect(panel.contains(document.activeElement)).toBe(true);
     act(() => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })));
     act(() => vi.advanceTimersByTime(20));
-    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    expect(document.querySelector('.openbitfun-chat-input__boost-submenu-panel')).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(trigger);
     expect(container.querySelector('[role="menu"]')).not.toBeNull();
@@ -180,9 +180,9 @@ describe('ChatInputBoostSubmenu', () => {
   it('removes portalled flyouts when the parent menu unmounts', () => {
     act(() => root.render(<SiblingMenus />));
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="skills"] [aria-haspopup="menu"]')!.click());
-    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).not.toBeNull();
+    expect(document.querySelector('.openbitfun-chat-input__boost-submenu-panel')).not.toBeNull();
     act(() => root.render(null));
-    expect(document.querySelector('.bitfun-chat-input__boost-submenu-panel')).toBeNull();
+    expect(document.querySelector('.openbitfun-chat-input__boost-submenu-panel')).toBeNull();
     act(() => root.render(<SiblingMenus />));
     expect(container.querySelector('[aria-expanded="true"]')).toBeNull();
   });

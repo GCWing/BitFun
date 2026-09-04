@@ -3,7 +3,7 @@
 /**
  * Removes Monaco NLS language packs the app can never use.
  *
- * BitFun only ships en-US / zh-CN / zh-TW locales (see index.html locale
+ * OpenBitFun only ships en-US / zh-CN / zh-TW locales (see index.html locale
  * resolution), but monaco-editor/min/vs carries 9 NLS packs. The 7 unreachable
  * ones are ~1.4 MB of dead weight that would otherwise end up inside dist/,
  * the desktop binary and the installers.

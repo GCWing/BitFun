@@ -1,4 +1,4 @@
-pub use bitfun_core_types::{
+pub use openbitfun_core_types::{
     SessionUsageReport, UsageCacheCoverage, UsageCompressionBreakdown, UsageCoverage,
     UsageCoverageKey, UsageCoverageLevel, UsageErrorBreakdown, UsageErrorExample,
     UsageFileBreakdown, UsageFileRow, UsageFileScope, UsageModelBreakdown, UsagePrivacy,
@@ -14,7 +14,7 @@ pub(crate) fn test_report() -> SessionUsageReport {
     report.report_id = "usage-session-1-1778347200000".to_string();
     report.workspace = UsageWorkspace {
         kind: UsageWorkspaceKind::Local,
-        path_label: Some("D:/workspace/bitfun".to_string()),
+        path_label: Some("D:/workspace/openbitfun".to_string()),
         workspace_id: Some("workspace-1".to_string()),
         remote_connection_id: None,
         remote_ssh_host: None,
@@ -63,7 +63,7 @@ pub(crate) fn test_report() -> SessionUsageReport {
     }];
     report.tools = vec![UsageToolBreakdown {
         tool_name: "read_file".to_string(),
-        category: bitfun_core_types::UsageToolCategory::File,
+        category: openbitfun_core_types::UsageToolCategory::File,
         call_count: 1,
         success_count: 1,
         error_count: 0,

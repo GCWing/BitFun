@@ -25,15 +25,15 @@
 
 Peer Device Mode（同账号远程完整客户端）的边界见 `docs/architecture/peer-device-mode.md`。
 前端不变量见 `src/infrastructure/peer-device/README.md`。不要重新引入内嵌会话/聊天壳；
-应从设备列表（Remote Connect 的「我的 BitFun」组）进入 peer mode。
+应从设备列表（Remote Connect 的「我的 OpenBitFun」组）进入 peer mode。
 
-一键部署 Relay：`src/features/relay-deploy/`（见其 README）。Remote Connect「我的 BitFun」
+一键部署 Relay：`src/features/relay-deploy/`（见其 README）。Remote Connect「我的 OpenBitFun」
 登录表单与 Self-Hosted 入口必须打开 `RelayDeployWizard`，不要改成外链 README。
 
 ## 本模块规则
 
 - 不要在 UI 组件里直接调用 Tauri API；应通过 adapter / infrastructure 层访问
-- 新增前端基础设施前，先复用 `@bitfun/ui`、设计令牌、theme、i18n 和 Zustand stores
+- 新增前端基础设施前，先复用 `@openbitfun/ui`、设计令牌、theme、i18n 和 Zustand stores
 - 主题与颜色 Token 改动遵循 `docs/architecture/theme-token-optimization.md`。审计失败应通过复用 Token、
   收敛冗余值或增加最小 owner contract 修复，不得仅为通过检查提高 baseline 或测试期望；跨形态改动运行
   `pnpm run theme:color-audit:all`。

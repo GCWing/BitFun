@@ -145,14 +145,12 @@ pub fn remove_mcp_authorization_keys(map: &mut HashMap<String, String>) {
 }
 
 pub fn get_mcp_remote_authorization_value(config: &MCPServerConfig) -> Option<String> {
-    authorization_from_map(&config.headers).or_else(|| authorization_from_map(&config.env))
+    authorization_from_map(&config.headers)
 }
 
 pub fn get_mcp_remote_authorization_source(config: &MCPServerConfig) -> Option<&'static str> {
     if authorization_from_map(&config.headers).is_some() {
         Some("headers")
-    } else if authorization_from_map(&config.env).is_some() {
-        Some("env")
     } else {
         None
     }

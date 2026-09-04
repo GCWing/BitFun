@@ -5,26 +5,26 @@
 
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-space-2);
-  padding: var(--bf-space-3);
+  gap: var(--openbitfun-space-2);
+  padding: var(--openbitfun-space-3);
   min-width: 280px;
   max-width: 320px;
-  animation: bitfun-progress-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: var(--bf-type-body-sm-font-family);
+  animation: openbitfun-progress-notification-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: var(--openbitfun-type-body-sm-font-family);
 
   
   &--completed {
     
     .progress-notification__icon {
-      background: var(--bf-color-status-success-surface);
-      color: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-surface);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 
   &--failed {
     .progress-notification__icon {
-      background: var(--bf-color-status-danger-surface);
-      color: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-surface);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -41,12 +41,12 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
-    color: var(--bf-color-status-warning-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   &__spinner {
-    animation: bitfun-progress-notification-spin 1s linear infinite;
+    animation: openbitfun-progress-notification-spin 1s linear infinite;
   }
 
   &__status-icon {
@@ -56,17 +56,17 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
 
     &--success {
-      background: var(--bf-color-status-success-surface);
-      color: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-surface);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     &--error {
-      background: var(--bf-color-status-danger-surface);
-      color: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-surface);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -76,35 +76,35 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__title {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
-    line-height: var(--bf-type-modifier-leading-snug-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
   }
 
   &__percentage {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-status-warning-content);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-status-warning-content);
     font-variant-numeric: tabular-nums;
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   &__message {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-snug-line-height);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
     word-break: break-word;
   }
 
@@ -112,7 +112,7 @@
   &__progress-bar {
     width: 100%;
     height: 3px;
-    background: var(--bf-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -120,7 +120,7 @@
   &__progress-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--bf-color-accent-hover), var(--bf-color-accent-secondary));
+    background: linear-gradient(90deg, var(--openbitfun-color-accent-hover), var(--openbitfun-color-accent-secondary));
     border-radius: 2px;
     transform-origin: left center;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -128,12 +128,12 @@
 
   
   &--completed &__progress-fill {
-    background: var(--bf-color-status-success-content);
+    background: var(--openbitfun-color-status-success-content);
   }
 
   
   &--failed &__progress-fill {
-    background: var(--bf-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-content);
   }
 
   
@@ -143,7 +143,7 @@
 }
 
 
-@keyframes bitfun-progress-notification-spin {
+@keyframes openbitfun-progress-notification-spin {
   from {
     transform: rotate(0deg);
   }
@@ -153,7 +153,7 @@
 }
 
 
-@keyframes bitfun-progress-notification-slide-in {
+@keyframes openbitfun-progress-notification-slide-in {
   from {
     opacity: 0;
     transform: translateX(-100%);

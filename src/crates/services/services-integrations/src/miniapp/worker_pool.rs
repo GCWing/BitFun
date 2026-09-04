@@ -1,14 +1,14 @@
 //! JS worker pool: LRU pool, get_or_spawn, call, stop_all, install_deps.
 
 use crate::miniapp::worker::{JsWorker, SharedMiniAppWorkerEventSink};
-use bitfun_product_domains::miniapp::ports::{
+use openbitfun_product_domains::miniapp::ports::{
     MiniAppInstallDepsRequest, MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
     MiniAppRuntimePort,
 };
-use bitfun_product_domains::miniapp::runtime::{detect_runtime, DetectedRuntime};
-use bitfun_product_domains::miniapp::types::{NodePermissions, NpmDep};
-pub use bitfun_product_domains::miniapp::worker::InstallResult;
-use bitfun_product_domains::miniapp::worker::{
+use openbitfun_product_domains::miniapp::runtime::{detect_runtime, DetectedRuntime};
+use openbitfun_product_domains::miniapp::types::{NodePermissions, NpmDep};
+pub use openbitfun_product_domains::miniapp::worker::InstallResult;
+use openbitfun_product_domains::miniapp::worker::{
     plan_install_deps, select_lru_worker, worker_is_idle, worker_pool_at_capacity, InstallDepsPlan,
 };
 use serde_json::Value;
@@ -454,12 +454,13 @@ impl JsWorkerPool {
             InstallDepsPlan::Run(command) => command,
         };
 
-        let output = bitfun_services_core::process_manager::create_tokio_command(command.program)
-            .args(command.args)
-            .current_dir(app_dir)
-            .output()
-            .await
-            .map_err(|e| MiniAppWorkerPoolError::io(format!("install_deps failed: {}", e)))?;
+        let output =
+            openbitfun_services_core::process_manager::create_tokio_command(command.program)
+                .args(command.args)
+                .current_dir(app_dir)
+                .output()
+                .await
+                .map_err(|e| MiniAppWorkerPoolError::io(format!("install_deps failed: {}", e)))?;
 
         Ok(InstallResult {
             success: output.status.success(),
@@ -500,7 +501,7 @@ fn map_miniapp_runtime_port_error(error: MiniAppWorkerPoolError) -> MiniAppPortE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::miniapp::runtime::RuntimeKind;
+    use openbitfun_product_domains::miniapp::runtime::RuntimeKind;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -528,7 +529,7 @@ mod tests {
 
     #[tokio::test]
     async fn runtime_port_adapter_preserves_existing_runtime_and_noop_install() {
-        let root = TestTempDir::new("bitfun-miniapp-runtime-port");
+        let root = TestTempDir::new("openbitfun-miniapp-runtime-port");
         let miniapps_dir = root.path().join("miniapps");
         let app_id = "demo_app";
         tokio::fs::create_dir_all(miniapps_dir.join(app_id))
@@ -567,7 +568,7 @@ mod tests {
 
     #[tokio::test]
     async fn install_deps_in_dir_noops_without_package_json() {
-        let root = TestTempDir::new("bitfun-miniapp-runtime-draft-port");
+        let root = TestTempDir::new("openbitfun-miniapp-runtime-draft-port");
         let miniapps_dir = root.path().join("miniapps");
         let draft_dir = miniapps_dir
             .join(".drafts")

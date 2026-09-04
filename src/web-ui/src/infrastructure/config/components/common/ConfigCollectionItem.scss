@@ -1,18 +1,18 @@
 // ─── item wrapper ──────────────────────────────────────────────────────────────
 
-.bitfun-collection-item {
-  --bitfun-collection-details-bg: var(--bf-color-surface-subtle);
-  --bitfun-collection-details-border: var(--bf-color-field-border-hover);
-  --bitfun-collection-details-text: var(--bf-color-content-secondary);
+.openbitfun-collection-item {
+  --openbitfun-collection-details-bg: var(--openbitfun-color-surface-subtle);
+  --openbitfun-collection-details-border: var(--openbitfun-color-field-border-hover);
+  --openbitfun-collection-details-text: var(--openbitfun-color-content-secondary);
 
-  & + .bitfun-collection-item {
-    border-top: 1px solid var(--bf-color-border-subtle);
+  & + .openbitfun-collection-item {
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &.is-disabled {
     opacity: 0.55;
 
-    .bitfun-collection-item__name {
+    .openbitfun-collection-item__name {
       text-decoration: line-through;
     }
   }
@@ -20,28 +20,28 @@
 
 // ─── clickable row ─────────────────────────────────────────────────────────────
 
-.bitfun-collection-item__row--toggleable {
+.openbitfun-collection-item__row--toggleable {
   cursor: pointer;
 }
 
 // ─── label + inline badge ──────────────────────────────────────────────────────
 
-.bitfun-collection-item__label {
+.openbitfun-collection-item__label {
   display: flex !important;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   flex-wrap: nowrap;
   min-width: 0;
   margin: 0;
 }
 
-.bitfun-collection-item__label--stacked {
+.openbitfun-collection-item__label--stacked {
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
 }
 
-.bitfun-collection-item__name {
+.openbitfun-collection-item__name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -50,50 +50,50 @@
   max-width: 100%;
 }
 
-.bitfun-collection-item__badges {
+.openbitfun-collection-item__badges {
   display: flex;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   min-width: 0;
 }
 
-.bitfun-collection-item__badges--inline {
+.openbitfun-collection-item__badges--inline {
   align-items: center;
   flex-wrap: nowrap;
   overflow: hidden;
 }
 
-.bitfun-collection-item__badges--stacked {
+.openbitfun-collection-item__badges--stacked {
   align-items: flex-start;
   flex-wrap: wrap;
 }
 
-.bitfun-collection-item__badge {
+.openbitfun-collection-item__badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
   padding: 1px 7px;
-  border-radius: var(--bf-radius-sm);
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+  border-radius: var(--openbitfun-radius-sm);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   white-space: nowrap;
-  background: var(--bf-color-action-neutral-surface-hover);
-  color: var(--bf-color-content-muted);
-  border: 1px solid var(--bf-color-border-subtle);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  color: var(--openbitfun-color-content-muted);
+  border: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 // ─── right control area ────────────────────────────────────────────────────────
 
-.bitfun-collection-item__control {
+.openbitfun-collection-item__control {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
 }
 
-.bitfun-collection-item__details-toggle {
+.openbitfun-collection-item__details-toggle {
   svg {
-    transition: transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   &[aria-expanded='true'] svg {
@@ -103,12 +103,12 @@
 
 // ─── expandable details ────────────────────────────────────────────────────────
 
-.bitfun-collection-item__details-collapse {
+.openbitfun-collection-item__details-collapse {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 180ms var(--bf-motion-easing-standard),
+    grid-template-rows 180ms var(--openbitfun-motion-easing-standard),
     opacity 120ms ease;
 
   &[data-open='true'] {
@@ -117,21 +117,21 @@
   }
 }
 
-.bitfun-collection-item__details {
+.openbitfun-collection-item__details {
   min-height: 0;
   overflow: hidden;
-  padding: var(--bf-space-4);
-  border-top: 1px dashed var(--bitfun-collection-details-border);
-  background: var(--bitfun-collection-details-bg);
-  color: var(--bitfun-collection-details-text);
+  padding: var(--openbitfun-space-4);
+  border-top: 1px dashed var(--openbitfun-collection-details-border);
+  background: var(--openbitfun-collection-details-bg);
+  color: var(--openbitfun-collection-details-text);
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
 // ─── shared action button ──────────────────────────────────────────────────────
 
-.bitfun-collection-btn {
+.openbitfun-collection-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -140,10 +140,10 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--bf-radius-base);
+  border-radius: var(--openbitfun-radius-base);
   cursor: pointer;
-  color: var(--bf-color-content-muted);
-  transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard), color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  color: var(--openbitfun-color-content-muted);
+  transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard), color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   svg {
     display: block;
@@ -152,8 +152,8 @@
   }
 
   &:hover {
-    background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:disabled {
@@ -162,21 +162,21 @@
   }
 
   &--danger:hover {
-    background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
-    color: var(--bf-color-status-danger-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 8%, transparent);
+    color: var(--openbitfun-color-status-danger-content);
   }
 }
 
 // ─── empty row ─────────────────────────────────────────────────────────────────
 
-.bitfun-collection-empty {
+.openbitfun-collection-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-space-3);
-  padding: var(--bf-space-6) var(--bf-space-4);
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-md-font-size);
+  gap: var(--openbitfun-space-3);
+  padding: var(--openbitfun-space-6) var(--openbitfun-space-4);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-md-font-size);
 
   p {
     margin: 0;
@@ -185,88 +185,88 @@
 
 // ─── inline form (shared by all collection pages) ──────────────────────────────
 
-.bitfun-collection-form {
-  padding: var(--bf-space-4);
-  border-bottom: 1px solid var(--bf-color-border-subtle);
-  animation: bitfun-collection-slide-down 0.18s var(--bf-motion-easing-standard);
+.openbitfun-collection-form {
+  padding: var(--openbitfun-space-4);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+  animation: openbitfun-collection-slide-down 0.18s var(--openbitfun-motion-easing-standard);
 }
 
-.bitfun-collection-form__header {
+.openbitfun-collection-form__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--bf-space-3);
+  margin-bottom: var(--openbitfun-space-3);
 
   h3 {
     margin: 0;
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
-.bitfun-collection-form__body {
+.openbitfun-collection-form__body {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
-.bitfun-collection-form__footer {
+.openbitfun-collection-form__footer {
   display: flex;
   justify-content: flex-end;
-  gap: var(--bf-space-2);
-  margin-top: var(--bf-space-3);
+  gap: var(--openbitfun-space-2);
+  margin-top: var(--openbitfun-space-3);
 }
 
 // ─── details inner blocks ──────────────────────────────────────────────────────
 
-.bitfun-collection-details__field {
-  font-size: var(--bf-type-label-md-font-size);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-body-lg-line-height);
+.openbitfun-collection-details__field {
+  font-size: var(--openbitfun-type-label-md-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-body-lg-line-height);
 }
 
-.bitfun-collection-details__label {
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: var(--bf-color-content-muted);
-  margin-bottom: var(--bf-space-1);
+.openbitfun-collection-details__label {
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  color: var(--openbitfun-color-content-muted);
+  margin-bottom: var(--openbitfun-space-1);
 }
 
-.bitfun-collection-details__pre {
+.openbitfun-collection-details__pre {
   margin: 0;
-  padding: var(--bf-space-3);
-  background: var(--bf-color-action-neutral-surface-hover);
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-sm);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-body-lg-line-height);
+  padding: var(--openbitfun-space-3);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-sm);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-body-lg-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 200px;
 }
 
-.bitfun-collection-details__meta {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-muted);
-  padding-top: var(--bf-space-3);
-  border-top: 1px solid var(--bf-color-border-subtle);
+.openbitfun-collection-details__meta {
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-muted);
+  padding-top: var(--openbitfun-space-3);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-collection-details__code {
+.openbitfun-collection-details__code {
   padding: 1px 6px;
-  background: var(--bf-color-action-neutral-surface-hover);
-  border-radius: var(--bf-radius-sm);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-accent-default);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  border-radius: var(--openbitfun-radius-sm);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-accent-default);
 }
 
 // ─── animation ─────────────────────────────────────────────────────────────────
 
-@keyframes bitfun-collection-slide-down {
+@keyframes openbitfun-collection-slide-down {
   from {
     opacity: 0;
     transform: translateY(-6px);
@@ -278,13 +278,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-collection-item__details-collapse,
-  .bitfun-collection-item__details-toggle svg,
-  .bitfun-collection-btn {
+  .openbitfun-collection-item__details-collapse,
+  .openbitfun-collection-item__details-toggle svg,
+  .openbitfun-collection-btn {
     transition: none;
   }
 
-  .bitfun-collection-form {
+  .openbitfun-collection-form {
     animation: none;
   }
 }
@@ -292,33 +292,33 @@
 // ─── responsive ────────────────────────────────────────────────────────────────
 
 @container config-panel (max-width: 520px) {
-  .bitfun-collection-item__details {
-    padding: var(--bf-space-3);
-    gap: var(--bf-space-2);
+  .openbitfun-collection-item__details {
+    padding: var(--openbitfun-space-3);
+    gap: var(--openbitfun-space-2);
   }
 
-  .bitfun-collection-item__label {
+  .openbitfun-collection-item__label {
     align-items: flex-start;
   }
 
-  .bitfun-collection-item__badges--inline {
+  .openbitfun-collection-item__badges--inline {
     flex-wrap: wrap;
   }
 
-  .bitfun-collection-form {
-    padding: var(--bf-space-3);
+  .openbitfun-collection-form {
+    padding: var(--openbitfun-space-3);
   }
 
-  .bitfun-collection-form__body {
-    gap: var(--bf-space-2);
+  .openbitfun-collection-form__body {
+    gap: var(--openbitfun-space-2);
   }
 
-  .bitfun-collection-empty {
+  .openbitfun-collection-empty {
     flex-direction: column;
-    padding: var(--bf-space-4);
+    padding: var(--openbitfun-space-4);
   }
 
-  .bitfun-collection-btn {
+  .openbitfun-collection-btn {
     width: 24px;
     height: 24px;
   }

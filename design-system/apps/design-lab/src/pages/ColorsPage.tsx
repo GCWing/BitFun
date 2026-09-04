@@ -1,17 +1,17 @@
 import { Fragment, useMemo, useState, type CSSProperties } from "react";
 import { Contrast, LayoutGrid, Moon, Sun } from "lucide-react";
-import { Icon, type DensityMode } from "@bitfun/ui";
+import { Icon, type DensityMode } from "@openbitfun/ui";
 import {
   themeContractVersion,
   themeTokenCatalog,
   type ThemeDataName,
   type ThemeTokenCatalogEntry,
-} from "@bitfun/theme-bitfun";
+} from "@openbitfun/theme-openbitfun";
 import {
   referenceColorCatalog,
   referenceColorScales,
   type ReferenceColorScaleName,
-} from "@bitfun/theme-bitfun/authoring";
+} from "@openbitfun/theme-openbitfun/authoring";
 import { useI18n, type MessageKey } from "../i18n";
 
 type ColorSection = "semantic" | "scale" | "palette" | "mapping";
@@ -235,9 +235,9 @@ export function ColorsPage({
               <select
                 aria-label={t("colors.theme")}
                 onChange={() => undefined}
-                value="bitfun"
+                value="openbitfun"
               >
-                <option value="bitfun">
+                <option value="openbitfun">
                   {t("colors.themeName", { version: themeContractVersion })}
                 </option>
               </select>

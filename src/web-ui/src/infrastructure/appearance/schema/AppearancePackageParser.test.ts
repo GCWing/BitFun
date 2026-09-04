@@ -26,8 +26,8 @@ function webmHeader(): Uint8Array {
 
 function manifest(): AppearancePackage {
   return {
-    schema: 'bitfun.appearance',
-    schemaVersion: 1,
+    schema: 'openbitfun.appearance',
+    schemaVersion: APPEARANCE_SCHEMA_VERSION,
     id: 'test.archive',
     name: 'Archive',
     version: '1.0.0',
@@ -47,11 +47,11 @@ function manifest(): AppearancePackage {
       },
     },
     renderers: {
-      'css-tokens': {
+      'theme-tokens': {
         version: 1,
         settings: {
           tokens: {
-            '--bf-appearance-token-color-bg-primary': '#101820',
+            '--openbitfun-color-surface-canvas': '#101820',
           },
         },
       },
@@ -87,13 +87,12 @@ describe('AppearancePackageParser', () => {
           version: 1,
           settings: {
             tokens: {
-              '--bf-color-surface-canvas': '#101820',
+              '--openbitfun-color-surface-canvas': '#101820',
             },
           },
         },
       },
     });
-    expect(stored.manifest.renderers).not.toHaveProperty('css-tokens');
 
     const canonicalZip = await JSZip.loadAsync(stored.archive);
     const canonicalManifest = JSON.parse(
@@ -101,7 +100,16 @@ describe('AppearancePackageParser', () => {
     ) as AppearancePackage;
     expect(canonicalManifest).toEqual(stored.manifest);
     expect(canonicalManifest.schemaVersion).toBe(APPEARANCE_SCHEMA_VERSION);
-    expect(canonicalManifest.renderers).not.toHaveProperty('css-tokens');
+  });
+
+  it('rejects a noncanonical schema instead of upgrading it during import', async () => {
+    const unsupported = {
+      ...manifest(),
+      schemaVersion: 1,
+    };
+
+    await expect(parser.parse(await archive(unsupported)))
+      .rejects.toThrow(`Schema version must be ${APPEARANCE_SCHEMA_VERSION}`);
   });
 
   it('rejects undeclared files before storage', async () => {
@@ -113,7 +121,7 @@ describe('AppearancePackageParser', () => {
 
   it('rejects unknown schemas', async () => {
     const unsupported = { ...manifest(), schema: 'example.unknown' };
-    await expect(parser.parse(await archive(unsupported))).rejects.toThrow('Schema must be bitfun.appearance');
+    await expect(parser.parse(await archive(unsupported))).rejects.toThrow('Schema must be openbitfun.appearance');
   });
 
   it('imports validated background video metadata and its poster', async () => {

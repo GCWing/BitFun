@@ -14,7 +14,7 @@
 
 - `src/api/`：Tauri commands
 - `src/api/peer_host_invoke.rs`：Peer Device Mode host-invoke bridge 与 control attach；
-  允许/拒绝与能力来自 Product Operation Registry（`bitfun_product_domains::remote_surface`），
+  允许/拒绝与能力来自 Product Operation Registry（`openbitfun_product_domains::remote_surface`），
   不再有本地表
 - `src/api/remote_workspace_policy.rs`：证明每个已注册 Tauri 命令在注册表中恰有一行的闭包测试
 - `src/lib.rs`、`src/main.rs`：应用启动与装配
@@ -59,7 +59,7 @@ pnpm run prepare:dsh-profile   # 可选：本地 DeepSeek Harness 会话
 
 ## Target 缓存 GC
 
-`desktop:dev`（退出时）、`desktop:preview:debug`（关闭时）以及 `desktop:build*` 会裁剪过期的 `target/<profile>` 缓存代际。`incremental` 每个 crate/session 保留最新项；GC 根据 Cargo fingerprint JSON 区分 lib、test、bin、build-script 等构建单元，每个单元保留最新代际，并保留 Cargo 管理的 `invoked.timestamp` 在最近 24 小时内刷新过的全部代际，随后删除失去 fingerprint 的 `deps` 文件和 `build` 目录。忙碌检测只检查所选 profile 的 Cargo 锁文件，因此其他 worktree 的编译不会再阻止清理。手动执行：`pnpm run target:gc -- --profile debug`。禁用：`BITFUN_TARGET_GC=0`；演练：`BITFUN_TARGET_GC_DRY_RUN=1`；可用 `BITFUN_TARGET_GC_MIN_AGE_HOURS` 调整安全窗口。
+`desktop:dev`（退出时）、`desktop:preview:debug`（关闭时）以及 `desktop:build*` 会裁剪过期的 `target/<profile>` 缓存代际。`incremental` 每个 crate/session 保留最新项；GC 根据 Cargo fingerprint JSON 区分 lib、test、bin、build-script 等构建单元，每个单元保留最新代际，并保留 Cargo 管理的 `invoked.timestamp` 在最近 24 小时内刷新过的全部代际，随后删除失去 fingerprint 的 `deps` 文件和 `build` 目录。忙碌检测只检查所选 profile 的 Cargo 锁文件，因此其他 worktree 的编译不会再阻止清理。手动执行：`pnpm run target:gc -- --profile debug`。禁用：`OPENBITFUN_TARGET_GC=0`；演练：`OPENBITFUN_TARGET_GC_DRY_RUN=1`；可用 `OPENBITFUN_TARGET_GC_MIN_AGE_HOURS` 调整安全窗口。
 
 `release-fast` profile（`Cargo.toml`）：继承 `release`，但关闭 LTO、`codegen-units` 提高到 16、启用增量编译。编译速度显著提升，代价是二进制体积增大和边际运行时性能下降。
 
@@ -75,11 +75,11 @@ pnpm run prepare:dsh-profile   # 可选：本地 DeepSeek Harness 会话
 ## 验证
 
 ```bash
-cargo check -p bitfun-desktop && cargo test -p bitfun-desktop
+cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
 
 如果改动影响启动、WebDriver、browser/computer-use 或打包行为，还需要运行：
 
 ```bash
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 ```

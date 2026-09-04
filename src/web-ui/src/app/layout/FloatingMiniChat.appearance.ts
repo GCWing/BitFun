@@ -8,13 +8,13 @@ export const floatingMiniChatAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'pending' }, { id: 'pendingIcon' },
   ],
   facets: [
-    { id: 'mode', attribute: 'data-bf-mode', values: ['chat', 'miniapp'] },
-    { id: 'communicationMode', attribute: 'data-bf-communication-mode', values: ['chat', 'voice'] },
+    { id: 'mode', attribute: 'data-openbitfun-mode', values: ['chat', 'miniapp'] },
+    { id: 'communicationMode', attribute: 'data-openbitfun-communication-mode', values: ['chat', 'voice'] },
   ],
   states: [
-    { id: 'open', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="open"]' } },
-    { id: 'processing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="processing"]' } },
-    { id: 'voice', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="voice"]' } },
-    { id: 'customizing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="customizing"]' } },
+    { id: 'open', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="open"]' } },
+    { id: 'processing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="processing"]' } },
+    { id: 'voice', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="voice"]' } },
+    { id: 'customizing', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="customizing"]' } },
   ],
 };

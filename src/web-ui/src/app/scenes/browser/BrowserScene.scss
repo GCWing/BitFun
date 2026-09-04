@@ -9,10 +9,10 @@
   &__toolbar {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 70%, transparent);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 70%, transparent);
   }
 
   &__address {
@@ -20,7 +20,7 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
 
     svg {
       flex-shrink: 0;
@@ -36,16 +36,16 @@
   &__error {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    margin: var(--bf-space-2) var(--bf-space-3) 0;
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    margin: var(--openbitfun-space-2) var(--openbitfun-space-3) 0;
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
 
     svg {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
       flex-shrink: 0;
     }
   }
@@ -54,7 +54,7 @@
     flex: 1;
     min-height: 0;
     position: relative;
-    background: var(--bf-color-surface-canvas);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   &__iframe,
@@ -75,12 +75,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-md-font-size);
     background:
-      radial-gradient(circle at top, color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent), transparent 42%),
-      var(--bf-color-surface-canvas);
+      radial-gradient(circle at top, color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent), transparent 42%),
+      var(--openbitfun-color-surface-canvas);
 
     span {
       max-width: min(60vw, 520px);

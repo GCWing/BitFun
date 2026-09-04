@@ -89,7 +89,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Read file contents',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-color-accent-hover)'
+    primaryColor: 'var(--openbitfun-color-accent-hover)'
   },
   'Write': {
     toolName: 'Write',
@@ -99,7 +99,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-color-status-success-content)'
+    primaryColor: 'var(--openbitfun-color-status-success-content)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -109,7 +109,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Edit file contents',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-color-status-warning-content)'
+    primaryColor: 'var(--openbitfun-color-status-warning-content)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -119,7 +119,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Delete a file',
     displayMode: 'detailed',
-    primaryColor: 'var(--bf-color-status-danger-content)'
+    primaryColor: 'var(--openbitfun-color-status-danger-content)'
   },
   'LS': {
     toolName: 'LS',
@@ -129,7 +129,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'List directory contents',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-domain-tool-search)'
+    primaryColor: 'var(--openbitfun-domain-tool-search)'
   },
 
   // Search tools
@@ -314,7 +314,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Create and manage project plans',
     displayMode: 'detailed',
-    primaryColor: 'var(--bf-color-status-warning-content)'
+    primaryColor: 'var(--openbitfun-color-status-warning-content)'
   },
 
   'SessionControl': {
@@ -325,7 +325,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Create, delete, or list sessions',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-color-accent-hover)'
+    primaryColor: 'var(--openbitfun-color-accent-hover)'
   },
 
   'SessionMessage': {
@@ -382,7 +382,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Interrupt or kill a running command process',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-color-status-danger-content)'
+    primaryColor: 'var(--openbitfun-color-status-danger-content)'
   },
 
   // MiniApp tool
@@ -424,7 +424,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: 'Submit an Appearance package to the Skin market for review',
     displayMode: 'standard',
-    primaryColor: 'var(--bf-color-accent-hover)'
+    primaryColor: 'var(--openbitfun-color-accent-hover)'
   },
   'PageDeploy': {
     toolName: 'PageDeploy',
@@ -432,7 +432,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     icon: 'WEB',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Deploy a saved BitFun Page version to production',
+    description: 'Deploy a saved OpenBitFun Page version to production',
     displayMode: 'standard',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
@@ -442,7 +442,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     icon: 'WEB',
     requiresConfirmation: true,
     resultDisplayType: 'detailed',
-    description: 'Publish BitFun Page content (upload, save version, deploy)',
+    description: 'Publish OpenBitFun Page content (upload, save version, deploy)',
     displayMode: 'standard',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
@@ -465,7 +465,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'summary',
     description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-color-accent-hover)'
+    primaryColor: 'var(--openbitfun-color-accent-hover)'
   },
 
   'view_image': {
@@ -476,17 +476,17 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     resultDisplayType: 'detailed',
     description: '',
     displayMode: 'compact',
-    primaryColor: 'var(--bf-color-accent-hover)'
+    primaryColor: 'var(--openbitfun-color-accent-hover)'
   },
 
-  // BitFun Canvas tools
+  // OpenBitFun Canvas tools
   'CreateCanvas': {
     toolName: 'CreateCanvas',
     displayName: 'Create Canvas',
     icon: 'UI',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Create a BitFun Canvas artifact',
+    description: 'Create a OpenBitFun Canvas artifact',
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
@@ -496,7 +496,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     icon: 'UI',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Read a BitFun Canvas artifact',
+    description: 'Read a OpenBitFun Canvas artifact',
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
@@ -506,7 +506,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     icon: 'UI',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Update a BitFun Canvas artifact',
+    description: 'Update a OpenBitFun Canvas artifact',
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
@@ -516,7 +516,7 @@ const TOOL_CARD_DEFINITIONS: Record<string, ToolCardDefinition> = {
     icon: 'UI',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Patch a BitFun Canvas artifact',
+    description: 'Patch a OpenBitFun Canvas artifact',
     displayMode: 'detailed',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
@@ -563,7 +563,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: `Run ${toolName} tool`,
     displayMode: 'standard',
-    primaryColor: 'var(--bf-color-content-muted)'
+    primaryColor: 'var(--openbitfun-color-content-muted)'
   };
 }
 

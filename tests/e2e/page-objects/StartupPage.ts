@@ -7,7 +7,7 @@ import { browser, $ } from '@wdio/globals';
 export class StartupPage extends BasePage {
   private selectors = {
     // Use actual frontend class names
-    container: '.welcome-scene--first-time, .welcome-scene, .bitfun-scene-viewport--welcome',
+    container: '.welcome-scene--first-time, .welcome-scene, .openbitfun-scene-viewport--welcome',
     openFolderBtn: '.welcome-scene__link-btn, .welcome-scene__primary-action',
     recentProjects: '.welcome-scene__recent-list',
     recentProjectItem: '.welcome-scene__recent-item',
@@ -25,7 +25,7 @@ export class StartupPage extends BasePage {
     const selectors = [
       '.welcome-scene--first-time',
       '.welcome-scene',
-      '.bitfun-scene-viewport--welcome',
+      '.openbitfun-scene-viewport--welcome',
     ];
 
     for (const selector of selectors) {

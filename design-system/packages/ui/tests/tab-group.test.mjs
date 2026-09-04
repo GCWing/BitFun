@@ -29,7 +29,7 @@ test("TabGroup exposes a single selected tab with native button behavior", () =>
     }),
   );
 
-  assert.match(markup, /data-bf-component="tab-group"/);
+  assert.match(markup, /data-openbitfun-component="tab-group"/);
   assert.match(markup, /role="tablist"/);
   assert.match(markup, /aria-orientation="horizontal"/);
   assert.equal((markup.match(/role="tab"/g) ?? []).length, 2);
@@ -99,12 +99,12 @@ test("end actions are rendered beside tabs instead of nesting interactive contro
     }),
   );
 
-  assert.equal((markup.match(/data-bf-part="item"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-openbitfun-part="item"/g) ?? []).length, 2);
   assert.equal((markup.match(/data-has-end-action="true"/g) ?? []).length, 1);
   assert.equal((markup.match(/data-has-icon="true"/g) ?? []).length, 1);
   assert.equal((markup.match(/data-has-icon="false"/g) ?? []).length, 1);
-  assert.match(markup, /data-bf-part="endAction"/);
-  assert.match(markup, /<\/button><span[^>]+data-bf-part="endAction"><button/);
+  assert.match(markup, /data-openbitfun-part="endAction"/);
+  assert.match(markup, /<\/button><span[^>]+data-openbitfun-part="endAction"><button/);
   assert.equal((markup.match(/type="button"/g) ?? []).length, 3);
 });
 
@@ -127,23 +127,23 @@ test("text-only tabs mirror the end-action reserve to keep labels centered", asy
 test("TabGroup styling uses its geometry contract and Button semantic colors", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-control-tab-group-gap/);
-  assert.match(styles, /--bf-control-tab-group-item-gap/);
-  assert.match(styles, /--bf-control-tab-group-item-height/);
-  assert.match(styles, /--bf-control-tab-group-item-height-sm/);
-  assert.match(styles, /--bf-control-tab-group-item-icon-size/);
-  assert.match(styles, /--bf-control-tab-group-item-padding-inline/);
-  assert.match(styles, /--bf-control-tab-group-item-padding-block-sm/);
-  assert.match(styles, /--bf-control-tab-group-item-padding-inline-sm/);
-  assert.match(styles, /--bf-control-tab-group-item-action-size/);
-  assert.match(styles, /--bf-control-tab-group-item-action-inset/);
-  assert.match(styles, /--bf-control-tab-group-item-radius/);
-  assert.match(styles, /--bf-color-action-neutral-border/);
-  assert.match(styles, /--bf-color-action-neutral-content/);
-  assert.match(styles, /--bf-color-content-primary/);
-  assert.match(styles, /--bf-color-action-neutral-surface/);
-  assert.match(styles, /--bf-type-label-md-font-weight/);
-  assert.match(styles, /--bf-type-label-selected-font-weight/);
+  assert.match(styles, /--openbitfun-control-tab-group-gap/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-gap/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-height/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-height-sm/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-icon-size/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-padding-inline/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-padding-block-sm/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-padding-inline-sm/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-action-size/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-action-inset/);
+  assert.match(styles, /--openbitfun-control-tab-group-item-radius/);
+  assert.match(styles, /--openbitfun-color-action-neutral-border/);
+  assert.match(styles, /--openbitfun-color-action-neutral-content/);
+  assert.match(styles, /--openbitfun-color-content-primary/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface/);
+  assert.match(styles, /--openbitfun-type-label-md-font-weight/);
+  assert.match(styles, /--openbitfun-type-label-selected-font-weight/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 
@@ -155,7 +155,7 @@ test("tab labels and icons keep primary content across selection states", async 
 
   assert.match(
     styles,
-    /\.tab\s*\{[^}]*--_tab-content:\s*var\(--bf-color-content-primary\);/s,
+    /\.tab\s*\{[^}]*--_tab-content:\s*var\(--openbitfun-color-content-primary\);/s,
   );
   assert.doesNotMatch(
     styles,
@@ -163,7 +163,7 @@ test("tab labels and icons keep primary content across selection states", async 
   );
   assert.match(
     styles,
-    /\.label\s*\{[^}]*line-height:\s*var\(--bf-type-label-md-line-height\);/s,
+    /\.label\s*\{[^}]*line-height:\s*var\(--openbitfun-type-label-md-line-height\);/s,
   );
 });
 

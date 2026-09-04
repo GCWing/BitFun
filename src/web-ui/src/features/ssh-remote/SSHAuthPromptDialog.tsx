@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 
@@ -175,8 +175,8 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody>
-      <div className="ssh-auth-prompt-dialog" onKeyDown={handleKeyDown} data-bf-component="ssh-remote" data-bf-part="authDialog">
-        <div className="ssh-auth-prompt-dialog__description" data-bf-component="ssh-remote" data-bf-part="authDescription">
+      <div className="ssh-auth-prompt-dialog" onKeyDown={handleKeyDown} data-openbitfun-component="ssh-remote" data-openbitfun-part="authDialog">
+        <div className="ssh-auth-prompt-dialog__description" data-openbitfun-component="ssh-remote" data-openbitfun-part="authDescription">
           <div className="ssh-auth-prompt-dialog__description-icon">
             <Server size={16} />
           </div>
@@ -184,7 +184,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
         </div>
 
         {!lockUsername && (
-          <div className="ssh-auth-prompt-dialog__field" data-bf-component="ssh-remote" data-bf-part="authField">
+          <div className="ssh-auth-prompt-dialog__field" data-openbitfun-component="ssh-remote" data-openbitfun-part="authField">
             <Field label={t('ssh.remote.username')} controlWidth="fill">
               <Input
                 value={username}
@@ -197,7 +197,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
           </div>
         )}
 
-        <div className="ssh-auth-prompt-dialog__field" data-bf-component="ssh-remote" data-bf-part="authField">
+        <div className="ssh-auth-prompt-dialog__field" data-openbitfun-component="ssh-remote" data-openbitfun-part="authField">
           <label className="ssh-auth-prompt-dialog__label">{t('ssh.remote.authMethod')}</label>
           <Select
             options={authOptions}
@@ -316,7 +316,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
           </>
         )}
 
-        <div className="ssh-auth-prompt-dialog__actions" data-bf-component="ssh-remote" data-bf-part="authActions">
+        <div className="ssh-auth-prompt-dialog__actions" data-openbitfun-component="ssh-remote" data-openbitfun-part="authActions">
           <Button variant="outline" size="sm" onClick={onCancel} disabled={isConnecting}>
             {t('actions.cancel')}
           </Button>

@@ -2,9 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-body-sm-font-family);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
+  font-family:var(--openbitfun-type-body-sm-font-family);
 }
 
 .settings-header {
@@ -12,8 +12,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid var(--bf-color-border-default);
-  background: var(--bf-color-surface-panel);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-panel);
 }
 
 .header-left {
@@ -24,9 +24,9 @@
 
 .header-left h3 {
   margin: 0;
-  font-size: var(--bf-type-flow-section-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .header-right {
@@ -41,10 +41,10 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: var(--bf-color-surface-tertiary);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 4px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -53,8 +53,8 @@
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: var(--bf-color-action-neutral-surface-hover);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .refresh-btn:disabled {
@@ -67,12 +67,12 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--bf-color-status-success-surface);
-  border: 1px solid var(--bf-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
+  border: 1px solid var(--openbitfun-color-status-success-content);
   border-radius: 4px;
-  color: var(--bf-color-status-success-content);
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+  color: var(--openbitfun-color-status-success-content);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -81,8 +81,8 @@
 }
 
 .save-btn:hover:not(:disabled) {
-  background: var(--bf-color-status-success-content);
-  color: var(--bf-color-content-on-dark);
+  background: var(--openbitfun-color-status-success-content);
+  color: var(--openbitfun-color-content-on-dark);
 }
 
 .save-btn:disabled {
@@ -95,20 +95,20 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  font-size: var(--bf-type-label-sm-font-size);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   border-bottom: 1px solid;
 }
 
 .status-banner.error {
-  background: var(--bf-color-status-danger-surface);
-  color: var(--bf-color-status-danger-content);
-  border-color: color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
+  background: var(--openbitfun-color-status-danger-surface);
+  color: var(--openbitfun-color-status-danger-content);
+  border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 20%, transparent);
 }
 
 .status-banner.success {
-  background: var(--bf-color-status-success-surface);
-  color: var(--bf-color-status-success-content);
-  border-color: color-mix(in srgb, var(--bf-color-status-success-content) 20%, transparent);
+  background: var(--openbitfun-color-status-success-surface);
+  color: var(--openbitfun-color-status-success-content);
+  border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 20%, transparent);
 }
 
 .close-btn {
@@ -117,14 +117,14 @@
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: var(--bf-type-body-md-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
 }
 
 .settings-tabs {
   display: flex;
-  border-bottom: 1px solid var(--bf-color-border-default);
-  background: var(--bf-color-surface-panel);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
+  background: var(--openbitfun-color-surface-panel);
 }
 
 .tab-btn {
@@ -135,9 +135,9 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -146,13 +146,13 @@
 }
 
 .tab-btn:hover {
-  color: var(--bf-color-content-primary);
-  background: var(--bf-color-action-neutral-surface-hover);
+  color: var(--openbitfun-color-content-primary);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
 }
 
 .tab-btn.active {
-  color: var(--bf-color-accent-default);
-  border-bottom-color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
+  border-bottom-color: var(--openbitfun-color-accent-default);
 }
 
 .settings-content {
@@ -167,7 +167,7 @@
 .settings-section {
   margin-bottom: 32px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--bf-color-border-default);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
 }
 
 .settings-section:last-child {
@@ -177,23 +177,23 @@
 
 .settings-section h4 {
   margin: 0 0 8px;
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .settings-section h5 {
   margin: 16px 0 8px;
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .section-description {
   margin: 0 0 16px;
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 }
 
 .form-group {
@@ -205,20 +205,20 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 6px;
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 8px 12px;
-  background: var(--bf-color-surface-tertiary);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 4px;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -228,18 +228,18 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--bf-color-accent-default);
-  background: var(--bf-color-action-neutral-surface-hover);
+  border-color: var(--openbitfun-color-accent-default);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
 }
 
 .form-group input::placeholder {
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .checkbox-group {
   padding: 12px;
-  background: var(--bf-color-surface-tertiary);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 6px;
 }
 
@@ -259,9 +259,9 @@
 
 .field-description {
   margin: 4px 0 0;
-  font-size: var(--bf-type-meta-font-size);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-snug-line-height);
+  font-size: var(--openbitfun-type-meta-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
 }
 
 .form-row {
@@ -272,8 +272,8 @@
 
 .remote-config {
   padding: 16px;
-  background: var(--bf-color-surface-tertiary);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -281,20 +281,20 @@
 .remote-config h5 {
   margin: 0 0 12px;
   padding: 4px 8px;
-  background: var(--bf-color-action-secondary-background);
-  border: 1px solid var(--bf-color-accent-default);
+  background: var(--openbitfun-color-action-secondary-background);
+  border: 1px solid var(--openbitfun-color-accent-default);
   border-radius: 3px;
-  color: var(--bf-color-accent-default);
-  font-size: var(--bf-type-meta-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-accent-default);
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   text-transform: uppercase;
   display: inline-block;
 }
 
 .branch-config {
   padding: 16px;
-  background: var(--bf-color-surface-tertiary);
-  border: 1px solid var(--bf-color-border-default);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 1px solid var(--openbitfun-color-border-default);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -302,12 +302,12 @@
 .branch-config h5 {
   margin: 0 0 12px;
   padding: 4px 8px;
-  background: var(--bf-color-status-success-surface);
-  border: 1px solid var(--bf-color-status-success-content);
+  background: var(--openbitfun-color-status-success-surface);
+  border: 1px solid var(--openbitfun-color-status-success-content);
   border-radius: 3px;
-  color: var(--bf-color-status-success-content);
-  font-size: var(--bf-type-meta-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  color: var(--openbitfun-color-status-success-content);
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   display: inline-block;
 }
 
@@ -321,11 +321,11 @@
 }
 
 .loading-spinner {
-  animation: bitfun-git-settings-legacy-spin 1s linear infinite;
+  animation: openbitfun-git-settings-legacy-spin 1s linear infinite;
   margin-bottom: 12px;
 }
 
-@keyframes bitfun-git-settings-legacy-spin {
+@keyframes openbitfun-git-settings-legacy-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
@@ -337,23 +337,23 @@
 
 .error-state h3 {
   margin: 0 0 8px;
-  font-size: var(--bf-type-flow-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-size: var(--openbitfun-type-flow-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 .error-message {
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-secondary);
   margin: 4px 0 16px;
 }
 
 .retry-btn {
   padding: 8px 16px;
-  background: var(--bf-color-accent-default);
+  background: var(--openbitfun-color-accent-default);
   border: none;
   border-radius: 4px;
-  color: var(--bf-color-content-on-dark);
-  font-size: var(--bf-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-on-dark);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
@@ -365,7 +365,7 @@
 }
 
 .retry-btn:hover {
-  background: var(--bf-color-accent-hover);
+  background: var(--openbitfun-color-accent-hover);
 }
 
 @media (max-width: 768px) {
@@ -390,7 +390,7 @@
   }
   
   .tab-btn.active {
-    border-right-color: var(--bf-color-accent-default);
+    border-right-color: var(--openbitfun-color-accent-default);
     border-bottom-color: transparent;
   }
   

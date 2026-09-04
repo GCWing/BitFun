@@ -7,10 +7,10 @@
 
 $_nav-width: 300px;
 $_nav-collapsed-width: 76px;
-$_nav-bar-height: var(--bf-layout-toolbar-md-height);
+$_nav-bar-height: var(--openbitfun-layout-toolbar-md-height);
 $_resize-target-width: 6px;
 
-.bitfun-workspace-body {
+.openbitfun-workspace-body {
   --nav-width: #{$_nav-width};
 
   @include shell-surfaces.sidebar-background;
@@ -24,12 +24,12 @@ $_resize-target-width: 6px;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   padding: 0;
   gap: 0;
 }
 
-.bitfun-workspace-body__nav-area {
+.openbitfun-workspace-body__nav-area {
   @include shell-surfaces.sidebar-background;
 
   position: relative;
@@ -50,16 +50,16 @@ $_resize-target-width: 6px;
   }
 }
 
-.bitfun-workspace-body__collapsed-nav {
+.openbitfun-workspace-body__collapsed-nav {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: var(--bf-layer-dropdown);
+  z-index: var(--openbitfun-layer-dropdown);
   width: $_nav-collapsed-width;
   height: $_nav-bar-height;
 }
 
-.bitfun-workspace-body__nav-divider {
+.openbitfun-workspace-body__nav-divider {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -72,7 +72,7 @@ $_resize-target-width: 6px;
   background: transparent;
 }
 
-.bitfun-workspace-body__scene-area {
+.openbitfun-workspace-body__scene-area {
   position: relative;
   z-index: 1;
   display: flex;
@@ -84,8 +84,8 @@ $_resize-target-width: 6px;
   background: transparent;
 }
 
-.bitfun-workspace-body__scene-surface {
-  --_scene-surface-radius: var(--bf-layout-split-view-content-panel-radius);
+.openbitfun-workspace-body__scene-surface {
+  --_scene-surface-radius: var(--openbitfun-layout-split-view-content-panel-radius);
 
   position: relative;
   display: flex;
@@ -94,14 +94,14 @@ $_resize-target-width: 6px;
   gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: 0 var(--bf-space-4);
+  padding: 0 var(--openbitfun-space-4);
   overflow: hidden;
   border-radius: var(--_scene-surface-radius) 0 0 var(--_scene-surface-radius);
-  background: var(--bf-color-surface-scene);
-  box-shadow: -4px 0 12px -6px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
+  background: var(--openbitfun-color-surface-scene);
+  box-shadow: -4px 0 12px -6px color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
 
-  :root[data-bf-appearance-mode='dark'] & {
-    box-shadow: -5px 0 16px -7px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
+  :root[data-openbitfun-appearance-mode='dark'] & {
+    box-shadow: -5px 0 16px -7px color-mix(in srgb, var(--openbitfun-color-content-on-light) 30%, transparent);
   }
 
   // Resize feedback follows only the rounded boundary shared with navigation.
@@ -111,7 +111,7 @@ $_resize-target-width: 6px;
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
-    z-index: var(--bf-layer-decoration);
+    z-index: var(--openbitfun-layer-decoration);
     box-sizing: border-box;
     width: var(--_scene-surface-radius);
     border: 1px solid transparent;
@@ -124,53 +124,53 @@ $_resize-target-width: 6px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-workspace-body__nav-divider:hover ~ .bitfun-workspace-body__scene-area {
-    .bitfun-workspace-body__scene-surface::after {
-      border-color: var(--bf-color-border-subtle);
+  .openbitfun-workspace-body__nav-divider:hover ~ .openbitfun-workspace-body__scene-area {
+    .openbitfun-workspace-body__scene-surface::after {
+      border-color: var(--openbitfun-color-border-subtle);
       opacity: 1;
     }
   }
 }
 
-.bitfun-is-resizing-nav .bitfun-workspace-body__scene-surface::after {
-  border-color: var(--bf-color-border-default);
+.openbitfun-is-resizing-nav .openbitfun-workspace-body__scene-surface::after {
+  border-color: var(--openbitfun-color-border-default);
   opacity: 1;
 }
 
 // The compact toolbar remains reachable when the navigation panel is hidden.
-.bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
-    padding-left: calc(#{$_nav-collapsed-width} + var(--bf-space-1));
+.openbitfun-workspace-body__nav-area.is-collapsed + .openbitfun-workspace-body__scene-area {
+  .openbitfun-workspace-body__scene-surface .openbitfun-scene-top-bar {
+    padding-left: calc(#{$_nav-collapsed-width} + var(--openbitfun-space-1));
   }
 }
 
-.bitfun-app-layout--macos .bitfun-workspace-body__collapsed-nav {
+.openbitfun-app-layout--macos .openbitfun-workspace-body__collapsed-nav {
   left: 72px;
 }
 
-.bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-workspace-body__scene-surface .bitfun-scene-top-bar {
-    padding-left: calc(#{$_nav-collapsed-width} + var(--bf-space-1) + 72px);
+.openbitfun-app-layout--macos .openbitfun-workspace-body__nav-area.is-collapsed + .openbitfun-workspace-body__scene-area {
+  .openbitfun-workspace-body__scene-surface .openbitfun-scene-top-bar {
+    padding-left: calc(#{$_nav-collapsed-width} + var(--openbitfun-space-1) + 72px);
   }
 }
 
-.bitfun-workspace-body__nav-area.is-collapsed .bitfun-nav-bar--macos .bitfun-nav-bar__logo-menu {
+.openbitfun-workspace-body__nav-area.is-collapsed .openbitfun-nav-bar--macos .openbitfun-nav-bar__logo-menu {
   display: none;
 }
 
-.bitfun-workspace-body__nav-panel {
+.openbitfun-workspace-body__nav-panel {
   width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 
-.bitfun-is-dragging-nav-collapse,
-.bitfun-is-dragging-nav-collapse * {
+.openbitfun-is-dragging-nav-collapse,
+.openbitfun-is-dragging-nav-collapse * {
   cursor: ew-resize !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-workspace-body__scene-surface::after {
+  .openbitfun-workspace-body__scene-surface::after {
     transition: none;
   }
 }

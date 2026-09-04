@@ -6,14 +6,14 @@
 
 #[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyRequestV1, ExternalHookImportApplyResultV1,
     ExternalHookImportMutationRequestV1, ExternalHookImportPlanV1, ExternalHookImportSnapshotV1,
 };
-use bitfun_product_domains::external_sources::SourceKey;
+use openbitfun_product_domains::external_sources::SourceKey;
 use serde::{Deserialize, Serialize};
 
-pub use bitfun_product_domains::native_hooks::{
+pub use openbitfun_product_domains::native_hooks::{
     NativeHookFileSummary, NativeHookHandlerSummary, NativeHookOverview, NativeHookRuleSummary,
 };
 
@@ -153,7 +153,7 @@ pub struct ExternalHookMutationResponse(pub ExternalHookImportSnapshotV1);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::external_hook_import::{
+    use openbitfun_product_domains::external_hook_import::{
         ExternalHookImportMutationV1, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
     };
 
@@ -182,7 +182,7 @@ mod tests {
             project_hooks_enabled: true,
             files: vec![NativeHookFileSummary {
                 scope: "project".to_string(),
-                location: "<workspace>/.bitfun/config/hooks.json".to_string(),
+                location: "<workspace>/.openbitfun/config/hooks.json".to_string(),
                 exists: true,
                 loaded: true,
             }],

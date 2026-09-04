@@ -216,7 +216,7 @@ for (const file of repositoryFiles) {
   if (
     trackedFileSet.has(normalized)
     && existsSync(file)
-    && normalized === 'BitFun-Installer/src-tauri/Cargo.lock'
+    && normalized === 'OpenBitFun-Installer/src-tauri/Cargo.lock'
   ) {
     addViolation(file, null, 'is a generated Installer lockfile and must not be tracked.');
   }

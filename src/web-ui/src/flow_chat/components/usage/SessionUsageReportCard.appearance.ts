@@ -8,7 +8,7 @@ export const sessionUsageReportCardAppearanceDescriptor: AppearanceSurfaceDescri
     { id: 'listRow' }, { id: 'fileStat' }, { id: 'loading' }, { id: 'fallback' },
   ],
   states: [
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'fallback', selector: { kind: 'self', suffix: '[data-bf-state~="fallback"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'fallback', selector: { kind: 'self', suffix: '[data-openbitfun-state~="fallback"]' } },
   ],
 };

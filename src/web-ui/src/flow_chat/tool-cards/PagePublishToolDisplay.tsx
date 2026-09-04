@@ -2,11 +2,11 @@
  * PagePublish tool card — shows publish slug / version / URLs.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
-import { PagePublishToolCard } from '@bitfun/ui/flow-chat';
+import { PagePublishToolCard } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -89,7 +89,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   return (
     <div
       ref={cardRootRef}
-      data-bf-adapter="page-publish"
+      data-openbitfun-adapter="page-publish"
       data-testid="chat-page-publish-card"
       data-tool-card-id={toolId ?? ''}
       data-status={status}

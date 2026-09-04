@@ -43,7 +43,7 @@ async function invoke<T>(command: string, args: unknown): Promise<InvokeResult<T
 }
 
 async function invokeExpectingFailure(command: string, args: unknown): Promise<string> {
-  const driverPort = Number(process.env.BITFUN_E2E_WEBDRIVER_PORT || 4445);
+  const driverPort = Number(process.env.OPENBITFUN_E2E_WEBDRIVER_PORT || 4445);
   const response = await fetch(
     `http://127.0.0.1:${driverPort}/session/${browser.sessionId}/execute/sync`,
     {
@@ -74,7 +74,7 @@ describe('L1 Local rollback workspace identity', () => {
 
   before(() => {
     fixtureRoot = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-rollback-collision-e2e-')),
+      fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-rollback-collision-e2e-')),
     );
   });
 
@@ -157,7 +157,7 @@ describe('L1 Local rollback workspace identity', () => {
 
     if (
       fixtureRoot
-      && path.basename(fixtureRoot).startsWith('bitfun-rollback-collision-e2e-')
+      && path.basename(fixtureRoot).startsWith('openbitfun-rollback-collision-e2e-')
       && fs.existsSync(fixtureRoot)
     ) {
       fs.rmSync(fixtureRoot, { recursive: true, force: true });

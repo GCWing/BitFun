@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .leading,
   .label {
@@ -9,17 +9,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-control-status-pill-gap);
-    padding-block: var(--bf-control-status-pill-padding-block);
-    padding-inline: var(--bf-control-status-pill-padding-inline);
-    border-radius: var(--bf-control-status-pill-radius);
-    color: var(--bf-color-status-success-content);
-    background: var(--bf-color-status-success-surface);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    gap: var(--openbitfun-control-status-pill-gap);
+    padding-block: var(--openbitfun-control-status-pill-padding-block);
+    padding-inline: var(--openbitfun-control-status-pill-padding-inline);
+    border-radius: var(--openbitfun-control-status-pill-radius);
+    color: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-surface);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     white-space: nowrap;
   }
 
@@ -28,12 +28,12 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-status-pill-icon-size);
-    block-size: var(--bf-control-status-pill-icon-size);
+    inline-size: var(--openbitfun-control-status-pill-icon-size);
+    block-size: var(--openbitfun-control-status-pill-icon-size);
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -46,33 +46,33 @@
   }
 
   .root[data-tone="neutral"] {
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-secondary);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .root[data-tone="accent"] {
-    color: var(--bf-color-accent-default);
-    background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
+    color: var(--openbitfun-color-accent-default);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent);
   }
 
   .root[data-tone="info"] {
-    color: var(--bf-color-status-info-content);
-    background: var(--bf-color-status-info-surface);
+    color: var(--openbitfun-color-status-info-content);
+    background: var(--openbitfun-color-status-info-surface);
   }
 
   .root[data-tone="warning"] {
-    color: var(--bf-color-status-warning-content);
-    background: var(--bf-color-status-warning-surface);
+    color: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
   .root[data-tone="danger"] {
-    color: var(--bf-color-status-danger-content);
-    background: var(--bf-color-status-danger-surface);
+    color: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   @media (forced-colors: active) {
     .root {
-      border: var(--bf-border-width-default) solid CanvasText;
+      border: var(--openbitfun-border-width-default) solid CanvasText;
       color: CanvasText;
       background: Canvas;
     }

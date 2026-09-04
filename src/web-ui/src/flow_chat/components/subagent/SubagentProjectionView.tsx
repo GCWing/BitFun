@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatState, FlowItem, FlowTextItem, FlowThinkingItem, FlowToolItem } from '../../types/flow-chat';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -63,14 +63,14 @@ const SubagentProjectionTextBlock = React.memo<{ textItem: FlowTextItem; classNa
   };
 
   return (
-    <div data-bf-component="subagent-projection" data-bf-part="truncated" className="subagent-projection-text--truncated">
+    <div data-openbitfun-component="subagent-projection" data-openbitfun-part="truncated" className="subagent-projection-text--truncated">
       <FlowTextBlock
         textItem={truncatedItem}
         className={className}
         replayStreamingOnMount={false}
       />
-      <div data-bf-component="subagent-projection" data-bf-part="hint" className="subagent-projection-text__hint">
-        <span data-bf-component="subagent-projection" data-bf-part="message" className="subagent-projection-text__message">
+      <div data-openbitfun-component="subagent-projection" data-openbitfun-part="hint" className="subagent-projection-text__hint">
+        <span data-openbitfun-component="subagent-projection" data-openbitfun-part="message" className="subagent-projection-text__message">
           {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
         </span>
         <Button
@@ -114,7 +114,7 @@ function renderProjectedItem(
       );
     case 'tool':
       return (
-        <div data-bf-component="subagent-projection" data-bf-part="item" key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div data-openbitfun-component="subagent-projection" data-openbitfun-part="item" key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
             sessionId={sessionId}
@@ -335,7 +335,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   }
 
   return (
-    <div data-bf-component="subagent-projection" data-bf-part="root" data-bf-state={isCollapsed ? 'collapsed' : 'expanded'}
+    <div data-openbitfun-component="subagent-projection" data-openbitfun-part="root" data-openbitfun-state={isCollapsed ? 'collapsed' : 'expanded'}
       className={`subagent-projection-wrapper ${isCollapsed ? 'subagent-projection-wrapper--collapsed' : 'subagent-projection-wrapper--expanded'} ${className}`.trim()}
       data-subagent-session-id={resolvedSubagentSessionId}
     >
@@ -343,15 +343,15 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
         isOpen={!isCollapsed}
         className="subagent-projection-collapse"
         durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
-       data-bf-component="subagent-projection" data-bf-part="collapse">
+       data-openbitfun-component="subagent-projection" data-openbitfun-part="collapse">
         <div
           ref={containerRef}
-          data-bf-component="subagent-projection"
-          data-bf-part="container"
+          data-openbitfun-component="subagent-projection"
+          data-openbitfun-part="container"
           className={`subagent-projection-container ${isCollapsed ? 'subagent-projection-container--collapsed' : 'subagent-projection-container--expanded'}`}
           data-parent-tool-id={parentTaskToolId}
         >
-          <div data-bf-component="subagent-projection" data-bf-part="content" className="subagent-projection-content">
+          <div data-openbitfun-component="subagent-projection" data-openbitfun-part="content" className="subagent-projection-content">
             {items.map(item => renderProjectedItem(
               item,
               sessionId ?? resolvedSubagentSessionId,

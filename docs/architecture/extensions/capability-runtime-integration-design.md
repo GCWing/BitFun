@@ -1,14 +1,14 @@
-# BitFun 能力装配、导入导出与外部宿主集成设计
+# OpenBitFun 能力装配、导入导出与外部宿主集成设计
 
-本文定义 BitFun 如何把记忆、上下文、工作流、Subagent、工具和调度策略做成可装配能力，以及这些能力如何在
+本文定义 OpenBitFun 如何把记忆、上下文、工作流、Subagent、工具和调度策略做成可装配能力，以及这些能力如何在
 不修改外部产品内核的前提下接入 OpenCode、Claude Code、Codex、Trae 等宿主。本文同时约束反向路径：外部
-配置、插件和能力如何进入 BitFun。
+配置、插件和能力如何进入 OpenBitFun。
 
 仓库级依赖方向、接口边界和产品形态以[产品运行时架构](../product-architecture.md)为准；共享 Agent Runtime API、
 运行时服务、工具和工作流归属见[智能体内核与运行时服务](../agent-runtime-services-design.md)；第三方进程可靠性见
 [插件运行时与 Plugin Host](plugin-runtime-design.md)；外部来源的发现、确认和产品体验见
 [外部 AI 工作内容](external-ai-work-sources-design.md)；OpenCode 的具体兼容承诺见
-[OpenCode 扩展兼容总览](opencode-extension-compatibility.md)。公开 BitFun Agent SDK 的产品心智、SDK Host 和
+[OpenCode 扩展兼容总览](opencode-extension-compatibility.md)。公开 OpenBitFun Agent SDK 的产品心智、SDK Host 和
 各入口关系见[Agent SDK 产品与宿主架构](../agent-sdk-product-architecture.md)。
 
 本文是目标设计和演进约束，不表示已存在一个通用 `CapabilityRuntime` crate、稳定公共 SDK、跨宿主插件包或下文
@@ -16,12 +16,12 @@
 
 ## 1. 设计结论、目标与非目标
 
-BitFun 采用“一个能力核心，多种宿主适配”的方向，而不是试图发布一个能直接安装到所有产品的相同插件包：
+OpenBitFun 采用“一个能力核心，多种宿主适配”的方向，而不是试图发布一个能直接安装到所有产品的相同插件包：
 
-1. **BitFun 内部装配**：产品组装选择已编译能力、Provider/factory 和能力上限；运行时能力归属模块使用不可变静态组装结果，并维护不可变的能力版本快照。
-2. **外部能力进入 BitFun**：生态 adapter 保留外部来源、顺序和行为，再转换成 BitFun 能力专属贡献。
-3. **BitFun 能力进入外部产品**：对外能力接口暴露少量明确操作，MCP、Skill、Plugin 或 Hook adapter 再映射到具体宿主；
-   这条“能力导出”路径不同于使用公开 BitFun Agent SDK 构建完整 Agent 应用。
+1. **OpenBitFun 内部装配**：产品组装选择已编译能力、Provider/factory 和能力上限；运行时能力归属模块使用不可变静态组装结果，并维护不可变的能力版本快照。
+2. **外部能力进入 OpenBitFun**：生态 adapter 保留外部来源、顺序和行为，再转换成 OpenBitFun 能力专属贡献。
+3. **OpenBitFun 能力进入外部产品**：对外能力接口暴露少量明确操作，MCP、Skill、Plugin 或 Hook adapter 再映射到具体宿主；
+   这条“能力导出”路径不同于使用公开 OpenBitFun Agent SDK 构建完整 Agent 应用。
 4. **以外部 Runtime 组装新产品**：Claude Agent SDK、Codex App Server、OpenCode Server 等可成为新产品的执行内核，
    但这不等于替换原 Claude Code、Codex 或 OpenCode 产品中的内核模块。
 
@@ -38,7 +38,7 @@ BitFun 采用“一个能力核心，多种宿主适配”的方向，而不是�
 - 不定义跨 OpenCode、Claude Code、Codex、Trae 的通用插件 manifest 或 Hook ABI。
 - 不建立一个可以定位任意服务、任意状态和任意生态对象的全局服务定位器。
 - 不开放第三方代码替换权限归属模块、状态机、审计、取消树、资源硬上限或产品身份。
-- 不设计跨 GUI/TUI 的通用组件协议，不承诺把外部原始 UI 组件树直接运行在 BitFun。
+- 不设计跨 GUI/TUI 的通用组件协议，不承诺把外部原始 UI 组件树直接运行在 OpenBitFun。
 - 不承诺跨宿主完整迁移私有 transcript、文件系统快照、凭据、进程、终端或未文档化状态。
 - 不复制完整 OpenCode Server、Claude Code 或 Codex 产品协议来证明插件兼容。
 - 不为了覆盖竞品矩阵同时实现全部 Memory、Workflow、Hook、Subagent、Server 和 Remote 能力。
@@ -101,7 +101,7 @@ flowchart LR
 
 ## 3. 逻辑架构与双向数据流
 
-### 3.1 外部能力进入 BitFun
+### 3.1 外部能力进入 OpenBitFun
 
 ```mermaid
 flowchart LR
@@ -121,7 +121,7 @@ flowchart LR
   Owner -->|"校验并提交"| Facts
 ```
 
-### 3.3 BitFun 能力进入外部宿主
+### 3.3 OpenBitFun 能力进入外部宿主
 
 ```mermaid
 flowchart LR
@@ -142,7 +142,7 @@ Runtime 接口，不经过对外能力接口，也不经过公开语言 SDK pack
 |---|---|---|
 | 能力归属模块 | 定义稳定事实和组合规则，在静态产品上限内解析动态候选、冲突与当前策略，完成最终校验并提交唯一的当前能力版本 | 解释外部产品格式、重新选择 Delivery Profile、修改产品定义或管理 UI。 |
 | Product Assembly | 选择已编译 Provider/factory 和受支持的组合规则、验证依赖与产品上限、生成静态产品组装结果 | 发现动态用户来源、执行插件、保存当前能力版本或成为运行中可变注册表。 |
-| 生态导入 adapter | 保留单一生态的来源、格式、顺序、错误和生命周期语义 | 定义跨生态最低公分母或直接提交 BitFun 权威状态。 |
+| 生态导入 adapter | 保留单一生态的来源、格式、顺序、错误和生命周期语义 | 定义跨生态最低公分母或直接提交 OpenBitFun 权威状态。 |
 | PluginRuntimeClient | 当前监督第三方调用的期限、同一插件串行调用、重复请求结果、响应校验与故障诊断；目标再增加队列上限、取消后的结果失效和旧连接结果拒绝 | 成为物理进程、插件生命周期归属模块、公共 SDK、来源优先级归属模块或产品能力归属模块。 |
 | 对外能力接口 | 暴露真实消费者需要的窄用例、只读状态、事件和明确错误 | 暴露内部 manager、插件内部 ABI、任意服务查找或产品 UI。 |
 | 外部宿主 adapter | 把这些接口映射为某宿主的 MCP、Skill、Plugin、Hook、SDK 或 Server 调用 | 声称突破宿主未提供的生命周期、状态或替换能力。 |
@@ -163,25 +163,25 @@ OpenCode 类型，也不通过统一 agent JSON 理解未来 Codex/Claude Code�
 Desktop、TUI 和 Peer 发送同一组固定控制动作，Server 只返回相同 DTO 的只读视图。该 DTO 是当前产品宿主契约，
 不是公共插件 SDK；没有独立仓库外消费方和版本策略前，不扩张为外部宿主 adapter 的通用接口。
 
-对外能力接口不等于公开 BitFun Agent SDK。前者只为一个外部宿主暴露当前场景需要的最小能力子集；后者通过
+对外能力接口不等于公开 OpenBitFun Agent SDK。前者只为一个外部宿主暴露当前场景需要的最小能力子集；后者通过
 `AgentClient`、`client.query()`、Session、Query、只读 Turn 事实、Tool/MCP、Permission、Hook 和 Event/Result
 提供完整 Agent 应用心智，并通过 SDK Host
-调用同一 Agent Runtime API。外部产品只需要调用一个 BitFun workflow 时，不应被迫嵌入完整 Agent Runtime
+调用同一 Agent Runtime API。外部产品只需要调用一个 OpenBitFun workflow 时，不应被迫嵌入完整 Agent Runtime
 或公开 SDK。
 
 ### 3.4 宿主 adapter 的产品交付生命周期
 
 每个实际交付的外部宿主集成都必须指定一个现有产品特性或产品入口负责；在首个集成出现前，不创建跨宿主安装器、
-manifest、插件商店或通用生命周期 manager。外部宿主/包管理器仍是物理安装状态的权威来源，BitFun 只保存自己的
+manifest、插件商店或通用生命周期 manager。外部宿主/包管理器仍是物理安装状态的权威来源，OpenBitFun 只保存自己的
 期望状态、宿主映射和对账结果，不伪造“已安装/已卸载”。外部宿主 adapter 负责把以下操作映射到单一宿主，但不保存
 第二份权威状态：
 
 - 分发单元和校验版本，以及用户/组织/工作区/项目的注册使用范围。
 - `install/register -> enable -> invoke -> disable -> uninstall -> restore` 的可观察结果和类型化错误。
 - 升级前兼容检查、失败后沿用上一合规版本或显式回滚；不把准备完成当成已生效。
-- `disable` 先阻止 BitFun 发起的新调用并撤下宿主贡献；若宿主仍报告生效，状态保持需处理而非静默成功。
+- `disable` 先阻止 OpenBitFun 发起的新调用并撤下宿主贡献；若宿主仍报告生效，状态保持需处理而非静默成功。
 - `uninstall` 只清理该 adapter 拥有的包、注册项、随附本地进程、缓存和凭据引用；删除用户或宿主数据需要单独确认。
-- BitFun 被移除、宿主升级或 adapter 崩溃后的恢复/清理入口，以及无法自动清理时的精确人工步骤。
+- OpenBitFun 被移除、宿主升级或 adapter 崩溃后的恢复/清理入口，以及无法自动清理时的精确人工步骤。
 
 能力归属模块继续只负责用例和权威运行时事实；`PluginRuntimeClient` 当前负责调用路由、期限、同一逻辑实例串行化、
 重复请求结果缓存、响应校验、诊断和故障暂停，实际第三方
@@ -199,9 +199,9 @@ JS/TS 代码由 Plugin Host 执行。两者都不接管外部宿主的分发生�
 - 来源、配置和策略的适用范围由各自归属模块单独表达；产品、用户、组织、工作区、项目、会话和单次运行不得被压成一个通用 `scope`。
 - 执行身份：本地/Remote 执行域、实际用户、工作目录和平台能力。
 - 运行身份：session、turn、workflow run、subagent、tool call、hook call。
-- 宿主映射：BitFun 身份与外部 host session/thread/task/tool-use ID 的可选映射。
+- 宿主映射：OpenBitFun 身份与外部 host session/thread/task/tool-use ID 的可选映射。
 
-外部 ID 只能作为映射事实，不能取代 BitFun 自己的 session/turn/run 身份。一个 Claude/Codex/OpenCode session
+外部 ID 只能作为映射事实，不能取代 OpenBitFun 自己的 session/turn/run 身份。一个 Claude/Codex/OpenCode session
 映射失败时，可以降级为无恢复的一次调用，不能伪造已建立双向持久会话。
 
 ### 4.2 状态权威
@@ -272,7 +272,7 @@ observed    UI、SDK 和遥测看到的只读视图
 - 交互调用和后台工作分开预算；插件健康检查不能与长工具调用共用唯一通道。
 - 公平性至少防止单个来源、provider、workflow 或 subagent 长期饿死其他会话。只有某个归属模块确实按工作区维护并发状态时，
   工作区才增加为该模块的局部预算维度，不能成为通用运行时或进程复用键。
-- 外部宿主无法表达 BitFun 的并发策略时，由 BitFun 侧收紧，不把宿主“已接受”当成已获得本地资源。
+- 外部宿主无法表达 OpenBitFun 的并发策略时，由 OpenBitFun 侧收紧，不把宿主“已接受”当成已获得本地资源。
 
 ### 5.2 取消树
 
@@ -319,8 +319,8 @@ observed    UI、SDK 和遥测看到的只读视图
 内容版本、执行位置或权限范围变化后重新检查。产品保护项只限身份、数据隔离、权限入口、故障恢复、升级/卸载完整性
 和法律要求，不能把所有内置能力设成不可覆盖。
 
-同名候选在 GUI/TUI 中固定先展示 BitFun 来源，其余生态按稳定 `provider_id` 排序，同一生态内部沿用 adapter 的
-正式来源顺序。这个顺序只用于减少阅读成本；用户未选择时仍保持冲突未决，不能把“BitFun 排在第一”误实现为静默激活。
+同名候选在 GUI/TUI 中固定先展示 OpenBitFun 来源，其余生态按稳定 `provider_id` 排序，同一生态内部沿用 adapter 的
+正式来源顺序。这个顺序只用于减少阅读成本；用户未选择时仍保持冲突未决，不能把“OpenBitFun 排在第一”误实现为静默激活。
 
 ## 7. 权限、信任与执行边界
 
@@ -342,9 +342,9 @@ observed    UI、SDK 和遥测看到的只读视图
 ```
 
 - 任一层拒绝都不能被 外部宿主 adapter、Hook、Provider 或用户级配置放宽。
-- 外部能力进入 BitFun，或外部宿主调用 BitFun 能力时，宿主 allow/ask/deny、Hook 合并和审批顺序由 adapter 保留，
-  有效权限仍不能放宽 BitFun 上限。BitFun 插件参与宿主自身 Tool/Agent 流程时，宿主负责其状态和最终权限；
-  BitFun 只能在自己发起或执行的调用内进一步收紧，不能宣称接管宿主权限。
+- 外部能力进入 OpenBitFun，或外部宿主调用 OpenBitFun 能力时，宿主 allow/ask/deny、Hook 合并和审批顺序由 adapter 保留，
+  有效权限仍不能放宽 OpenBitFun 上限。OpenBitFun 插件参与宿主自身 Tool/Agent 流程时，宿主负责其状态和最终权限；
+  OpenBitFun 只能在自己发起或执行的调用内进一步收紧，不能宣称接管宿主权限。
 - 凭据只通过归属模块管理的引用和最小使用范围代理，值不进入插件状态、事件、日志、Resolution Report 或公共 DTO。
 - 凭据引用必须支持过期、轮换和撤销；来源停用、scope 收窄或执行域变化后不能继续复用旧代理。
 - Memory/Context 输入标记 provenance、隐私级别和使用范围；外部内容默认按不可信数据处理，防止提示注入和记忆污染。
@@ -384,7 +384,7 @@ PostToolUse，无法观察 admission”。
 - Memory 检索命中与实际注入、Context token 预算、压缩前后 token 差和恢复失败。
 - 冲突、用户选择、失败回退、能力受限、沿用上一版本和回滚。
 - 每个外部宿主 adapter 的 native/translated/degraded/unsupported 次数。
-- token、模型费用和外部服务成本的单一归属，避免宿主与 BitFun 重复计数。
+- token、模型费用和外部服务成本的单一归属，避免宿主与 OpenBitFun 重复计数。
 
 Prompt、代码、文件路径、凭据、Memory 内容和 Tool 输入输出默认不进入产品分析；运维日志需要内容时使用摘要、引用
 或显式诊断开关，并遵守数据驻留、保留和删除要求。
@@ -402,7 +402,7 @@ Prompt、代码、文件路径、凭据、Memory 内容和 Tool 输入输出默�
 
 每个真实外部宿主 adapter 按能力维护 `native / translated / degraded / unsupported / experimental`，并记录固定宿主
 版本、样例、已知损失和回退行为。表中的 `translated/degraded` 只表示固定样例通过后可能达到的最高映射等级，
-不是当前实现状态。下表只是 2026-07-17 核对的公开能力上限，不是 BitFun 已实现兼容记录；除
+不是当前实现状态。下表只是 2026-07-17 核对的公开能力上限，不是 OpenBitFun 已实现兼容记录；除
 OpenCode 专项文档已固定的版本外，Claude Code、Codex 和 Trae 目前只有官方滚动文档证据，未固定版本/样例的
 adapter 一律保持 `experimental/unsupported`，不能据本表标记产品可用。
 
@@ -419,7 +419,7 @@ adapter 一律保持 `experimental/unsupported`，不能据本表标记产品可
 
 | Runtime 接口 | 可获得的控制 | 不能据此宣称 |
 |---|---|---|
-| Claude Agent SDK | Query、Session、Tool、Permission、Hook、Subagent、MCP | 已替换 Claude Code 内核，或其会话与文件系统行为等同 BitFun。[Overview](https://code.claude.com/docs/en/agent-sdk/overview) |
+| Claude Agent SDK | Query、Session、Tool、Permission、Hook、Subagent、MCP | 已替换 Claude Code 内核，或其会话与文件系统行为等同 OpenBitFun。[Overview](https://code.claude.com/docs/en/agent-sdk/overview) |
 | Codex App Server / SDK | thread/turn/item、恢复、取消、审批和事件 | 已替换 Codex 内部 Memory、Compactor、Scheduler 或 Tool；实验方法也不自动稳定。[App Server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md) |
 | OpenCode Server / SDK | HTTP/OpenAPI、Session、Abort、SSE | Plugin 已拥有内部调度，或 Server 可以跳过认证与网络隔离。[SDK](https://opencode.ai/docs/sdk/)、[Server](https://opencode.ai/docs/server/) |
 | Trae | 尚无已验证的同等级通用 Agent Server/SDK | 在公开稳定控制接口出现前，不进入新宿主控制接口的交付承诺。 |
@@ -427,7 +427,7 @@ adapter 一律保持 `experimental/unsupported`，不能据本表标记产品可
 两张表分别验收，不能用 SDK/Server 的控制能力抬高现有产品插件覆盖率。无论哪种路径，都不使用“覆盖竞品完整
 能力”描述部分 Hook 或 MCP 集成。
 
-BitFun 自身公开 SDK 不直接选择上述三种形态之一：公开心智使用 Agent、Session、Turn、Tool、MCP、
+OpenBitFun 自身公开 SDK 不直接选择上述三种形态之一：公开心智使用 Agent、Session、Turn、Tool、MCP、
 Permission 和 Hook 等行业通用概念，并以固定的 Claude Agent SDK 稳定能力作为 GA 下限之一；本地宿主采用
 Codex App Server 式的版本、schema、双向请求、能力协商和流量控制纪律；默认 managed SDK Host/显式连接模式参考
 OpenCode，多语言协议与发布一致性参考 Copilot SDK。最终结构和发布门槛以
@@ -449,7 +449,7 @@ OpenCode，多语言协议与发布一致性参考 Copilot SDK。最终结构和
    自动扩大数据采集。
 8. **非交互入口稳定**：返回结构化状态、错误和退出码，不弹交互 UI、不自动批准，也不让无关待办改变当前输出。
 9. **宿主状态可对账**：安装、启停、升级和卸载以宿主实际状态为准；残留 Hook、sidecar、注册项或授权必须显示为
-   需处理并给出清理动作，不能只更新 BitFun UI 后宣称完成。
+   需处理并给出清理动作，不能只更新 OpenBitFun UI 后宣称完成。
 
 ## 11. 成熟条件
 
@@ -509,7 +509,7 @@ Agent SDK 负责语言 API 与 callback 通信；两者都不能建立私有 Hoo
 本设计达到“可指导渐进开发”的判定是：
 
 - 能回答每项能力谁拥有状态、谁可以替换、如何组合、如何取消、如何降级和谁最终提交。
-- 能区分外部能力进入 BitFun、BitFun 能力进入现有宿主、以及用外部 Runtime 构建新产品三种路径。
+- 能区分外部能力进入 OpenBitFun、OpenBitFun 能力进入现有宿主、以及用外部 Runtime 构建新产品三种路径。
 - 宿主覆盖矩阵明确公开上限和不支持项，不把未来目标描述为当前实现。
 - 每个成熟度维度中的单项能力扩大都有一个可观察结果、独立成熟条件和停止扩大条件。
 - 产品体验覆盖后台发现、非阻塞确认、状态解释、覆盖恢复、失败降级、成本和非交互入口。

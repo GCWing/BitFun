@@ -734,7 +734,7 @@ mod tests {
         let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let process_id = std::process::id();
         let path = std::env::temp_dir().join(format!(
-            "bitfun-read-file-test-{process_id}-{timestamp}-{counter}.txt"
+            "openbitfun-read-file-test-{process_id}-{timestamp}-{counter}.txt"
         ));
         fs::write(&path, contents).expect("temp file should be written");
         path

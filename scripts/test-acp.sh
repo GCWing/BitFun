@@ -1,13 +1,13 @@
 #!/bin/bash
-# Test script for BitFun ACP server
+# Test script for OpenBitFun ACP server
 # This script demonstrates basic ACP protocol interaction
 
-echo "=== BitFun ACP Server Test ==="
+echo "=== OpenBitFun ACP Server Test ==="
 echo ""
 
-BINARY="${BITFUN_CLI:-target/debug/bitfun}"
+BINARY="${OPENBITFUN_CLI:-target/debug/openbitfun}"
 WORKSPACE="/tmp/test-acp"
-PIPE_DIR="$(mktemp -d /tmp/bitfun-acp-test-sh.XXXXXX)"
+PIPE_DIR="$(mktemp -d /tmp/openbitfun-acp-test-sh.XXXXXX)"
 ACP_IN="$PIPE_DIR/in"
 ACP_OUT="$PIPE_DIR/out"
 mkdir -p "$WORKSPACE"

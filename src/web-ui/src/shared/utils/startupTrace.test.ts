@@ -57,14 +57,14 @@ describe('startupTrace', () => {
   });
 
   it('records react render profiles only when perf trace is explicitly enabled', () => {
-    const previousRenderProfileEnabled = globalThis.__BITFUN_RENDER_PROFILE_ENABLED__;
+    const previousRenderProfileEnabled = globalThis.__OPENBITFUN_RENDER_PROFILE_ENABLED__;
     const trace = createStartupTrace({
       traceId: 'trace-test',
       now: () => 100,
     });
 
     try {
-      globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = false;
+      globalThis.__OPENBITFUN_RENDER_PROFILE_ENABLED__ = false;
       expect(isStartupRenderTraceEnabled()).toBe(false);
       recordReactRenderProfile(trace, {
         component: 'MarkdownRenderer',
@@ -93,7 +93,7 @@ describe('startupTrace', () => {
       });
       expect(trace.getSnapshot().phases.events).toHaveLength(0);
 
-      globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = true;
+      globalThis.__OPENBITFUN_RENDER_PROFILE_ENABLED__ = true;
       expect(isStartupRenderTraceEnabled()).toBe(true);
       recordReactRenderProfile(trace, {
         component: 'MarkdownRenderer',
@@ -151,9 +151,9 @@ describe('startupTrace', () => {
       expect(trace.getSnapshot().phases.events[0]).not.toHaveProperty('request');
     } finally {
       if (previousRenderProfileEnabled === undefined) {
-        delete globalThis.__BITFUN_RENDER_PROFILE_ENABLED__;
+        delete globalThis.__OPENBITFUN_RENDER_PROFILE_ENABLED__;
       } else {
-        globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = previousRenderProfileEnabled;
+        globalThis.__OPENBITFUN_RENDER_PROFILE_ENABLED__ = previousRenderProfileEnabled;
       }
     }
   });
@@ -404,7 +404,7 @@ describe('startupTrace', () => {
 
     trace.markPhase('historical_session_hydrate_start', {
       sessionTraceId: 'session-1',
-      workspacePath: '/workspace/BitFun',
+      workspacePath: '/workspace/OpenBitFun',
       remote: false,
     });
     trace.recordApiCall({
@@ -528,9 +528,9 @@ describe('startupTrace', () => {
   });
 
   it('uses the desktop injected trace id when available', () => {
-    const previousTraceId = (globalThis as { __BITFUN_STARTUP_TRACE_ID__?: string })
-      .__BITFUN_STARTUP_TRACE_ID__;
-    (globalThis as { __BITFUN_STARTUP_TRACE_ID__?: string }).__BITFUN_STARTUP_TRACE_ID__ =
+    const previousTraceId = (globalThis as { __OPENBITFUN_STARTUP_TRACE_ID__?: string })
+      .__OPENBITFUN_STARTUP_TRACE_ID__;
+    (globalThis as { __OPENBITFUN_STARTUP_TRACE_ID__?: string }).__OPENBITFUN_STARTUP_TRACE_ID__ =
       'desktop-123';
 
     try {
@@ -542,10 +542,10 @@ describe('startupTrace', () => {
       expect(trace.traceId).toBe('desktop-123');
     } finally {
       if (previousTraceId === undefined) {
-        delete (globalThis as { __BITFUN_STARTUP_TRACE_ID__?: string })
-          .__BITFUN_STARTUP_TRACE_ID__;
+        delete (globalThis as { __OPENBITFUN_STARTUP_TRACE_ID__?: string })
+          .__OPENBITFUN_STARTUP_TRACE_ID__;
       } else {
-        (globalThis as { __BITFUN_STARTUP_TRACE_ID__?: string }).__BITFUN_STARTUP_TRACE_ID__ =
+        (globalThis as { __OPENBITFUN_STARTUP_TRACE_ID__?: string }).__OPENBITFUN_STARTUP_TRACE_ID__ =
           previousTraceId;
       }
     }
@@ -570,7 +570,7 @@ describe('startupTrace payload helpers', () => {
     })).toBe(true);
     expect(isRemoteTraceRequest({
       request: {
-        workspacePath: 'D:/workspace/bitfun',
+        workspacePath: 'D:/workspace/openbitfun',
       },
     })).toBe(false);
     expect(isRemoteTraceRequest({

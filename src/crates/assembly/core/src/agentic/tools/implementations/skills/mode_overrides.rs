@@ -11,9 +11,9 @@ use crate::service::config::agent_profile_project_store::{
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
 use crate::service::config::types::{AgentProfileConfig, SkillSettingsConfig};
-use crate::util::errors::{BitFunError, BitFunResult};
-pub use bitfun_agent_runtime::skills::UserModeSkillOverrides;
-use bitfun_agent_runtime::skills::{normalize_skill_keys, normalize_user_mode_skill_overrides};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+pub use openbitfun_agent_runtime::skills::UserModeSkillOverrides;
+use openbitfun_agent_runtime::skills::{normalize_skill_keys, normalize_user_mode_skill_overrides};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,7 +22,9 @@ fn resolve_profile_id(mode_id: &str) -> String {
     resolve_mode_config_profile_id(mode_id).into_owned()
 }
 
-pub async fn load_user_mode_skill_overrides(mode_id: &str) -> BitFunResult<UserModeSkillOverrides> {
+pub async fn load_user_mode_skill_overrides(
+    mode_id: &str,
+) -> OpenBitFunResult<UserModeSkillOverrides> {
     let config_service = GlobalConfigManager::get_service().await?;
     let stored_configs: HashMap<String, AgentProfileConfig> = config_service
         .get_config(Some("ai.agent_profiles"))
@@ -46,7 +48,7 @@ pub async fn set_user_mode_skill_state(
     skill_key: &str,
     enabled: bool,
     default_enabled: bool,
-) -> BitFunResult<UserModeSkillOverrides> {
+) -> OpenBitFunResult<UserModeSkillOverrides> {
     let mut overrides = load_user_mode_skill_overrides(mode_id).await?;
     overrides.disabled_skills.retain(|value| value != skill_key);
     overrides.enabled_skills.retain(|value| value != skill_key);
@@ -76,7 +78,7 @@ pub async fn set_user_mode_skill_state(
 
 pub async fn clear_user_mode_skill_overrides(
     mode_id: &str,
-) -> BitFunResult<UserModeSkillOverrides> {
+) -> OpenBitFunResult<UserModeSkillOverrides> {
     persist_agent_profile_from_value(
         mode_id,
         json!({
@@ -89,7 +91,7 @@ pub async fn clear_user_mode_skill_overrides(
     load_user_mode_skill_overrides(mode_id).await
 }
 
-pub async fn load_globally_disabled_user_skills() -> BitFunResult<Vec<String>> {
+pub async fn load_globally_disabled_user_skills() -> OpenBitFunResult<Vec<String>> {
     let config_service = GlobalConfigManager::get_service().await?;
     let settings: SkillSettingsConfig = config_service
         .get_config(Some("ai.skill_settings"))
@@ -101,7 +103,7 @@ pub async fn load_globally_disabled_user_skills() -> BitFunResult<Vec<String>> {
 pub async fn set_global_user_skill_disabled(
     skill_key: &str,
     disabled: bool,
-) -> BitFunResult<Vec<String>> {
+) -> OpenBitFunResult<Vec<String>> {
     let skill_key = skill_key.trim();
     if skill_key.is_empty() {
         return Ok(Vec::new());
@@ -143,7 +145,7 @@ pub fn set_mode_skill_disabled_in_document(
     mode_id: &str,
     skill_key: &str,
     disabled: bool,
-) -> BitFunResult<Vec<String>> {
+) -> OpenBitFunResult<Vec<String>> {
     Ok(set_project_skill_disabled(
         document,
         &resolve_profile_id(mode_id),
@@ -156,7 +158,7 @@ pub fn set_disabled_mode_skills_in_document(
     document: &mut ProjectAgentProfilesDocument,
     mode_id: &str,
     skill_keys: Vec<String>,
-) -> BitFunResult<Vec<String>> {
+) -> OpenBitFunResult<Vec<String>> {
     Ok(set_disabled_project_skills(
         document,
         &resolve_profile_id(mode_id),
@@ -166,21 +168,21 @@ pub fn set_disabled_mode_skills_in_document(
 
 pub async fn load_project_mode_skills_document_local(
     workspace_root: &Path,
-) -> BitFunResult<ProjectAgentProfilesDocument> {
+) -> OpenBitFunResult<ProjectAgentProfilesDocument> {
     load_project_agent_profiles_document_local(workspace_root).await
 }
 
 pub async fn save_project_mode_skills_document_local(
     workspace_root: &Path,
     document: &ProjectAgentProfilesDocument,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     save_project_agent_profiles_document_local(workspace_root, document).await
 }
 
 pub async fn load_disabled_mode_skills_local(
     workspace_root: &Path,
     mode_id: &str,
-) -> BitFunResult<Vec<String>> {
+) -> OpenBitFunResult<Vec<String>> {
     let document = load_project_agent_profiles_document_local(workspace_root).await?;
     Ok(get_disabled_project_skills(
         &document,
@@ -192,7 +194,7 @@ pub async fn load_disabled_mode_skills_remote(
     fs: &dyn WorkspaceFileSystem,
     remote_root: &str,
     mode_id: &str,
-) -> BitFunResult<Vec<String>> {
+) -> OpenBitFunResult<Vec<String>> {
     let path = project_agent_profiles_path_for_remote(remote_root);
     let exists = fs.exists(&path).await.unwrap_or(false);
     if !exists {
@@ -200,7 +202,7 @@ pub async fn load_disabled_mode_skills_remote(
     }
 
     let content = fs.read_file_text(&path).await.map_err(|error| {
-        BitFunError::config(format!(
+        OpenBitFunError::config(format!(
             "Failed to read remote project mode profiles: {}",
             error
         ))

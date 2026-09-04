@@ -1,7 +1,7 @@
 {
   "title": "记忆",
   "subtitle": "控制自动记忆的生成、使用与整理范围。",
-  "scopeNotice": "这里的配置、会话候选和记忆文件都属于当前执行 BitFun 的主机。切换到其他设备或 Peer 主机后，其记忆数据与设置可能不同。",
+  "scopeNotice": "这里的配置、会话候选和记忆文件都属于当前执行 OpenBitFun 的主机。切换到其他设备或 Peer 主机后，其记忆数据与设置可能不同。",
   "sections": {
     "basic": {
       "title": "基础",

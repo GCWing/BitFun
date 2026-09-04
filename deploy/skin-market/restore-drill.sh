@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly BACKUP_ROOT="/srv/bitfun-skin-market/backups"
+readonly BACKUP_ROOT="/srv/openbitfun-skin-market/backups"
 readonly SOURCE="${1:-}"
 
 if [[ -z "${SOURCE}" || "${SOURCE}" != "${BACKUP_ROOT}/"* || ! -d "${SOURCE}" ]]; then
-  echo "Usage: $0 /srv/bitfun-skin-market/backups/{daily|weekly}/<backup>" >&2
+  echo "Usage: $0 /srv/openbitfun-skin-market/backups/{daily|weekly}/<backup>" >&2
   exit 2
 fi
 
@@ -50,7 +50,7 @@ while IFS='|' read -r sha256 expected_size; do
     echo "Restore drill found an invalid package reference" >&2
     exit 1
   }
-  package="${DRILL_DIR}/artifacts/packages/${sha256:0:2}/${sha256}.bitfun-appearance"
+  package="${DRILL_DIR}/artifacts/packages/${sha256:0:2}/${sha256}.openbitfun-appearance"
   [[ -f "${package}" && "$(stat -c %s "${package}")" == "${expected_size}" ]] || {
     echo "Restore drill found a missing or incorrectly sized package artifact" >&2
     exit 1

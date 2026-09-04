@@ -1,4 +1,4 @@
-use bitfun_services_core::jsonc::strip_jsonc;
+use openbitfun_services_core::jsonc::strip_jsonc;
 
 #[test]
 fn jsonc_normalization_preserves_string_tokens_and_removes_trailing_commas() {

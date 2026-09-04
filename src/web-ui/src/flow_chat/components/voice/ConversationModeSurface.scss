@@ -1,4 +1,4 @@
-.bitfun-conversation-mode-surface {
+.openbitfun-conversation-mode-surface {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -7,7 +7,7 @@
   flex-direction: column;
 }
 
-.bitfun-conversation-mode-surface__body {
+.openbitfun-conversation-mode-surface__body {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -16,85 +16,85 @@
   flex-direction: column;
 }
 
-.bitfun-conversation-mode-surface__switch {
+.openbitfun-conversation-mode-surface__switch {
   display: flex;
   flex: 0 0 auto;
-  padding: var(--bf-space-2);
-  border-top: 1px solid var(--bf-color-border-subtle);
+  padding: var(--openbitfun-space-2);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
   background: transparent;
 }
 
-.bitfun-conversation-mode-surface__switch-button {
+.openbitfun-conversation-mode-surface__switch-button {
   display: inline-flex;
   width: 100%;
   min-height: 38px;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-space-2);
-  padding: var(--bf-space-2) var(--bf-space-3);
+  gap: var(--openbitfun-space-2);
+  padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
   border: 0;
-  border-radius: var(--bf-radius-base);
+  border-radius: var(--openbitfun-radius-base);
   background: transparent;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font: inherit;
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-label-md-line-height);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   @media (hover: hover) and (pointer: fine) {
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &.is-voice:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 13%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 13%, transparent);
     }
   }
 
   &:active:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface-hover);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
     transform: scale(0.985);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
+    outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: 2px;
   }
 
   &:disabled {
     cursor: default;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
   &.is-voice {
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 9%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 9%, transparent);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
-.bitfun-conversation-mode-surface__switch-spinner {
+.openbitfun-conversation-mode-surface__switch-spinner {
   animation: conversation-mode-switch-spin 0.9s linear infinite;
 }
 
-.bitfun-conversation-voice-mode-icon {
+.openbitfun-conversation-voice-mode-icon {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: 7px;
-  background: var(--bf-color-surface-subtle);
-  color: var(--bf-color-status-success-content);
+  background: var(--openbitfun-color-surface-subtle);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 @keyframes conversation-mode-switch-spin {
@@ -102,15 +102,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-conversation-mode-surface__switch-button {
+  .openbitfun-conversation-mode-surface__switch-button {
     transition: none;
   }
 
-  .bitfun-conversation-mode-surface__switch-button:active:not(:disabled) {
+  .openbitfun-conversation-mode-surface__switch-button:active:not(:disabled) {
     transform: none;
   }
 
-  .bitfun-conversation-mode-surface__switch-spinner {
+  .openbitfun-conversation-mode-surface__switch-spinner {
     animation: none;
   }
 }

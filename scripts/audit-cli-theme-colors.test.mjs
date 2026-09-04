@@ -46,7 +46,7 @@ test('collectPresetColorEntriesFromJson reads opencode theme colors', () => {
 });
 
 test('collectPresetColorEntriesFromJson resolves defs and light/dark variants', () => {
-  const entries = collectPresetColorEntriesFromJson('bitfun-light.json', JSON.stringify({
+  const entries = collectPresetColorEntriesFromJson('openbitfun-light.json', JSON.stringify({
     defs: {
       neutral: '#00000080',
     },
@@ -57,9 +57,9 @@ test('collectPresetColorEntriesFromJson resolves defs and light/dark variants', 
   }));
 
   assert.deepEqual(entries, [
-    { file: 'bitfun-light.json', key: 'background', color: '#7f7f7f' },
-    { file: 'bitfun-light.json', key: 'primary.dark', color: '#808080' },
-    { file: 'bitfun-light.json', key: 'primary.light', color: '#7f7f7f' },
+    { file: 'openbitfun-light.json', key: 'background', color: '#7f7f7f' },
+    { file: 'openbitfun-light.json', key: 'primary.dark', color: '#808080' },
+    { file: 'openbitfun-light.json', key: 'primary.light', color: '#7f7f7f' },
   ]);
 });
 
@@ -68,12 +68,12 @@ test('isRuntimePresetEntry separates consumed CLI keys from OpenCode compatibili
   assert.equal(CLI_RUNTIME_THEME_KEYS.has('markdownText'), false);
 
   assert.equal(isRuntimePresetEntry({
-    file: 'bitfun-light.json',
+    file: 'openbitfun-light.json',
     key: 'primary.light',
     color: '#7f7f7f',
   }), true);
   assert.equal(isRuntimePresetEntry({
-    file: 'bitfun-light.json',
+    file: 'openbitfun-light.json',
     key: 'syntaxKeyword',
     color: '#7c6b99',
   }), false);
@@ -130,7 +130,7 @@ test('findNearPairs reports nearby but not identical colors', () => {
 });
 
 test('checkBaseline requires budgets to be lowered when CLI color debt drops', () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-cli-theme-audit-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-cli-theme-audit-'));
   try {
     const baselinePath = path.join(tempDir, 'baseline.json');
     fs.writeFileSync(baselinePath, JSON.stringify({
@@ -154,7 +154,7 @@ test('checkBaseline requires budgets to be lowered when CLI color debt drops', (
 });
 
 test('checkBaseline validates CLI baseline budget shape', () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-cli-theme-audit-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-cli-theme-audit-'));
   try {
     const baselinePath = path.join(tempDir, 'baseline.json');
     fs.writeFileSync(baselinePath, JSON.stringify({
@@ -175,7 +175,7 @@ test('checkBaseline validates CLI baseline budget shape', () => {
 });
 
 test('writeReportJson creates parent directories for report output', () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-cli-theme-audit-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-cli-theme-audit-'));
   try {
     const reportPath = path.join(tempDir, 'nested', 'report.json');
     writeReportJson({ totalUniqueColors: 1 }, reportPath);

@@ -4,7 +4,7 @@ use super::AgentRegistry;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::GlobalConfig;
 use crate::service::config::SubagentModelSelection;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use log::{debug, error, warn};
 use std::path::Path;
 
@@ -41,7 +41,7 @@ impl AgentRegistry {
         &self,
         agent_type: &str,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let externally_owned = workspace_root
             .is_some_and(|workspace| self.is_external_subagent_route(agent_type, Some(workspace)));
         let entry = if externally_owned {
@@ -52,7 +52,7 @@ impl AgentRegistry {
         };
         let entry = entry.ok_or_else(|| {
             error!("[AgentRegistry] Agent not found: {}", agent_type);
-            BitFunError::agent(format!("[AgentRegistry] Agent not found: {}", agent_type))
+            OpenBitFunError::agent(format!("[AgentRegistry] Agent not found: {}", agent_type))
         })?;
 
         if let Some(config) = entry.custom_config {

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Barrier};
 
-use bitfun_services_core::runtime_ownership::{
+use openbitfun_services_core::runtime_ownership::{
     RuntimeDeployment, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
 };
 use tempfile::tempdir;
@@ -15,7 +15,7 @@ fn embedded_owner_is_idempotent_and_keeps_one_workspace_lease() {
     let workspace = tempdir().expect("workspace");
     let owner = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
     );
 
@@ -27,7 +27,7 @@ fn embedded_owner_is_idempotent_and_keeps_one_workspace_lease() {
         .expect("idempotent acquisition");
 
     let key =
-        RuntimeOwnershipKey::for_workspace(workspace.path(), "bitfun").expect("ownership key");
+        RuntimeOwnershipKey::for_workspace(workspace.path(), "openbitfun").expect("ownership key");
     assert!(WorkspaceRuntimeOwnership::try_acquire(
         ownership_root.path(),
         &key,
@@ -42,7 +42,7 @@ fn embedded_owner_serializes_concurrent_first_acquisition() {
     let workspace = tempdir().expect("workspace");
     let owner = Arc::new(CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
     ));
     let barrier = Arc::new(Barrier::new(5));
@@ -65,7 +65,7 @@ fn embedded_owner_serializes_concurrent_first_acquisition() {
     }
 
     let key =
-        RuntimeOwnershipKey::for_workspace(workspace.path(), "bitfun").expect("ownership key");
+        RuntimeOwnershipKey::for_workspace(workspace.path(), "openbitfun").expect("ownership key");
     assert!(WorkspaceRuntimeOwnership::try_acquire(
         ownership_root.path(),
         &key,
@@ -81,7 +81,7 @@ fn shared_owner_accepts_only_its_startup_workspace() {
     let other_workspace = tempdir().expect("other workspace");
     let owner = CoreRuntimeOwnership::shared_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
         workspace.path(),
     )
@@ -103,7 +103,7 @@ fn unverified_remote_workspace_cannot_bypass_local_ownership() {
     let missing_local_path = ownership_root.path().join("remote-path-is-not-local");
     let owner = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
     );
 
@@ -125,7 +125,7 @@ fn verified_remote_workspace_does_not_touch_local_ownership() {
     let missing_local_path = ownership_root.path().join("remote-path-is-not-local");
     let owner = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
     );
 
@@ -149,14 +149,14 @@ fn ssh_host_without_connection_id_cannot_bypass_local_ownership() {
     let workspace = tempdir().expect("workspace");
     let shared = CoreRuntimeOwnership::shared_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "shared-test",
         workspace.path(),
     )
     .expect("shared owner");
     let embedded = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "embedded-test",
     );
 
@@ -176,7 +176,7 @@ async fn dispatch_observer_record_never_acquires_local_workspace_ownership() {
     let outbound_root = tempdir().expect("outbound root");
     let shared = CoreRuntimeOwnership::shared_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "shared-test",
         workspace.path(),
     )
@@ -220,7 +220,7 @@ fn startup_errors_expose_codes_without_mislabeling_path_failures_as_conflicts() 
     let ownership_root = tempdir().expect("ownership root");
     let owner = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "test",
     );
     let missing = ownership_root.path().join("missing-workspace");
@@ -240,24 +240,27 @@ fn ownership_conflict_guidance_matches_the_calling_product_surface() {
     let workspace = tempdir().expect("workspace");
     let shared = CoreRuntimeOwnership::shared_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "shared-tui-runtime",
         workspace.path(),
     )
     .expect("shared owner");
     let error = CoreRuntimeOwnership::embedded_with_facts(
         ownership_root.path().to_path_buf(),
-        "bitfun".to_string(),
+        "openbitfun".to_string(),
         "sdk-host",
     )
     .ensure_local_workspace(workspace.path())
     .expect_err("Shared owner must block an Embedded SDK Host");
 
     let tui_message = error.startup_message(RuntimeDeployment::Embedded, "cli-interactive");
-    assert!(tui_message.contains("bitfun chat --shared"));
+    assert!(tui_message.contains("openbitfun chat --shared"));
     for entrypoint in ["cli-headless", "acp", "sdk-host", "desktop"] {
         let message = error.startup_message(RuntimeDeployment::Embedded, entrypoint);
-        assert!(!message.contains("bitfun chat --shared"), "{entrypoint}");
+        assert!(
+            !message.contains("openbitfun chat --shared"),
+            "{entrypoint}"
+        );
         assert!(message.contains("close its clients"), "{entrypoint}");
     }
     drop(shared);

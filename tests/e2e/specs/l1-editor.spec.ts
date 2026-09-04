@@ -155,7 +155,7 @@ describe('L1 Editor', () => {
       }
 
       const tabBarSelectors = [
-        '.bitfun-tab-bar',
+        '.openbitfun-tab-bar',
         '[class*="tab-bar"]',
         '[role="tablist"]',
       ];
@@ -185,7 +185,7 @@ describe('L1 Editor', () => {
         return;
       }
 
-      const tabs = await browser.$$('[role="tab"], .bitfun-tab, [class*="tab-item"]');
+      const tabs = await browser.$$('[role="tab"], .openbitfun-tab, [class*="tab-item"]');
       console.log('[L1] Tabs found:', tabs.length);
 
       if (tabs.length > 0) {
@@ -205,7 +205,7 @@ describe('L1 Editor', () => {
         return;
       }
 
-      const tabs = await browser.$$('[role="tab"], .bitfun-tab, [class*="tab-item"]');
+      const tabs = await browser.$$('[role="tab"], .openbitfun-tab, [class*="tab-item"]');
 
       if (tabs.length < 2) {
         console.log('[L1] Not enough tabs to test switching');
@@ -235,7 +235,7 @@ describe('L1 Editor', () => {
         return;
       }
 
-      const closeButtons = await browser.$$('[class*="tab-close"], .bitfun-tab__close, [data-testid^="tab-close"]');
+      const closeButtons = await browser.$$('[class*="tab-close"], .openbitfun-tab__close, [data-testid^="tab-close"]');
       console.log('[L1] Tab close buttons:', closeButtons.length);
 
       expect(closeButtons.length).toBeGreaterThanOrEqual(0);

@@ -1,23 +1,23 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     --_checkbox-size: 14px;
 
     display: inline-flex;
     align-items: flex-start;
     min-inline-size: 0;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-primary);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     cursor: pointer;
   }
 
   .root[data-size="sm"] { --_checkbox-size: 12px; }
   .root[data-size="lg"] { --_checkbox-size: 16px; }
-  .root[data-disabled="true"] { color: var(--bf-color-content-disabled); cursor: not-allowed; }
+  .root[data-disabled="true"] { color: var(--openbitfun-color-content-disabled); cursor: not-allowed; }
 
   .control {
     position: relative;
@@ -45,25 +45,25 @@
     justify-content: center;
     inline-size: 100%;
     block-size: 100%;
-    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-content-inverse);
-    background: var(--bf-color-field-background);
-    transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border);
+    border-radius: var(--openbitfun-radius-sm);
+    color: var(--openbitfun-color-content-inverse);
+    background: var(--openbitfun-color-field-background);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .input:is(:checked, :indeterminate) + .box {
-    border-color: var(--bf-color-accent-default);
-    background: var(--bf-color-accent-default);
+    border-color: var(--openbitfun-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
   }
 
   .input:focus-visible + .box {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
-  .root[data-invalid="true"] .box { border-color: var(--bf-color-status-danger-border); }
-  .root[data-disabled="true"] .box { background: var(--bf-color-field-background); }
+  .root[data-invalid="true"] .box { border-color: var(--openbitfun-color-status-danger-border); }
+  .root[data-disabled="true"] .box { background: var(--openbitfun-color-field-background); }
 
   .icon {
     inline-size: 100%;
@@ -77,9 +77,9 @@
   }
 
   .input:is(:checked, :indeterminate) + .box .icon { opacity: 1; }
-  .content { display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--bf-space-1); }
+  .content { display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--openbitfun-space-1); }
   .label { color: inherit; }
-  .description { color: var(--bf-color-content-muted); font-family: var(--bf-type-support-font-family); font-size: var(--bf-type-support-font-size); font-weight: var(--bf-type-support-font-weight); line-height: var(--bf-type-support-line-height); letter-spacing: var(--bf-type-support-letter-spacing); }
+  .description { color: var(--openbitfun-color-content-muted); font-family: var(--openbitfun-type-support-font-family); font-size: var(--openbitfun-type-support-font-size); font-weight: var(--openbitfun-type-support-font-weight); line-height: var(--openbitfun-type-support-line-height); letter-spacing: var(--openbitfun-type-support-letter-spacing); }
 
   @media (prefers-reduced-motion: reduce) { .box { transition: none; } }
   @media (forced-colors: active) {

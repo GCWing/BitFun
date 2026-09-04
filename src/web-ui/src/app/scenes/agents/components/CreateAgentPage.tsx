@@ -1,4 +1,4 @@
-import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconName, type IconSize } from '@bitfun/ui';
+import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconName, type IconSize } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
@@ -487,8 +487,8 @@ const CreateAgentPage: React.FC = () => {
     : t('agentsOverview.form.submit');
   if (isEdit && detailLoading) {
     return (
-      <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="loading">
-        <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
+      <div className="tv" data-openbitfun-component="create-agent-page" data-openbitfun-part="root" data-openbitfun-state="loading">
+        <div className="tv__editor-bar" data-openbitfun-component="create-agent-page" data-openbitfun-part="editorBar">
           <Button
             variant="outline"
             size="sm"
@@ -499,7 +499,7 @@ const CreateAgentPage: React.FC = () => {
           </Button>
         </div>
         <ScrollArea className="th__list-body">
-          <div className="th__list-inner" data-bf-component="create-agent-page" data-bf-part="body">
+          <div className="th__list-inner" data-openbitfun-component="create-agent-page" data-openbitfun-part="body">
             <p className="th__title-sub">{t('agentsOverview.form.loadingDetail')}</p>
           </div>
         </ScrollArea>
@@ -509,8 +509,8 @@ const CreateAgentPage: React.FC = () => {
 
   if (isEdit && detailError) {
     return (
-      <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="error">
-        <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
+      <div className="tv" data-openbitfun-component="create-agent-page" data-openbitfun-part="root" data-openbitfun-state="error">
+        <div className="tv__editor-bar" data-openbitfun-component="create-agent-page" data-openbitfun-part="editorBar">
           <Button
             variant="outline"
             size="sm"
@@ -522,7 +522,7 @@ const CreateAgentPage: React.FC = () => {
         </div>
         <ScrollArea className="th__list-body">
           <div className="th__list-inner">
-            <p className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error" role="alert">{detailError}</p>
+            <p className="th-create-panel__error" data-openbitfun-component="create-agent-page" data-openbitfun-part="error" role="alert">{detailError}</p>
             <Button variant="outline" size="sm" onClick={openHome}>
               {t('agentsOverview.form.cancel')}
             </Button>
@@ -533,15 +533,15 @@ const CreateAgentPage: React.FC = () => {
   }
 
   return (
-    <div className="tv th-create-page" data-bf-component="create-agent-page" data-bf-part="root">
+    <div className="tv th-create-page" data-openbitfun-component="create-agent-page" data-openbitfun-part="root">
       <ScrollArea className="th__list-body th-create-page__body">
-        <div className="th__list-inner th-create-page__inner" data-bf-component="create-agent-page" data-bf-part="body">
-          <header className="th-create-page__head" data-bf-component="create-agent-page" data-bf-part="heading">
+        <div className="th__list-inner th-create-page__inner" data-openbitfun-component="create-agent-page" data-openbitfun-part="body">
+          <header className="th-create-page__head" data-openbitfun-component="create-agent-page" data-openbitfun-part="heading">
             <div className="th-create-page__heading">
               <h2 className="th__title">{formTitle}</h2>
               <p className="th__title-sub">{formSubtitle}</p>
             </div>
-            <div className="th-create-page__actions" data-bf-component="create-agent-page" data-bf-part="actions">
+            <div className="th-create-page__actions" data-openbitfun-component="create-agent-page" data-openbitfun-part="actions">
               <Button
                 className="th-create-page__action"
                 type="button"
@@ -569,8 +569,8 @@ const CreateAgentPage: React.FC = () => {
           <form
             id="custom-agent-form"
             className="th-create-page__form"
-            data-bf-component="create-agent-page"
-            data-bf-part="form"
+            data-openbitfun-component="create-agent-page"
+            data-openbitfun-part="form"
             onSubmit={(event) => {
               event.preventDefault();
               if (submitting || toolsEditing) {
@@ -579,27 +579,27 @@ const CreateAgentPage: React.FC = () => {
               void handleSubmit();
             }}
           >
-            <div className="th-create-page__columns" data-bf-component="create-agent-page" data-bf-part="columns">
+            <div className="th-create-page__columns" data-openbitfun-component="create-agent-page" data-openbitfun-part="columns">
               <section
                 ref={definitionColumnRef}
                 className="th-create-page__panel th-create-page__panel--definition"
-                data-bf-component="create-agent-page"
-                data-bf-part="column"
+                data-openbitfun-component="create-agent-page"
+                data-openbitfun-part="column"
               >
                 <div className="th-create-page__section">
-                  <div className="th-create-page__section-heading" data-bf-component="create-agent-page" data-bf-part="sectionHeading">
+                  <div className="th-create-page__section-heading" data-openbitfun-component="create-agent-page" data-openbitfun-part="sectionHeading">
                     <span className="th-create-page__section-marker" aria-hidden="true">
                       <Minus size={18} strokeWidth={5} />
                     </span>
                     <h3>{t('agentsOverview.form.basicInformation')}</h3>
                   </div>
 
-                  <div className="th-create-panel__field" data-bf-component="create-agent-page" data-bf-part="field">
+                  <div className="th-create-panel__field" data-openbitfun-component="create-agent-page" data-openbitfun-part="field">
                     <span className="th-create-panel__label">{t('agentsOverview.form.kind')}</span>
                     <div
                       className="th-create-panel__level-group"
-                      data-bf-component="create-agent-page"
-                      data-bf-part="levelGroup"
+                      data-openbitfun-component="create-agent-page"
+                      data-openbitfun-part="levelGroup"
                       role="group"
                       aria-label={t('agentsOverview.form.kind')}
                     >
@@ -617,9 +617,9 @@ const CreateAgentPage: React.FC = () => {
                             type="button"
                             disabled={isEdit}
                             className={`th-create-panel__level-btn${kind === candidateKind ? ' is-active' : ''}`}
-                            data-bf-component="create-agent-page"
-                            data-bf-part="levelOption"
-                            data-bf-state={kind === candidateKind ? 'active' : undefined}
+                            data-openbitfun-component="create-agent-page"
+                            data-openbitfun-part="levelOption"
+                            data-openbitfun-state={kind === candidateKind ? 'active' : undefined}
                             aria-pressed={kind === candidateKind}
                             onClick={() => setKind(candidateKind)}
                           >
@@ -651,7 +651,7 @@ const CreateAgentPage: React.FC = () => {
                         size="sm"
                       />
                       {agentIdError ? (
-                        <span className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error" role="alert">{agentIdError}</span>
+                        <span className="th-create-panel__error" data-openbitfun-component="create-agent-page" data-openbitfun-part="error" role="alert">{agentIdError}</span>
                       ) : null}
                     </div>
 
@@ -687,8 +687,8 @@ const CreateAgentPage: React.FC = () => {
                       <span className="th-create-panel__label">{t('agentsOverview.form.level')}</span>
                       <div
                         className="th-create-panel__level-group"
-                        data-bf-component="create-agent-page"
-                        data-bf-part="levelGroup"
+                        data-openbitfun-component="create-agent-page"
+                        data-openbitfun-part="levelGroup"
                         role="group"
                         aria-label={t('agentsOverview.form.level')}
                       >
@@ -697,13 +697,13 @@ const CreateAgentPage: React.FC = () => {
                             (candidateLevel === 'project' && !hasWorkspace) || isEdit;
                           return (
                             <button
-                              data-bf-component="create-agent-page"
-                              data-bf-part="levelOption"
+                              data-openbitfun-component="create-agent-page"
+                              data-openbitfun-part="levelOption"
                               key={candidateLevel}
                               type="button"
                               disabled={disabled}
                               className={`th-create-panel__level-btn${level === candidateLevel ? ' is-active' : ''}`}
-                              data-bf-state={level === candidateLevel ? 'active' : undefined}
+                              data-openbitfun-state={level === candidateLevel ? 'active' : undefined}
                               aria-pressed={level === candidateLevel}
                               onClick={() => setLevel(candidateLevel)}
                               title={
@@ -756,8 +756,8 @@ const CreateAgentPage: React.FC = () => {
                       <div className="th-create-panel__field-head">
                         <div
                           className="th-create-page__section-heading th-create-page__section-heading--tools"
-                          data-bf-component="create-agent-page"
-                          data-bf-part="sectionHeading"
+                          data-openbitfun-component="create-agent-page"
+                          data-openbitfun-part="sectionHeading"
                         >
                           <h3>{t('agentsOverview.form.tools')}</h3>
                           <span className="th-create-panel__label-hint">
@@ -845,21 +845,21 @@ const CreateAgentPage: React.FC = () => {
               <section
                 ref={capabilitiesColumnRef}
                 className="th-create-page__panel th-create-page__panel--capabilities"
-                data-bf-component="create-agent-page"
-                data-bf-part="column"
+                data-openbitfun-component="create-agent-page"
+                data-openbitfun-part="column"
               >
                 <div className="th-create-page__section th-create-page__section--context">
                   <div
                     className="th-create-page__context-heading"
-                    data-bf-component="create-agent-page"
-                    data-bf-part="sectionHeading"
+                    data-openbitfun-component="create-agent-page"
+                    data-openbitfun-part="sectionHeading"
                   >
                     <h3>{t('agentsOverview.form.contextPolicy')}</h3>
                     <span className="th-create-panel__label-hint">
                       {t('agentsOverview.form.contextPolicyHint')}
                     </span>
                   </div>
-                  <div className="th-create-panel__context-options" data-bf-component="create-agent-page" data-bf-part="tools">
+                  <div className="th-create-panel__context-options" data-openbitfun-component="create-agent-page" data-openbitfun-part="tools">
                     {VISIBLE_CONTEXT_SECTIONS.map((section) => {
                       const label = contextSectionLabels[section];
                       const tooltipContent = contextSectionTooltips[section];
@@ -875,9 +875,9 @@ const CreateAgentPage: React.FC = () => {
                           <button
                             type="button"
                             className={`th-create-panel__context-option${isSelected ? ' is-on' : ''}`}
-                            data-bf-component="create-agent-page"
-                            data-bf-part="tool"
-                            data-bf-state={isSelected ? 'active' : undefined}
+                            data-openbitfun-component="create-agent-page"
+                            data-openbitfun-part="tool"
+                            data-openbitfun-state={isSelected ? 'active' : undefined}
                             onClick={() => toggleContextSection(section)}
                             aria-label={`${label}: ${tooltipContent}`}
                             aria-pressed={isSelected}
@@ -897,14 +897,14 @@ const CreateAgentPage: React.FC = () => {
                   </label>
                   <div
                     className="th-create-panel__prompt-editor"
-                    data-bf-component="create-agent-page"
-                    data-bf-part="promptEditor"
+                    data-openbitfun-component="create-agent-page"
+                    data-openbitfun-part="promptEditor"
                   >
                     <div
                       id="custom-agent-runtime-context-preview"
                       className="th-create-panel__prompt-context-preview"
-                      data-bf-component="create-agent-page"
-                      data-bf-part="contextPreview"
+                      data-openbitfun-component="create-agent-page"
+                      data-openbitfun-part="contextPreview"
                       aria-live="polite"
                     >
                       <span className="th-create-panel__prompt-context-label">
@@ -932,8 +932,8 @@ const CreateAgentPage: React.FC = () => {
                       )}
                     </div>
                     <div
-                      data-bf-component="create-agent-page"
-                      data-bf-part="prompt"
+                      data-openbitfun-component="create-agent-page"
+                      data-openbitfun-part="prompt"
                       className="th-create-panel__prompt-control"
                     >
                       <Textarea

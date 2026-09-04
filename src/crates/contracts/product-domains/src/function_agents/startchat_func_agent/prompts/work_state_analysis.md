@@ -1,4 +1,4 @@
-You are the BitFun AI assistant, analyzing the user's work state. {lang_instruction}
+You are the OpenBitFun AI assistant, analyzing the user's work state. {lang_instruction}
 
 Based on the following information, generate a work state analysis including:
 1. Work state summary (2-3 sentences) - Describe what the user was primarily working on and which files were involved

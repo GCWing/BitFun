@@ -1,6 +1,6 @@
 //! Core Agent Runtime compatibility adapter boundary.
 //!
-//! Product runtime assembly facts live in `bitfun-product-capabilities`. Core
+//! Product runtime assembly facts live in `openbitfun-product-capabilities`. Core
 //! keeps only compatibility exports and adapter wiring that still depends on
 //! existing concrete core paths.
 
@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use bitfun_agent_runtime::permission::PermissionRequestManager;
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::permission::PermissionRequestManager;
+use openbitfun_agent_runtime::sdk::{
     AgentEventReceiver, AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
     AgentSessionForkResult, AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest,
@@ -22,30 +22,30 @@ use bitfun_agent_runtime::sdk::{
     AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentTurnSettlementResult,
     AgentTurnSettlementStatus, SessionTranscript,
 };
-use bitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
+use openbitfun_core_types::{SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 #[cfg(feature = "product-search")]
-use bitfun_product_domains::product_search::{
+use openbitfun_product_domains::product_search::{
     SessionContentSearchRequest, SessionContentSearchResponse, SessionSearchDiagnostic,
     SessionSearchDiagnosticCode, SessionSearchSessionDocument, SessionSearchTurnDocument,
     MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS,
 };
 #[cfg(feature = "product-search")]
-use bitfun_runtime_ports::ProductSearchPort;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::ProductSearchPort;
+use openbitfun_runtime_ports::{
     AgentContextReloadPort, AgentContextReloadRequest, ClockPort, LocalWorkspaceSnapshotPort,
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
     LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind, PortResult,
     RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
     SessionTranscriptRequest, SessionTurnWindowRequest, SessionViewRestoreTiming,
 };
-use bitfun_runtime_services::RuntimeServices;
-use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
-use bitfun_services_core::session::{
+use openbitfun_runtime_services::RuntimeServices;
+use openbitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+use openbitfun_services_core::session::{
     build_session_lineage_snapshot, normalized_session_relationship, SessionBranchBoundary,
     SessionRelationshipKind,
 };
 #[cfg(feature = "product-search")]
-use bitfun_services_core::session_search::{SessionSearchIndexError, SessionSearchSqliteIndex};
+use openbitfun_services_core::session_search::{SessionSearchIndexError, SessionSearchSqliteIndex};
 
 use crate::agentic::coordination::{
     runtime_transcript_messages_from_turns, validate_required_lineage_turns_settled,
@@ -89,9 +89,9 @@ use crate::service::snapshot::{
 };
 use crate::service::token_usage::TokenUsageService;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 
-pub use bitfun_product_capabilities::ProductRuntimeAssembly as CoreProductRuntimeAssembly;
+pub use openbitfun_product_capabilities::ProductRuntimeAssembly as CoreProductRuntimeAssembly;
 pub use runtime_services::{build_local_runtime_services, CoreRuntimeServicesProvider};
 
 fn projected_turn_save_would_overwrite_runtime_state(
@@ -242,7 +242,7 @@ impl CoreProductEventQueueOwner {
 ///
 /// First-party hosts must retain [`CoreProductEventQueueOwner`] and subscribe
 /// through `AgentRuntime`. This wrapper remains only to avoid silently breaking
-/// existing `bitfun-core` consumers during the migration.
+/// existing `openbitfun-core` consumers during the migration.
 #[deprecated(note = "use CoreProductEventQueueOwner and subscribe through AgentRuntime instead")]
 #[derive(Clone)]
 pub struct CoreProductAgentEventSource {
@@ -319,9 +319,9 @@ pub fn core_permission_request_manager() -> Result<Arc<PermissionRequestManager>
     let store = Arc::new(ProjectPermissionSqliteStore::new(
         path_manager.user_data_dir().join("permissions"),
     ));
-    let audit_store: Arc<dyn bitfun_runtime_ports::PermissionAuditStorePort> = store.clone();
-    let reply_store: Arc<dyn bitfun_runtime_ports::PermissionReplyStorePort> = store.clone();
-    let grant_store: Arc<dyn bitfun_runtime_ports::PermissionGrantStorePort> = store;
+    let audit_store: Arc<dyn openbitfun_runtime_ports::PermissionAuditStorePort> = store.clone();
+    let reply_store: Arc<dyn openbitfun_runtime_ports::PermissionReplyStorePort> = store.clone();
+    let grant_store: Arc<dyn openbitfun_runtime_ports::PermissionGrantStorePort> = store;
     let manager = Arc::new(
         PermissionRequestManager::new(audit_store, reply_store, Arc::new(SystemPermissionClock))
             .with_grant_store(grant_store),
@@ -361,14 +361,14 @@ pub struct CoreSessionMaintenancePermit {
     _permit: SessionMaintenancePermit,
 }
 
-fn validate_persisted_session_id(session_id: &str) -> BitFunResult<()> {
-    bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
+fn validate_persisted_session_id(session_id: &str) -> OpenBitFunResult<()> {
+    openbitfun_core_types::validate_session_id(session_id).map_err(OpenBitFunError::Validation)
 }
 
 fn validate_session_workspace_identity(
     session: &Session,
     expected: &WorkspaceSessionIdentity,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let config = &session.config;
     let actual = config.workspace_path.as_deref().and_then(|path| {
         workspace_session_identity(
@@ -378,7 +378,7 @@ fn validate_session_workspace_identity(
         )
     });
     if actual.as_ref() != Some(expected) {
-        return Err(BitFunError::Validation(format!(
+        return Err(OpenBitFunError::Validation(format!(
             "Session workspace identity does not match the requested workspace scope: {}",
             session.session_id,
         )));
@@ -389,14 +389,14 @@ fn validate_session_workspace_identity(
 fn fork_workspace_identity(
     session: &Session,
     request: &SessionStoragePathRequest,
-) -> BitFunResult<Option<WorkspaceSessionIdentity>> {
+) -> OpenBitFunResult<Option<WorkspaceSessionIdentity>> {
     fn nonempty(value: Option<&str>) -> Option<&str> {
         value.map(str::trim).filter(|value| !value.is_empty())
     }
     fn declares_remote(connection_id: Option<&str>, hostname: Option<&str>) -> bool {
         connection_id.is_some()
             || hostname.is_some_and(|host| {
-                host != bitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
+                host != openbitfun_services_core::workspace_identity::LOCAL_WORKSPACE_SSH_HOST
             })
     }
     let connection_id = nonempty(request.remote_connection_id.as_deref());
@@ -418,7 +418,7 @@ fn fork_workspace_identity(
                 nonempty(config.remote_connection_id.as_deref()),
                 nonempty(config.remote_ssh_host.as_deref()),
             ) {
-                return Err(BitFunError::Validation(
+                return Err(OpenBitFunError::Validation(
                     "Remote Session fork requires a persisted workspace path".to_string(),
                 ));
             }
@@ -436,7 +436,7 @@ fn fork_workspace_identity(
             .as_ref()
             .is_none_or(|identity| identity.remote_connection_id.is_none())
     {
-        return Err(BitFunError::Validation(
+        return Err(OpenBitFunError::Validation(
             "Remote Session fork requires a complete persisted connection and host identity"
                 .to_string(),
         ));
@@ -453,7 +453,7 @@ async fn begin_consistent_persisted_session_read(
     storage_path: &Path,
     session_id: &str,
     expected_workspace: Option<&WorkspaceSessionIdentity>,
-) -> BitFunResult<CoreSessionReadPermit> {
+) -> OpenBitFunResult<CoreSessionReadPermit> {
     validate_persisted_session_id(session_id)?;
     let session_manager = coordinator.get_session_manager();
     let guard = session_manager.acquire_session_mutation(session_id).await?;
@@ -478,7 +478,7 @@ async fn begin_consistent_persisted_session_read(
     {
         if state.phase != crate::agentic::session::revert::SessionRevertPhase::Staged {
             if session_manager.get_session(session_id).is_none() {
-                return Err(BitFunError::OutcomeUnknown(
+                return Err(OpenBitFunError::OutcomeUnknown(
                     "Session facts are unavailable until the unfinished undo transition is restored"
                         .to_string(),
                 ));
@@ -499,12 +499,12 @@ async fn begin_consistent_persisted_session_read(
     })
 }
 
-fn latest_persisted_turn_id(turns: &[DialogTurnData]) -> BitFunResult<String> {
+fn latest_persisted_turn_id(turns: &[DialogTurnData]) -> OpenBitFunResult<String> {
     turns
         .last()
         .map(|turn| turn.turn_id.clone())
         .ok_or_else(|| {
-            BitFunError::Validation("Session has no persisted turns to fork".to_string())
+            OpenBitFunError::Validation("Session has no persisted turns to fork".to_string())
         })
 }
 
@@ -513,7 +513,7 @@ async fn generate_core_session_usage_report(
     token_usage_service: &TokenUsageService,
     session_storage_path: &Path,
     request: AgentSessionUsageRequest,
-) -> BitFunResult<SessionUsageReport> {
+) -> OpenBitFunResult<SessionUsageReport> {
     validate_persisted_session_id(&request.session_id)?;
     generate_session_usage_report_from_storage_path(
         persistence,
@@ -530,7 +530,7 @@ async fn load_visible_persisted_session_turns(
     session_id: &str,
     visible_turn_end: Option<usize>,
     limit: Option<usize>,
-) -> BitFunResult<Vec<DialogTurnData>> {
+) -> OpenBitFunResult<Vec<DialogTurnData>> {
     let mut turns = persistence
         .load_session_turns(storage_path, session_id)
         .await?;
@@ -545,7 +545,7 @@ async fn load_visible_persisted_session_turns(
 }
 
 fn runtime_lineage_snapshot(
-    snapshot: bitfun_services_core::session::SessionLineageSnapshot,
+    snapshot: openbitfun_services_core::session::SessionLineageSnapshot,
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> AgentSessionLineageSnapshot {
@@ -562,13 +562,13 @@ fn runtime_lineage_snapshot(
                     agent_type: metadata.agent_type,
                     created_at_ms: metadata.created_at,
                     status: match metadata.status {
-                        bitfun_services_core::session::SessionStatus::Active => {
+                        openbitfun_services_core::session::SessionStatus::Active => {
                             AgentSessionLifecycleStatus::Active
                         }
-                        bitfun_services_core::session::SessionStatus::Archived => {
+                        openbitfun_services_core::session::SessionStatus::Archived => {
                             AgentSessionLifecycleStatus::Archived
                         }
-                        bitfun_services_core::session::SessionStatus::Completed => {
+                        openbitfun_services_core::session::SessionStatus::Completed => {
                             AgentSessionLifecycleStatus::Completed
                         }
                     },
@@ -814,7 +814,7 @@ impl CoreProductAgentRuntime {
         coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
         token_usage_service: Arc<TokenUsageService>,
-        event_journal: Arc<bitfun_agent_runtime::sdk::SessionEventJournal>,
+        event_journal: Arc<openbitfun_agent_runtime::sdk::SessionEventJournal>,
     ) -> Result<AgentRuntime, String> {
         Self::build_session_surface(coordinator, scheduler, token_usage_service)
             .map(|runtime| runtime.with_session_event_journal(event_journal))
@@ -983,7 +983,7 @@ impl CoreAgentRuntimeCompatibility {
     pub fn ensure_workspace_runtime_ownership(
         &self,
         request: &SessionStoragePathRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.coordinator.ensure_workspace_runtime_ownership(
             &request.workspace_path,
             request.remote_connection_id.as_deref(),
@@ -997,7 +997,7 @@ impl CoreAgentRuntimeCompatibility {
     pub async fn reload_session_context(
         &self,
         request: AgentContextReloadRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let session_id = request.session_id.trim();
         validate_persisted_session_id(session_id)?;
 
@@ -1007,7 +1007,7 @@ impl CoreAgentRuntimeCompatibility {
             .get_session(session_id)
             .is_none()
         {
-            return Err(BitFunError::NotFound(format!(
+            return Err(OpenBitFunError::NotFound(format!(
                 "Session '{session_id}' is not loaded"
             )));
         }
@@ -1034,7 +1034,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         include_internal: bool,
-    ) -> BitFunResult<Session> {
+    ) -> OpenBitFunResult<Session> {
         validate_persisted_session_id(session_id)?;
         if include_internal {
             self.coordinator
@@ -1053,7 +1053,7 @@ impl CoreAgentRuntimeCompatibility {
         session_id: &str,
         include_internal: bool,
         tail_turn_count: Option<usize>,
-    ) -> BitFunResult<(
+    ) -> OpenBitFunResult<(
         Session,
         Vec<DialogTurnData>,
         usize,
@@ -1113,7 +1113,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         storage_path: &Path,
         mut request: SessionTurnWindowRequest,
-    ) -> BitFunResult<SessionTurnWindowResponse> {
+    ) -> OpenBitFunResult<SessionTurnWindowResponse> {
         validate_persisted_session_id(&request.session_id)?;
         if self
             .persistence
@@ -1123,7 +1123,7 @@ impl CoreAgentRuntimeCompatibility {
                 !request.include_internal && metadata.should_hide_from_user_lists()
             })
         {
-            return Err(BitFunError::NotFound(format!(
+            return Err(OpenBitFunError::NotFound(format!(
                 "Session not found: {}",
                 request.session_id
             )));
@@ -1141,7 +1141,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         include_internal: bool,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>)> {
         validate_persisted_session_id(session_id)?;
         if include_internal {
             self.coordinator
@@ -1160,7 +1160,7 @@ impl CoreAgentRuntimeCompatibility {
         session_id: &str,
         include_internal: bool,
         tail_turn_count: Option<usize>,
-    ) -> BitFunResult<(
+    ) -> OpenBitFunResult<(
         Session,
         Vec<DialogTurnData>,
         usize,
@@ -1183,7 +1183,7 @@ impl CoreAgentRuntimeCompatibility {
         request: SessionStoragePathRequest,
         session_id: &str,
         include_internal: bool,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>)> {
         validate_persisted_session_id(session_id)?;
         if include_internal {
             self.coordinator
@@ -1199,7 +1199,7 @@ impl CoreAgentRuntimeCompatibility {
     pub async fn list_persisted_sessions(
         &self,
         workspace_path: &Path,
-    ) -> BitFunResult<Vec<SessionMetadata>> {
+    ) -> OpenBitFunResult<Vec<SessionMetadata>> {
         self.persistence.list_session_metadata(workspace_path).await
     }
 
@@ -1208,7 +1208,7 @@ impl CoreAgentRuntimeCompatibility {
         workspace_path: &Path,
         cursor: Option<&str>,
         limit: usize,
-    ) -> BitFunResult<SessionMetadataPage> {
+    ) -> OpenBitFunResult<SessionMetadataPage> {
         self.persistence
             .list_session_metadata_page(workspace_path, cursor, limit)
             .await
@@ -1224,7 +1224,7 @@ impl CoreAgentRuntimeCompatibility {
         query: &str,
         limit: usize,
         include_archived: bool,
-    ) -> BitFunResult<SessionContentSearchResponse> {
+    ) -> OpenBitFunResult<SessionContentSearchResponse> {
         let query = validated_session_content_search_query(query)?;
         if query.is_empty() {
             return Ok(SessionContentSearchResponse::default());
@@ -1312,7 +1312,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<SessionMetadata>> {
+    ) -> OpenBitFunResult<Option<SessionMetadata>> {
         validate_persisted_session_id(session_id)?;
         self.persistence
             .load_session_metadata(workspace_path, session_id)
@@ -1329,7 +1329,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<bool> {
+    ) -> OpenBitFunResult<bool> {
         let metadata = self
             .load_persisted_session_metadata(workspace_path, session_id)
             .await?;
@@ -1346,14 +1346,14 @@ impl CoreAgentRuntimeCompatibility {
         workspace_path: &Path,
         session_id: &str,
         update: impl FnOnce(&mut SessionMetadata),
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         validate_persisted_session_id(session_id)?;
         self.persistence
             .update_session_metadata(workspace_path, session_id, update)
             .await
     }
 
-    pub fn is_session_loaded_in_memory(&self, session_id: &str) -> BitFunResult<bool> {
+    pub fn is_session_loaded_in_memory(&self, session_id: &str) -> OpenBitFunResult<bool> {
         validate_persisted_session_id(session_id)?;
         Ok(self
             .coordinator
@@ -1369,7 +1369,7 @@ impl CoreAgentRuntimeCompatibility {
     /// so a later process restart cannot resurrect work. Live read-only views
     /// (for example Peer Device controllers) still need the current process
     /// state to distinguish an executing session from interrupted history.
-    pub fn loaded_session_snapshot(&self, session_id: &str) -> BitFunResult<Option<Session>> {
+    pub fn loaded_session_snapshot(&self, session_id: &str) -> OpenBitFunResult<Option<Session>> {
         validate_persisted_session_id(session_id)?;
         Ok(self
             .coordinator
@@ -1381,7 +1381,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         session_id: &str,
         title: &str,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         validate_persisted_session_id(session_id)?;
         self.coordinator
             .update_session_title(session_id, title)
@@ -1391,19 +1391,19 @@ impl CoreAgentRuntimeCompatibility {
     pub async fn resolve_persisted_session_storage_path(
         &self,
         request: SessionStoragePathRequest,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         CoreSessionStorePort::with_path_manager(self.persistence.path_manager().clone())
             .resolve_session_storage_path(request)
             .await
             .map(|resolution| resolution.effective_storage_path)
-            .map_err(|error| BitFunError::Session(error.to_string()))
+            .map_err(|error| OpenBitFunError::Session(error.to_string()))
     }
 
     pub fn is_session_loaded_from_storage_path(
         &self,
         storage_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<bool> {
+    ) -> OpenBitFunResult<bool> {
         validate_persisted_session_id(session_id)?;
         self.coordinator
             .get_session_manager()
@@ -1415,7 +1415,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         include_internal: bool,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if self.is_session_loaded_from_storage_path(storage_path, session_id)? {
             return Ok(());
         }
@@ -1435,7 +1435,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         storage_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<CoreSessionMutationPermit> {
+    ) -> OpenBitFunResult<CoreSessionMutationPermit> {
         validate_persisted_session_id(session_id)?;
         let session_manager = self.coordinator.get_session_manager();
         let guard = session_manager.acquire_session_mutation(session_id).await?;
@@ -1455,7 +1455,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         storage_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<CoreSessionMutationPermit> {
+    ) -> OpenBitFunResult<CoreSessionMutationPermit> {
         let permit = self
             .begin_persisted_session_mutation(storage_path, session_id)
             .await?;
@@ -1465,7 +1465,7 @@ impl CoreAgentRuntimeCompatibility {
             .await?
             .is_some()
         {
-            return Err(BitFunError::SessionInUse {
+            return Err(OpenBitFunError::SessionInUse {
                 session_id: session_id.to_string(),
             });
         }
@@ -1476,7 +1476,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         storage_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<CoreSessionReadPermit> {
+    ) -> OpenBitFunResult<CoreSessionReadPermit> {
         begin_consistent_persisted_session_read(
             self.coordinator.as_ref(),
             self.persistence.as_ref(),
@@ -1492,7 +1492,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         workspace: &WorkspaceSessionIdentity,
-    ) -> BitFunResult<CoreSessionReadPermit> {
+    ) -> OpenBitFunResult<CoreSessionReadPermit> {
         begin_consistent_persisted_session_read(
             self.coordinator.as_ref(),
             self.persistence.as_ref(),
@@ -1508,7 +1508,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         wait_timeout_ms: u64,
-    ) -> BitFunResult<CoreSessionMaintenancePermit> {
+    ) -> OpenBitFunResult<CoreSessionMaintenancePermit> {
         let permit = self
             .scheduler
             .begin_session_maintenance(
@@ -1523,7 +1523,7 @@ impl CoreAgentRuntimeCompatibility {
     /// Compatibility-only lifecycle operation for ACP setup compensation and
     /// session/close. It releases loaded Core state but preserves persistence
     /// and the storage binding so the same session can be restored later.
-    pub async fn unload_persisted_session(&self, session_id: &str) -> BitFunResult<bool> {
+    pub async fn unload_persisted_session(&self, session_id: &str) -> OpenBitFunResult<bool> {
         validate_persisted_session_id(session_id)?;
         self.coordinator
             .get_session_manager()
@@ -1535,7 +1535,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         parent_session_id: &str,
         subagent_session_id: &str,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         self.coordinator
             .cancel_background_subagents_for_parent(parent_session_id, subagent_session_id, true)
             .await
@@ -1545,7 +1545,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         permit: &CoreSessionMutationPermit,
         target_turn: usize,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.coordinator
             .get_session_manager()
             .rollback_context_to_turn_start_locked(
@@ -1560,7 +1560,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         permit: &CoreSessionMutationPermit,
         target_turn: usize,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.coordinator
             .get_session_manager()
             .validate_rollback_context_to_turn_start_locked(
@@ -1577,7 +1577,7 @@ impl CoreAgentRuntimeCompatibility {
     pub async fn commit_session_revert_before_snapshot_mutation(
         &self,
         permit: &CoreSessionMutationPermit,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.coordinator
             .commit_session_revert_locked(&permit.storage_path, &permit.session_id)
             .await
@@ -1588,14 +1588,14 @@ impl CoreAgentRuntimeCompatibility {
     pub async fn ensure_snapshot_record_allowed(
         &self,
         permit: &CoreSessionMutationPermit,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if self
             .persistence
             .load_session_revert_state(&permit.storage_path, &permit.session_id)
             .await?
             .is_some()
         {
-            return Err(BitFunError::OutcomeUnknown(format!(
+            return Err(OpenBitFunError::OutcomeUnknown(format!(
                 "Snapshot recording is not allowed while a Session undo is staged: session_id={}",
                 permit.session_id
             )));
@@ -1608,7 +1608,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         limit: Option<usize>,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         let read = self
             .begin_persisted_session_read(storage_path, session_id)
             .await?;
@@ -1626,7 +1626,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         permit: &CoreSessionMutationPermit,
         limit: Option<usize>,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         let visible_turn_end = self
             .persistence
             .load_session_revert_state(&permit.storage_path, &permit.session_id)
@@ -1647,7 +1647,7 @@ impl CoreAgentRuntimeCompatibility {
         storage_path: &Path,
         session_id: &str,
         options: &SessionTranscriptExportOptions,
-    ) -> BitFunResult<SessionTranscriptExport> {
+    ) -> OpenBitFunResult<SessionTranscriptExport> {
         let _read = self
             .begin_persisted_session_read(storage_path, session_id)
             .await?;
@@ -1660,7 +1660,7 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         validate_persisted_session_id(session_id)?;
         self.persistence
             .touch_session(workspace_path, session_id)
@@ -1671,10 +1671,10 @@ impl CoreAgentRuntimeCompatibility {
         &self,
         permit: &CoreSessionMutationPermit,
         turn: &DialogTurnData,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         validate_persisted_session_id(&turn.session_id)?;
         if turn.session_id != permit.session_id {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Turn session does not match the active mutation: turn_session_id={}, mutation_session_id={}",
                 turn.session_id, permit.session_id
             )));
@@ -1695,14 +1695,14 @@ impl CoreAgentRuntimeCompatibility {
             .get_session_manager()
             .get_session(&permit.session_id)
             .ok_or_else(|| {
-                BitFunError::OutcomeUnknown(format!(
+                OpenBitFunError::OutcomeUnknown(format!(
                     "Session must be loaded before saving a projected Turn: session_id={}",
                     permit.session_id
                 ))
             })?;
         let expected_turn_id = session.dialog_turn_ids.get(turn.turn_index);
         if expected_turn_id != Some(&turn.turn_id) {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Turn does not belong to the active Session history branch: session_id={}, turn_index={}, turn_id={}",
                 permit.session_id, turn.turn_index, turn.turn_id
             )));
@@ -1735,7 +1735,7 @@ impl CoreAgentRuntimeCompatibility {
         workspace_path: &Path,
         parent_session_id: &str,
         parent_dialog_turn_ids: &std::collections::HashSet<String>,
-    ) -> BitFunResult<Vec<String>> {
+    ) -> OpenBitFunResult<Vec<String>> {
         validate_persisted_session_id(parent_session_id)?;
         self.coordinator
             .delete_hidden_subagent_sessions_for_parent_turns(
@@ -1779,16 +1779,16 @@ fn session_search_turn_document(turn: &DialogTurnData) -> SessionSearchTurnDocum
 }
 
 #[cfg(feature = "product-search")]
-fn session_search_index_error(error: SessionSearchIndexError) -> BitFunError {
+fn session_search_index_error(error: SessionSearchIndexError) -> OpenBitFunError {
     log::warn!("Product search index operation failed: {error}");
-    BitFunError::Session("Session content search is temporarily unavailable".to_string())
+    OpenBitFunError::Session("Session content search is temporarily unavailable".to_string())
 }
 
 #[cfg(feature = "product-search")]
-fn validated_session_content_search_query(query: &str) -> BitFunResult<&str> {
+fn validated_session_content_search_query(query: &str) -> OpenBitFunResult<&str> {
     let query = query.trim();
     if query.chars().count() > MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS {
-        return Err(BitFunError::Validation(format!(
+        return Err(OpenBitFunError::Validation(format!(
             "Session content search queries must not exceed {MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS} characters"
         )));
     }
@@ -1800,12 +1800,12 @@ impl AgentContextReloadPort for CoreAgentRuntimeCompatibility {
     async fn reload_session_context(
         &self,
         request: AgentContextReloadRequest,
-    ) -> bitfun_runtime_ports::PortResult<()> {
+    ) -> openbitfun_runtime_ports::PortResult<()> {
         CoreAgentRuntimeCompatibility::reload_session_context(self, request)
             .await
             .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
+                openbitfun_runtime_ports::PortError::new(
+                    openbitfun_runtime_ports::PortErrorKind::Backend,
                     error.to_string(),
                 )
             })
@@ -2139,15 +2139,15 @@ async fn validate_persisted_lineage_descendant(
     }
 }
 
-fn runtime_port_error(error: BitFunError) -> PortError {
+fn runtime_port_error(error: OpenBitFunError) -> PortError {
     let kind = match &error {
-        BitFunError::Validation(_) => PortErrorKind::InvalidRequest,
-        BitFunError::NotFound(_) => PortErrorKind::NotFound,
-        BitFunError::Timeout(_) => PortErrorKind::Timeout,
-        BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
-        BitFunError::SessionInUse { .. } => PortErrorKind::SessionInUse,
-        BitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
-        BitFunError::OutcomeUnknown(_) => PortErrorKind::OutcomeUnknown,
+        OpenBitFunError::Validation(_) => PortErrorKind::InvalidRequest,
+        OpenBitFunError::NotFound(_) => PortErrorKind::NotFound,
+        OpenBitFunError::Timeout(_) => PortErrorKind::Timeout,
+        OpenBitFunError::Cancelled(_) => PortErrorKind::Cancelled,
+        OpenBitFunError::SessionInUse { .. } => PortErrorKind::SessionInUse,
+        OpenBitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
+        OpenBitFunError::OutcomeUnknown(_) => PortErrorKind::OutcomeUnknown,
         _ => PortErrorKind::Backend,
     };
     PortError::new(kind, error.to_string())
@@ -2563,15 +2563,15 @@ mod tests {
     use std::time::Duration;
 
     use crate::service::session::SessionTranscriptExportOptions;
-    use bitfun_agent_runtime::sdk::{
+    use openbitfun_agent_runtime::sdk::{
         AgentEventSource, AgentRuntime, AgentTurnSettlementPort, AgentTurnSettlementRequest,
         AgentTurnSettlementResult, AgentTurnSettlementStatus,
     };
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         AgentContextReloadRequest, AgentContextReloadTarget, LocalWorkspaceSnapshotSessionRequest,
         LocalWorkspaceSnapshotTurnRequest,
     };
-    use bitfun_runtime_services::RuntimeServices;
+    use openbitfun_runtime_services::RuntimeServices;
     use uuid::Uuid;
 
     #[allow(deprecated)]
@@ -2611,12 +2611,12 @@ mod tests {
     use crate::service::workspace_runtime::{
         set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
     };
-    use crate::util::errors::BitFunError;
-    use bitfun_agent_runtime::sdk::{
+    use crate::util::errors::OpenBitFunError;
+    use openbitfun_agent_runtime::sdk::{
         AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
         AgentSessionForkRequest, AgentSessionUsagePort, AgentSessionUsageRequest, PortErrorKind,
     };
-    use bitfun_events::AgenticEvent;
+    use openbitfun_events::AgenticEvent;
     use tokio::sync::RwLock as TokioRwLock;
 
     #[cfg(feature = "product-search")]
@@ -2624,7 +2624,7 @@ mod tests {
     fn product_search_index_errors_do_not_cross_the_runtime_boundary() {
         let private_backend_detail = "C:\\Users\\private\\product-search-v1.sqlite";
         let error = session_search_index_error(
-            bitfun_services_core::session_search::SessionSearchIndexError::Backend(
+            openbitfun_services_core::session_search::SessionSearchIndexError::Backend(
                 private_backend_detail.to_string(),
             ),
         );
@@ -2638,7 +2638,7 @@ mod tests {
     #[test]
     fn product_search_query_length_is_bounded_before_storage_access() {
         let oversized = "x".repeat(
-            bitfun_product_domains::product_search::MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS + 1,
+            openbitfun_product_domains::product_search::MAX_SESSION_CONTENT_SEARCH_QUERY_CHARS + 1,
         );
 
         assert_eq!(
@@ -2647,7 +2647,7 @@ mod tests {
         );
         assert!(matches!(
             validated_session_content_search_query(&oversized),
-            Err(BitFunError::Validation(_))
+            Err(OpenBitFunError::Validation(_))
         ));
     }
 
@@ -2658,7 +2658,7 @@ mod tests {
     impl TestWorkspace {
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
-                "bitfun-product-runtime-compatibility-test-{}",
+                "openbitfun-product-runtime-compatibility-test-{}",
                 Uuid::new_v4()
             ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
@@ -3273,7 +3273,7 @@ mod tests {
             Arc::new(
                 crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
                     workspace.path().join("runtime-ownership"),
-                    "bitfun".to_string(),
+                    "openbitfun".to_string(),
                     "test",
                 ),
             ),
@@ -3425,7 +3425,7 @@ mod tests {
 
     #[test]
     fn session_create_rollback_residual_remains_typed_across_the_runtime_port() {
-        let error = runtime_port_error(BitFunError::SessionCreateCleanupRequired {
+        let error = runtime_port_error(OpenBitFunError::SessionCreateCleanupRequired {
             session_id: "session-1".to_string(),
             error: "metadata write failed".to_string(),
             cleanup_error: "session directory is locked".to_string(),
@@ -3437,7 +3437,7 @@ mod tests {
 
     #[test]
     fn session_writer_conflict_remains_typed_across_the_runtime_port() {
-        let error = runtime_port_error(BitFunError::SessionInUse {
+        let error = runtime_port_error(OpenBitFunError::SessionInUse {
             session_id: "session-1".to_string(),
         });
 
@@ -3533,7 +3533,7 @@ mod tests {
             Arc::new(
                 crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
                     workspace.path().join("ownership"),
-                    "bitfun".to_string(),
+                    "openbitfun".to_string(),
                     "test",
                 ),
             ),
@@ -3861,7 +3861,7 @@ mod tests {
             Some("ssh-source"),
             Some("source-host"),
         );
-        let mut request = bitfun_runtime_ports::SessionStoragePathRequest {
+        let mut request = openbitfun_runtime_ports::SessionStoragePathRequest {
             workspace_path: PathBuf::from("/controller/mirror/sessions"),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -3948,10 +3948,10 @@ mod tests {
             Arc::new(
                 crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
                     std::env::temp_dir().join(format!(
-                        "bitfun-product-runtime-ownership-test-{}",
+                        "openbitfun-product-runtime-ownership-test-{}",
                         uuid::Uuid::new_v4()
                     )),
-                    "bitfun".to_string(),
+                    "openbitfun".to_string(),
                     "test",
                 ),
             ),
@@ -4030,7 +4030,10 @@ mod tests {
             .load_visible_persisted_session_turns(&storage_path, session_id)
             .await
             .expect_err("cold readers must fail closed on an unfinished undo transition");
-        assert!(matches!(cold_read_error, BitFunError::OutcomeUnknown(_)));
+        assert!(matches!(
+            cold_read_error,
+            OpenBitFunError::OutcomeUnknown(_)
+        ));
 
         let result = port
             .fork_session(AgentSessionForkRequest {
@@ -4235,7 +4238,7 @@ mod tests {
             .save_persisted_dialog_turn(&commit_mutation, &hidden_turn)
             .await
             .expect_err("a delayed save cannot revive a committed suffix Turn");
-        assert!(matches!(stale_save, BitFunError::Validation(_)));
+        assert!(matches!(stale_save, OpenBitFunError::Validation(_)));
         drop(commit_mutation);
         assert_eq!(
             persistence
@@ -4434,10 +4437,10 @@ mod tests {
             Arc::new(
                 crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
                     std::env::temp_dir().join(format!(
-                        "bitfun-product-runtime-ownership-test-{}",
+                        "openbitfun-product-runtime-ownership-test-{}",
                         uuid::Uuid::new_v4()
                     )),
-                    "bitfun".to_string(),
+                    "openbitfun".to_string(),
                     "test",
                 ),
             ),
@@ -4518,7 +4521,7 @@ mod tests {
             .await
             .expect_err("a Runtime-owned Session still needs its history branch");
         assert!(
-            matches!(error, BitFunError::OutcomeUnknown(_)),
+            matches!(error, OpenBitFunError::OutcomeUnknown(_)),
             "unexpected error: {error}"
         );
     }

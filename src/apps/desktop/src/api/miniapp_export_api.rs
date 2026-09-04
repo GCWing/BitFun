@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use bitfun_webdriver::platform::{print_page, take_screenshot, PrintOptions};
+use openbitfun_webdriver::platform::{print_page, take_screenshot, PrintOptions};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;

@@ -42,7 +42,7 @@ describe('L1 Git Panel', () => {
       await browser.pause(500);
 
       const selectors = [
-        '.bitfun-git-scene',
+        '.openbitfun-git-scene',
         '[class*="git-scene"]',
         '[class*="GitScene"]',
         '[data-testid="git-panel"]',
@@ -73,9 +73,9 @@ describe('L1 Git Panel', () => {
         return;
       }
 
-      const notRepo = await $('.bitfun-git-scene--not-repository');
-      const isLoading = await $('.bitfun-git-scene--loading');
-      const isRepo = await $('.bitfun-git-scene-working-copy');
+      const notRepo = await $('.openbitfun-git-scene--not-repository');
+      const isLoading = await $('.openbitfun-git-scene--loading');
+      const isRepo = await $('.openbitfun-git-scene-working-copy');
 
       const notRepoExists = await notRepo.isExisting();
       const loadingExists = await isLoading.isExisting();
@@ -100,7 +100,7 @@ describe('L1 Git Panel', () => {
         return;
       }
 
-      const branchElement = await $('.bitfun-git-scene-working-copy__branch');
+      const branchElement = await $('.openbitfun-git-scene-working-copy__branch');
       const exists = await branchElement.isExisting();
 
       if (exists) {

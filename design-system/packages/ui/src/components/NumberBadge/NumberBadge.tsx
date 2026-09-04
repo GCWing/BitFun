@@ -16,10 +16,10 @@ export const NumberBadge = forwardRef<HTMLSpanElement, NumberBadgeProps>(functio
     <span
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="number-badge"
+      data-openbitfun-component="number-badge"
       ref={ref}
     >
-      <span className={styles.value} data-bf-part="value">{value}</span>
+      <span className={styles.value} data-openbitfun-part="value">{value}</span>
     </span>
   );
 });

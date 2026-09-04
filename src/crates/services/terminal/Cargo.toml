@@ -10,7 +10,7 @@ name = "terminal_core"
 path = "src/lib.rs"
 
 [dependencies]
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["terminal-port"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["terminal-port"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }

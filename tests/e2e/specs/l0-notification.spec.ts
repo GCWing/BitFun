@@ -62,7 +62,7 @@ describe('L0 Notification', () => {
       console.log('[L0] Notification menu item visible:', btnVisible);
       expect(btnVisible).toBe(true);
 
-      const backdrop = await $('.bitfun-nav-panel__footer-backdrop');
+      const backdrop = await $('.openbitfun-nav-panel__footer-backdrop');
       await backdrop.click();
       await backdrop.waitForExist({ reverse: true, timeout: 2000 });
     });

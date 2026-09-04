@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::thread_goal::{
+use openbitfun_agent_runtime::thread_goal::{
     billable_tokens_from_counts, build_objective_updated_plan, build_set_thread_goal_result,
     build_thread_goal_continuation_plan, clear_thread_goal_patch,
     goal_continuation_submit_retry_delay_ms, goal_tool_response, is_usage_limit_message,
@@ -7,7 +7,7 @@ use bitfun_agent_runtime::thread_goal::{
     thread_goal_patch, thread_goal_status_is_resumable, SetThreadGoalRequest,
     ThreadGoalContinuationFacts, ThreadGoalRuntime, ThreadGoalTokenUsageFacts,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     ThreadGoal, ThreadGoalStatus, MAX_GOAL_CONTINUATIONS, MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
     THREAD_GOAL_METADATA_KEY,
 };

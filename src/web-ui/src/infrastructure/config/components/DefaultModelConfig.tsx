@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Layers } from 'lucide-react';
-import { Combobox } from '@bitfun/ui';
-import { Spinner } from '@bitfun/ui';
+import { Combobox } from '@openbitfun/ui';
+import { Spinner } from '@openbitfun/ui';
 import { notificationService } from '@/shared/notification-system';
 import { configManager } from '../services/ConfigManager';
 import type {
@@ -12,6 +12,10 @@ import type {
 import { ConfigPageRow } from './common';
 import { createLogger } from '@/shared/utils/logger';
 import { useModelSelectPresentation } from './ModelSelectPresentation';
+import {
+  filterSelectableTextChatModels,
+  isSelectableModelForCapability,
+} from '../services/modelCategory';
 import './DefaultModelConfig.scss';
 
 const log = createLogger('DefaultModelConfig');
@@ -146,19 +150,19 @@ export const DefaultModelConfig: React.FC = () => {
   };
 
   
-  const enabledModels = models.filter(m => m.enabled);
-  const imageUnderstandingModels = enabledModels.filter(model => {
-    const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
-    return model.category === 'multimodal' || capabilities.includes('image_understanding');
-  });
-  const speechRecognitionModels = enabledModels.filter(model => {
-    const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
-    return model.category === 'speech_recognition' || capabilities.includes('speech_recognition');
-  });
+  // Keep the primary/fast slots aligned with the ChatInput selector: enabled
+  // non-chat models must never become a text-generation default by accident.
+  const enabledModels = filterSelectableTextChatModels(models);
+  const imageUnderstandingModels = models.filter(model => (
+    isSelectableModelForCapability(model, 'image_understanding')
+  ));
+  const speechRecognitionModels = models.filter(model => (
+    isSelectableModelForCapability(model, 'speech_recognition')
+  ));
 
   if (loading) {
     return (
-      <div className="default-model-config__loading" data-bf-component="default-model-config" data-bf-part="loading" data-bf-state="loading">
+      <div className="default-model-config__loading" data-openbitfun-component="default-model-config" data-openbitfun-part="loading" data-openbitfun-state="loading">
         <Spinner size="sm" />
         <p>{t('loading')}</p>
       </div>
@@ -167,7 +171,7 @@ export const DefaultModelConfig: React.FC = () => {
 
   if (models.length === 0) {
     return (
-      <div className="default-model-config__empty" data-bf-component="default-model-config" data-bf-part="empty" data-bf-state="empty">
+      <div className="default-model-config__empty" data-openbitfun-component="default-model-config" data-openbitfun-part="empty" data-openbitfun-state="empty">
         <Layers size={48} />
         <p>{t('empty.noModels')}</p>
       </div>
@@ -175,7 +179,7 @@ export const DefaultModelConfig: React.FC = () => {
   }
 
   return (
-    <div className="default-model-config" data-bf-component="default-model-config" data-bf-part="root">
+    <div className="default-model-config" data-openbitfun-component="default-model-config" data-openbitfun-part="root">
       <ConfigPageRow
         label={t('core.primary.label')}
         description={t('core.primary.description')}
@@ -184,8 +188,8 @@ export const DefaultModelConfig: React.FC = () => {
       >
         <Combobox
           aria-required="true"
-          data-bf-component="default-model-config"
-          data-bf-part="primaryModel"
+          data-openbitfun-component="default-model-config"
+          data-openbitfun-part="primaryModel"
           value={defaultModels.primary || ''}
           onValueChange={(value) => handleDefaultModelChange('primary', normalizeSelectValue(value))}
           placeholder={t('core.primary.placeholder')}
@@ -201,8 +205,8 @@ export const DefaultModelConfig: React.FC = () => {
         align="center"
       >
         <Combobox
-          data-bf-component="default-model-config"
-          data-bf-part="lightweightModel"
+          data-openbitfun-component="default-model-config"
+          data-openbitfun-part="lightweightModel"
           value={defaultModels.fast || ''}
           onValueChange={(value) => handleDefaultModelChange('fast', normalizeSelectValue(value))}
           placeholder={t('core.fast.placeholder')}
@@ -220,8 +224,8 @@ export const DefaultModelConfig: React.FC = () => {
         align="center"
       >
         <Combobox
-          data-bf-component="default-model-config"
-          data-bf-part="embeddingModel"
+          data-openbitfun-component="default-model-config"
+          data-openbitfun-part="embeddingModel"
           value={defaultModels.image_understanding || ''}
           onValueChange={(value) => handleDefaultModelChange('image_understanding', normalizeSelectValue(value))}
           placeholder={t('optional.selectModel')}

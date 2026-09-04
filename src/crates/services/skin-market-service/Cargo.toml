@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-skin-market-service"
+name = "openbitfun-skin-market-service"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun appearance marketplace service"
+description = "OpenBitFun appearance marketplace service"
 
 [lib]
-name = "bitfun_skin_market_service"
+name = "openbitfun_skin_market_service"
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["appearance-market"] }
-bitfun-services-core = { path = "../services-core", features = ["tls-provider"] }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["appearance-market"] }
+openbitfun-services-core = { path = "../services-core", features = ["tls-provider"] }
 chrono = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }

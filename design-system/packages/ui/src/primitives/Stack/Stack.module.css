@@ -1,4 +1,4 @@
-@layer bf.base {
+@layer openbitfun.base {
   .stack {
     display: flex;
     min-inline-size: 0;

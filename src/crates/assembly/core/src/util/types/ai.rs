@@ -1,4 +1,4 @@
-pub use bitfun_core_types::{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo};
+pub use openbitfun_core_types::{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo};
 
 #[cfg(feature = "ai-adapter-runtime")]
-pub use bitfun_ai_adapters::types::{GeminiResponse, GeminiUsage};
+pub use openbitfun_ai_adapters::types::{GeminiResponse, GeminiUsage};

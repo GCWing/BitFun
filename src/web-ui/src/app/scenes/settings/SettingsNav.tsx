@@ -17,7 +17,7 @@ import {
   NavigationPanelItem,
   NavigationPanelSection,
   SearchField,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSettingsDraftSnapshot } from '@/infrastructure/config/settingsDraftRegistry';
 import { getInteractionMotion } from '@/shared/utils/motionPreference';
@@ -109,9 +109,9 @@ function highlightFirstMatch(text: string, query: string): React.ReactNode {
     <>
       {text.slice(0, index)}
       <mark
-        className="bitfun-settings-nav__search-highlight"
-        data-bf-component="settings-nav"
-        data-bf-part="highlight"
+        className="openbitfun-settings-nav__search-highlight"
+        data-openbitfun-component="settings-nav"
+        data-openbitfun-part="highlight"
       >
         {text.slice(index, index + needle.length)}
       </mark>
@@ -153,9 +153,9 @@ const SettingsNav: React.FC = () => {
   const dirtyMarker = useCallback((pageId: SettingsPageId) => (
     dirtyPageIds.has(pageId) ? (
       <span
-        className="bitfun-settings-nav__dirty-marker"
-        data-bf-component="settings-nav"
-        data-bf-part="dirtyMarker"
+        className="openbitfun-settings-nav__dirty-marker"
+        data-openbitfun-component="settings-nav"
+        data-openbitfun-part="dirtyMarker"
         title={t('changeGuard.unsavedPage')}
         aria-label={t('changeGuard.unsavedPage')}
       />
@@ -231,20 +231,20 @@ const SettingsNav: React.FC = () => {
 
   return (
     <NavigationPanel
-      className="bitfun-settings-nav"
+      className="openbitfun-settings-nav"
       data-testid="settings-nav"
-      data-bf-component="settings-nav"
-      data-bf-part="root"
+      data-openbitfun-component="settings-nav"
+      data-openbitfun-part="root"
     >
-      <NavigationPanelHeader className="bitfun-settings-nav__panel-header">
+      <NavigationPanelHeader className="openbitfun-settings-nav__panel-header">
         <>
-          <div className="bitfun-settings-nav__header" data-bf-component="settings-nav" data-bf-part="header">
-            <span className="bitfun-settings-nav__title">{t('shared:features.settings')}</span>
+          <div className="openbitfun-settings-nav__header" data-openbitfun-component="settings-nav" data-openbitfun-part="header">
+            <span className="openbitfun-settings-nav__title">{t('shared:features.settings')}</span>
           </div>
-          <div className="bitfun-settings-nav__search" data-bf-component="settings-nav" data-bf-part="search">
+          <div className="openbitfun-settings-nav__search" data-openbitfun-component="settings-nav" data-openbitfun-part="search">
             <SearchField
               ref={searchInputRef}
-              className="bitfun-settings-nav__search-field"
+              className="openbitfun-settings-nav__search-field"
               size="sm"
               value={draftQuery}
               onValueChange={setDraftQuery}
@@ -264,15 +264,15 @@ const SettingsNav: React.FC = () => {
         </>
       </NavigationPanelHeader>
       <NavigationPanelBody>
-        <NavigationPanelContent className="bitfun-settings-nav__content">
+        <NavigationPanelContent className="openbitfun-settings-nav__content">
           {isSearchMode ? (
         results.length ? (
           <div
             ref={resultsRef}
             id="settings-nav-results"
-            className="bitfun-settings-nav__search-results"
-            data-bf-component="settings-nav"
-            data-bf-part="searchResults"
+            className="openbitfun-settings-nav__search-results"
+            data-openbitfun-component="settings-nav"
+            data-openbitfun-part="searchResults"
             role="listbox"
             tabIndex={results.length ? 0 : undefined}
             onKeyDown={handleResultsKeyDown}
@@ -292,11 +292,11 @@ const SettingsNav: React.FC = () => {
                   role="option"
                   aria-selected={active}
                   selected={active}
-                  data-bf-component="settings-nav"
-                  data-bf-part="searchResult"
-                  data-bf-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
+                  data-openbitfun-component="settings-nav"
+                  data-openbitfun-part="searchResult"
+                  data-openbitfun-state={[active && 'active', selected && 'selected'].filter(Boolean).join(' ') || undefined}
                   className={[
-                    'bitfun-settings-nav__search-result-item',
+                    'openbitfun-settings-nav__search-result-item',
                     selected && 'is-highlighted',
                     active && 'is-active',
                   ].filter(Boolean).join(' ')}
@@ -307,11 +307,11 @@ const SettingsNav: React.FC = () => {
                   }}
                   onFocus={() => preload(row.destination.pageId)}
                 >
-                  <span className="bitfun-settings-nav__search-result-copy">
-                    <span className="bitfun-settings-nav__search-result-line">
+                  <span className="openbitfun-settings-nav__search-result-copy">
+                    <span className="openbitfun-settings-nav__search-result-line">
                       {highlightFirstMatch(path, searchQuery)}
                     </span>
-                    <span className="bitfun-settings-nav__search-result-desc">
+                    <span className="openbitfun-settings-nav__search-result-desc">
                       {highlightFirstMatch(row.description, searchQuery)}
                     </span>
                   </span>
@@ -321,42 +321,42 @@ const SettingsNav: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="bitfun-settings-nav__search-empty" role="status" data-bf-component="settings-nav" data-bf-part="searchEmpty">
+          <div className="openbitfun-settings-nav__search-empty" role="status" data-openbitfun-component="settings-nav" data-openbitfun-part="searchEmpty">
             {t('navigation.search.empty')}
           </div>
         )
       ) : SETTINGS_CATEGORIES.map((category) => (
         <NavigationPanelSection
           key={category.id}
-          className="bitfun-settings-nav__category"
-          data-bf-component="settings-nav"
-          data-bf-part="category"
+          className="openbitfun-settings-nav__category"
+          data-openbitfun-component="settings-nav"
+          data-openbitfun-part="category"
           title={(
             <span
-              className="bitfun-settings-nav__category-label"
-              data-bf-component="settings-nav"
-              data-bf-part="categoryHeader"
+              className="openbitfun-settings-nav__category-label"
+              data-openbitfun-component="settings-nav"
+              data-openbitfun-part="categoryHeader"
             >
               {t(category.labelKey)}
             </span>
           )}
         >
-          <div className="bitfun-settings-nav__items" data-bf-component="settings-nav" data-bf-part="items">
+          <div className="openbitfun-settings-nav__items" data-openbitfun-component="settings-nav" data-openbitfun-part="items">
           {category.pages.map((page) => (
             <NavigationPanelItem
               key={page.id}
               data-testid="settings-nav-page"
               data-settings-page={page.id}
-              data-bf-component="settings-nav"
-              data-bf-part="item"
-              data-bf-state={activePageId === page.id ? 'active' : undefined}
-              className="bitfun-settings-nav__item"
+              data-openbitfun-component="settings-nav"
+              data-openbitfun-part="item"
+              data-openbitfun-state={activePageId === page.id ? 'active' : undefined}
+              className="openbitfun-settings-nav__item"
               selected={activePageId === page.id}
               onClick={() => activate({ pageId: page.id })}
               onPointerEnter={() => preload(page.id)}
               onFocus={() => preload(page.id)}
             >
-              <span className="bitfun-settings-nav__item-label">{t(page.labelKey)}</span>
+              <span className="openbitfun-settings-nav__item-label">{t(page.labelKey)}</span>
               {dirtyMarker(page.id)}
             </NavigationPanelItem>
           ))}

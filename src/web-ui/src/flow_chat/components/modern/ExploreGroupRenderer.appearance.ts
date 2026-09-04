@@ -5,5 +5,5 @@ export const exploreGroupAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root' }, { id: 'header' }, { id: 'summary' },
     { id: 'contentWrapper' }, { id: 'content' }, { id: 'item' },
   ],
-  states: [{ id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } }],
+  states: [{ id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } }],
 };

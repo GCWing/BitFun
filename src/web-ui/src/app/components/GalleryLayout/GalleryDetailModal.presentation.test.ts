@@ -15,7 +15,7 @@ describe('GalleryDetailModal presentation contract', () => {
     expect(source).toContain("titlePlacement = 'header'");
     expect(source).toContain('aria-labelledby={usesHeroTitle ? heroTitleId : undefined}');
     expect(source).toContain('<DialogTitle data-testid={titleTestId}>{title}</DialogTitle>');
-    expect(source).toContain('data-bf-part="title"');
+    expect(source).toContain('data-openbitfun-part="title"');
     expect(appearance).toContain("{ id: 'title' }");
   });
 

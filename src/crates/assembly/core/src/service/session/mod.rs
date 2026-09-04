@@ -1,10 +1,10 @@
 //! Session persistence service
 
-pub use bitfun_services_core::session::types;
-pub use bitfun_services_core::session::*;
+pub use openbitfun_services_core::session::types;
+pub use openbitfun_services_core::session::*;
 
 pub fn effective_tool_identity(item: &ToolItemData) -> (&str, &serde_json::Value) {
-    bitfun_agent_tools::effective_tool_invocation(&item.tool_name, &item.tool_call.input)
+    openbitfun_agent_tools::effective_tool_invocation(&item.tool_name, &item.tool_call.input)
 }
 
 pub trait ToolItemIdentityExt {

@@ -16,7 +16,7 @@ export const modelSelectorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'optionMain' },
   ],
   states: [
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
   ],
 };

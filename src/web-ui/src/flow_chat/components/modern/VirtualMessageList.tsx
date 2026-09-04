@@ -231,8 +231,8 @@ const FlowChatListHeader = forwardRef<HTMLDivElement, {
   <div ref={ref} className="message-list-header-block">
     <div
       className="message-list-header"
-      data-bf-component="virtual-message-list"
-      data-bf-part="header"
+      data-openbitfun-component="virtual-message-list"
+      data-openbitfun-part="header"
       style={{
         height: `${FLOWCHAT_TURN_TOP_GAP_PX}px`,
         minHeight: `${FLOWCHAT_TURN_TOP_GAP_PX}px`,
@@ -257,8 +257,8 @@ const FlowChatListFooter = ({
   <>
     <div
       className="message-list-footer"
-      data-bf-component="virtual-message-list"
-      data-bf-part="footer"
+      data-openbitfun-component="virtual-message-list"
+      data-openbitfun-part="footer"
       style={{
         height: `${bottomLayoutInsetPx}px`,
         minHeight: `${bottomLayoutInsetPx}px`,
@@ -274,8 +274,8 @@ const FlowChatListFooter = ({
     */}
     <div
       className="message-list-tail-spacer"
-      data-bf-component="virtual-message-list"
-      data-bf-part="tailSpacer"
+      data-openbitfun-component="virtual-message-list"
+      data-openbitfun-part="tailSpacer"
       aria-hidden="true"
       style={{
         height: `${tailSpacerPx}px`,
@@ -294,9 +294,9 @@ const FlowChatHistoryPagingSentinel = ({
 }) => (
   <div
     className="virtual-message-list__history-paging-sentinel"
-    data-bf-component="virtual-message-list"
-    data-bf-part="boundaryStatus"
-    data-bf-state={state === 'loading' ? 'preparing' : state === 'error' ? 'unavailable' : undefined}
+    data-openbitfun-component="virtual-message-list"
+    data-openbitfun-part="boundaryStatus"
+    data-openbitfun-state={state === 'loading' ? 'preparing' : state === 'error' ? 'unavailable' : undefined}
     data-history-paging-sentinel={state}
     data-history-boundary-status={state === 'loading' ? 'preparing' : state === 'error' ? 'not-ready' : undefined}
     aria-hidden={state === 'idle'}
@@ -2509,14 +2509,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   if (virtualItems.length === 0) {
     return (
       <div
-        data-bf-component="virtual-message-list"
-        data-bf-part="root"
-        data-bf-state="empty"
+        data-openbitfun-component="virtual-message-list"
+        data-openbitfun-part="root"
+        data-openbitfun-state="empty"
         className="virtual-message-list virtual-message-list--empty"
         data-testid="flowchat-message-list-empty"
       >
-        <div className="empty-state" data-bf-component="virtual-message-list" data-bf-part="empty">
-          <p data-bf-component="virtual-message-list" data-bf-part="emptyMessage">No messages yet</p>
+        <div className="empty-state" data-openbitfun-component="virtual-message-list" data-openbitfun-part="empty">
+          <p data-openbitfun-component="virtual-message-list" data-openbitfun-part="emptyMessage">No messages yet</p>
         </div>
       </div>
     );
@@ -2524,8 +2524,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   return (
     <div
-      data-bf-component="virtual-message-list"
-      data-bf-part="root"
+      data-openbitfun-component="virtual-message-list"
+      data-openbitfun-part="root"
       className="virtual-message-list"
       data-testid="flowchat-message-list"
       data-presentation-mode={presentationMode}
@@ -2553,8 +2553,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         */}
         <div
           className="virtual-message-list__items"
-          data-bf-component="virtual-message-list"
-          data-bf-part="items"
+          data-openbitfun-component="virtual-message-list"
+          data-openbitfun-part="items"
           data-testid="flowchat-item-list"
           style={{
             paddingTop: `${virtualizer.paddingTopPx}px`,

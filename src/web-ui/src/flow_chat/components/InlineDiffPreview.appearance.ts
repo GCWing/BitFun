@@ -7,6 +7,6 @@ export const inlineDiffPreviewAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'line' }, { id: 'gutter' }, { id: 'prefix' }, { id: 'lineContent' },
   ],
   states: [
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
   ],
 };

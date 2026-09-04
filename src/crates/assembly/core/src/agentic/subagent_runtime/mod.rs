@@ -4,4 +4,4 @@
 //! Deep Review modules or define Deep Review product policy.
 
 #[allow(unused_imports)]
-pub(crate) use bitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};
+pub(crate) use openbitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};

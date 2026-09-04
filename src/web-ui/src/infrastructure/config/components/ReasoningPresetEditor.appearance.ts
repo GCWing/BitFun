@@ -20,6 +20,6 @@ export const reasoningPresetEditorAppearanceDescriptor: AppearanceSurfaceDescrip
     { id: 'actionControls' },
   ],
   states: [
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

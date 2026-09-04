@@ -1,14 +1,14 @@
-.bitfun-scene-top-bar {
+.openbitfun-scene-top-bar {
   position: relative;
   z-index: 10;
   align-items: center;
-  flex: 0 0 var(--bf-layout-toolbar-md-height);
+  flex: 0 0 var(--openbitfun-layout-toolbar-md-height);
   width: 100%;
   min-width: 0;
-  height: var(--bf-layout-toolbar-md-height);
-  min-block-size: var(--bf-layout-toolbar-md-height);
+  height: var(--openbitfun-layout-toolbar-md-height);
+  min-block-size: var(--openbitfun-layout-toolbar-md-height);
   overflow: visible;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   container-name: scene-top-bar;
   container-type: inline-size;
   user-select: none;
@@ -18,10 +18,10 @@
     &::after {
       content: '';
       position: absolute;
-      inset-block-end: calc(0px - var(--bf-border-width-default));
-      width: var(--bf-space-4);
-      height: var(--bf-border-width-default);
-      background: var(--bf-color-border-subtle);
+      inset-block-end: calc(0px - var(--openbitfun-border-width-default));
+      width: var(--openbitfun-space-4);
+      height: var(--openbitfun-border-width-default);
+      background: var(--openbitfun-color-border-subtle);
       pointer-events: none;
     }
 
@@ -40,7 +40,7 @@
     flex: 0 1 auto;
     min-width: 0;
     height: 100%;
-    margin-inline-start: var(--bf-space-2);
+    margin-inline-start: var(--openbitfun-space-2);
 
     &:empty {
       display: none;
@@ -52,13 +52,13 @@
     align-items: center;
     flex: 0 0 auto;
     height: 100%;
-    margin-inline-start: var(--bf-space-2);
+    margin-inline-start: var(--openbitfun-space-2);
   }
 }
 
 @media (forced-colors: active) {
-  .bitfun-scene-top-bar[data-bordered='true']::before,
-  .bitfun-scene-top-bar[data-bordered='true']::after {
+  .openbitfun-scene-top-bar[data-bordered='true']::before,
+  .openbitfun-scene-top-bar[data-bordered='true']::after {
     background: ButtonText;
   }
 }

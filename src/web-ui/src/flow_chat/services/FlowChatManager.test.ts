@@ -131,7 +131,7 @@ function createHistoricalSession(overrides: Record<string, unknown> = {}) {
     historyState: 'metadata-only',
     todos: [],
     mode: 'agentic',
-    workspacePath: 'D:/workspace/BitFun',
+    workspacePath: 'D:/workspace/OpenBitFun',
     sessionKind: 'normal',
     ...overrides,
   };
@@ -199,7 +199,7 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const initialize = manager.initialize('D:/workspace/BitFun');
+    const initialize = manager.initialize('D:/workspace/OpenBitFun');
 
     await flushAsyncWork();
     manager.destroy();
@@ -237,8 +237,8 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const firstInitialize = manager.initialize('D:/workspace/BitFun');
-    const secondInitialize = manager.initialize('D:/workspace/BitFun');
+    const firstInitialize = manager.initialize('D:/workspace/OpenBitFun');
+    const secondInitialize = manager.initialize('D:/workspace/OpenBitFun');
 
     await flushAsyncWork();
 
@@ -295,12 +295,12 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const initialize = manager.initialize('D:/workspace/BitFun');
+    const initialize = manager.initialize('D:/workspace/OpenBitFun');
 
     await flushAsyncWork();
     expect(storeMocks.store.loadSessionHistory).toHaveBeenCalledWith(
       'history-1',
-      'D:/workspace/BitFun',
+      'D:/workspace/OpenBitFun',
       undefined,
       undefined,
       undefined,
@@ -348,7 +348,7 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const initialize = manager.initialize('D:/workspace/BitFun');
+    const initialize = manager.initialize('D:/workspace/OpenBitFun');
 
     await flushAsyncWork();
     activeSessionId = 'other-1';
@@ -365,7 +365,7 @@ describe('FlowChatManager initialization', () => {
   });
 
   it('does not let an older workspace initialization switch after a newer workspace initialize starts', async () => {
-    const bitfunHistoryRestore = createDeferred<void>();
+    const openbitfunHistoryRestore = createDeferred<void>();
     const sessions = new Map<string, any>([
       ['history-1', createHistoricalSession()],
       ['other-1', createHistoricalSession({
@@ -385,7 +385,7 @@ describe('FlowChatManager initialization', () => {
         workspacePath: string,
       ) => ({
         sessions: [],
-        totalTopLevelCount: workspacePath === 'D:/workspace/BitFun' ? 1 : 0,
+        totalTopLevelCount: workspacePath === 'D:/workspace/OpenBitFun' ? 1 : 0,
         hasMore: false,
       })),
       getState: vi.fn(() => ({
@@ -394,7 +394,7 @@ describe('FlowChatManager initialization', () => {
       })),
       loadSessionHistory: vi.fn((sessionId: string) => {
         if (sessionId === 'history-1') {
-          return bitfunHistoryRestore.promise;
+          return openbitfunHistoryRestore.promise;
         }
         return Promise.resolve();
       }),
@@ -404,13 +404,13 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const bitfunInitialize = manager.initialize('D:/workspace/BitFun');
+    const openbitfunInitialize = manager.initialize('D:/workspace/OpenBitFun');
 
     await flushAsyncWork();
     await expect(manager.initialize('D:/workspace/Other')).resolves.toBe(true);
 
-    bitfunHistoryRestore.resolve();
-    await expect(bitfunInitialize).resolves.toBe(true);
+    openbitfunHistoryRestore.resolve();
+    await expect(openbitfunInitialize).resolves.toBe(true);
 
     expect(storeMocks.store.switchSession).toHaveBeenCalledWith('other-1');
     expect(storeMocks.store.switchSession).not.toHaveBeenCalledWith('history-1');
@@ -427,7 +427,7 @@ describe('FlowChatManager initialization', () => {
         historyState: 'ready',
         createdAt: 10,
         lastFinishedAt: 30,
-        workspacePath: 'D:/workspace/BitFun',
+        workspacePath: 'D:/workspace/OpenBitFun',
         sessionKind: 'normal',
       })],
       ['subagent-1', createHistoricalSession({
@@ -437,7 +437,7 @@ describe('FlowChatManager initialization', () => {
         historyState: 'ready',
         createdAt: 40,
         lastFinishedAt: undefined,
-        workspacePath: 'D:/workspace/BitFun',
+        workspacePath: 'D:/workspace/OpenBitFun',
         sessionKind: 'subagent',
         parentSessionId: 'parent-1',
         mode: 'Explore',
@@ -464,7 +464,7 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+    await expect(manager.initialize('D:/workspace/OpenBitFun')).resolves.toBe(true);
 
     expect(storeMocks.store.switchSession).toHaveBeenCalledTimes(1);
     expect(storeMocks.store.switchSession).toHaveBeenCalledWith('parent-1');
@@ -492,7 +492,7 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    await expect(manager.initialize('D:/workspace/BitFun')).rejects.toSatisfy(isSurfaceChangedError);
+    await expect(manager.initialize('D:/workspace/OpenBitFun')).rejects.toSatisfy(isSurfaceChangedError);
 
     expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(1);
     expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
@@ -523,12 +523,12 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    const localInitialize = manager.initialize('D:/workspace/BitFun');
+    const localInitialize = manager.initialize('D:/workspace/OpenBitFun');
     await flushAsyncWork();
     expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(1);
 
     activateSurface('device-b');
-    const peerInitialize = manager.initialize('D:/workspace/BitFun');
+    const peerInitialize = manager.initialize('D:/workspace/OpenBitFun');
     await flushAsyncWork();
     // A shared key would have handed this bootstrap the local device's request.
     expect(storeMocks.store.loadSessionMetadataPage).toHaveBeenCalledTimes(2);
@@ -571,13 +571,13 @@ describe('FlowChatManager initialization', () => {
     };
 
     const manager = FlowChatManager.getInstance();
-    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+    await expect(manager.initialize('D:/workspace/OpenBitFun')).resolves.toBe(true);
 
     // Without this the breadcrumb and turn rail render from the catalog while
     // the message area stays blank until the user clicks the session.
     expect(storeMocks.store.loadSessionHistory).toHaveBeenCalledWith(
       'active-1',
-      'D:/workspace/BitFun',
+      'D:/workspace/OpenBitFun',
       undefined,
       undefined,
       undefined,
@@ -603,7 +603,7 @@ describe('FlowChatManager initialization', () => {
     // `false` is the caller's signal to create a session against the live
     // workspace. Returning `true` here would leave the surface with no active
     // session and no new one.
-    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(false);
+    await expect(manager.initialize('D:/workspace/OpenBitFun')).resolves.toBe(false);
     expect(storeMocks.store.switchSession).not.toHaveBeenCalled();
   });
 });

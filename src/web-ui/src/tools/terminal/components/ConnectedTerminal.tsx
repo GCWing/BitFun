@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import { AlertCircle } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
@@ -448,10 +448,10 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
 
   if (isLoading) {
     return (
-      <div className={`bitfun-terminal ${className}`} data-testid="shell-command-list" data-bf-component="terminal-tool" data-bf-part="root" data-bf-state="loading">
-        <div className="bitfun-terminal__loading" data-testid="shell-command-status" data-command-status="loading" data-bf-component="terminal-tool" data-bf-part="loading">
-          <div className="bitfun-terminal__loading-spinner" />
-          <span className="bitfun-terminal__loading-text">Connecting to terminal...</span>
+      <div className={`openbitfun-terminal ${className}`} data-testid="shell-command-list" data-openbitfun-component="terminal-tool" data-openbitfun-part="root" data-openbitfun-state="loading">
+        <div className="openbitfun-terminal__loading" data-testid="shell-command-status" data-command-status="loading" data-openbitfun-component="terminal-tool" data-openbitfun-part="loading">
+          <div className="openbitfun-terminal__loading-spinner" />
+          <span className="openbitfun-terminal__loading-text">Connecting to terminal...</span>
         </div>
       </div>
     );
@@ -459,10 +459,10 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
 
   if (error) {
     return (
-      <div className={`bitfun-terminal ${className}`} data-testid="shell-command-list" data-bf-component="terminal-tool" data-bf-part="root" data-bf-state="error">
-        <div className="bitfun-terminal__error" data-testid="shell-command-status" data-command-status="error" data-bf-component="terminal-tool" data-bf-part="error">
-          <AlertCircle className="bitfun-terminal__error-icon" size={32} />
-          <span className="bitfun-terminal__error-message">{error}</span>
+      <div className={`openbitfun-terminal ${className}`} data-testid="shell-command-list" data-openbitfun-component="terminal-tool" data-openbitfun-part="root" data-openbitfun-state="error">
+        <div className="openbitfun-terminal__error" data-testid="shell-command-status" data-command-status="error" data-openbitfun-component="terminal-tool" data-openbitfun-part="error">
+          <AlertCircle className="openbitfun-terminal__error-icon" size={32} />
+          <span className="openbitfun-terminal__error-message">{error}</span>
           <Button
             variant="outline"
             size="sm"
@@ -479,36 +479,36 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
 
   return (
     <div
-      className={`bitfun-terminal ${className}`}
+      className={`openbitfun-terminal ${className}`}
       data-testid="shell-command-list"
       data-command-id={sessionId}
       data-command-status={isExited ? 'exited' : 'running'}
-      data-bf-component="terminal-tool"
-      data-bf-part="root"
-      data-bf-state={isExited ? 'exited' : 'running'}
+      data-openbitfun-component="terminal-tool"
+      data-openbitfun-part="root"
+      data-openbitfun-state={isExited ? 'exited' : 'running'}
     >
       {showToolbar && (
-        <div className="bitfun-terminal__toolbar" data-bf-component="terminal-tool" data-bf-part="toolbar">
-          <div className="bitfun-terminal__toolbar-left">
+        <div className="openbitfun-terminal__toolbar" data-openbitfun-component="terminal-tool" data-openbitfun-part="toolbar">
+          <div className="openbitfun-terminal__toolbar-left">
             <Icon name="terminal" size="sm" />
-            <span className="bitfun-terminal__toolbar-title" data-testid="shell-panel-title">
+            <span className="openbitfun-terminal__toolbar-title" data-testid="shell-panel-title">
               {title}
               {session && (
                 <span className="shell-type">({session.shellType})</span>
               )}
             </span>
           </div>
-          <div className="bitfun-terminal__toolbar-right">
+          <div className="openbitfun-terminal__toolbar-right">
             <button
-              className="bitfun-terminal__toolbar-btn"
+              className="openbitfun-terminal__toolbar-btn"
               onClick={handleSendCtrlC}
               title="Send Ctrl+C"
               data-testid="shell-command-rerun"
             >
-              <span style={{ fontSize: 'var(--bf-type-micro-font-size)', fontWeight: 'var(--bf-type-heading-page-font-weight)' }}>^C</span>
+              <span style={{ fontSize: 'var(--openbitfun-type-micro-font-size)', fontWeight: 'var(--openbitfun-type-heading-page-font-weight)' }}>^C</span>
             </button>
             <button
-              className="bitfun-terminal__toolbar-btn bitfun-terminal__toolbar-btn--danger"
+              className="openbitfun-terminal__toolbar-btn openbitfun-terminal__toolbar-btn--danger"
               onClick={handleClose}
               title="Close terminal"
               data-testid="shell-panel-close"
@@ -536,33 +536,33 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       />
 
       {showStatusBar && session && (
-        <div className={`bitfun-terminal__statusbar ${
-          isExited ? 'bitfun-terminal__statusbar--exited' : ''
+        <div className={`openbitfun-terminal__statusbar ${
+          isExited ? 'openbitfun-terminal__statusbar--exited' : ''
         } ${
-          error ? 'bitfun-terminal__statusbar--error' : ''
-        }`} data-bf-component="terminal-tool" data-bf-part="statusBar">
-          <div className="bitfun-terminal__statusbar-left">
+          error ? 'openbitfun-terminal__statusbar--error' : ''
+        }`} data-openbitfun-component="terminal-tool" data-openbitfun-part="statusBar">
+          <div className="openbitfun-terminal__statusbar-left">
             <span
-              className="bitfun-terminal__statusbar-item"
+              className="openbitfun-terminal__statusbar-item"
               data-testid="shell-command-status"
               data-command-status={isExited ? 'exited' : 'running'}
             >
               {session.shellType}
             </span>
-            <span className="bitfun-terminal__statusbar-item">
+            <span className="openbitfun-terminal__statusbar-item">
               PID: {session.pid || '-'}
             </span>
-            <span className="bitfun-terminal__statusbar-item">
+            <span className="openbitfun-terminal__statusbar-item">
               {session.cwd}
             </span>
           </div>
-          <div className="bitfun-terminal__statusbar-right">
-            <span className="bitfun-terminal__statusbar-item">
+          <div className="openbitfun-terminal__statusbar-right">
+            <span className="openbitfun-terminal__statusbar-item">
               {session.cols}×{session.rows}
             </span>
             {isExited && exitCode !== null && (
               <span
-                className="bitfun-terminal__statusbar-item"
+                className="openbitfun-terminal__statusbar-item"
                 data-testid="shell-command-exit-code"
                 data-exit-code={exitCode}
                 data-status={exitCode === 0 ? 'success' : 'failed'}

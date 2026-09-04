@@ -1,0 +1,66 @@
+[package]
+name = "openbitfun-installer"
+version = "1.0.0"
+authors = ["OpenBitFun Team"]
+edition = "2021"
+description = "OpenBitFun Custom Installer - Modern branded installation experience"
+
+[lib]
+name = "openbitfun_installer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "openbitfun-installer"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+zip = "0.6"
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-dialog = "=2.7.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+anyhow = "1.0"
+log = "0.4"
+dirs = "5.0"
+zip = "0.6"
+chrono = "0.4"
+openbitfun-core-types = { path = "../../src/crates/contracts/core-types" }
+openbitfun-ai-adapters = { path = "../../src/crates/adapters/ai-adapters" }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+mslnk = "0.1"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.release-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
+incremental = true

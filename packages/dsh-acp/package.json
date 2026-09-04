@@ -1,5 +1,5 @@
 {
-  "name": "@bitfun/dsh-acp",
+  "name": "@openbitfun/dsh-acp",
   "version": "0.0.1",
   "private": true,
   "description": "IDE-oriented Agent Client Protocol server for DeepSeek Harness: publishes tool calls, reasoning, and plans that the automation-only @deepseek-ai/dsh-acp deliberately withholds",

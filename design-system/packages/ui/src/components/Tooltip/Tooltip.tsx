@@ -395,10 +395,10 @@ export function Tooltip({
           id={tooltipId}
           role="tooltip"
           className={classNames(styles.root, className)}
-          data-bf-component="tooltip"
-          data-bf-placement={layout.placement}
-          data-bf-interactive={interactive ? "true" : "false"}
-          data-bf-state={isShown ? "visible" : undefined}
+          data-openbitfun-component="tooltip"
+          data-openbitfun-placement={layout.placement}
+          data-openbitfun-interactive={interactive ? "true" : "false"}
+          data-openbitfun-state={isShown ? "visible" : undefined}
           data-instant={instantRef.current || undefined}
           onMouseEnter={interactive ? () => {
             if (hideTimeoutRef.current) {
@@ -413,10 +413,10 @@ export function Tooltip({
           }}
         >
           {!followCursor && (
-            <div className={styles.arrow} data-bf-part="arrow" aria-hidden="true" />
+            <div className={styles.arrow} data-openbitfun-part="arrow" aria-hidden="true" />
           )}
-          <div className={styles.content} data-bf-part="content">
-            <div className={styles.body} data-bf-part="body">{content}</div>
+          <div className={styles.content} data-openbitfun-part="content">
+            <div className={styles.body} data-openbitfun-part="body">{content}</div>
           </div>
         </div>
         </Portal>

@@ -12,8 +12,8 @@ export const gitToolAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'createBranchDialog' },
   ],
   states: [
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
   ],
 };

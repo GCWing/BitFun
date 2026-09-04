@@ -1,6 +1,6 @@
 {
-  "name": "bitfun-miniapp-market-web",
-  "version": "0.2.19",
+  "name": "openbitfun-miniapp-market-web",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@bitfun/theme-bitfun": "workspace:^",
+    "@openbitfun/theme-openbitfun": "workspace:^",
     "@phosphor-icons/react": "^2.1.10",
     "lucide-react": "^0.541.0",
     "react": "^18.3.1",

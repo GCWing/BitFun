@@ -2,12 +2,12 @@
 
 Scope: this guide applies to `src/crates/execution/tool-contracts`.
 
-`bitfun-agent-tools` owns portable tool contracts. It must stay independent of
+`openbitfun-agent-tools` owns portable tool contracts. It must stay independent of
 the product tool runtime.
 
 ## Guardrails
 
-- Do not depend on `bitfun-core`, concrete service crates,
+- Do not depend on `openbitfun-core`, concrete service crates,
   `tool-provider-groups`, app crates, Tauri, Git, MCP, network clients, or CLI
   UI dependencies.
 - This crate may own provider-neutral tool DTOs, validation/restriction facts,
@@ -29,7 +29,7 @@ the product tool runtime.
   provider-neutral contracts.
 - MCP transport/client lifecycle and protocol result-content rendering stay in
   `services-integrations`; this crate owns only the model/tool bridge contract.
-- ACP protocol/client lifecycle stays in `bitfun-acp`; this crate owns only the
+- ACP protocol/client lifecycle stays in `openbitfun-acp`; this crate owns only the
   external-agent tool bridge contract.
 - Keep `default = []`. ACP and MCP bridges, Computer Use contracts, and element
   tokens are independent capability slices; do not combine them into a
@@ -38,11 +38,11 @@ the product tool runtime.
 ## Verification
 
 ```bash
-cargo test --locked -p bitfun-agent-tools --no-default-features
-cargo test --locked -p bitfun-agent-tools --no-default-features --test tool_contracts file_read_freshness_
-cargo test --locked -p bitfun-agent-tools --no-default-features --features acp-bridge --test tool_contracts acp_external_agent_bridge_preserves_tool_contract
-cargo test --locked -p bitfun-agent-tools --no-default-features --features mcp-bridge --test tool_contracts mcp_tool_bridge
-cargo test --locked -p bitfun-agent-tools --no-default-features --features computer-use-contract --lib computer_use::
-cargo test --locked -p bitfun-agent-tools --no-default-features --features element-token --lib element_token::
+cargo test --locked -p openbitfun-agent-tools --no-default-features
+cargo test --locked -p openbitfun-agent-tools --no-default-features --test tool_contracts file_read_freshness_
+cargo test --locked -p openbitfun-agent-tools --no-default-features --features acp-bridge --test tool_contracts acp_external_agent_bridge_preserves_tool_contract
+cargo test --locked -p openbitfun-agent-tools --no-default-features --features mcp-bridge --test tool_contracts mcp_tool_bridge
+cargo test --locked -p openbitfun-agent-tools --no-default-features --features computer-use-contract --lib computer_use::
+cargo test --locked -p openbitfun-agent-tools --no-default-features --features element-token --lib element_token::
 node scripts/check-core-boundaries.mjs
 ```

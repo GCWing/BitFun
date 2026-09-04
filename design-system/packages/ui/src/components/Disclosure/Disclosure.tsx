@@ -39,8 +39,8 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
     ...props
   }, ref) {
     const generatedId = useId();
-    const triggerId = `bf-disclosure-${generatedId}-trigger`;
-    const contentId = `bf-disclosure-${generatedId}-content`;
+    const triggerId = `openbitfun-disclosure-${generatedId}-trigger`;
+    const contentId = `openbitfun-disclosure-${generatedId}-content`;
     const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
     const resolvedOpen = open ?? uncontrolledOpen;
     const inertContentAttributes: InertContentAttributes = resolvedOpen ? {} : { inert: "" };
@@ -56,12 +56,12 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
       <section
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component="disclosure"
+        data-openbitfun-component="disclosure"
         data-disabled={disabled ? "true" : "false"}
         data-open={resolvedOpen ? "true" : "false"}
         ref={ref}
       >
-        <div className={styles.header} data-bf-part="header">
+        <div className={styles.header} data-openbitfun-part="header">
           <button
             aria-controls={contentId}
             aria-expanded={resolvedOpen}
@@ -71,25 +71,25 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
             onClick={toggle}
             type="button"
           >
-            <span aria-hidden="true" className={styles.indicator} data-bf-part="indicator">
+            <span aria-hidden="true" className={styles.indicator} data-openbitfun-part="indicator">
               <Icon name="chevron-right" size="sm" />
             </span>
             {leading !== undefined && leading !== null && (
-              <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+              <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
                 {leading}
               </span>
             )}
-            <span className={styles.heading} data-bf-part="heading">
-              <span className={styles.summary} data-bf-part="summary">{summary}</span>
+            <span className={styles.heading} data-openbitfun-part="heading">
+              <span className={styles.summary} data-openbitfun-part="summary">{summary}</span>
               {description !== undefined && description !== null && (
-                <span className={styles.description} data-bf-part="description">
+                <span className={styles.description} data-openbitfun-part="description">
                   {description}
                 </span>
               )}
             </span>
           </button>
           {actions !== undefined && actions !== null && (
-            <span className={styles.actions} data-bf-part="actions">{actions}</span>
+            <span className={styles.actions} data-openbitfun-part="actions">{actions}</span>
           )}
         </div>
         <div
@@ -97,11 +97,11 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
           aria-hidden={!resolvedOpen}
           aria-labelledby={triggerId}
           className={styles.content}
-          data-bf-part="content"
+          data-openbitfun-part="content"
           id={contentId}
           role="region"
         >
-          <div className={styles.contentInner} data-bf-part="content-inner">
+          <div className={styles.contentInner} data-openbitfun-part="content-inner">
             {children}
           </div>
         </div>

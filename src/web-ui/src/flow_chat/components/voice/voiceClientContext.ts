@@ -89,7 +89,7 @@ export function buildVoiceClientContext(
   const sceneState = useSceneStore.getState();
   const activeWorkspace = workspaceState.currentWorkspace;
   return {
-    scope: 'bitfun_client',
+    scope: 'openbitfun_client',
     captured_at: new Date().toISOString(),
     // Keep immutable call routing near the front of the bounded snapshot so it
     // remains prominent even when the client has many open workspaces/sessions.
@@ -174,7 +174,7 @@ export function resolveOpenedVoiceWorkspace(
   if (!workspaceReference?.trim()) {
     const activeWorkspace = workspaceManager.getState().currentWorkspace;
     if (!activeWorkspace) {
-      throw new Error('No BitFun workspace is currently open');
+      throw new Error('No OpenBitFun workspace is currently open');
     }
     if (activeWorkspace.workspaceKind === WorkspaceKind.Assistant) {
       const projectWorkspace = Array.from(

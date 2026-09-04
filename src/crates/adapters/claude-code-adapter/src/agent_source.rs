@@ -1,9 +1,9 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, SourceKey,
 };
-use bitfun_product_domains::external_subagents::{
+use openbitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
@@ -12,8 +12,8 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
-use bitfun_services_core::markdown::FrontMatterMarkdown;
-use bitfun_static_hook_support::{
+use openbitfun_services_core::markdown::FrontMatterMarkdown;
+use openbitfun_static_hook_support::{
     collect_bounded_regular_files, common_external_subagent_tool_capability, read_bounded_text,
     BoundedDirectoryWalkError, BoundedDirectoryWalkLimits, BoundedTextRead,
 };

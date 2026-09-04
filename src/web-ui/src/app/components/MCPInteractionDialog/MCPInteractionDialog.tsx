@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -154,10 +154,10 @@ export const MCPInteractionDialog: React.FC = () => {
       {currentRequest && (
         <div
           className="mcp-interaction-dialog"
-          data-bf-component="mcp-interaction-dialog"
-          data-bf-part="root"
+          data-openbitfun-component="mcp-interaction-dialog"
+          data-openbitfun-part="root"
         >
-          <div className="mcp-interaction-dialog__meta" data-bf-component="mcp-interaction-dialog" data-bf-part="meta">
+          <div className="mcp-interaction-dialog__meta" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="meta">
             <span className="mcp-interaction-dialog__server">
               Server: {currentRequest.serverName || currentRequest.serverId}
             </span>
@@ -166,21 +166,21 @@ export const MCPInteractionDialog: React.FC = () => {
             )}
           </div>
 
-          <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
-            <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Request Params</div>
-            <ScrollArea className="mcp-interaction-dialog__params" data-bf-component="mcp-interaction-dialog" data-bf-part="params">
+          <div className="mcp-interaction-dialog__section" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="section">
+            <div className="mcp-interaction-dialog__label" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="label">Request Params</div>
+            <ScrollArea className="mcp-interaction-dialog__params" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="params">
               <pre>{paramsPreview}</pre>
             </ScrollArea>
           </div>
 
-          <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
-            <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Response JSON</div>
+          <div className="mcp-interaction-dialog__section" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="section">
+            <div className="mcp-interaction-dialog__label" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="label">Response JSON</div>
             <Textarea
               className="mcp-interaction-dialog__editor-field"
               font="mono"
               rows={8}
-              data-bf-component="mcp-interaction-dialog"
-              data-bf-part="editor"
+              data-openbitfun-component="mcp-interaction-dialog"
+              data-openbitfun-part="editor"
               value={editorValue}
               onValueChange={setEditorValue}
               placeholder="{}"
@@ -188,7 +188,7 @@ export const MCPInteractionDialog: React.FC = () => {
             />
           </div>
 
-          <div className="mcp-interaction-dialog__actions" data-bf-component="mcp-interaction-dialog" data-bf-part="actions">
+          <div className="mcp-interaction-dialog__actions" data-openbitfun-component="mcp-interaction-dialog" data-openbitfun-part="actions">
             <Button
               variant="outline"
               size="sm"

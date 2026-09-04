@@ -1,4 +1,4 @@
-use bitfun_product_domains::canvas::types::CanvasSource;
+use openbitfun_product_domains::canvas::types::CanvasSource;
 
 const CANVAS_RUNTIME_STYLE: &str = include_str!("runtime_style.css");
 const CANVAS_RUNTIME_BOOTSTRAP: &str = include_str!("runtime_bootstrap.js");
@@ -14,7 +14,7 @@ pub fn compile_canvas_html(source: &CanvasSource, component_js: &str) -> String 
   <style>{style}</style>
 </head>
 <body>
-  <div id="bitfun-canvas-root"></div>
+  <div id="openbitfun-canvas-root"></div>
   <script>
 {runtime}
   </script>

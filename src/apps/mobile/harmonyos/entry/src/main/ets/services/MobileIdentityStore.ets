@@ -3,7 +3,7 @@ import { Encoding } from './Encoding';
 import { OhosError } from './OhosError';
 import { RemoteModelPreferenceStore } from './RemoteModelController';
 
-const STORE_NAME = 'bitfun_remote_identity';
+const STORE_NAME = 'openbitfun_remote_identity';
 const INSTALL_ID_KEY = 'mobile_install_id';
 const USER_ID_KEY = 'user_id';
 const REMOTE_URL_KEY = 'remote_url';

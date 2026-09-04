@@ -160,7 +160,7 @@ impl ChatMode {
                             })?;
                         let status_message = crate::account::account_login_status_message(&result);
                         Ok::<_, anyhow::Error>(
-                            bitfun_product_domains::account::AccountLoginProjection {
+                            openbitfun_product_domains::account::AccountLoginProjection {
                                 user_id: result.user_id,
                                 relay_url: result.relay_url,
                                 has_cloud_settings: result.has_cloud_settings,

@@ -6,7 +6,7 @@
  */
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { Bot, Loader2, Archive } from 'lucide-react';
 import { RetainedMountBoundary } from '@/shared/presence';
@@ -239,7 +239,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     : DEFAULT_WORKSPACE_SESSION_FILTERS;
   const hasActiveSessionFilter = sessionShow !== 'all' || hasWorkspaceSessionFilters(sessionFilters);
   const showAllWithoutLimit = layout === 'flat' && Boolean(workspaceScopes?.length);
-  const sessionListClassName = `bitfun-nav-panel__inline-list${layout === 'flat' ? ' is-flat-workspace-view' : ''}`;
+  const sessionListClassName = `openbitfun-nav-panel__inline-list${layout === 'flat' ? ' is-flat-workspace-view' : ''}`;
   const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const activeTabId = useSceneStore(s => s.activeTabId);
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
@@ -716,8 +716,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_post_archive');
       }
     };
-    window.addEventListener('bitfun:session-archived', handler);
-    return () => window.removeEventListener('bitfun:session-archived', handler);
+    window.addEventListener('openbitfun:session-archived', handler);
+    return () => window.removeEventListener('openbitfun:session-archived', handler);
   }, [isVisible, workspacePath, loadMetadataPage]);
 
   const closeSessionMenu = useCallback(() => {
@@ -786,8 +786,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       });
     };
 
-    window.addEventListener('bitfun:session-switched', handleSessionSwitched);
-    return () => window.removeEventListener('bitfun:session-switched', handleSessionSwitched);
+    window.addEventListener('openbitfun:session-switched', handleSessionSwitched);
+    return () => window.removeEventListener('openbitfun:session-switched', handleSessionSwitched);
   }, []);
 
   const sessions = useMemo(
@@ -1186,7 +1186,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       }
 
       const target = event.target as HTMLElement | null;
-      if (target?.closest('.bitfun-nav-panel__inline-item-actions, .bitfun-nav-panel__inline-item-edit')) {
+      if (target?.closest('.openbitfun-nav-panel__inline-item-actions, .openbitfun-nav-panel__inline-item-edit')) {
         return;
       }
 
@@ -1303,7 +1303,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const activeSessionIdBeforeArchive = flowChatStore.getState().activeSessionId;
         await flowChatManager.archiveChatSession(sessionId);
         closeSessionSceneAfterActiveSessionArchive(activeSessionIdBeforeArchive);
-        window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
+        window.dispatchEvent(new CustomEvent('openbitfun:session-archived'));
       } catch (err) {
         log.error('Failed to archive session', err);
       }
@@ -1432,10 +1432,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     ? aggregateLoadState.isLoading
       ? (
           <div
-            className="bitfun-nav-panel__inline-loading"
-            data-bf-component="sessions-section"
-            data-bf-part="aggregateLoading"
-            data-bf-state="loading"
+            className="openbitfun-nav-panel__inline-loading"
+            data-openbitfun-component="sessions-section"
+            data-openbitfun-part="aggregateLoading"
+            data-openbitfun-state="loading"
             data-testid="nav-session-aggregate-loading"
             role="status"
             aria-live="polite"
@@ -1449,8 +1449,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <Button
               variant="outline"
               size="sm"
-              className="bitfun-nav-panel__inline-action"
-              data-bf-state="partial"
+              className="openbitfun-nav-panel__inline-action"
+              data-openbitfun-state="partial"
               data-testid="nav-session-aggregate-retry"
               onClick={() => setAggregateReloadRequestId(current => current + 1)}
             >
@@ -1463,15 +1463,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   if (allTopLevelSessions.length === 0) {
     if (aggregateLoadStatus) {
       return (
-        <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
+        <div data-openbitfun-component="sessions-section" data-openbitfun-part="root" className={sessionListClassName}>
           {aggregateLoadStatus}
         </div>
       );
     }
     if (metadataPageState.isLoading) {
       return (
-        <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
-          <div className="bitfun-nav-panel__inline-loading" data-bf-component="sessions-section" data-bf-part="loading" data-bf-state="loading">
+        <div data-openbitfun-component="sessions-section" data-openbitfun-part="root" className={sessionListClassName}>
+          <div className="openbitfun-nav-panel__inline-loading" data-openbitfun-component="sessions-section" data-openbitfun-part="loading" data-openbitfun-state="loading">
             <Loader2 size={12} />
             <span>{t('nav.sessions.loading')}</span>
           </div>
@@ -1480,11 +1480,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     if (metadataPageState.loadError) {
       return (
-        <div data-bf-component="sessions-section" data-bf-part="root" className={sessionListClassName}>
+        <div data-openbitfun-component="sessions-section" data-openbitfun-part="root" className={sessionListClassName}>
           <Button
             variant="outline"
             size="sm"
-            className="bitfun-nav-panel__inline-action"
+            className="openbitfun-nav-panel__inline-action"
             onClick={() => {
               void loadInitialMetadataPage('sessions_nav_manual_retry');
             }}
@@ -1497,7 +1497,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return (
       <div className={sessionListClassName}>
         {presentation?.kind === 'assistant' ? (
-          <div className="bitfun-nav-panel__inline-empty is-assistant" aria-disabled="true">
+          <div className="openbitfun-nav-panel__inline-empty is-assistant" aria-disabled="true">
             <AssistantAvatar
               presetId={presentation.assistant.avatar}
               emoji={presentation.assistant.emoji}
@@ -1505,13 +1505,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               name={presentation.assistant.name}
               size={26}
             />
-            <span className="bitfun-nav-panel__inline-empty-copy">
-              <span className="bitfun-nav-panel__inline-empty-name">{presentation.assistant.name}</span>
+            <span className="openbitfun-nav-panel__inline-empty-copy">
+              <span className="openbitfun-nav-panel__inline-empty-name">{presentation.assistant.name}</span>
               <span>{t('nav.sessions.noSessions')}</span>
             </span>
           </div>
         ) : (
-          <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
+          <div className="openbitfun-nav-panel__inline-empty" aria-disabled="true">
             {t('nav.sessions.noSessions')}
           </div>
         )}
@@ -1529,7 +1529,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     return (
       <div className={sessionListClassName}>
-        <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
+        <div className="openbitfun-nav-panel__inline-empty" aria-disabled="true">
           {t('nav.sessions.viewMenu.noMatches')}
         </div>
         {aggregateLoadStatus}
@@ -1624,20 +1624,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             showBackgroundSubagentActivity ||
             isDispatched;
           const tooltipContent = showRichTooltip ? (
-            <div className="bitfun-nav-panel__inline-item-tooltip">
-              <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
+            <div className="openbitfun-nav-panel__inline-item-tooltip">
+              <div className="openbitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
               {sessionWorkspaceScope ? (
-                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                   {sessionWorkspaceScope.workspaceName}
                 </div>
               ) : null}
               {showAssistantInTooltip ? (
-                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                   {t('nav.sessions.assistantOwner', { name: trimmedAssistant })}
                 </div>
               ) : null}
               {isChildSession ? (
-                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                   {parentTurnIndex
                     ? t('nav.sessions.childSourceWithTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
@@ -1649,19 +1649,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 </div>
               ) : null}
               {isDispatched ? (
-                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                   {dispatchPresentation?.summary}
                 </div>
               ) : null}
               {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
                 <>
-                  <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                  <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                     {t('nav.sessions.backgroundSubagentsRunning', {
                       count: backgroundSubagentActivityCount,
                     })}
                   </div>
                   {backgroundSubagentActivity.items.length > 0 ? (
-                    <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                    <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                       {backgroundSubagentActivity.items
                         .slice(0, 2)
                         .map(item => item.title)
@@ -1710,7 +1710,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const row = (
             <div
               className={[
-                'bitfun-nav-panel__inline-item',
+                'openbitfun-nav-panel__inline-item',
                 showAssistantIdentity && 'is-assistant-session',
                 level === 1 && 'is-child',
                 isChildSession && 'is-btw-child',
@@ -1720,9 +1720,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              data-bf-component="sessions-section"
-              data-bf-part="row"
-              data-bf-state={[
+              data-openbitfun-component="sessions-section"
+              data-openbitfun-part="row"
+              data-openbitfun-state={[
                 isRowActive && 'active',
                 isEditing && 'editing',
                 openMenuSessionId === session.sessionId && 'menuOpen',
@@ -1736,7 +1736,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               onClick={() => handleSwitch(session.sessionId)}
             >
               {showAssistantIdentity && assistantIdentity ? (
-                <span className="bitfun-nav-panel__inline-item-avatar" data-bf-component="sessions-section" data-bf-part="assistantAvatar">
+                <span className="openbitfun-nav-panel__inline-item-avatar" data-openbitfun-component="sessions-section" data-openbitfun-part="assistantAvatar">
                   <AssistantAvatar
                     presetId={assistantIdentity.avatar}
                     emoji={assistantIdentity.emoji}
@@ -1757,10 +1757,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ) : null}
 
               {isEditing ? (
-                <div className="bitfun-nav-panel__inline-item-edit" data-bf-component="sessions-section" data-bf-part="edit" onClick={e => e.stopPropagation()}>
+                <div className="openbitfun-nav-panel__inline-item-edit" data-openbitfun-component="sessions-section" data-openbitfun-part="edit" onClick={e => e.stopPropagation()}>
                   <Input
                     ref={editInputRef}
-                    className="bitfun-nav-panel__inline-item-edit-field"
+                    className="openbitfun-nav-panel__inline-item-edit-field"
                     value={editingTitle}
                     onChange={e => setEditingTitle(e.target.value)}
                     onKeyDown={handleEditKeyDown}
@@ -1772,7 +1772,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       aria-label={t('nav.sessions.confirmEdit')}
                       variant="primary"
                       size="sm"
-                      className="bitfun-nav-panel__inline-item-edit-btn confirm"
+                      className="openbitfun-nav-panel__inline-item-edit-btn confirm"
                       onClick={e => { e.stopPropagation(); handleConfirmEdit(); }}
                       icon={<Icon name="check-line" size="2xs" />}
                     />
@@ -1781,7 +1781,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <IconButton
                       aria-label={t('nav.sessions.cancelEdit')}
                       size="sm"
-                      className="bitfun-nav-panel__inline-item-edit-btn cancel"
+                      className="openbitfun-nav-panel__inline-item-edit-btn cancel"
                       onMouseDown={e => { e.preventDefault(); e.stopPropagation(); handleCancelEdit(); }}
                       icon={<Icon name="xmark" size="2xs" />}
                     />
@@ -1789,16 +1789,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 </div>
               ) : (
                 <>
-                  <span className="bitfun-nav-panel__inline-item-main" data-bf-component="sessions-section" data-bf-part="rowMain">
-                    <span className="bitfun-nav-panel__inline-item-copy">
-                      <span className="bitfun-nav-panel__inline-item-primary">
-                        <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
+                  <span className="openbitfun-nav-panel__inline-item-main" data-openbitfun-component="sessions-section" data-openbitfun-part="rowMain">
+                    <span className="openbitfun-nav-panel__inline-item-copy">
+                      <span className="openbitfun-nav-panel__inline-item-primary">
+                        <span className="openbitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
-                      <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                      <span className="openbitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
                     ) : null}
                     {isDispatched ? (
                       <span
-                        className="bitfun-nav-panel__inline-item-dispatch-badge"
+                        className="openbitfun-nav-panel__inline-item-dispatch-badge"
                         data-state={dispatchPresentation?.visualState}
                         title={dispatchPresentation?.summary}
                       >
@@ -1806,58 +1806,58 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       </span>
                     ) : null}
                     {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
-                      <span className="bitfun-nav-panel__inline-item-attention-badge">
+                      <span className="openbitfun-nav-panel__inline-item-attention-badge">
                         {attentionKind === 'ask_user'
                           ? t('nav.sessions.badgeNeedsInput')
                           : t('nav.sessions.badgeNeedsConfirm')}
                       </span>
                     ) : null}
                     {reviewActivityKind ? (
-                      <span className="bitfun-nav-panel__inline-item-review-badge">
+                      <span className="openbitfun-nav-panel__inline-item-review-badge">
                         <Loader2 size={9} aria-hidden />
                         {getReviewActivityBadge(reviewActivityKind)}
                       </span>
                     ) : null}
                         {showBackgroundSubagentActivity ? (
                       <span
-                        className="bitfun-nav-panel__inline-item-background-subagent-badge"
+                        className="openbitfun-nav-panel__inline-item-background-subagent-badge"
                         aria-label={t('nav.sessions.backgroundSubagentsRunning', {
                           count: backgroundSubagentActivityCount,
                         })}
                       >
                         <Bot
-                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-bot"
+                          className="openbitfun-nav-panel__inline-item-background-subagent-icon is-bot"
                           size={10}
                           aria-hidden
                         />
                         <Loader2
-                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-loader"
+                          className="openbitfun-nav-panel__inline-item-background-subagent-icon is-loader"
                           size={10}
                           aria-hidden
                         />
                       </span>
                         ) : null}
                         {sessionWorkspaceScope && !isChildSession ? (
-                          <span className="bitfun-nav-panel__inline-item-workspace-name">
+                          <span className="openbitfun-nav-panel__inline-item-workspace-name">
                             {sessionWorkspaceScope.workspaceName}
                           </span>
                         ) : null}
                       </span>
                       {showAssistantIdentity ? (
-                        <span className="bitfun-nav-panel__inline-item-assistant-name">{trimmedAssistant}</span>
+                        <span className="openbitfun-nav-panel__inline-item-assistant-name">{trimmedAssistant}</span>
                       ) : null}
                     </span>
                   </span>
                   <div
-                    className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
-                    data-bf-component="sessions-section"
-                    data-bf-part="actions"
-                    data-bf-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
+                    className={`openbitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                    data-openbitfun-component="sessions-section"
+                    data-openbitfun-part="actions"
+                    data-openbitfun-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
                   >
                     <button
                       type="button"
                       ref={openMenuSessionId === session.sessionId ? sessionMenuAnchorRef : undefined}
-                      className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                      className={`openbitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       onClick={e => handleMenuOpen(e, session.sessionId)}
                       data-testid="nav-session-menu-btn"
                       data-session-id={session.sessionId}
@@ -1868,10 +1868,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(
                     <Menu
                       ref={sessionMenuPopoverRef}
-                      className="bitfun-nav-panel__inline-item-menu-popover"
-                      data-bf-component="sessions-section"
-                      data-bf-part="menu"
-                      data-bf-state="menuOpen"
+                      className="openbitfun-nav-panel__inline-item-menu-popover"
+                      data-openbitfun-component="sessions-section"
+                      data-openbitfun-part="menu"
+                      data-openbitfun-state="menuOpen"
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
                       data-testid="nav-session-menu"
                       data-session-id={session.sessionId}
@@ -1939,7 +1939,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                             data-testid="nav-session-menu-export-markdown"
                             data-session-id={session.sessionId}
                             leading={exportingSessionId === session.sessionId
-                              ? <Loader2 size={13} className="bitfun-nav-panel__inline-toggle-spinner" />
+                              ? <Loader2 size={13} className="openbitfun-nav-panel__inline-toggle-spinner" />
                               : <Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
                           >
                             <span>{t('nav.sessions.exportMarkdown')}</span>
@@ -2006,50 +2006,50 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       {!showAllWithoutLimit && expandLevel === 2 && topLevelSessions.length > sessionDisplayLimit && (
         <button
           type="button"
-          className="bitfun-nav-panel__inline-toggle"
+          className="openbitfun-nav-panel__inline-toggle"
           data-testid="nav-session-list-load-more"
           aria-label={t('nav.sessions.showMore', {
             count: topLevelSessions.length - sessionDisplayLimit,
           })}
           onClick={() => setLevel2DisplayCount(prev => prev + SESSIONS_LEVEL_2_PAGE)}
         >
-          <span className="bitfun-nav-panel__inline-toggle-label">
+          <span className="openbitfun-nav-panel__inline-toggle-label">
             {t('nav.sessions.showMoreLabel')}
           </span>
-          <span className="bitfun-nav-panel__inline-toggle-count" aria-hidden>
+          <span className="openbitfun-nav-panel__inline-toggle-count" aria-hidden>
             +{topLevelSessions.length - sessionDisplayLimit}
           </span>
-          <Icon name="chevron-down" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
         </button>
       )}
 
       {!showAllWithoutLimit && expandToggleState.shouldRender && (
         <button
           type="button"
-          className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
-          data-bf-component="sessions-section"
-          data-bf-part="toggle"
-          data-bf-state={metadataPageState.isLoading ? 'loading' : undefined}
+          className={`openbitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
+          data-openbitfun-component="sessions-section"
+          data-openbitfun-part="toggle"
+          data-openbitfun-state={metadataPageState.isLoading ? 'loading' : undefined}
           data-testid="nav-session-list-toggle"
           data-session-nav-toggle-action={expandToggleState.action}
           aria-label={expandToggleLabels.ariaLabel}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >
-          <span className="bitfun-nav-panel__inline-toggle-label">
+          <span className="openbitfun-nav-panel__inline-toggle-label">
             {expandToggleLabels.label}
           </span>
           {expandToggleLabels.remainingCount !== null && (
-            <span className="bitfun-nav-panel__inline-toggle-count" aria-hidden>
+            <span className="openbitfun-nav-panel__inline-toggle-count" aria-hidden>
               +{expandToggleLabels.remainingCount}
             </span>
           )}
           {metadataPageState.isLoading ? (
-            <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+            <Loader2 size={12} className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
           ) : expandToggleLabels.remainingCount === null ? (
-            <Icon name="chevron-up" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           ) : (
-            <Icon name="chevron-down" size="xs" className="bitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
           )}
         </button>
       )}

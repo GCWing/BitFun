@@ -4,7 +4,7 @@
   gap: 16px;
   min-width: 0;
   padding-block: 4px 16px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 
   &__modal {
     overflow-x: hidden;
@@ -15,17 +15,17 @@
     align-items: flex-start;
     gap: 8px;
     padding: 8px 10px;
-    border: 1px solid var(--bf-color-border-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
     border-radius: 6px;
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
 
     svg {
       flex-shrink: 0;
       margin-top: 1px;
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
     }
 
     p {
@@ -37,7 +37,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    border: 1px solid var(--bf-color-border-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -49,10 +49,10 @@
     gap: 12px;
     min-height: 44px;
     padding: 8px 12px;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    background: var(--bf-color-surface-subtle);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__grants,
@@ -71,7 +71,7 @@
     padding: 10px 12px;
 
     + .workspace-project-permissions-dialog__grant-row {
-      border-top: 1px solid var(--bf-color-border-subtle);
+      border-top: 1px solid var(--openbitfun-color-border-subtle);
     }
   }
 
@@ -85,15 +85,15 @@
     code {
       min-width: 0;
       overflow: hidden;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-label-sm-font-size);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-label-sm-font-size);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     span {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-label-sm-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-label-sm-font-size);
       white-space: nowrap;
     }
   }
@@ -110,17 +110,17 @@
 
   &__rule-heading {
     min-height: 32px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    background: var(--bf-color-surface-subtle);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    background: var(--openbitfun-color-surface-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__rule-row {
     padding-block: 10px;
 
     + .workspace-project-permissions-dialog__rule-row {
-      border-top: 1px solid var(--bf-color-border-subtle);
+      border-top: 1px solid var(--openbitfun-color-border-subtle);
     }
   }
 
@@ -136,15 +136,15 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 12px;
-    border-top: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__empty {
     padding: 18px 12px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-align: center;
   }
 }

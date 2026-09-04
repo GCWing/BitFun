@@ -2,39 +2,39 @@
  * InitMiniApp tool display on the prominent FlowChat tool-card framework.
  */
 
-.miniapp-tool-display[data-bf-attention='prominent'][data-bf-expandable='true']
-  > [data-bf-part='surface']
-  > [data-bf-part='header'] {
+.miniapp-tool-display[data-openbitfun-attention='prominent'][data-openbitfun-expandable='true']
+  > [data-openbitfun-part='surface']
+  > [data-openbitfun-part='header'] {
   cursor: pointer;
 }
 
-.miniapp-tool-display[data-bf-attention='prominent'][data-bf-expandable='false']
-  > [data-bf-part='surface']
-  > [data-bf-part='header'] {
+.miniapp-tool-display[data-openbitfun-attention='prominent'][data-openbitfun-expandable='false']
+  > [data-openbitfun-part='surface']
+  > [data-openbitfun-part='header'] {
   cursor: default;
 }
 
-.miniapp-tool-display[data-bf-attention='prominent'] .miniapp-result-footer {
-  margin-left: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-inline));
-  margin-right: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-inline));
-  margin-bottom: calc(-1 * var(--bf-control-flow-chat-card-expanded-padding-block));
-  padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline);
-  border-radius: 0 0 var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius);
+.miniapp-tool-display[data-openbitfun-attention='prominent'] .miniapp-result-footer {
+  margin-left: calc(-1 * var(--openbitfun-control-flow-chat-card-expanded-padding-inline));
+  margin-right: calc(-1 * var(--openbitfun-control-flow-chat-card-expanded-padding-inline));
+  margin-bottom: calc(-1 * var(--openbitfun-control-flow-chat-card-expanded-padding-block));
+  padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+  border-radius: 0 0 var(--openbitfun-control-flow-chat-card-radius) var(--openbitfun-control-flow-chat-card-radius);
 }
 
 .miniapp-tool-display {
   .miniapp-icon {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
-  [data-bf-part='iconGraphic'].miniapp-icon {
-    color: var(--bf-color-content-secondary);
+  [data-openbitfun-part='iconGraphic'].miniapp-icon {
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .miniapp-tool-info {
     display: flex;
     align-items: center;
-    gap: var(--bf-control-flow-chat-control-gap);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
     flex-wrap: nowrap;
     min-width: 0;
     flex: 1;
@@ -42,17 +42,17 @@
     .operation-tag {
       display: inline-flex;
       align-items: center;
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
       flex-shrink: 0;
       white-space: nowrap;
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
     }
 
     .command-text {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      color: var(--openbitfun-color-content-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -61,8 +61,8 @@
   }
 
   .output-summary {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -74,9 +74,9 @@
     align-items: center;
 
     .error-text {
-      font-size: var(--bf-type-flow-control-font-size);
-      color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 90%, transparent);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
   }
 
@@ -87,62 +87,62 @@
   }
 
   .miniapp-result-rows {
-    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-control-flow-chat-card-expanded-padding-inline) 0;
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline) 0;
     display: flex;
     flex-direction: column;
-    gap: var(--bf-control-flow-chat-flow-item-gap);
+    gap: var(--openbitfun-control-flow-chat-flow-item-gap);
   }
 
   .miniapp-result-row {
     display: flex;
     align-items: baseline;
-    gap: var(--bf-control-flow-chat-control-gap);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
     flex-wrap: wrap;
-    line-height: var(--bf-type-flow-support-line-height);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 
   .miniapp-result-label {
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
     flex-shrink: 0;
   }
 
   .miniapp-result-value {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-primary);
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--bf-type-flow-meta-line-height);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
   }
 
   .miniapp-result-footer {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: var(--bf-control-flow-chat-control-gap);
+    gap: var(--openbitfun-control-flow-chat-control-gap);
     flex-wrap: wrap;
-    line-height: var(--bf-type-flow-meta-line-height);
-    margin-top: var(--bf-control-flow-chat-card-gap);
-    background: var(--bf-color-surface-subtle);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
+    margin-top: var(--openbitfun-control-flow-chat-card-gap);
+    background: var(--openbitfun-color-surface-subtle);
     box-sizing: border-box;
-    border-top: 1px solid var(--bf-color-border-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   .error-content {
-    padding: var(--bf-control-flow-chat-card-expanded-padding-block) var(--bf-space-4);
-    background: color-mix(in srgb, var(--bf-color-status-danger-content) 5%, transparent);
-    border-top: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 20%, transparent);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-space-4);
+    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 5%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 20%, transparent);
 
     .error-message {
-      color: color-mix(in srgb, var(--bf-color-status-danger-content) 90%, transparent);
-      font-size: var(--bf-type-flow-control-font-size);
-      margin-bottom: var(--bf-control-flow-chat-card-gap);
+      color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 90%, transparent);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      margin-bottom: var(--openbitfun-control-flow-chat-card-gap);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -150,12 +150,12 @@
     .error-meta {
       display: flex;
       align-items: center;
-      gap: var(--bf-control-flow-chat-control-gap);
-      font-size: var(--bf-type-flow-control-font-size);
-      color: var(--bf-color-content-secondary);
+      gap: var(--openbitfun-control-flow-chat-control-gap);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      color: var(--openbitfun-color-content-secondary);
 
       .error-operation {
-        color: color-mix(in srgb, var(--bf-color-status-danger-content) 70%, transparent);
+        color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 70%, transparent);
       }
     }
   }

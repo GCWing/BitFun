@@ -37,7 +37,7 @@ const stubWindowForPanelExpansion = (rightPanelCollapsed: boolean) => {
   vi.stubGlobal('window', {
     CustomEvent: TestCustomEvent,
     dispatchEvent,
-    __BITFUN_LAYOUT_STATE__: { rightPanelCollapsed },
+    __OPENBITFUN_LAYOUT_STATE__: { rightPanelCollapsed },
   });
 
   return dispatchEvent;

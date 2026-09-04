@@ -33,14 +33,16 @@ use crate::service::session::{
     SESSION_STORAGE_SCHEMA_VERSION, SESSION_TURN_CATALOG_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::timing::elapsed_ms_u64;
-use bitfun_runtime_ports::{
+use futures::{stream, StreamExt};
+use log::{debug, info, warn};
+use openbitfun_runtime_ports::{
     SessionTurnLoadRequest, SessionTurnLoadTiming, SessionTurnWindowRequest,
 };
 #[cfg(feature = "product-search")]
-use bitfun_services_core::session_search::SessionSearchSqliteIndex;
-use bitfun_services_core::{
+use openbitfun_services_core::session_search::SessionSearchSqliteIndex;
+use openbitfun_services_core::{
     json_store::{JsonFileStore, JsonFileStoreError},
     session::{
         build_session_metadata as build_persisted_session_metadata, empty_session_metadata_page,
@@ -49,8 +51,6 @@ use bitfun_services_core::{
         SessionMetadataStoreError, SessionStorageLayout, SessionWriteLock, SessionWriteLockError,
     },
 };
-use futures::{stream, StreamExt};
-use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
@@ -63,7 +63,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
-pub use bitfun_services_core::session::SessionMetadataPage;
+pub use openbitfun_services_core::session::SessionMetadataPage;
 
 const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const COMPRESSION_TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
@@ -116,7 +116,7 @@ impl Drop for PendingSessionDirectory {
 async fn memory_pollution_guard_enabled() -> bool {
     match get_global_config_service().await {
         Ok(service) => {
-            let config: BitFunResult<GlobalConfig> = service.get_config(None).await;
+            let config: OpenBitFunResult<GlobalConfig> = service.get_config(None).await;
             config
                 .map(|config| {
                     config.memories.generate_memories
@@ -132,7 +132,7 @@ async fn memory_pollution_guard_enabled() -> bool {
 async fn new_session_memory_mode_from_global_config() -> SessionMemoryMode {
     match get_global_config_service().await {
         Ok(service) => {
-            let config: BitFunResult<GlobalConfig> = service.get_config(None).await;
+            let config: OpenBitFunResult<GlobalConfig> = service.get_config(None).await;
             if config
                 .map(|config| config.memories.generate_memories)
                 .unwrap_or(true)
@@ -500,7 +500,7 @@ pub struct PersistenceManager {
 }
 
 impl PersistenceManager {
-    pub fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
+    pub fn new(path_manager: Arc<PathManager>) -> OpenBitFunResult<Self> {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
             path_manager,
@@ -517,8 +517,8 @@ impl PersistenceManager {
         })
     }
 
-    fn validate_session_id(session_id: &str) -> BitFunResult<()> {
-        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)
+    fn validate_session_id(session_id: &str) -> OpenBitFunResult<()> {
+        openbitfun_core_types::validate_session_id(session_id).map_err(OpenBitFunError::Validation)
     }
 
     /// Get PathManager reference
@@ -574,7 +574,7 @@ impl PersistenceManager {
     ///
     /// Callers may pass either a logical workspace root or an already-resolved
     /// managed sessions directory. Local workspace roots are slugified under
-    /// `~/.bitfun/projects/`; already-resolved local/remote sessions
+    /// `~/.openbitfun/projects/`; already-resolved local/remote sessions
     /// directories are used as-is.
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
         if self.is_resolved_sessions_dir(workspace_path) {
@@ -614,7 +614,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<SessionWriteLock> {
+    ) -> OpenBitFunResult<SessionWriteLock> {
         let sessions_dir = self.project_sessions_dir(workspace_path);
         SessionWriteLock::try_acquire(&sessions_dir, session_id)
             .map_err(|error| Self::session_write_lock_error(session_id, error))
@@ -624,18 +624,18 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<SessionWriteLock> {
+    ) -> OpenBitFunResult<SessionWriteLock> {
         let sessions_dir = self.project_sessions_dir(workspace_path);
         SessionWriteLock::try_acquire_for_operation(&sessions_dir, session_id)
             .map_err(|error| Self::session_write_lock_error(session_id, error))
     }
 
-    fn session_write_lock_error(session_id: &str, error: SessionWriteLockError) -> BitFunError {
+    fn session_write_lock_error(session_id: &str, error: SessionWriteLockError) -> OpenBitFunError {
         match error {
-            SessionWriteLockError::InUse => BitFunError::SessionInUse {
+            SessionWriteLockError::InUse => OpenBitFunError::SessionInUse {
                 session_id: session_id.to_string(),
             },
-            other => BitFunError::Session(format!(
+            other => OpenBitFunError::Session(format!(
                 "Failed to protect Session writes: session_id={session_id}, code={}, error={other}",
                 other.code()
             )),
@@ -763,7 +763,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<bool> {
+    ) -> OpenBitFunResult<bool> {
         Self::validate_session_id(session_id)?;
         Ok(self
             .session_layout(workspace_path)
@@ -780,7 +780,7 @@ impl PersistenceManager {
         dir.exists().then_some(dir)
     }
 
-    async fn ensure_runtime_for_write(&self, workspace_path: &Path) -> BitFunResult<()> {
+    async fn ensure_runtime_for_write(&self, workspace_path: &Path) -> OpenBitFunResult<()> {
         if self.is_resolved_sessions_dir(workspace_path) {
             return Ok(());
         }
@@ -795,56 +795,60 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         self.session_layout(workspace_path)
             .ensure_session_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create session directory: {}", e)))
+            .map_err(|e| OpenBitFunError::io(format!("Failed to create session directory: {}", e)))
     }
 
     async fn ensure_turns_dir(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         self.session_layout(workspace_path)
             .ensure_turns_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create turns directory: {}", e)))
+            .map_err(|e| OpenBitFunError::io(format!("Failed to create turns directory: {}", e)))
     }
 
     async fn ensure_snapshots_dir(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         self.session_layout(workspace_path)
             .ensure_snapshots_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create snapshots directory: {}", e)))
+            .map_err(|e| {
+                OpenBitFunError::io(format!("Failed to create snapshots directory: {}", e))
+            })
     }
 
     async fn ensure_artifacts_dir(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         self.session_layout(workspace_path)
             .ensure_artifacts_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create artifacts directory: {}", e)))
+            .map_err(|e| {
+                OpenBitFunError::io(format!("Failed to create artifacts directory: {}", e))
+            })
     }
 
     async fn ensure_session_references_dir(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<PathBuf> {
+    ) -> OpenBitFunResult<PathBuf> {
         self.session_layout(workspace_path)
             .ensure_session_references_dir(session_id)
             .await
             .map_err(|e| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to create session reference directory: {}",
                     e
                 ))
@@ -854,21 +858,25 @@ impl PersistenceManager {
     async fn read_json_optional<T: DeserializeOwned>(
         &self,
         path: &Path,
-    ) -> BitFunResult<Option<T>> {
+    ) -> OpenBitFunResult<Option<T>> {
         JsonFileStore
             .read_optional(path)
             .await
             .map_err(Self::json_store_error)
     }
 
-    async fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> BitFunResult<()> {
+    async fn write_json_atomic<T: Serialize>(
+        &self,
+        path: &Path,
+        value: &T,
+    ) -> OpenBitFunResult<()> {
         JsonFileStore
             .write_atomic(path, value)
             .await
             .map_err(Self::json_store_error)
     }
 
-    async fn write_text_atomic(&self, path: &Path, text: &str) -> BitFunResult<()> {
+    async fn write_text_atomic(&self, path: &Path, text: &str) -> OpenBitFunResult<()> {
         JsonFileStore
             .write_text_atomic(path, text)
             .await
@@ -911,23 +919,23 @@ impl PersistenceManager {
             .clone()
     }
 
-    fn json_store_error(error: JsonFileStoreError) -> BitFunError {
+    fn json_store_error(error: JsonFileStoreError) -> OpenBitFunError {
         if error.is_deserialization() {
-            BitFunError::Deserialization(error.to_string())
+            OpenBitFunError::Deserialization(error.to_string())
         } else if error.is_serialization() {
-            BitFunError::serialization(error.to_string())
+            OpenBitFunError::serialization(error.to_string())
         } else {
-            BitFunError::io(error.to_string())
+            OpenBitFunError::io(error.to_string())
         }
     }
 
-    fn session_metadata_store_error(error: SessionMetadataStoreError) -> BitFunError {
+    fn session_metadata_store_error(error: SessionMetadataStoreError) -> OpenBitFunError {
         if error.is_deserialization() {
-            BitFunError::Deserialization(error.to_string())
+            OpenBitFunError::Deserialization(error.to_string())
         } else if error.is_serialization() {
-            BitFunError::serialization(error.to_string())
+            OpenBitFunError::serialization(error.to_string())
         } else {
-            BitFunError::io(error.to_string())
+            OpenBitFunError::io(error.to_string())
         }
     }
 
@@ -1100,9 +1108,9 @@ impl PersistenceManager {
 
     fn parse_transcript_turn_selectors(
         selectors: &[String],
-    ) -> BitFunResult<Vec<ParsedTranscriptTurnSelector>> {
+    ) -> OpenBitFunResult<Vec<ParsedTranscriptTurnSelector>> {
         if selectors.is_empty() {
-            return Err(BitFunError::Validation(
+            return Err(OpenBitFunError::Validation(
                 "turns cannot be an empty array".to_string(),
             ));
         }
@@ -1115,16 +1123,16 @@ impl PersistenceManager {
 
     fn parse_transcript_turn_selector(
         selector: &str,
-    ) -> BitFunResult<ParsedTranscriptTurnSelector> {
+    ) -> OpenBitFunResult<ParsedTranscriptTurnSelector> {
         let normalized = selector.trim();
         if normalized.is_empty() {
-            return Err(BitFunError::Validation(
+            return Err(OpenBitFunError::Validation(
                 "turns cannot contain empty selectors".to_string(),
             ));
         }
 
         if normalized.matches(':').count() > 1 {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Invalid turn selector '{}'. Use forms like ':20', '-20:', '10:30', or '15'.",
                 normalized
             )));
@@ -1155,9 +1163,9 @@ impl PersistenceManager {
         })
     }
 
-    fn parse_transcript_turn_value(value: &str, selector: &str) -> BitFunResult<isize> {
+    fn parse_transcript_turn_value(value: &str, selector: &str) -> OpenBitFunResult<isize> {
         value.parse::<isize>().map_err(|_| {
-            BitFunError::Validation(format!(
+            OpenBitFunError::Validation(format!(
                 "Invalid turn selector '{}'. Use forms like ':20', '-20:', '10:30', or '15'.",
                 selector
             ))
@@ -1230,7 +1238,7 @@ impl PersistenceManager {
     pub async fn list_session_metadata(
         &self,
         workspace_path: &Path,
-    ) -> BitFunResult<Vec<SessionMetadata>> {
+    ) -> OpenBitFunResult<Vec<SessionMetadata>> {
         if !workspace_path.exists() {
             return Ok(Vec::new());
         }
@@ -1250,7 +1258,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         cursor: Option<&str>,
         limit: usize,
-    ) -> BitFunResult<SessionMetadataPage> {
+    ) -> OpenBitFunResult<SessionMetadataPage> {
         if !workspace_path.exists() {
             return Ok(empty_session_metadata_page());
         }
@@ -1268,7 +1276,7 @@ impl PersistenceManager {
     pub async fn list_session_metadata_including_internal(
         &self,
         workspace_path: &Path,
-    ) -> BitFunResult<Vec<SessionMetadata>> {
+    ) -> OpenBitFunResult<Vec<SessionMetadata>> {
         if !workspace_path.exists() {
             return Ok(Vec::new());
         }
@@ -1287,7 +1295,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         metadata: &SessionMetadata,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let _session_write =
             self.lock_session_write_operation(workspace_path, &metadata.session_id)?;
         let persistence_lock = self
@@ -1302,7 +1310,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         metadata: &SessionMetadata,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(&metadata.session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
         #[cfg(test)]
@@ -1313,7 +1321,9 @@ impl PersistenceManager {
                 .expect("session metadata fault lock");
             if fault.as_deref() == Some(metadata.session_id.as_str()) {
                 *fault = None;
-                return Err(BitFunError::io("Injected session metadata write failure"));
+                return Err(OpenBitFunError::io(
+                    "Injected session metadata write failure",
+                ));
             }
         }
         self.session_metadata_store(workspace_path)
@@ -1326,7 +1336,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         metadata: &SessionMetadata,
-    ) -> BitFunResult<bool> {
+    ) -> OpenBitFunResult<bool> {
         Self::validate_session_id(&metadata.session_id)?;
         let _session_write =
             self.lock_session_write_operation(workspace_path, &metadata.session_id)?;
@@ -1352,7 +1362,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         update: impl FnOnce(&mut SessionMetadata),
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let updated = self
             .update_session_metadata_if_present(workspace_path, session_id, |metadata| {
                 update(metadata);
@@ -1362,7 +1372,7 @@ impl PersistenceManager {
         if updated {
             Ok(())
         } else {
-            Err(BitFunError::NotFound(format!(
+            Err(OpenBitFunError::NotFound(format!(
                 "Session metadata not found: {}",
                 session_id
             )))
@@ -1375,7 +1385,7 @@ impl PersistenceManager {
         session_id: &str,
         session_name: &str,
         last_active_at: u64,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1387,7 +1397,7 @@ impl PersistenceManager {
             .load_session_metadata(workspace_path, session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {session_id}"))
+                OpenBitFunError::NotFound(format!("Session metadata not found: {session_id}"))
             })?;
         let mut updated = original.clone();
         updated.session_name = session_name.to_string();
@@ -1429,7 +1439,7 @@ impl PersistenceManager {
         let skip_rollback = false;
 
         let rollback_error = if skip_rollback {
-            Some(BitFunError::io(
+            Some(OpenBitFunError::io(
                 "Injected session metadata rollback failure",
             ))
         } else {
@@ -1450,7 +1460,7 @@ impl PersistenceManager {
             return Err(write_error);
         }
 
-        Err(BitFunError::OutcomeUnknown(format!(
+        Err(OpenBitFunError::OutcomeUnknown(format!(
             "Session title persistence failed and rollback did not restore the previous metadata: session_id={session_id}, error={write_error}, rollback_error={}",
             rollback_error
                 .map(|error| error.to_string())
@@ -1462,8 +1472,8 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-        update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
-    ) -> BitFunResult<bool> {
+        update: impl FnOnce(&mut SessionMetadata) -> OpenBitFunResult<()>,
+    ) -> OpenBitFunResult<bool> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1479,8 +1489,8 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-        update: impl FnOnce(&mut SessionMetadata) -> BitFunResult<()>,
-    ) -> BitFunResult<bool> {
+        update: impl FnOnce(&mut SessionMetadata) -> OpenBitFunResult<()>,
+    ) -> OpenBitFunResult<bool> {
         let Some(mut metadata) = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -1498,7 +1508,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         mode: SessionMemoryMode,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -1509,7 +1519,7 @@ impl PersistenceManager {
             .load_session_metadata(workspace_path, session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+                OpenBitFunError::NotFound(format!("Session metadata not found: {}", session_id))
             })?;
         metadata.memory_mode = mode;
         self.save_session_metadata_locked(workspace_path, &metadata)
@@ -1520,7 +1530,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -1531,7 +1541,7 @@ impl PersistenceManager {
             .load_session_metadata(workspace_path, session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+                OpenBitFunError::NotFound(format!("Session metadata not found: {}", session_id))
             })?;
         let should_enqueue_phase2 = matches!(
             metadata.memory_mode,
@@ -1553,7 +1563,7 @@ impl PersistenceManager {
         &self,
         session_id: &str,
         input_watermark: i64,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let db = MemoryDatabase::new(self.path_manager.clone());
         db.initialize().await?;
         if db.phase2_selected_for_session(session_id).await? {
@@ -1567,7 +1577,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<SessionMetadata>> {
+    ) -> OpenBitFunResult<Option<SessionMetadata>> {
         Self::validate_session_id(session_id)?;
         self.session_metadata_store(workspace_path)
             .load_metadata(session_id)
@@ -1579,7 +1589,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<StoredSessionStateFile>> {
+    ) -> OpenBitFunResult<Option<StoredSessionStateFile>> {
         self.read_json_optional::<StoredSessionStateFile>(
             &self.state_path(workspace_path, session_id),
         )
@@ -1591,7 +1601,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         state: &StoredSessionStateFile,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         #[cfg(test)]
         {
             let mut fault = self
@@ -1600,7 +1610,7 @@ impl PersistenceManager {
                 .expect("session state fault lock");
             if fault.as_deref() == Some(session_id) {
                 *fault = None;
-                return Err(BitFunError::io("Injected session state write failure"));
+                return Err(OpenBitFunError::io("Injected session state write failure"));
             }
         }
         self.write_json_atomic(&self.state_path(workspace_path, session_id), state)
@@ -1611,7 +1621,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<EvidenceLedgerEvent>> {
+    ) -> OpenBitFunResult<Vec<EvidenceLedgerEvent>> {
         Self::validate_session_id(session_id)?;
         let path = self.evidence_ledger_path(workspace_path, session_id);
         let file = JsonFileStore
@@ -1620,7 +1630,7 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)?;
         file.map(|file| {
             file.validated_events(session_id)
-                .map_err(|error| BitFunError::parse(error.to_string()))
+                .map_err(|error| OpenBitFunError::parse(error.to_string()))
         })
         .transpose()
         .map(Option::unwrap_or_default)
@@ -1630,7 +1640,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         event: &EvidenceLedgerEvent,
-    ) -> BitFunResult<Vec<EvidenceLedgerEvent>> {
+    ) -> OpenBitFunResult<Vec<EvidenceLedgerEvent>> {
         Self::validate_session_id(&event.session_id)?;
         let _session_write =
             self.lock_session_write_operation(workspace_path, &event.session_id)?;
@@ -1650,7 +1660,9 @@ impl PersistenceManager {
                 .expect("evidence ledger fault lock");
             if fault.as_deref() == Some(event.session_id.as_str()) {
                 *fault = None;
-                return Err(BitFunError::io("Injected evidence ledger write failure"));
+                return Err(OpenBitFunError::io(
+                    "Injected evidence ledger write failure",
+                ));
             }
         }
 
@@ -1665,14 +1677,14 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)?
             .unwrap_or_else(|| PersistedEvidenceLedgerFile::new(event.session_id.clone()));
         file.append(event.clone())
-            .map_err(|error| BitFunError::parse(error.to_string()))?;
+            .map_err(|error| OpenBitFunError::parse(error.to_string()))?;
         file.schema_version = EVIDENCE_LEDGER_SCHEMA_VERSION;
         JsonFileStore
             .write_atomic_strict(&path, &file)
             .await
             .map_err(Self::json_store_error)?;
         file.validated_events(&event.session_id)
-            .map_err(|error| BitFunError::parse(error.to_string()))
+            .map_err(|error| OpenBitFunError::parse(error.to_string()))
     }
 
     pub(crate) async fn retain_evidence_ledger_events(
@@ -1680,7 +1692,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         surviving_turn_ids: &std::collections::HashSet<String>,
-    ) -> BitFunResult<Option<Vec<EvidenceLedgerEvent>>> {
+    ) -> OpenBitFunResult<Option<Vec<EvidenceLedgerEvent>>> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -1701,14 +1713,14 @@ impl PersistenceManager {
             .await
             .map_err(Self::json_store_error)?
         else {
-            return Err(BitFunError::io(format!(
+            return Err(OpenBitFunError::io(format!(
                 "Evidence ledger disappeared while retaining: {}",
                 path.display()
             )));
         };
         let retained = file
             .retain_turn_ids(session_id, surviving_turn_ids)
-            .map_err(|error| BitFunError::parse(error.to_string()))?;
+            .map_err(|error| OpenBitFunError::parse(error.to_string()))?;
         file.schema_version = EVIDENCE_LEDGER_SCHEMA_VERSION;
         JsonFileStore
             .write_atomic_strict(&path, &file)
@@ -1725,7 +1737,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         events: Vec<EvidenceLedgerEvent>,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let persistence_lock = self
             .get_session_persistence_lock(workspace_path, session_id)
@@ -1745,7 +1757,7 @@ impl PersistenceManager {
         // Validate before writing so a bad session_id on an event is caught.
         file.clone()
             .validated_events(session_id)
-            .map_err(|error| BitFunError::parse(error.to_string()))?;
+            .map_err(|error| OpenBitFunError::parse(error.to_string()))?;
         JsonFileStore
             .write_atomic_strict(&path, &file)
             .await
@@ -1757,7 +1769,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<SessionPromptCache>> {
+    ) -> OpenBitFunResult<Option<SessionPromptCache>> {
         Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredSessionPromptCacheFile>(
@@ -1772,7 +1784,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         cache: &SessionPromptCache,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1792,13 +1804,13 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         match fs::remove_file(self.prompt_cache_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(BitFunError::io(format!(
+            Err(error) => Err(OpenBitFunError::io(format!(
                 "Failed to delete prompt cache for session {}: {}",
                 session_id, error
             ))),
@@ -1809,7 +1821,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<SessionRevertState>> {
+    ) -> OpenBitFunResult<Option<SessionRevertState>> {
         Self::validate_session_id(session_id)?;
         let state = self
             .read_json_optional::<SessionRevertState>(
@@ -1818,7 +1830,7 @@ impl PersistenceManager {
             .await?;
         if let Some(state) = state.as_ref() {
             if state.schema_version != SESSION_REVERT_SCHEMA_VERSION {
-                return Err(BitFunError::Deserialization(format!(
+                return Err(OpenBitFunError::Deserialization(format!(
                     "Unsupported Session revert schema version: session_id={}, version={}",
                     session_id, state.schema_version
                 )));
@@ -1832,7 +1844,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         state: &SessionRevertState,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1845,13 +1857,13 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         match fs::remove_file(self.session_revert_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(BitFunError::io(format!(
+            Err(error) => Err(OpenBitFunError::io(format!(
                 "Failed to delete staged Session revert for {}: {}",
                 session_id, error
             ))),
@@ -1862,7 +1874,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<Vec<TokenAnchor>>> {
+    ) -> OpenBitFunResult<Option<Vec<TokenAnchor>>> {
         Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredTokenAnchorsFile>(
@@ -1877,7 +1889,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         anchors: &[TokenAnchor],
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1898,13 +1910,13 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         match fs::remove_file(self.token_anchors_path(workspace_path, session_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(BitFunError::io(format!(
+            Err(error) => Err(OpenBitFunError::io(format!(
                 "Failed to delete token anchors for session {}: {}",
                 session_id, error
             ))),
@@ -1919,7 +1931,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
         messages: &[Message],
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -1945,7 +1957,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<Option<Vec<Message>>> {
+    ) -> OpenBitFunResult<Option<Vec<Message>>> {
         Self::validate_session_id(session_id)?;
         let snapshot = self
             .read_json_optional::<StoredTurnContextSnapshotFile>(&self.context_snapshot_path(
@@ -1961,7 +1973,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+    ) -> OpenBitFunResult<Option<(usize, Vec<Message>)>> {
         self.load_latest_turn_context_snapshot_before(workspace_path, session_id, usize::MAX)
             .await
     }
@@ -1971,7 +1983,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         exclusive_turn_index: usize,
-    ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+    ) -> OpenBitFunResult<Option<(usize, Vec<Message>)>> {
         Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
@@ -1982,15 +1994,13 @@ impl PersistenceManager {
         let scan_started_at = Instant::now();
         let mut latest: Option<usize> = None;
         let mut snapshot_file_count = 0usize;
-        let mut rd = fs::read_dir(&dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
+        let mut rd = fs::read_dir(&dir).await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to read snapshots directory: {}", e))
+        })?;
 
-        while let Some(entry) = rd
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to iterate snapshots directory: {}", e)))?
-        {
+        while let Some(entry) = rd.next_entry().await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to iterate snapshots directory: {}", e))
+        })? {
             let path = entry.path();
             if path.extension().and_then(|value| value.to_str()) != Some("json") {
                 continue;
@@ -2052,7 +2062,7 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
         snapshot: &TurnSkillAgentSnapshot,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -2076,7 +2086,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+    ) -> OpenBitFunResult<Option<TurnSkillAgentSnapshot>> {
         Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredTurnSkillAgentSnapshotFile>(
@@ -2091,7 +2101,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
@@ -2099,14 +2109,12 @@ impl PersistenceManager {
             return Ok(());
         }
 
-        let mut rd = fs::read_dir(&dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
-        while let Some(entry) = rd
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to iterate snapshots directory: {}", e)))?
-        {
+        let mut rd = fs::read_dir(&dir).await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to read snapshots directory: {}", e))
+        })?;
+        while let Some(entry) = rd.next_entry().await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to iterate snapshots directory: {}", e))
+        })? {
             let path = entry.path();
             if path.extension().and_then(|value| value.to_str()) != Some("json") {
                 continue;
@@ -2133,7 +2141,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         snapshot: &TurnSkillAgentSnapshot,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -2155,7 +2163,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+    ) -> OpenBitFunResult<Option<TurnSkillAgentSnapshot>> {
         Self::validate_session_id(session_id)?;
         let stored = self
             .read_json_optional::<StoredSkillAgentBaselineOverrideFile>(
@@ -2170,7 +2178,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.snapshots_dir(workspace_path, session_id);
@@ -2178,14 +2186,12 @@ impl PersistenceManager {
             return Ok(());
         }
 
-        let mut rd = fs::read_dir(&dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
-        while let Some(entry) = rd
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to iterate snapshots directory: {}", e)))?
-        {
+        let mut rd = fs::read_dir(&dir).await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to read snapshots directory: {}", e))
+        })?;
+        while let Some(entry) = rd.next_entry().await.map_err(|e| {
+            OpenBitFunError::io(format!("Failed to iterate snapshots directory: {}", e))
+        })? {
             let path = entry.path();
             if path.extension().and_then(|value| value.to_str()) != Some("json") {
                 continue;
@@ -2222,7 +2228,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session: &Session,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
         let _session_write =
             self.lock_session_write_operation(workspace_path, &session.session_id)?;
@@ -2230,7 +2236,7 @@ impl PersistenceManager {
 
         let sessions_dir = self.project_sessions_dir(workspace_path);
         fs::create_dir_all(&sessions_dir).await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to create sessions directory {}: {}",
                 sessions_dir.display(),
                 error
@@ -2246,13 +2252,13 @@ impl PersistenceManager {
         match fs::create_dir(&session_dir).await {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                return Err(BitFunError::Validation(format!(
+                return Err(OpenBitFunError::Validation(format!(
                     "Persisted session ID already exists: {}",
                     session.session_id
                 )));
             }
             Err(error) => {
-                return Err(BitFunError::io(format!(
+                return Err(OpenBitFunError::io(format!(
                     "Failed to claim session directory {}: {}",
                     session_dir.display(),
                     error
@@ -2277,7 +2283,7 @@ impl PersistenceManager {
                     "Failed to clean up partial session persistence: session_id={}, error={}",
                     session.session_id, cleanup_error
                 );
-                return Err(BitFunError::SessionCreateCleanupRequired {
+                return Err(OpenBitFunError::SessionCreateCleanupRequired {
                     session_id: session.session_id.clone(),
                     error: error.to_string(),
                     cleanup_error: cleanup_error.to_string(),
@@ -2292,7 +2298,11 @@ impl PersistenceManager {
     }
 
     /// Save session
-    pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
+    pub async fn save_session(
+        &self,
+        workspace_path: &Path,
+        session: &Session,
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(&session.session_id)?;
         let _session_write =
             self.lock_session_write_operation(workspace_path, &session.session_id)?;
@@ -2311,7 +2321,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session: &Session,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
@@ -2339,7 +2349,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Session> {
+    ) -> OpenBitFunResult<Session> {
         Self::validate_session_id(session_id)?;
         let (session, _) = self
             .load_session_with_turns(workspace_path, session_id)
@@ -2423,13 +2433,13 @@ impl PersistenceManager {
         &self,
         storage_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Session> {
+    ) -> OpenBitFunResult<Session> {
         Self::validate_session_id(session_id)?;
         let metadata = self
             .load_session_metadata(storage_path, session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {session_id}"))
+                OpenBitFunError::NotFound(format!("Session metadata not found: {session_id}"))
             })?;
         let state = self
             .load_stored_session_state(storage_path, session_id)
@@ -2446,7 +2456,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>)> {
         Self::validate_session_id(session_id)?;
         self.load_session_with_turns_timed(workspace_path, session_id)
             .await
@@ -2457,7 +2467,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionTurnLoadTiming)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>, SessionTurnLoadTiming)> {
         Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
@@ -2470,7 +2480,7 @@ impl PersistenceManager {
             .load_session_metadata(&request.workspace_path, &request.session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!(
+                OpenBitFunError::NotFound(format!(
                     "Session metadata not found: {}",
                     request.session_id
                 ))
@@ -2543,7 +2553,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         tail_turn_count: usize,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>, usize)> {
         Self::validate_session_id(session_id)?;
         self.load_session_with_tail_turns_timed(workspace_path, session_id, tail_turn_count)
             .await
@@ -2555,7 +2565,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         tail_turn_count: usize,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize, SessionTurnLoadTiming)> {
+    ) -> OpenBitFunResult<(Session, Vec<DialogTurnData>, usize, SessionTurnLoadTiming)> {
         Self::validate_session_id(session_id)?;
         let request = SessionTurnLoadRequest {
             workspace_path: workspace_path.to_path_buf(),
@@ -2568,7 +2578,7 @@ impl PersistenceManager {
             .load_session_metadata(&request.workspace_path, &request.session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!(
+                OpenBitFunError::NotFound(format!(
                     "Session metadata not found: {}",
                     request.session_id
                 ))
@@ -2683,7 +2693,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         state: &SessionState,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         self.ensure_runtime_for_write(workspace_path).await?;
@@ -2717,7 +2727,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -2736,7 +2746,10 @@ impl PersistenceManager {
     }
 
     /// List all sessions
-    pub async fn list_sessions(&self, workspace_path: &Path) -> BitFunResult<Vec<SessionSummary>> {
+    pub async fn list_sessions(
+        &self,
+        workspace_path: &Path,
+    ) -> OpenBitFunResult<Vec<SessionSummary>> {
         let metadata_list = self.list_session_metadata(workspace_path).await?;
         let mut summaries = Vec::with_capacity(metadata_list.len());
 
@@ -2825,7 +2838,7 @@ impl PersistenceManager {
         session_id: &str,
         loaded_turns: &[DialogTurnData],
         visible_total_turn_count: usize,
-    ) -> BitFunResult<SessionTurnCatalog> {
+    ) -> OpenBitFunResult<SessionTurnCatalog> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
 
@@ -2898,7 +2911,7 @@ impl PersistenceManager {
         physical_indices: Vec<usize>,
         loaded_turns: &[DialogTurnData],
         visible_total_turn_count: usize,
-    ) -> BitFunResult<SessionTurnCatalog> {
+    ) -> OpenBitFunResult<SessionTurnCatalog> {
         Ok(self
             .build_session_turn_catalog_projection_with_physical(
                 workspace_path,
@@ -2918,7 +2931,7 @@ impl PersistenceManager {
         physical_indices: Vec<usize>,
         loaded_turns: &[DialogTurnData],
         visible_total_turn_count: usize,
-    ) -> BitFunResult<BuiltSessionTurnCatalogProjection> {
+    ) -> OpenBitFunResult<BuiltSessionTurnCatalogProjection> {
         let cached = self
             .read_session_turn_catalog_cache(workspace_path, session_id)
             .await;
@@ -2976,7 +2989,7 @@ impl PersistenceManager {
     pub async fn load_session_turn_window(
         &self,
         request: &SessionTurnWindowRequest,
-    ) -> BitFunResult<SessionTurnWindowResponse> {
+    ) -> OpenBitFunResult<SessionTurnWindowResponse> {
         Self::validate_session_id(&request.session_id)?;
         let _session_write =
             self.lock_session_write_operation(&request.workspace_path, &request.session_id)?;
@@ -3072,7 +3085,7 @@ impl PersistenceManager {
 
         for (turn, expected_index) in read_result.turns.iter().zip(selected_indices.iter()) {
             if turn.session_id != request.session_id || turn.turn_index != *expected_index {
-                return Err(BitFunError::Validation(format!(
+                return Err(OpenBitFunError::Validation(format!(
                     "Persisted Turn identity does not match its storage path: session_id={} expected_turn_index={} actual_session_id={} actual_turn_index={}",
                     request.session_id, expected_index, turn.session_id, turn.turn_index
                 )));
@@ -3136,7 +3149,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         turn: &DialogTurnData,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let cached = self
             .read_session_turn_catalog_cache(workspace_path, &turn.session_id)
             .await;
@@ -3222,7 +3235,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turns: &[DialogTurnData],
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let next_catalog = build_turn_catalog(
             session_id,
             turns
@@ -3251,7 +3264,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         turn: &DialogTurnData,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(&turn.session_id)?;
         #[cfg(test)]
         {
@@ -3261,7 +3274,7 @@ impl PersistenceManager {
                 .expect("dialog turn fault lock");
             if fault.as_deref() == Some(turn.session_id.as_str()) {
                 *fault = None;
-                return Err(BitFunError::io("Injected dialog turn write failure"));
+                return Err(OpenBitFunError::io("Injected dialog turn write failure"));
             }
         }
         let _session_write = self.lock_session_write_operation(workspace_path, &turn.session_id)?;
@@ -3275,7 +3288,10 @@ impl PersistenceManager {
             .load_session_metadata(workspace_path, &turn.session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", turn.session_id))
+                OpenBitFunError::NotFound(format!(
+                    "Session metadata not found: {}",
+                    turn.session_id
+                ))
             })?;
         self.ensure_turns_dir(workspace_path, &turn.session_id)
             .await?;
@@ -3306,13 +3322,13 @@ impl PersistenceManager {
             .await?
         {
             if revert.schema_version != SESSION_REVERT_SCHEMA_VERSION {
-                return Err(BitFunError::Deserialization(format!(
+                return Err(OpenBitFunError::Deserialization(format!(
                     "Unsupported Session revert schema version: session_id={}, version={}",
                     turn.session_id, revert.schema_version
                 )));
             }
             if turn.turn_index >= revert.boundary_turn {
-                return Err(BitFunError::Validation(format!(
+                return Err(OpenBitFunError::Validation(format!(
                     "Cannot persist a Turn over the staged Session suffix: session_id={}, turn_index={}, boundary_turn={}",
                     turn.session_id, turn.turn_index, revert.boundary_turn
                 )));
@@ -3410,7 +3426,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<Option<DialogTurnData>> {
+    ) -> OpenBitFunResult<Option<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
         Ok(self
             .read_json_optional::<StoredDialogTurnFile>(&self.turn_path(
@@ -3426,17 +3442,17 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<(usize, PathBuf)>> {
+    ) -> OpenBitFunResult<Vec<(usize, PathBuf)>> {
         self.session_layout(workspace_path)
             .list_indexed_turn_paths(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to list dialog turn files: {}", e)))
+            .map_err(|e| OpenBitFunError::io(format!("Failed to list dialog turn files: {}", e)))
     }
 
     async fn read_turn_paths(
         &self,
         indexed_paths: Vec<(usize, PathBuf)>,
-    ) -> BitFunResult<ReadTurnPathsResult> {
+    ) -> OpenBitFunResult<ReadTurnPathsResult> {
         let mut turns = Vec::with_capacity(indexed_paths.len());
         let mut missing_turn_file_count = 0usize;
         let mut max_turn_read_duration_ms = 0u64;
@@ -3476,7 +3492,7 @@ impl PersistenceManager {
         session_id: &str,
         total_turn_count: usize,
         requested_count: usize,
-    ) -> BitFunResult<Option<ReadTurnPathsResult>> {
+    ) -> OpenBitFunResult<Option<ReadTurnPathsResult>> {
         if requested_count == 0 {
             return Ok(Some(ReadTurnPathsResult {
                 turns: Vec::new(),
@@ -3504,7 +3520,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let scan_started_at = Instant::now();
@@ -3550,7 +3566,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let boundary_turn = self
@@ -3569,7 +3585,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         count: usize,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
         if count == 0 {
             return Ok(Vec::new());
@@ -3663,7 +3679,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -3691,7 +3707,9 @@ impl PersistenceManager {
         self.session_layout(workspace_path)
             .delete_indexed_turn_paths_from(session_id, turn_index)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to delete dialog turn files: {}", e)))?;
+            .map_err(|e| {
+                OpenBitFunError::io(format!("Failed to delete dialog turn files: {}", e))
+            })?;
 
         let turns = self.load_session_turns(workspace_path, session_id).await?;
         if self
@@ -3734,7 +3752,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         count: usize,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
+    ) -> OpenBitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
         let turns = self
             .load_visible_session_turns(workspace_path, session_id)
@@ -3767,7 +3785,7 @@ impl PersistenceManager {
         boundary_turn_index: usize,
         compression_id: &str,
         trigger: &str,
-    ) -> BitFunResult<Option<CompressionTranscriptArtifact>> {
+    ) -> OpenBitFunResult<Option<CompressionTranscriptArtifact>> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let all_turns = self.load_session_turns(workspace_path, session_id).await?;
@@ -3801,7 +3819,7 @@ impl PersistenceManager {
             .ensure_compression_transcripts_dir(session_id)
             .await
             .map_err(|error| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to create compression transcript directory: {}",
                     error
                 ))
@@ -3830,7 +3848,7 @@ impl PersistenceManager {
                 },
             };
             let mut metadata_bytes = serde_json::to_vec_pretty(&metadata).map_err(|error| {
-                BitFunError::serialization(format!(
+                OpenBitFunError::serialization(format!(
                     "Failed to serialize compression transcript metadata: {}",
                     error
                 ))
@@ -3846,7 +3864,7 @@ impl PersistenceManager {
                 Ok(file) => file,
                 Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
                 Err(error) => {
-                    return Err(BitFunError::io(format!(
+                    return Err(OpenBitFunError::io(format!(
                         "Failed to reserve compression transcript {}: {}",
                         transcript_path.display(),
                         error
@@ -3867,7 +3885,7 @@ impl PersistenceManager {
                 }
                 Err(error) => {
                     let _ = fs::remove_file(&transcript_path).await;
-                    return Err(BitFunError::io(format!(
+                    return Err(OpenBitFunError::io(format!(
                         "Failed to reserve compression transcript metadata {}: {}",
                         meta_path.display(),
                         error
@@ -3887,17 +3905,17 @@ impl PersistenceManager {
                 drop(meta_file);
                 let _ = fs::remove_file(&transcript_path).await;
                 let _ = fs::remove_file(&meta_path).await;
-                return Err(BitFunError::io(format!(
+                return Err(OpenBitFunError::io(format!(
                     "Failed to write compression transcript pair: {}",
                     error
                 )));
             }
 
-            let uri = bitfun_agent_tools::build_bitfun_current_session_uri(&format!(
+            let uri = openbitfun_agent_tools::build_openbitfun_current_session_uri(&format!(
                 "artifacts/compression-transcripts/{}.txt",
                 stem
             ))
-            .map_err(|error| BitFunError::Validation(error.to_string()))?;
+            .map_err(|error| OpenBitFunError::Validation(error.to_string()))?;
             return Ok(Some(CompressionTranscriptArtifact {
                 uri,
                 index_range: rendered.index_range.clone(),
@@ -3906,7 +3924,7 @@ impl PersistenceManager {
             }));
         }
 
-        Err(BitFunError::io(format!(
+        Err(OpenBitFunError::io(format!(
             "Failed to allocate a unique compression transcript name after {} attempts",
             COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS
         )))
@@ -3917,7 +3935,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         start_turn_index: usize,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let dir = self.compression_transcripts_dir(workspace_path, session_id);
@@ -3926,14 +3944,14 @@ impl PersistenceManager {
         }
         let mut deleted = 0usize;
         let mut entries = fs::read_dir(&dir).await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to read compression transcript directory {}: {}",
                 dir.display(),
                 error
             ))
         })?;
         while let Some(entry) = entries.next_entry().await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to enumerate compression transcript directory {}: {}",
                 dir.display(),
                 error
@@ -3944,7 +3962,7 @@ impl PersistenceManager {
                 .is_some_and(|boundary| boundary >= start_turn_index)
             {
                 fs::remove_file(entry.path()).await.map_err(|error| {
-                    BitFunError::io(format!(
+                    OpenBitFunError::io(format!(
                         "Failed to delete compression transcript artifact {}: {}",
                         entry.path().display(),
                         error
@@ -3962,7 +3980,7 @@ impl PersistenceManager {
         source_session_id: &str,
         target_session_id: &str,
         end_turn_index: usize,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         Self::validate_session_id(source_session_id)?;
         Self::validate_session_id(target_session_id)?;
         let _session_write =
@@ -3976,21 +3994,21 @@ impl PersistenceManager {
             .ensure_compression_transcripts_dir(target_session_id)
             .await
             .map_err(|error| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to create branched compression transcript directory: {}",
                     error
                 ))
             })?;
         let mut copied = 0usize;
         let mut entries = fs::read_dir(&source_dir).await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to read source compression transcript directory {}: {}",
                 source_dir.display(),
                 error
             ))
         })?;
         while let Some(entry) = entries.next_entry().await.map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to enumerate source compression transcripts: {}",
                 error
             ))
@@ -4002,7 +4020,7 @@ impl PersistenceManager {
                 fs::copy(entry.path(), target_dir.join(&file_name))
                     .await
                     .map_err(|error| {
-                        BitFunError::io(format!(
+                        OpenBitFunError::io(format!(
                             "Failed to copy compression transcript artifact {}: {}",
                             entry.path().display(),
                             error
@@ -4019,7 +4037,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         options: &SessionTranscriptExportOptions,
-    ) -> BitFunResult<SessionTranscriptExport> {
+    ) -> OpenBitFunResult<SessionTranscriptExport> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         if self
@@ -4027,7 +4045,7 @@ impl PersistenceManager {
             .await?
             .is_none()
         {
-            return Err(BitFunError::NotFound(format!(
+            return Err(OpenBitFunError::NotFound(format!(
                 "Session metadata not found: {}",
                 session_id
             )));
@@ -4098,7 +4116,7 @@ impl PersistenceManager {
         fs::write(&transcript_path, transcript_content)
             .await
             .map_err(|e| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to write transcript file {}: {}",
                     transcript_path.display(),
                     e
@@ -4143,7 +4161,7 @@ impl PersistenceManager {
         reference_workspace_path: &Path,
         reference_session_id: &str,
         reference_artifact_stem: &str,
-    ) -> BitFunResult<MaterializedSessionReferenceTranscript> {
+    ) -> OpenBitFunResult<MaterializedSessionReferenceTranscript> {
         Self::validate_session_id(source_session_id)?;
         Self::validate_session_id(reference_session_id)?;
         Self::validate_session_id(reference_artifact_stem)?;
@@ -4155,7 +4173,7 @@ impl PersistenceManager {
             .await?
             .is_none()
         {
-            return Err(BitFunError::NotFound(format!(
+            return Err(OpenBitFunError::NotFound(format!(
                 "Referenced session metadata not found: {}",
                 reference_session_id
             )));
@@ -4199,7 +4217,7 @@ impl PersistenceManager {
 
         Ok(MaterializedSessionReferenceTranscript {
             uri: format!(
-                "bitfun://current-session/artifacts/session-references/{}.txt",
+                "openbitfun://current-session/artifacts/session-references/{}.txt",
                 reference_artifact_stem
             ),
             turn_count: selected_indices_reversed.len(),
@@ -4215,7 +4233,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -4234,9 +4252,9 @@ impl PersistenceManager {
         {
             let path = self.turn_path(workspace_path, session_id, turn.turn_index);
             if path.exists() {
-                fs::remove_file(&path)
-                    .await
-                    .map_err(|e| BitFunError::io(format!("Failed to delete turn file: {}", e)))?;
+                fs::remove_file(&path).await.map_err(|e| {
+                    OpenBitFunError::io(format!("Failed to delete turn file: {}", e))
+                })?;
                 deleted += 1;
             }
         }
@@ -4284,7 +4302,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
         turn_index: usize,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         Self::validate_session_id(session_id)?;
         let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
         let persistence_lock = self
@@ -4303,9 +4321,9 @@ impl PersistenceManager {
         {
             let path = self.turn_path(workspace_path, session_id, turn.turn_index);
             if path.exists() {
-                fs::remove_file(&path)
-                    .await
-                    .map_err(|e| BitFunError::io(format!("Failed to delete turn file: {}", e)))?;
+                fs::remove_file(&path).await.map_err(|e| {
+                    OpenBitFunError::io(format!("Failed to delete turn file: {}", e))
+                })?;
                 deleted += 1;
             }
         }
@@ -4346,7 +4364,11 @@ impl PersistenceManager {
         Ok(deleted)
     }
 
-    pub async fn touch_session(&self, workspace_path: &Path, session_id: &str) -> BitFunResult<()> {
+    pub async fn touch_session(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> OpenBitFunResult<()> {
         self.update_session_metadata_if_present(workspace_path, session_id, |metadata| {
             metadata.touch();
             Ok(())
@@ -4379,8 +4401,8 @@ mod tests {
         SessionRelationshipKind, SessionTranscriptExportOptions, SessionTurnCatalog,
         SessionTurnWindowResponse, StoredSessionIndexFile, TextItemData, UserMessageData,
     };
-    use crate::BitFunError;
-    use bitfun_runtime_ports::SessionTurnWindowRequest;
+    use crate::OpenBitFunError;
+    use openbitfun_runtime_ports::SessionTurnWindowRequest;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -4393,8 +4415,10 @@ mod tests {
 
     impl TestWorkspace {
         fn new() -> Self {
-            let path = std::env::temp_dir()
-                .join(format!("bitfun-session-transcript-test-{}", Uuid::new_v4()));
+            let path = std::env::temp_dir().join(format!(
+                "openbitfun-session-transcript-test-{}",
+                Uuid::new_v4()
+            ));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
             Self { path }
         }
@@ -4666,7 +4690,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(failures.len(), 1, "exactly one contender must fail");
-        assert!(matches!(failures[0], BitFunError::Validation(_)));
+        assert!(matches!(failures[0], OpenBitFunError::Validation(_)));
         let persisted = manager_a
             .load_session(workspace.path(), &session_id)
             .await
@@ -4933,7 +4957,7 @@ mod tests {
         assert_eq!(
             first.uri,
             format!(
-                "bitfun://current-session/artifacts/session-references/{}.txt",
+                "openbitfun://current-session/artifacts/session-references/{}.txt",
                 reference_artifact_stem
             )
         );
@@ -6043,10 +6067,10 @@ mod tests {
         assert_ne!(first.transcript_path, second.transcript_path);
         assert!(first
             .uri
-            .starts_with("bitfun://current-session/artifacts/compression-transcripts/1-"));
+            .starts_with("openbitfun://current-session/artifacts/compression-transcripts/1-"));
         assert!(second
             .uri
-            .starts_with("bitfun://current-session/artifacts/compression-transcripts/2-"));
+            .starts_with("openbitfun://current-session/artifacts/compression-transcripts/2-"));
         assert_eq!(first.index_range.start_line, 1);
         assert_eq!(first.index_range.end_line, 3);
         assert_eq!(second.index_range.start_line, 1);
@@ -7025,7 +7049,7 @@ mod tests {
     #[tokio::test]
     async fn remote_sessions_dir_input_is_used_without_accepting_runtime_root() {
         let test_root =
-            std::env::temp_dir().join(format!("bitfun-persistence-test-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("openbitfun-persistence-test-{}", Uuid::new_v4()));
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(
             test_root.join("user"),
         ));

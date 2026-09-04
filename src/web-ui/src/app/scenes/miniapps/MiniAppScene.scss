@@ -14,9 +14,9 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     flex-shrink: 0;
     min-height: 40px;
   }
@@ -27,27 +27,27 @@
   }
 
   &__title {
-    font-family: var(--bf-type-heading-card-font-family);
-    font-size: var(--bf-type-heading-card-font-size);
-    font-weight: var(--bf-type-heading-card-font-weight);
-    line-height: var(--bf-type-heading-card-line-height);
-    letter-spacing: var(--bf-type-heading-card-letter-spacing);
-    color: var(--bf-color-content-primary);
+    font-family: var(--openbitfun-type-heading-card-font-family);
+    font-size: var(--openbitfun-type-heading-card-font-size);
+    font-weight: var(--openbitfun-type-heading-card-font-weight);
+    line-height: var(--openbitfun-type-heading-card-line-height);
+    letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     display: block;
 
     &--loading {
-      color: var(--bf-color-content-muted);
-      font-weight: var(--bf-type-label-md-font-weight);
+      color: var(--openbitfun-color-content-muted);
+      font-weight: var(--openbitfun-type-label-md-font-weight);
     }
   }
 
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     flex-shrink: 0;
   }
 
@@ -87,37 +87,37 @@
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
-    padding: var(--bf-space-2);
+    padding: var(--openbitfun-space-2);
     pointer-events: none;
-    color: var(--bf-color-content-muted);
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 18%, transparent);
+    color: var(--openbitfun-color-content-muted);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 18%, transparent);
   }
 
   &__preview-stage {
     position: absolute;
-    inset: var(--bf-space-4);
+    inset: var(--openbitfun-space-4);
     z-index: 6;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-lg);
-    background: var(--bf-color-surface-raised);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-lg);
+    background: var(--openbitfun-color-surface-raised);
     box-shadow:
-      0 24px 70px color-mix(in srgb, var(--bf-color-content-on-light) 34%, transparent),
-      0 0 0 1px color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+      0 24px 70px color-mix(in srgb, var(--openbitfun-color-content-on-light) 34%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
   }
 
   &__preview-stage-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-panel);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-panel);
 
     span,
     small {
@@ -125,30 +125,30 @@
     }
 
     span {
-      color: var(--bf-color-content-primary);
-      font-family: var(--bf-type-heading-card-font-family);
-      font-size: var(--bf-type-heading-card-font-size);
-      font-weight: var(--bf-type-heading-card-font-weight);
-      line-height: var(--bf-type-heading-card-line-height);
-      letter-spacing: var(--bf-type-heading-card-letter-spacing);
+      color: var(--openbitfun-color-content-primary);
+      font-family: var(--openbitfun-type-heading-card-font-family);
+      font-size: var(--openbitfun-type-heading-card-font-size);
+      font-weight: var(--openbitfun-type-heading-card-font-weight);
+      line-height: var(--openbitfun-type-heading-card-line-height);
+      letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
     }
 
     small {
       margin-top: 2px;
-      color: var(--bf-color-content-muted);
-      font-family: var(--bf-type-support-font-family);
-      font-size: var(--bf-type-support-font-size);
-      font-weight: var(--bf-type-support-font-weight);
-      line-height: var(--bf-type-support-line-height);
-      letter-spacing: var(--bf-type-support-letter-spacing);
+      color: var(--openbitfun-color-content-muted);
+      font-family: var(--openbitfun-type-support-font-family);
+      font-size: var(--openbitfun-type-support-font-size);
+      font-weight: var(--openbitfun-type-support-font-weight);
+      line-height: var(--openbitfun-type-support-line-height);
+      letter-spacing: var(--openbitfun-type-support-letter-spacing);
     }
   }
 
   &__preview-stage-body {
     flex: 1 1 auto;
     min-height: 0;
-    padding: var(--bf-space-3);
-    background: var(--bf-color-surface-canvas);
+    padding: var(--openbitfun-space-3);
+    background: var(--openbitfun-color-surface-canvas);
 
     .miniapp-customize-panel__preview-frame {
       height: 100%;
@@ -164,13 +164,13 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    gap: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   &__error {
@@ -181,24 +181,24 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    gap: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     text-align: center;
-    padding: var(--bf-space-6);
+    padding: var(--openbitfun-space-6);
 
     > svg {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     p {
       margin: 0;
       max-width: 320px;
-      line-height: var(--bf-type-body-lg-line-height);
+      line-height: var(--openbitfun-type-body-lg-line-height);
     }
   }
 
@@ -208,28 +208,28 @@
 
   &__customize-notice {
     position: absolute;
-    left: var(--bf-space-3);
-    bottom: var(--bf-space-3);
+    left: var(--openbitfun-space-3);
+    bottom: var(--openbitfun-space-3);
     z-index: 5;
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    max-width: min(520px, calc(100% - var(--bf-space-6)));
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border: 1px solid var(--bf-color-status-success-border);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-panel);
-    color: var(--bf-color-content-primary);
-    box-shadow: var(--bf-shadow-base);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    max-width: min(520px, calc(100% - var(--openbitfun-space-6)));
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border: 1px solid var(--openbitfun-color-status-success-border);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-panel);
+    color: var(--openbitfun-color-content-primary);
+    box-shadow: var(--openbitfun-shadow-base);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 
@@ -242,16 +242,16 @@
   flex-direction: column;
   flex: 0 0 clamp(380px, 38vw, 560px);
   align-self: stretch;
-  margin: var(--bf-space-3) var(--bf-space-3) var(--bf-space-3) 0;
+  margin: var(--openbitfun-space-3) var(--openbitfun-space-3) var(--openbitfun-space-3) 0;
   min-width: 320px;
   overflow: hidden;
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-raised);
-  color: var(--bf-color-content-primary);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-raised);
+  color: var(--openbitfun-color-content-primary);
   box-shadow:
-    0 24px 70px color-mix(in srgb, var(--bf-color-content-on-light) 36%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+    0 24px 70px color-mix(in srgb, var(--openbitfun-color-content-on-light) 36%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
   isolation: isolate;
 
   &__header,
@@ -266,28 +266,28 @@
 
   &__header {
     justify-content: space-between;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-3) var(--bf-space-3) var(--bf-space-2);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-3) var(--openbitfun-space-2);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 
     h3 {
       margin: 0;
-      font-family: var(--bf-type-heading-section-font-family);
-      font-size: var(--bf-type-heading-section-font-size);
-      font-weight: var(--bf-type-heading-section-font-weight);
-      line-height: var(--bf-type-heading-section-line-height);
-      letter-spacing: var(--bf-type-heading-section-letter-spacing);
+      font-family: var(--openbitfun-type-heading-section-font-family);
+      font-size: var(--openbitfun-type-heading-section-font-size);
+      font-weight: var(--openbitfun-type-heading-section-font-weight);
+      line-height: var(--openbitfun-type-heading-section-line-height);
+      letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
     }
 
     span {
       display: block;
       margin-top: 2px;
-      color: var(--bf-color-content-muted);
-      font-family: var(--bf-type-support-font-family);
-      font-size: var(--bf-type-support-font-size);
-      font-weight: var(--bf-type-support-font-weight);
-      line-height: var(--bf-type-support-line-height);
-      letter-spacing: var(--bf-type-support-letter-spacing);
+      color: var(--openbitfun-color-content-muted);
+      font-family: var(--openbitfun-type-support-font-family);
+      font-size: var(--openbitfun-type-support-font-size);
+      font-weight: var(--openbitfun-type-support-font-weight);
+      line-height: var(--openbitfun-type-support-line-height);
+      letter-spacing: var(--openbitfun-type-support-letter-spacing);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -297,121 +297,121 @@
 
   &__notice {
     display: flex;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-status-warning-surface);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-status-warning-surface);
 
     svg {
       flex: 0 0 auto;
       margin-top: 2px;
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     strong {
       display: block;
       margin-bottom: 2px;
-      font-family: var(--bf-type-heading-card-font-family);
-      font-size: var(--bf-type-heading-card-font-size);
-      font-weight: var(--bf-type-heading-card-font-weight);
-      line-height: var(--bf-type-heading-card-line-height);
-      letter-spacing: var(--bf-type-heading-card-letter-spacing);
+      font-family: var(--openbitfun-type-heading-card-font-family);
+      font-size: var(--openbitfun-type-heading-card-font-size);
+      font-weight: var(--openbitfun-type-heading-card-font-weight);
+      line-height: var(--openbitfun-type-heading-card-line-height);
+      letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
     }
 
     p {
       margin: 0;
-      color: var(--bf-color-content-secondary);
-      font-family: var(--bf-type-support-font-family);
-      font-size: var(--bf-type-support-font-size);
-      font-weight: var(--bf-type-support-font-weight);
-      line-height: var(--bf-type-support-line-height);
-      letter-spacing: var(--bf-type-support-letter-spacing);
+      color: var(--openbitfun-color-content-secondary);
+      font-family: var(--openbitfun-type-support-font-family);
+      font-size: var(--openbitfun-type-support-font-size);
+      font-weight: var(--openbitfun-type-support-font-weight);
+      line-height: var(--openbitfun-type-support-line-height);
+      letter-spacing: var(--openbitfun-type-support-letter-spacing);
     }
 
     &-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--bf-space-2);
-      margin-top: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
+      margin-top: var(--openbitfun-space-2);
     }
 
     &--update {
-      border-bottom-color: color-mix(in srgb, var(--bf-color-status-warning-content) 28%, var(--bf-color-border-subtle));
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, var(--bf-color-surface-subtle));
+      border-bottom-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 28%, var(--openbitfun-color-border-subtle));
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, var(--openbitfun-color-surface-subtle));
     }
   }
 
   &__request {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
 
     span {
-      font-family: var(--bf-type-label-sm-font-family);
-      font-size: var(--bf-type-label-sm-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
-      line-height: var(--bf-type-label-sm-line-height);
-      letter-spacing: var(--bf-type-label-sm-letter-spacing);
-      color: var(--bf-color-content-muted);
+      font-family: var(--openbitfun-type-label-sm-font-family);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      line-height: var(--openbitfun-type-label-sm-line-height);
+      letter-spacing: var(--openbitfun-type-label-sm-letter-spacing);
+      color: var(--openbitfun-color-content-muted);
     }
 
     textarea {
       width: 100%;
       min-height: 96px;
       resize: vertical;
-      border: 1px solid var(--bf-color-border-subtle);
-      border-radius: var(--bf-radius-base);
-      padding: var(--bf-space-2);
-      background: var(--bf-color-surface-subtle);
-      color: var(--bf-color-content-primary);
-      font-family: var(--bf-type-body-sm-font-family);
-      font-size: var(--bf-type-body-sm-font-size);
-      font-weight: var(--bf-type-body-sm-font-weight);
-      line-height: var(--bf-type-body-sm-line-height);
-      letter-spacing: var(--bf-type-body-sm-letter-spacing);
+      border: 1px solid var(--openbitfun-color-border-subtle);
+      border-radius: var(--openbitfun-radius-base);
+      padding: var(--openbitfun-space-2);
+      background: var(--openbitfun-color-surface-subtle);
+      color: var(--openbitfun-color-content-primary);
+      font-family: var(--openbitfun-type-body-sm-font-family);
+      font-size: var(--openbitfun-type-body-sm-font-size);
+      font-weight: var(--openbitfun-type-body-sm-font-weight);
+      line-height: var(--openbitfun-type-body-sm-line-height);
+      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 
       &:focus {
-        outline: 2px solid var(--bf-color-accent-default);
+        outline: 2px solid var(--openbitfun-color-accent-default);
         outline-offset: 1px;
       }
     }
   }
 
   &__actions {
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     flex-wrap: wrap;
-    padding: 0 var(--bf-space-3) var(--bf-space-3);
+    padding: 0 var(--openbitfun-space-3) var(--openbitfun-space-3);
 
   }
 
   &__error,
   &__status,
   &__busy {
-    margin: 0 var(--bf-space-3) var(--bf-space-3);
-    padding: var(--bf-space-2);
-    border-radius: var(--bf-radius-base);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    margin: 0 var(--openbitfun-space-3) var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-base);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
   }
 
   &__error {
-    border: 1px solid var(--bf-color-status-danger-border);
-    background: var(--bf-color-status-danger-surface);
-    color: var(--bf-color-status-danger-content);
+    border: 1px solid var(--openbitfun-color-status-danger-border);
+    background: var(--openbitfun-color-status-danger-surface);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   &__status {
-    gap: var(--bf-space-2);
-    border: 1px solid var(--bf-color-status-success-border);
-    background: var(--bf-color-status-success-surface);
-    color: var(--bf-color-content-secondary);
+    gap: var(--openbitfun-space-2);
+    border: 1px solid var(--openbitfun-color-status-success-border);
+    background: var(--openbitfun-color-status-success-surface);
+    color: var(--openbitfun-color-content-secondary);
 
     svg {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 
@@ -419,16 +419,16 @@
     display: flex;
     flex: 1 1 240px;
     min-height: 220px;
-    margin: 0 var(--bf-space-3) var(--bf-space-3);
+    margin: 0 var(--openbitfun-space-3) var(--openbitfun-space-3);
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-scene);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-scene);
 
     .btw-session-panel {
       min-height: 0;
       width: 100%;
-      background: var(--bf-color-surface-scene);
+      background: var(--openbitfun-color-surface-scene);
     }
 
     .btw-session-panel__header-right {
@@ -440,14 +440,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     width: 100%;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
   &__preview {
@@ -455,25 +455,25 @@
     flex: 0 0 190px;
     flex-direction: column;
     min-height: 0;
-    padding: 0 var(--bf-space-3) var(--bf-space-3);
+    padding: 0 var(--openbitfun-space-3) var(--openbitfun-space-3);
   }
 
   &__preview-header {
     justify-content: space-between;
-    gap: var(--bf-space-2);
-    margin-bottom: var(--bf-space-2);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    margin-bottom: var(--openbitfun-space-2);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
 
     span:first-child {
-      font-weight: var(--bf-type-label-selected-font-weight);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
 
     span:last-child {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
       text-align: right;
     }
   }
@@ -482,23 +482,23 @@
     flex: 1 1 0;
     min-height: 180px;
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-canvas);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   &__footer {
     justify-content: flex-end;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    border-top: 1px solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
 
   }
 
   &__busy {
-    gap: var(--bf-space-2);
-    border: 1px solid var(--bf-color-border-subtle);
-    color: var(--bf-color-content-secondary);
+    gap: var(--openbitfun-space-2);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    color: var(--openbitfun-color-content-secondary);
   }
 }
 
@@ -508,22 +508,22 @@
   &__body {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   &__notice {
     display: flex;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-secondary);
-    font-family: var(--bf-type-body-sm-font-family);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-body-sm-letter-spacing);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-secondary);
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 
     svg {
       flex: 0 0 auto;
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
 
     p {
@@ -533,14 +533,14 @@
 
   &__section {
     h4 {
-      margin: 0 0 var(--bf-space-1);
-      font-family: var(--bf-type-meta-font-family);
-      font-size: var(--bf-type-meta-font-size);
-      font-weight: var(--bf-type-meta-font-weight);
-      line-height: var(--bf-type-meta-line-height);
-      color: var(--bf-color-content-muted);
+      margin: 0 0 var(--openbitfun-space-1);
+      font-family: var(--openbitfun-type-meta-font-family);
+      font-size: var(--openbitfun-type-meta-font-size);
+      font-weight: var(--openbitfun-type-meta-font-weight);
+      line-height: var(--openbitfun-type-meta-line-height);
+      color: var(--openbitfun-color-content-muted);
       text-transform: uppercase;
-      letter-spacing: var(--bf-type-meta-letter-spacing);
+      letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     }
 
     &__list {
@@ -550,34 +550,34 @@
     ul {
       display: flex;
       flex-direction: column;
-      gap: var(--bf-space-1);
+      gap: var(--openbitfun-space-1);
       margin: 0;
-      padding: var(--bf-space-2) var(--bf-space-3);
-      border: 1px solid var(--bf-color-border-subtle);
-      border-radius: var(--bf-radius-base);
-      background: var(--bf-color-surface-subtle);
-      font-family: var(--bf-type-code-sm-font-family);
-      font-size: var(--bf-type-code-sm-font-size);
-      font-weight: var(--bf-type-code-sm-font-weight);
-      line-height: var(--bf-type-code-sm-line-height);
-      letter-spacing: var(--bf-type-code-sm-letter-spacing);
+      padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+      border: 1px solid var(--openbitfun-color-border-subtle);
+      border-radius: var(--openbitfun-radius-base);
+      background: var(--openbitfun-color-surface-subtle);
+      font-family: var(--openbitfun-type-code-sm-font-family);
+      font-size: var(--openbitfun-type-code-sm-font-size);
+      font-weight: var(--openbitfun-type-code-sm-font-weight);
+      line-height: var(--openbitfun-type-code-sm-line-height);
+      letter-spacing: var(--openbitfun-type-code-sm-letter-spacing);
     }
   }
 
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 }
 
 @media (max-width: 720px) {
   .miniapp-customize-panel {
     position: absolute;
-    left: var(--bf-space-2);
-    right: var(--bf-space-2);
-    bottom: var(--bf-space-2);
-    top: var(--bf-space-2);
+    left: var(--openbitfun-space-2);
+    right: var(--openbitfun-space-2);
+    bottom: var(--openbitfun-space-2);
+    top: var(--openbitfun-space-2);
     width: auto;
     margin: 0;
     min-width: 0;

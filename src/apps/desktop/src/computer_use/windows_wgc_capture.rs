@@ -5,7 +5,7 @@
 
 #![allow(dead_code)]
 
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::time::{Duration, Instant};
 use windows::core::Interface;
 use windows::Graphics::Capture::{Direct3D11CaptureFramePool, GraphicsCaptureItem};
@@ -25,9 +25,9 @@ use windows::Win32::System::WinRT::Direct3D11::IDirect3DDxgiInterfaceAccess;
 use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 
 /// Capture one frame from `hwnd` via WGC, returning top-down BGRA bytes.
-pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
+pub(super) fn capture_window_bgra(hwnd: HWND) -> OpenBitFunResult<(Vec<u8>, u32, u32)> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "WGC capture: invalid HWND".to_string(),
         ));
     }
@@ -40,16 +40,16 @@ pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32
         let direct_device = create_winrt_d3d_device(&d3d_device)?;
 
         let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()
-            .map_err(|e| BitFunError::service(format!("WGC factory: {e}")))?;
+            .map_err(|e| OpenBitFunError::service(format!("WGC factory: {e}")))?;
         let item: GraphicsCaptureItem = interop
             .CreateForWindow(hwnd)
-            .map_err(|e| BitFunError::service(format!("WGC CreateForWindow: {e}")))?;
+            .map_err(|e| OpenBitFunError::service(format!("WGC CreateForWindow: {e}")))?;
 
         let size = item
             .Size()
-            .map_err(|e| BitFunError::service(format!("WGC item Size: {e}")))?;
+            .map_err(|e| OpenBitFunError::service(format!("WGC item Size: {e}")))?;
         if size.Width <= 0 || size.Height <= 0 {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "WGC capture: invalid item size {}x{}",
                 size.Width, size.Height
             )));
@@ -61,14 +61,14 @@ pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32
             2,
             size,
         )
-        .map_err(|e| BitFunError::service(format!("WGC CreateFreeThreaded: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("WGC CreateFreeThreaded: {e}")))?;
 
         let session = frame_pool
             .CreateCaptureSession(&item)
-            .map_err(|e| BitFunError::service(format!("WGC CreateCaptureSession: {e}")))?;
+            .map_err(|e| OpenBitFunError::service(format!("WGC CreateCaptureSession: {e}")))?;
         session
             .StartCapture()
-            .map_err(|e| BitFunError::service(format!("WGC StartCapture: {e}")))?;
+            .map_err(|e| OpenBitFunError::service(format!("WGC StartCapture: {e}")))?;
 
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut last_err: Option<String>;
@@ -81,7 +81,7 @@ pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32
                 Err(e) => last_err = Some(format!("TryGetNextFrame: {e}")),
             }
             if Instant::now() >= deadline {
-                break Err(BitFunError::service(format!(
+                break Err(OpenBitFunError::service(format!(
                     "WGC capture timed out waiting for frame{}",
                     last_err
                         .map(|e| format!(" (last error: {e})"))
@@ -98,7 +98,7 @@ pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32
     }
 }
 
-unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceContext)> {
+unsafe fn create_d3d11_device() -> OpenBitFunResult<(ID3D11Device, ID3D11DeviceContext)> {
     let mut device: Option<ID3D11Device> = None;
     let mut context: Option<ID3D11DeviceContext> = None;
     let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -133,53 +133,55 @@ unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceConte
                 Some(&mut context),
             )
         }
-        .map_err(|e| BitFunError::service(format!("D3D11CreateDevice (WARP): {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("D3D11CreateDevice (WARP): {e}")))?;
     }
 
     let device = device.ok_or_else(|| {
-        BitFunError::service("D3D11CreateDevice returned null device".to_string())
+        OpenBitFunError::service("D3D11CreateDevice returned null device".to_string())
     })?;
     let context = context.ok_or_else(|| {
-        BitFunError::service("D3D11CreateDevice returned null context".to_string())
+        OpenBitFunError::service("D3D11CreateDevice returned null context".to_string())
     })?;
     Ok((device, context))
 }
 
-unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> BitFunResult<IDirect3DDevice> {
+unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> OpenBitFunResult<IDirect3DDevice> {
     let dxgi_device: IDXGIDevice = d3d_device
         .cast()
-        .map_err(|e| BitFunError::service(format!("IDXGIDevice cast: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("IDXGIDevice cast: {e}")))?;
     // SAFETY: `dxgi_device` is a live COM interface obtained from the supplied
     // D3D11 device and remains alive through the conversion call.
-    let inspectable = unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi_device) }
-        .map_err(|e| BitFunError::service(format!("CreateDirect3D11DeviceFromDXGIDevice: {e}")))?;
+    let inspectable =
+        unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi_device) }.map_err(|e| {
+            OpenBitFunError::service(format!("CreateDirect3D11DeviceFromDXGIDevice: {e}"))
+        })?;
     inspectable
         .cast()
-        .map_err(|e| BitFunError::service(format!("IDirect3DDevice cast: {e}")))
+        .map_err(|e| OpenBitFunError::service(format!("IDirect3DDevice cast: {e}")))
 }
 
 unsafe fn copy_frame_to_bgra(
     frame: &windows::Graphics::Capture::Direct3D11CaptureFrame,
     d3d_device: &ID3D11Device,
     d3d_context: &ID3D11DeviceContext,
-) -> BitFunResult<(Vec<u8>, u32, u32)> {
+) -> OpenBitFunResult<(Vec<u8>, u32, u32)> {
     let surface = frame
         .Surface()
-        .map_err(|e| BitFunError::service(format!("WGC frame Surface: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("WGC frame Surface: {e}")))?;
     let access: IDirect3DDxgiInterfaceAccess = surface
         .cast()
-        .map_err(|e| BitFunError::service(format!("IDirect3DDxgiInterfaceAccess cast: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("IDirect3DDxgiInterfaceAccess cast: {e}")))?;
     // SAFETY: `access` is the live DXGI interface for `surface`; the requested
     // interface type matches the WGC frame surface contract.
     let src_texture: ID3D11Texture2D = unsafe { access.GetInterface::<ID3D11Texture2D>() }
-        .map_err(|e| BitFunError::service(format!("GetInterface ID3D11Texture2D: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("GetInterface ID3D11Texture2D: {e}")))?;
 
     let mut desc = D3D11_TEXTURE2D_DESC::default();
     unsafe { src_texture.GetDesc(&mut desc) };
     let width = desc.Width;
     let height = desc.Height;
     if width == 0 || height == 0 {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "WGC frame texture has zero dimensions".to_string(),
         ));
     }
@@ -200,16 +202,16 @@ unsafe fn copy_frame_to_bgra(
     // SAFETY: `staging_desc` is fully initialized and `staging` is a live
     // output slot for the newly created texture interface.
     unsafe { d3d_device.CreateTexture2D(&staging_desc, None, Some(&mut staging)) }
-        .map_err(|e| BitFunError::service(format!("CreateTexture2D staging: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("CreateTexture2D staging: {e}")))?;
     let staging = staging.ok_or_else(|| {
-        BitFunError::service("CreateTexture2D returned null staging texture".to_string())
+        OpenBitFunError::service("CreateTexture2D returned null staging texture".to_string())
     })?;
 
     unsafe { d3d_context.CopyResource(&staging, &src_texture) };
 
     let mut mapped = windows::Win32::Graphics::Direct3D11::D3D11_MAPPED_SUBRESOURCE::default();
     unsafe { d3d_context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped)) }
-        .map_err(|e| BitFunError::service(format!("Map staging texture: {e}")))?;
+        .map_err(|e| OpenBitFunError::service(format!("Map staging texture: {e}")))?;
 
     let row_pitch = mapped.RowPitch as usize;
     let width_bytes = (width as usize) * 4;

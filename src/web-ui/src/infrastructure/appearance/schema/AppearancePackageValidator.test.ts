@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultAppearanceRegistry } from '../registry/defaultAppearanceRegistry';
-import type { AppearancePackage } from '../types';
+import { APPEARANCE_SCHEMA_VERSION, type AppearancePackage } from '../types';
 import { AppearancePackageValidationError } from './AppearancePackageValidationError';
 import { appearancePackageValidator, assertValidAppearancePackage } from './AppearancePackageValidator';
-import { migrateAppearancePackage } from './migrateAppearancePackage';
 
 function validPackage(): AppearancePackage {
   return {
-    schema: 'bitfun.appearance',
-    schemaVersion: 1,
+    schema: 'openbitfun.appearance',
+    schemaVersion: APPEARANCE_SCHEMA_VERSION,
     id: 'test.appearance',
     name: 'Test Appearance',
     version: '1.0.0',
@@ -104,9 +103,9 @@ describe('AppearancePackageValidator', () => {
     ]));
   });
 
-  it('drops retired menu parts and states while preserving supported appearance rules', () => {
-    const legacy = validPackage() as unknown as Record<string, unknown>;
-    legacy.components = {
+  it('rejects retired parts and states instead of rewriting the package', () => {
+    const retired = validPackage() as unknown as Record<string, unknown>;
+    retired.components = {
       'branch-quick-switch': {
         parts: {
           root: {
@@ -120,39 +119,20 @@ describe('AppearancePackageValidator', () => {
           item: { base: { opacity: { kind: 'number', value: 1 } } },
         },
       },
-      'context-menu': {
-        parts: {
-          root: {
-            base: { opacity: { kind: 'number', value: 1 } },
-            states: { disabled: { opacity: { kind: 'number', value: 0.5 } } },
-          },
-          submenu: { base: { opacity: { kind: 'number', value: 1 } } },
-        },
-      },
-      'appearance-settings': {
-        parts: {
-          root: { base: { opacity: { kind: 'number', value: 1 } } },
-          palettePicker: { base: { opacity: { kind: 'number', value: 1 } } },
-          paletteSelect: { base: { opacity: { kind: 'number', value: 1 } } },
-          packageSelect: { base: { opacity: { kind: 'number', value: 1 } } },
-        },
-      },
     };
 
-    const migrated = migrateAppearancePackage(legacy);
-    const components = migrated.components as Record<string, {
-      parts: Record<string, Record<string, unknown>>;
-    }>;
-    expect(components['branch-quick-switch']?.parts.item).toBeUndefined();
-    expect(components['branch-quick-switch']?.parts.root?.states).toBeUndefined();
-    expect(components['branch-quick-switch']?.parts.root?.contexts).toBeUndefined();
-    expect(components['context-menu']?.parts.submenu).toBeUndefined();
-    expect(components['context-menu']?.parts.root?.states).toBeUndefined();
-    expect(components['appearance-settings']?.parts.root).toBeDefined();
-    expect(components['appearance-settings']?.parts.palettePicker).toBeUndefined();
-    expect(components['appearance-settings']?.parts.paletteSelect).toBeUndefined();
-    expect(components['appearance-settings']?.parts.packageSelect).toBeUndefined();
-    expect(appearancePackageValidator.validate(legacy, registry).valid).toBe(true);
+    const result = appearancePackageValidator.validate(retired, registry);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'UNKNOWN_PART',
+        path: 'components.branch-quick-switch.parts.item',
+      }),
+      expect.objectContaining({
+        code: 'UNKNOWN_STATE',
+        path: 'components.branch-quick-switch.parts.root.states.selected',
+      }),
+    ]));
   });
 
   it('keeps incompatible component contracts as grouped structured diagnostics', () => {

@@ -183,11 +183,13 @@ mod tests {
 
     #[test]
     fn recognizes_plan_artifact_paths_case_insensitively() {
-        assert!(is_plan_artifact_path(".bitfun/plans/example.plan.md"));
+        assert!(is_plan_artifact_path(".openbitfun/plans/example.plan.md"));
         assert!(is_plan_artifact_path(
-            r"E:\workspace\.bitfun\plans\EXAMPLE.PLAN.MD"
+            r"E:\workspace\.openbitfun\plans\EXAMPLE.PLAN.MD"
         ));
-        assert!(!is_plan_artifact_path(".bitfun/plans/example.plan.md.bak"));
+        assert!(!is_plan_artifact_path(
+            ".openbitfun/plans/example.plan.md.bak"
+        ));
     }
 
     #[test]

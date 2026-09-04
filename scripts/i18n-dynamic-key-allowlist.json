@@ -4,7 +4,7 @@
     {
       "id": "installer-install-path-errors",
       "surface": "installer",
-      "owner": "BitFun-Installer/src/utils/installPathErrors.ts",
+      "owner": "OpenBitFun-Installer/src/utils/installPathErrors.ts",
       "description": "Installer backend returns INSTALL_PATH::snake_case codes that the frontend maps to errors.installPath.camelCase.",
       "sourceReferences": [
         "const key = `errors.installPath.${snakeToCamelKey(code)}`",
@@ -14,7 +14,7 @@
         "errors.installPath.notAbsolute",
         "errors.installPath.filesystemRoot",
         "errors.installPath.pathNotDirectory",
-        "errors.installPath.directoryMustBeEmptyOrBitfun",
+        "errors.installPath.directoryMustBeEmptyOrOpenBitFun",
         "errors.installPath.inspectDirectoryFailed",
         "errors.installPath.directoryNotWritable",
         "errors.installPath.parentNotWritable"
@@ -23,7 +23,7 @@
     {
       "id": "installer-model-provider-metadata",
       "surface": "installer",
-      "owner": "BitFun-Installer/src/data/modelProviders.ts",
+      "owner": "OpenBitFun-Installer/src/data/modelProviders.ts",
       "description": "Installer model-provider templates resolve nameKey, descriptionKey, and noteKey metadata at render time.",
       "sourceReferences": [
         "nameKey: `model.providers.${provider.id}.name`",

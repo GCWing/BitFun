@@ -1,4 +1,4 @@
-use bitfun_services_core::filesystem::FileSearchOutcome;
+use openbitfun_services_core::filesystem::FileSearchOutcome;
 
 use super::flashgrep::{
     DirtyFileStats as FlashgrepDirtyFileStats, FileCount as FlashgrepFileCount,
@@ -376,11 +376,11 @@ pub struct WorkspaceSearchHit {
     pub lines: Vec<WorkspaceSearchLine>,
 }
 
-/// Outcome of BitFun's automatic-index policy for a workspace.
+/// Outcome of OpenBitFun's automatic-index policy for a workspace.
 ///
 /// flashgrep reports `needs_index` both while the policy is still evaluating a workspace and
 /// after it has deliberately declined to build one, so the daemon's phase alone cannot explain
-/// to a user why nothing is happening. This carries that BitFun-side decision to the UI.
+/// to a user why nothing is happening. This carries that OpenBitFun-side decision to the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceSearchAutoIndexDecision {
@@ -414,7 +414,7 @@ pub struct WorkspaceSearchAutoIndexStatus {
 pub struct WorkspaceIndexStatus {
     pub repo_status: WorkspaceSearchRepoStatus,
     pub active_task: Option<WorkspaceSearchTaskStatus>,
-    /// Absent on transports that have no BitFun-side auto-index policy (remote SSH workspaces).
+    /// Absent on transports that have no OpenBitFun-side auto-index policy (remote SSH workspaces).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_index: Option<WorkspaceSearchAutoIndexStatus>,
 }

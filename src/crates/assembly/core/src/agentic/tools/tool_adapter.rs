@@ -1,13 +1,13 @@
 //! Core product tool adapter for provider-neutral tool contracts.
 //!
 //! Keep these adapters in core until `ToolUseContext` and concrete tools have a
-//! reviewed owner migration. Generic contracts live in `bitfun-agent-tools`;
+//! reviewed owner migration. Generic contracts live in `openbitfun-agent-tools`;
 //! this module only projects core-owned `Tool` behavior into those contracts.
 
 use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolExposure};
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
-use bitfun_agent_runtime::deep_review::{ReviewTargetEvidence, ReviewTargetEvidenceSource};
-use bitfun_agent_tools::{ContextualToolManifestItem, ToolRegistryItem};
+use openbitfun_agent_runtime::deep_review::{ReviewTargetEvidence, ReviewTargetEvidenceSource};
+use openbitfun_agent_tools::{ContextualToolManifestItem, ToolRegistryItem};
 use serde_json::Value;
 
 fn live_repository_context_allowed(context: &ToolUseContext) -> bool {

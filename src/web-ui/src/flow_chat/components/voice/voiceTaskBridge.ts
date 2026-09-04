@@ -70,7 +70,7 @@ export class VoiceTaskCancelledError extends Error {
   readonly sessionId: string;
 
   constructor(sessionId: string) {
-    super('BitFun task was cancelled');
+    super('OpenBitFun task was cancelled');
     this.name = 'VoiceTaskCancelledError';
     this.sessionId = sessionId;
   }
@@ -209,7 +209,7 @@ function rewriteProgressSentence(sentence: string): string {
   value = value
     .replace(/^(?:progress|update|status)\s*[:\uFF1A-]?\s*/i, '')
     .replace(/^(?:\u8FDB\u5C55|\u66F4\u65B0|\u72B6\u6001)\s*[:\uFF1A-]?\s*/, '')
-    .replace(/^(?:\u6211|\u6211\u4EEC|BitFun)\s*/, '');
+    .replace(/^(?:\u6211|\u6211\u4EEC|OpenBitFun)\s*/, '');
 
   const completedChinese = value.match(
     /^(?:\u5DF2\u7ECF|\u5DF2)\u5B8C\u6210\u4E86?(.+?)(?:\uFF0C(.+))?$/,
@@ -312,7 +312,7 @@ export function extractVoiceTaskProgressTexts(session: Session): Array<{ id: str
 export function extractVoiceTaskSummary(session: Session): string {
   const turn = latestTurn(session);
   if (!turn) {
-    return 'BitFun completed the task without a text response.';
+    return 'OpenBitFun completed the task without a text response.';
   }
   const parts: string[] = [];
   turn.modelRounds.forEach(round => {
@@ -324,7 +324,7 @@ export function extractVoiceTaskSummary(session: Session): string {
   });
   const summary = parts.join(' ').trim();
   if (summary.length <= MAX_RESULT_CHARS) {
-    return summary || 'BitFun completed the task without a text response.';
+    return summary || 'OpenBitFun completed the task without a text response.';
   }
   return `${summary.slice(0, MAX_RESULT_CHARS - 1)}…`;
 }
@@ -377,7 +377,7 @@ async function waitForSettledSession(
       finished = true;
       stateSubscription.dispose();
       flowSubscription.dispose();
-      reject(new Error('BitFun task timed out after 30 minutes'));
+      reject(new Error('OpenBitFun task timed out after 30 minutes'));
     }, TASK_TIMEOUT_MS);
     stateSubscription.dispose = stateMachineManager.subscribeGlobal((changedSessionId) => {
       if (changedSessionId !== sessionId || !isSettled()) return;
@@ -490,11 +490,11 @@ async function observeVoiceTaskSession(
     await waitForSettledSession(sessionId, baselineTurnIds);
     const session = manager.getFlowChatState().sessions.get(sessionId);
     if (!session) {
-      throw new Error('BitFun task session disappeared before completion');
+      throw new Error('OpenBitFun task session disappeared before completion');
     }
     const turn = selectVoiceTaskTurn(session, baselineTurnIds);
     if (!turn || turn.status === 'error') {
-      throw new Error(turn?.error || session.error || 'BitFun task failed');
+      throw new Error(turn?.error || session.error || 'OpenBitFun task failed');
     }
     if (turn.status === 'cancelled') {
       throw new VoiceTaskCancelledError(sessionId);
@@ -529,13 +529,13 @@ async function observeVoiceTaskSession(
  * Agent execution path; delegated sessions will inherit it automatically. Only
  * direct client-control operations need a new Voice function command.
  */
-export async function runBitFunVoiceTask(
+export async function runOpenBitFunVoiceTask(
   task: string,
   options: RunVoiceTaskOptions,
 ): Promise<VoiceTaskResult> {
   const normalizedTask = task.trim();
   if (!normalizedTask) {
-    throw new Error('BitFun task description is empty');
+    throw new Error('OpenBitFun task description is empty');
   }
 
   const manager = FlowChatManager.getInstance();
@@ -571,7 +571,7 @@ export async function runMiniAppVoiceTask(
 ): Promise<VoiceTaskResult> {
   const normalizedTask = task.trim();
   if (!normalizedTask) {
-    throw new Error('BitFun task description is empty');
+    throw new Error('OpenBitFun task description is empty');
   }
 
   const session = FlowChatManager.getInstance()

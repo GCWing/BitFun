@@ -63,10 +63,10 @@
       "more_count": "{{count}} more"
     },
     "welcome": {
-      "toast_title": "Welcome to BitFun",
+      "toast_title": "Welcome to OpenBitFun",
       "toast_desc": "Your AI-powered programming environment",
-      "modal_title": "Welcome to BitFun",
-      "modal_body": "BitFun is an AI-driven programming environment.\n\nThrough multi-turn conversations and tool collaboration, development becomes more efficient."
+      "modal_title": "Welcome to OpenBitFun",
+      "modal_body": "OpenBitFun is an AI-driven programming environment.\n\nThrough multi-turn conversations and tool collaboration, development becomes more efficient."
     }
   },
   "confirm": {

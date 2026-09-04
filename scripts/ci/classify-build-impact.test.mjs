@@ -114,9 +114,9 @@ test('maps representative changes to the smallest predictive validation', () => 
     },
     {
       paths: [
-        'src/apps/mobile/android/app/src/main/kotlin/com/bitfun/MainActivity.kt',
+        'src/apps/mobile/android/app/src/main/kotlin/com/openbitfun/MainActivity.kt',
         'src/apps/mobile/shared/core-feature/src/commonMain/kotlin/Feature.kt',
-        'src/apps/mobile/ios/BitFun/App.swift',
+        'src/apps/mobile/ios/OpenBitFun/App.swift',
         'src/apps/mobile/harmonyos/entry/src/main/ets/pages/Index.ets',
       ],
       result: expected({
@@ -131,7 +131,7 @@ test('maps representative changes to the smallest predictive validation', () => 
       result: expected({ rustRequired: true, reason: 'rust-build-input' }),
     },
     {
-      paths: ['BitFun-Installer/scripts/build-installer.cjs'],
+      paths: ['OpenBitFun-Installer/scripts/build-installer.cjs'],
       result: expected({
         rustRequired: true,
         desktopPlatforms: ['windows-x64'],
@@ -160,7 +160,7 @@ test('maps representative changes to the smallest predictive validation', () => 
       'src/apps/desktop/scripts/post-install-icons.sh',
       'src/apps/desktop/dmg/background.png',
       'scripts/product-customization/projections.mjs',
-      'products/bitfun/product.jsonc',
+      'products/openbitfun/product.jsonc',
     ].map((desktopInput) => ({
       paths: [desktopInput],
       result: expected({
@@ -272,7 +272,7 @@ test('combines mobile-web with other surfaces without native-mobile noise', () =
   assert.deepEqual(
     classifyBuildImpact([
       'src/mobile-web/src/App.tsx',
-      'src/apps/mobile/android/app/src/main/kotlin/com/bitfun/MainActivity.kt',
+      'src/apps/mobile/android/app/src/main/kotlin/com/openbitfun/MainActivity.kt',
     ]),
     expected({
       rustRequired: false,
@@ -324,14 +324,14 @@ test('keeps nested Markdown fail-closed because it may be a compile-time input',
 });
 
 test('uses a merge-base range for pull requests and emits every workflow output', (t) => {
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-build-impact-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-build-impact-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, ['init', '--initial-branch=main']);
   writeFileSync(path.join(root, 'README.md'), 'baseline\n');
   commit(root, 'baseline');
 
   git(root, ['switch', '-c', 'feature']);
-  const installer = path.join(root, 'BitFun-Installer/scripts/build-installer.cjs');
+  const installer = path.join(root, 'OpenBitFun-Installer/scripts/build-installer.cjs');
   mkdirSync(path.dirname(installer), { recursive: true });
   writeFileSync(installer, 'export {};\n');
   const head = commit(root, 'installer change');
@@ -377,7 +377,7 @@ test('fails closed when paths or event ranges are invalid or unavailable', (t) =
     assert.equal(result.dshProfileRequired, true);
   }
 
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-build-impact-range-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-build-impact-range-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, ['init', '--initial-branch=main']);
   writeFileSync(path.join(root, 'README.md'), 'baseline\n');
@@ -396,7 +396,7 @@ test('fails closed when paths or event ranges are invalid or unavailable', (t) =
 });
 
 test('rejects tracked Rust sources that reference the Web UI source tree', (t) => {
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-build-impact-boundary-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-build-impact-boundary-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   git(root, ['init', '--initial-branch=main']);
   writeFileSync(path.join(root, 'README.md'), 'baseline\n');

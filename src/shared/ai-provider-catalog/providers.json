@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_kind": "bitfun_builtin_provider_overlay",
+  "catalog_kind": "openbitfun_builtin_provider_overlay",
   "providers": [
     {
       "id": "openbitfun",

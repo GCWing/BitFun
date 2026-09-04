@@ -1,4 +1,4 @@
-.bitfun-update-available {
+.openbitfun-update-available {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -7,14 +7,14 @@
   max-width: 100%;
 }
 
-.bitfun-update-available__lead {
+.openbitfun-update-available__lead {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.bitfun-update-available__lead-icon {
+.openbitfun-update-available__lead-icon {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -22,100 +22,100 @@
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  background: var(--bf-color-surface-subtle);
-  color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+  background: var(--openbitfun-color-surface-subtle);
+  color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
 }
 
-.bitfun-update-available__subtitle {
+.openbitfun-update-available__subtitle {
   margin: 2px 0 0;
   flex: 1;
   min-width: 0;
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-support-line-height);
-  color: var(--bf-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-support-line-height);
+  color: var(--openbitfun-color-content-secondary);
 }
 
-.bitfun-update-available__versions {
+.openbitfun-update-available__versions {
   display: flex;
   flex-direction: column;
   gap: 0;
 
   &--card {
     padding: 0;
-    border: 1px dashed var(--bf-color-border-subtle);
+    border: 1px dashed var(--openbitfun-color-border-subtle);
     border-radius: 10px;
-    background: var(--bf-color-surface-subtle);
+    background: var(--openbitfun-color-surface-subtle);
     overflow: hidden;
   }
 }
 
-.bitfun-update-available__row {
+.openbitfun-update-available__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px 20px;
   padding: 12px 16px;
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 
   &:last-child {
     border-bottom: none;
   }
 
   &--highlight {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 6%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 6%, transparent);
 
-    .bitfun-update-available__value {
-      color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
-      font-weight: var(--bf-type-label-sm-font-weight);
+    .openbitfun-update-available__value {
+      color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
   }
 }
 
-.bitfun-update-available__label {
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+.openbitfun-update-available__label {
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
 }
 
-.bitfun-update-available__value {
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
-  color: var(--bf-color-content-primary);
+.openbitfun-update-available__value {
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-primary);
   text-align: right;
   word-break: break-all;
 }
 
-.bitfun-update-available__notes {
+.openbitfun-update-available__notes {
   margin-top: 18px;
 }
 
-.bitfun-update-available__notes-label {
-  font-size: var(--bf-type-meta-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
+.openbitfun-update-available__notes-label {
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
   text-transform: uppercase;
-  letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
-  color: var(--bf-color-content-muted);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
+  color: var(--openbitfun-color-content-muted);
   margin-bottom: 8px;
 }
 
-.bitfun-update-available__notes-body {
+.openbitfun-update-available__notes-body {
   margin: 0;
   max-height: 200px;
   padding: 12px 14px;
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   border-radius: 8px;
-  border: 1px solid var(--bf-color-border-subtle);
-  background: var(--bf-color-surface-subtle);
-  color: var(--bf-color-content-secondary);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-subtle);
+  color: var(--openbitfun-color-content-secondary);
 }
 
-.bitfun-update-available__actions {
+.openbitfun-update-available__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -123,25 +123,25 @@
   gap: 10px;
   margin-top: 22px;
   padding-top: 18px;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 @media (max-width: 480px) {
-  .bitfun-update-available {
+  .openbitfun-update-available {
     padding-bottom: 18px;
   }
 
-  .bitfun-update-available__row {
+  .openbitfun-update-available__row {
     grid-template-columns: 1fr;
     gap: 6px;
     padding: 12px 14px;
   }
 
-  .bitfun-update-available__value {
+  .openbitfun-update-available__value {
     text-align: left;
   }
 
-  .bitfun-update-available__actions {
+  .openbitfun-update-available__actions {
     flex-direction: column-reverse;
     align-items: stretch;
     justify-content: stretch;

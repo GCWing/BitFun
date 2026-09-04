@@ -3,7 +3,7 @@
 //! The provider supplies entries and metadata. Traversal, limits, ordering and
 //! rendering must not depend on whether those entries came from local IO or SFTP.
 
-use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
+use openbitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
 use std::collections::{HashMap, VecDeque};
 use std::time::SystemTime;
 

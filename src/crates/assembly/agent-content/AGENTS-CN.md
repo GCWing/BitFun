@@ -2,7 +2,7 @@
 
 # 内置 Agent 内容
 
-本 crate 只归属随产品发布的不可变内置 Agent prompt 字节，以及为 `bitfun-core` 兼容保留的稳定查询 key。
+本 crate 只归属随产品发布的不可变内置 Agent prompt 字节，以及为 `openbitfun-core` 兼容保留的稳定查询 key。
 它不依赖第三方库，只由 Core 的 `product-full` 组装启用。
 
 ## 边界规则
@@ -18,5 +18,5 @@
 ## 验证
 
 修改 catalog、查询行为或 prompt 路径后运行
-`cargo test -p bitfun-agent-content --test prompt_catalog_contracts`。prompt 文本可以有意更新，但不得静默删除或
+`cargo test -p openbitfun-agent-content --test prompt_catalog_contracts`。prompt 文本可以有意更新，但不得静默删除或
 重命名稳定 key。

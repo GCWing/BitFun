@@ -3,12 +3,12 @@ use crate::local_source_paths::{
     LocalConfigDocument, LocalConfigDocumentKind, LocalConfigDocumentSource, LocalSourcePlanItem,
     OpenCodeLocalConfigOptions,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, SourceKey,
 };
-use bitfun_product_domains::external_subagents::{
+use openbitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
@@ -18,12 +18,12 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentToolCapability, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
 };
-use bitfun_product_domains::tool_permissions::{
+use openbitfun_product_domains::tool_permissions::{
     wildcard_matches, PermissionConstraintLayer, PermissionEffect,
     PermissionResourceCaseSensitivity, PermissionRule,
 };
-use bitfun_services_core::{jsonc::strip_jsonc, markdown::FrontMatterMarkdown};
-use bitfun_static_hook_support::common_external_subagent_tool_capability;
+use openbitfun_services_core::{jsonc::strip_jsonc, markdown::FrontMatterMarkdown};
+use openbitfun_static_hook_support::common_external_subagent_tool_capability;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -382,15 +382,15 @@ fn parse_layer(layer: &AgentLayer) -> Result<ParsedAgentLayer, ExternalSourcePro
                         true,
                     )
                 })? {
-                bitfun_services_core::bounded_fs::BoundedTextRead::Content(content) => content,
-                bitfun_services_core::bounded_fs::BoundedTextRead::TooLarge => {
+                openbitfun_services_core::bounded_fs::BoundedTextRead::Content(content) => content,
+                openbitfun_services_core::bounded_fs::BoundedTextRead::TooLarge => {
                     return Err(ExternalSourceProviderError::new(
                         "opencode.agent.source_too_large",
                         "OpenCode agent source exceeds the compatibility size limit",
                         false,
                     ));
                 }
-                bitfun_services_core::bounded_fs::BoundedTextRead::InvalidUtf8 => {
+                openbitfun_services_core::bounded_fs::BoundedTextRead::InvalidUtf8 => {
                     return Err(ExternalSourceProviderError::new(
                         "opencode.agent.source_unreadable",
                         "OpenCode agent source must be valid UTF-8",

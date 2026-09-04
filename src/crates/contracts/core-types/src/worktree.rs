@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::product_identity::{hidden_data_directory, product_id};
+
 /// User-facing choice for where a newly-created session executes.
 ///
 /// This is a request contract. Once resolved, sessions persist a
@@ -91,8 +93,8 @@ pub struct WorktreeSettings {
 impl Default for WorktreeSettings {
     fn default() -> Self {
         Self {
-            root_path: "~/.bitfun/worktrees".to_string(),
-            branch_prefix: "bitfun/".to_string(),
+            root_path: format!("~/{}/worktrees", hidden_data_directory()),
+            branch_prefix: format!("{}/", product_id()),
             copy_local_changes: false,
             auto_delete_enabled: true,
             auto_delete_limit: 15,
@@ -222,8 +224,8 @@ mod tests {
     #[test]
     fn worktree_defaults_include_managed_cleanup_policy() {
         let defaults = WorktreeSettings::default();
-        assert_eq!(defaults.root_path, "~/.bitfun/worktrees");
-        assert_eq!(defaults.branch_prefix, "bitfun/");
+        assert_eq!(defaults.root_path, "~/.openbitfun/worktrees");
+        assert_eq!(defaults.branch_prefix, "openbitfun/");
         assert!(!defaults.copy_local_changes);
         assert!(defaults.auto_delete_enabled);
         assert_eq!(defaults.auto_delete_limit, 15);

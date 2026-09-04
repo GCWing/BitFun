@@ -22,8 +22,8 @@ test("resolves aliases and emits stable CSS variable names", () => {
   });
 
   assert.equal(tokens["color.action.primary"].value, "#146c4b");
-  assert.equal(tokenNameToCssVariable("color.action.primary"), "--bf-color-action-primary");
-  assert.match(renderCss(tokens), /--bf-color-action-primary: #146c4b;/);
+  assert.equal(tokenNameToCssVariable("color.action.primary"), "--openbitfun-color-action-primary");
+  assert.match(renderCss(tokens), /--openbitfun-color-action-primary: #146c4b;/);
 });
 
 test("can preserve exact and embedded references in generated CSS", () => {
@@ -47,10 +47,10 @@ test("can preserve exact and embedded references in generated CSS", () => {
   const css = renderCss(tokens, { preserveReferences: true });
 
   assert.equal(tokens["type.body.fontSize"].value, "14px");
-  assert.match(css, /--bf-type-body-font-size: var\(--bf-font-size-base\);/);
+  assert.match(css, /--openbitfun-type-body-font-size: var\(--openbitfun-font-size-base\);/);
   assert.match(
     css,
-    /--bf-type-body-fluid-size: clamp\(var\(--bf-font-size-base\), 2vw, 18px\);/,
+    /--openbitfun-type-body-fluid-size: clamp\(var\(--openbitfun-font-size-base\), 2vw, 18px\);/,
   );
 });
 
@@ -123,7 +123,7 @@ test("creates a mode-complete catalog for visual authoring consumers", () => {
   assert.deepEqual(catalog, [
     {
       category: "space",
-      cssVariable: "--bf-space-2",
+      cssVariable: "--openbitfun-space-2",
       description: "Standard gap",
       name: "space.2",
       type: "dimension",

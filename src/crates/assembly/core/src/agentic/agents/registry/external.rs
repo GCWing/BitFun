@@ -5,13 +5,13 @@ use crate::agentic::deep_review_policy::{
     CODE_REVIEW_AGENT_TYPE, DEEP_REVIEW_AGENT_TYPE, REVIEW_FIXER_AGENT_TYPE,
 };
 use crate::agentic::workspace::canonical_local_workspace_path;
-use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
-use bitfun_core_types::{
+use log::{debug, warn};
+use openbitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
+use openbitfun_core_types::{
     SessionAgentRouteOwner, SessionContinuationPolicy, SessionModelBindingPolicy,
 };
-use bitfun_product_domains::external_sources::EcosystemId;
-use bitfun_product_domains::external_subagents::ExternalSubagentMode;
-use log::{debug, warn};
+use openbitfun_product_domains::external_sources::EcosystemId;
+use openbitfun_product_domains::external_subagents::ExternalSubagentMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};

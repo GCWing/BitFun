@@ -4,20 +4,20 @@
   align-items: flex-start;
   margin:
     8px
-    var(--bf-control-flow-chat-content-padding-inline)
-    calc(var(--bf-control-flow-chat-turn-gap) + 0.18rem)
-    var(--bf-control-flow-chat-content-padding-inline);
+    var(--openbitfun-control-flow-chat-content-padding-inline)
+    calc(var(--openbitfun-control-flow-chat-turn-gap) + 0.18rem)
+    var(--openbitfun-control-flow-chat-content-padding-inline);
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 45%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--bf-color-status-danger-content) 10%, var(--bf-color-surface-panel));
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, var(--openbitfun-color-surface-panel));
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 
   &--warning {
-    border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 45%, transparent);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, var(--bf-color-surface-panel));
+    border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 45%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, var(--openbitfun-color-surface-panel));
   }
 }
 
@@ -25,10 +25,10 @@
   display: inline-flex;
   flex: 0 0 auto;
   margin-top: 4px;
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 
   .turn-failure-notice--warning & {
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 }
 
@@ -54,7 +54,7 @@
 
 .turn-failure-notice__title {
   flex: 0 0 auto;
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   white-space: nowrap;
 }
 
@@ -63,7 +63,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--bf-color-content-primary) 78%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-primary) 78%, transparent);
 }
 
 .turn-failure-notice__details-toggle {
@@ -78,13 +78,13 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
   font: inherit;
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-content-primary) 8%, transparent);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
@@ -108,14 +108,14 @@
   min-width: 0;
 
   dt {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   dd {
     min-width: 0;
     margin: 0;
     overflow-wrap: anywhere;
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 }
 
@@ -128,7 +128,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 .turn-failure-notice__copy {
@@ -145,8 +145,8 @@
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-content-primary) 8%, transparent);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
@@ -156,19 +156,19 @@
   overflow: auto;
   padding: 8px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--bf-color-surface-canvas) 75%, transparent);
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-meta-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 75%, transparent);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-meta-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
 @media (max-width: 900px) {
   .turn-failure-notice {
-    margin-left: var(--bf-control-flow-chat-content-padding-inline-mobile);
-    margin-right: var(--bf-control-flow-chat-content-padding-inline-mobile);
+    margin-left: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
+    margin-right: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
   }
 
   .turn-failure-notice__facts {

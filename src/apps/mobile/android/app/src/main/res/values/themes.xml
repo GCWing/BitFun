@@ -5,7 +5,7 @@
       launch and the first frame. Extending a platform theme keeps the app off
       the com.google.android.material dependency entirely.
     -->
-    <style name="Theme.BitFun" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.OpenBitFun" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>

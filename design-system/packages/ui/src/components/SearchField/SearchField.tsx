@@ -65,7 +65,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       );
 
   return (
-    <span className={classNames(styles.root, className)} data-bf-component="search-field">
+    <span className={classNames(styles.root, className)} data-openbitfun-component="search-field">
       <Input
         {...props}
         className={styles.field}

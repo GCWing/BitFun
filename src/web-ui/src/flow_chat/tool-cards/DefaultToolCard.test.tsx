@@ -121,7 +121,7 @@ describe('DefaultToolCard', () => {
     });
 
     const card = container.querySelector(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="ambient"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="surface"][data-openbitfun-attention="ambient"]',
     );
     expect(card).not.toBeNull();
 

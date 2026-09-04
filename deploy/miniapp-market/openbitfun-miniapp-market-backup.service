@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up the OpenBitFun MiniApp market
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openbitfun-miniapp-market-backup
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

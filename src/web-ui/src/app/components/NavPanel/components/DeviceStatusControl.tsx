@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@bitfun/ui';
+import { Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { Cloud, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -213,29 +213,29 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        className={`bitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
+        className={`openbitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
         aria-label={accessibleSummary}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => onOpenChange(!open)}
         data-testid="nav-footer-device-status"
-        data-bf-component="nav-panel"
-        data-bf-part="deviceStatus"
-        data-bf-state={overview.mode}
+        data-openbitfun-component="nav-panel"
+        data-openbitfun-part="deviceStatus"
+        data-openbitfun-state={overview.mode}
       >
         <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
-        <span className="bitfun-nav-panel__footer-device-status-label">
+        <span className="openbitfun-nav-panel__footer-device-status-label">
           {overview.currentWorkDeviceName}
         </span>
         {attachedGroups.length > 0 && (
           <span
-            className="bitfun-nav-panel__footer-device-status-attached"
+            className="openbitfun-nav-panel__footer-device-status-attached"
             aria-hidden="true"
           >
             {attachedGroups.map(group => (
               <span
-                className="bitfun-nav-panel__footer-device-status-attached-group"
-                data-bf-device-kind={group.kind}
+                className="openbitfun-nav-panel__footer-device-status-attached-group"
+                data-openbitfun-device-kind={group.kind}
                 key={group.kind}
               >
                 <DeviceIcon
@@ -244,7 +244,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   size={13}
                 />
                 {group.count > 1 && (
-                  <span className="bitfun-nav-panel__footer-device-status-attached-count">
+                  <span className="openbitfun-nav-panel__footer-device-status-attached-count">
                     {group.count}
                   </span>
                 )}
@@ -257,24 +257,24 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
       {open && createPortal(
         <>
           <div
-            className="bitfun-nav-panel__footer-backdrop"
+            className="openbitfun-nav-panel__footer-backdrop"
             onMouseDown={() => onOpenChange(false)}
             data-testid="nav-device-status-backdrop"
           />
           <Card
             ref={popoverRef}
             appearance="raised"
-            className="bitfun-device-overview"
+            className="openbitfun-device-overview"
             gap="none"
             padding="none"
             radius="lg"
             role="dialog"
             aria-label={t('deviceOverview.title')}
             data-testid="nav-device-status-popover"
-            data-bf-product-component="device-overview"
-            data-bf-product-part="root"
-            data-bf-state={overview.mode}
-            data-bf-placement={popoverLayout?.placement ?? 'top'}
+            data-openbitfun-product-component="device-overview"
+            data-openbitfun-product-part="root"
+            data-openbitfun-state={overview.mode}
+            data-openbitfun-placement={popoverLayout?.placement ?? 'top'}
             style={{
               top: `${popoverLayout?.top ?? 0}px`,
               left: `${popoverLayout?.left ?? 0}px`,
@@ -282,19 +282,19 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             }}
           >
             <CardHeader
-              className="bitfun-device-overview__header"
+              className="openbitfun-device-overview__header"
               contentAlign="center"
-              title={<h2 className="bitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
+              title={<h2 className="openbitfun-device-overview__title">{t('deviceOverview.title')}</h2>}
             />
-            <ScrollArea className="bitfun-device-overview__scroll">
-            <CardBody className="bitfun-device-overview__body">
-              <div className="bitfun-device-overview__summary" data-testid="nav-device-status-summary">
+            <ScrollArea className="openbitfun-device-overview__scroll">
+            <CardBody className="openbitfun-device-overview__body">
+              <div className="openbitfun-device-overview__summary" data-testid="nav-device-status-summary">
                 <DeviceArtwork device={overview.primaryDevice} />
-                <span className="bitfun-device-overview__device-name" title={overview.currentWorkDeviceName}>
+                <span className="openbitfun-device-overview__device-name" title={overview.currentWorkDeviceName}>
                   {overview.currentWorkDeviceName}
                 </span>
                 {overview.mode === 'connected' && (
-                  <span className="bitfun-device-overview__activity">
+                  <span className="openbitfun-device-overview__activity">
                     {deviceActivity(overview.primaryDevice)}
                   </span>
                 )}
@@ -302,19 +302,19 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
               {overview.mode === 'connected' && (
                 <>
                   <section
-                    className="bitfun-device-overview__device-group"
+                    className="openbitfun-device-overview__device-group"
                     data-testid="nav-device-status-connected-devices"
                   >
                     <h3>{t('deviceOverview.connectedDevices')}</h3>
-                    <div className="bitfun-device-overview__device-rows">
+                    <div className="openbitfun-device-overview__device-rows">
                       {overview.connectedDevices.map(device => (
                         <div
-                          className="bitfun-device-overview__device-row"
+                          className="openbitfun-device-overview__device-row"
                           key={device.id}
-                          data-bf-device-kind={device.kind}
-                          data-bf-activities={device.activities.join(' ')}
+                          data-openbitfun-device-kind={device.kind}
+                          data-openbitfun-activities={device.activities.join(' ')}
                         >
-                          <span className="bitfun-device-overview__device-icon" aria-hidden="true">
+                          <span className="openbitfun-device-overview__device-icon" aria-hidden="true">
                             <DeviceIcon
                               identity={`${device.id} ${device.name}`}
                               kind={device.kind}
@@ -332,9 +332,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
 
               {overview.mode === 'connected' && overview.connectionService && serviceContent && (
                 <div
-                  className="bitfun-device-overview__service"
+                  className="openbitfun-device-overview__service"
                   data-testid="nav-device-connection-service"
-                  data-bf-service-kind={overview.connectionService.kind}
+                  data-openbitfun-service-kind={overview.connectionService.kind}
                 >
                   <ConnectionServiceIcon service={overview.connectionService} />
                   <span>
@@ -352,7 +352,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   variant="outline"
                   size="sm"
                   leadingIcon={<Icon name="refresh" size="lg" />}
-                  className="bitfun-device-overview__notice"
+                  className="openbitfun-device-overview__notice"
                   onClick={() => { void refresh(); }}
                 >
                   {t('deviceOverview.statusUnavailable')}
@@ -361,9 +361,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
             </CardBody>
             </ScrollArea>
 
-            <CardFooter align="center" className="bitfun-device-overview__actions">
+            <CardFooter align="center" className="openbitfun-device-overview__actions">
               <Button
-                className="bitfun-device-overview__action"
+                className="openbitfun-device-overview__action"
                 variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="link" size="sm" />}
@@ -374,7 +374,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
               </Button>
               {overview.peerActive && (
                 <Button
-                  className="bitfun-device-overview__action"
+                  className="openbitfun-device-overview__action"
                   variant="outline"
                   size="sm"
                   leadingIcon={<Undo2 />}

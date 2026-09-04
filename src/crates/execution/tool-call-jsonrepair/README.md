@@ -5,7 +5,7 @@ This crate is a local fork of
 under MIT. The upstream license is retained in [`LICENSE`](LICENSE).
 
 It retains the upstream generic repair API for compatibility, and adds
-`repair_tool_call_json` for BitFun streamed tool arguments. That profile does
+`repair_tool_call_json` for OpenBitFun streamed tool arguments. That profile does
 not interpret `#`, `//`, or `/* ... */` as comments: tool arguments are JSON,
 not configuration files. This prevents Markdown content whose opening quote
 was omitted from being silently discarded as a comment.

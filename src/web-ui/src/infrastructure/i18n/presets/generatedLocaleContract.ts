@@ -31,8 +31,8 @@ export type SharedI18nTerms = {
 export const SHARED_TERMS_BY_LOCALE = {
   "zh-CN": {
     "product": {
-      "name": "BitFun",
-      "remote": "BitFun Remote"
+      "name": "OpenBitFun",
+      "remote": "OpenBitFun Remote"
     },
     "features": {
       "remoteControl": "远程控制",
@@ -65,7 +65,7 @@ export const SHARED_TERMS_BY_LOCALE = {
     "connectionMethods": {
       "lan": "局域网",
       "ngrok": "Ngrok",
-      "bitfunServer": "BitFun Server",
+      "openbitfunServer": "OpenBitFun Server",
       "customServer": "自定义服务器",
       "botFeishu": "飞书机器人",
       "botTelegram": "Telegram Bot",
@@ -81,8 +81,8 @@ export const SHARED_TERMS_BY_LOCALE = {
   },
   "en-US": {
     "product": {
-      "name": "BitFun",
-      "remote": "BitFun Remote"
+      "name": "OpenBitFun",
+      "remote": "OpenBitFun Remote"
     },
     "features": {
       "remoteControl": "Remote Control",
@@ -115,7 +115,7 @@ export const SHARED_TERMS_BY_LOCALE = {
     "connectionMethods": {
       "lan": "LAN",
       "ngrok": "Ngrok",
-      "bitfunServer": "BitFun Server",
+      "openbitfunServer": "OpenBitFun Server",
       "customServer": "Custom Server",
       "botFeishu": "Feishu Bot",
       "botTelegram": "Telegram Bot",
@@ -131,8 +131,8 @@ export const SHARED_TERMS_BY_LOCALE = {
   },
   "zh-TW": {
     "product": {
-      "name": "BitFun",
-      "remote": "BitFun Remote"
+      "name": "OpenBitFun",
+      "remote": "OpenBitFun Remote"
     },
     "features": {
       "remoteControl": "遠端控制",
@@ -165,7 +165,7 @@ export const SHARED_TERMS_BY_LOCALE = {
     "connectionMethods": {
       "lan": "區域網路",
       "ngrok": "Ngrok",
-      "bitfunServer": "BitFun Server",
+      "openbitfunServer": "OpenBitFun Server",
       "customServer": "自訂伺服器",
       "botFeishu": "飛書機器人",
       "botTelegram": "Telegram Bot",

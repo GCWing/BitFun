@@ -1,4 +1,4 @@
-# BitFun 可配置开发体验与工程治理架构设计
+# OpenBitFun 可配置开发体验与工程治理架构设计
 
 > 产品输入：[product-requirements.md](product-requirements.md)
 > 范围：把产品需求转为架构边界、领域模型、配置优先级和模块职责。用户画像、体验路径和功能需求以产品需求文档为准。
@@ -135,7 +135,7 @@
 |---|---|---|
 | 用户偏好 | 用户选择快/严、语言、默认授权范围 | 个体体验默认值 |
 | Session/任务覆盖 | “这次快速放行网络”“本任务只读分析” | 临时治理强度 |
-| 工作区配置 | `.bitfun/config.toml` 或 `.bitfun/quality.yaml` | BitFun 专属模式、检查、安全策略 |
+| 工作区配置 | `.openbitfun/config.toml` 或 `.openbitfun/quality.yaml` | OpenBitFun 专属模式、检查、安全策略 |
 | 现有仓库规则 | AGENTS.md、CONTRIBUTING、CODEOWNERS、CI、`.github/instructions` | 项目知识和规则来源 |
 | 工具特定规则 | `.coderabbit.yaml`、`.gitlab/duo/*`、`.kiro/steering/*` | 外部工具和路径级经验 |
 | 组织策略 | 受管配置、受保护分支、企业策略 | 强制策略和不可绕过限制 |

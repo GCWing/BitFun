@@ -25,5 +25,5 @@ and embedded hosts.
 
 ## Verification
 
-Run `cargo test -p bitfun-relay-service` and
+Run `cargo test -p openbitfun-relay-service` and
 `node scripts/check-core-boundaries.mjs` after changes.

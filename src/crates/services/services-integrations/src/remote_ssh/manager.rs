@@ -10,7 +10,7 @@ use crate::remote_ssh::types::{
 };
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use bitfun_services_core::process_manager;
+use openbitfun_services_core::{process_manager, product_identity::hidden_data_directory};
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
 use russh_keys::key::{KeyPair, PublicKey};
@@ -1524,9 +1524,11 @@ fn workspace_command(config: &SSHConnectionConfig, command: &str, tty: bool) -> 
 /// live upload is age, and the cost of guessing wrong is a corrupted transfer
 /// in another session. No real upload runs for 24 hours; plenty run for one.
 fn stale_upload_sweep(quoted_dir: &str) -> String {
+    let quoted_pattern =
+        crate::remote_ssh::shell::quote_arg(&format!("{}-upload-*.tmp", hidden_data_directory()));
     format!(
         "if command -v find >/dev/null 2>&1; then \
-           find {quoted_dir} -maxdepth 1 -name '.bitfun-upload-*.tmp' -mmin +1440 \
+           find {quoted_dir} -maxdepth 1 -name {quoted_pattern} -mmin +1440 \
              -exec rm -f -- {{}} \\; 2>/dev/null || true; \
          fi; "
     )
@@ -1590,11 +1592,12 @@ async fn drain_workspace_diagnostics<R: AsyncRead + Unpin>(
 /// to a command that is starting right now; those are only removed once they
 /// are far too old for that to be true.
 fn stale_pid_file_sweep() -> String {
-    "for stale_pid_file in /tmp/.bitfun-exec-*.pid; do \
+    format!(
+        "for stale_pid_file in /tmp/{}-exec-*.pid; do \
        [ -e \"$stale_pid_file\" ] || continue; \
        if [ ! -s \"$stale_pid_file\" ]; then \
          if command -v find >/dev/null 2>&1; then \
-           find \"$stale_pid_file\" -mmin +60 -exec rm -f -- {} \\; 2>/dev/null || true; \
+           find \"$stale_pid_file\" -mmin +60 -exec rm -f -- {{}} \\; 2>/dev/null || true; \
          fi; \
          continue; \
        fi; \
@@ -1604,15 +1607,20 @@ fn stale_pid_file_sweep() -> String {
        esac; \
        kill -0 \"$stale_pid\" 2>/dev/null || rm -f -- \"$stale_pid_file\" 2>/dev/null || true; \
      done; \
-     unset stale_pid_file stale_pid 2>/dev/null || true; "
-        .to_string()
+     unset stale_pid_file stale_pid 2>/dev/null || true; ",
+        hidden_data_directory()
+    )
 }
 
 fn supervised_container_command(
     container: &ContainerWorkspaceConfig,
     command: &str,
 ) -> (String, String) {
-    let pid_file = format!("/tmp/.bitfun-exec-{}.pid", uuid::Uuid::new_v4());
+    let pid_file = format!(
+        "/tmp/{}-exec-{}.pid",
+        hidden_data_directory(),
+        uuid::Uuid::new_v4()
+    );
     let wrapped = supervised_container_command_with_pid_file(container, command, &pid_file);
     (wrapped, pid_file)
 }
@@ -1993,8 +2001,8 @@ fn parse_container_file_output(
 
 fn parse_workspace_stat_output(
     output: &str,
-) -> anyhow::Result<bitfun_runtime_ports::WorkspaceMetadata> {
-    use bitfun_runtime_ports::{WorkspaceMetadata, WorkspacePathKind};
+) -> anyhow::Result<openbitfun_runtime_ports::WorkspaceMetadata> {
+    use openbitfun_runtime_ports::{WorkspaceMetadata, WorkspacePathKind};
     let fields = output.split_whitespace().collect::<Vec<_>>();
     if fields.len() != 5 || !matches!(fields[0], "hex" | "oct") {
         anyhow::bail!("Container stat returned malformed workspace metadata");
@@ -2166,42 +2174,8 @@ impl SSHConnectionManager {
         }
 
         let content = tokio::fs::read_to_string(&self.remote_workspace_path).await?;
-        // Try array format first, fall back to single-object for backward compat
         let mut workspaces: Vec<crate::remote_ssh::types::RemoteWorkspace> =
-            serde_json::from_str(&content)
-                .or_else(|_| {
-                    // Legacy: single workspace object
-                    serde_json::from_str::<crate::remote_ssh::types::RemoteWorkspace>(&content)
-                        .map(|ws| vec![ws])
-                })
-                .context("Failed to parse remote workspace(s)")?;
-
-        // Saved connection IDs used to include the SSH port. The saved-profile
-        // loader migrates those IDs before workspace records are loaded, so
-        // migrate the corresponding workspace references here as well. Without
-        // this, startup pruning would treat a valid legacy workspace as orphaned.
-        let saved_ids: Vec<String> = self
-            .saved_connections
-            .read()
-            .await
-            .iter()
-            .map(|connection| connection.id.clone())
-            .collect();
-        let mut migrated_connection_ids = 0;
-        for workspace in &mut workspaces {
-            let Some(stable_id) = Self::migrate_connection_id(&workspace.connection_id) else {
-                continue;
-            };
-            if saved_ids.iter().any(|saved_id| saved_id == &stable_id) {
-                log::info!(
-                    "Migrating remote workspace connection ID: {} -> {}",
-                    workspace.connection_id,
-                    stable_id
-                );
-                workspace.connection_id = stable_id;
-                migrated_connection_ids += 1;
-            }
-        }
+            serde_json::from_str(&content).context("Failed to parse remote workspaces")?;
 
         let before = workspaces.len();
         workspaces.retain(|w| !w.connection_id.is_empty() && !w.remote_path.is_empty());
@@ -2214,11 +2188,6 @@ impl SSHConnectionManager {
 
         let mut guard = self.remote_workspaces.write().await;
         *guard = workspaces;
-        drop(guard);
-
-        if migrated_connection_ids > 0 {
-            self.save_remote_workspaces().await?;
-        }
 
         Ok(())
     }
@@ -2720,39 +2689,7 @@ impl SSHConnectionManager {
 
         let mut guard = self.saved_connections.write().await;
         *guard = saved;
-
-        // Migrate old-format connection IDs that include the port
-        // (e.g. "ssh-root@host:22") to the new stable format ("ssh-root@host").
-        // This ensures historical sessions can still find the connection after
-        // the user changes the port.
-        let mut migrated_ids = Vec::new();
-        for conn in guard.iter_mut() {
-            if let Some(new_id) = Self::migrate_connection_id(&conn.id) {
-                let old_id = conn.id.clone();
-                log::info!("Migrating saved connection ID: {} -> {}", old_id, new_id);
-                conn.id = new_id.clone();
-                migrated_ids.push((old_id, new_id));
-            }
-        }
-        if !migrated_ids.is_empty() {
-            drop(guard);
-            for (old_id, new_id) in &migrated_ids {
-                if let Err(e) = self.password_vault.migrate_entry(old_id, new_id).await {
-                    log::warn!(
-                        "Failed to migrate SSH password vault entry from {} to {}: {}",
-                        old_id,
-                        new_id,
-                        e
-                    );
-                }
-            }
-            // Persist the migrated IDs to disk.
-            if let Err(e) = self.save_connections().await {
-                log::warn!("Failed to persist migrated connection IDs: {}", e);
-            }
-        } else {
-            drop(guard);
-        }
+        drop(guard);
 
         let unavailable = self.saved_connections_without_credentials().await;
         if !unavailable.is_empty() {
@@ -2765,30 +2702,6 @@ impl SSHConnectionManager {
         let guard = self.saved_connections.read().await;
         log::info!("load_saved_connections: loaded {} connections", guard.len());
         Ok(())
-    }
-
-    /// If `id` follows the old format `ssh-{user}@{host}:{port}`, return the
-    /// new stable format `ssh-{user}@{host}`.  Otherwise return `None`.
-    fn migrate_connection_id(id: &str) -> Option<String> {
-        if !id.starts_with("ssh-") {
-            return None;
-        }
-        let rest = &id[4..]; // "{user}@{host}:{port}"
-        let at_pos = rest.find('@')?;
-        let colon_pos = rest.rfind(':')?;
-        if colon_pos <= at_pos {
-            return None;
-        }
-        // Verify the suffix after the last colon is a valid port number.
-        let port_str = &rest[colon_pos + 1..];
-        if port_str.parse::<u16>().is_ok() {
-            let stable = format!("ssh-{}", &rest[..colon_pos]);
-            // Only return if the ID actually changes (i.e. the port was present).
-            if stable != id {
-                return Some(stable);
-            }
-        }
-        None
     }
 
     /// Save connections to disk
@@ -5097,7 +5010,7 @@ impl SSHConnectionManager {
         &self,
         connection_id: &str,
         path: &str,
-    ) -> anyhow::Result<bitfun_runtime_ports::WorkspaceReader> {
+    ) -> anyhow::Result<openbitfun_runtime_ports::WorkspaceReader> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         if self.is_container_workspace(connection_id).await {
             let command = format!(
@@ -5272,8 +5185,9 @@ impl SSHConnectionManager {
             .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
             .unwrap_or(".");
         let temporary = format!(
-            "{}/.bitfun-upload-{}.tmp",
+            "{}/{}-upload-{}.tmp",
             parent.trim_end_matches('/'),
+            hidden_data_directory(),
             uuid::Uuid::new_v4()
         );
         let command = container_workspace_write_command(&path, &temporary, content.len());
@@ -5321,8 +5235,9 @@ impl SSHConnectionManager {
             .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
             .unwrap_or(".");
         let temporary = format!(
-            "{}/.bitfun-upload-{}.tmp",
+            "{}/{}-upload-{}.tmp",
             parent.trim_end_matches('/'),
+            hidden_data_directory(),
             uuid::Uuid::new_v4()
         );
         let quoted_temporary = crate::remote_ssh::shell::quote_arg(&temporary);
@@ -5539,7 +5454,7 @@ impl SSHConnectionManager {
         connection_id: &str,
         path: &str,
         follow_symlinks: bool,
-    ) -> anyhow::Result<Option<bitfun_runtime_ports::WorkspaceMetadata>> {
+    ) -> anyhow::Result<Option<openbitfun_runtime_ports::WorkspaceMetadata>> {
         let mut path = self.resolve_sftp_path(connection_id, path).await?;
         let follow = if follow_symlinks { "-L " } else { "" };
         // Query stat itself: `test -e` also returns false for inaccessible
@@ -5567,7 +5482,8 @@ impl SSHConnectionManager {
                 );
             }
             let metadata = parse_workspace_stat_output(std::str::from_utf8(&stdout)?)?;
-            if !follow_symlinks || metadata.kind != bitfun_runtime_ports::WorkspacePathKind::Symlink
+            if !follow_symlinks
+                || metadata.kind != openbitfun_runtime_ports::WorkspacePathKind::Symlink
             {
                 return Ok(Some(metadata));
             }
@@ -7495,7 +7411,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn workspace_container_metadata_preserves_errors_and_follows_links() {
-        use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
+        use openbitfun_runtime_ports::{WorkspaceFileSystem, WorkspacePathKind};
         use std::os::unix::fs::{symlink, PermissionsExt};
         let temp = tempfile::tempdir().unwrap();
         let (_manager, provider) = shell_workspace_provider_fixture(temp.path()).await;
@@ -7601,7 +7517,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn workspace_container_write_preserves_inode_links_and_modes_without_changing_uploads() {
-        use bitfun_runtime_ports::WorkspaceFileSystem;
+        use openbitfun_runtime_ports::WorkspaceFileSystem;
         use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
         let temp = tempfile::tempdir().unwrap();
         let (manager, provider) = shell_workspace_provider_fixture(temp.path()).await;
@@ -7662,7 +7578,7 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let temp = tempfile::tempdir().unwrap();
         let target = temp.path().join("target");
-        let staged = temp.path().join(".bitfun-upload-test.tmp");
+        let staged = temp.path().join(".openbitfun-upload-test.tmp");
         std::fs::write(&target, b"preserved").unwrap();
         let command = container_workspace_write_command(
             target.to_str().unwrap(),
@@ -7692,7 +7608,7 @@ mod tests {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let temp = tempfile::tempdir().unwrap();
         let target = temp.path().join("target");
-        let staged = temp.path().join(".bitfun-upload-test.tmp");
+        let staged = temp.path().join(".openbitfun-upload-test.tmp");
         let wc = temp.path().join("wc");
         std::fs::write(&target, b"preserved").unwrap();
         // wc is called only after staging is complete. Signal the writing
@@ -7700,7 +7616,7 @@ mod tests {
         // the trap must exit instead of proceeding into target redirection.
         std::fs::write(
             &wc,
-            "#!/bin/sh\ncat >/dev/null\nkill -TERM \"$BITFUN_TEST_WRITE_PID\"\nprintf '8\\n'\n",
+            "#!/bin/sh\ncat >/dev/null\nkill -TERM \"$OPENBITFUN_TEST_WRITE_PID\"\nprintf '8\\n'\n",
         )
         .unwrap();
         std::fs::set_permissions(&wc, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -7710,7 +7626,7 @@ mod tests {
             std::env::var("PATH").unwrap_or_default()
         );
         let command = format!(
-            "BITFUN_TEST_WRITE_PID=$$; export BITFUN_TEST_WRITE_PID; PATH={}; export PATH; {}",
+            "OPENBITFUN_TEST_WRITE_PID=$$; export OPENBITFUN_TEST_WRITE_PID; PATH={}; export PATH; {}",
             crate::remote_ssh::shell::quote_arg(&path),
             container_workspace_write_command(
                 target.to_str().unwrap(),
@@ -7735,7 +7651,7 @@ mod tests {
 
     #[test]
     fn workspace_metadata_parses_permissions_and_rejects_malformed_stat() {
-        use bitfun_runtime_ports::WorkspacePathKind;
+        use openbitfun_runtime_ports::WorkspacePathKind;
         let gnu = parse_workspace_stat_output("hex 81a4 7 1700000000 644\n").unwrap();
         let bsd = parse_workspace_stat_output("oct 100644 7 1700000000 644\n").unwrap();
         assert_eq!(gnu, bsd);
@@ -7826,7 +7742,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "bitfun-remote-ssh-manager-{}-{}-{}",
+            "openbitfun-remote-ssh-manager-{}-{}-{}",
             name,
             std::process::id(),
             nanos
@@ -7956,8 +7872,8 @@ mod tests {
         // The whole point of the pid file is cancellation, so removing one that
         // is still in use silently breaks interrupt/kill for a command that may
         // legitimately run for hours. Liveness, never age.
-        let live = format!("/tmp/.bitfun-exec-live-{}.pid", uuid::Uuid::new_v4());
-        let dead = format!("/tmp/.bitfun-exec-dead-{}.pid", uuid::Uuid::new_v4());
+        let live = format!("/tmp/.openbitfun-exec-live-{}.pid", uuid::Uuid::new_v4());
+        let dead = format!("/tmp/.openbitfun-exec-dead-{}.pid", uuid::Uuid::new_v4());
         std::fs::write(&live, std::process::id().to_string()).expect("write live pid file");
         // Reaped immediately, so its pid is guaranteed not to be running.
         let mut corpse = std::process::Command::new("true")
@@ -8018,7 +7934,7 @@ mod tests {
         let signal =
             container_signal_command(&pid_file, crate::remote_ssh::WorkspaceProcessSignal::Kill);
 
-        assert!(pid_file.starts_with("/tmp/.bitfun-exec-"));
+        assert!(pid_file.starts_with("/tmp/.openbitfun-exec-"));
         assert!(wrapped.contains("setsid '/bin/bash' -lc"));
         assert!(wrapped.contains("exec 9<&0 || exit 1"));
         assert!(wrapped.contains("<&9 &"));
@@ -8047,7 +7963,7 @@ mod tests {
         let wrapped = supervised_container_command_with_pid_file(
             &container,
             "read value; printf 'stdin:%s' \"$value\"",
-            "/tmp/.bitfun-exec-stdin-contract.pid",
+            "/tmp/.openbitfun-exec-stdin-contract.pid",
         );
         let mut child = std::process::Command::new("sh")
             .args(["-lc", &wrapped])
@@ -8089,7 +8005,7 @@ mod tests {
         let wrapped = supervised_container_command_with_pid_file(
             &container,
             "printf 'compatible'",
-            "/dev/null/bitfun-exec.pid",
+            "/dev/null/openbitfun-exec.pid",
         );
         let output = std::process::Command::new("sh")
             .args(["-lc", &wrapped])
@@ -8200,9 +8116,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires BITFUN_TEST_DOCKER_CONTAINER to name a running container"]
+    #[ignore = "requires OPENBITFUN_TEST_DOCKER_CONTAINER to name a running container"]
     async fn local_docker_workspace_round_trip() {
-        let Ok(container_name) = std::env::var("BITFUN_TEST_DOCKER_CONTAINER") else {
+        let Ok(container_name) = std::env::var("OPENBITFUN_TEST_DOCKER_CONTAINER") else {
             return;
         };
         let dir = test_data_dir("local-docker-round-trip");
@@ -8222,7 +8138,7 @@ mod tests {
                     passphrase: None,
                     certificate_path: None,
                 },
-                default_workspace: Some("/tmp/bitfun-remote-workspace".to_string()),
+                default_workspace: Some("/tmp/openbitfun-remote-workspace".to_string()),
                 proxy_jump: None,
                 container: Some(ContainerWorkspaceConfig {
                     name: container_name,
@@ -8262,7 +8178,7 @@ mod tests {
         }
 
         manager
-            .container_mkdir(connection_id, "/tmp/bitfun-remote-workspace", true)
+            .container_mkdir(connection_id, "/tmp/openbitfun-remote-workspace", true)
             .await
             .unwrap();
         let cancellation = tokio_util::sync::CancellationToken::new();
@@ -8274,7 +8190,7 @@ mod tests {
         let cancelled_command = manager
             .execute_command_with_options(
                 connection_id,
-                "trap '' INT; sleep 30; touch /tmp/bitfun-remote-workspace/cancel-leaked",
+                "trap '' INT; sleep 30; touch /tmp/openbitfun-remote-workspace/cancel-leaked",
                 SSHCommandOptions {
                     timeout_ms: Some(5_000),
                     cancellation_token: Some(cancellation),
@@ -8286,23 +8202,26 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(
             !manager
-                .container_exists(connection_id, "/tmp/bitfun-remote-workspace/cancel-leaked")
+                .container_exists(
+                    connection_id,
+                    "/tmp/openbitfun-remote-workspace/cancel-leaked"
+                )
                 .await
                 .unwrap(),
             "cancelled Docker command must not continue inside the container"
         );
-        let original = b"BitFun container workspace\0binary";
+        let original = b"OpenBitFun container workspace\0binary";
         manager
             .container_write_file(
                 connection_id,
-                "/tmp/bitfun-remote-workspace/source.bin",
+                "/tmp/openbitfun-remote-workspace/source.bin",
                 original,
             )
             .await
             .unwrap();
         assert_eq!(
             manager
-                .container_read_file(connection_id, "/tmp/bitfun-remote-workspace/source.bin")
+                .container_read_file(connection_id, "/tmp/openbitfun-remote-workspace/source.bin")
                 .await
                 .unwrap(),
             original
@@ -8310,7 +8229,7 @@ mod tests {
         manager
             .container_write_file(
                 connection_id,
-                "/tmp/bitfun-remote-workspace/atomic.bin",
+                "/tmp/openbitfun-remote-workspace/atomic.bin",
                 original,
             )
             .await
@@ -8319,7 +8238,7 @@ mod tests {
         let cancelled = manager
             .container_write_file_with_progress(
                 connection_id,
-                "/tmp/bitfun-remote-workspace/atomic.bin",
+                "/tmp/openbitfun-remote-workspace/atomic.bin",
                 &replacement,
                 &mut |written, _| written < 262_144,
             )
@@ -8328,7 +8247,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert_eq!(
             manager
-                .container_read_file(connection_id, "/tmp/bitfun-remote-workspace/atomic.bin")
+                .container_read_file(connection_id, "/tmp/openbitfun-remote-workspace/atomic.bin")
                 .await
                 .unwrap(),
             original,
@@ -8337,19 +8256,22 @@ mod tests {
         manager
             .container_rename(
                 connection_id,
-                "/tmp/bitfun-remote-workspace/source.bin",
-                "/tmp/bitfun-remote-workspace/renamed.bin",
+                "/tmp/openbitfun-remote-workspace/source.bin",
+                "/tmp/openbitfun-remote-workspace/renamed.bin",
             )
             .await
             .unwrap();
         let entries = manager
-            .container_read_dir(connection_id, "/tmp/bitfun-remote-workspace")
+            .container_read_dir(connection_id, "/tmp/openbitfun-remote-workspace")
             .await
             .unwrap();
         assert!(entries.iter().any(|entry| entry.name == "renamed.bin"));
         assert_eq!(
             manager
-                .container_stat(connection_id, "/tmp/bitfun-remote-workspace/renamed.bin")
+                .container_stat(
+                    connection_id,
+                    "/tmp/openbitfun-remote-workspace/renamed.bin"
+                )
                 .await
                 .unwrap()
                 .and_then(|entry| entry.size),
@@ -8358,13 +8280,16 @@ mod tests {
         manager
             .container_remove(
                 connection_id,
-                "/tmp/bitfun-remote-workspace/renamed.bin",
+                "/tmp/openbitfun-remote-workspace/renamed.bin",
                 false,
             )
             .await
             .unwrap();
         assert!(!manager
-            .container_exists(connection_id, "/tmp/bitfun-remote-workspace/renamed.bin")
+            .container_exists(
+                connection_id,
+                "/tmp/openbitfun-remote-workspace/renamed.bin"
+            )
             .await
             .unwrap());
 
@@ -8373,15 +8298,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retains_legacy_password_connection_and_workspace_without_vault_entry() {
-        let dir = test_data_dir("legacy-missing-vault");
+    async fn retains_password_connection_and_workspace_without_vault_entry() {
+        let dir = test_data_dir("missing-vault-entry");
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let manager = SSHConnectionManager::new(dir.clone());
 
         tokio::fs::write(
             dir.join("ssh_connections.json"),
             serde_json::to_string_pretty(&serde_json::json!([{
-                "id": "ssh-root@example.com:22",
+                "id": "ssh-root@example.com",
                 "name": "root@example.com",
                 "host": "example.com",
                 "port": 22,
@@ -8397,7 +8322,7 @@ mod tests {
         tokio::fs::write(
             dir.join("remote_workspace.json"),
             serde_json::to_string_pretty(&serde_json::json!([{
-                "connectionId": "ssh-root@example.com:22",
+                "connectionId": "ssh-root@example.com",
                 "remotePath": "/root/project",
                 "connectionName": "root@example.com",
                 "sshHost": "example.com"
@@ -8418,13 +8343,38 @@ mod tests {
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].id, "ssh-root@example.com");
         assert_eq!(saved[0].default_workspace.as_deref(), Some("/root/project"));
-        assert!(saved[0].proxy_jump.is_none());
-        assert!(saved[0].container.is_none());
         assert!(removed.is_empty());
         let workspaces = manager.get_remote_workspaces().await;
         assert_eq!(workspaces.len(), 1);
         assert_eq!(workspaces[0].connection_id, "ssh-root@example.com");
         assert_eq!(workspaces[0].remote_path, "/root/project");
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn rejects_single_remote_workspace_object() {
+        let dir = test_data_dir("single-remote-workspace-object");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        tokio::fs::write(
+            dir.join("remote_workspace.json"),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "connectionId": "ssh-root@example.com",
+                "remotePath": "/root/project",
+                "connectionName": "root@example.com",
+                "sshHost": "example.com"
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+        let error = manager.load_remote_workspace().await.unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Failed to parse remote workspaces"));
+        assert!(manager.get_remote_workspaces().await.is_empty());
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
@@ -8662,14 +8612,14 @@ mod tests {
     #[test]
     fn mkdir_all_prefixes_expand_absolute_posix_path() {
         assert_eq!(
-            sftp_mkdir_all_prefixes("/home/wgq/workspace/bot_detection/.bitfun/bin"),
+            sftp_mkdir_all_prefixes("/home/wgq/workspace/bot_detection/.openbitfun/bin"),
             vec![
                 "/home".to_string(),
                 "/home/wgq".to_string(),
                 "/home/wgq/workspace".to_string(),
                 "/home/wgq/workspace/bot_detection".to_string(),
-                "/home/wgq/workspace/bot_detection/.bitfun".to_string(),
-                "/home/wgq/workspace/bot_detection/.bitfun/bin".to_string(),
+                "/home/wgq/workspace/bot_detection/.openbitfun".to_string(),
+                "/home/wgq/workspace/bot_detection/.openbitfun/bin".to_string(),
             ]
         );
     }

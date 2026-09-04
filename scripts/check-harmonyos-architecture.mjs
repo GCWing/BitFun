@@ -214,7 +214,7 @@ const duplicateSheetGeometry =
   ) ? [relative(sheetLayoutPath)] : [];
 const cryptoDeclarationPath = path.join(
   repoRoot,
-  'src/apps/mobile/harmonyos/entry/src/main/cpp/types/libbitfun_crypto/index.d.ts'
+  'src/apps/mobile/harmonyos/entry/src/main/cpp/types/libopenbitfun_crypto/index.d.ts'
 );
 const cryptoDeclarationSource = fs.readFileSync(cryptoDeclarationPath, 'utf8');
 const synchronousArgon2Declaration = /argon2idRaw[\s\S]*\):\s*Uint8Array\s*;/.test(cryptoDeclarationSource) ?

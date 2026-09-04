@@ -163,7 +163,7 @@ export class AppearancePackageParser {
 
     const canonicalManifest = `${JSON.stringify(manifest, null, 2)}\n`;
     if (new TextEncoder().encode(canonicalManifest).byteLength > MAX_MANIFEST_BYTES) {
-      throw new Error('Migrated Appearance manifest is too large');
+      throw new Error('Canonical Appearance manifest is too large');
     }
     zip.file(MANIFEST_PATH, canonicalManifest);
     const canonicalArchive = await zip.generateAsync({
@@ -172,7 +172,7 @@ export class AppearancePackageParser {
       compressionOptions: { level: 9 },
     });
     if (canonicalArchive.byteLength > MAX_ARCHIVE_BYTES) {
-      throw new Error('Migrated Appearance archive is too large');
+      throw new Error('Canonical Appearance archive is too large');
     }
 
     return {

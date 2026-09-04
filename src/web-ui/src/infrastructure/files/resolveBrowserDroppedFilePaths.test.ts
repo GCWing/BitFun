@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveBrowserDroppedFilePaths } from './resolveBrowserDroppedFilePaths';
 
-const REGISTRY_KEY = '__BITFUN_BROWSER_DROP_FILES__';
+const REGISTRY_KEY = '__OPENBITFUN_BROWSER_DROP_FILES__';
 
 type BrowserDropRegistryHost = typeof globalThis & {
   [REGISTRY_KEY]?: Map<string, readonly File[]>;

@@ -65,7 +65,7 @@ describe('projectDeviceInterconnectionOverview', () => {
         ...disconnectedStatus,
         is_connected: true,
         pairing_state: 'connected',
-        active_method: 'BitfunServer',
+        active_method: 'OpenBitFunServer',
         peer_device_name: 'My iPhone',
         peer_user_id: 'mobile-user',
       },
@@ -192,7 +192,7 @@ describe('selectActivityFacts', () => {
     ...disconnectedStatus,
     is_connected: true,
     pairing_state: 'connected' as const,
-    active_method: 'BitfunServer',
+    active_method: 'OpenBitFunServer',
     peer_device_name: 'My iPhone',
     peer_user_id: 'mobile-user',
   };
@@ -273,7 +273,7 @@ describe('selectAttachedGroups', () => {
         ...disconnectedStatus,
         is_connected: true,
         pairing_state: 'connected',
-        active_method: 'BitfunServer',
+        active_method: 'OpenBitFunServer',
         peer_device_name: 'My iPhone',
         peer_user_id: 'mobile-user',
         bot_connected: 'Weixin (family group)',
@@ -337,7 +337,7 @@ describe('device display names', () => {
         ...disconnectedStatus,
         is_connected: true,
         pairing_state: 'connected',
-        active_method: 'BitfunServer',
+        active_method: 'OpenBitFunServer',
         peer_device_name: 'Pixel.lan',
         peer_user_id: 'mobile-user',
       },
@@ -360,7 +360,7 @@ describe('device display names', () => {
 });
 
 describe('connection service classification', () => {
-  it('only classifies the canonical BitFun relay host as official', () => {
+  it('only classifies the canonical OpenBitFun relay host as official', () => {
     expect(classifyAccountRelayUrl('https://remote.openbitfun.com/relay')).toBe('official-relay');
     expect(classifyAccountRelayUrl('https://relay.example.com')).toBe('self-hosted-relay');
     expect(classifyAccountRelayUrl('not a url')).toBe('unknown');

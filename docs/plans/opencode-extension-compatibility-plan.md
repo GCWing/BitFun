@@ -4,11 +4,11 @@
 [兼容矩阵](../architecture/extensions/opencode-extension-compatibility.md)，跨生态来源体验与生命周期见
 [外部 AI 工作内容设计](../architecture/extensions/external-ai-work-sources-design.md)，通用能力归属、当前版本与宿主边界见
 [能力装配与宿主集成设计](../architecture/extensions/capability-runtime-integration-design.md)。本计划只覆盖外部 OpenCode
-能力进入 BitFun 的渐进导入轨道，不代表 BitFun 能力导出到 OpenCode 已经完成。兼容矩阵是审计库存，不是默认路线图。
+能力进入 OpenBitFun 的渐进导入轨道，不代表 OpenBitFun 能力导出到 OpenCode 已经完成。兼容矩阵是审计库存，不是默认路线图。
 
 PR1 已建立通用外部来源目录、`ExternalSourceControlPlane` 和 OpenCode Prompt Command 端到端能力，PR2 已把受支持的单文件
 `.js` standalone Tool 接入现有 Tool Runtime，PR3 已把 Subagent 安全子集交给现有 Subagent owner，PR4 补齐现有
-Skill 多来源的身份与覆盖状态展示。BitFun 原有
+Skill 多来源的身份与覆盖状态展示。OpenBitFun 原有
 受管插件包来源确认和 custom tool 静态预览继续保留，但不等同于 OpenCode package plugin 可执行。Command、Tool、Subagent
 三个可执行切片均沿用
 稳定的跨生态来源契约，不建设“大而全的 OpenCode Plugin Runtime”，也不提前承诺尚未执行的生态能力。
@@ -81,7 +81,7 @@ Claude Code 的声明式安全子集已由同级 adapter 接入并在 Product As
 - 支持 Markdown YAML front matter 中的 `description` 和正文模板，以及 JSON/JSONC `command` 中的
   `template`、`description`。Markdown 已知字段按当前 OpenCode schema 校验，类型错误不得静默丢弃；同时保留
   OpenCode 对未引用冒号值的兼容重试。
-- 保留 OpenCode 生态内部的名称和覆盖顺序；独立 provider 之间或与 BitFun 本地能力同名时不得按适配器优先级静默决胜，
+- 保留 OpenCode 生态内部的名称和覆盖顺序；独立 provider 之间或与 OpenBitFun 本地能力同名时不得按适配器优先级静默决胜，
   必须生成版本敏感的冲突内容摘要并等待用户选择。候选版本不变时只询问一次，更新后重新询问。交互式 TUI（ChatMode）继续显示
   竞品一致的 `/command`，通过来源标签和内部 candidate id 区分候选；直接输入存在未解决冲突时拒绝执行并引导使用候选菜单，
   不公开生态前缀或 `/builtin:`、`/external:` 选择语法。
@@ -89,7 +89,7 @@ Claude Code 的声明式安全子集已由同级 adapter 接入并在 Product As
   命令的用户确认；发现阶段不自动向会话发送内容。
 - `!shell`、`@file`、`{env:...}`、`{file:...}`、`agent`、`model`、`variant`、`subtask` 等尚未接通真实 owner 的语义继续被识别，但命令标记为
   “当前受限”并给出原因，不做部分执行或静默忽略。
-- 外部文件始终只读；不要求安装 OpenCode CLI，不复制到 BitFun 配置，也不写回或升级来源。
+- 外部文件始终只读；不要求安装 OpenCode CLI，不复制到 OpenBitFun 配置，也不写回或升级来源。
 
 ### 3.2 分层归属
 
@@ -168,7 +168,7 @@ Codex、Claude Code 接入同类能力时新增同级 adapter，不修改 OpenCo
 - 首次启用键由“来源限定身份 + 插件身份 + 执行域 + runtime + 能力集合”组成。纯内容更新且能力集合不变时复用已批准
   结果；能力、runtime 或执行域扩大时重新确认。用户选择保持停用后，同一内容版本不再主动询问；来源内容更新后
   才形成新 decision key。Desktop 仍允许用户主动重新审核，避免“一次拒绝后永久不可恢复”。
-- 外部 Tool 与 BitFun 内置、MCP 或其他外部 Tool 同名时，不按 adapter 或注册顺序静默覆盖。冲突键包含全部候选
+- 外部 Tool 与 OpenBitFun 内置、MCP 或其他外部 Tool 同名时，不按 adapter 或注册顺序静默覆盖。冲突键包含全部候选
   身份与内容版本；候选来自静态识别定义而不是成功加载集合。选择前保留已有本地实现，选择后只在候选集合和版本
   不变时复用；任一候选更新、删除或暂不可用后重新询问，已选 external 失效期间不回退同名内置/MCP。
 - Desktop IPC 和 TUI 快照只包含静态摘要与决策 key，不传输模块源码。用户选择落盘使用 PR1 的跨进程锁、锁内
@@ -228,11 +228,11 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
 - 安全子集为 description、prompt、subagent/all、disable、hidden、可精确解析的 model 和 tool 选择。permission、
   variant/options、采样参数、steps/maxSteps 等不能等价执行的字段直接阻止运行，不做“忽略后继续运行”。
 - OpenCode adapter 把 model 解析为字段明确的 provider 提示和模型名；Subagent 归属模块在审批前将其或固定默认项解析并绑定为
-  唯一、已启用的 BitFun 模型。继承、歧义、缺失或已停用模型保持不可用，不使用动态回退替代明确审批。
+  唯一、已启用的 OpenBitFun 模型。继承、歧义、缺失或已停用模型保持不可用，不使用动态回退替代明确审批。
 - 首次启用绑定当前 behavior、provenance、具体模型和工具范围；只有影响展示的 catalog 文案更新不重复询问，
   行为或能力变化重新确认。与 builtin/user/project 或其他 provider 同名时保持不可用，直到用户选择；候选变化后
   旧选择失效，即使只剩一个候选也不静默回退。
-- BitFun 模型配置变化会在后台为后续调用生成新版本；审批绑定具体配置 ID 和运行配置内容摘要，同一 ID 下的 provider、
+- OpenBitFun 模型配置变化会在后台为后续调用生成新版本；审批绑定具体配置 ID 和运行配置内容摘要，同一 ID 下的 provider、
   模型名或 endpoint 变化也要求重新确认。已绑定 ID 不再解释为 `inherit/primary/fast/default` 选择器；已开始调用继续保留
   旧绑定事实，若执行时配置已不一致则安全失败，不静默切换模型。
 - 新 Task 在进入调度前取得现有 Subagent 运行租约，固定 `runtime_agent_key` 和模型绑定，并持有到完成、取消、超时或提交失败；来源稳定
@@ -248,9 +248,9 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
 - 冲突族（`conflict_lineage`）覆盖 0/1/N 个参与者；参与集合缩减后继续保持逻辑名不可用，等待用户重新选择。自动观察到的新冲突内容摘要
   与用户决策使用同一跨进程锁并推进 `preference_revision`，因此其他进程基于旧 revision 的审批或选择必然被拒绝。
 - 当前 Remote 工作区明确不支持外部来源发现与决策，不读取本机同名配置；静态 system prompt 未修改，只有审批后
-  的通用 AgentInfo 动态视图进入现有可用 agent 上下文，且该视图使用 BitFun 自有的稳定描述，不注入来源 catalog 文案。
+  的通用 AgentInfo 动态视图进入现有可用 agent 上下文，且该视图使用 OpenBitFun 自有的稳定描述，不注入来源 catalog 文案。
 
-选择与执行仍由现有会话/Subagent owner 决定；adapter 不能替换 BitFun Agent Kernel。外部 agent 当前只支持新建的
+选择与执行仍由现有会话/Subagent owner 决定；adapter 不能替换 OpenBitFun Agent Kernel。外部 agent 当前只支持新建的
 单次调用，前台结果不返回续接入口，历史 external runtime session 的 follow-up 会被类型化拒绝。
 
 ### 5.1 已实现路径的稳定性整理
@@ -264,8 +264,8 @@ PR3 已为现有 Subagent owner 增加独立兼容端口，由 OpenCode adapter 
   “安装后已经刷新但仍不可见”的独立证据，因此不主动建议重启，也不提供自动重启或“立即重启”动作，更不能中断活动 session。
   刷新会重新发现来源并触发运行环境可用性检查，但不能承诺继承父进程后续收到的环境变量变化；`node --version`
   探测通过前，运行时状态不得写成“可用”。
-- Subagent owner 读取 BitFun 模型配置失败时必须拒绝启动，并生成与“模型不存在”不同的通用诊断。GUI/TUI
-  提示用户先确认 BitFun 模型设置能够正常读取和保存，再刷新；日志只保留经过脱敏的失败阶段和错误类别。不得用 `AIConfig::default()`
+- Subagent owner 读取 OpenBitFun 模型配置失败时必须拒绝启动，并生成与“模型不存在”不同的通用诊断。GUI/TUI
+  提示用户先确认 OpenBitFun 模型设置能够正常读取和保存，再刷新；日志只保留经过脱敏的失败阶段和错误类别。不得用 `AIConfig::default()`
   把配置服务异常转换成候选模型不匹配，也不得把原始错误或绝对配置路径写入普通快照。临时故障期间不得改写已持久化的
   审批或同名冲突选择，配置恢复且扩展行为未变化时继续复用原决定。
 - 外部 Tool 的首次确认继续明确展示代码来源、工作目录、文件/网络/进程/环境访问，以及“当前用户权限、无 OS
@@ -284,11 +284,11 @@ PR4 只解释现有 Skill Registry 已经执行的选择结果，不改变选择
 
 ### 6.1 优先级回归契约
 
-- 项目根保持 `.bitfun`、`.claude`、`.codex`、`.cursor`、`.opencode`、`.agents` 的现有顺序；项目根整体先于
-  用户根。用户根、BitFun 用户目录、BitFun 内置目录、OpenCode config/home 延迟根继续沿用当前实现顺序。
-- “BitFun 优先”只适用于当前已经如此定义的项目级 `.bitfun/skills`，不得误写成所有 BitFun 用户或内置 Skill
+- 项目根保持 `.openbitfun`、`.claude`、`.codex`、`.cursor`、`.opencode`、`.agents` 的现有顺序；项目根整体先于
+  用户根。用户根、OpenBitFun 用户目录、OpenBitFun 内置目录、OpenCode config/home 延迟根继续沿用当前实现顺序。
+- “OpenBitFun 优先”只适用于当前已经如此定义的项目级 `.openbitfun/skills`，不得误写成所有 OpenBitFun 用户或内置 Skill
   都高于其他生态。PR4 用精确顺序测试固定这一事实，来源元数据不参与排序或决胜。
-- `source_slot` 继续标识具体发现槽位；新增开放的 `source_id` 和稳定产品名只负责把多个槽位归为 BitFun、
+- `source_slot` 继续标识具体发现槽位；新增开放的 `source_id` 和稳定产品名只负责把多个槽位归为 OpenBitFun、
   Claude Code、Codex、Cursor、OpenCode 或 Agent Skills 来源。能力 owner 和界面不得根据 `source_id` 另算优先级。
 - 本地与远程项目继续消费同一项目根契约。远程工作区只扫描真实远程项目根，同时保留当前本机用户级 Skill 行为；
   PR4 不借来源展示改变远程执行域或回退规则。
@@ -309,11 +309,11 @@ PR4 只解释现有 Skill Registry 已经执行的选择结果，不改变选择
 
 ### 6.3 后续可执行扩展的统一原则
 
-Command、Tool、Subagent、MCP 以及未来可执行扩展默认把 BitFun 原生/内置实现作为安全候选，但不允许外部候选
+Command、Tool、Subagent、MCP 以及未来可执行扩展默认把 OpenBitFun 原生/内置实现作为安全候选，但不允许外部候选
 通过注册顺序静默覆盖。出现同名参与者时由用户选择；选择绑定参与者集合与行为版本，集合或行为更新后才重新询问。
-冲突选择列表固定先展示 BitFun 候选，其余生态按稳定 `provider_id` 排序，同一生态内部保留该 adapter 的正式来源顺序；
+冲突选择列表固定先展示 OpenBitFun 候选，其余生态按稳定 `provider_id` 排序，同一生态内部保留该 adapter 的正式来源顺序；
 展示顺序只帮助用户理解，不代替选择，也不把 Skill 的固定根优先级复制到可执行扩展。
-被 BitFun/其他候选覆盖、被用户拒绝或尚未选择的外部项必须继续出现在统一管理入口，并以“已覆盖”“未启用”或
+被 OpenBitFun/其他候选覆盖、被用户拒绝或尚未选择的外部项必须继续出现在统一管理入口，并以“已覆盖”“未启用”或
 “等待选择”及原因展示，不能从列表消失。该原则由各能力 owner 的独立冲突契约实现，不复用 Skill 的固定优先级，
 也不在 PR4 修改 PR1—PR3 已有执行路径。
 
@@ -322,7 +322,7 @@ Command、Tool、Subagent、MCP 以及未来可执行扩展默认把 BitFun 原�
 PR5 不新增扩展类型或运行能力，只补齐 Command、Tool、Subagent 已有冲突决策的管理完整流程，并纠正 TUI 信息架构：
 
 - 三类 owner 继续维护各自 DTO、冲突内容摘要和选择持久化，主体逻辑不按 OpenCode 等生态 ID 分支。候选列表由 owner 输出；
-  存在 BitFun 原生/本地候选时固定在首位，其余外部候选使用 adapter 已确定的稳定顺序。Skill Registry 的发现顺序和覆盖
+  存在 OpenBitFun 原生/本地候选时固定在首位，其余外部候选使用 adapter 已确定的稳定顺序。Skill Registry 的发现顺序和覆盖
   关系完全不变，不能复用这里的交互式选择规则。
 - Desktop 同时显示待选择和已处理冲突，待选择项排在前面。每个候选明确标识“当前使用”“已选择但当前不可用”“未使用”或“可选”；已选择、
   被覆盖以及 Subagent 的“保持不可用”状态都不会因决策完成而消失，用户可直接改选。候选或行为版本变化使冲突内容摘要变化后，
@@ -346,7 +346,7 @@ PR5 的退出条件是：三类已处理冲突在 GUI 中可见可改选；Tool/
 待处理提醒去重、选择内容摘要失效、Remote 无回退和非强迫恢复文案均有聚焦测试。该切片不以统一入口为由构造通用 `ExtensionAsset`
 或第二套选择状态。
 
-TUI 命令命名属于产品契约。新增命令前必须先核对 BitFun 既有入口以及至少一个同类竞品的用户可见命令；能力已有对应
+TUI 命令命名属于产品契约。新增命令前必须先核对 OpenBitFun 既有入口以及至少一个同类竞品的用户可见命令；能力已有对应
 入口时优先在原列表中通过分组、状态或二级选项表达来源差异。只有对象、生命周期或权限边界确实不同，并且复用入口会产生
 歧义时，才允许新增命令，并须在设计与测试中写明理由。adapter 名、provider ID 或“external”来源标签都不能单独构成新命令依据。
 

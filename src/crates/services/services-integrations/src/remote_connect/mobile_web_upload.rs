@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn manifest_preserves_forward_slash_paths_and_hashes() {
         let base = std::env::temp_dir().join(format!(
-            "bitfun-remote-mobile-web-manifest-{}",
+            "openbitfun-remote-mobile-web-manifest-{}",
             uuid::Uuid::new_v4()
         ));
         let assets = base.join("assets");
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn manifest_rejects_missing_index_html() {
         let base = std::env::temp_dir().join(format!(
-            "bitfun-remote-mobile-web-missing-index-{}",
+            "openbitfun-remote-mobile-web-missing-index-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&base).unwrap();

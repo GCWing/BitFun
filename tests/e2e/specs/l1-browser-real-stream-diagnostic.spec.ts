@@ -1,12 +1,12 @@
 /**
- * Diagnostic-only spec for comparing the real local stream inside BitFun's
- * embedded browser. Run with BITFUN_BROWSER_STREAM_URL=http://127.0.0.1:41953/
+ * Diagnostic-only spec for comparing the real local stream inside OpenBitFun's
+ * embedded browser. Run with OPENBITFUN_BROWSER_STREAM_URL=http://127.0.0.1:41953/
  */
 
 import { browser, $ } from '@wdio/globals';
 
-const streamUrl = process.env.BITFUN_BROWSER_STREAM_URL || 'http://127.0.0.1:41953/';
-const describeRealStream = process.env.BITFUN_BROWSER_STREAM_URL ? describe : describe.skip;
+const streamUrl = process.env.OPENBITFUN_BROWSER_STREAM_URL || 'http://127.0.0.1:41953/';
+const describeRealStream = process.env.OPENBITFUN_BROWSER_STREAM_URL ? describe : describe.skip;
 
 async function fetchClientStatus() {
   const response = await fetch(`${streamUrl.replace(/\/$/, '')}/api/client-status`, {
@@ -148,7 +148,7 @@ describeRealStream('L1 Built-in browser real stream diagnostic', () => {
       await browser.pause(1000);
     }
 
-    if (process.env.BITFUN_BROWSER_LONG_DRAG === '1') {
+    if (process.env.OPENBITFUN_BROWSER_LONG_DRAG === '1') {
       await runLongDrag();
     } else {
       await fetch(`${streamUrl.replace(/\/$/, '')}/api/browser/self-test`, {

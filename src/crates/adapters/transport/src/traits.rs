@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitfun_events::AgenticEvent;
+use openbitfun_events::AgenticEvent;
 use std::fmt::Debug;
 
 /// Event delivery implemented by a product host adapter.

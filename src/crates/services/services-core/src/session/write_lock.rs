@@ -41,7 +41,7 @@ impl SessionWriteLock {
         session_id: &str,
         reuse_process_writer: bool,
     ) -> Result<Self, SessionWriteLockError> {
-        bitfun_core_types::validate_session_id(session_id)
+        openbitfun_core_types::validate_session_id(session_id)
             .map_err(|_| SessionWriteLockError::InvalidSessionId)?;
         std::fs::create_dir_all(session_storage_root).map_err(|source| {
             SessionWriteLockError::CreateStorageDirectory {
@@ -205,7 +205,7 @@ fn session_lock_root(canonical_storage_root: &Path) -> Result<PathBuf, SessionWr
 
 fn lock_key(canonical_storage_root: &Path, session_id: &str) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"bitfun-session-write-v1\0");
+    hasher.update(b"openbitfun-session-write-v1\0");
     hash_path(&mut hasher, canonical_storage_root);
     hasher.update(b"\0");
     hasher.update(session_id.as_bytes());

@@ -20,7 +20,7 @@ export class DetectedRemoteUrlResult {
  * What a scanned pair URL should do next. Applying the URL and starting a
  * connect are separate steps: the detector never connects by itself.
  *
- * A BitFun cloud session on this phone is already the account proof. An
+ * A OpenBitFun cloud session on this phone is already the account proof. An
  * account-auth QR for that same user must not ask for the password again;
  * it continues through the same-account device path instead of room pairing.
  */

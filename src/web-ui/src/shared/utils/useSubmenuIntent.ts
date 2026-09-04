@@ -8,4 +8,4 @@ export {
   type SubmenuIntentRect,
   type UseSubmenuIntentOptions,
   type SubmenuIntentControls,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';

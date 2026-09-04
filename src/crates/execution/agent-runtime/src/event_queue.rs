@@ -1,11 +1,11 @@
 //! Provider-neutral runtime event queue.
 
 use crate::event_bus::EventBusResult;
-use bitfun_agent_stream::StreamEventSink;
-use bitfun_events::{
+use log::{debug, trace, warn};
+use openbitfun_agent_stream::StreamEventSink;
+use openbitfun_events::{
     AgenticEvent, AgenticEventEnvelope as EventEnvelope, AgenticEventPriority as EventPriority,
 };
-use log::{debug, trace, warn};
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -660,7 +660,7 @@ impl StreamEventSink for EventQueue {
 #[cfg(test)]
 mod tests {
     use super::{EventQueue, EventQueueConfig};
-    use bitfun_events::{AgenticEvent, AgenticEventPriority};
+    use openbitfun_events::{AgenticEvent, AgenticEventPriority};
     use std::sync::{Arc, Barrier};
     use std::time::Duration;
 

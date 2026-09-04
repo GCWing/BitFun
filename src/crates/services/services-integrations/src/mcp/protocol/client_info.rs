@@ -6,7 +6,7 @@ pub fn create_mcp_client_info(
     client_name: impl Into<String>,
     client_version: impl Into<String>,
 ) -> ClientInfo {
-    // SEP-2577 deprecates `roots` and `sampling`, but BitFun still advertises
+    // SEP-2577 deprecates `roots` and `sampling`, but OpenBitFun still advertises
     // both so servers that gate features on them keep working; the handshake
     // shape is pinned by `mcp_remote_client_info_declares_supported_client_capabilities`.
     // Dropping them is a protocol-visible decision, not a lint cleanup — revisit

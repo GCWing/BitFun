@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use bitfun_services_integrations::workspace_search::{
+use openbitfun_services_integrations::workspace_search::{
     resolve_workspace_search_daemon_program_path, workspace_search_daemon_binary_name,
     workspace_search_daemon_binary_names, workspace_search_daemon_missing_hint,
     ContentSearchOutputMode, ContentSearchRequest, WorkspaceSearchService,
@@ -36,7 +36,7 @@ fn service_constructs_without_core_runtime_dependencies() {
 /// The flashgrep daemon returns match positions only, so content output is
 /// hydrated from disk. This test spawns the real daemon, so it is ignored by
 /// default; run it with
-/// `cargo test -p bitfun-services-integrations --features workspace-search
+/// `cargo test -p openbitfun-services-integrations --features workspace-search
 ///  --test workspace_search_contracts -- --ignored`.
 #[tokio::test]
 #[ignore = "spawns the real flashgrep daemon and indexes a temporary repository"]
@@ -126,7 +126,7 @@ async fn content_search_hydrates_real_line_text_and_previews() {
 
 #[cfg(test)]
 fn git(repo_root: &Path, args: &[&str]) {
-    let output = bitfun_services_core::process_manager::create_command("git")
+    let output = openbitfun_services_core::process_manager::create_command("git")
         .current_dir(repo_root)
         .args(args)
         .output()

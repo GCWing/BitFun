@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Icon, IconButton, StatusPill, Tooltip } from '@bitfun/ui';
+import { Button, Icon, IconButton, StatusPill, Tooltip } from '@openbitfun/ui';
 
 import { useTranslation } from 'react-i18next';
 
@@ -42,25 +42,25 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
 
   return (
     <article
-      data-bf-component="assistant-card"
-      data-bf-part="root"
-      data-bf-primary={isPrimary ? 'true' : 'false'}
-      data-bf-state={isDeleting || isStartingSession || isSettingPrimary ? 'busy' : undefined}
+      data-openbitfun-component="assistant-card"
+      data-openbitfun-part="root"
+      data-openbitfun-primary={isPrimary ? 'true' : 'false'}
+      data-openbitfun-state={isDeleting || isStartingSession || isSettingPrimary ? 'busy' : undefined}
       className={['assistant-card', (isDeleting || isSettingPrimary) && 'assistant-card--busy'].filter(Boolean).join(' ')}
       role="listitem"
       style={style}
     >
       <button
-        data-bf-component="assistant-card"
-        data-bf-part="main"
+        data-openbitfun-component="assistant-card"
+        data-openbitfun-part="main"
         type="button"
         className="assistant-card__main"
         onClick={onClick}
         aria-label={`${t('nursery.card.configure')}: ${name}`}
         disabled={isDeleting || isSettingPrimary}
       >
-        <span className="assistant-card__header" data-bf-component="assistant-card" data-bf-part="header">
-          <span className="assistant-card__avatar" data-bf-component="assistant-card" data-bf-part="avatar">
+        <span className="assistant-card__header" data-openbitfun-component="assistant-card" data-openbitfun-part="header">
+          <span className="assistant-card__avatar" data-openbitfun-component="assistant-card" data-openbitfun-part="avatar">
             <AssistantAvatar
               presetId={avatar}
               emoji={emoji}
@@ -69,33 +69,33 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
               size={44}
             />
           </span>
-          <span className="assistant-card__header-info" data-bf-component="assistant-card" data-bf-part="headerInfo">
+          <span className="assistant-card__header-info" data-openbitfun-component="assistant-card" data-openbitfun-part="headerInfo">
             <span className="assistant-card__title-row">
-              <span className="assistant-card__name" data-bf-component="assistant-card" data-bf-part="name">{name}</span>
+              <span className="assistant-card__name" data-openbitfun-component="assistant-card" data-openbitfun-part="name">{name}</span>
               {isPrimary && (
-                <span className="assistant-card__primary-badge" data-bf-component="assistant-card" data-bf-part="primaryBadge">
+                <span className="assistant-card__primary-badge" data-openbitfun-component="assistant-card" data-openbitfun-part="primaryBadge">
                   {t('nursery.card.primaryBadge')}
                 </span>
               )}
             </span>
             {vibe ? (
-              <span className="assistant-card__vibe" data-bf-component="assistant-card" data-bf-part="vibe">{vibe}</span>
+              <span className="assistant-card__vibe" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">{vibe}</span>
             ) : (
-              <span className="assistant-card__vibe assistant-card__vibe--empty" data-bf-component="assistant-card" data-bf-part="vibe">
+              <span className="assistant-card__vibe assistant-card__vibe--empty" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">
                 {t('nursery.card.noVibe')}
               </span>
             )}
             {creature ? (
-              <span className="assistant-card__badges" data-bf-component="assistant-card" data-bf-part="badges">
+              <span className="assistant-card__badges" data-openbitfun-component="assistant-card" data-openbitfun-part="badges">
                 <StatusPill tone="neutral">{creature}</StatusPill>
               </span>
             ) : null}
           </span>
-          <Icon name="more" size="md" data-bf-component="assistant-card" data-bf-part="chevron" className="assistant-card__chevron" aria-hidden="true" />
+          <Icon name="more" size="md" data-openbitfun-component="assistant-card" data-openbitfun-part="chevron" className="assistant-card__chevron" aria-hidden="true" />
         </span>
       </button>
 
-      <footer className="assistant-card__footer" data-bf-component="assistant-card" data-bf-part="footer">
+      <footer className="assistant-card__footer" data-openbitfun-component="assistant-card" data-openbitfun-part="footer">
         <Button
           variant="outline"
           size="sm"
@@ -127,8 +127,8 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             {onSetPrimary ? (
               <Tooltip content={t('nursery.card.setPrimary')}>
                 <IconButton
-                  data-bf-component="assistant-card"
-                  data-bf-part="setPrimary"
+                  data-openbitfun-component="assistant-card"
+                  data-openbitfun-part="setPrimary"
                   size="sm"
                   onClick={onSetPrimary}
                   aria-label={t('nursery.card.setPrimary')}
@@ -142,8 +142,8 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             {onDelete ? (
               <Tooltip content={t('nursery.card.delete')}>
                 <IconButton
-                  data-bf-component="assistant-card"
-                  data-bf-part="delete"
+                  data-openbitfun-component="assistant-card"
+                  data-openbitfun-part="delete"
                   tone="danger"
                   size="sm"
                   onClick={onDelete}

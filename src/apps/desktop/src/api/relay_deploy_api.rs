@@ -1,16 +1,16 @@
 //! Relay server self-deploy Tauri commands.
 //!
-//! Lets a user deploy the open-source BitFun relay server to their own host
+//! Lets a user deploy the open-source OpenBitFun relay server to their own host
 //! over an existing SSH connection (preflight → Docker install → source
 //! download + compose deploy → account import). The account is provisioned
 //! locally: the plaintext password never leaves this machine — only Argon2id
 //! derived artifacts are transferred and handed to `relay-admin import-user`.
 //!
-//! Orchestration: `bitfun_services_integrations::remote_ssh::relay_deploy`.
+//! Orchestration: `openbitfun_services_integrations::remote_ssh::relay_deploy`.
 //! Product invariants / wizard entry points:
 //! `src/web-ui/src/features/relay-deploy/README.md`.
 
-use bitfun_core::service::remote_ssh::relay_deploy::{
+use openbitfun_core::service::remote_ssh::relay_deploy::{
     self, RelayDeployTask, RelayMirrorMode, RelayPreflight, RelayTaskPoll, RelayTaskStart,
 };
 use serde::Serialize;
@@ -130,9 +130,9 @@ pub async fn relay_deploy_register(
     if password.len() < 8 {
         return Err("password must be at least 8 characters".to_string());
     }
-    let account = bitfun_relay_service::admin::provision(&username, &password)
+    let account = openbitfun_relay_service::admin::provision(&username, &password)
         .map_err(|e| format!("provision account: {e}"))?;
-    let import = bitfun_relay_service::admin::ImportableAccount { username, account };
+    let import = openbitfun_relay_service::admin::ImportableAccount { username, account };
     let json = serde_json::to_string(&import).map_err(|e| format!("serialize account: {e}"))?;
     let manager = state
         .get_ssh_manager_async()

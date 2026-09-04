@@ -67,9 +67,9 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
     <RetainedMountBoundary present={visible}>
       <div
         ref={barRef}
-        data-bf-component="scroll-to-latest-bar"
-        data-bf-part="root"
-        data-bf-input="active"
+        data-openbitfun-component="scroll-to-latest-bar"
+        data-openbitfun-part="root"
+        data-openbitfun-input="active"
         data-visible={visible ? 'true' : 'false'}
         className={`scroll-to-latest-bar ${className}`}
         style={dynamicStyle}
@@ -86,10 +86,10 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
         {...(!visible ? { inert: '' } : {})}
         aria-label={t('scroll.toLatest')}
       >
-        <div data-bf-component="scroll-to-latest-bar" data-bf-part="gradient" className="scroll-to-latest-bar__gradient" />
+        <div data-openbitfun-component="scroll-to-latest-bar" data-openbitfun-part="gradient" className="scroll-to-latest-bar__gradient" />
 
-        <div data-bf-component="scroll-to-latest-bar" data-bf-part="content" className="scroll-to-latest-bar__content" style={contentStyle}>
-          <button data-bf-component="scroll-to-latest-bar" data-bf-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
+        <div data-openbitfun-component="scroll-to-latest-bar" data-openbitfun-part="content" className="scroll-to-latest-bar__content" style={contentStyle}>
+          <button data-openbitfun-component="scroll-to-latest-bar" data-openbitfun-part="button" className="scroll-to-latest-bar__btn" aria-hidden="true" tabIndex={-1}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8 3.5V12.5M8 12.5L4 8.5M8 12.5L12 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

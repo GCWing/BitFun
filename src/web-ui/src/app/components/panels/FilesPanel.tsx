@@ -3,7 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
@@ -22,7 +22,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
-import { LoadingState } from '@bitfun/ui';
+import { LoadingState } from '@openbitfun/ui';
 import { InputDialog } from '@/app/components/InputDialog';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
@@ -629,9 +629,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           behavior: getMotionAwareScrollBehavior('smooth'),
           block: 'center',
         });
-        targetElement.classList.add('bitfun-file-explorer__node-content--highlighted');
+        targetElement.classList.add('openbitfun-file-explorer__node-content--highlighted');
         setTimeout(() => {
-          targetElement.classList.remove('bitfun-file-explorer__node-content--highlighted');
+          targetElement.classList.remove('openbitfun-file-explorer__node-content--highlighted');
         }, 2000);
       }
     };
@@ -773,7 +773,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   // (the default when no text editor is focused) the menu tells the WebView to
   // perform a native paste, which surfaces as a DOM `paste` event. In
   // "Renderer" mode (when a Monaco editor was recently focused) the menu emits
-  // a Tauri `bitfun_menu_edit_paste` event. We listen to both so file-tree
+  // a Tauri `openbitfun_menu_edit_paste` event. We listen to both so file-tree
   // paste works regardless of which mode the menu is in.
   useEffect(() => {
     if (!workspacePath) return;
@@ -803,7 +803,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       (async () => {
         try {
           const { listen } = await import('@tauri-apps/api/event');
-          const unsubscribe = await listen('bitfun_menu_edit_paste', () => {
+          const unsubscribe = await listen('openbitfun_menu_edit_paste', () => {
             if (isPanelFocused()) {
               handlePaste();
             }
@@ -1039,17 +1039,17 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 
   return (
     <div
-      data-bf-component="files-panel"
-      data-bf-part="root"
+      data-openbitfun-component="files-panel"
+      data-openbitfun-part="root"
       ref={panelRef}
-      className="bitfun-files-panel"
+      className="openbitfun-files-panel"
       tabIndex={-1}
       onFocus={() => {}}
     >
       {!hideHeader && (
         <PanelHeader
           title={t('title')}
-          className="bitfun-files-panel__header"
+          className="openbitfun-files-panel__header"
           actions={
             workspacePath && (
               <Tooltip content={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')} placement="bottom">
@@ -1065,9 +1065,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         />
       )}
       
-      <div className="bitfun-files-panel__content" data-bf-component="files-panel" data-bf-part="content">
+      <div className="openbitfun-files-panel__content" data-openbitfun-component="files-panel" data-openbitfun-part="content">
         {workspacePath && viewMode === 'search' && (
-          <div className="bitfun-files-panel__search" data-bf-component="files-panel" data-bf-part="search" data-bf-search-mode={searchMode}>
+          <div className="openbitfun-files-panel__search" data-openbitfun-component="files-panel" data-openbitfun-part="search" data-openbitfun-search-mode={searchMode}>
             <SearchField
               placeholder={t('search.placeholder')}
               aria-label={t('search.placeholder')}
@@ -1077,31 +1077,31 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               onClear={searchQuery ? handleClearSearch : undefined}
               size="sm"
               leadingIcon={isSearching
-                ? <Loader2 className="bitfun-files-panel__search-spinner" size={14} aria-hidden />
+                ? <Loader2 className="openbitfun-files-panel__search-spinner" size={14} aria-hidden />
                 : <Icon name="search" size="sm" aria-hidden />}
             />
-            <div className="bitfun-files-panel__search-toolbar" data-bf-component="files-panel" data-bf-part="searchToolbar">
-              <div className="bitfun-files-panel__search-modes">
+            <div className="openbitfun-files-panel__search-toolbar" data-openbitfun-component="files-panel" data-openbitfun-part="searchToolbar">
+              <div className="openbitfun-files-panel__search-modes">
                 <button
                   type="button"
-                  className={`bitfun-files-panel__search-mode ${searchMode === 'content' ? 'active' : ''}`}
+                  className={`openbitfun-files-panel__search-mode ${searchMode === 'content' ? 'active' : ''}`}
                   onClick={() => setSearchMode('content')}
                 >
                   {t('search.modeContent')}
                 </button>
                 <button
                   type="button"
-                  className={`bitfun-files-panel__search-mode ${searchMode === 'filenames' ? 'active' : ''}`}
+                  className={`openbitfun-files-panel__search-mode ${searchMode === 'filenames' ? 'active' : ''}`}
                   onClick={() => setSearchMode('filenames')}
                 >
                   {t('search.modeFiles')}
                 </button>
               </div>
-              <div className="bitfun-files-panel__search-options">
+              <div className="openbitfun-files-panel__search-options">
                 <Tooltip content={t('options.caseSensitive')}>
                   <button
                     type="button"
-                    className={`bitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
+                    className={`openbitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
                   >
                     <CaseSensitive size={14} />
@@ -1110,7 +1110,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 <Tooltip content={t('options.wholeWord')}>
                   <button
                     type="button"
-                    className={`bitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
+                    className={`openbitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, wholeWord: !prev.wholeWord }))}
                   >
                     <WholeWord size={14} />
@@ -1119,7 +1119,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 <Tooltip content={t('options.useRegex')}>
                   <button
                     type="button"
-                    className={`bitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
+                    className={`openbitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
                   >
                     <Regex size={14} />
@@ -1131,15 +1131,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         )}
 
         <div
-          className={`bitfun-files-panel__main-content${
-            fileDropHighlight ? ' bitfun-files-panel__main-content--drop-target' : ''
+          className={`openbitfun-files-panel__main-content${
+            fileDropHighlight ? ' openbitfun-files-panel__main-content--drop-target' : ''
           }`}
-          data-bf-component="files-panel"
-          data-bf-part="main"
+          data-openbitfun-component="files-panel"
+          data-openbitfun-part="main"
         >
         {!workspacePath ? (
-          <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
-            <div className="bitfun-files-panel__placeholder-icon">
+          <div className="openbitfun-files-panel__placeholder" data-openbitfun-component="files-panel" data-openbitfun-part="placeholder">
+            <div className="openbitfun-files-panel__placeholder-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14,2 14,8 20,8"/>
@@ -1152,16 +1152,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           </div>
         ) : viewMode === 'search' ? (
           searchQuery ? (
-            <div className="bitfun-files-panel__search-content">
+            <div className="openbitfun-files-panel__search-content">
               {searchLimitNotice && (
-                <div className="bitfun-files-panel__search-limit-notice">
+                <div className="openbitfun-files-panel__search-limit-notice">
                   <span>{searchLimitNotice}</span>
                 </div>
               )}
 
               {showContentSearchMetadata && contentSearchMetadata && (
-                <div className="bitfun-files-panel__search-backend">
-                  <div className="bitfun-files-panel__search-backend-badges">
+                <div className="openbitfun-files-panel__search-backend">
+                  <div className="openbitfun-files-panel__search-backend-badges">
                     <StatusPill tone={getSearchBackendBadgeVariant(contentSearchMetadata)}>
                       {contentSearchBackendLabel}
                     </StatusPill>
@@ -1183,7 +1183,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                       </StatusPill>
                     ) : null}
                   </div>
-                  <div className="bitfun-files-panel__search-backend-summary">
+                  <div className="openbitfun-files-panel__search-backend-summary">
                     {t('search.backendSummary', {
                       candidateDocs: contentSearchMetadata.candidateDocs,
                       matchedLines: contentSearchMetadata.matchedLines,
@@ -1194,7 +1194,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               )}
 
               {searchError && (
-                <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
+                <div className="openbitfun-files-panel__error" data-openbitfun-component="files-panel" data-openbitfun-part="error">
                   <p>❌ {searchError}</p>
                   <Button
                     variant="outline"
@@ -1213,12 +1213,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   onFileSelect={handleSearchResultSelect}
                   onFolderNavigate={handleSearchFolderNavigate}
                   workspacePath={workspacePath}
-                  className="bitfun-files-panel__search-results"
+                  className="openbitfun-files-panel__search-results"
                 />
               ) : (
                 !isSearching && !searchError && (
-                  <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
-                    <div className="bitfun-files-panel__placeholder-icon">
+                  <div className="openbitfun-files-panel__placeholder" data-openbitfun-component="files-panel" data-openbitfun-part="placeholder">
+                    <div className="openbitfun-files-panel__placeholder-icon">
                       <Icon name="search" size="lg" />
                     </div>
                     <p>{t('search.noResults')}</p>
@@ -1227,8 +1227,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               )}
             </div>
           ) : (
-            <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
-              <div className="bitfun-files-panel__placeholder-icon">
+            <div className="openbitfun-files-panel__placeholder" data-openbitfun-component="files-panel" data-openbitfun-part="placeholder">
+              <div className="openbitfun-files-panel__placeholder-icon">
                 <Icon name="search" size="lg" />
               </div>
               <p>{t('search.enterKeyword')}</p>
@@ -1236,11 +1236,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           )
         ) : (
           loading && fileTree.length === 0 ? (
-            <div className="bitfun-files-panel__loading">
+            <div className="openbitfun-files-panel__loading">
               <LoadingState size="md">{t('status.loadingFileTree')}</LoadingState>
             </div>
           ) : error ? (
-            <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
+            <div className="openbitfun-files-panel__error" data-openbitfun-component="files-panel" data-openbitfun-part="error">
               <p>❌ {error}</p>
               <Button
                 variant="outline"
@@ -1260,7 +1260,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               onNodeExpand={handleNodeExpandLazy}
               onFileSelect={handleFileSelect}
               onFileDoubleClick={handleFileDoubleClick}
-              className="bitfun-files-panel__explorer"
+              className="openbitfun-files-panel__explorer"
               enablePathCompression={true}
               renamingPath={renamingPath}
               onRename={handleExecuteRename}
@@ -1277,11 +1277,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       </div>
 
       {transfers.size > 0 && (
-        <ScrollArea className="bitfun-files-panel__transfers" data-bf-component="files-panel" data-bf-part="transfers">
+        <ScrollArea className="openbitfun-files-panel__transfers" data-openbitfun-component="files-panel" data-openbitfun-part="transfers">
           {Array.from(transfers.entries()).map(([id, tp]) => (
-            <div className="bitfun-files-panel__transfer" data-bf-component="files-panel" data-bf-part="transfer" role="status" key={id}>
-              <div className="bitfun-files-panel__transfer-label">
-                <span className="bitfun-files-panel__transfer-label-text">
+            <div className="openbitfun-files-panel__transfer" data-openbitfun-component="files-panel" data-openbitfun-part="transfer" role="status" key={id}>
+              <div className="openbitfun-files-panel__transfer-label">
+                <span className="openbitfun-files-panel__transfer-label-text">
                   {tp.phase === 'download'
                     ? t('transfer.downloading')
                     : t('transfer.uploading')}
@@ -1290,7 +1290,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 {!tp.indeterminate &&
                 tp.bytesTotal &&
                 tp.bytesTotal > 0 ? (
-                  <span className="bitfun-files-panel__transfer-stats">
+                  <span className="openbitfun-files-panel__transfer-stats">
                     {Math.min(
                       100,
                       Math.round(
@@ -1304,16 +1304,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 ) : null}
               </div>
               <div
-                className={`bitfun-files-panel__transfer-track${
-                  tp.indeterminate ? ' bitfun-files-panel__transfer-track--indeterminate' : ''
+                className={`openbitfun-files-panel__transfer-track${
+                  tp.indeterminate ? ' openbitfun-files-panel__transfer-track--indeterminate' : ''
                 }`}
-                data-bf-component="files-panel"
-                data-bf-part="transferTrack"
+                data-openbitfun-component="files-panel"
+                data-openbitfun-part="transferTrack"
               >
                 <div
-                  className="bitfun-files-panel__transfer-fill"
-                  data-bf-component="files-panel"
-                  data-bf-part="transferFill"
+                  className="openbitfun-files-panel__transfer-fill"
+                  data-openbitfun-component="files-panel"
+                  data-openbitfun-part="transferFill"
                   style={
                     tp.indeterminate || !tp.total
                       ? undefined
@@ -1326,11 +1326,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   }
                 />
               </div>
-              <div className="bitfun-files-panel__transfer-bottom">
+              <div className="openbitfun-files-panel__transfer-bottom">
                 {!tp.indeterminate &&
                 tp.bytesTotal &&
                 tp.bytesTotal > 0 ? (
-                  <span className="bitfun-files-panel__transfer-detail">
+                  <span className="openbitfun-files-panel__transfer-detail">
                     {formatBytes(tp.bytesTransferred ?? 0)} /{' '}
                     {formatBytes(tp.bytesTotal)}
                   </span>

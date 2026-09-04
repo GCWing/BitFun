@@ -6,7 +6,7 @@ use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -40,12 +40,12 @@ impl AnalyzeImageTool {
         Self
     }
 
-    fn path_from_input(input: &Value) -> BitFunResult<&str> {
+    fn path_from_input(input: &Value) -> OpenBitFunResult<&str> {
         input
             .get("path")
             .and_then(Value::as_str)
             .filter(|path| !path.trim().is_empty())
-            .ok_or_else(|| BitFunError::tool("path is required".to_string()))
+            .ok_or_else(|| OpenBitFunError::tool("path is required".to_string()))
     }
 
     fn prompt_from_input(input: &Value) -> String {
@@ -61,10 +61,10 @@ impl AnalyzeImageTool {
     fn resolve_path(
         input_path: &str,
         context: Option<&ToolUseContext>,
-    ) -> BitFunResult<ResolvedImagePath> {
+    ) -> OpenBitFunResult<ResolvedImagePath> {
         let local_path = Path::new(input_path);
         if local_path.is_absolute()
-            && !crate::agentic::tools::workspace_paths::is_bitfun_tool_uri(input_path)
+            && !crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri(input_path)
             && (!context.is_some_and(|ctx| ctx.is_remote()) || local_path.is_file())
         {
             return Ok(ResolvedImagePath::Local(local_path.to_path_buf()));
@@ -86,7 +86,7 @@ impl AnalyzeImageTool {
             None => {
                 let path = Path::new(input_path);
                 if !path.is_absolute() {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "path must be an absolute path when no tool context is available, got: {}",
                         input_path
                     )));
@@ -99,25 +99,25 @@ impl AnalyzeImageTool {
     async fn read_image_bytes(
         resolved: &ResolvedImagePath,
         context: Option<&ToolUseContext>,
-    ) -> BitFunResult<Vec<u8>> {
+    ) -> OpenBitFunResult<Vec<u8>> {
         match resolved {
             ResolvedImagePath::Local(path) => {
                 let metadata = fs::metadata(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to locate image at {}: {}",
                         path.display(),
                         err
                     ))
                 })?;
                 if !metadata.is_file() {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "image path is not a file: {}",
                         path.display()
                     )));
                 }
 
                 fs::read(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to read image at {}: {}",
                         path.display(),
                         err
@@ -126,26 +126,26 @@ impl AnalyzeImageTool {
             }
             ResolvedImagePath::RemoteWorkspace { path, logical_path } => {
                 let fs = context.and_then(|ctx| ctx.ws_fs()).ok_or_else(|| {
-                    BitFunError::tool(
+                    OpenBitFunError::tool(
                         "analyze_image cannot read remote workspace images because workspace filesystem services are unavailable"
                             .to_string(),
                     )
                 })?;
                 let is_file = fs.is_file(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to inspect remote image at {}: {}",
                         logical_path, err
                     ))
                 })?;
                 if !is_file {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "image path is not a file: {}",
                         logical_path
                     )));
                 }
 
                 fs.read_file(path).await.map_err(|err| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "unable to read remote image at {}: {}",
                         logical_path, err
                     ))
@@ -214,7 +214,7 @@ impl Tool for AnalyzeImageTool {
         "analyze_image"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(
             "Analyze an image file with the configured image understanding model and return a text result. Use this when the primary model cannot inspect images directly, or when an image was pasted into the chat and a path is available in the user context."
                 .to_string(),
@@ -235,7 +235,7 @@ impl Tool for AnalyzeImageTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Path to the image file. Use an absolute local path, a workspace-relative path, or an exact bitfun:// URI."
+                    "description": "Path to the image file. Use an absolute local path, a workspace-relative path, or an exact openbitfun:// URI."
                 },
                 "prompt": {
                     "type": "string",
@@ -374,13 +374,13 @@ impl Tool for AnalyzeImageTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let input_path = Self::path_from_input(input)?;
         let prompt = Self::prompt_from_input(input);
         let resolved = Self::resolve_path(input_path, Some(context))?;
         let bytes = Self::read_image_bytes(&resolved, Some(context)).await?;
         let original_mime_type = detect_mime_type_from_bytes(&bytes, None)
-            .map_err(|err| BitFunError::tool(format!("unsupported image file: {}", err)))?;
+            .map_err(|err| OpenBitFunError::tool(format!("unsupported image file: {}", err)))?;
 
         let vision_model = resolve_vision_model_from_global_config().await?;
         let processed = optimize_image_with_size_limit(
@@ -389,7 +389,7 @@ impl Tool for AnalyzeImageTool {
             Some(&original_mime_type),
             Some(1024 * 1024),
         )
-        .map_err(|err| BitFunError::tool(format!("unable to prepare image: {}", err)))?;
+        .map_err(|err| OpenBitFunError::tool(format!("unable to prepare image: {}", err)))?;
 
         let messages = build_multimodal_message(
             &prompt,
@@ -399,18 +399,20 @@ impl Tool for AnalyzeImageTool {
         )?;
         let client = get_global_ai_client_factory()
             .await
-            .map_err(|err| BitFunError::service(format!("AI client factory unavailable: {err}")))?
+            .map_err(|err| {
+                OpenBitFunError::service(format!("AI client factory unavailable: {err}"))
+            })?
             .get_client_by_id(&vision_model.id)
             .await
             .map_err(|err| {
-                BitFunError::service(format!(
+                OpenBitFunError::service(format!(
                     "Failed to create image understanding model client: {err}"
                 ))
             })?;
         let response = client
             .send_message(messages, None)
             .await
-            .map_err(|err| BitFunError::service(format!("Image analysis failed: {err}")))?;
+            .map_err(|err| OpenBitFunError::service(format!("Image analysis failed: {err}")))?;
         let analysis = response.text.trim().to_string();
         // `analyze_image` calls the vision model directly through AIClient,
         // bypassing the round executor's token usage event, so persist the

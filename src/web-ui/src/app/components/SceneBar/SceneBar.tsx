@@ -7,7 +7,7 @@
 
 import React, { useCallback } from 'react';
 
-import { Icon, TabGroup, type TabGroupItem } from '@bitfun/ui';
+import { Icon, TabGroup, type TabGroupItem } from '@openbitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
@@ -18,9 +18,9 @@ import './SceneBar.scss';
 
 function getSceneIdFromTabTarget(target: EventTarget | null): SceneTabId | undefined {
   if (!(target instanceof HTMLElement)) return undefined;
-  const item = target.closest<HTMLElement>('[data-bf-part="item"]');
-  const tab = item?.querySelector<HTMLElement>('[role="tab"][data-bf-value]');
-  return tab?.dataset.bfValue as SceneTabId | undefined;
+  const item = target.closest<HTMLElement>('[data-openbitfun-part="item"]');
+  const tab = item?.querySelector<HTMLElement>('[role="tab"][data-openbitfun-value]');
+  return tab?.dataset.openbitfunValue as SceneTabId | undefined;
 }
 
 interface SceneBarProps {
@@ -40,7 +40,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   } = useSceneManager();
   const sessionTitle = useCurrentSessionTitle();
   const { t } = useI18n('common');
-  const sceneBarClassName = `bitfun-scene-bar ${className}`.trim();
+  const sceneBarClassName = `openbitfun-scene-bar ${className}`.trim();
   const {
     tabRegionRef,
     tabsRef,
@@ -98,7 +98,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
 
     items.push({
       value: tab.id,
-      label: <span className="bitfun-scene-bar__tab-title">{displayLabel}</span>,
+      label: <span className="openbitfun-scene-bar__tab-title">{displayLabel}</span>,
       // Keep the close hit target stationary between pointer down and up;
       // shrinking it can retarget the click at the button edge (issue #2210).
       endAction: closable ? (
@@ -123,26 +123,26 @@ const SceneBar: React.FC<SceneBarProps> = ({
   }, []);
 
   return (
-    <div data-bf-component="scene-bar" data-bf-part="root"
+    <div data-openbitfun-component="scene-bar" data-openbitfun-part="root"
       className={sceneBarClassName}
     >
       <div
         ref={tabRegionRef}
-        className="bitfun-scene-bar__tab-region"
+        className="openbitfun-scene-bar__tab-region"
         data-overflow={tabScrollState.hasOverflow ? 'true' : 'false'}
-        data-bf-component="scene-bar"
-        data-bf-part="tabs"
+        data-openbitfun-component="scene-bar"
+        data-openbitfun-part="tabs"
       >
         {tabScrollState.hasOverflow && (
           <button
             type="button"
-            className="bitfun-scene-bar__scroll-button"
+            className="openbitfun-scene-bar__scroll-button"
             aria-label={t('sceneBar.scrollPrevious')}
             title={t('sceneBar.scrollPrevious')}
             disabled={!tabScrollState.canScrollBackward}
             onClick={() => scrollTabsByPage(-1)}
-            data-bf-component="scene-bar"
-            data-bf-part="scrollPrevious"
+            data-openbitfun-component="scene-bar"
+            data-openbitfun-part="scrollPrevious"
           >
             <Icon name="chevron-left" size="sm" aria-hidden="true" />
           </button>
@@ -150,7 +150,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
 
         <TabGroup
           ref={tabsRef}
-          className="bitfun-scene-bar__tabs"
+          className="openbitfun-scene-bar__tabs"
           aria-label={t('sceneBar.tabsLabel')}
           items={tabItems}
           size="sm"
@@ -167,13 +167,13 @@ const SceneBar: React.FC<SceneBarProps> = ({
         {tabScrollState.hasOverflow && (
           <button
             type="button"
-            className="bitfun-scene-bar__scroll-button"
+            className="openbitfun-scene-bar__scroll-button"
             aria-label={t('sceneBar.scrollNext')}
             title={t('sceneBar.scrollNext')}
             disabled={!tabScrollState.canScrollForward}
             onClick={() => scrollTabsByPage(1)}
-            data-bf-component="scene-bar"
-            data-bf-part="scrollNext"
+            data-openbitfun-component="scene-bar"
+            data-openbitfun-part="scrollNext"
           >
             <Icon name="chevron-right" size="sm" aria-hidden="true" />
           </button>

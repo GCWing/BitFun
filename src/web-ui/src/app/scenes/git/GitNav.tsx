@@ -14,7 +14,7 @@ import {
   NavigationPanelHeader,
   NavigationPanelItem,
   Tooltip,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Layers2 } from 'lucide-react';
 import { useGitSceneStore, type GitSceneView } from './gitSceneStore';
@@ -64,27 +64,27 @@ const GitNav: React.FC = () => {
 
   return (
     <NavigationPanel
-      data-bf-component="git-nav"
-      data-bf-part="root"
-      className="bitfun-git-scene-nav"
+      data-openbitfun-component="git-nav"
+      data-openbitfun-part="root"
+      className="openbitfun-git-scene-nav"
     >
-      <NavigationPanelHeader className="bitfun-git-nav__panel-header">
-        <div className="bitfun-git-scene-nav__header" data-bf-component="git-nav" data-bf-part="header">
-          <span className="bitfun-git-scene-nav__title" data-bf-component="git-nav" data-bf-part="title">{t('title')}</span>
+      <NavigationPanelHeader className="openbitfun-git-nav__panel-header">
+        <div className="openbitfun-git-scene-nav__header" data-openbitfun-component="git-nav" data-openbitfun-part="header">
+          <span className="openbitfun-git-scene-nav__title" data-openbitfun-component="git-nav" data-openbitfun-part="title">{t('title')}</span>
         </div>
       </NavigationPanelHeader>
       <NavigationPanelBody>
-        <NavigationPanelContent className="bitfun-git-nav__panel-content">
+        <NavigationPanelContent className="openbitfun-git-nav__panel-content">
           {isRepository && (
-            <div className="bitfun-git-scene-nav__status" data-bf-component="git-nav" data-bf-part="status">
-          <div className="bitfun-git-scene-nav__branch-row">
+            <div className="openbitfun-git-scene-nav__status" data-openbitfun-component="git-nav" data-openbitfun-part="status">
+          <div className="openbitfun-git-scene-nav__branch-row">
             <Icon name="git" size="xs" aria-hidden />
-            <span className="bitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
+            <span className="openbitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
               {currentBranch ?? t('common.unknown')}
             </span>
           </div>
           {(ahead > 0 || behind > 0) && (
-            <div className="bitfun-git-scene-nav__sync-badges">
+            <div className="openbitfun-git-scene-nav__sync-badges">
               {ahead > 0 && (
                 <span title={t('status.ahead')}>
                   <Icon name="arrow-up" size="2xs" /> {ahead}
@@ -97,7 +97,7 @@ const GitNav: React.FC = () => {
               )}
             </div>
           )}
-        <div className="bitfun-git-scene-nav__actions-row" data-bf-component="git-nav" data-bf-part="actions">
+        <div className="openbitfun-git-scene-nav__actions-row" data-openbitfun-component="git-nav" data-openbitfun-part="actions">
             <Tooltip content={t('actions.refresh')}>
               <IconButton
                 size="sm"
@@ -113,16 +113,16 @@ const GitNav: React.FC = () => {
           {NAV_ITEMS.map(({ id, icon: ItemIcon, labelKey }) => (
             <NavigationPanelItem
           key={id}
-          className={['bitfun-git-scene-nav__item', activeView === id && 'is-active'].filter(Boolean).join(' ')}
+          className={['openbitfun-git-scene-nav__item', activeView === id && 'is-active'].filter(Boolean).join(' ')}
           selected={activeView === id}
           leading={id === 'working-copy'
             ? <Icon name="git" size="sm" />
             : ItemIcon ? <ItemIcon size={14} aria-hidden /> : undefined}
           metadata={
             id === 'working-copy' && changeCount > 0 ? (
-              <span className="bitfun-git-scene-nav__item-badge">({changeCount})</span>
+              <span className="openbitfun-git-scene-nav__item-badge">({changeCount})</span>
             ) : id === 'branches' && branchCount > 0 ? (
-              <span className="bitfun-git-scene-nav__item-badge">({branchCount})</span>
+              <span className="openbitfun-git-scene-nav__item-badge">({branchCount})</span>
             ) : undefined
           }
           onClick={() => handleViewClick(id)}

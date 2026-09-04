@@ -1,23 +1,23 @@
-@layer bf.components {
-  .root { --_height: var(--bf-control-height-md); display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--bf-space-2); color: var(--bf-color-content-primary); }
-  .root[data-size="sm"] { --_height: var(--bf-control-height-sm); }
-  .root[data-size="lg"] { --_height: var(--bf-control-height-lg); }
-  .label { font-family: var(--bf-type-label-md-font-family); font-size: var(--bf-type-label-md-font-size); font-weight: var(--bf-type-label-md-font-weight); line-height: var(--bf-type-label-md-line-height); letter-spacing: var(--bf-type-label-md-letter-spacing); }
-  .control { display: inline-flex; align-items: stretch; min-inline-size: 0; block-size: var(--_height); overflow: hidden; border: var(--bf-border-width-default) solid var(--bf-color-field-border); border-radius: var(--bf-radius-base); background: var(--bf-color-field-background); transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard); }
+@layer openbitfun.components {
+  .root { --_height: var(--openbitfun-control-height-md); display: inline-flex; min-inline-size: 0; flex-direction: column; gap: var(--openbitfun-space-2); color: var(--openbitfun-color-content-primary); }
+  .root[data-size="sm"] { --_height: var(--openbitfun-control-height-sm); }
+  .root[data-size="lg"] { --_height: var(--openbitfun-control-height-lg); }
+  .label { font-family: var(--openbitfun-type-label-md-font-family); font-size: var(--openbitfun-type-label-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); line-height: var(--openbitfun-type-label-md-line-height); letter-spacing: var(--openbitfun-type-label-md-letter-spacing); }
+  .control { display: inline-flex; align-items: stretch; min-inline-size: 0; block-size: var(--_height); overflow: hidden; border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); border-radius: var(--openbitfun-radius-base); background: var(--openbitfun-color-field-background); transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard); }
   .root[data-field-surface="ambient"] .control { background: transparent; }
-  .root:not([data-disabled="true"]) .control:hover { border-color: var(--bf-color-field-border-hover); }
-  .control:focus-within { border-color: var(--bf-color-field-border-focus); box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring); }
-  .input { flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; padding-inline: var(--bf-space-3); border: 0; outline: 0; color: inherit; background: transparent; font-family: var(--bf-type-label-md-font-family); font-size: var(--bf-type-label-md-font-size); font-weight: var(--bf-type-label-md-font-weight); font-variant-numeric: tabular-nums; line-height: var(--bf-type-label-md-line-height); letter-spacing: var(--bf-type-label-md-letter-spacing); text-align: end; }
-  .input:has(+ .unit) { padding-inline-end: var(--bf-space-1); }
-  .unit { display: inline-flex; flex: 0 0 auto; align-items: center; padding-inline-end: var(--bf-space-2); color: var(--bf-color-content-muted); font-family: var(--bf-type-support-font-family); font-size: var(--bf-type-support-font-size); font-weight: var(--bf-type-support-font-weight); line-height: var(--bf-type-support-line-height); letter-spacing: var(--bf-type-support-letter-spacing); white-space: nowrap; }
-  .buttons { display: inline-grid; flex: 0 0 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); border-inline-start: var(--bf-border-width-default) solid var(--bf-color-field-border); }
-  .buttons button { display: grid; min-inline-size: 22px; padding: 0; place-items: center; border: 0; color: var(--bf-color-content-muted); background: transparent; font: inherit; line-height: 1; cursor: pointer; }
-  .buttons button:hover:not(:disabled) { color: var(--bf-color-content-primary); background: var(--bf-color-action-neutral-surface-hover); }
-  .buttons button:disabled, .root[data-disabled="true"] { color: var(--bf-color-content-disabled); cursor: not-allowed; }
-  .root[data-disabled="true"] .unit { color: var(--bf-color-content-disabled); }
+  .root:not([data-disabled="true"]) .control:hover { border-color: var(--openbitfun-color-field-border-hover); }
+  .control:focus-within { border-color: var(--openbitfun-color-field-border-focus); box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring); }
+  .input { flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; padding-inline: var(--openbitfun-space-3); border: 0; outline: 0; color: inherit; background: transparent; font-family: var(--openbitfun-type-label-md-font-family); font-size: var(--openbitfun-type-label-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); font-variant-numeric: tabular-nums; line-height: var(--openbitfun-type-label-md-line-height); letter-spacing: var(--openbitfun-type-label-md-letter-spacing); text-align: end; }
+  .input:has(+ .unit) { padding-inline-end: var(--openbitfun-space-1); }
+  .unit { display: inline-flex; flex: 0 0 auto; align-items: center; padding-inline-end: var(--openbitfun-space-2); color: var(--openbitfun-color-content-muted); font-family: var(--openbitfun-type-support-font-family); font-size: var(--openbitfun-type-support-font-size); font-weight: var(--openbitfun-type-support-font-weight); line-height: var(--openbitfun-type-support-line-height); letter-spacing: var(--openbitfun-type-support-letter-spacing); white-space: nowrap; }
+  .buttons { display: inline-grid; flex: 0 0 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); border-inline-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); }
+  .buttons button { display: grid; min-inline-size: 22px; padding: 0; place-items: center; border: 0; color: var(--openbitfun-color-content-muted); background: transparent; font: inherit; line-height: 1; cursor: pointer; }
+  .buttons button:hover:not(:disabled) { color: var(--openbitfun-color-content-primary); background: var(--openbitfun-color-action-neutral-surface-hover); }
+  .buttons button:disabled, .root[data-disabled="true"] { color: var(--openbitfun-color-content-disabled); cursor: not-allowed; }
+  .root[data-disabled="true"] .unit { color: var(--openbitfun-color-content-disabled); }
   .root[data-variant="default"] .buttons { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); }
-  .root[data-variant="default"] .buttons button { min-inline-size: 20px; font-size: var(--bf-type-meta-font-size); line-height: var(--bf-type-meta-line-height); }
-  .root[data-variant="default"] .buttons button + button { border-block-start: var(--bf-border-width-default) solid var(--bf-color-field-border); }
+  .root[data-variant="default"] .buttons button { min-inline-size: 20px; font-size: var(--openbitfun-type-meta-font-size); line-height: var(--openbitfun-type-meta-line-height); }
+  .root[data-variant="default"] .buttons button + button { border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); }
   @media (prefers-reduced-motion: reduce) { .control { transition: none; } }
-  @media (forced-colors: active) { .control { border-color: ButtonText; } .control:focus-within { border-color: Highlight; box-shadow: 0 0 0 var(--bf-focus-width) Highlight; } }
+  @media (forced-colors: active) { .control { border-color: ButtonText; } .control:focus-within { border-color: Highlight; box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight; } }
 }

@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub const APPEARANCE_MARKET_API_VERSION: &str = "v1";
-pub const APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE: &str = "application/vnd.bitfun.appearance+zip";
+pub const APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE: &str =
+    "application/vnd.openbitfun.appearance+zip";
 pub const APPEARANCE_MARKET_MAX_PACKAGE_BYTES: u64 = 96 * 1024 * 1024;
 pub const APPEARANCE_MARKET_MAX_UNCOMPRESSED_BYTES: u64 = 128 * 1024 * 1024;
 pub const APPEARANCE_MARKET_MAX_MANIFEST_BYTES: u64 = 256 * 1024;
@@ -81,7 +82,7 @@ pub struct AppearanceMarketListingSummary {
     pub mode: AppearancePackageMode,
     pub package_version: String,
     pub latest_release: u32,
-    pub min_bitfun_version: String,
+    pub min_openbitfun_version: String,
     pub required_capabilities: Vec<String>,
     pub owner: AppearanceMarketUserSummary,
     pub preview_url: String,
@@ -108,7 +109,7 @@ pub struct AppearanceMarketRelease {
     pub listing_id: String,
     pub release_number: u32,
     pub package_version: String,
-    pub min_bitfun_version: String,
+    pub min_openbitfun_version: String,
     pub package_sha256: String,
     pub package_size: u64,
     pub review_bundle_hash: String,
@@ -157,7 +158,7 @@ pub struct AppearanceMarketSubmission {
     pub mode: Option<AppearancePackageMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_version: Option<String>,
-    pub min_bitfun_version: String,
+    pub min_openbitfun_version: String,
     pub required_capabilities: Vec<String>,
     pub changelog: String,
     pub license: AppearanceMarketLicense,
@@ -185,7 +186,7 @@ pub struct AppearanceMarketSubmissionDraftRequest {
     pub listing_id: Option<String>,
     pub slug: String,
     pub release_number: u32,
-    pub min_bitfun_version: String,
+    pub min_openbitfun_version: String,
     pub changelog: String,
     pub license: AppearanceMarketLicense,
     #[serde(skip_serializing_if = "Option::is_none")]

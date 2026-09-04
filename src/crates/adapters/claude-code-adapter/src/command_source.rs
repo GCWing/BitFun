@@ -1,4 +1,4 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
@@ -6,12 +6,12 @@ use bitfun_product_domains::external_sources::{
     PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
     SourceKey, SourceQualifiedCommandId,
 };
-use bitfun_services_core::markdown::{
+use openbitfun_services_core::markdown::{
     expand_prompt_template_arguments, parse_prompt_shell_directives,
     prompt_template_expansion_upper_bound, FrontMatterMarkdown,
 };
-use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
-use bitfun_static_hook_support::{
+use openbitfun_services_core::workspace_text::normalize_workspace_relative_path;
+use openbitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimits, BoundedTextRead,
 };
@@ -661,7 +661,7 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
                         .to_string();
                 }
                 // Display-only in Claude Code. It is intentionally not part of
-                // BitFun's executable behavior version.
+                // OpenBitFun's executable behavior version.
                 "argument-hint" => {
                     if value.as_str().is_none() {
                         return Err(
@@ -670,7 +670,7 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
                     }
                 }
                 // Claude Code treats this as a permission preapproval hint.
-                // BitFun keeps its own permission policy authoritative, so the
+                // OpenBitFun keeps its own permission policy authoritative, so the
                 // hint is validated but intentionally not projected into the
                 // executable command definition or behavior version.
                 "allowed-tools" => {

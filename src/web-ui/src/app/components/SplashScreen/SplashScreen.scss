@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────
@@ -50,27 +50,38 @@
   display: block;
   width: 96px;
   height: 96px;
-  border-radius: var(--bf-radius-lg);
   user-select: none;
   // Ensure proper rendering on Linux
   -webkit-user-select: none;
 }
 
+.splash-screen__logo--light {
+  display: none;
+}
+
+[data-color-scheme='dark'] .splash-screen__logo--dark {
+  display: none;
+}
+
+[data-color-scheme='dark'] .splash-screen__logo--light {
+  display: block;
+}
+
 .splash-screen__message {
   position: absolute;
-  top: calc(100% + var(--bf-space-4));
+  top: calc(100% + var(--openbitfun-space-4));
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   text-align: center;
   opacity: 0;
   transform: translate(-50%, -2px);
   transition:
-    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate),
-    transform var(--bf-motion-duration-base) var(--bf-motion-easing-decelerate);
+    opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-decelerate),
+    transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-decelerate);
   pointer-events: none;
 }
 

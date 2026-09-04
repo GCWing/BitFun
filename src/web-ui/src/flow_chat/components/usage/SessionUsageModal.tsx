@@ -19,7 +19,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { setChatPopupActive } from '../chatPopupState';
 import { SessionUsageReportCard } from './SessionUsageReportCard';
@@ -86,8 +86,8 @@ export const SessionUsageModal: React.FC = () => {
       <DialogBody className="session-usage-dialog__body" inset="none">
         <div
           className="session-usage-dialog__content"
-          data-bf-component="session-usage-modal"
-          data-bf-part="content"
+          data-openbitfun-component="session-usage-modal"
+          data-openbitfun-part="content"
         >
           <SessionUsageReportCard
             compact

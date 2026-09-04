@@ -7,8 +7,8 @@ use agent_client_protocol::schema::{
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
-use bitfun_core::service::session::{ToolItemData, ToolItemIdentityExt};
-use bitfun_events::ToolEventData;
+use openbitfun_core::service::session::{ToolItemData, ToolItemIdentityExt};
+use openbitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
 pub(super) const PERMISSION_REJECT_ONCE: &str = "reject_once";
@@ -215,7 +215,10 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             let fields = ToolCallUpdateFields::new().status(ToolCallStatus::Pending);
             if let Ok(wire_input) = serde_json::from_str::<serde_json::Value>(params) {
                 let (tool_name, effective_input) =
-                    bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, &wire_input);
+                    openbitfun_agent_tools::effective_tool_invocation(
+                        &identity.tool_name,
+                        &wire_input,
+                    );
                 if is_write_like_tool(tool_name) {
                     fields
                         .raw_input(sanitize_tool_input(tool_name, effective_input.clone()))
@@ -248,7 +251,7 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             identity, params, ..
         } => {
             let (tool_name, effective_input) =
-                bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
+                openbitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
             ToolCallUpdateFields::new()
                 .title(tool_title(tool_name))
                 .kind(tool_kind(tool_name))
@@ -281,7 +284,7 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             identity, params, ..
         } => {
             let (tool_name, effective_input) =
-                bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
+                openbitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params);
             ToolCallUpdateFields::new()
                 .title(format!("Allow {}?", tool_name))
                 .status(ToolCallStatus::Pending)
@@ -535,8 +538,8 @@ fn value_to_display_text(value: &serde_json::Value) -> String {
 mod tests {
     use super::*;
     use agent_client_protocol::schema::ContentBlock;
-    use bitfun_core::service::session::ToolCallData;
-    use bitfun_events::ToolEventIdentity;
+    use openbitfun_core::service::session::ToolCallData;
+    use openbitfun_events::ToolEventIdentity;
 
     fn identity(tool_name: &str) -> ToolEventIdentity {
         ToolEventIdentity::direct("tool-1", tool_name)
@@ -620,7 +623,7 @@ mod tests {
         let event = ToolEventData::Started {
             identity: ToolEventIdentity::resolved(
                 "tool-1",
-                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                openbitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
                 "Write",
             ),
             params: serde_json::json!({

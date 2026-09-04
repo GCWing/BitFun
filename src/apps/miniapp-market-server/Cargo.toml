@@ -1,18 +1,18 @@
 [package]
-name = "bitfun-miniapp-market-server"
+name = "openbitfun-miniapp-market-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun MiniApp marketplace HTTP server"
+description = "OpenBitFun MiniApp marketplace HTTP server"
 
 [[bin]]
-name = "bitfun-miniapp-market-server"
+name = "openbitfun-miniapp-market-server"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
-bitfun-miniapp-market-service = { path = "../../crates/services/miniapp-market-service" }
+openbitfun-miniapp-market-service = { path = "../../crates/services/miniapp-market-service" }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

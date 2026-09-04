@@ -9,6 +9,6 @@ export const canvasTabBarAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'actions', visualRole: 'toolbar' },
     { id: 'action', propertyProfile: 'control', visualRole: 'control' },
   ],
-  facets: [{ id: 'group', attribute: 'data-bf-group', values: ['primary', 'secondary', 'tertiary'] }],
-  states: [{ id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } }],
+  facets: [{ id: 'group', attribute: 'data-openbitfun-group', values: ['primary', 'secondary', 'tertiary'] }],
+  states: [{ id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } }],
 };

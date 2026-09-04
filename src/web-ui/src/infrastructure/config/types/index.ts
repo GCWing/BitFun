@@ -2,6 +2,7 @@ import { i18nService } from '@/infrastructure/i18n';
 
 const t = (key: string, options?: Record<string, unknown>) => i18nService.t(key, options);
 export interface GlobalConfig {
+  product_id: 'openbitfun';
   app: AppConfig;
   editor: EditorConfig;
   terminal: TerminalConfig;
@@ -9,6 +10,7 @@ export interface GlobalConfig {
   ai: AIConfig;
   tool_permissions: ToolPermissionConfig;
   memories: MemoriesConfig;
+  schema_version: 1;
   version: string;
   last_modified: number;
 }
@@ -573,12 +575,11 @@ export interface ConfigValidationWarning {
 }
 
 export interface ConfigExport {
+  product_id: 'openbitfun';
+  format_version: 1;
   config: GlobalConfig;
-  metadata: {
-    version: string;
-    exported_at: number;
-    exported_by: string;
-  };
+  export_timestamp: string;
+  version: string;
 }
 
 export interface ConfigChangeEvent {

@@ -286,7 +286,7 @@ function isFullPackageInput(file) {
   ) {
     return true;
   }
-  if (name === 'Cargo.toml' && !file.startsWith('BitFun-Installer/')) {
+  if (name === 'Cargo.toml' && !file.startsWith('OpenBitFun-Installer/')) {
     return true;
   }
   if (
@@ -312,7 +312,7 @@ function isFrontendOnlyInput(file) {
 }
 
 function isWindowsPackageInput(file) {
-  return file.startsWith('BitFun-Installer/')
+  return file.startsWith('OpenBitFun-Installer/')
     || file === 'scripts/cli/package-windows.ps1'
     || file.startsWith('scripts/windows/')
     || file.includes('/windows/')

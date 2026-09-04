@@ -1,5 +1,5 @@
 /**
- * Account ("My BitFun") panel inside the Remote Connect dialog.
+ * Account ("My OpenBitFun") panel inside the Remote Connect dialog.
  *
  * Views: login → overwrite (optional) → devices
  * Unlike the old standalone dialog, a successful login keeps the panel open
@@ -15,7 +15,7 @@
  *   group), not an external README. See `src/features/relay-deploy/README.md`.
  */
 
-import { Alert, Button, Field, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
+import { Alert, Button, Field, Icon, IconButton, Input, ScrollArea } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -1053,24 +1053,24 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   return (
     <>
-      <div data-bf-component="remote-account-panel" data-bf-part="root" data-bf-view={view} className="account-panel">
+      <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="root" data-openbitfun-view={view} className="account-panel">
         {error && (
-          <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
+          <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
             <Alert tone="error" message={error} closable onClose={() => setError(null)} />
           </div>
         )}
 
         {loading && view === 'devices' && (
-          <div className="account-panel__loading-overlay" data-bf-component="remote-account-panel" data-bf-part="loading">
+          <div className="account-panel__loading-overlay" data-openbitfun-component="remote-account-panel" data-openbitfun-part="loading">
             <Icon name="refresh" size="lg" className="spinning" style={{ width: 20, height: 20 }} />
             <span>{t('accountLogin.processing')}</span>
           </div>
         )}
 
         {view === 'login' && (
-          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
             <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
-            <div className="account-panel__form" data-bf-component="remote-account-panel" data-bf-part="form">
+            <div className="account-panel__form" data-openbitfun-component="remote-account-panel" data-openbitfun-part="form">
               <Field
                 className="account-panel__field"
                 controlWidth="fill"
@@ -1142,7 +1142,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 </Button>
               </div>
             </div>
-            <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
+            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
               <Button
                 variant="fill"
                 size="sm"
@@ -1157,16 +1157,16 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         )}
 
         {view === 'overwrite' && (
-          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
             <div className="account-panel__overwrite-notice">
               <CloudDownload size={32} />
               <p>{t('accountLogin.cloudOverwriteWarning')}</p>
             </div>
-            <div className="account-panel__sync-options" data-bf-component="remote-account-panel" data-bf-part="syncOptions">
+            <div className="account-panel__sync-options" data-openbitfun-component="remote-account-panel" data-openbitfun-part="syncOptions">
               <button
                 className="account-panel__sync-option"
-                data-bf-component="remote-account-panel"
-                data-bf-part="syncOption"
+                data-openbitfun-component="remote-account-panel"
+                data-openbitfun-part="syncOption"
                 onClick={handleUseLocalOverwrite}
                 disabled={loading}
               >
@@ -1178,8 +1178,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </button>
               <button
                 className="account-panel__sync-option"
-                data-bf-component="remote-account-panel"
-                data-bf-part="syncOption"
+                data-openbitfun-component="remote-account-panel"
+                data-openbitfun-part="syncOption"
                 onClick={handleConfirmOverwrite}
                 disabled={loading}
               >
@@ -1190,7 +1190,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 </div>
               </button>
             </div>
-            <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
+            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
               <Button variant="outline" size="sm" onClick={handleCancelOverwrite} disabled={loading}>
                 {t('accountLogin.disagree')}
               </Button>
@@ -1199,9 +1199,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         )}
 
         {view === 'devices' && (
-          <ScrollArea className="account-panel__scroll" data-bf-component="remote-account-panel" data-bf-part="scroll">
+          <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
             {accountRelayUrl && (
-              <div className="account-panel__server-line" data-bf-component="remote-account-panel" data-bf-part="server">
+              <div className="account-panel__server-line" data-openbitfun-component="remote-account-panel" data-openbitfun-part="server">
                 <Server size={13} />
                 <span className="account-panel__server-url" title={accountRelayUrl}>
                   {accountRelayUrl}
@@ -1217,7 +1217,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </div>
             )}
             {syncStatus !== 'idle' && !relayError && (
-              <div className={`account-panel__sync-indicator ${syncStatus}`} data-bf-component="remote-account-panel" data-bf-part="syncStatus" data-bf-state={syncStatus === 'syncing' ? 'syncing' : undefined}>
+              <div className={`account-panel__sync-indicator ${syncStatus}`} data-openbitfun-component="remote-account-panel" data-openbitfun-part="syncStatus" data-openbitfun-state={syncStatus === 'syncing' ? 'syncing' : undefined}>
                 <div className="account-panel__sync-indicator-row">
                   {syncStatus === 'syncing' && <Icon name="refresh" size="sm" className="spinning" />}
                   {syncStatus === 'done' && <span>✓</span>}
@@ -1253,8 +1253,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 {syncStatus === 'syncing' && (
                   <div
                     className="account-panel__sync-progress-track"
-                    data-bf-component="remote-account-panel"
-                    data-bf-part="progressTrack"
+                    data-openbitfun-component="remote-account-panel"
+                    data-openbitfun-part="progressTrack"
                     role="progressbar"
                     aria-valuemin={0}
                     aria-valuemax={100}
@@ -1262,8 +1262,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   >
                     <div
                       className="account-panel__sync-progress-fill"
-                      data-bf-component="remote-account-panel"
-                      data-bf-part="progressFill"
+                      data-openbitfun-component="remote-account-panel"
+                      data-openbitfun-part="progressFill"
                       style={{ width: `${Math.max(2, syncProgress.percent)}%` }}
                     />
                   </div>
@@ -1271,14 +1271,14 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
               </div>
             )}
             {relayError && (
-              <div className="account-panel__error-banner" data-bf-component="remote-account-panel" data-bf-part="error">
+              <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
                 <Alert
                   tone="error"
                   message={relayError}
                 />
               </div>
             )}
-            <div className="account-panel__device-list" data-bf-component="remote-account-panel" data-bf-part="deviceList">
+            <div className="account-panel__device-list" data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceList">
               {!relayError && devicesReady && devices.length === 0 && (
                 <div className="account-panel__empty">{t('accountLogin.noDevices')}</div>
               )}
@@ -1300,8 +1300,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   : t('accountLogin.removeDevice');
                 const displayName = d.device_name || t('accountLogin.unknownDevice');
                 return (
-                <div data-bf-component="remote-account-panel" data-bf-part="deviceCard" key={d.device_id}
-                  data-bf-state={[
+                <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceCard" key={d.device_id}
+                  data-openbitfun-state={[
                     !d.online && 'offline',
                     isLocal && 'current',
                   ].filter(Boolean).join(' ') || undefined}
@@ -1353,7 +1353,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                 );
               })}
             </div>
-            <div className="account-panel__actions" data-bf-component="remote-account-panel" data-bf-part="actions">
+            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
               {relayError && (
                 <Button
                   variant="fill"

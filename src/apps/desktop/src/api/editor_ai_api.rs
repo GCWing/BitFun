@@ -6,9 +6,9 @@
 //! - Supports streaming output and cancellation by request id
 
 use crate::api::app_state::AppState;
-use bitfun_core::util::types::message::Message as AIMessage;
 use futures::StreamExt;
 use log::warn;
+use openbitfun_core::util::types::message::Message as AIMessage;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 

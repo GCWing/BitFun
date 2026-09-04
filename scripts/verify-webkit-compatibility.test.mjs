@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const { findWebKitCompatibilityViolations } = require('./verify-webkit-compatibility.cjs');
 
 function withTempDist(callback) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-webkit-compat-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-webkit-compat-'));
   try {
     return callback(directory);
   } finally {

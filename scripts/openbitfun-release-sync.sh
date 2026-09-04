@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# sync-release.sh — Mirror BitFun release assets from GitHub to openbitfun.com.
+# sync-release.sh — Mirror OpenBitFun release assets from GitHub to openbitfun.com.
 #
 # Flow:
 #   1. Fetch the selected channel's latest.json from GitHub
@@ -20,10 +20,10 @@
 # latest.json's manual_installers entry while the updater keeps the versioned
 # Tauri setup.exe URL.
 #
-# Cron (every 10 minutes). Run the in-repo script from the BitFun checkout so a
+# Cron (every 10 minutes). Run the in-repo script from the OpenBitFun checkout so a
 # new host only needs this repository, not a detached AutoUpdate copy:
-#   */10 * * * * /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
-#       >> /var/log/bitfun-release-sync.log 2>&1
+#   */10 * * * * /root/repos/OpenBitFun/scripts/openbitfun-release-sync.sh \
+#       >> /var/log/openbitfun-release-sync.log 2>&1
 # Host restore: deploy/openbitfun-host/README.md
 #
 # Optional immediate trigger. The release workflow POSTs to
@@ -34,9 +34,9 @@
 #
 #   while true; do
 #     nc -l -p 8787 -q 1 >/dev/null \
-#       && BITFUN_RELEASE_CHANNEL=stable \
-#            /root/repos/BitFun/scripts/openbitfun-release-sync.sh \
-#            >> /var/log/bitfun-release-sync.log 2>&1
+#       && OPENBITFUN_RELEASE_CHANNEL=stable \
+#            /root/repos/OpenBitFun/scripts/openbitfun-release-sync.sh \
+#            >> /var/log/openbitfun-release-sync.log 2>&1
 #   done
 #
 # The current production origin is cron-only. Do not invent a detached webhook
@@ -49,18 +49,18 @@
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────
-RELEASE_CHANNEL="${BITFUN_RELEASE_CHANNEL:-stable}"
+RELEASE_CHANNEL="${OPENBITFUN_RELEASE_CHANNEL:-stable}"
 case "$RELEASE_CHANNEL" in
   stable)
     CHANNEL_PATH=""
-    GITHUB_RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/latest/download"
+    GITHUB_RELEASE_ROOT="https://github.com/GCWing/OpenBitFun/releases/latest/download"
     ;;
   beta)
     CHANNEL_PATH="/beta"
-    GITHUB_RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/download/channel-beta"
+    GITHUB_RELEASE_ROOT="https://github.com/GCWing/OpenBitFun/releases/download/channel-beta"
     ;;
   *)
-    echo "Unsupported BITFUN_RELEASE_CHANNEL: $RELEASE_CHANNEL" >&2
+    echo "Unsupported OPENBITFUN_RELEASE_CHANNEL: $RELEASE_CHANNEL" >&2
     exit 1
     ;;
 esac
@@ -69,17 +69,16 @@ GITHUB_LINUX_BINARIES_URL="${GITHUB_RELEASE_ROOT}/linux-binaries.json"
 GITHUB_RELAY_IMAGE_URL="${GITHUB_RELEASE_ROOT}/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release${CHANNEL_PATH}"
 # The mirror deliberately lives outside the website checkout. It used to be
-# BitFun-Website/dist/release, but `npm run build` empties dist/, so every
+# OpenBitFun-Website/dist/release, but `npm run build` empties dist/, so every
 # website deploy silently deleted the mirrored installers and manifests —
 # breaking downloads and the updater fallback until someone noticed. nginx
 # serves this directory through a `location ^~ /release/` alias instead.
-WEBSITE_RELEASE_ROOT="${WEBSITE_RELEASE_DIR:-/srv/bitfun-release}"
+WEBSITE_RELEASE_ROOT="${WEBSITE_RELEASE_DIR:-/srv/openbitfun-release}"
 WEBSITE_RELEASE_DIR="${WEBSITE_RELEASE_ROOT}${CHANNEL_PATH}"
 # Keep the lock off the Nginx /release/ alias. Override with
-# BITFUN_RELEASE_SYNC_LOCK if a host must share a lock across checkouts.
-LOCK_FILE="${BITFUN_RELEASE_SYNC_LOCK:-/var/lock/bitfun-release-sync.lock}"
-LEGACY_WINDOWS_INSTALLER_FILENAME="bitfun-installer.exe"
-WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
+# OPENBITFUN_RELEASE_SYNC_LOCK if a host must share a lock across checkouts.
+LOCK_FILE="${OPENBITFUN_RELEASE_SYNC_LOCK:-/var/lock/openbitfun-release-sync.lock}"
+WINDOWS_INSTALLER_FILENAME="openbitfun-installer.exe"
 WINDOWS_INSTALLER_URL=""
 WINDOWS_INSTALLER_SIGNATURE_URL=""
 WEBSITE_DOWNLOADS_MANIFEST="downloads.json"
@@ -406,7 +405,7 @@ mirror_dispatch_macos_cli_archives() {
   local target filename base_url suffix ready failed checksum_list
   checksum_list=""
   for target in x86_64-apple-darwin aarch64-apple-darwin; do
-    filename="bitfun-cli-${VERSION}-${target}.tar.gz"
+    filename="openbitfun-cli-${VERSION}-${target}.tar.gz"
     base_url="${RELEASE_ASSET_BASE_URL}/${filename}"
     ready=1
     for suffix in "" .sha256 .sha256.sig .sig; do
@@ -485,7 +484,7 @@ import json, re, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     data = json.load(f)
 assert data.get("schema_version") == 1
-assert data.get("image") == "ghcr.io/gcwing/bitfun-relay-server"
+assert data.get("image") == "ghcr.io/gcwing/openbitfun-relay-server"
 assert re.fullmatch(r"sha256:[0-9a-f]{64}", data.get("digest", ""))
 print(data["version"])
 PY
@@ -520,7 +519,7 @@ main() {
     exit 0
   fi
 
-  log "=== BitFun ${RELEASE_CHANNEL} release sync started ==="
+  log "=== OpenBitFun ${RELEASE_CHANNEL} release sync started ==="
 
   mkdir -p "$WEBSITE_RELEASE_DIR"
 
@@ -582,9 +581,8 @@ if entry:
     fi
     WINDOWS_INSTALLER_FILENAME="${WINDOWS_INSTALLER_URL##*/}"
   else
-    WINDOWS_INSTALLER_URL="${RELEASE_ASSET_BASE_URL}/${LEGACY_WINDOWS_INSTALLER_FILENAME}"
+    WINDOWS_INSTALLER_URL="${RELEASE_ASSET_BASE_URL}/${WINDOWS_INSTALLER_FILENAME}"
     WINDOWS_INSTALLER_SIGNATURE_URL="${WINDOWS_INSTALLER_URL}.sig"
-    WINDOWS_INSTALLER_FILENAME="$LEGACY_WINDOWS_INSTALLER_FILENAME"
   fi
 
   # 3. Create version directory

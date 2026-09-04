@@ -2,16 +2,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     AgentRuntimeBuilder, AgentSessionClosePort, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
     AgentSubmissionResult, AgentTransientSessionDiscardRequest, PortResult,
 };
-use bitfun_sdk_host::host::{TemporaryModelInstallError, TemporaryModelInstaller};
-use bitfun_sdk_host::protocol::TemporaryModelConfig;
-use bitfun_sdk_host_app::transport::{serve_streams, SdkHostTransportConfig};
+use openbitfun_sdk_host::host::{TemporaryModelInstallError, TemporaryModelInstaller};
+use openbitfun_sdk_host::protocol::TemporaryModelConfig;
+use openbitfun_sdk_host_app::transport::{serve_streams, SdkHostTransportConfig};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Notify;
 use tokio::time::{timeout, Duration};
@@ -376,7 +376,7 @@ async fn transport_accepts_input_while_an_owner_call_is_pending_and_bounds_reque
         server_read,
         server_write,
         SdkHostTransportConfig {
-            host: bitfun_sdk_host::host::SdkHostConfig {
+            host: openbitfun_sdk_host::host::SdkHostConfig {
                 max_in_flight_requests: 1,
                 ..Default::default()
             },
@@ -449,7 +449,7 @@ async fn shutdown_remains_available_when_the_data_request_budget_is_exhausted() 
         server_write,
         SdkHostTransportConfig {
             shutdown_total_timeout_ms: 500,
-            host: bitfun_sdk_host::host::SdkHostConfig {
+            host: openbitfun_sdk_host::host::SdkHostConfig {
                 max_in_flight_requests: 1,
                 ..Default::default()
             },

@@ -1,13 +1,13 @@
 [package]
-name = "bitfun-services-integrations"
+name = "openbitfun-services-integrations"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun integration service owner crate"
+description = "OpenBitFun integration service owner crate"
 autotests = false
 
 [lib]
-name = "bitfun_services_integrations"
+name = "openbitfun_services_integrations"
 crate-type = ["rlib"]
 
 [dependencies]
@@ -16,20 +16,20 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 ts-rs = { workspace = true, optional = true }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
-bitfun-agent-workflows = { path = "../../execution/agent-workflows", optional = true }
-bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-core-types = { path = "../../contracts/core-types", optional = true }
-bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+openbitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
+openbitfun-agent-workflows = { path = "../../execution/agent-workflows", optional = true }
+openbitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
+openbitfun-events = { path = "../../contracts/events" }
+openbitfun-core-types = { path = "../../contracts/core-types", optional = true }
+openbitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 argon2 = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
-bitfun-services-core = { path = "../services-core", optional = true }
+openbitfun-services-core = { path = "../services-core", optional = true }
 bzip2 = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
@@ -95,9 +95,9 @@ default = []
 # feature group (e.g. `git`) only derive `TS` when that group is also enabled;
 # app-server's `ts` feature enables `product-full` which pulls `git`.
 ts = ["dep:ts-rs"]
-announcement = ["bitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "tokio/fs", "tokio/sync"]
+announcement = ["openbitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "tokio/fs", "tokio/sync"]
 models-dev = [
-    "bitfun-services-core/tls-provider",
+    "openbitfun-services-core/tls-provider",
     "reqwest",
     "reqwest/rustls-no-provider",
     "reqwest/system-proxy",
@@ -107,9 +107,9 @@ models-dev = [
     "tokio/time",
     "windows",
 ]
-browser-control = ["anyhow", "bitfun-services-core/process-runtime", "bitfun-services-core/tls-provider", "dirs", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "thiserror", "tokio/time"]
+browser-control = ["anyhow", "openbitfun-services-core/process-runtime", "openbitfun-services-core/tls-provider", "dirs", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "thiserror", "tokio/time"]
 canvas-runtime = [
-    "dep:bitfun-product-domains",
+    "dep:openbitfun-product-domains",
     "oxc",
     "sha2",
     "tokio/fs",
@@ -119,13 +119,14 @@ canvas-runtime = [
 deep-research = [
     "anyhow",
     "async-trait",
-    "dep:bitfun-agent-workflows",
-    "bitfun-runtime-ports/workspace-ports",
+    "dep:openbitfun-agent-workflows",
+    "dep:openbitfun-core-types",
+    "openbitfun-runtime-ports/workspace-ports",
 ]
 git = [
     "async-trait",
-    "bitfun-runtime-ports/git-port",
-    "bitfun-services-core/process-runtime",
+    "openbitfun-runtime-ports/git-port",
+    "openbitfun-services-core/process-runtime",
     "chrono",
     "git2",
     "thiserror",
@@ -137,8 +138,8 @@ git = [
 ]
 file-watch = ["notify", "tokio/rt", "tokio/sync"]
 function-agents = [
-    "bitfun-product-domains/function-agents",
-    "dep:bitfun-product-domains",
+    "openbitfun-product-domains/function-agents",
+    "dep:openbitfun-product-domains",
     "git",
 ]
 mcp = [
@@ -146,9 +147,9 @@ mcp = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-agent-tools/mcp-bridge",
-    "bitfun-services-core/process-runtime",
-    "bitfun-services-core/tls-provider",
+    "openbitfun-agent-tools/mcp-bridge",
+    "openbitfun-services-core/process-runtime",
+    "openbitfun-services-core/tls-provider",
     "futures",
     "hex",
     "rand",
@@ -172,10 +173,10 @@ mcp = [
 ]
 miniapp-runtime = [
     "base64",
-    "bitfun-product-domains/miniapp",
-    "bitfun-services-core/process-runtime",
-    "bitfun-services-core/tls-provider",
-    "dep:bitfun-product-domains",
+    "openbitfun-product-domains/miniapp",
+    "openbitfun-services-core/process-runtime",
+    "openbitfun-services-core/tls-provider",
+    "dep:openbitfun-product-domains",
     "dirs",
     "reqwest",
     "reqwest/rustls-no-provider",
@@ -191,9 +192,10 @@ miniapp-runtime = [
     "which",
 ]
 miniapp-market = [
-    "bitfun-services-core/tls-provider",
-    "bitfun-product-domains/appearance-market",
-    "bitfun-services-core/credential-vault",
+    "openbitfun-services-core/tls-provider",
+    "openbitfun-product-domains/appearance-market",
+    "openbitfun-services-core/credential-vault",
+    "openbitfun-services-core/product-identity",
     "chrono",
     "dep:keyring-core",
     "dep:windows-native-keyring-store",
@@ -217,8 +219,8 @@ miniapp-market = [
     "zip",
 ]
 plugin-source = [
-    "bitfun-product-domains/plugin-source",
-    "dep:bitfun-product-domains",
+    "openbitfun-product-domains/plugin-source",
+    "dep:openbitfun-product-domains",
     "dunce",
     "fs2",
     "hex",
@@ -233,11 +235,11 @@ plugin-source = [
     "windows",
 ]
 hook-import = [
-    "dep:bitfun-agent-runtime",
-    "bitfun-agent-runtime/native-hook-settings",
-    "bitfun-product-domains/external-sources",
-    "bitfun-services-core/local-storage",
-    "dep:bitfun-product-domains",
+    "dep:openbitfun-agent-runtime",
+    "openbitfun-agent-runtime/native-hook-settings",
+    "openbitfun-product-domains/external-sources",
+    "openbitfun-services-core/local-storage",
+    "dep:openbitfun-product-domains",
     "hex",
     "sha2",
     "thiserror",
@@ -252,13 +254,13 @@ remote-connect = [
     "argon2",
     "async-trait",
     "base64",
-    "dep:bitfun-agent-tools",
-    "dep:bitfun-core-types",
-    "bitfun-services-core/local-storage",
-    "bitfun-services-core/process-runtime",
-    "bitfun-services-core/tls-provider",
-    "bitfun-runtime-ports/agent-api",
-    "bitfun-runtime-ports/remote-workspace-ports",
+    "dep:openbitfun-agent-tools",
+    "dep:openbitfun-core-types",
+    "openbitfun-services-core/local-storage",
+    "openbitfun-services-core/process-runtime",
+    "openbitfun-services-core/tls-provider",
+    "openbitfun-runtime-ports/agent-api",
+    "openbitfun-runtime-ports/remote-workspace-ports",
     "chrono",
     "dirs",
     "futures",
@@ -301,12 +303,12 @@ remote-connect = [
 remote-ssh = [
     "anyhow",
     "async-trait",
-    "bitfun-services-core/filesystem",
-    "bitfun-services-core/process-runtime",
-    "bitfun-services-core/workspace-identity",
-    "bitfun-runtime-ports/remote-exec-port",
-    "bitfun-runtime-ports/remote-workspace-ports",
-    "bitfun-runtime-ports/workspace-ports",
+    "openbitfun-services-core/filesystem",
+    "openbitfun-services-core/process-runtime",
+    "openbitfun-services-core/workspace-identity",
+    "openbitfun-runtime-ports/remote-exec-port",
+    "openbitfun-runtime-ports/remote-workspace-ports",
+    "openbitfun-runtime-ports/workspace-ports",
     "regex",
     "sha2",
     "terminal-core",
@@ -327,8 +329,8 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-services-core/tls-provider",
-    "dep:bitfun-runtime-ports",
+    "openbitfun-services-core/tls-provider",
+    "dep:openbitfun-runtime-ports",
     "chrono",
     "dirs",
     "minisign-verify",
@@ -348,8 +350,8 @@ remote-ssh-concrete = [
 ]
 review-platform = [
     "async-trait",
-    "bitfun-services-core/process-runtime",
-    "bitfun-services-core/tls-provider",
+    "openbitfun-services-core/process-runtime",
+    "openbitfun-services-core/tls-provider",
     "chrono",
     "futures",
     "reqwest",
@@ -368,10 +370,10 @@ review-platform = [
 speech = [
     "async-trait",
     "base64",
-    "bitfun-services-core/tls-provider",
+    "openbitfun-services-core/tls-provider",
     "bzip2",
     "chrono",
-    "dep:bitfun-core-types",
+    "dep:openbitfun-core-types",
     "futures-util",
     "reqwest",
     "reqwest/rustls-no-provider",
@@ -397,8 +399,8 @@ speech-realtime = [
 ]
 workspace-search = [
     "async-trait",
-    "bitfun-services-core/filesystem",
-    "bitfun-services-core/process-runtime",
+    "openbitfun-services-core/filesystem",
+    "openbitfun-services-core/process-runtime",
     "dunce",
     "thiserror",
     "tokio/io-util",
@@ -407,10 +409,10 @@ workspace-search = [
     "tokio/time",
     "which",
 ]
-process-tree = ["bitfun-services-core/process-runtime"]
+process-tree = ["openbitfun-services-core/process-runtime"]
 script-tool-runtime = [
     "async-trait",
-    "bitfun-runtime-ports/script-tool-runtime",
+    "openbitfun-runtime-ports/script-tool-runtime",
     "process-tree",
     "tokio/io-util",
     "tokio/process",
@@ -421,8 +423,8 @@ script-tool-runtime = [
 ]
 web-tools = [
     "async-trait",
-    "bitfun-runtime-ports/web-search-port",
-    "bitfun-services-core/tls-provider",
+    "openbitfun-runtime-ports/web-search-port",
+    "openbitfun-services-core/tls-provider",
     "chrono",
     "futures-util",
     "reqwest",

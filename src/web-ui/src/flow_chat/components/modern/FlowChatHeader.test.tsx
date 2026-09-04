@@ -30,11 +30,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => {
+vi.mock('@openbitfun/ui', async importOriginal => {
   const ReactModule = await import('react');
 
   return {
-    ...await importOriginal<typeof import('@bitfun/ui')>(),
+    ...await importOriginal<typeof import('@openbitfun/ui')>(),
     Tooltip: ({ children }: { children: React.ReactNode }) => (
       <ReactModule.Fragment>{children}</ReactModule.Fragment>
     ),
@@ -120,7 +120,7 @@ describe('FlowChatHeader', () => {
     act(() => {
       root.unmount();
     });
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container.remove();
     vi.restoreAllMocks();
   });
@@ -137,8 +137,8 @@ describe('FlowChatHeader', () => {
     });
 
     expect(container.querySelector('.flowchat-header')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="message"]')).toBeNull();
-    expect(container.querySelector('[data-bf-part="turnBadge"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="message"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="turnBadge"]')).toBeNull();
   });
 
   it('contributes only active Session actions to the shared scene top bar', () => {
@@ -163,15 +163,15 @@ describe('FlowChatHeader', () => {
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')).toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-session-overview"]')).not.toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-right-panel"]')).not.toBeNull();
-    expect(host?.querySelector('[data-testid="flowchat-header-session-overview"] [data-bf-name="settings"]')).not.toBeNull();
-    expect(host?.querySelector('[data-testid="flowchat-header-right-panel"] [data-bf-name="sidebar-right"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-session-overview"] [data-openbitfun-name="settings"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-right-panel"] [data-openbitfun-name="sidebar-right"]')).not.toBeNull();
 
     act(() => renderInScene('settings'));
     expect(host?.childElementCount).toBe(0);
 
     act(() => renderInScene('session', true));
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')).not.toBeNull();
-    expect(host?.querySelector('[data-testid="flowchat-header-search"] [data-bf-name="search"]')).not.toBeNull();
+    expect(host?.querySelector('[data-testid="flowchat-header-search"] [data-openbitfun-name="search"]')).not.toBeNull();
     expect(host?.querySelector('[data-testid="flowchat-header-search"]')?.getAttribute('data-size')).toBe('xs');
     expect(host?.querySelector('[data-testid="flowchat-header-session-overview"]')?.getAttribute('data-size')).toBe('xs');
     expect(host?.querySelector('[data-testid="flowchat-header-right-panel"]')?.getAttribute('data-size')).toBe('xs');
@@ -199,8 +199,8 @@ describe('FlowChatHeader', () => {
     );
     expect(trigger?.getAttribute('aria-label')).toBe('common:header.expandRightPanel');
     expect(trigger?.getAttribute('aria-pressed')).toBe('false');
-    expect(trigger?.getAttribute('data-bf-state')).toBe('collapsed');
-    expect(trigger?.querySelector('[data-bf-name="sidebar-right"]')).not.toBeNull();
+    expect(trigger?.getAttribute('data-openbitfun-state')).toBe('collapsed');
+    expect(trigger?.querySelector('[data-openbitfun-name="sidebar-right"]')).not.toBeNull();
     const rightActions = container.querySelectorAll('.flowchat-header__actions')[1];
     const actionTestIds = () => [...(rightActions?.children ?? [])].map((action) => (
       action.getAttribute('data-testid')
@@ -246,9 +246,9 @@ describe('FlowChatHeader', () => {
     );
     expect(openTrigger?.getAttribute('aria-label')).toBe('common:header.collapseRightPanel');
     expect(openTrigger?.getAttribute('aria-pressed')).toBe('true');
-    expect(openTrigger?.getAttribute('data-bf-state')).toBe('open');
+    expect(openTrigger?.getAttribute('data-openbitfun-state')).toBe('open');
     expect(openTrigger?.classList.contains('flowchat-header__right-panel-trigger--active')).toBe(true);
-    expect(openTrigger?.querySelector('[data-bf-name="sidebar-right"]')).not.toBeNull();
+    expect(openTrigger?.querySelector('[data-openbitfun-name="sidebar-right"]')).not.toBeNull();
   });
 
   it('shows Agents, background terminals, and pull requests as one default list', async () => {
@@ -263,7 +263,7 @@ describe('FlowChatHeader', () => {
     const overviewButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="flowchat-header-session-overview"]',
     );
-    expect(overviewButton?.querySelector('[data-bf-name="settings"]')).not.toBeNull();
+    expect(overviewButton?.querySelector('[data-openbitfun-name="settings"]')).not.toBeNull();
     expect(overviewButton?.querySelector('.lucide-activity')).toBeNull();
     await act(async () => {
       overviewButton?.click();
@@ -311,9 +311,9 @@ describe('FlowChatHeader', () => {
 
     const panel = document.querySelector<HTMLElement>('.flowchat-header__session-overview-panel');
     expect(commandSection?.textContent).toContain('flowChatHeader.backgroundTerminalEmpty');
-    expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(panel?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(panel?.style.visibility).toBe('visible');
-    expect(panel?.hasAttribute('data-bf-view')).toBe(false);
+    expect(panel?.hasAttribute('data-openbitfun-view')).toBe(false);
   });
 
   it('renders the Agent tree immediately without a back-navigation state', async () => {
@@ -437,7 +437,7 @@ describe('FlowChatHeader', () => {
     getWorkspaceSnapshotMock.mockResolvedValueOnce({
       pullRequests: [{
         id: '42',
-        providerId: 'origin:github:bitfun',
+        providerId: 'origin:github:openbitfun',
         number: 42,
         title: 'Keep status lists compact',
         webUrl: 'https://example.test/pull/42',
@@ -460,7 +460,7 @@ describe('FlowChatHeader', () => {
     );
     expect(pullRequestItem?.textContent).toBe('#42 Keep status lists compact');
     expect(
-      pullRequestItem?.querySelector('[data-bf-component="icon"][data-bf-name="chevron-right"]'),
+      pullRequestItem?.querySelector('[data-openbitfun-component="icon"][data-openbitfun-name="chevron-right"]'),
     ).not.toBeNull();
 
     act(() => {
@@ -470,7 +470,7 @@ describe('FlowChatHeader', () => {
     expect(getWorkspaceSnapshotMock).toHaveBeenCalledWith('/workspace', null, 1, 3);
     expect(createReviewPlatformPullRequestDetailTabMock).toHaveBeenCalledWith({
       workspacePath: '/workspace',
-      remoteId: 'origin:github:bitfun',
+      remoteId: 'origin:github:openbitfun',
       pullRequestId: '42',
       pullRequestUrl: 'https://example.test/pull/42',
       title: '#42 Keep status lists compact',
@@ -501,7 +501,7 @@ describe('FlowChatHeader', () => {
       '.flowchat-header__session-overview-section-header--action',
     );
 
-    expect(section?.dataset.bfState).toBe('unavailable');
+    expect(section?.dataset.openbitfunState).toBe('unavailable');
     expect(unavailable?.textContent).toBe('flowChatHeader.pullRequestNotGitRepository');
     expect(headerButton?.disabled).toBe(true);
     expect(getWorkspaceSnapshotMock).not.toHaveBeenCalled();

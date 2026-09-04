@@ -17,6 +17,6 @@ export const generativeWidgetAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'iframe' },
   ],
   states: [
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
   ],
 };

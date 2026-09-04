@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agent_client_protocol::{Builder, HandleDispatchFrom};
-use bitfun_app_server_protocol::subagent::*;
+use openbitfun_app_server_protocol::subagent::*;
 
 use super::capability::management_handler;
 use crate::management::{AppManagementService, SUBAGENTS_CAPABILITY};

@@ -13,10 +13,10 @@ use sqlx::Row;
 use url::Url;
 use uuid::Uuid;
 
-const WEB_SESSION_COOKIE: &str = "bitfun_market_session";
-const CSRF_COOKIE: &str = "bitfun_market_csrf";
-const SKIN_SESSION_COOKIE: &str = "bitfun_skin_session";
-const SKIN_CSRF_COOKIE: &str = "bitfun_skin_csrf";
+const WEB_SESSION_COOKIE: &str = "openbitfun_market_session";
+const CSRF_COOKIE: &str = "openbitfun_market_csrf";
+const SKIN_SESSION_COOKIE: &str = "openbitfun_skin_session";
+const SKIN_CSRF_COOKIE: &str = "openbitfun_skin_csrf";
 const MINIAPP_COOKIE_PATH: &str = "/miniapp";
 const SKIN_COOKIE_PATH: &str = "/skin";
 const OAUTH_FLOW_MINUTES: i64 = 10;
@@ -147,9 +147,9 @@ struct OAuthFlowRecord {
 
 impl AuthService {
     pub(crate) fn new(config: MarketConfig, db: Database) -> MarketResult<Self> {
-        bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+        openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
         let client = reqwest::Client::builder()
-            .user_agent("BitFun-MiniApp-Market/1")
+            .user_agent("OpenBitFun-MiniApp-Market/1")
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(MarketError::internal)?;
@@ -828,7 +828,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             header::COOKIE,
-            HeaderValue::from_static("bitfun_market_csrf=csrf-value"),
+            HeaderValue::from_static("openbitfun_market_csrf=csrf-value"),
         );
         headers.insert("x-csrf-token", HeaderValue::from_static("csrf-value"));
         service.require_csrf(&headers, &auth).unwrap();
@@ -853,18 +853,18 @@ mod tests {
             .map(|value| value.to_str().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(cookies.len(), 4);
+        assert!(cookies.iter().any(|cookie| {
+            cookie.starts_with("openbitfun_market_session=session; Path=/miniapp;")
+        }));
+        assert!(cookies.iter().any(|cookie| {
+            cookie.starts_with("openbitfun_market_csrf=csrf-value; Path=/miniapp;")
+        }));
         assert!(cookies
             .iter()
-            .any(|cookie| { cookie.starts_with("bitfun_market_session=session; Path=/miniapp;") }));
+            .any(|cookie| { cookie.starts_with("openbitfun_skin_session=session; Path=/skin;") }));
         assert!(cookies
             .iter()
-            .any(|cookie| { cookie.starts_with("bitfun_market_csrf=csrf-value; Path=/miniapp;") }));
-        assert!(cookies
-            .iter()
-            .any(|cookie| { cookie.starts_with("bitfun_skin_session=session; Path=/skin;") }));
-        assert!(cookies
-            .iter()
-            .any(|cookie| { cookie.starts_with("bitfun_skin_csrf=csrf-value; Path=/skin;") }));
+            .any(|cookie| { cookie.starts_with("openbitfun_skin_csrf=csrf-value; Path=/skin;") }));
         assert!(cookies.iter().all(|cookie| cookie.contains("SameSite=Lax")));
         assert!(cookies.iter().all(|cookie| cookie.contains("Secure")));
         assert!(cookies.iter().all(|cookie| !cookie.contains("Domain=")));

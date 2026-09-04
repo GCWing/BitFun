@@ -1,22 +1,22 @@
 #![cfg(feature = "mcp")]
 
 use async_trait::async_trait;
-use bitfun_services_integrations::mcp::auth::rmcp_compat::{
+use openbitfun_services_integrations::mcp::auth::rmcp_compat::{
     AuthorizationManager, CredentialStore, StoredCredentials,
 };
-use bitfun_services_integrations::mcp::auth::{
+use openbitfun_services_integrations::mcp::auth::{
     MCPRemoteOAuthCredentialStore, MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot,
     MCPRemoteOAuthStatus,
 };
-use bitfun_services_integrations::mcp::config::ConfigLocation;
-use bitfun_services_integrations::mcp::config::{
+use openbitfun_services_integrations::mcp::config::ConfigLocation;
+use openbitfun_services_integrations::mcp::config::{
     config_to_cursor_format, format_mcp_json_config_value, get_mcp_remote_authorization_source,
     get_mcp_remote_authorization_value, has_mcp_remote_authorization, has_mcp_remote_oauth,
     has_mcp_remote_xaa, merge_mcp_server_config_sources, normalize_mcp_authorization_value,
     parse_cursor_format, remove_mcp_authorization_keys, validate_mcp_json_config, MCPConfigService,
     MCPConfigStore, MCPImportError, MCPImportServer, MCPImportTransport,
 };
-use bitfun_services_integrations::mcp::protocol::{
+use openbitfun_services_integrations::mcp::protocol::{
     create_initialize_request, create_mcp_client_info, create_ping_request,
     create_tools_call_request, create_tools_list_request, default_protocol_version,
     map_rmcp_initialize_result, map_rmcp_prompt, map_rmcp_prompt_message, map_rmcp_resource,
@@ -25,15 +25,14 @@ use bitfun_services_integrations::mcp::protocol::{
     MCPRequest, MCPResource, MCPResourceContent, MCPTool, MCPToolAnnotations, MCPToolResult,
     MCPToolResultContent,
 };
-use bitfun_services_integrations::mcp::server::{
+use openbitfun_services_integrations::mcp::server::{
     compute_mcp_backoff_delay, detect_mcp_list_changed_kind, is_mcp_auth_error_message,
     mcp_reconnect_runtime_decision, mcp_server_is_running, mcp_should_start_after_config_update,
-    merge_mcp_remote_headers, MCPCatalogCache, MCPConnectionPool, MCPListChangedKind,
-    MCPProcessStartContext, MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult,
-    MCPServerConfig, MCPServerRuntimeState, MCPServerStatus, MCPServerTimeouts, MCPServerTransport,
-    MCPServerType,
+    MCPCatalogCache, MCPConnectionPool, MCPListChangedKind, MCPProcessStartContext,
+    MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult, MCPServerConfig,
+    MCPServerRuntimeState, MCPServerStatus, MCPServerTimeouts, MCPServerTransport, MCPServerType,
 };
-use bitfun_services_integrations::mcp::{
+use openbitfun_services_integrations::mcp::{
     build_mcp_tool_descriptor, build_mcp_tool_name, normalize_name_for_mcp,
     render_mcp_tool_result_for_assistant, MCPContextEnhancer, MCPContextEnhancerConfig,
     MCPDynamicToolProvider, MCPToolCatalogClient, McpDynamicToolDescriptor, McpToolInfo,
@@ -126,7 +125,7 @@ struct FailingMCPConfigStore;
 impl MCPConfigStore for FailingMCPConfigStore {
     async fn get_config_value(&self, key: &str) -> MCPRuntimeResult<Option<serde_json::Value>> {
         Err(
-            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+            openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
                 "backend unavailable for {key}"
             )),
         )
@@ -134,7 +133,7 @@ impl MCPConfigStore for FailingMCPConfigStore {
 
     async fn set_config_value(&self, key: &str, _value: serde_json::Value) -> MCPRuntimeResult<()> {
         Err(
-            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+            openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
                 "backend unavailable for {key}"
             )),
         )
@@ -147,7 +146,7 @@ impl MCPConfigStore for FailingMCPConfigStore {
         _replacement: serde_json::Value,
     ) -> MCPRuntimeResult<bool> {
         Err(
-            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+            openbitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
                 "backend unavailable for {key}"
             )),
         )
@@ -255,9 +254,9 @@ fn mcp_server_timeout_config_is_optional_positive_milliseconds() {
 
 #[test]
 fn mcp_remote_client_info_declares_supported_client_capabilities() {
-    let info = create_mcp_client_info("BitFun", "1.0.0");
+    let info = create_mcp_client_info("OpenBitFun", "1.0.0");
 
-    assert_eq!(info.client_info.name, "BitFun");
+    assert_eq!(info.client_info.name, "OpenBitFun");
     assert_eq!(info.client_info.version, "1.0.0");
     assert!(info.capabilities.roots.is_some());
     assert!(info.capabilities.sampling.is_some());
@@ -568,7 +567,7 @@ fn mcp_protocol_jsonrpc_helpers_preserve_wire_shape() {
 #[test]
 fn mcp_protocol_request_builders_preserve_wire_shape() {
     assert_eq!(
-        serde_json::to_value(create_initialize_request(9, "BitFun", "0.2.6")).unwrap(),
+        serde_json::to_value(create_initialize_request(9, "OpenBitFun", "1.0.0")).unwrap(),
         serde_json::json!({
             "jsonrpc": "2.0",
             "id": 9,
@@ -588,10 +587,10 @@ fn mcp_protocol_request_builders_preserve_wire_shape() {
                     }
                 },
                 "clientInfo": {
-                    "name": "BitFun",
-                    "version": "0.2.6",
-                    "description": "BitFun MCP Client",
-                    "vendor": "BitFun"
+                    "name": "OpenBitFun",
+                    "version": "1.0.0",
+                    "description": "OpenBitFun MCP Client",
+                    "vendor": "OpenBitFun"
                 }
             }
         })
@@ -1014,6 +1013,9 @@ async fn mcp_config_service_orchestration_preserves_load_save_delete_contract() 
                     "url": "https://example.com/mcp",
                     "headers": {
                         "X-Existing": "kept"
+                    },
+                    "env": {
+                        "Authorization": "process-env-token"
                     }
                 }
             }
@@ -1051,12 +1053,20 @@ async fn mcp_config_service_orchestration_preserves_load_save_delete_contract() 
         saved_value["mcpServers"]["remote-docs"]["headers"]["X-Existing"],
         "kept"
     );
+    assert_eq!(
+        saved_value["mcpServers"]["remote-docs"]["env"]["Authorization"],
+        "process-env-token"
+    );
 
     let cleared = service
         .clear_remote_authorization("remote-docs")
         .await
         .unwrap();
     assert!(!cleared.headers.contains_key("Authorization"));
+    assert_eq!(
+        cleared.env.get("Authorization").map(String::as_str),
+        Some("process-env-token")
+    );
 
     service.delete_server_config("remote-docs").await.unwrap();
     let deleted_value = store
@@ -1099,10 +1109,10 @@ async fn external_mcp_import_is_atomic_disabled_and_idempotence_visible() {
     assert_eq!(stored["mcpServers"]["docs"]["enabled"], false);
     assert_eq!(stored["mcpServers"]["docs"]["autoStart"], false);
     assert_eq!(
-        stored["mcpServers"]["docs"]["_bitfunImport"]["sourceCandidateId"],
+        stored["mcpServers"]["docs"]["_openbitfunImport"]["sourceCandidateId"],
         "opencode:mcp:docs"
     );
-    assert!(stored.get("_bitfunImportJournal").is_none());
+    assert!(stored.get("_openbitfunImportJournal").is_none());
 
     let refreshed = service.user_import_snapshot().await.unwrap();
     assert_eq!(refreshed.imports.len(), 1);
@@ -1525,7 +1535,7 @@ fn mcp_config_merge_helpers_preserve_precedence_and_dedup_contract() {
 }
 
 #[test]
-fn mcp_config_authorization_helpers_preserve_header_precedence_and_normalization() {
+fn mcp_config_authorization_helpers_use_only_canonical_headers() {
     let mut config = make_mcp_config(
         "remote-auth",
         ConfigLocation::User,
@@ -1535,7 +1545,7 @@ fn mcp_config_authorization_helpers_preserve_header_precedence_and_normalization
     );
     config
         .env
-        .insert("Authorization".to_string(), "legacy-token".to_string());
+        .insert("Authorization".to_string(), "process-env-token".to_string());
     config.headers.insert(
         "Authorization".to_string(),
         "Bearer header-token".to_string(),
@@ -1563,9 +1573,12 @@ fn mcp_config_authorization_helpers_preserve_header_precedence_and_normalization
     assert_eq!(normalize_mcp_authorization_value("   "), None);
 
     remove_mcp_authorization_keys(&mut config.headers);
-    remove_mcp_authorization_keys(&mut config.env);
     assert_eq!(get_mcp_remote_authorization_value(&config), None);
     assert_eq!(get_mcp_remote_authorization_source(&config), None);
+    assert_eq!(
+        config.env.get("Authorization").map(String::as_str),
+        Some("process-env-token")
+    );
 }
 
 #[test]
@@ -1739,39 +1752,6 @@ fn mcp_runtime_auth_error_classifier_preserves_process_status_contract() {
 }
 
 #[test]
-fn mcp_runtime_remote_header_merge_preserves_legacy_env_authorization_fallback() {
-    let mut env = HashMap::new();
-    env.insert("Authorization".to_string(), "legacy-token".to_string());
-    env.insert("X-Env".to_string(), "env-only".to_string());
-
-    let headers = HashMap::new();
-    let merged = merge_mcp_remote_headers(&headers, &env);
-    assert_eq!(
-        merged.get("Authorization").map(String::as_str),
-        Some("legacy-token")
-    );
-    assert!(!merged.contains_key("X-Env"));
-
-    let mut explicit_headers = HashMap::new();
-    explicit_headers.insert(
-        "authorization".to_string(),
-        "Bearer header-token".to_string(),
-    );
-    let merged = merge_mcp_remote_headers(&explicit_headers, &env);
-    assert_eq!(
-        merged.get("authorization").map(String::as_str),
-        Some("Bearer header-token")
-    );
-    assert!(!merged.contains_key("Authorization"));
-
-    let mut empty_header = HashMap::new();
-    empty_header.insert("AUTHORIZATION".to_string(), String::new());
-    let merged = merge_mcp_remote_headers(&empty_header, &env);
-    assert_eq!(merged.get("AUTHORIZATION").map(String::as_str), Some(""));
-    assert!(!merged.contains_key("Authorization"));
-}
-
-#[test]
 fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
     let local = MCPServerConfig {
         id: "local".to_string(),
@@ -1936,7 +1916,7 @@ async fn mcp_oauth_credential_vault_uses_injected_data_dir_and_roundtrips_creden
         .unwrap()
         .as_nanos();
     let data_dir = std::env::temp_dir().join(format!(
-        "bitfun-mcp-oauth-vault-contract-{}-{}",
+        "openbitfun-mcp-oauth-vault-contract-{}-{}",
         std::process::id(),
         unique
     ));

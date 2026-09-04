@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: inline-flex;
     min-inline-size: 0;
@@ -6,7 +6,7 @@
 
   .field {
     inline-size: 100%;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
   }
 
   .root .clear {
@@ -19,7 +19,7 @@
   }
 
   .root .field:not([data-invalid="true"]):focus-within {
-    border-color: var(--bf-color-content-primary);
+    border-color: var(--openbitfun-color-content-primary);
     box-shadow: none;
   }
 
@@ -34,12 +34,12 @@
     align-items: center;
     justify-content: center;
     min-inline-size: 0;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     white-space: nowrap;
   }
 

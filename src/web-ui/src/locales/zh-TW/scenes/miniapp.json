@@ -117,10 +117,10 @@
     "account": {
       "menuLabel": "GitHub 帳號 @{{login}}",
       "githubAccount": "GitHub 市場帳號",
-      "dialogTitle": "登入 BitFun 市場",
+      "dialogTitle": "登入 OpenBitFun 市場",
       "dialogHeading": "使用 GitHub 繼續",
       "dialogDescription": "MiniApp 市場與 Skin 市場共用此帳號。授權會在瀏覽器中完成，憑證只儲存在桌面系統憑證庫中。",
-      "waiting": "請在瀏覽器中完成授權，BitFun 會自動更新登入狀態。",
+      "waiting": "請在瀏覽器中完成授權，OpenBitFun 會自動更新登入狀態。",
       "cancel": "取消",
       "continue": "開啟 GitHub",
       "authorizing": "等待 GitHub 授權…"
@@ -188,7 +188,7 @@
       "repository": "查看公開儲存庫",
       "remoteWorkspaceUnsupported": "此應用需要 {workspace}，遠端工作區暫不支援安裝或執行。",
       "localOverride": "此副本有本機自訂。更新前會建立版本快照並保留 storage.json。",
-      "installedYanked": "目前安裝版本已被永久撤回。BitFun 不會遠端刪除它，但請將其視為安全風險。"
+      "installedYanked": "目前安裝版本已被永久撤回。OpenBitFun 不會遠端刪除它，但請將其視為安全風險。"
     },
     "permissions": {
       "fsRead": "讀取檔案：{{value}}",
@@ -237,7 +237,7 @@
     "import": {
       "action": "匯入 .bfminiapp",
       "choose": "選擇 .bfminiapp 檔案",
-      "packageFile": "BitFun MiniApp 套件",
+      "packageFile": "OpenBitFun MiniApp 套件",
       "invalid": "套件驗證失敗：{{error}}",
       "confirmTitle": "匯入「{{name}}」？",
       "confirmMessage": "{{description}}\n\n權限：{{permissions}}\n\nSHA-256：{{sha256}}",
@@ -261,7 +261,7 @@
       "name": "公開名稱",
       "description": "公開描述",
       "category": "分類",
-      "minVersion": "最低 BitFun 版本",
+      "minVersion": "最低 OpenBitFun 版本",
       "tags": "標籤",
       "tagsHint": "以逗號分隔，最多 10 個。",
       "changelog": "版本說明",

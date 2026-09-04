@@ -69,7 +69,7 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -179,7 +179,7 @@ vi.mock('./common', () => ({
     </header>
   ),
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => (
-    <main className="bitfun-config-page-layout">{children}</main>
+    <main className="openbitfun-config-page-layout">{children}</main>
   ),
   ConfigPageRow: ({
     children,
@@ -220,7 +220,7 @@ function worktree(overrides: Record<string, unknown> = {}) {
   return {
     worktreeId: 'wt-1',
     projectWorkspacePath: '/repo',
-    path: '/managed/BitFun-wt-1',
+    path: '/managed/OpenBitFun-wt-1',
     head: '0123456789abcdef',
     lifecycle: 'managed',
     isMain: false,
@@ -311,7 +311,7 @@ describe('WorktreeSettingsPage', () => {
     expect(checkboxes[1].checked).toBe(true);
     expect(limit?.value).toBe('15');
     expect(container.textContent).toContain('/repo');
-    expect(container.textContent).toContain('/managed/BitFun-wt-1');
+    expect(container.textContent).toContain('/managed/OpenBitFun-wt-1');
     expect(container.textContent).toContain('Ship worktree management');
   });
 
@@ -514,9 +514,9 @@ describe('WorktreeSettingsPage', () => {
       .find(button => button.textContent === 'refresh');
     act(() => refreshButton?.click());
 
-    const results = container.querySelector('.bitfun-worktree-settings__results');
+    const results = container.querySelector('.openbitfun-worktree-settings__results');
     expect(results?.getAttribute('aria-busy')).toBe('true');
-    expect(container.textContent).toContain('/managed/BitFun-wt-1');
+    expect(container.textContent).toContain('/managed/OpenBitFun-wt-1');
 
     await act(async () => {
       refresh.resolve([{
@@ -528,7 +528,7 @@ describe('WorktreeSettingsPage', () => {
     });
 
     expect(results?.getAttribute('aria-busy')).toBe('false');
-    expect(container.textContent).toContain('/managed/BitFun-wt-1');
+    expect(container.textContent).toContain('/managed/OpenBitFun-wt-1');
   });
 
   it('keeps the settings scroll position while deletion refreshes the list', async () => {
@@ -543,7 +543,7 @@ describe('WorktreeSettingsPage', () => {
     await flushPromises();
     listProjectsMock.mockReturnValueOnce(refresh.promise);
 
-    const layout = container.querySelector<HTMLElement>('.bitfun-config-page-layout');
+    const layout = container.querySelector<HTMLElement>('.openbitfun-config-page-layout');
     expect(layout).not.toBeNull();
     if (layout) {
       layout.scrollTop = 420;
@@ -561,9 +561,9 @@ describe('WorktreeSettingsPage', () => {
       await Promise.resolve();
     });
 
-    const results = container.querySelector('.bitfun-worktree-settings__results');
+    const results = container.querySelector('.openbitfun-worktree-settings__results');
     expect(results?.getAttribute('aria-busy')).toBe('true');
-    expect(container.querySelector('.bitfun-worktree-settings__skeleton')).toBeNull();
+    expect(container.querySelector('.openbitfun-worktree-settings__skeleton')).toBeNull();
     expect(layout?.scrollTop).toBe(420);
 
     await act(async () => {

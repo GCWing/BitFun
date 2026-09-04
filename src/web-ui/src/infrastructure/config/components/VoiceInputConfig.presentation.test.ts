@@ -30,13 +30,13 @@ describe('VoiceInputConfig status presentation', () => {
     expect(source).toMatch(/case 'setup':\s*return 'status\.downloadModel'/);
     expect(plainStateRule).toContain('grid-template-columns: minmax(0, 1fr) auto');
     expect(plainStateRule).toContain('padding: 0');
-    expect(summaryRule).toContain('font-family: var(--bf-type-body-sm-font-family)');
-    expect(summaryRule).toContain('font-size: var(--bf-type-body-sm-font-size)');
-    expect(summaryRule).toContain('line-height: var(--bf-type-body-sm-line-height)');
+    expect(summaryRule).toContain('font-family: var(--openbitfun-type-body-sm-font-family)');
+    expect(summaryRule).toContain('font-size: var(--openbitfun-type-body-sm-font-size)');
+    expect(summaryRule).toContain('line-height: var(--openbitfun-type-body-sm-line-height)');
     expect(summaryRule).toContain('text-align: start');
-    expect(warningRule).toContain('color: var(--bf-color-status-warning-emphasis)');
-    expect(modelRule).toContain('color: var(--bf-color-content-primary)');
-    expect(modelRule).toContain('font-weight: var(--bf-type-label-selected-font-weight)');
+    expect(warningRule).toContain('color: var(--openbitfun-color-status-warning-emphasis)');
+    expect(modelRule).toContain('color: var(--openbitfun-color-content-primary)');
+    expect(modelRule).toContain('font-weight: var(--openbitfun-type-label-selected-font-weight)');
   });
 
   it('reveals language and diagnostic controls only after the local model is ready', () => {

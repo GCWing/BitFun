@@ -23,7 +23,7 @@ export function serverBuildPlan(root = ROOT, environment = process.env, platform
       '--manifest-path',
       path.join(root, 'src', 'apps', 'server', 'Cargo.toml'),
     ],
-    binaryPath: path.join(releaseDirectory, `bitfun-server${windowsTarget ? '.exe' : ''}`),
+    binaryPath: path.join(releaseDirectory, `openbitfun-server${windowsTarget ? '.exe' : ''}`),
     pluginHostDestination: path.join(releaseDirectory, 'resources', 'ext-host'),
   };
 }

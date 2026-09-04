@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export function decodeMinisignPublicKey(value) {
   const input = String(value || '').trim();
   if (!input) {
-    throw new Error('BITFUN_SIGNING_PUBKEY is required');
+    throw new Error('OPENBITFUN_SIGNING_PUBKEY is required');
   }
 
   const raw = input.startsWith('untrusted comment:')
@@ -40,7 +40,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const output = readArg(process.argv.slice(2), '--out');
     if (!output) throw new Error('Missing required --out argument');
-    writeFileSync(output, decodeMinisignPublicKey(process.env.BITFUN_SIGNING_PUBKEY), 'utf8');
+    writeFileSync(output, decodeMinisignPublicKey(process.env.OPENBITFUN_SIGNING_PUBKEY), 'utf8');
   } catch (error) {
     console.error(`[release-key] ${error.message || error}`);
     process.exit(1);

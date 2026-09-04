@@ -79,8 +79,8 @@
   "editor": {
     "createTitle": "Create Todo",
     "editTitle": "Edit Todo",
-    "createDescription": "Create a task and BitFun will run it automatically at the scheduled time.",
-    "editDescription": "Update the task details and how BitFun should run it.",
+    "createDescription": "Create a task and OpenBitFun will run it automatically at the scheduled time.",
+    "editDescription": "Update the task details and how OpenBitFun should run it.",
     "noWorkspace": "Open a workspace before creating a Todo — a scheduled run needs somewhere to execute.",
     "sections": {
       "information": "Task details",
@@ -92,7 +92,7 @@
     },
     "smartExecution": {
       "title": "Context-aware execution",
-      "description": "BitFun runs the prompt at the scheduled time with the selected Agent and workspace context."
+      "description": "OpenBitFun runs the prompt at the scheduled time with the selected Agent and workspace context."
     },
     "advanced": {
       "title": "Advanced settings (optional)",

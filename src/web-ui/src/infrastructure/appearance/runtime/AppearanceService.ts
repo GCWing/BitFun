@@ -49,18 +49,18 @@ interface ApplySelectionOptions {
 declare global {
   // Injected by the desktop webview initialization script before the frontend
   // bundle runs. Both values are single-use startup hints.
-  var __BITFUN_BOOTSTRAP_APPEARANCE_ID__: string | undefined;
-  var __BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__: string | undefined;
+  var __OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__: string | undefined;
+  var __OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__: string | undefined;
 }
 
 function consumeBootstrapAppearance(): {
   resolvedId?: string;
   selection?: AppearanceSelectionId;
 } {
-  const resolvedId = globalThis.__BITFUN_BOOTSTRAP_APPEARANCE_ID__;
-  const selection = globalThis.__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__;
-  delete globalThis.__BITFUN_BOOTSTRAP_APPEARANCE_ID__;
-  delete globalThis.__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__;
+  const resolvedId = globalThis.__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__;
+  const selection = globalThis.__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__;
+  delete globalThis.__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__;
+  delete globalThis.__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__;
   return {
     resolvedId: typeof resolvedId === 'string' && resolvedId.trim() ? resolvedId.trim() : undefined,
     selection: typeof selection === 'string' && selection.trim() ? selection.trim() : undefined,
@@ -351,7 +351,7 @@ export class AppearanceService {
   }
 
   async exportPackage(id: string): Promise<ArrayBuffer> {
-    const stored = await this.getCanonicalStoredPackage(id);
+    const stored = await this.getStoredPackage(id);
     if (!stored) throw new Error(`Imported appearance package not found: ${id}`);
     return stored.archive.slice(0);
   }
@@ -588,7 +588,7 @@ export class AppearanceService {
   private async resolvePackage(id: string): Promise<AppearanceSource | null> {
     const builtin = getBuiltinAppearance(id);
     if (builtin) return { pkg: builtin, assets: {} };
-    const stored = await this.getCanonicalStoredPackage(id);
+    const stored = await this.getStoredPackage(id);
     return stored ? {
       pkg: composeAppearancePackage(stored.manifest),
       assets: stored.assets,
@@ -597,46 +597,21 @@ export class AppearanceService {
   }
 
   private async loadCatalog(): Promise<readonly AppearanceCatalogEntry[]> {
-    let entries = await this.storage.listCatalog();
-    for (const entry of entries) {
-      if (entry.schemaVersion === APPEARANCE_SCHEMA_VERSION
-        && entry.archiveSchemaVersion === APPEARANCE_SCHEMA_VERSION) continue;
-      try {
-        await this.getCanonicalStoredPackage(entry.id);
-      } catch (error) {
-        log.warn('Stored Appearance migration failed; package was preserved', {
-          appearanceId: entry.id,
-          error,
-        });
-      }
-    }
-    entries = await this.storage.listCatalog();
+    const entries = await this.storage.listCatalog();
     const imported = entries.map(importedCatalogEntry);
     return [...builtinAppearanceCatalog, ...imported];
   }
 
-  private async getCanonicalStoredPackage(id: string): Promise<StoredAppearancePackage | null> {
+  private async getStoredPackage(id: string): Promise<StoredAppearancePackage | null> {
     const stored = await this.storage.get(id);
     if (!stored) return null;
-    if (stored.manifest.schemaVersion === APPEARANCE_SCHEMA_VERSION
-      && stored.archiveSchemaVersion === APPEARANCE_SCHEMA_VERSION) {
-      return stored;
-    }
-
-    const parsed = await this.parser.parse(stored.archive);
-    if (parsed.manifest.id !== stored.manifest.id) {
+    if (stored.manifest.schemaVersion !== APPEARANCE_SCHEMA_VERSION
+      || stored.archiveSchemaVersion !== APPEARANCE_SCHEMA_VERSION) {
       throw new Error(
-        `Stored Appearance archive id ${parsed.manifest.id} does not match record ${stored.manifest.id}`,
+        `Stored Appearance ${id} uses an unsupported schema and must be imported again`,
       );
     }
-    const migrated: StoredAppearancePackage = {
-      ...parsed,
-      importedAt: stored.importedAt,
-      marketOrigin: stored.marketOrigin,
-      localOverride: stored.localOverride,
-    };
-    await this.storage.put(migrated);
-    return migrated;
+    return stored;
   }
 
   private attachSystemListener(): void {

@@ -1,7 +1,7 @@
 //! Shared `/btw` prompt helpers and compatibility exports for runtime tracking.
 
 use crate::agentic::core::{InternalReminderKind, Message};
-pub use bitfun_agent_runtime::side_question::{ActiveBtwTurn, SideQuestionRuntime};
+pub use openbitfun_agent_runtime::side_question::{ActiveBtwTurn, SideQuestionRuntime};
 
 pub fn btw_system_reminder() -> &'static str {
     r#"This is a side question from the user. You must answer this question directly.

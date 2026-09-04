@@ -19,8 +19,8 @@ describe('ModelSelector portal layer', () => {
 
     expect(component).toContain('createPortal(');
     expect(component).toContain('document.body');
-    expect(dropdownBlock).toContain('z-index: var(--bf-layer-popover);');
-    expect(dropdownBlock).not.toContain('z-index: var(--bf-layer-dropdown);');
+    expect(dropdownBlock).toContain('z-index: var(--openbitfun-layer-popover);');
+    expect(dropdownBlock).not.toContain('z-index: var(--openbitfun-layer-dropdown);');
   });
 
   it('keeps native model and reasoning flyouts in the shared overlay host', () => {

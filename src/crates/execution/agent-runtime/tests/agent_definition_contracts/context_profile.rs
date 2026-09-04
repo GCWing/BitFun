@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::context_profile::{
+use openbitfun_agent_runtime::context_profile::{
     ContextProfile, ContextProfilePolicy, ModelCapabilityProfile,
 };
 

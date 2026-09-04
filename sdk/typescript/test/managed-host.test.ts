@@ -53,10 +53,10 @@ test("AgentClient.start reports a missing Host before an operation begins", asyn
 });
 
 test("the Host resolver uses the package-local executable without environment fallback", () => {
-  const previousHostPath = process.env.BITFUN_SDK_HOST_PATH;
-  process.env.BITFUN_SDK_HOST_PATH = process.execPath;
+  const previousHostPath = process.env.OPENBITFUN_SDK_HOST_PATH;
+  process.env.OPENBITFUN_SDK_HOST_PATH = process.execPath;
   try {
-    const executableName = process.platform === "win32" ? "bitfun-sdk-host.exe" : "bitfun-sdk-host";
+    const executableName = process.platform === "win32" ? "openbitfun-sdk-host.exe" : "openbitfun-sdk-host";
     const expectedHost = fileURLToPath(
       new URL(
         `../native/${process.platform}-${process.arch}/${executableName}`,
@@ -67,9 +67,9 @@ test("the Host resolver uses the package-local executable without environment fa
     assert.notEqual(resolveHostPath(), process.execPath);
   } finally {
     if (previousHostPath === undefined) {
-      delete process.env.BITFUN_SDK_HOST_PATH;
+      delete process.env.OPENBITFUN_SDK_HOST_PATH;
     } else {
-      process.env.BITFUN_SDK_HOST_PATH = previousHostPath;
+      process.env.OPENBITFUN_SDK_HOST_PATH = previousHostPath;
     }
   }
 });

@@ -1,18 +1,18 @@
 [package]
-name = "bitfun-skin-market-server"
+name = "openbitfun-skin-market-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun appearance marketplace HTTP server"
+description = "OpenBitFun appearance marketplace HTTP server"
 
 [[bin]]
-name = "bitfun-skin-market-server"
+name = "openbitfun-skin-market-server"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
-bitfun-skin-market-service = { path = "../../crates/services/skin-market-service" }
+openbitfun-skin-market-service = { path = "../../crates/services/skin-market-service" }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

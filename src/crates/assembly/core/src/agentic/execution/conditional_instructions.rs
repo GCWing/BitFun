@@ -5,11 +5,11 @@ use crate::service::instruction_context::{
     load_local_conditional_instruction_files, load_local_conditional_instruction_files_with_fs,
     load_workspace_conditional_instruction_files_with_fs, render_instruction_documents,
 };
-use crate::util::errors::BitFunResult;
-use bitfun_services_core::workspace_instructions::{
+use crate::util::errors::OpenBitFunResult;
+use log::warn;
+use openbitfun_services_core::workspace_instructions::{
     WorkspaceInstructionFile, WorkspaceInstructionPathMatcher,
 };
-use log::warn;
 use std::collections::HashSet;
 
 const MAX_CONDITIONAL_INSTRUCTION_FILES: usize = 256;
@@ -32,7 +32,7 @@ pub(crate) async fn build_conditional_instruction_reminder(
     messages: &[Message],
     turn_id: &str,
     round_id: &str,
-) -> BitFunResult<Option<Message>> {
+) -> OpenBitFunResult<Option<Message>> {
     Ok(
         ConditionalInstructionCatalog::load(workspace, workspace_services)
             .await?
@@ -44,7 +44,7 @@ impl ConditionalInstructionCatalog {
     pub(crate) async fn load(
         workspace: &WorkspaceBinding,
         workspace_services: Option<&WorkspaceServices>,
-    ) -> BitFunResult<Self> {
+    ) -> OpenBitFunResult<Self> {
         let files = if workspace.is_remote() {
             let Some(services) = workspace_services else {
                 warn!(
@@ -167,7 +167,7 @@ pub(crate) fn successful_workspace_read_paths(
 }
 
 fn workspace_relative_path(workspace: &WorkspaceBinding, file_path: &str) -> Option<String> {
-    if file_path.starts_with("bitfun://") {
+    if file_path.starts_with("openbitfun://") {
         return None;
     }
     let file_path = file_path.trim().replace('\\', "/");
@@ -224,7 +224,7 @@ mod tests {
     use crate::agentic::WorkspaceBinding;
     #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
-    use bitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
+    use openbitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
     use serde_json::json;
 
     fn conditional_file(name: &str, patterns: &[&str], content: &str) -> WorkspaceInstructionFile {

@@ -1,6 +1,6 @@
 use crate::common::sse_fixture_server::FixtureSseServerOptions;
 use crate::common::stream_test_harness::{run_stream_fixture, StreamFixtureProvider};
-use bitfun_events::AgenticEvent;
+use openbitfun_events::AgenticEvent;
 use serde_json::json;
 
 fn assert_no_stream_failure_event(events: &[AgenticEvent]) {

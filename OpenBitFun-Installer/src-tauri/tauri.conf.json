@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OpenBitFun Installer",
+  "identifier": "com.openbitfun.installer",
+  "build": {
+    "beforeDevCommand": "pnpm run dev",
+    "devUrl": "http://localhost:1520",
+    "beforeBuildCommand": "pnpm run build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/openbitfun-app-icon.icns",
+      "icons/openbitfun-app-icon.ico",
+      "icons/openbitfun-app-icon.png"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "both",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "installer",
+        "title": "Install OpenBitFun",
+        "width": 760,
+        "height": 560,
+        "minWidth": 700,
+        "minHeight": 480,
+        "resizable": true,
+        "maximizable": false,
+        "decorations": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  }
+}

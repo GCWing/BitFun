@@ -18,11 +18,11 @@ export const galleryDetailModalAppearanceDescriptor: AppearanceSurfaceDescriptor
   states: [
     {
       id: 'heroTitle',
-      selector: { kind: 'self', suffix: '[data-bf-state~="heroTitle"]' },
+      selector: { kind: 'self', suffix: '[data-openbitfun-state~="heroTitle"]' },
     },
     {
       id: 'stableHeight',
-      selector: { kind: 'self', suffix: '[data-bf-state~="stableHeight"]' },
+      selector: { kind: 'self', suffix: '[data-openbitfun-state~="stableHeight"]' },
     },
   ],
 };

@@ -16,13 +16,13 @@ async fn run_host() -> Result<()> {
     runtime::SdkHostRuntime::select_process_profile()?;
     runtime::initialize_terminal_service().await;
 
-    bitfun_core::service::config::initialize_global_config()
+    openbitfun_core::service::config::initialize_global_config()
         .await
         .context("Failed to initialize global config service")?;
-    bitfun_core::infrastructure::ai::AIClientFactory::initialize_global()
+    openbitfun_core::infrastructure::ai::AIClientFactory::initialize_global()
         .await
         .context("Failed to initialize global AI client factory")?;
-    let config_service = bitfun_core::service::config::get_global_config_service().await?;
+    let config_service = openbitfun_core::service::config::get_global_config_service().await?;
     let installer = Arc::new(model_source::ConfigTemporaryModelInstaller::new(
         config_service,
     ));
@@ -30,7 +30,7 @@ async fn run_host() -> Result<()> {
     let host = runtime::SdkHostRuntime::build(&workspace_root)
         .await
         .context("Failed to assemble Agent SDK Host")?;
-    bitfun_sdk_host_app::transport::serve_stdio(
+    openbitfun_sdk_host_app::transport::serve_stdio(
         host.agent_runtime().clone(),
         host.workspace_root().to_string_lossy().into_owned(),
         installer,
@@ -40,12 +40,12 @@ async fn run_host() -> Result<()> {
 }
 
 fn main() {
-    if let Err(error) = bitfun_sdk_host_app::initialize_process_runtime() {
+    if let Err(error) = openbitfun_sdk_host_app::initialize_process_runtime() {
         eprintln!("Error: {error}");
         std::process::exit(1);
     }
 
-    let worker = bitfun_sdk_host_app::spawn_sdk_host_worker(|| {
+    let worker = openbitfun_sdk_host_app::spawn_sdk_host_worker(|| {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()

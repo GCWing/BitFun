@@ -11,7 +11,7 @@ pub(crate) const DEFAULT_INDEX_DISK_BUDGET_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// maintenance silently stops finding the indexes it is meant to reclaim.
 pub(crate) fn storage_root(repo_root: &Path) -> PathBuf {
     repo_root
-        .join(".bitfun")
+        .join(openbitfun_services_core::product_identity::hidden_data_directory())
         .join("search")
         .join("flashgrep-index")
 }
@@ -178,7 +178,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_index(root: &Path, bytes: usize) {
-        let index = root.join(".bitfun/search/flashgrep-index");
+        let index = root
+            .join(openbitfun_services_core::product_identity::hidden_data_directory())
+            .join("search")
+            .join("flashgrep-index");
         fs::create_dir_all(&index).expect("index directory should be created");
         write(index.join("payload"), vec![b'x'; bytes]).expect("index payload should be written");
     }
@@ -203,8 +206,8 @@ mod tests {
         assert_eq!(report.total_before, 12);
         assert_eq!(report.total_after, 8);
         assert_eq!(report.removed, vec![oldest]);
-        assert!(newest.join(".bitfun/search/flashgrep-index").exists());
-        assert!(older.join(".bitfun/search/flashgrep-index").exists());
+        assert!(storage_root(&newest).exists());
+        assert!(storage_root(&older).exists());
         assert!(!report.over_budget);
     }
 

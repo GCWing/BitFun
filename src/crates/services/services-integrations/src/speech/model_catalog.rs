@@ -2,7 +2,7 @@ use super::types::{
     SpeechModelArtifact, SpeechModelArtifactKind, SpeechModelManifest, SpeechRecognizerKind,
     LOCAL_QWEN3_ASR_0_6B_INT8_MODEL_ID, LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID,
 };
-use super::{BitFunError, BitFunResult};
+use super::{OpenBitFunError, OpenBitFunResult};
 
 pub(super) fn builtin_speech_model_manifests() -> Vec<SpeechModelManifest> {
     vec![
@@ -13,11 +13,11 @@ pub(super) fn builtin_speech_model_manifests() -> Vec<SpeechModelManifest> {
 
 pub(super) fn get_builtin_speech_model_manifest(
     model_id: &str,
-) -> BitFunResult<SpeechModelManifest> {
+) -> OpenBitFunResult<SpeechModelManifest> {
     builtin_speech_model_manifests()
         .into_iter()
         .find(|manifest| manifest.id == model_id)
-        .ok_or_else(|| BitFunError::NotFound(format!("Unknown speech model: {model_id}")))
+        .ok_or_else(|| OpenBitFunError::NotFound(format!("Unknown speech model: {model_id}")))
 }
 
 pub(super) fn sensevoice_small_int8_manifest() -> SpeechModelManifest {

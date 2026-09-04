@@ -4,8 +4,6 @@
 
 use super::service::ConfigService;
 use crate::util::errors::*;
-#[cfg(feature = "agent-runtime")]
-use log::warn;
 use log::{debug, info};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -84,7 +82,7 @@ pub struct GlobalConfigManager;
 
 impl GlobalConfigManager {
     /// Initializes the global configuration service.
-    pub async fn initialize() -> BitFunResult<()> {
+    pub async fn initialize() -> OpenBitFunResult<()> {
         if Self::is_initialized() {
             debug!("Global config service already initialized, skipping");
             return Ok(());
@@ -92,14 +90,14 @@ impl GlobalConfigManager {
 
         let (sender, _) = tokio::sync::broadcast::channel(100);
         CONFIG_UPDATE_SENDER.set(sender).map_err(|_| {
-            BitFunError::config("Failed to initialize config update sender".to_string())
+            OpenBitFunError::config("Failed to initialize config update sender".to_string())
         })?;
 
         let config_service = Arc::new(ConfigService::new().await?);
         let service_wrapper = Arc::new(RwLock::new(Some(Arc::clone(&config_service))));
 
         GLOBAL_CONFIG_SERVICE.set(service_wrapper).map_err(|_| {
-            BitFunError::config("Failed to initialize global config service".to_string())
+            OpenBitFunError::config("Failed to initialize global config service".to_string())
         })?;
 
         #[cfg(feature = "web-tools")]
@@ -110,46 +108,26 @@ impl GlobalConfigManager {
 
         info!("Global config service initialized");
 
-        #[cfg(feature = "agent-runtime")]
-        {
-            match super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await {
-                Ok(report) => {
-                    if !report.removed_profile_configs.is_empty()
-                        || !report.updated_profiles.is_empty()
-                    {
-                        info!(
-                            "Mode config canonicalization completed: removed_profiles={}, updated_profiles={}",
-                            report.removed_profile_configs.len(),
-                            report.updated_profiles.len()
-                        );
-                    }
-                }
-                Err(e) => {
-                    warn!("Mode config canonicalization failed: {}", e);
-                }
-            }
-        }
-
         Ok(())
     }
 
     /// Returns the global configuration service instance.
-    pub async fn get_service() -> BitFunResult<Arc<ConfigService>> {
+    pub async fn get_service() -> OpenBitFunResult<Arc<ConfigService>> {
         let service_wrapper = GLOBAL_CONFIG_SERVICE.get().ok_or_else(|| {
-            BitFunError::config("Global config service not initialized".to_string())
+            OpenBitFunError::config("Global config service not initialized".to_string())
         })?;
 
         let service_guard = service_wrapper.read().await;
         service_guard
             .as_ref()
-            .ok_or_else(|| BitFunError::config("Global config service is None".to_string()))
+            .ok_or_else(|| OpenBitFunError::config("Global config service is None".to_string()))
             .map(Arc::clone)
     }
 
     /// Updates the global configuration service instance (used for configuration reload).
-    pub async fn update_service(new_service: Arc<ConfigService>) -> BitFunResult<()> {
+    pub async fn update_service(new_service: Arc<ConfigService>) -> OpenBitFunResult<()> {
         let service_wrapper = GLOBAL_CONFIG_SERVICE.get().ok_or_else(|| {
-            BitFunError::config("Global config service not initialized".to_string())
+            OpenBitFunError::config("Global config service not initialized".to_string())
         })?;
 
         {
@@ -173,18 +151,9 @@ impl GlobalConfigManager {
     ///
     /// Re-reads the config from disk into the existing `ConfigService` instance,
     /// preserving the `Arc` pointer so that all holders (e.g. `AppState`) stay in sync.
-    pub async fn reload() -> BitFunResult<()> {
+    pub async fn reload() -> OpenBitFunResult<()> {
         let service = Self::get_service().await?;
         service.reload().await?;
-        #[cfg(feature = "agent-runtime")]
-        if let Err(error) =
-            super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await
-        {
-            warn!(
-                "Mode config canonicalization failed after reload: {}",
-                error
-            );
-        }
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
         Ok(())
     }
@@ -206,7 +175,7 @@ impl GlobalConfigManager {
         &self,
         model_id: &str,
         model: crate::service::config::types::AIModelConfig,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let model_name = model.name.clone();
         let service = Self::get_service().await?;
         service.update_ai_model(model_id, model).await?;
@@ -221,7 +190,7 @@ impl GlobalConfigManager {
     }
 
     /// Updates the Web UI appearance selection and broadcasts an event.
-    pub async fn update_appearance(&self, appearance_id: &str) -> BitFunResult<()> {
+    pub async fn update_appearance(&self, appearance_id: &str) -> OpenBitFunResult<()> {
         let service = Self::get_service().await?;
         service
             .set_config("appearance.selection", appearance_id)
@@ -243,17 +212,17 @@ impl GlobalConfigManager {
 }
 
 /// Convenience helper: get the global configuration service.
-pub async fn get_global_config_service() -> BitFunResult<Arc<ConfigService>> {
+pub async fn get_global_config_service() -> OpenBitFunResult<Arc<ConfigService>> {
     GlobalConfigManager::get_service().await
 }
 
 /// Convenience helper: initialize the global configuration service.
-pub async fn initialize_global_config() -> BitFunResult<()> {
+pub async fn initialize_global_config() -> OpenBitFunResult<()> {
     GlobalConfigManager::initialize().await
 }
 
 /// Convenience helper: reload the global configuration.
-pub async fn reload_global_config() -> BitFunResult<()> {
+pub async fn reload_global_config() -> OpenBitFunResult<()> {
     GlobalConfigManager::reload().await
 }
 

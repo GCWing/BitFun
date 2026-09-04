@@ -19,16 +19,16 @@
     padding: 0 6px;
     background: transparent;
     border: none;
-    border-radius: var(--bf-radius-base);
-    font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    color: var(--bf-color-content-secondary);
+    border-radius: var(--openbitfun-radius-base);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     white-space: nowrap;
 
     // Avoid I-beam over label/icon; beat global :disabled cursor when chained with class.
@@ -38,12 +38,12 @@
     }
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
       transform: scale(0.98);
     }
 
@@ -54,43 +54,43 @@
   }
 
   &__stats {
-    font-weight: var(--bf-type-label-sm-font-weight);
-    font-family: var(--bf-type-code-md-font-family);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    font-family: var(--openbitfun-type-code-md-font-family);
     font-size: inherit;
     line-height: inherit;
 
     &--add {
-      color: var(--bf-color-code-change-added);
+      color: var(--openbitfun-color-code-change-added);
     }
 
     &--del {
-      color: var(--bf-color-code-change-removed);
+      color: var(--openbitfun-color-code-change-removed);
     }
   }
 
   &__arrow {
     flex-shrink: 0;
     display: block;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     width: 12px;
     height: 12px;
-    transition: transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__review-btn {
     &--glint {
       position: relative;
       overflow: hidden;
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       background:
         linear-gradient(
           135deg,
-          color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent),
-          color-mix(in srgb, var(--bf-color-action-secondary-pressed) 10%, transparent)
+          color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent),
+          color-mix(in srgb, var(--openbitfun-color-action-secondary-pressed) 10%, transparent)
         );
       box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--bf-color-accent-default) 38%, transparent),
-        0 0 18px color-mix(in srgb, var(--bf-color-accent-default) 24%, transparent);
+        0 0 0 1px color-mix(in srgb, var(--openbitfun-color-accent-default) 38%, transparent),
+        0 0 18px color-mix(in srgb, var(--openbitfun-color-accent-default) 24%, transparent);
       animation: session-files-review-ready-pulse 5.2s ease-in-out 1;
 
       &::after {
@@ -102,8 +102,8 @@
         background: linear-gradient(
           90deg,
           transparent,
-          color-mix(in srgb, var(--bf-color-action-secondary-background) 74%, transparent),
-          color-mix(in srgb, var(--bf-color-action-secondary-pressed) 56%, transparent),
+          color-mix(in srgb, var(--openbitfun-color-action-secondary-background) 74%, transparent),
+          color-mix(in srgb, var(--openbitfun-color-action-secondary-pressed) 56%, transparent),
           transparent
         );
         animation: session-files-review-glint 1.35s cubic-bezier(0.16, 1, 0.3, 1) 3;
@@ -112,20 +112,20 @@
     }
 
     &--deep {
-      color: color-mix(in srgb, var(--bf-color-accent-default) 90%, var(--bf-color-content-primary));
+      color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, var(--openbitfun-color-content-primary));
 
       &:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent);
-        color: var(--bf-color-content-primary);
+        background: color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent);
+        color: var(--openbitfun-color-content-primary);
       }
     }
 
     &--running {
       position: relative;
       overflow: hidden;
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 86%, transparent);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-field-border-hover) 72%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 86%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-field-border-hover) 72%, transparent);
 
       &::before {
         content: '';
@@ -135,7 +135,7 @@
         background: linear-gradient(
           90deg,
           transparent,
-          color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent),
+          color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent),
           transparent
         );
         transform: translateX(-100%);
@@ -156,7 +156,7 @@
 
   &__review-menu-popover {
     position: fixed;
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__review-main-icon,
@@ -168,15 +168,15 @@
 
   &__review-running-icon {
     animation: session-files-review-spin 1s linear infinite;
-    color: color-mix(in srgb, var(--bf-color-accent-default) 72%, var(--bf-color-content-primary));
+    color: color-mix(in srgb, var(--openbitfun-color-accent-default) 72%, var(--openbitfun-color-content-primary));
   }
 
   &__review-text {
     position: relative;
     z-index: 1;
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   }
 
   // Expanded state
@@ -191,15 +191,15 @@
     @include surfaces.floating;
 
     position: fixed;
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
     width: min(380px, calc(100vw - 16px));
     min-width: min(260px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-sm-font-family);
-    animation: session-files-badge-popover-in 0.2s var(--bf-motion-easing-standard);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-sm-font-family);
+    animation: session-files-badge-popover-in 0.2s var(--openbitfun-motion-easing-standard);
 
     @keyframes session-files-badge-popover-in {
       from {
@@ -217,18 +217,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     padding: 8px 10px;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-type-flow-meta-line-height);
-    color: var(--bf-color-content-secondary);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__popover-summary-count {
     min-width: 0;
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -239,7 +239,7 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   // ==================== File list ====================
@@ -249,7 +249,7 @@
     padding: 4px 6px 6px;
 
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-color-border-subtle) transparent;
+    scrollbar-color: var(--openbitfun-color-border-subtle) transparent;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -260,11 +260,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: var(--bf-color-border-subtle);
+      background-color: var(--openbitfun-color-border-subtle);
       border-radius: 2px;
 
       &:hover {
-        background-color: var(--bf-color-field-border-hover);
+        background-color: var(--openbitfun-color-field-border-hover);
       }
     }
   }
@@ -275,14 +275,14 @@
     align-items: center;
     gap: 6px;
     padding: 4px 6px;
-    border-radius: var(--bf-radius-base);
-    font-size: var(--bf-type-flow-control-font-size);
-    color: var(--bf-color-content-secondary);
+    border-radius: var(--openbitfun-radius-base);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     user-select: none;
 
     span,
@@ -291,12 +291,12 @@
     }
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:active {
-      background: var(--bf-color-action-neutral-surface);
+      background: var(--openbitfun-color-action-neutral-surface);
     }
 
     &--error {
@@ -312,7 +312,7 @@
     &--delete {
       .session-files-badge__file-name {
         text-decoration: line-through;
-        color: var(--bf-color-content-muted);
+        color: var(--openbitfun-color-content-muted);
       }
     }
   }
@@ -326,15 +326,15 @@
     height: 14px;
 
     .icon-write {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
     }
 
     .icon-edit {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     .icon-delete {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -344,7 +344,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
   }
 
   &__file-stats {
@@ -352,24 +352,24 @@
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   &__file-stat {
     &--add {
-      color: var(--bf-color-code-change-added);
+      color: var(--openbitfun-color-code-change-added);
     }
 
     &--del {
-      color: var(--bf-color-code-change-removed);
+      color: var(--openbitfun-color-code-change-removed);
     }
   }
 
   &__file-error {
-    font-size: var(--bf-type-flow-support-font-size);
-    color: var(--bf-color-status-danger-content);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    color: var(--openbitfun-color-status-danger-content);
     font-style: italic;
   }
 }
@@ -388,22 +388,22 @@
   100% {
     transform: translateY(0);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent),
-      0 0 0 color-mix(in srgb, var(--bf-color-accent-default) 0%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent),
+      0 0 0 color-mix(in srgb, var(--openbitfun-color-accent-default) 0%, transparent);
   }
   12%,
   52% {
     transform: translateY(-1px);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bf-color-accent-default) 52%, transparent),
-      0 0 20px color-mix(in srgb, var(--bf-color-accent-default) 34%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-color-accent-default) 52%, transparent),
+      0 0 20px color-mix(in srgb, var(--openbitfun-color-accent-default) 34%, transparent);
   }
   28%,
   76% {
     transform: translateY(0);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bf-color-action-secondary-pressed) 46%, transparent),
-      0 0 14px color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--openbitfun-color-action-secondary-pressed) 46%, transparent),
+      0 0 14px color-mix(in srgb, var(--openbitfun-color-accent-default) 22%, transparent);
   }
 }
 

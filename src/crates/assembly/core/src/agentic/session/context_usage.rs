@@ -1,8 +1,8 @@
 use super::SessionManager;
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
-use bitfun_agent_runtime::event_bus::EventSubscriberResult;
-use bitfun_services_core::session::{SessionContextUsage, SessionContextUsageSource};
 use log::warn;
+use openbitfun_agent_runtime::event_bus::EventSubscriberResult;
+use openbitfun_services_core::session::{SessionContextUsage, SessionContextUsageSource};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 

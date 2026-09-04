@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Spinner: () => <span data-testid="dot-matrix" />,
 }));
 

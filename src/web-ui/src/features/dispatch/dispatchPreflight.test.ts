@@ -5,9 +5,10 @@ import {
 } from './dispatchPreflight';
 
 describe('dispatch preflight', () => {
-  it('requires protocol v5 target reasoning and Git worktree delivery', () => {
-    expect(DISPATCH_PROTOCOL_VERSION).toBe(5);
+  it('requires protocol v6 product identity, reasoning, and Git worktree delivery', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(6);
     expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
+      'product_identity',
       'workspace_git_worktree',
       'workspace_git_bundle_upload',
       'workspace_git_sync',

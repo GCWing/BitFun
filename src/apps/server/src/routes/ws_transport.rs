@@ -8,7 +8,7 @@
 //! wraps the `SplitSink` (each `String` -> `Message::Text`), incoming wraps the
 //! `SplitStream` (each `Message::Text` -> `Ok(String)`, everything else -> `Err`).
 //!
-//! The returned `Lines` is handed to [`bitfun_app_server::BitfunAppServer::serve`]
+//! The returned `Lines` is handed to [`openbitfun_app_server::OpenBitFunAppServer::serve`]
 //! per WebSocket connection, so the browser connects directly to the in-process
 //! app-server over native JSON-RPC -- no custom `{type:"request"|...}` envelope,
 //! no hand-written `route_agent_command`, no shared in-process client.
@@ -24,7 +24,7 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 
 /// Bridge an axum WebSocket into an ACP `Lines` transport for
-/// `BitfunAppServer::serve(lines)`.
+/// `OpenBitFunAppServer::serve(lines)`.
 ///
 /// The WebSocket is split; the outgoing half becomes the `Lines` sink (one
 /// `String` per WS text frame), the incoming half becomes the stream (text

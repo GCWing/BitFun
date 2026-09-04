@@ -20,6 +20,6 @@ export const welcomePanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'hover', selector: { kind: 'self', suffix: ':hover:not(:disabled)' } },
     { id: 'focusVisible', selector: { kind: 'self', suffix: ':focus-visible' } },
     { id: 'disabled', selector: { kind: 'self', suffix: ':disabled' } },
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
   ],
 };

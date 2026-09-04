@@ -1,8 +1,8 @@
 **中文** | [English](README.md)
 
-# BitFun E2E 测试
+# OpenBitFun E2E 测试
 
-使用 WebDriverIO + BitFun 内置 WebDriver 的 E2E 测试框架。
+使用 WebDriverIO + OpenBitFun 内置 WebDriver 的 E2E 测试框架。
 
 > 完整文档请参阅 [E2E-TESTING-GUIDE.zh-CN.md](E2E-TESTING-GUIDE.zh-CN.md)
 
@@ -12,7 +12,7 @@
 
 ```bash
 # 构建 debug 应用
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 
 # 安装测试依赖
 pnpm --dir tests/e2e install
@@ -55,12 +55,12 @@ tests/e2e/
 
 ### 内置 WebDriver 未就绪
 
-测试启动器会直接拉起 BitFun，并等待 `127.0.0.1:4445` 上的内置 WebDriver 服务就绪。
+测试启动器会直接拉起 OpenBitFun，并等待 `127.0.0.1:4445` 上的内置 WebDriver 服务就绪。
 
 ### 应用未构建
 
 ```bash
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 ```
 
 ### 测试超时
@@ -70,4 +70,4 @@ Debug 构建启动较慢，可在配置中调整超时时间。
 ## 更多信息
 
 - [完整测试指南](E2E-TESTING-GUIDE.zh-CN.md) - 测试编写规范、最佳实践、测试计划
-- [BitFun 项目结构](../../AGENTS.md)
+- [OpenBitFun 项目结构](../../AGENTS.md)

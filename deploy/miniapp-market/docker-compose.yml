@@ -6,8 +6,8 @@ services:
       args:
         CARGO_BUILD_JOBS: ${MARKET_CARGO_BUILD_JOBS:-}
         MARKET_GIT_COMMIT: ${MARKET_GIT_COMMIT:?Set MARKET_GIT_COMMIT to the deployed commit}
-    image: bitfun-miniapp-market:${MARKET_GIT_COMMIT}
-    container_name: bitfun-miniapp-market
+    image: openbitfun-miniapp-market:${MARKET_GIT_COMMIT}
+    container_name: openbitfun-miniapp-market
     restart: unless-stopped
     user: "10001:10001"
     read_only: true
@@ -18,15 +18,15 @@ services:
     ports:
       - "127.0.0.1:9710:9710"
     env_file:
-      - /etc/bitfun-miniapp-market/market.env
+      - /etc/openbitfun-miniapp-market/market.env
     environment:
       MARKET_BIND: 0.0.0.0:9710
       MARKET_DATABASE_PATH: /app/data/market.sqlite
       MARKET_ARTIFACT_DIR: /app/artifacts
       MARKET_WEB_DIR: /app/web
     volumes:
-      - /srv/bitfun-miniapp-market/data:/app/data
-      - /srv/bitfun-miniapp-market/artifacts:/app/artifacts
+      - /srv/openbitfun-miniapp-market/data:/app/data
+      - /srv/openbitfun-miniapp-market/artifacts:/app/artifacts
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
     healthcheck:

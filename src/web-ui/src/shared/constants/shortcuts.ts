@@ -14,7 +14,7 @@ export interface ShortcutDef {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-/** Build a ShortcutConfig using BitFun's logical primary modifier.
+/** Build a ShortcutConfig using OpenBitFun's logical primary modifier.
  * ShortcutManager maps it to Ctrl on Windows/Linux and Command on macOS.
  */
 function mod(

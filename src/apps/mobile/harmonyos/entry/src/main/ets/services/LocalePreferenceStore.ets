@@ -5,7 +5,7 @@ import { RemoteI18n } from '../i18n/RemoteI18n';
 import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 
-const STORE_NAME = 'bitfun_app_locale';
+const STORE_NAME = 'openbitfun_app_locale';
 const LANGUAGE_KEY = 'language';
 
 export interface LocaleSystemHost {

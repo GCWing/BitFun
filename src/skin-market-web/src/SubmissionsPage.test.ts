@@ -7,7 +7,7 @@ const approvedSubmission = {
   listingId: 'listing-1',
   slug: 'ocean-night',
   releaseNumber: 1,
-  minBitfunVersion: '0.2.15',
+  minOpenBitFunVersion: '1.0.0',
   requiredCapabilities: [],
   changelog: 'Initial release',
   license: { spdxExpression: 'MIT' },

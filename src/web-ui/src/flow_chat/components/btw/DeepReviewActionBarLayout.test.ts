@@ -32,9 +32,9 @@ describe('DeepReviewActionBar layout styles', () => {
     expect(error).toContain('--deep-review-action-bar-surface:');
     expect(warning).toContain('--deep-review-action-bar-surface:');
     expect(actions).toContain('background: var(--deep-review-action-bar-surface);');
-    expect(actions).toContain('border-top: 1px solid color-mix(in srgb, var(--bf-color-border-default) 56%, transparent);');
+    expect(actions).toContain('border-top: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 56%, transparent);');
     expect(stylesheet).not.toContain('--deep-review-action-bar-actions-surface');
-    expect(actions).not.toContain('var(--bf-color-surface-panel) 94%');
+    expect(actions).not.toContain('var(--openbitfun-color-surface-panel) 94%');
     expect(actions).not.toContain('backdrop-filter');
   });
 

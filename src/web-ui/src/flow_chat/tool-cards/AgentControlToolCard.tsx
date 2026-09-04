@@ -18,7 +18,7 @@ import {
   type SessionLineageLifecycle,
 } from '../utils/sessionLineage';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
-import { AgentControlToolCard as AgentControlToolCardView } from '@bitfun/ui/flow-chat';
+import { AgentControlToolCard as AgentControlToolCardView } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 const PARAMETER_STREAMING_STATUSES = new Set<FlowToolItem['status']>([
@@ -219,7 +219,7 @@ export const AgentControlToolCard: React.FC<ToolCardProps> = ({
   return (
     <div
       ref={cardRootRef}
-      data-bf-adapter="agent-control-tool-card"
+      data-openbitfun-adapter="agent-control-tool-card"
       data-tool-card-id={toolId ?? ''}
     >
       <AgentControlToolCardView

@@ -1,13 +1,13 @@
 ---
 name: pr-review-canvas
-description: 'Create a BitFun Canvas for reviewing a pull request, branch diff, or change set with Cursor-style diff cards, review maps, risk callouts, and focused reviewer flow. Use when the user asks for a PR review canvas, diff walkthrough, change-set overview, or visual review summary.'
+description: 'Create a OpenBitFun Canvas for reviewing a pull request, branch diff, or change set with Cursor-style diff cards, review maps, risk callouts, and focused reviewer flow. Use when the user asks for a PR review canvas, diff walkthrough, change-set overview, or visual review summary.'
 ---
 
 # PR Review Canvas
 
-Use this skill to produce a session-scoped BitFun Canvas that helps a reviewer understand a PR quickly. The artifact should reorganize the diff for reviewer comprehension, not mirror file-tree order. It should look and feel like a Cursor Canvas review: compact metadata, focused diff stats, pill filters, file diff cards, tables, callouts, traces, and reviewer-facing notes.
+Use this skill to produce a session-scoped OpenBitFun Canvas that helps a reviewer understand a PR quickly. The artifact should reorganize the diff for reviewer comprehension, not mirror file-tree order. It should look and feel like a Cursor Canvas review: compact metadata, focused diff stats, pill filters, file diff cards, tables, callouts, traces, and reviewer-facing notes.
 
-Read and follow `bitfun-canvas` first. It defines the Canvas tool workflow, source rules, SDK surface, and design constraints.
+Read and follow `openbitfun-canvas` first. It defines the Canvas tool workflow, source rules, SDK surface, and design constraints.
 
 ## Inputs
 
@@ -99,8 +99,8 @@ Before calling `CreateCanvas`, verify:
 - Dense logic has pseudocode, a trace, or a flow/call graph if that would help.
 - Raw diff snippets are focused and not full-file dumps.
 - The first screen includes the main behavior/risk, not only metadata.
-- The design passes the `bitfun-canvas` slop-pattern check.
+- The design passes the `openbitfun-canvas` slop-pattern check.
 
 ## Output
 
-Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, mention the Canvas title and diff source used, but do not print the internal `bitfun-canvas://...` reference; BitFun renders its openable card automatically below the response.
+Call `CreateCanvas` with a concise title and the complete TSX source. In the final response, mention the Canvas title and diff source used, but do not print the internal `openbitfun-canvas://...` reference; OpenBitFun renders its openable card automatically below the response.

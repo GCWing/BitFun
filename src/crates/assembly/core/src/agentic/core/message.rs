@@ -1,10 +1,10 @@
 use crate::agentic::image_analysis::ImageContextData;
 use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall, ToolImageAttachment};
 use crate::util::TokenCounter;
-use bitfun_agent_runtime::prompt_markup::is_system_reminder_only;
-use bitfun_core_types::{ModelResponseReplay, ReasoningContentKind};
-pub use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use log::warn;
+use openbitfun_agent_runtime::prompt_markup::is_system_reminder_only;
+use openbitfun_core_types::{ModelResponseReplay, ReasoningContentKind};
+pub use openbitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 use std::time::SystemTime;
@@ -787,8 +787,10 @@ impl Display for MessageContent {
 mod tests {
     use super::{Message, ToolCall};
     use crate::util::types::Message as AIMessage;
-    use bitfun_agent_stream::ToolArgumentRepairKind;
-    use bitfun_core_types::{ModelResponseReplay, ModelResponseReplayItem, ReasoningContentKind};
+    use openbitfun_agent_stream::ToolArgumentRepairKind;
+    use openbitfun_core_types::{
+        ModelResponseReplay, ModelResponseReplayItem, ReasoningContentKind,
+    };
     use serde_json::json;
 
     #[test]
@@ -890,7 +892,7 @@ mod tests {
 
     #[test]
     fn preserves_tool_argument_repair_provenance_from_stream_contract() {
-        let tool_call = ToolCall::from(bitfun_agent_stream::ToolCall {
+        let tool_call = ToolCall::from(openbitfun_agent_stream::ToolCall {
             tool_id: "call_1".to_string(),
             tool_name: "Read".to_string(),
             arguments: json!({ "path": "src/main.rs" }),
@@ -933,9 +935,9 @@ pub struct ToolCall {
     /// Provenance for any argument repair accepted before tool validation.
     #[serde(
         default,
-        skip_serializing_if = "bitfun_agent_stream::ToolArgumentRepairKind::is_none"
+        skip_serializing_if = "openbitfun_agent_stream::ToolArgumentRepairKind::is_none"
     )]
-    pub repair_kind: bitfun_agent_stream::ToolArgumentRepairKind,
+    pub repair_kind: openbitfun_agent_stream::ToolArgumentRepairKind,
 }
 
 impl ToolCall {
@@ -944,8 +946,8 @@ impl ToolCall {
     }
 }
 
-impl From<bitfun_agent_stream::ToolCall> for ToolCall {
-    fn from(tool_call: bitfun_agent_stream::ToolCall) -> Self {
+impl From<openbitfun_agent_stream::ToolCall> for ToolCall {
+    fn from(tool_call: openbitfun_agent_stream::ToolCall) -> Self {
         Self {
             tool_id: tool_call.tool_id,
             tool_name: tool_call.tool_name,

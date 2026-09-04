@@ -73,7 +73,7 @@ impl LaunchReviewAgentTool {
     }
 
     pub(super) fn deep_review_capacity_decision_for_provider_error(
-        error: &BitFunError,
+        error: &OpenBitFunError,
     ) -> crate::agentic::deep_review_policy::DeepReviewCapacityQueueDecision {
         deep_review_task_adapter::capacity_decision_for_provider_error(error)
     }
@@ -186,7 +186,7 @@ impl LaunchReviewAgentTool {
         conc_policy: &DeepReviewConcurrencyPolicy,
         is_optional_reviewer: bool,
         launch_batch_info: Option<&DeepReviewLaunchBatchInfo>,
-    ) -> BitFunResult<DeepReviewQueueWaitOutcome> {
+    ) -> OpenBitFunResult<DeepReviewQueueWaitOutcome> {
         deep_review_task_adapter::wait_for_reviewer_admission(
             session_id,
             dialog_turn_id,

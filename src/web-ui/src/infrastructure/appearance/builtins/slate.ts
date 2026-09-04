@@ -33,13 +33,13 @@ const SLATE_SUCCESS = '#7eb09b';
 const SLATE_WARNING = '#f59e0b';
 const SLATE_ERROR = '#c9878d';
 
-export const bitfunSlatePalette: AppearancePalette = {
+export const openBitFunSlatePalette: AppearancePalette = {
 
-  id: 'bitfun-slate',
+  id: 'openbitfun-slate',
   name: 'Slate',
   type: 'dark',
   description: 'Slate gray geometric appearance - Deep immersion, high contrast grayscale aesthetics',
-  author: 'BitFun Team',
+  author: 'OpenBitFun Team',
   version: '1.3.0',
 
   layout: {

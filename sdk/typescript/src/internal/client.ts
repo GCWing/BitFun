@@ -14,7 +14,7 @@ export async function createAgentClient(
   const connection = new JsonRpcConnection(transport);
   const params: InitializeParams = {
     protocolVersion: PROTOCOL_VERSION,
-    clientInfo: { name: "@bitfun/agent-sdk", version: "0.0.0" },
+    clientInfo: { name: "@openbitfun/agent-sdk", version: "0.0.0" },
     capabilities: {
       serverNotifications: true,
       permissionResponses: true,

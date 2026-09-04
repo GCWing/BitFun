@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button, Icon, IconButton, KeyHint, ScrollArea, useDismissibleLayer } from '@bitfun/ui';
+import { Button, Icon, IconButton, KeyHint, ScrollArea, useDismissibleLayer } from '@openbitfun/ui';
 import { Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ThumbnailCard } from './ThumbnailCard';
@@ -186,18 +186,18 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   }
 
   return (
-    <div data-bf-component="mission-control" data-bf-part="root" data-bf-state="open"
+    <div data-openbitfun-component="mission-control" data-openbitfun-part="root" data-openbitfun-state="open"
       ref={rootRef}
       className="canvas-mission-control"
       data-shortcut-scope="canvas"
       tabIndex={-1}
       onClick={handleBackdropClick}
     >
-      <div className="canvas-mission-control__content" data-bf-component="mission-control" data-bf-part="content">
+      <div className="canvas-mission-control__content" data-openbitfun-component="mission-control" data-openbitfun-part="content">
         {/* Header */}
-        <div data-bf-component="mission-control" data-bf-part="header" className="canvas-mission-control__header">
+        <div data-openbitfun-component="mission-control" data-openbitfun-part="header" className="canvas-mission-control__header">
           <h2 className="canvas-mission-control__title">{t('tabs.missionControl')}</h2>
-          <div data-bf-component="mission-control" data-bf-part="headerActions" className="canvas-mission-control__header-actions">
+          <div data-openbitfun-component="mission-control" data-openbitfun-part="headerActions" className="canvas-mission-control__header-actions">
             {hasMultipleGroups && (
               <Button
                 variant="outline"
@@ -220,9 +220,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Search and filter area */}
-        <div data-bf-component="mission-control" data-bf-part="filters" className="canvas-mission-control__filters">
+        <div data-openbitfun-component="mission-control" data-openbitfun-part="filters" className="canvas-mission-control__filters">
           <div className="canvas-mission-control__filters-row">
-            <div data-bf-component="mission-control" data-bf-part="search" className="canvas-mission-control__search-wrapper">
+            <div data-openbitfun-component="mission-control" data-openbitfun-part="search" className="canvas-mission-control__search-wrapper">
               <SearchFilter
                 value={searchQuery}
                 onChange={setSearchQuery}
@@ -233,7 +233,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             
             {/* Group filters - compact icon buttons */}
             {hasMultipleGroups && (
-              <div data-bf-component="mission-control" data-bf-part="groupFilters" className="canvas-mission-control__group-filters">
+              <div data-openbitfun-component="mission-control" data-openbitfun-part="groupFilters" className="canvas-mission-control__group-filters">
                 {[
                   { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary' },
                   { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary' },
@@ -243,7 +243,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
                   if (!hasTabs) return null;
                   
                   return (
-                    <button data-bf-component="mission-control" data-bf-part="filter" data-bf-group={id} data-bf-state={selectedGroups.has(id) ? 'active' : ''}
+                    <button data-openbitfun-component="mission-control" data-openbitfun-part="filter" data-openbitfun-group={id} data-openbitfun-state={selectedGroups.has(id) ? 'active' : ''}
                       key={id}
                       className={`canvas-mission-control__group-filter canvas-mission-control__group-filter--${id} ${selectedGroups.has(id) ? 'is-active' : ''}`}
                       onClick={() => toggleGroupFilter(id)}
@@ -260,7 +260,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Thumbnail grid - unified display */}
-        <ScrollArea data-bf-component="mission-control" data-bf-part="grid" className="canvas-mission-control__grid">
+        <ScrollArea data-openbitfun-component="mission-control" data-openbitfun-part="grid" className="canvas-mission-control__grid">
           {filteredTabs.length > 0 ? (
             filteredTabs.map(({ tab, groupId }) => (
               <ThumbnailCard
@@ -276,7 +276,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
               />
             ))
           ) : (
-            <div data-bf-component="mission-control" data-bf-part="empty" className="canvas-mission-control__empty">
+            <div data-openbitfun-component="mission-control" data-openbitfun-part="empty" className="canvas-mission-control__empty">
               {searchQuery || selectedGroups.size < 3 ? (
                 <span>{t('canvas.noMatchingFiles')}</span>
               ) : (
@@ -287,9 +287,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </ScrollArea>
 
         {/* Footer hint */}
-        <div data-bf-component="mission-control" data-bf-part="footer" className="canvas-mission-control__footer">
+        <div data-openbitfun-component="mission-control" data-openbitfun-part="footer" className="canvas-mission-control__footer">
           <span>{t('canvas.clickToSwitch')}</span>
-          <div data-bf-component="mission-control" data-bf-part="separator" className="canvas-mission-control__separator" />
+          <div data-openbitfun-component="mission-control" data-openbitfun-part="separator" className="canvas-mission-control__separator" />
           <span><KeyHint>Esc</KeyHint> {t('canvas.exit')}</span>
         </div>
       </div>

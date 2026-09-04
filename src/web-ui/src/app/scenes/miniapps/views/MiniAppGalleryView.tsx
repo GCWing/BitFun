@@ -33,7 +33,7 @@ import {
   NumberBadge,
   SearchField,
   SegmentedControl,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 
 import {
   GalleryEmpty,
@@ -425,8 +425,8 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
 
   return (
     <GalleryLayout
-      data-bf-component="miniapp-gallery-view"
-      data-bf-part="root"
+      data-openbitfun-component="miniapp-gallery-view"
+      data-openbitfun-part="root"
       className="miniapp-gallery-pane miniapp-gallery"
     >
       <GalleryPageHeader
@@ -505,7 +505,7 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
 
       {tabs}
 
-      <div data-bf-component="miniapp-gallery-view" data-bf-part="content" className="gallery-zones">
+      <div data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="content" className="gallery-zones">
         {activeApps.length > 0 ? (
           <GalleryZone
             title={t('running')}
@@ -537,8 +537,8 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
           tools={(
             categories.length > 1 ? (
               <div
-                data-bf-component="miniapp-gallery-view"
-                data-bf-part="categoryFilters"
+                data-openbitfun-component="miniapp-gallery-view"
+                data-openbitfun-part="categoryFilters"
               >
                 <SegmentedControl
                   className="miniapp-gallery__categories"
@@ -557,8 +557,8 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
                       icon: categoryIcon,
                       label: (
                         <span
-                          data-bf-component="miniapp-gallery-view"
-                          data-bf-part="categoryFilter"
+                          data-openbitfun-component="miniapp-gallery-view"
+                          data-openbitfun-part="categoryFilter"
                         >
                           {category === 'all'
                             ? t('all')

@@ -16,7 +16,7 @@ const outputs = [
     generate: generateMobileLocaleContract,
   },
   {
-    path: path.join(root, 'BitFun-Installer', 'src', 'i18n', 'generatedLocaleContract.ts'),
+    path: path.join(root, 'OpenBitFun-Installer', 'src', 'i18n', 'generatedLocaleContract.ts'),
     generate: generateInstallerLocaleContract,
   },
   {
@@ -24,7 +24,7 @@ const outputs = [
     generate: generateCoreRustLocaleContract,
   },
   {
-    path: path.join(root, 'BitFun-Installer', 'src-tauri', 'src', 'installer', 'generated_locale_contract.rs'),
+    path: path.join(root, 'OpenBitFun-Installer', 'src-tauri', 'src', 'installer', 'generated_locale_contract.rs'),
     generate: generateInstallerRustLocaleContract,
   },
   {

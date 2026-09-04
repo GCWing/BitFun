@@ -5,7 +5,7 @@
 //! stdin, stdout, stderr, exit status, and interrupt/kill control.
 
 use anyhow::{anyhow, Context};
-use bitfun_services_core::process_manager;
+use openbitfun_services_core::process_manager;
 #[cfg(feature = "remote-ssh-concrete")]
 use russh::client::Msg;
 #[cfg(feature = "remote-ssh-concrete")]

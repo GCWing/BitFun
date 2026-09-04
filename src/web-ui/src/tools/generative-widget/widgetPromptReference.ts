@@ -7,9 +7,9 @@ export interface WidgetPromptReferenceTokenPayload {
   line?: number;
 }
 
-const TOKEN_PREFIX = '[[bitfun-widget-ref:';
+const TOKEN_PREFIX = '[[openbitfun-widget-ref:';
 const TOKEN_SUFFIX = ']]';
-const TOKEN_PATTERN = /\[\[bitfun-widget-ref:([^[\]]+)\]\]/g;
+const TOKEN_PATTERN = /\[\[openbitfun-widget-ref:([^[\]]+)\]\]/g;
 
 function encodePayload(payload: WidgetPromptReferenceTokenPayload): string {
   return encodeURIComponent(JSON.stringify(payload));
@@ -36,7 +36,7 @@ export function createWidgetPromptReferenceToken(
 export function parseWidgetPromptReferenceToken(
   token: string,
 ): WidgetPromptReferenceTokenPayload | null {
-  const match = token.match(/^\[\[bitfun-widget-ref:([^[\]]+)\]\]$/);
+  const match = token.match(/^\[\[openbitfun-widget-ref:([^[\]]+)\]\]$/);
   if (!match) {
     return null;
   }

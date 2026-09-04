@@ -198,7 +198,7 @@ export class RelayHttpClient {
    * 1. POST /pair with our public key → receive encrypted challenge
    * 2. POST /command with encrypted challenge_echo → receive initial_sync
    *
-   * When the desktop is logged into a BitFun account, pass `password` so the
+   * When the desktop is logged into a OpenBitFun account, pass `password` so the
    * desktop can verify credentials (same challenge+unwrap path as desktop login).
    */
   async pair(

@@ -7,14 +7,15 @@
 //! Manual submission receives only an absolute controller-device path and
 //! delegates package validation and upload orchestration to the shared service.
 
-use bitfun_product_domains::appearance_market::{
+use openbitfun_product_domains::appearance_market::{
     validate_appearance_market_slug, AppearanceAdminSubmissionDetail, AppearanceCursorPage,
     AppearanceMarketLicense, AppearanceMarketListingDetail, AppearanceMarketListingSummary,
     AppearanceMarketRelease, AppearanceMarketSubmission, AppearanceMarketSubmissionDraftRequest,
     AppearanceMarketSubmissionStatus, AppearanceReviewDecision, AppearanceReviewDecisionRequest,
     APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
 };
-use bitfun_services_integrations::appearance_market::{
+use openbitfun_product_domains::product_release::OPENBITFUN_INITIAL_RELEASE_VERSION;
+use openbitfun_services_integrations::appearance_market::{
     resolve_appearance_release_target, submit_appearance_package, suggest_appearance_slug,
     AppearanceMarketBrowseRequest, AppearanceMarketClient, AppearanceReleaseTarget,
 };
@@ -61,7 +62,7 @@ pub struct AppearanceMarketSubmitPackageRequest {
     #[serde(default)]
     pub slug: String,
     #[serde(default)]
-    pub min_bitfun_version: String,
+    pub min_openbitfun_version: String,
     #[serde(default)]
     pub changelog: String,
     pub license: AppearanceMarketLicense,
@@ -72,7 +73,7 @@ pub struct AppearanceMarketSubmitPackageRequest {
 struct NormalizedManualSubmission {
     package_path: PathBuf,
     slug: String,
-    min_bitfun_version: String,
+    min_openbitfun_version: String,
     changelog: String,
     license: AppearanceMarketLicense,
     repository_url: Option<String>,
@@ -120,7 +121,7 @@ pub async fn appearance_market_download_release(
                 .to_string(),
         );
     }
-    validate_minimum_bitfun_version(&release.min_bitfun_version)?;
+    validate_minimum_openbitfun_version(&release.min_openbitfun_version)?;
     if release.yanked {
         return Err("This Appearance release has been yanked and cannot be installed.".to_string());
     }
@@ -189,7 +190,7 @@ pub async fn appearance_market_submit_package(
         listing_id,
         slug: normalized.slug,
         release_number,
-        min_bitfun_version: normalized.min_bitfun_version,
+        min_openbitfun_version: normalized.min_openbitfun_version,
         changelog,
         license: normalized.license,
         repository_url: normalized.repository_url,
@@ -275,9 +276,12 @@ fn normalize_manual_submission(
     if !package_path
         .file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name.to_ascii_lowercase().ends_with(".bitfun-appearance"))
+        .is_some_and(|name| {
+            name.to_ascii_lowercase()
+                .ends_with(".openbitfun-appearance")
+        })
     {
-        return Err("Skin submissions must use a .bitfun-appearance package.".to_string());
+        return Err("Skin submissions must use a .openbitfun-appearance package.".to_string());
     }
     let fallback_name = package_path
         .file_stem()
@@ -294,13 +298,13 @@ fn normalize_manual_submission(
     };
     validate_slug(&slug)?;
 
-    let min_bitfun_version = if request.min_bitfun_version.trim().is_empty() {
+    let min_openbitfun_version = if request.min_openbitfun_version.trim().is_empty() {
         env!("CARGO_PKG_VERSION").to_string()
     } else {
-        request.min_bitfun_version.trim().to_string()
+        request.min_openbitfun_version.trim().to_string()
     };
-    semver::Version::parse(&min_bitfun_version)
-        .map_err(|_| "Minimum BitFun version must use semantic version syntax.".to_string())?;
+    semver::Version::parse(&min_openbitfun_version)
+        .map_err(|_| "Minimum OpenBitFun version must use semantic version syntax.".to_string())?;
 
     let spdx_expression = trimmed(request.license.spdx_expression);
     let custom_url = trimmed(request.license.custom_url);
@@ -315,7 +319,7 @@ fn normalize_manual_submission(
     Ok(NormalizedManualSubmission {
         package_path,
         slug,
-        min_bitfun_version,
+        min_openbitfun_version,
         changelog,
         license: AppearanceMarketLicense {
             spdx_expression,
@@ -344,14 +348,19 @@ fn find_release(
         .ok_or_else(|| "Appearance market release not found.".to_string())
 }
 
-fn validate_minimum_bitfun_version(minimum: &str) -> Result<(), String> {
+fn validate_minimum_openbitfun_version(minimum: &str) -> Result<(), String> {
     let minimum = semver::Version::parse(minimum)
-        .map_err(|_| "The release declares an invalid minimum BitFun version.".to_string())?;
+        .map_err(|_| "The release declares an invalid minimum OpenBitFun version.".to_string())?;
+    if minimum < OPENBITFUN_INITIAL_RELEASE_VERSION {
+        return Err(
+            "The release declares a minimum OpenBitFun version earlier than 1.0.0.".to_string(),
+        );
+    }
     let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
-        .map_err(|_| "The current BitFun version is invalid.".to_string())?;
+        .map_err(|_| "The current OpenBitFun version is invalid.".to_string())?;
     if current < minimum {
         return Err(format!(
-            "This Appearance requires BitFun {minimum} or newer. Current version: {current}."
+            "This Appearance requires OpenBitFun {minimum} or newer. Current version: {current}."
         ));
     }
     Ok(())
@@ -412,16 +421,28 @@ mod tests {
     }
 
     #[test]
+    fn rejects_minimum_versions_before_initial_openbitfun_release() {
+        assert!(validate_minimum_openbitfun_version("1.0.0").is_ok());
+        let pre_release_identity = [0, 9, 0]
+            .into_iter()
+            .map(|part| part.to_string())
+            .collect::<Vec<_>>()
+            .join(".");
+        assert!(validate_minimum_openbitfun_version(&pre_release_identity).is_err());
+        assert!(validate_minimum_openbitfun_version("1.0.0-rc.1").is_err());
+    }
+
+    #[test]
     fn normalizes_manual_submission_defaults_without_opening_the_package() {
         let package_path = if cfg!(windows) {
-            r"C:\tmp\Ocean Night.bitfun-appearance"
+            r"C:\tmp\Ocean Night.openbitfun-appearance"
         } else {
-            "/tmp/Ocean Night.bitfun-appearance"
+            "/tmp/Ocean Night.openbitfun-appearance"
         };
         let normalized = normalize_manual_submission(AppearanceMarketSubmitPackageRequest {
             package_path: package_path.to_string(),
             slug: String::new(),
-            min_bitfun_version: String::new(),
+            min_openbitfun_version: String::new(),
             changelog: "  Initial release  ".to_string(),
             license: AppearanceMarketLicense {
                 spdx_expression: Some(" MIT ".to_string()),
@@ -432,7 +453,7 @@ mod tests {
         .expect("manual submission should normalize");
 
         assert_eq!(normalized.slug, "ocean-night");
-        assert_eq!(normalized.min_bitfun_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(normalized.min_openbitfun_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(normalized.changelog, "Initial release");
         assert_eq!(normalized.license.spdx_expression.as_deref(), Some("MIT"));
         assert_eq!(
@@ -444,14 +465,14 @@ mod tests {
     #[test]
     fn manual_submission_requires_exactly_one_license_form() {
         let package_path = if cfg!(windows) {
-            r"C:\tmp\ocean-night.bitfun-appearance"
+            r"C:\tmp\ocean-night.openbitfun-appearance"
         } else {
-            "/tmp/ocean-night.bitfun-appearance"
+            "/tmp/ocean-night.openbitfun-appearance"
         };
         let result = normalize_manual_submission(AppearanceMarketSubmitPackageRequest {
             package_path: package_path.to_string(),
             slug: "ocean-night".to_string(),
-            min_bitfun_version: "0.2.15".to_string(),
+            min_openbitfun_version: "1.0.0".to_string(),
             changelog: String::new(),
             license: AppearanceMarketLicense {
                 spdx_expression: None,

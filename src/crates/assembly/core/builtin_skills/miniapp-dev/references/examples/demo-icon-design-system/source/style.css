@@ -1,35 +1,35 @@
 /* ── Theme token aliases ────────────────────────────────────────────────────── */
-/* Map --bitfun-* host variables to local names so every rule auto-adapts.    */
+/* Map --openbitfun-* host variables to local names so every rule auto-adapts.    */
 :root {
-  --bg:           var(--bitfun-bg);
-  --bg2:          var(--bitfun-bg-secondary);
-  --bg3:          var(--bitfun-bg-tertiary);
-  --bg-el:        var(--bitfun-element-bg);
-  --bg-hover:     var(--bitfun-element-hover);
-  --text:         var(--bitfun-text);
-  --text2:        var(--bitfun-text-secondary);
-  --text3:        var(--bitfun-text-muted);
-  --accent:       var(--bitfun-accent);
-  --accent2:      var(--bitfun-accent-hover);
-  --success:      var(--bitfun-success);
-  --warning:      var(--bitfun-warning);
-  --danger:       var(--bitfun-error);
-  --info:         var(--bitfun-info);
-  --border:       var(--bitfun-border);
-  --border2:      var(--bitfun-border-subtle);
-  --radius:       var(--bitfun-radius);
-  --radius-lg:    var(--bitfun-radius-lg);
-  --font:         var(--bitfun-font-sans);
-  --font-mono:    var(--bitfun-font-mono);
-  --scrollbar:    var(--bitfun-scrollbar-thumb);
+  --bg:           var(--openbitfun-bg);
+  --bg2:          var(--openbitfun-bg-secondary);
+  --bg3:          var(--openbitfun-bg-tertiary);
+  --bg-el:        var(--openbitfun-element-bg);
+  --bg-hover:     var(--openbitfun-element-hover);
+  --text:         var(--openbitfun-text);
+  --text2:        var(--openbitfun-text-secondary);
+  --text3:        var(--openbitfun-text-muted);
+  --accent:       var(--openbitfun-accent);
+  --accent2:      var(--openbitfun-accent-hover);
+  --success:      var(--openbitfun-success);
+  --warning:      var(--openbitfun-warning);
+  --danger:       var(--openbitfun-error);
+  --info:         var(--openbitfun-info);
+  --border:       var(--openbitfun-border);
+  --border2:      var(--openbitfun-border-subtle);
+  --radius:       var(--openbitfun-radius);
+  --radius-lg:    var(--openbitfun-radius-lg);
+  --font:         var(--openbitfun-font-sans);
+  --font-mono:    var(--openbitfun-font-mono);
+  --scrollbar:    var(--openbitfun-scrollbar-thumb);
 
   /* Derived semantic tokens */
-  --on-accent:    var(--bitfun-text-on-accent);
-  --on-danger:    var(--bitfun-text-on-accent);
-  --on-success:   var(--bitfun-text-on-accent);
+  --on-accent:    var(--openbitfun-text-on-accent);
+  --on-danger:    var(--openbitfun-text-on-accent);
+  --on-success:   var(--openbitfun-text-on-accent);
 }
 
-/* On-accent and danger text use the registered --bitfun-text-on-accent projection. */
+/* On-accent and danger text use the registered --openbitfun-text-on-accent projection. */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

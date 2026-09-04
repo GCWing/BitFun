@@ -9,9 +9,9 @@ export const skillsConfigAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'empty' }, { id: 'loading' }, { id: 'error' },
   ],
   states: [
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'installed', selector: { kind: 'self', suffix: '[data-bf-state~="installed"]' } },
-    { id: 'covered', selector: { kind: 'self', suffix: '[data-bf-state~="covered"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'installed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="installed"]' } },
+    { id: 'covered', selector: { kind: 'self', suffix: '[data-openbitfun-state~="covered"]' } },
   ],
 };

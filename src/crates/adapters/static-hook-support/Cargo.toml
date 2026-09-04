@@ -1,17 +1,17 @@
 [package]
-name = "bitfun-static-hook-support"
+name = "openbitfun-static-hook-support"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Shared bounded and redacting support for static external source adapters"
 
 [lib]
-name = "bitfun_static_hook_support"
+name = "openbitfun_static_hook_support"
 crate-type = ["rlib"]
 
 [dependencies]
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-services-core = { path = "../../services/services-core" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-services-core = { path = "../../services/services-core" }
 serde_json = { workspace = true }
 toml = { workspace = true }
 hex = { workspace = true }

@@ -23,7 +23,7 @@ export function packageHostPath(
   platform: NodeJS.Platform,
   arch: NodeJS.Architecture,
 ): string {
-  const executable = platform === "win32" ? "bitfun-sdk-host.exe" : "bitfun-sdk-host";
+  const executable = platform === "win32" ? "openbitfun-sdk-host.exe" : "openbitfun-sdk-host";
   return fileURLToPath(
     new URL(`../../native/${platform}-${arch}/${executable}`, import.meta.url),
   );

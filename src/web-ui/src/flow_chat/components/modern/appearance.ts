@@ -13,9 +13,9 @@ export const virtualMessageListAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'tailSpacer' },
   ],
   states: [
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
-    { id: 'preparing', selector: { kind: 'self', suffix: '[data-bf-state~="preparing"]' } },
-    { id: 'unavailable', selector: { kind: 'self', suffix: '[data-bf-state~="unavailable"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
+    { id: 'preparing', selector: { kind: 'self', suffix: '[data-openbitfun-state~="preparing"]' } },
+    { id: 'unavailable', selector: { kind: 'self', suffix: '[data-openbitfun-state~="unavailable"]' } },
   ],
 };
 

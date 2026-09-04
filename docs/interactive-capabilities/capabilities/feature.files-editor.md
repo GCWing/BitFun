@@ -49,13 +49,13 @@ Browse, search, and edit project files while inspecting diffs, language-aware ed
 3. 选择文件进行编辑，或搜索内容与符号
    Choose a file to edit, or search content and symbols
 
-入口 / Entry: BitFun 功能入口
+入口 / Entry: OpenBitFun 功能入口
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

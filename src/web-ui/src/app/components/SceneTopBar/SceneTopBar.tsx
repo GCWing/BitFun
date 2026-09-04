@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { Toolbar } from '@bitfun/ui';
+import { Toolbar } from '@openbitfun/ui';
 import { WindowControls } from '@/app/components/WindowControls';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
@@ -70,24 +70,24 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
   return (
     <Toolbar
       bordered={hasTabs}
-      className={`bitfun-scene-top-bar ${className}`.trim()}
+      className={`openbitfun-scene-top-bar ${className}`.trim()}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
-      data-bf-scene="workbench"
-      data-bf-part="topBar"
+      data-openbitfun-scene="workbench"
+      data-openbitfun-part="topBar"
       leading={<SceneBar />}
       size="md"
       trailing={<>
       <SceneChromeHost
-        className="bitfun-scene-top-bar__actions"
-        data-bf-scene="workbench"
-        data-bf-part="sceneActions"
+        className="openbitfun-scene-top-bar__actions"
+        data-openbitfun-scene="workbench"
+        data-openbitfun-part="sceneActions"
       />
       {hasWindowControls ? (
         <div
-          className="bitfun-scene-top-bar__window-controls"
-          data-bf-component="scene-bar"
-          data-bf-part="controls"
+          className="openbitfun-scene-top-bar__window-controls"
+          data-openbitfun-component="scene-bar"
+          data-openbitfun-part="controls"
         >
           <WindowControls
             onMinimize={onMinimize!}

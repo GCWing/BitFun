@@ -17,8 +17,8 @@ describe('typography runtime adapter', () => {
   });
 
   it('reads active root font-size overrides before falling back to the canonical value', () => {
-    document.documentElement.style.setProperty('--bf-font-size-base', '17px');
+    document.documentElement.style.setProperty('--openbitfun-font-size-base', '17px');
     expect(readActiveTypographyTokenPx('font.size.base')).toBe(17);
-    document.documentElement.style.removeProperty('--bf-font-size-base');
+    document.documentElement.style.removeProperty('--openbitfun-font-size-base');
   });
 });

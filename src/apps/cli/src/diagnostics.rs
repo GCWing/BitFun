@@ -2,15 +2,15 @@
 
 use std::path::Path;
 
-use bitfun_agent_runtime::sdk::{PortErrorKind, RuntimeError};
-use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcErrorCode};
+use openbitfun_agent_runtime::sdk::{PortErrorKind, RuntimeError};
+use openbitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcErrorCode};
 
-pub(crate) const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
+pub(crate) const EXIT_LINE_PREFIX: &str = "OPENBITFUN_EXIT: ";
 pub(crate) const DETAIL_MAX_LEN: usize = 500;
 pub(crate) const SESSION_IN_USE_ERROR_CODE: &str = "session_in_use";
 pub(crate) const OUTCOME_UNKNOWN_ERROR_CODE: &str = "outcome_unknown";
 pub(crate) const SESSION_IN_USE_USER_MESSAGE: &str =
-    "This session is open in another BitFun instance. Close it there and retry.";
+    "This session is open in another OpenBitFun instance. Close it there and retry.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExitKind {
@@ -117,15 +117,17 @@ pub(crate) fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitConte
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
-    use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
+    use openbitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+    use openbitfun_agent_runtime_ipc::{
+        RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode,
+    };
 
     #[test]
     fn format_exit_line_uses_stable_prefix_and_kind() {
         let line = format_exit_line(ExitKind::DialogTurnFailed, "429 Too Many Requests");
         assert_eq!(
             line,
-            "BITFUN_EXIT: dialog_turn_failed: 429 Too Many Requests"
+            "OPENBITFUN_EXIT: dialog_turn_failed: 429 Too Many Requests"
         );
     }
 

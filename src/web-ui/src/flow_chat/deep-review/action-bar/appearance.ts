@@ -16,7 +16,7 @@ export const deepReviewActionBarAppearanceDescriptor: AppearanceSurfaceDescripto
   facets: [
     {
       id: 'phase',
-      attribute: 'data-bf-phase',
+      attribute: 'data-openbitfun-phase',
       values: [
         'review_running',
         'review_completed',
@@ -33,9 +33,9 @@ export const deepReviewActionBarAppearanceDescriptor: AppearanceSurfaceDescripto
         'review_error',
       ],
     },
-    { id: 'variant', attribute: 'data-bf-variant', values: ['success', 'warning', 'error', 'info', 'loading'] },
+    { id: 'variant', attribute: 'data-openbitfun-variant', values: ['success', 'warning', 'error', 'info', 'loading'] },
   ],
   states: [
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

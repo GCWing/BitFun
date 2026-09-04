@@ -7,7 +7,7 @@ export class MiniAppsPage extends BasePage {
   }
 
   private installedCard(appId: string): string {
-    return `[data-bf-component="mini-app-card"]${this.appAttribute(appId)}`;
+    return `[data-openbitfun-component="mini-app-card"]${this.appAttribute(appId)}`;
   }
 
   private runningCard(appId: string): string {
@@ -15,7 +15,7 @@ export class MiniAppsPage extends BasePage {
   }
 
   private runner(appId: string): string {
-    return `[data-bf-scene="miniapp"]${this.appAttribute(appId)}`;
+    return `[data-openbitfun-scene="miniapp"]${this.appAttribute(appId)}`;
   }
 
   private detailDialog(): string {
@@ -43,7 +43,7 @@ export class MiniAppsPage extends BasePage {
   async openGallery(): Promise<void> {
     await this.ensureGlobalNavigation();
     await this.clickByTestId('nav-miniapps-entry', 20000);
-    await this.waitForElement('[data-bf-scene="miniapp-gallery"]', 20000);
+    await this.waitForElement('[data-openbitfun-scene="miniapp-gallery"]', 20000);
     await this.waitForElement('[data-testid="miniapp-running-zone"]', 20000);
   }
 
@@ -126,7 +126,7 @@ export class MiniAppsPage extends BasePage {
 
   async returnToGallery(): Promise<void> {
     await this.clickByTestId('nav-miniapps-entry', 10000);
-    await this.waitForElement('[data-bf-scene="miniapp-gallery"]', 10000);
+    await this.waitForElement('[data-openbitfun-scene="miniapp-gallery"]', 10000);
   }
 
   async waitForRunningCard(appId: string): Promise<WebdriverIO.Element> {
@@ -135,7 +135,7 @@ export class MiniAppsPage extends BasePage {
 
   async getRunningCardIds(): Promise<string[]> {
     const cards = await browser.$$(
-      '[data-testid="miniapp-running-zone"] [data-bf-component="mini-app-card"][data-miniapp-id]',
+      '[data-testid="miniapp-running-zone"] [data-openbitfun-component="mini-app-card"][data-miniapp-id]',
     );
     const ids: string[] = [];
     const count = await cards.length;

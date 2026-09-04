@@ -1,4 +1,4 @@
-import { Icon as CatalogIcon, type IconName } from "@bitfun/ui";
+import { Icon as CatalogIcon, type IconName } from "@openbitfun/ui";
 import { Blocks, FileCode2, Layers3 } from "lucide-react";
 import { useI18n, type MessageKey } from "../i18n";
 
@@ -85,7 +85,7 @@ export function GettingStartedPage({ onNavigate }: GettingStartedPageProps) {
         </div>
         <div className="guide-code-card">
           <div><FileCode2 aria-hidden="true" size={15} /><span>App.tsx</span></div>
-          <pre><code>{`import { Button, ThemeRoot } from "@bitfun/ui";
+          <pre><code>{`import { Button, ThemeRoot } from "@openbitfun/ui";
 
 export function App() {
   return (

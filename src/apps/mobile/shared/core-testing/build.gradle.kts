@@ -13,7 +13,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.bitfun.mobile.core.testing"
+        namespace = "com.openbitfun.mobile.core.testing"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
     }

@@ -1,4 +1,4 @@
-# BitFun 可配置开发体验追踪矩阵
+# OpenBitFun 可配置开发体验追踪矩阵
 
 > 范围：把产品需求、架构设计、功能规格、执行阶段和测试方法连起来，避免关键体验只停留在单份文档中。
 > 上游文档：[product-requirements.md](product-requirements.md)、[design.md](design.md)、[implementation-plan.md](implementation-plan.md)
@@ -12,7 +12,7 @@
 | 沙箱边界可见 | PRD-19 | 执行位置和沙箱等级分层 | 安全边界、质量数据面、证据包 | P0、P1、P3 | 本地 shell、远程 SSH、ACP、MCP、MiniApp、Plugin Host 子进程、浏览器/桌面和云端任务用例；验证执行位置、沙箱等级组合、降级原因、授权范围和替代路径 |
 | 阶段性用户收益 | PRD-20 | 阶段收益编排、质量一致性检查、阶段风险副作用分析 | 实施计划、指标规格、质量数据面 | P-1、P0-P4 | P0/P1 回放低风险任务、安全确认、远程/不可支持状态和 Harness 主动配置发现；PR/团队场景作为“不显露、不阻断”的负向用例。P2 起再回放 PR/团队正向完整流程 |
 | 远程开发适配 | PRD-11、PRD-12、PRD-15 | 本地/远程能力边界、项目集成面 | 项目画像、风险分类器、安全边界 | P0、P1 | SSH、容器、远程工作区、云端任务用例；验证执行位置、路径映射、端口/网络、不可支持状态和替代路径 |
-| 团队配置治理 | PRD-05、PRD-06 | 配置层级、组织策略优先级 | 配置化策略画像、PR 门禁 | P2 | `.bitfun`、AGENTS、CODEOWNERS、CI、路径规则冲突用例；验证来源、优先级和覆盖限制 |
+| 团队配置治理 | PRD-05、PRD-06 | 配置层级、组织策略优先级 | 配置化策略画像、PR 门禁 | P2 | `.openbitfun`、AGENTS、CODEOWNERS、CI、路径规则冲突用例；验证来源、优先级和覆盖限制 |
 | PR 就绪度 | PRD-07 | 按需展示证据、PR 场景显露 | PR 门禁、证据包 | P1、P2 | P1 可 shadow/advisory 生成就绪度摘要；P2 回放准备 PR、受保护分支、不可运行 CI 用例，验证就绪度摘要、未验证项、证据引用和非默认阻断 |
 | 版本化 Review 生命周期 | PRD-21 | [Review 生命周期架构](../architecture/review-lifecycle.md) | session-history 记录位置与有限摘要查询、既有 Review 目标证据与只读执行链路 | P2 | 回放后台启动、恢复、复审、新修订、归档/删除、断链只读和未加载 session 查询 |
 | Review 按问题有界协作 | PRD-22 | [Review 执行架构](../architecture/deep-review.md) | 既有 Review 目标证据、LaunchReviewAgent admission、ReviewWorker 只读工具边界和聚合报告 | P2 | 覆盖普通零到两个、严格零到三个且 Judge 共用额度；验证类型明确的分派及其 `target fingerprint`（不由 UI 解释的目标指纹）与路径拒绝、Skill/自定义指引的工具降权、最多两路并发、文件包不与审核维度相乘、失败不自动重试和根因去重；固定回放集比较输入 token、耗时和已知问题保留情况 |

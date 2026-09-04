@@ -1,7 +1,7 @@
-use bitfun_product_domains::miniapp::market::{
+use openbitfun_product_domains::miniapp::market::{
     MarketPackageMeta, MARKET_MAX_PACKAGE_BYTES, MARKET_MAX_UNCOMPRESSED_BYTES,
 };
-use bitfun_product_domains::miniapp::types::MiniApp;
+use openbitfun_product_domains::miniapp::types::MiniApp;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::io::{Cursor, Read, Write};
@@ -314,7 +314,7 @@ fn validate_package_meta(meta: &MarketPackageMeta) -> Result<(), MarketPackageEr
             "MiniApp descriptions must contain between 1 and 500 characters.",
         ));
     }
-    if !bitfun_product_domains::miniapp::market::validate_market_category(&meta.category) {
+    if !openbitfun_product_domains::miniapp::market::validate_market_category(&meta.category) {
         return Err(MarketPackageError::new(
             "invalid_category",
             "The MiniApp category is not supported.",
@@ -398,7 +398,7 @@ fn is_forbidden_interpreter(command: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::miniapp::types::{MiniAppPermissions, NodePermissions};
+    use openbitfun_product_domains::miniapp::types::{MiniAppPermissions, NodePermissions};
 
     #[test]
     fn generated_package_roundtrips_through_strict_validator() {
@@ -412,7 +412,7 @@ mod tests {
             version: 8,
             created_at: 1,
             updated_at: 2,
-            source: bitfun_product_domains::miniapp::types::MiniAppSource {
+            source: openbitfun_product_domains::miniapp::types::MiniAppSource {
                 html: "<main>Safe</main>".to_string(),
                 css: String::new(),
                 ui_js: "document.body.dataset.ready = '1';".to_string(),

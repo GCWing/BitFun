@@ -183,7 +183,7 @@ const CopyButton: React.FC<{ code: string }> = ({ code }) => {
 const COMPUTER_LINK_PREFIX = 'computer://';
 const FILE_LINK_PREFIX = 'file://';
 const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
-const MOBILE_LAST_SELECTED_MODEL_ID_KEY = 'bitfun.mobile.last_selected_model_id';
+const MOBILE_LAST_SELECTED_MODEL_ID_KEY = 'openbitfun.mobile.last_selected_model_id';
 
 const CODE_FILE_EXTENSIONS = new Set([
   'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'mts', 'cts',
@@ -368,22 +368,22 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    border: '1px solid var(--bf-color-border-subtle)',
+    border: '1px solid var(--openbitfun-color-border-subtle)',
     borderRadius: '10px',
-    background: 'var(--bf-color-surface-subtle)',
+    background: 'var(--openbitfun-color-surface-subtle)',
     cursor: state.status === 'ready' || state.status === 'done' ? 'pointer' : 'default',
     maxWidth: '300px',
     verticalAlign: 'middle',
     transition: 'background 0.15s',
   };
 
-  const iconColor = 'var(--bf-color-content-muted)';
+  const iconColor = 'var(--openbitfun-color-content-muted)';
 
   if (state.status === 'loading') {
     return (
       <span className="file-card" style={cardStyle}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
+        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
       </span>
     );
   }
@@ -391,7 +391,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     return (
       <span className="file-card" style={{ ...cardStyle, cursor: 'default', opacity: 0.5 }} title={state.message}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
+        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
       </span>
     );
   }
@@ -414,19 +414,19 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       <span style={{ minWidth: 0, overflow: 'hidden' }}>
         <span style={{
           display: 'block',
-          fontSize: 'var(--bf-type-body-xs-font-size)',
-          fontWeight: 'var(--bf-type-label-lg-font-weight)',
+          fontSize: 'var(--openbitfun-type-body-xs-font-size)',
+          fontWeight: 'var(--openbitfun-type-label-lg-font-weight)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: 'var(--bf-color-content-primary)',
+          color: 'var(--openbitfun-color-content-primary)',
         }}>
           {name}
         </span>
         <span style={{
           display: 'block',
-          fontSize: 'var(--bf-type-support-font-size)',
-          color: 'var(--bf-color-content-muted)',
+          fontSize: 'var(--openbitfun-type-support-font-size)',
+          color: 'var(--openbitfun-color-content-muted)',
           marginTop: '2px',
         }}>
           {formatFileSize(size)}
@@ -434,8 +434,8 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       </span>
       <span style={{
         flexShrink: 0,
-        fontSize: 'var(--bf-type-support-font-size)',
-        color: isDone ? 'var(--bf-color-status-success-content)' : 'var(--bf-color-content-muted)',
+        fontSize: 'var(--openbitfun-type-support-font-size)',
+        color: isDone ? 'var(--openbitfun-color-status-success-content)' : 'var(--openbitfun-color-content-muted)',
       }}>
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
       </span>
@@ -478,16 +478,16 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
             customStyle={{
               margin: 0,
               borderRadius: '8px',
-              fontSize: 'var(--bf-type-code-sm-font-size)',
-              lineHeight: 'var(--bf-type-body-md-line-height)',
+              fontSize: 'var(--openbitfun-type-code-sm-font-size)',
+              lineHeight: 'var(--openbitfun-type-body-md-line-height)',
             }}
             codeTagProps={{
               style: {
-                fontFamily: 'var(--bf-type-code-md-font-family)',
+                fontFamily: 'var(--openbitfun-type-code-md-font-family)',
               },
             }}
             lineNumberStyle={{
-              color: 'var(--bf-color-content-muted)',
+              color: 'var(--openbitfun-color-content-muted)',
               paddingRight: '1em',
               textAlign: 'right' as const,
               userSelect: 'none' as const,
@@ -524,7 +524,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
             type="button"
             style={{
               cursor: 'pointer',
-              color: 'var(--bf-color-accent-default)',
+              color: 'var(--openbitfun-color-accent-default)',
               textDecoration: 'underline',
               background: 'none',
               border: 'none',
@@ -562,7 +562,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--bf-color-accent-default)', textDecoration: 'underline' }}
+              style={{ color: 'var(--openbitfun-color-accent-default)', textDecoration: 'underline' }}
             >
               {children}
             </a>
@@ -732,13 +732,13 @@ const TodoCard: React.FC<{ tool: RemoteToolStatus }> = ({ tool }) => {
   const statusIcon = (s: string) => {
     switch (s) {
       case 'completed':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-success-content)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-status-success-content)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
       case 'in_progress':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-accent-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--bf-color-accent-default)"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-accent-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--openbitfun-color-accent-default)"/></svg>;
       case 'cancelled':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-status-danger-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
       default:
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-content-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-content-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
     }
   };
 
@@ -926,9 +926,9 @@ const TaskToolCard: React.FC<{
                   return (
                     <div key={`sub-tool-${t.id}-${idx}`} className={`chat-task-card__step chat-task-card__step--tool ${isDone ? 'is-done' : isErr ? 'is-error' : 'is-running'}`}>
                       {isDone ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--bf-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--openbitfun-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isErr ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--openbitfun-color-status-danger-content)" strokeWidth="2" strokeLinecap="round"/></svg>
                       ) : (
                         <span className="chat-task-card__step-spinner" />
                       )}
@@ -1143,7 +1143,7 @@ const ReadFilesToggle: React.FC<{ tools: RemoteToolStatus[] }> = ({ tools }) => 
               const preview = t.input_preview || '';
               return (
                 <div key={t.id} style={{
-                  fontSize: 'var(--bf-type-body-xs-font-size)',
+                  fontSize: 'var(--openbitfun-type-body-xs-font-size)',
                   padding: '2px 0',
                   opacity: 0.8,
                 }}>

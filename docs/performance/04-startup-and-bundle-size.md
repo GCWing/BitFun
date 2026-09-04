@@ -1,4 +1,4 @@
-# BitFun 启动性能与产物体积审阅报告
+# OpenBitFun 启动性能与产物体积审阅报告
 
 - 审阅日期:2026-07-26
 - 审阅范围:Tauri 冷启动链路(src/apps/desktop)、前端首包与分包(src/web-ui)、静态资源(public/dist)、Rust release profile
@@ -15,8 +15,8 @@
 | `dist/agent-companion-pets` | **18 MB** | 10 个桌宠精灵图全量内置 |
 | `dist/monaco-editor` | **14 MB** | monaco `min/vs` 全量拷贝(含 9 种 NLS 语言、tsWorker 5.7 MB) |
 | `dist/fonts` | **13 MB** | 审阅时的旧内置中文字体 3 个字重,各 ~4.2 MB |
-| `dist/` 根目录图片 | ~2.7 MB | BitFun-Logo.png 1.06 MB 等未压缩 PNG |
-| `target/release/bitfun-desktop.exe` | 217 MB(7-24 本地构建,profile 未知,可能为 release-fast) | 前端 dist 全部嵌入二进制 |
+| `dist/` 根目录图片 | ~2.7 MB | OpenBitFun-Logo.png 1.06 MB 等未压缩 PNG |
+| `target/release/openbitfun-desktop.exe` | 217 MB(7-24 本地构建,profile 未知,可能为 release-fast) | 前端 dist 全部嵌入二进制 |
 | NSIS 安装包 | 0.2.11 → 81 MB;0.2.13 → **90.5 MB**(两个小版本 +9.4 MB) | `target/release/bundle/nsis/` |
 
 > 前置说明:前端在启动编排上已有明显投入(`src/web-ui/src/app/startup/startupPerformanceContract.test.ts` 契约测试、`index.html` 内联 splash、AppLayout lazy、i18n 命名空间懒加载、Rust 侧 startup_trace),本报告只列仍然成立的真实问题。
@@ -32,7 +32,7 @@
 | 3 | 10 个桌宠精灵图 18 MB 全量内置 | 体积 | **高**(-10~16 MB,视方案) | 中(产品决策) |
 | 4 | Monaco 全量 min 拷贝:未用 NLS 语言 1.4 MB + 未做裁剪 | 体积 | 中(-1.4 MB 起) | 低 |
 | 5 | 首包 5.44 MB:三语种 bootstrap 文案 ~793 KB 全部 eager 打入入口 | 冷启动+体积 | 中(首包 -0.5 MB+,减 JS parse) | 中 |
-| 6 | 未压缩大图:BitFun-Logo.png 1.06 MB 等 ~2.7 MB PNG | 体积 | 中(-2 MB) | 低 |
+| 6 | 未压缩大图:OpenBitFun-Logo.png 1.06 MB 等 ~2.7 MB PNG | 体积 | 中(-2 MB) | 低 |
 | 7 | 四套语法高亮引擎并存(highlight.js×2 版本、prismjs×2 版本、refractor) | 体积 | 中 | 中 |
 | 8 | `[profile.release]` 未设 `panic = "abort"` | 二进制体积 | 中(exe -5~10%) | 中低 |
 | 9 | `main.tsx` 静态 import 桌宠组件 `AgentCompanionDesktopPet`,主窗口也要加载 | 冷启动 | 低 | 低 |
@@ -44,7 +44,7 @@
 
 ### 1. 窗口创建被全部后端初始化串行阻塞(冷启动最大瓶颈)【高收益/中风险】
 
-**问题**:`bitfun_desktop_lib::run()` 在进入 `tauri::Builder` 之前,串行 `await` 了 7 个初始化步骤;主窗口在 `setup()` 中更靠后的位置才创建。也就是说,从进程启动到用户看到第一帧(哪怕是 splash),要等完:
+**问题**:`openbitfun_desktop_lib::run()` 在进入 `tauri::Builder` 之前,串行 `await` 了 7 个初始化步骤;主窗口在 `setup()` 中更靠后的位置才创建。也就是说,从进程启动到用户看到第一帧(哪怕是 splash),要等完:
 
 - `src/apps/desktop/src/lib.rs:325` `initialize_global_config().await`(磁盘 IO)
 - `lib.rs:337-353` `initialize_global_i18n_service().await`
@@ -79,7 +79,7 @@
 
 **方案**:
 - 低风险速赢:`panda-pix/spritesheet.png`(1.80 MB)是唯一 PNG,转 webp 预计 -0.9 MB。
-- 结构方案:仅内置默认宠物(如 bitfun),其余改为首次选择时按需下载(项目已有 `import_agent_companion_pet_package` 导入通道,`lib.rs:1040`),安装包 -14~16 MB。需要产品确认离线场景表现。
+- 结构方案:仅内置默认宠物(如 openbitfun),其余改为首次选择时按需下载(项目已有 `import_agent_companion_pet_package` 导入通道,`lib.rs:1040`),安装包 -14~16 MB。需要产品确认离线场景表现。
 
 ### 4. Monaco 全量拷贝未裁剪【中收益/低风险】
 
@@ -97,11 +97,11 @@
 - `src/web-ui/src/infrastructure/i18n/core/I18nService.ts:44-57`:`bootstrapLocaleModules` 用 `import.meta.glob(..., { eager: true })` 把 **3 个语言 × 9 个命名空间**全部内联进入口;实测这批 JSON 源文件共 **793 KB**,而运行时只需要当前语言(~1/3)。
 - 已排除其他嫌疑:入口内无 base64 大资源(data URI 合计 78 字节)、无 tiptap/prosemirror/mermaid/monaco/lucide 全量(签名探测均为 0 或个位数命中),lucide 无 `import *` 全量导入。
 
-**方案**:bootstrap 文案按语言拆分——保持 eager 但只对 resolved locale 生效:把 eager glob 改为三个按语言的 `import.meta.glob`(每语言一个 chunk),启动时根据 `__BITFUN_BOOTSTRAP_LOCALE__` 同步选择(Vite 会为每个 glob 生成独立 chunk,当前语言之外的不加载);或将同步 `t()` 依赖的模块初始化改为在 `I18nProvider` ready 后执行。注意与 `startupPerformanceContract.test.ts` 中 "i18n provider 不允许异步 waterfall" 的契约协调,属于中风险改动。
+**方案**:bootstrap 文案按语言拆分——保持 eager 但只对 resolved locale 生效:把 eager glob 改为三个按语言的 `import.meta.glob`(每语言一个 chunk),启动时根据 `__OPENBITFUN_BOOTSTRAP_LOCALE__` 同步选择(Vite 会为每个 glob 生成独立 chunk,当前语言之外的不加载);或将同步 `t()` 依赖的模块初始化改为在 `I18nProvider` ready 后执行。注意与 `startupPerformanceContract.test.ts` 中 "i18n provider 不允许异步 waterfall" 的契约协调,属于中风险改动。
 
 ### 6. 未压缩大图 ~2.7 MB【中收益/低风险】
 
-**证据**(`dist/` 根目录 = `public/` 根目录):`BitFun-Logo.png` 1,088,684 B、`panda_full_2.png` 433 KB、`panda_full_1.png` 420 KB、`Logo-ICON.png` 391 KB、`panda_1/2.png` 各 ~185 KB。使用点仅 `NurseryGallery.tsx` 与 `WelcomePanel.tsx`(展示尺寸远小于原图)。`Logo-ICON.png` 由 `copy-icons` 从桌面 icons 拷来,384 KB 明显未过压缩。
+**证据**(`dist/` 根目录 = `public/` 根目录):`OpenBitFun-Logo.png` 1,088,684 B、`panda_full_2.png` 433 KB、`panda_full_1.png` 420 KB、`Logo-ICON.png` 391 KB、`panda_1/2.png` 各 ~185 KB。使用点仅 `NurseryGallery.tsx` 与 `WelcomePanel.tsx`(展示尺寸远小于原图)。`Logo-ICON.png` 由 `copy-icons` 从桌面 icons 拷来,384 KB 明显未过压缩。
 
 **方案**:oxipng/pngquant 无损+有损压缩,或转 webp 并按实际显示尺寸导出(Logo 预计 1.06 MB → <150 KB)。注意 `Logo-ICON-128.png` 有透明度契约测试(`startupPerformanceContract.test.ts:44-57`),压缩需保 alpha。
 
@@ -113,13 +113,13 @@
 
 ### 8. release profile 缺 `panic = "abort"`【中收益/中低风险】
 
-**证据**:根 `Cargo.toml:282-286` `[profile.release]` 已有 `opt-level=3, lto=true, codegen-units=1, strip=true`(体积姿势基本正确),但未设 `panic = "abort"`,unwinding 表与 landing pad 通常占 5~10% 二进制体积。另:本地 `target/release/bitfun-desktop.exe` 实测 217 MB,若为 `release-fast` profile(strip=false、lto=false,`Cargo.toml:288-293`)构建则不代表发布体积;发布链路(NSIS 90.5 MB)以 `[profile.release]` 为准。
+**证据**:根 `Cargo.toml:282-286` `[profile.release]` 已有 `opt-level=3, lto=true, codegen-units=1, strip=true`(体积姿势基本正确),但未设 `panic = "abort"`,unwinding 表与 landing pad 通常占 5~10% 二进制体积。另:本地 `target/release/openbitfun-desktop.exe` 实测 217 MB,若为 `release-fast` profile(strip=false、lto=false,`Cargo.toml:288-293`)构建则不代表发布体积;发布链路(NSIS 90.5 MB)以 `[profile.release]` 为准。
 
 **方案**:`[profile.release]` 增加 `panic = "abort"`。风险点:代码中依赖 `catch_unwind` 的路径会变成直接终止(`lib.rs:316` 有 `setup_panic_hook`,panic hook 本身仍然有效);建议加上后跑一轮桌面回归。注意安装包体积从 0.2.11→0.2.13 两个小版本涨了 9.4 MB,建议在 CI 中加体积基线监控。
 
 ### 9. `main.tsx` 静态引入桌宠组件【低收益/低风险】
 
-**证据**:`src/web-ui/src/main.tsx:3` `import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/..."`,该组件仅在 `bitfunWindow === 'agent-companion'` 的独立小窗使用(`main.tsx:346-369`),却随入口 chunk 被主窗口一并加载(连带 `AgentCompanionPet`、其 SCSS 与配置服务)。
+**证据**:`src/web-ui/src/main.tsx:3` `import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/..."`,该组件仅在 `openbitfunWindow === 'agent-companion'` 的独立小窗使用(`main.tsx:346-369`),却随入口 chunk 被主窗口一并加载(连带 `AgentCompanionPet`、其 SCSS 与配置服务)。
 
 **方案**:改为 `lazy(() => import(...))` + Suspense(pet 窗口本就有预载动画兜底),主窗口首包相应减小;主 `App` 分支保持静态。
 
@@ -139,7 +139,7 @@
 | T4 桌宠按需分发 | 产品确认后:仅内置默认宠物,其余走现有 `import_agent_companion_pet_package` 通道按需获取 | `src/web-ui/public/agent-companion-pets/`、桌宠选择 UI | 安装包 -14 MB | 中(需产品确认) |
 | T5 Rust 启动并行化(第一步,低风险) | `run()` 内用 `tokio::join!` 并行 i18n/AIClientFactory/log-level 三步;`init_agentic_system` 内 TokenUsage/Cron 并行;为 `prepare_workspace_startup_bootstrap_snapshot` 的 block_on 加超时回退 | `src/apps/desktop/src/lib.rs` | 冷启动前段缩短(IO 并行) | 中低 |
 | T6 Rust 窗口前移(第二步,需设计) | config 就绪后立即创建并显示主窗口,agentic/AppState 等移到窗口创建后台;为 invoke 增加服务就绪 gate;用现有 startup_trace 对比前后指标 | `src/apps/desktop/src/lib.rs`、`theme.rs`、`api/commands.rs` | 首帧出现时间大幅提前(高) | 中 |
-| T7 i18n 首包按语言拆分 | `bootstrapLocaleModules` 按语言拆为独立 eager glob/chunk,启动仅加载 `__BITFUN_BOOTSTRAP_LOCALE__` 对应语言;同步更新 `startupPerformanceContract.test.ts` 契约 | `src/web-ui/src/infrastructure/i18n/core/I18nService.ts`、契约测试 | 首包 -0.5 MB、减 parse | 中 |
+| T7 i18n 首包按语言拆分 | `bootstrapLocaleModules` 按语言拆为独立 eager glob/chunk,启动仅加载 `__OPENBITFUN_BOOTSTRAP_LOCALE__` 对应语言;同步更新 `startupPerformanceContract.test.ts` 契约 | `src/web-ui/src/infrastructure/i18n/core/I18nService.ts`、契约测试 | 首包 -0.5 MB、减 parse | 中 |
 | T8 桌宠组件懒加载 | `main.tsx` 中 `AgentCompanionDesktopPet` 改 `React.lazy`,pet 窗口加 Suspense fallback(复用现有预载动画) | `src/web-ui/src/main.tsx` | 主窗口首包减小 | 低 |
 | T9 panic=abort | `[profile.release]` 加 `panic = "abort"`,全量桌面冒烟(重点:插件、panic hook、崩溃诊断路径) | 根 `Cargo.toml` | exe -5~10% | 中低 |
 | T10 高亮引擎统一 | 消除双 prismjs(InlineDiffPreview 改用 refractor 或懒加载),规划 highlight.js/react-syntax-highlighter 二选一 | `src/web-ui/src/flow_chat/components/InlineDiffPreview.tsx` 等 | JS -0.5~1 MB | 中 |

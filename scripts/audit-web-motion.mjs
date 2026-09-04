@@ -112,7 +112,7 @@ const duplicateKeyframes = [...keyframes.entries()]
   .filter(([, definitions]) => definitions.length > 1)
   .sort((left, right) => right[1].length - left[1].length);
 
-console.log('BitFun Web UI motion inventory');
+console.log('OpenBitFun Web UI motion inventory');
 console.log(`Scanned ${files.length} source files under src/web-ui/src.`);
 console.log(`Interactive handler attributes: ${interactiveHandlers}`);
 console.log(`Explicit data-motion opt-ins: ${motionOptIns}`);

@@ -63,7 +63,7 @@ pub(crate) fn apply_headers(
         }
 
         if url.contains("openbitfun.com") {
-            builder = builder.header("X-Verification-Code", "from_bitfun");
+            builder = builder.header("X-Verification-Code", "from_openbitfun");
         }
 
         builder

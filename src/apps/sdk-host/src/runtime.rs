@@ -1,14 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_core::agentic::system::{self, AgenticSystem};
-use bitfun_core::product_assembly::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
-use bitfun_core::product_runtime::{
+use openbitfun_agent_runtime::sdk::AgentRuntime;
+use openbitfun_core::agentic::system::{self, AgenticSystem};
+use openbitfun_core::product_assembly::{DeliveryProfile, ProductAssembler, ProductAssemblyInput};
+use openbitfun_core::product_runtime::{
     build_local_runtime_services, ensure_product_dialog_scheduler, CoreProductAgentRuntime,
     CoreProductEventQueueOwner, CoreRuntimeServicesProvider,
 };
-use bitfun_core::runtime_ownership::{CoreRuntimeOwnership, RuntimeDeployment};
+use openbitfun_core::runtime_ownership::{CoreRuntimeOwnership, RuntimeDeployment};
 use std::sync::Arc;
 
 const RUNTIME_EVENT_BUFFER: usize = 256;
@@ -29,7 +29,7 @@ impl SdkHostRuntime {
     pub(crate) async fn build(workspace_root: impl AsRef<Path>) -> Result<Self> {
         let (workspace_root, services) =
             build_local_runtime_services(workspace_root, RUNTIME_EVENT_BUFFER)?;
-        let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+        let path_manager = openbitfun_core::infrastructure::try_get_path_manager_arc()
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let deployment = RuntimeDeployment::Embedded;
         let runtime_ownership = CoreRuntimeOwnership::fixed_workspace(
@@ -89,9 +89,9 @@ fn bind_core_execution_ports(agentic_system: &AgenticSystem) {
 }
 
 pub(crate) async fn initialize_terminal_service() {
-    use bitfun_core::infrastructure::try_get_path_manager_arc;
-    use bitfun_core::service::runtime::RuntimeManager;
-    use bitfun_core::service::terminal::{TerminalApi, TerminalConfig};
+    use openbitfun_core::infrastructure::try_get_path_manager_arc;
+    use openbitfun_core::service::runtime::RuntimeManager;
+    use openbitfun_core::service::terminal::{TerminalApi, TerminalConfig};
 
     let mut config = TerminalConfig::default();
     match try_get_path_manager_arc() {

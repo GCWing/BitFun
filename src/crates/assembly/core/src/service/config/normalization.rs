@@ -1,122 +1,12 @@
-use super::manager::{
-    normalize_legacy_agent_model_defaults_config_value,
-    normalize_legacy_tool_permissions_config_value, strip_removed_model_reasoning_fields,
-};
-use super::providers::AIConfigProvider;
 use super::types::{
-    ConfigDiagnostic, ConfigDiagnosticRecoverability, ConfigDiagnosticSeverity, ConfigProvider,
-    GlobalConfig, ModelCapability, SubagentModelSelection, CURRENT_CONFIG_SCHEMA_VERSION,
+    ConfigDiagnostic, ConfigDiagnosticRecoverability, ConfigDiagnosticSeverity, GlobalConfig,
+    ModelCapability, SubagentModelSelection,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
-use serde_json::Value;
 use std::collections::HashSet;
-
-#[derive(Debug, Clone)]
-pub struct ConfigNormalizationResult {
-    pub value: Value,
-    pub diagnostics: Vec<ConfigDiagnostic>,
-    pub changed: bool,
-}
-
-/// Applies deterministic, credential-preserving compatibility normalization
-/// before typed deserialization and strict semantic validation.
-pub fn normalize_config_value(config: Value) -> ConfigNormalizationResult {
-    let original = config.clone();
-    let mut diagnostics = Vec::new();
-    let mut value =
-        strip_removed_model_reasoning_fields(normalize_legacy_tool_permissions_config_value(
-            normalize_legacy_agent_model_defaults_config_value(config),
-        ));
-
-    let previous_schema = value
-        .get("schema_version")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    if previous_schema > u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
-        diagnostics.push(ConfigDiagnostic {
-            path: "schema_version".to_string(),
-            message: format!(
-                "Configuration schema {previous_schema} is newer than supported schema {CURRENT_CONFIG_SCHEMA_VERSION}"
-            ),
-            code: "CONFIG_SCHEMA_TOO_NEW".to_string(),
-            severity: ConfigDiagnosticSeverity::Error,
-            recoverability: ConfigDiagnosticRecoverability::None,
-        });
-        return ConfigNormalizationResult {
-            changed: value != original,
-            value,
-            diagnostics,
-        };
-    }
-
-    normalize_incompatible_telemetry_value(&mut value, &mut diagnostics);
-
-    if previous_schema < u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
-        if let Some(root) = value.as_object_mut() {
-            root.insert(
-                "schema_version".to_string(),
-                Value::from(CURRENT_CONFIG_SCHEMA_VERSION),
-            );
-        }
-        diagnostics.push(ConfigDiagnostic {
-            path: "schema_version".to_string(),
-            message: format!(
-                "Configuration schema upgraded from {previous_schema} to {CURRENT_CONFIG_SCHEMA_VERSION}"
-            ),
-            code: "CONFIG_SCHEMA_UPGRADED".to_string(),
-            severity: ConfigDiagnosticSeverity::Warning,
-            recoverability: ConfigDiagnosticRecoverability::AutoFix,
-        });
-    }
-
-    ConfigNormalizationResult {
-        changed: value != original,
-        value,
-        diagnostics,
-    }
-}
-
-fn normalize_incompatible_telemetry_value(
-    config: &mut Value,
-    diagnostics: &mut Vec<ConfigDiagnostic>,
-) {
-    let Some(telemetry) = config
-        .get_mut("app")
-        .and_then(Value::as_object_mut)
-        .and_then(|app| app.get_mut("telemetry"))
-    else {
-        return;
-    };
-
-    if telemetry.is_boolean() {
-        return;
-    }
-
-    *telemetry = Value::Bool(false);
-    diagnostics.push(ConfigDiagnostic {
-        path: "app.telemetry".to_string(),
-        message: "Disabled an unsupported telemetry configuration during compatibility recovery"
-            .to_string(),
-        code: "CONFIG_TELEMETRY_DOWNGRADED".to_string(),
-        severity: ConfigDiagnosticSeverity::Warning,
-        recoverability: ConfigDiagnosticRecoverability::AutoFix,
-    });
-}
-
-pub fn reject_unsupported_schema(diagnostics: &[ConfigDiagnostic]) -> BitFunResult<()> {
-    if let Some(diagnostic) = diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.code == "CONFIG_SCHEMA_TOO_NEW")
-    {
-        return Err(BitFunError::validation(diagnostic.message.clone()));
-    }
-    Ok(())
-}
 
 /// Canonicalizes typed model fields whose meaning is capability-dependent.
 pub fn normalize_typed_config(config: &mut GlobalConfig) -> Vec<ConfigDiagnostic> {
     let mut diagnostics = Vec::new();
-    config.schema_version = CURRENT_CONFIG_SCHEMA_VERSION;
 
     for (index, model) in config.ai.models.iter_mut().enumerate() {
         model.ensure_category_and_capabilities();
@@ -136,55 +26,6 @@ pub fn normalize_typed_config(config: &mut GlobalConfig) -> Vec<ConfigDiagnostic
     }
 
     diagnostics
-}
-
-/// Disables only individually invalid model entries so a local model mistake
-/// cannot prevent the rest of the product from starting. Cross-model/default
-/// integrity is repaired separately by the model reconciliation pass.
-pub async fn isolate_invalid_ai_models(
-    config: &mut GlobalConfig,
-) -> BitFunResult<Vec<ConfigDiagnostic>> {
-    let mut diagnostics = Vec::new();
-
-    for index in 0..config.ai.models.len() {
-        if !config.ai.models[index].enabled {
-            continue;
-        }
-
-        let mut isolated_ai = super::types::AIConfig::default();
-        isolated_ai.models = vec![config.ai.models[index].clone()];
-
-        let validation = AIConfigProvider
-            .validate_config(&serde_json::to_value(isolated_ai)?)
-            .await;
-        if let Err(error) = validation {
-            let error_message = error.to_string();
-            // Reasoning schemas are cross-cutting runtime contracts. Keep these
-            // as hard failures so a malformed preset is not silently hidden.
-            if error_message.to_ascii_lowercase().contains("reasoning") {
-                return Err(error);
-            }
-            let model_id = config.ai.models[index].id.clone();
-            config.ai.models[index].enabled = false;
-            diagnostics.push(ConfigDiagnostic {
-                path: format!("ai.models[{index}]"),
-                message: format!(
-                    "Disabled invalid model '{}' during configuration recovery",
-                    model_id
-                ),
-                code: "INVALID_MODEL_DISABLED".to_string(),
-                severity: ConfigDiagnosticSeverity::Warning,
-                recoverability: ConfigDiagnosticRecoverability::ModelDisabled,
-            });
-            log::warn!(
-                "Disabled invalid model during configuration recovery: model_id={}, error={}",
-                model_id,
-                error_message
-            );
-        }
-    }
-
-    Ok(diagnostics)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -356,7 +197,7 @@ pub fn reconcile_model_references(config: &mut GlobalConfig) -> ModelReferenceRe
         result.diagnostics.push(ConfigDiagnostic {
             path: "ai.agent_model_defaults.subagents.builtin.ResearchSpecialist".to_string(),
             message: "Configured ResearchSpecialist to inherit the parent model so DeepResearch does not depend on an unrelated fast-model endpoint".to_string(),
-            code: "RESEARCH_SPECIALIST_MODEL_DEFAULT_MIGRATED".to_string(),
+            code: "RESEARCH_SPECIALIST_MODEL_DEFAULT_RESTORED".to_string(),
             severity: ConfigDiagnosticSeverity::Warning,
             recoverability: ConfigDiagnosticRecoverability::AutoFix,
         });
@@ -626,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_research_specialist_default_migrates_to_parent_inheritance() {
+    fn missing_research_specialist_default_is_restored_for_current_writes() {
         let mut config = GlobalConfig::default();
         config
             .ai
@@ -650,7 +491,7 @@ mod tests {
         assert!(result
             .diagnostics
             .iter()
-            .any(|diagnostic| { diagnostic.code == "RESEARCH_SPECIALIST_MODEL_DEFAULT_MIGRATED" }));
+            .any(|diagnostic| { diagnostic.code == "RESEARCH_SPECIALIST_MODEL_DEFAULT_RESTORED" }));
     }
 
     #[test]
@@ -675,27 +516,4 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn global_ai_errors_do_not_disable_individually_valid_models() {
-        let mut config = GlobalConfig::default();
-        config.ai.stream_idle_timeout_secs = Some(0);
-        config.ai.models.push(AIModelConfig {
-            id: "valid-text".to_string(),
-            name: "Valid text model".to_string(),
-            provider: "openai".to_string(),
-            model_name: "text-model".to_string(),
-            base_url: "https://example.com/v1".to_string(),
-            enabled: true,
-            capabilities: vec![ModelCapability::TextChat],
-            context_window: Some(64_000),
-            ..AIModelConfig::default()
-        });
-
-        let diagnostics = isolate_invalid_ai_models(&mut config)
-            .await
-            .expect("model isolation should succeed");
-
-        assert!(diagnostics.is_empty());
-        assert!(config.ai.models[0].enabled);
-    }
 }

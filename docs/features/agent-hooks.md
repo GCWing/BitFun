@@ -1,15 +1,15 @@
 # Agent hooks
 
-Hooks let you run your own commands at fixed points in the BitFun Agent's
+Hooks let you run your own commands at fixed points in the OpenBitFun Agent's
 lifecycle: before and after a tool call, when a permission prompt would appear,
 when a prompt is submitted, around context compaction, around subagents, and
 when a session or turn starts or ends. A hook can observe what the Agent is
 doing, add context the model will read, rewrite a tool call's arguments, or
 block an action outright.
 
-## BitFun hooks are Codex hooks
+## OpenBitFun hooks are Codex hooks
 
-BitFun implements **the Codex hook contract**, not a BitFun dialect:
+OpenBitFun implements **the Codex hook contract**, not a OpenBitFun dialect:
 
 - the same `hooks.json` document — events, matcher groups, handler fields;
 - the same event names (`PreToolUse`, `PostToolUse`, `PermissionRequest`,
@@ -21,7 +21,7 @@ BitFun implements **the Codex hook contract**, not a BitFun dialect:
 - the same JSON decision schema on stdout (`permissionDecision`,
   `updatedInput`, `additionalContext`, `decision`/`reason`, …).
 
-**A Codex hook script runs in BitFun unchanged, and vice versa — there is
+**A Codex hook script runs in OpenBitFun unchanged, and vice versa — there is
 nothing to port.**
 
 So this page does not restate the reference. For event semantics, the exact
@@ -30,26 +30,26 @@ documentation, which covers all of it well:
 
 **→ <https://learn.chatgpt.com/docs/hooks>**
 
-The rest of this page is only what is BitFun-specific: where the files live,
-how to switch hooks on, and where BitFun currently differs.
+The rest of this page is only what is OpenBitFun-specific: where the files live,
+how to switch hooks on, and where OpenBitFun currently differs.
 
-## Where BitFun reads hooks
+## Where OpenBitFun reads hooks
 
-Codex reads `~/.codex/hooks.json`; BitFun reads its own config directory
+Codex reads `~/.codex/hooks.json`; OpenBitFun reads its own config directory
 instead. Everything inside the file is identical.
 
 | Scope | Path |
 | --- | --- |
 | User | `<user config dir>/config/hooks.json` |
-| Project | `<workspace>/.bitfun/config/hooks.json` |
+| Project | `<workspace>/.openbitfun/config/hooks.json` |
 
-The user config directory is `~/.config/bitfun` on Linux,
-`~/Library/Application Support/bitfun` on macOS, and `%APPDATA%\bitfun` on
+The user config directory is `~/.config/openbitfun` on Linux,
+`~/Library/Application Support/openbitfun` on macOS, and `%APPDATA%\openbitfun` on
 Windows.
 
 Both layers are additive: every matching handler runs, user handlers first.
 There is no override or shadowing between them. Changes are picked up without
-restarting BitFun.
+restarting OpenBitFun.
 
 ## Turning hooks on
 
@@ -77,25 +77,25 @@ that live inside a checked-out repository, so anyone who can land a commit
 could otherwise run code on your machine. Turn it on only for repositories
 you trust, and re-check the file after pulling.
 
-Codex's `[features] hooks = false` has no BitFun equivalent — use
+Codex's `[features] hooks = false` has no OpenBitFun equivalent — use
 `app.hooks.enabled` instead.
 
 ## Importing Claude Code and Codex command hooks
 
-BitFun can take a reviewed local snapshot of compatible `type: "command"`
+OpenBitFun can take a reviewed local snapshot of compatible `type: "command"`
 hooks discovered from Claude Code or Codex. This is an explicit copy, not a
 live mount of another product's configuration:
 
 1. Open **Settings → Agent Hooks** or run `/hooks` in the TUI. Use
-   `bitfun hooks list` from the root CLI for a scriptable view.
+   `openbitfun hooks list` from the root CLI for a scriptable view.
 2. Choose a source and review every effective command, Windows override,
    timeout, copied or external dependency, skipped item, and the plan
    fingerprint.
-3. Confirm that exact plan. If the source changed after review, BitFun writes
+3. Confirm that exact plan. If the source changed after review, OpenBitFun writes
    nothing and returns a refreshed plan for another confirmation.
 
-User sources are copied to BitFun's user-managed data. Project sources are
-copied to workspace-isolated data under BitFun's project runtime area. Safe
+User sources are copied to OpenBitFun's user-managed data. Project sources are
+copied to workspace-isolated data under OpenBitFun's project runtime area. Safe
 relative script dependencies beneath a source's `.claude/hooks` or
 `.codex/hooks` directory are copied into the immutable snapshot. Absolute
 dependencies remain external and are called out during review; moving or
@@ -104,7 +104,7 @@ Dynamic paths, globs, escaping paths, links, unreadable files, and files beyond
 the fixed import limits are skipped rather than followed implicitly.
 
 An imported source can be enabled, disabled, updated, or removed independently.
-Removing it deletes only BitFun's managed copy; it never edits Claude Code or
+Removing it deletes only OpenBitFun's managed copy; it never edits Claude Code or
 Codex files. Updates always require another exact-command review. Imported
 layers run in this fixed order:
 
@@ -115,7 +115,7 @@ layers run in this fixed order:
 
 Import, update, enable, disable, and remove take effect on the next matching
 Hook event; an already running Hook finishes against the snapshot it started
-with. BitFun does not re-import on startup, poll, or watch Claude Code/Codex
+with. OpenBitFun does not re-import on startup, poll, or watch Claude Code/Codex
 files. Use **Refresh** or `/hooks refresh` to check for source changes, then
 review an update explicitly. The management and execution paths are local-only;
 remote workspaces return unsupported instead of running local commands against
@@ -128,19 +128,19 @@ still discovery/static preview and is not executable.
 Root CLI equivalents are:
 
 ```text
-bitfun hooks list [--refresh] [--format text|json]
-bitfun hooks import --source <source-key> [--confirm <plan-fingerprint>]
-bitfun hooks update <import-id> [--confirm <plan-fingerprint>]
-bitfun hooks enable <import-id>
-bitfun hooks disable <import-id>
-bitfun hooks remove <import-id> --confirm
-bitfun hooks reset <user|project> --confirm
+openbitfun hooks list [--refresh] [--format text|json]
+openbitfun hooks import --source <source-key> [--confirm <plan-fingerprint>]
+openbitfun hooks update <import-id> [--confirm <plan-fingerprint>]
+openbitfun hooks enable <import-id>
+openbitfun hooks disable <import-id>
+openbitfun hooks remove <import-id> --confirm
+openbitfun hooks reset <user|project> --confirm
 ```
 
 Import and update are preview-only without the matching fingerprint. TUI uses
 the same backend and keeps `/hooks_external` and `/hooks-external` as aliases
 for the unified `/hooks` management view. `reset` is available only as explicit
-recovery for a corrupt BitFun-managed index and never changes source files.
+recovery for a corrupt OpenBitFun-managed index and never changes source files.
 
 ## Quick start
 
@@ -155,7 +155,7 @@ Create `<user config dir>/config/hooks.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' >> ~/bitfun-commands.log"
+            "command": "jq -r '.tool_input.command' >> ~/openbitfun-commands.log"
           }
         ]
       }
@@ -165,7 +165,7 @@ Create `<user config dir>/config/hooks.json`:
 ```
 
 Start a new session and ask the Agent to run a shell command; each command it
-runs is appended to `~/bitfun-commands.log`.
+runs is appended to `~/openbitfun-commands.log`.
 
 A hook that blocks — here, refusing edits under `migrations/`:
 
@@ -198,13 +198,13 @@ if "/migrations/" in payload.get("tool_input", {}).get("file_path", ""):
 sys.exit(0)
 ```
 
-## Where BitFun differs from Codex
+## Where OpenBitFun differs from Codex
 
 Everything not listed here behaves as the Codex documentation describes.
 
 ### Not supported
 
-| Codex feature | BitFun |
+| Codex feature | OpenBitFun |
 | --- | --- |
 | `config.toml` `[hooks]` table | not read — put hooks in `hooks.json` |
 | `[features] hooks = false` | use `app.hooks.enabled` |
@@ -273,7 +273,7 @@ every time its event fires. Treat `hooks.json` like a shell profile:
 | Plain `echo` output is not visible to the model | Only `SessionStart`, `UserPromptSubmit`, and `SubagentStart` turn plain stdout into context; elsewhere use `hookSpecificOutput.additionalContext`. |
 
 Configuration problems, non-zero exits, timeouts, and hook decisions are
-written to the BitFun backend log. See
+written to the OpenBitFun backend log. See
 [`src/crates/LOGGING.md`](../../src/crates/LOGGING.md) for how to raise the
 log level.
 
@@ -281,6 +281,6 @@ log level.
 
 - CLI `/hooks` shows manual and imported layers, discovers supported external
   sources asynchronously, and owns the import management actions described
-  above. Edit `hooks.json` directly only for manual BitFun layers.
+  above. Edit `hooks.json` directly only for manual OpenBitFun layers.
 - `/hooks_external` and `/hooks-external` are compatibility aliases for the
   same view; they do not create a second import or execution path.

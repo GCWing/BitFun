@@ -12,8 +12,8 @@
   gap: 6px;
   background: none;
   border: none;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-body-xs-font-size);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-xs-font-size);
   cursor: pointer;
   padding: 3px 0;
   text-align: left;
@@ -32,9 +32,9 @@
 }
 
 .chat-thinking__label {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-style: italic;
-  font-size: var(--bf-type-body-xs-font-size);
+  font-size: var(--openbitfun-type-body-xs-font-size);
 }
 
 // Expand/collapse container using grid animation
@@ -74,12 +74,12 @@
 
   &::before {
     top: 0;
-    background: linear-gradient(to bottom, var(--bf-color-surface-scene), transparent);
+    background: linear-gradient(to bottom, var(--openbitfun-color-surface-scene), transparent);
   }
 
   &::after {
     bottom: 0;
-    background: linear-gradient(to top, var(--bf-color-surface-scene), transparent);
+    background: linear-gradient(to top, var(--openbitfun-color-surface-scene), transparent);
   }
 
   &.at-top::before { display: none; }
@@ -88,17 +88,17 @@
 
 .chat-thinking__content {
   padding: var(--size-gap-2) 0;
-  font-size: var(--bf-type-body-xs-font-size);
-  color: var(--bf-color-content-muted);
-  line-height: var(--bf-type-body-lg-line-height);
+  font-size: var(--openbitfun-type-body-xs-font-size);
+  color: var(--openbitfun-color-content-muted);
+  line-height: var(--openbitfun-type-body-lg-line-height);
 
   p { margin-bottom: 6px; &:last-child { margin-bottom: 0; } }
   code {
-    background: var(--bf-color-action-neutral-surface-hover);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
     padding: 1px 4px;
     border-radius: 3px;
-    font-size: var(--bf-type-support-font-size);
-    font-family: var(--bf-type-code-md-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 }
 
@@ -110,7 +110,7 @@
       display: inline-block;
       width: 4px;
       height: 12px;
-      background: var(--bf-color-content-muted);
+      background: var(--openbitfun-color-content-muted);
       margin-left: 4px;
       animation: pulse 1s ease-in-out infinite;
       vertical-align: middle;

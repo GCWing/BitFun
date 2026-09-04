@@ -37,9 +37,9 @@
 
 #![allow(dead_code)]
 
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use log::warn;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::Graphics::Gdi::{
@@ -65,9 +65,9 @@ const DWM_CROP_INSET_PX: i32 = 1;
 /// Swaps B <-> R in place then defers to the `image` crate's encoder (BGRA is
 /// not a PNG-encodable channel order). Alpha is preserved as-is, matching the
 /// cua source. Caller guarantees `bgra.len() == width * height * 4`.
-fn encode_bgra_to_png(bgra: &[u8], width: u32, height: u32) -> BitFunResult<Vec<u8>> {
+fn encode_bgra_to_png(bgra: &[u8], width: u32, height: u32) -> OpenBitFunResult<Vec<u8>> {
     if bgra.len() as u64 != (width as u64) * (height as u64) * 4 {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "encode_bgra_to_png: buffer size {} != width({width}) * height({height}) * 4",
             bgra.len()
         )));
@@ -78,14 +78,14 @@ fn encode_bgra_to_png(bgra: &[u8], width: u32, height: u32) -> BitFunResult<Vec<
     }
     let buf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width, height, rgba)
         .ok_or_else(|| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "invalid RGBA buffer for width={width} height={height}"
             ))
         })?;
     let mut out = Vec::new();
     DynamicImage::ImageRgba8(buf)
         .write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)
-        .map_err(|e| BitFunError::io(format!("PNG encode failed: {e}")))?;
+        .map_err(|e| OpenBitFunError::io(format!("PNG encode failed: {e}")))?;
     Ok(out)
 }
 
@@ -190,7 +190,7 @@ fn is_iconic(hwnd: HWND) -> bool {
 ///
 /// WGC is the only API that returns a UWP target's own composited pixels even
 /// when occluded by another window.
-fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
+fn screenshot_window_via_wgc(hwnd: HWND) -> OpenBitFunResult<(Vec<u8>, u32, u32)> {
     crate::computer_use::windows_wgc_capture::capture_window_bgra(hwnd)
 }
 
@@ -200,12 +200,12 @@ fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
 /// Works for UWP / DirectComposition surfaces that `PrintWindow` can't reach,
 /// as long as the window is on-screen and not occluded. Returns
 /// `(bgra_pixels, width, height)`.
-unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32, i32)> {
+unsafe fn screenshot_via_screen_region(hwnd: HWND) -> OpenBitFunResult<(Vec<u8>, i32, i32)> {
     let mut rect = RECT::default();
     // SAFETY: `rect` is a valid out-parameter and a stale/invalid HWND is
     // reported by the Win32 API.
     unsafe { GetWindowRect(hwnd, &mut rect) }.map_err(|e| {
-        BitFunError::service(format!("screen-region fallback: GetWindowRect failed: {e}"))
+        OpenBitFunError::service(format!("screen-region fallback: GetWindowRect failed: {e}"))
     })?;
     // Under Per-Monitor V2 DPI awareness, GetWindowRect returns PHYSICAL pixels
     // and BitBlt operates in physical pixels too — use the rect as-is.
@@ -214,7 +214,7 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
     let w = rect.right - rect.left;
     let h = rect.bottom - rect.top;
     if w <= 0 || h <= 0 {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "screen-region fallback: window has zero/negative bounds: {w}x{h}"
         )));
     }
@@ -270,12 +270,12 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
         ReleaseDC(None, screen_dc);
     }
     if blt_ok.is_err() {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "screen-region fallback: BitBlt failed: {blt_ok:?}"
         )));
     }
     if ok == 0 {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "screen-region fallback: GetDIBits returned 0",
         ));
     }
@@ -313,13 +313,13 @@ pub(super) struct WindowCapture {
 /// Minimized windows are rejected up front via [`is_iconic`]. The DWM
 /// extended-frame bounds are used to crop the invisible drop-shadow margin; the
 /// returned `origin_*` account for that crop so coordinate mapping stays exact.
-pub(super) fn screenshot_window_capture(hwnd: HWND) -> BitFunResult<WindowCapture> {
+pub(super) fn screenshot_window_capture(hwnd: HWND) -> OpenBitFunResult<WindowCapture> {
     unsafe { screenshot_window_bytes_unsafe(hwnd) }
 }
 
-unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCapture> {
+unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> OpenBitFunResult<WindowCapture> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "screenshot_window_bytes: invalid HWND",
         ));
     }
@@ -328,7 +328,7 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     // paints nothing. The degenerate all-black PNG wastes model turns retrying
     // against a window minimized to the taskbar.
     if is_iconic(hwnd) {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "cannot capture minimized window: it has no rendered content. \
              Restore the window first.",
         ));
@@ -346,14 +346,14 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     let mut win_rect = RECT::default();
     // SAFETY: `win_rect` is a valid out-parameter and `hwnd` was checked above.
     unsafe { GetWindowRect(hwnd, &mut win_rect) }.map_err(|e| {
-        BitFunError::service(format!(
+        OpenBitFunError::service(format!(
             "screenshot_window_bytes: GetWindowRect failed: {e}"
         ))
     })?;
     let w = win_rect.right - win_rect.left;
     let h = win_rect.bottom - win_rect.top;
     if w <= 0 || h <= 0 {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "screenshot_window_bytes: window has zero/negative size: {w}x{h}"
         )));
     }
@@ -429,7 +429,7 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
     }
 
     if ok == 0 {
-        return Err(BitFunError::service(
+        return Err(OpenBitFunError::service(
             "screenshot_window_bytes: GetDIBits returned 0",
         ));
     }

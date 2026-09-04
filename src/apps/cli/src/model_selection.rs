@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use bitfun_core::service::config::AIConfig;
-use bitfun_core_types::model::{ModelListProjection, ModelMutation, ModelSummary, SecretUpdate};
+use openbitfun_core::service::config::AIConfig;
+use openbitfun_core_types::model::{
+    ModelListProjection, ModelMutation, ModelSummary, SecretUpdate,
+};
 
-pub(crate) use bitfun_core::service::config::model_projection::{
+pub(crate) use openbitfun_core::service::config::model_projection::{
     model_catalog_projection, model_edit_projection, model_list_projection, resolve_model_selector,
 };
 
@@ -72,14 +74,14 @@ pub(crate) fn tui_model_display_name(model: &ModelSummary) -> String {
 
 pub(crate) fn model_from_mutation(
     mutation: ModelMutation,
-    existing: Option<bitfun_core::service::config::AIModelConfig>,
-) -> Result<bitfun_core::service::config::AIModelConfig> {
+    existing: Option<openbitfun_core::service::config::AIModelConfig>,
+) -> Result<openbitfun_core::service::config::AIModelConfig> {
     let current = existing.unwrap_or_default();
     let api_key = secret_update_value(mutation.api_key, Some(current.api_key));
     let custom_headers = headers_update(mutation.custom_headers, current.custom_headers)?;
     let custom_request_body =
         string_update(mutation.custom_request_body, current.custom_request_body);
-    Ok(bitfun_core::service::config::AIModelConfig {
+    Ok(openbitfun_core::service::config::AIModelConfig {
         id: mutation.id,
         name: mutation.name,
         provider: mutation.provider,

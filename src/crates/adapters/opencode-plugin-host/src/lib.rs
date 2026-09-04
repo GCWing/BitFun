@@ -6,7 +6,7 @@ mod peer;
 mod peer_runtime;
 mod stream_registry;
 
-use bitfun_services_core::process_tree::{CleanupOutcome, ProcessTreeChild};
+use openbitfun_services_core::process_tree::{CleanupOutcome, ProcessTreeChild};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -205,7 +205,7 @@ pub enum PluginHostError {
 pub struct PluginHost {
     child: ProcessTreeChild,
     client: PluginHostClient,
-    runtime: Arc<dyn bitfun_runtime_ports::HookFunctionRuntime>,
+    runtime: Arc<dyn openbitfun_runtime_ports::HookFunctionRuntime>,
     host_log: Option<host_log::HostLogDrain>,
     max_frame_bytes: usize,
 }
@@ -331,7 +331,7 @@ impl PluginHost {
         self.client.clone()
     }
 
-    pub fn runtime(&self) -> Arc<dyn bitfun_runtime_ports::HookFunctionRuntime> {
+    pub fn runtime(&self) -> Arc<dyn openbitfun_runtime_ports::HookFunctionRuntime> {
         self.runtime.clone()
     }
 

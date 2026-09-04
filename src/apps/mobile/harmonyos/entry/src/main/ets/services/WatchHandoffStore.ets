@@ -11,11 +11,11 @@ import {
 /**
  * Versioned because a store's `securityLevel` is fixed at creation: it can only
  * ever be raised, and for a store that syncs across devices it cannot be changed
- * at all. `bitfun_harmony_handoff` was created S2 on both devices and had to be
+ * at all. `openbitfun_harmony_handoff` was created S2 on both devices and had to be
  * abandoned rather than relabelled — see the S1 note on `securityLevel` below.
  * Must stay identical to the watch's `DistributedHandoffStore`.
  */
-const STORE_ID: string = 'bitfun_harmony_handoff_s1';
+const STORE_ID: string = 'openbitfun_harmony_handoff_s1';
 
 export type WatchProvisionRequestHandler = (payload: string) => void;
 
@@ -24,7 +24,7 @@ export type WatchProvisionRequestHandler = (payload: string) => void;
  *
  * `distributedKVStore` isolates stores by bundle name *and* store id and only
  * replicates between installs of the same app on the same account, which is
- * why the phone carries the watch's bundle name (`com.bitfun.app`) rather than
+ * why the phone carries the watch's bundle name (`com.openbitfun.app`) rather than
  * a store id of its own.
  *
  * The isolation key is really bundle name + **AppID**, and AppID is derived from

@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 ;
@@ -145,19 +145,19 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody inset="none">
-      <div className="bitfun-create-branch-dialog" onKeyDown={handleKeyDown} data-bf-component="git-tool" data-bf-part="createBranchDialog">
-      <ScrollArea className="bitfun-create-branch-dialog__scroll">
-        <div className="bitfun-create-branch-dialog__base-info">
-          <div className="bitfun-create-branch-dialog__base-label">
+      <div className="openbitfun-create-branch-dialog" onKeyDown={handleKeyDown} data-openbitfun-component="git-tool" data-openbitfun-part="createBranchDialog">
+      <ScrollArea className="openbitfun-create-branch-dialog__scroll">
+        <div className="openbitfun-create-branch-dialog__base-info">
+          <div className="openbitfun-create-branch-dialog__base-label">
             <Icon name="git" size="sm" />
             <span>{t('dialog.createNewBranch.baseBranch')}</span>
           </div>
-          <div className="bitfun-create-branch-dialog__base-value">
+          <div className="openbitfun-create-branch-dialog__base-value">
             {baseBranch}
           </div>
         </div>
 
-        <FieldGroup appearance="plain" dividers={false} className="bitfun-create-branch-dialog__form">
+        <FieldGroup appearance="plain" dividers={false} className="openbitfun-create-branch-dialog__form">
           <FieldRow padding="none">
             <Field
               label={t('dialog.createNewBranch.nameLabel')}
@@ -175,7 +175,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
             </Field>
           </FieldRow>
           <FieldRow padding="none">
-            <div className="bitfun-create-branch-dialog__hint">
+            <div className="openbitfun-create-branch-dialog__hint">
               <div>{t('dialog.createNewBranch.namingHintTitle')}</div>
               <ul>
                 <li>
@@ -195,7 +195,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
           </FieldRow>
         </FieldGroup>
 
-        <div className="bitfun-create-branch-dialog__actions">
+        <div className="openbitfun-create-branch-dialog__actions">
           <Button 
             variant="outline"
             size="sm"
@@ -217,7 +217,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
           </Button>
         </div>
 
-        <div className="bitfun-create-branch-dialog__shortcuts">
+        <div className="openbitfun-create-branch-dialog__shortcuts">
           <span>Esc</span> {t('dialog.createNewBranch.cancel')} · <span>Enter</span> {t('dialog.createNewBranch.confirm')}
         </div>
       </ScrollArea>

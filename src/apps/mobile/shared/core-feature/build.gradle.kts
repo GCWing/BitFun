@@ -23,17 +23,17 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.bitfun.mobile.core.feature"
+        namespace = "com.openbitfun.mobile.core.feature"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
         withHostTest {}
     }
 
-    val xcframework = XCFramework("BitFunMobileCore")
+    val xcframework = XCFramework("OpenBitFunMobileCore")
     val appleTargets = listOf(iosArm64(), iosSimulatorArm64())
     appleTargets.forEach { target ->
         target.binaries.framework {
-            baseName = "BitFunMobileCore"
+            baseName = "OpenBitFunMobileCore"
             isStatic = true
             transitiveExport = true
             export(project(":core-domain"))

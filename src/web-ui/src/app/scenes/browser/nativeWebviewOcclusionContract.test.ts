@@ -10,17 +10,17 @@ function readSource(relativePath: string): string {
 
 describe('native browser webview occlusion contract', () => {
   it('recognizes overlays that explicitly occlude native child webviews', () => {
-    expect(NATIVE_WEBVIEW_OCCLUSION_SELECTOR).toContain('[data-bf-native-webview-occlusion]');
+    expect(NATIVE_WEBVIEW_OCCLUSION_SELECTOR).toContain('[data-openbitfun-native-webview-occlusion]');
   });
 
   it('marks the user-message image lightbox as a native-webview occluder', () => {
     const source = readSource('../../../flow_chat/components/modern/UserMessageItem.tsx');
 
-    expect(source).toContain('data-bf-native-webview-occlusion');
+    expect(source).toContain('data-openbitfun-native-webview-occlusion');
   });
 
   it('includes the context menu only when its bounds intersect the browser viewport', () => {
-    expect(NATIVE_WEBVIEW_OCCLUSION_SELECTOR).toContain('[data-bf-product-component=\'context-menu\']');
+    expect(NATIVE_WEBVIEW_OCCLUSION_SELECTOR).toContain('[data-openbitfun-product-component=\'context-menu\']');
     expect(rectanglesIntersect(
       { left: 0, top: 0, right: 100, bottom: 100 },
       { left: 80, top: 80, right: 120, bottom: 120 },

@@ -43,7 +43,7 @@ Open a local directory or create a project so files, sessions, terminals, and ag
 3. 从侧边栏进入项目文件与会话
    Use the sidebar to access files and sessions
 
-入口 / Entry: BitFun 功能入口
+入口 / Entry: OpenBitFun 功能入口
 
 ## Agent 可替你做什么 / What an agent can do for you
 

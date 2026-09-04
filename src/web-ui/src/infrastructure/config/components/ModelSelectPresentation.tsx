@@ -1,4 +1,4 @@
-import type { ComboboxOption } from '@bitfun/ui';
+import type { ComboboxOption } from '@openbitfun/ui';
 import { getProviderDisplayName } from '../services/modelConfigs';
 import type { AIModelConfig } from '../types';
 export type ModelSelectOption = ComboboxOption;

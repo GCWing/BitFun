@@ -1,28 +1,28 @@
 /**
  * SessionsSection styles — inline accordion shown under the Sessions nav item.
  *
- * Uses the parent BEM block (.bitfun-nav-panel) to stay consistent with the
+ * Uses the parent BEM block (.openbitfun-nav-panel) to stay consistent with the
  * rest of the navigation styling, while being self-contained in this file.
  */
 @use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../../../styles/workspace-shell-surfaces' as shell-surfaces;
 
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__inline-list {
     // Left text rail shared by session rows and the expand toggle. Context
     // stylesheets that indent rows (see WorkspaceListSection's 30px icon
     // gutter) re-declare this so the toggle label can never drift off the rail
     // the session titles sit on.
-    --bf-nav-session-rail: var(--bf-space-1);
+    --openbitfun-nav-session-rail: var(--openbitfun-space-1);
 
     display: flex;
     flex-direction: column;
     min-width: 0;
     max-width: 100%;
-    padding: 2px var(--bf-space-1) 2px;
-    gap: calc(var(--bf-space-1) / 2);
+    padding: 2px var(--openbitfun-space-1) 2px;
+    gap: calc(var(--openbitfun-space-1) / 2);
     // No vertical margin: the list owns the separation between adjacent row surfaces.
-    margin: 0 var(--bf-space-1) 0 calc(var(--bf-space-1) + 4px);
+    margin: 0 var(--openbitfun-space-1) 0 calc(var(--openbitfun-space-1) + 4px);
 
     &.is-flat-workspace-view {
       margin: 0 6px;
@@ -37,9 +37,9 @@
   }
 
   &__inline-empty {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-muted);
-    padding: 4px var(--bf-space-1);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
+    padding: 4px var(--openbitfun-space-1);
     font-style: italic;
     text-align: center;
 
@@ -48,7 +48,7 @@
       min-width: 0;
       min-height: 40px;
       align-items: center;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
       font-style: normal;
     }
   }
@@ -59,14 +59,14 @@
     flex: 1;
     flex-direction: column;
     gap: 1px;
-    line-height: var(--bf-type-label-md-line-height);
+    line-height: var(--openbitfun-type-label-md-line-height);
   }
 
   &__inline-empty-name {
     overflow: hidden;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -77,13 +77,13 @@
     gap: 5px;
     min-width: 0;
     height: 24px;
-    padding: 0 var(--bf-space-1);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
+    padding: 0 var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
 
     svg {
       flex: 0 0 auto;
-      animation: bitfun-nav-session-spin 1s linear infinite;
+      animation: openbitfun-nav-session-spin 1s linear infinite;
     }
 
     span {
@@ -101,74 +101,74 @@
     min-width: 0;
     max-width: 100%;
     height: 26px;
-    padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);
+    padding: 0 var(--openbitfun-space-1) 0 var(--openbitfun-nav-session-rail);
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     cursor: pointer;
     width: 100%;
     overflow: hidden;
     text-align: left;
     overflow: hidden;
     position: relative;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &.is-active {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &.is-editing {
       cursor: default;
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 82%, transparent);
     }
 
     &.is-assistant-session {
       height: 40px;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
       padding-block: 4px;
     }
 
     &:focus-visible {
-      outline: 1px solid var(--bf-color-accent-default);
+      outline: 1px solid var(--openbitfun-color-accent-default);
       outline-offset: -1px;
     }
 
     &.is-child {
       margin-top: 0;
       min-height: 24px;
-      font-size: var(--bf-type-label-sm-font-size);
-      padding-left: calc(var(--bf-nav-session-rail) + 14px);
+      font-size: var(--openbitfun-type-label-sm-font-size);
+      padding-left: calc(var(--openbitfun-nav-session-rail) + 14px);
       position: relative;
 
       &::before {
         content: '';
         position: absolute;
-        left: calc(var(--bf-nav-session-rail) + 2px);
+        left: calc(var(--openbitfun-nav-session-rail) + 2px);
         top: 0;
         width: 1px;
         height: 50%;
-        background: color-mix(in srgb, var(--bf-color-border-subtle) 88%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-border-subtle) 88%, transparent);
         opacity: 0.95;
       }
 
       &::after {
         content: '';
         position: absolute;
-        left: calc(var(--bf-nav-session-rail) + 2px);
+        left: calc(var(--openbitfun-nav-session-rail) + 2px);
         top: 50%;
         width: 10px;
         height: 1px;
-        background: color-mix(in srgb, var(--bf-color-border-subtle) 92%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-border-subtle) 92%, transparent);
         opacity: 0.95;
         transform: translateY(-50%);
       }
@@ -178,11 +178,11 @@
     &.is-btw-child {
       &:hover,
       &.is-active {
-        background: var(--bf-color-action-quiet-hover);
+        background: var(--openbitfun-color-action-quiet-hover);
       }
 
       &.is-active {
-        background: var(--bf-color-action-quiet-hover);
+        background: var(--openbitfun-color-action-quiet-hover);
       }
     }
   }
@@ -223,9 +223,9 @@
 
   &__inline-item-assistant-name {
     overflow: hidden;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -235,9 +235,9 @@
     min-width: 0;
     margin-left: auto;
     overflow: hidden;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -262,13 +262,13 @@
     align-items: center;
     height: 12px;
     padding: 0 4px;
-    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 34%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 34%, var(--openbitfun-color-border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 13%, var(--bf-color-action-quiet-hover));
-    color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 62%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    background: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 13%, var(--openbitfun-color-action-quiet-hover));
+    color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 62%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     opacity: 0.96;
     overflow: visible;
     white-space: nowrap;
@@ -283,27 +283,27 @@
     height: 14px;
     padding: 0 5px;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 38%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 38%, var(--openbitfun-color-border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 12%, var(--bf-color-action-quiet-hover));
-    color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 76%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    background: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 12%, var(--openbitfun-color-action-quiet-hover));
+    color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 76%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
 
     &[data-state='failed'],
     &[data-state='cancelled'],
     &[data-state='unreachable'] {
-      border-color: var(--bf-color-status-danger-border);
-      background: var(--bf-color-status-danger-surface);
-      color: var(--bf-color-status-danger-content);
+      border-color: var(--openbitfun-color-status-danger-border);
+      background: var(--openbitfun-color-status-danger-surface);
+      color: var(--openbitfun-color-status-danger-content);
     }
 
     &[data-state='succeeded'] {
-      border-color: var(--bf-color-status-success-border);
-      background: var(--bf-color-status-success-surface);
-      color: var(--bf-color-status-success-content);
+      border-color: var(--openbitfun-color-status-success-border);
+      background: var(--openbitfun-color-status-success-surface);
+      color: var(--openbitfun-color-status-success-content);
     }
   }
 
@@ -314,17 +314,17 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 44%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 44%, var(--openbitfun-color-border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 18%, var(--bf-color-action-quiet-hover));
-    color: color-mix(in srgb, color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 82%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    background: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 18%, var(--openbitfun-color-action-quiet-hover));
+    color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 82%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     white-space: nowrap;
 
     svg {
-      animation: bitfun-nav-session-spin 1s linear infinite;
+      animation: openbitfun-nav-session-spin 1s linear infinite;
     }
   }
 
@@ -338,10 +338,10 @@
     width: 16px;
     height: 16px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--bf-color-status-success-content) 36%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-success-content) 36%, var(--openbitfun-color-border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, var(--bf-color-action-quiet-hover));
-    color: color-mix(in srgb, var(--bf-color-status-success-content) 76%, var(--bf-color-content-primary));
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, var(--openbitfun-color-action-quiet-hover));
+    color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 76%, var(--openbitfun-color-content-primary));
     overflow: hidden;
     // Kill the inline strut so the 16x16 circle stays optically centered against the title.
     line-height: 0;
@@ -356,17 +356,17 @@
     height: 10px;
     flex-shrink: 0;
     transform-origin: center center;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.is-bot {
-      animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
+      animation: openbitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
     }
 
     &.is-loader {
       opacity: 0;
       animation:
-        bitfun-nav-background-subagent-loader-cycle 3.6s ease-in-out infinite,
-        bitfun-nav-session-spin 1s linear infinite;
+        openbitfun-nav-background-subagent-loader-cycle 3.6s ease-in-out infinite,
+        openbitfun-nav-session-spin 1s linear infinite;
     }
   }
 
@@ -378,13 +378,13 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 35%, var(--bf-color-border-subtle));
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 35%, var(--openbitfun-color-border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 14%, transparent);
-    color: color-mix(in srgb, var(--bf-color-status-warning-content) 80%, var(--bf-color-content-primary));
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 14%, transparent);
+    color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 80%, var(--openbitfun-color-content-primary));
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     white-space: nowrap;
   }
 
@@ -396,17 +396,17 @@
   }
 
   &__inline-item-tooltip-title {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 
   &__inline-item-tooltip-meta {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-secondary);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     word-break: break-word;
   }
 
@@ -421,10 +421,10 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                visibility var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                visibility var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-    .bitfun-nav-panel__inline-item:hover &,
+    .openbitfun-nav-panel__inline-item:hover &,
     &.is-open {
       visibility: visible;
       opacity: 1;
@@ -442,15 +442,15 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover,
     &.is-open {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
     }
   }
 
@@ -481,23 +481,23 @@
     justify-content: flex-start;
     gap: 5px;
     height: 22px;
-    padding: 0 var(--bf-space-1) 0 var(--bf-nav-session-rail);
+    padding: 0 var(--openbitfun-space-1) 0 var(--openbitfun-nav-session-rail);
     margin-top: 1px;
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
     text-align: left;
     cursor: pointer;
     width: 100%;
     min-width: 0;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &:disabled {
@@ -506,13 +506,13 @@
     }
 
     &.is-loading {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
   &__inline-toggle-spinner {
     flex: 0 0 auto;
-    animation: bitfun-nav-session-spin 1s linear infinite;
+    animation: openbitfun-nav-session-spin 1s linear infinite;
   }
 
   // Trailing, not leading: a leading icon would push the label off the rail by
@@ -520,8 +520,8 @@
   &__inline-toggle-chevron {
     flex: 0 0 auto;
     opacity: 0.65;
-    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   // Grows to fill the row so the count chip and chevron ride the trailing edge,
@@ -543,14 +543,14 @@
     height: 15px;
     padding: 0 5px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-content-primary) 9%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    background: color-mix(in srgb, var(--openbitfun-color-content-primary) 9%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     font-variant-numeric: tabular-nums;
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    transition: background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   &__inline-toggle:hover &__inline-toggle-chevron,
@@ -566,8 +566,8 @@
 
   &__inline-toggle:hover &__inline-toggle-count,
   &__inline-toggle:focus-visible &__inline-toggle-count {
-    background: color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
-    color: var(--bf-color-content-primary);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 22%, transparent);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &__inline-item-edit-btn {
@@ -580,20 +580,20 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &.confirm:hover {
-      color: var(--bf-color-status-success-content);
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
+      color: var(--openbitfun-color-status-success-content);
+      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
     }
 
     &.cancel:hover {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
     }
   }
 
@@ -603,12 +603,12 @@
     border-radius: 50%;
 
     &.is-running {
-      color: var(--bf-color-status-success-content);
+      color: var(--openbitfun-color-status-success-content);
       fill: currentColor;
     }
 
     &.is-stopped {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
       fill: transparent;
       stroke: currentColor;
     }
@@ -617,13 +617,13 @@
   // Inline item badge (count / status text)
   &__inline-item-badge {
     flex-shrink: 0;
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    color: var(--openbitfun-color-content-muted);
     margin-left: auto;
     padding: 1px 4px;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--bf-color-content-muted) 12%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-muted) 12%, transparent);
 
     &--dim {
       opacity: 0.55;
@@ -640,13 +640,13 @@
     margin-left: auto;
 
     &.is-healthy {
-      background: var(--bf-color-status-success-content);
-      box-shadow: 0 0 4px color-mix(in srgb, var(--bf-color-status-success-content) 40%, transparent);
+      background: var(--openbitfun-color-status-success-content);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-success-content) 40%, transparent);
     }
 
     &.is-error {
-      background: var(--bf-color-status-warning-content);
-      box-shadow: 0 0 4px color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
+      background: var(--openbitfun-color-status-warning-content);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
     }
   }
 
@@ -658,7 +658,7 @@
 }
 
 // Session running spin animation
-@keyframes bitfun-nav-session-spin {
+@keyframes openbitfun-nav-session-spin {
   from {
     transform: rotate(0deg);
   }
@@ -667,7 +667,7 @@
   }
 }
 
-@keyframes bitfun-nav-background-subagent-bot-cycle {
+@keyframes openbitfun-nav-background-subagent-bot-cycle {
   0%,
   62%,
   100% {
@@ -682,7 +682,7 @@
   }
 }
 
-@keyframes bitfun-nav-background-subagent-loader-cycle {
+@keyframes openbitfun-nav-background-subagent-loader-cycle {
   0%,
   62%,
   100% {
@@ -696,17 +696,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-panel {
+  .openbitfun-nav-panel {
     &__inline-item {
       transition: none;
     }
   }
 
-  .bitfun-nav-panel__inline-item-review-badge svg {
+  .openbitfun-nav-panel__inline-item-review-badge svg {
     animation: none;
   }
 
-  .bitfun-nav-panel__inline-item-background-subagent-icon {
+  .openbitfun-nav-panel__inline-item-background-subagent-icon {
     animation: none;
 
     &.is-bot {
@@ -723,16 +723,16 @@
 
 // Compact session rows share the shell's 6px radius and 120ms physical press
 // response. Running/attention motion remains because it communicates state.
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__inline-list {
-    margin: 0 6px 0 var(--bf-space-3);
+    margin: 0 6px 0 var(--openbitfun-space-3);
     padding: 2px 0;
   }
 
   &__inline-item {
     height: 28px;
-    padding: 0 6px 0 var(--bf-nav-session-rail);
-    border-radius: var(--bf-radius-sm);
+    padding: 0 6px 0 var(--openbitfun-nav-session-rail);
+    border-radius: var(--openbitfun-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -740,11 +740,11 @@
 
     &:active:not(.is-disabled) {
       transform: scale(0.99);
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &.is-active {
-      background: var(--bf-color-action-quiet-hover);
+      background: var(--openbitfun-color-action-quiet-hover);
       box-shadow: none;
     }
   }
@@ -757,7 +757,7 @@
 
   &__inline-item-action-btn,
   &__inline-item-edit-btn {
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -771,7 +771,7 @@
   // Press feedback matches a full-width row, not the 20px icon buttons: the
   // icon-button 0.94 squish travels far too much across the panel width.
   &__inline-toggle {
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
@@ -779,33 +779,33 @@
 
     &:active:not(:disabled) {
       transform: scale(0.99);
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }
 
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__inline-item:hover {
-    background: var(--bf-color-action-quiet-hover);
+  .openbitfun-nav-panel__inline-item:hover {
+    background: var(--openbitfun-color-action-quiet-hover);
   }
 }
 
 
 // Match the primary navigation's readable text scale and 30px row rhythm while
 // retaining the existing nested/flat session geometry.
-.bitfun-nav-panel {
+.openbitfun-nav-panel {
   &__inline-list {
     padding-block: 0;
     // Rail for this rhythm: rows previously hard-coded `padding: 0 6px`.
-    --bf-nav-session-rail: 8px;
+    --openbitfun-nav-session-rail: 8px;
   }
 
   &__inline-item {
     height: 30px;
-    gap: var(--bf-space-2);
-    padding-right: var(--bf-space-2);
-    border-radius: var(--bf-radius-base);
+    gap: var(--openbitfun-space-2);
+    padding-right: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-base);
     @include nav-font.nav-panel-text-row;
 
     &:hover,
@@ -826,7 +826,7 @@
     &.is-child {
       height: 30px;
       margin-top: 0;
-      font-size: var(--bf-type-label-md-font-size);
+      font-size: var(--openbitfun-type-label-md-font-size);
     }
 
     &.is-assistant-session {
@@ -842,7 +842,7 @@
   }
 
   &__inline-item.is-active &__inline-item-label {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     font-weight: inherit;
   }
 
@@ -850,16 +850,16 @@
   &__inline-item-workspace-name {
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
   &__inline-toggle {
     height: 32px;
     @include nav-font.nav-panel-text-meta;
 
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
 
     &:hover,
     &:focus-visible {

@@ -4,9 +4,9 @@ use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult};
 use crate::agentic::tools::registry::{get_global_tool_registry, ToolRef};
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::types::ToolDefinition;
-use bitfun_agent_tools::{
+use openbitfun_agent_tools::{
     resolve_contextual_tool_manifest, resolve_contextual_visible_tools, ContextualToolManifest,
     ContextualVisibleTools, DynamicToolInfo, GetToolSpecCatalogProvider,
     GetToolSpecDeferredToolSummary, GetToolSpecExecutionError, GetToolSpecRuntime,
@@ -237,9 +237,9 @@ impl ProductToolCatalogProvider {
     async fn contextual_deferred_tools(
         &self,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolRef>> {
+    ) -> OpenBitFunResult<Vec<ToolRef>> {
         let agent_type = context.agent_type.as_deref().ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires agent type context".to_string())
+            OpenBitFunError::Validation("GetToolSpec requires agent type context".to_string())
         })?;
         let workspace_root = context.workspace_root();
         let agent_registry = get_agent_registry();
@@ -259,9 +259,9 @@ impl ProductToolCatalogProvider {
     async fn contextual_available_tools(
         &self,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolRef>> {
+    ) -> OpenBitFunResult<Vec<ToolRef>> {
         let agent_type = context.agent_type.as_deref().ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires agent type context".to_string())
+            OpenBitFunError::Validation("GetToolSpec requires agent type context".to_string())
         })?;
         let workspace_root = context.workspace_root();
         let agent_registry = get_agent_registry();
@@ -446,7 +446,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     #[cfg(feature = "external-sources")]
     use crate::agentic::WorkspaceBinding;
-    use bitfun_agent_tools::{
+    use openbitfun_agent_tools::{
         GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, CALL_DEFERRED_TOOL_NAME,
         GET_TOOL_SPEC_TOOL_NAME,
     };
@@ -469,7 +469,7 @@ mod tests {
             self.name
         }
 
-        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+        async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
             Ok(self.name.to_string())
         }
 
@@ -489,7 +489,7 @@ mod tests {
             &self,
             _input: &Value,
             _context: &ToolUseContext,
-        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+        ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
             Ok(Vec::new())
         }
     }
@@ -500,7 +500,7 @@ mod tests {
             "mcp__github__search_repos"
         }
 
-        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+        async fn description(&self) -> crate::util::errors::OpenBitFunResult<String> {
             Ok("Search GitHub repositories".to_string())
         }
 
@@ -538,7 +538,7 @@ mod tests {
             &self,
             _input: &serde_json::Value,
             _context: &ToolUseContext,
-        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+        ) -> crate::util::errors::OpenBitFunResult<Vec<ToolResult>> {
             Ok(Vec::new())
         }
     }
@@ -555,7 +555,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -814,7 +814,7 @@ mod tests {
             Arc::new(DeferredMcpCatalogTool) as Arc<dyn Tool>,
         ];
         let context = tool_context(Some("agentic"));
-        let manifest = bitfun_agent_tools::resolve_contextual_tool_manifest(
+        let manifest = openbitfun_agent_tools::resolve_contextual_tool_manifest(
             &tool_snapshot,
             &["mcp__github__search_repos".to_string()],
             &AgentToolPolicyOverrides::default(),
@@ -836,7 +836,7 @@ mod tests {
             vec![GET_TOOL_SPEC_TOOL_NAME, "CallDeferredTool"]
         );
 
-        let detail = bitfun_agent_tools::resolve_get_tool_spec_detail(
+        let detail = openbitfun_agent_tools::resolve_get_tool_spec_detail(
             &manifest.deferred_tools,
             "mcp__github__search_repos",
             &context,
@@ -900,7 +900,7 @@ mod tests {
                 &AgentToolPolicyOverrides::default(),
                 &context,
             );
-        let manifest = bitfun_agent_tools::resolve_contextual_tool_manifest(
+        let manifest = openbitfun_agent_tools::resolve_contextual_tool_manifest(
             &tool_snapshot,
             &allowed_tools,
             &exposure_overrides,
@@ -1052,7 +1052,7 @@ mod tests {
             .contains(&"ReviewPlatform".to_string()));
         assert!(manifest
             .allowed_tool_names
-            .contains(&"BitFunControl".to_string()));
+            .contains(&"OpenBitFunControl".to_string()));
         assert!(manifest
             .deferred_tool_names
             .contains(&"ReviewPlatform".to_string()));
@@ -1063,7 +1063,7 @@ mod tests {
         assert!(manifest
             .tool_definitions
             .iter()
-            .any(|tool| tool.name == "BitFunControl"));
+            .any(|tool| tool.name == "OpenBitFunControl"));
     }
 
     #[tokio::test]

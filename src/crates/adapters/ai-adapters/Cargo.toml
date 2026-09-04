@@ -1,13 +1,13 @@
 [package]
-name = "bitfun-ai-adapters"
+name = "openbitfun-ai-adapters"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Shared AI protocol adapters for BitFun core and installer"
+description = "Shared AI protocol adapters for OpenBitFun core and installer"
 autotests = false
 
 [lib]
-name = "bitfun_ai_adapters"
+name = "openbitfun_ai_adapters"
 crate-type = ["rlib"]
 
 [[test]]
@@ -22,9 +22,9 @@ path = "tests/ai_stream_contracts.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true, optional = true }
-bitfun-agent-stream = { path = "../../execution/agent-stream" }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-services-core = { path = "../../services/services-core", features = ["tls-provider"] }
+openbitfun-agent-stream = { path = "../../execution/agent-stream" }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+openbitfun-services-core = { path = "../../services/services-core", features = ["tls-provider"] }
 chrono = { workspace = true }
 dirs = { workspace = true, optional = true }
 eventsource-stream = { workspace = true }
@@ -54,8 +54,8 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 [features]
 subscription-auth = [
     "dep:base64",
-    "bitfun-services-core/credential-vault",
-    "bitfun-services-core/process-runtime",
+    "openbitfun-services-core/credential-vault",
+    "openbitfun-services-core/process-runtime",
     "dep:dirs",
     "dep:fs2",
     "dep:keyring-core",
@@ -71,7 +71,7 @@ subscription-auth = [
 
 [dev-dependencies]
 axum = { workspace = true }
-bitfun-events = { path = "../../contracts/events" }
+openbitfun-events = { path = "../../contracts/events" }
 tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread"] }
 
 [lints]

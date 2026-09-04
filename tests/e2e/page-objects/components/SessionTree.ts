@@ -97,7 +97,7 @@ export class SessionTree {
         const isPressed = (await currentTrigger.getAttribute('aria-pressed')) === 'true';
         const isCollapsed = (await panel.getAttribute('class'))
           ?.split(/\s+/)
-          .includes('bitfun-session-scene__aux-pane--collapsed') ?? false;
+          .includes('openbitfun-session-scene__aux-pane--collapsed') ?? false;
         return isPressed === open && isCollapsed === !open;
       } catch {
         return false;
@@ -118,23 +118,23 @@ export class SessionTree {
     const trigger = await $(this.rightPanelTriggerSelector);
     return {
       open: (await trigger.getAttribute('aria-pressed')) === 'true',
-      state: await trigger.getAttribute('data-bf-state'),
+      state: await trigger.getAttribute('data-openbitfun-state'),
       hasOpenIcon: await trigger.$('.lucide-panel-right-open').isExisting(),
       hasCloseIcon: await trigger.$('.lucide-panel-right-close').isExisting(),
     };
   }
 
   async getSubagentIdentities(): Promise<RenderedSubagentIdentity[]> {
-    const avatars = await $$(`${this.panelSelector} [data-bf-component="subagent-avatar"]`);
+    const avatars = await $$(`${this.panelSelector} [data-openbitfun-component="subagent-avatar"]`);
     const identities: RenderedSubagentIdentity[] = [];
 
     for (const avatar of avatars) {
       const nodeMain = await avatar.$('..');
-      const name = await nodeMain.$('[data-bf-part="subagentName"]');
+      const name = await nodeMain.$('[data-openbitfun-part="subagentName"]');
       const image = await avatar.$('img');
       identities.push({
-        avatarId: (await avatar.getAttribute('data-bf-avatar-id')) ?? '',
-        nameId: (await avatar.getAttribute('data-bf-name-id')) ?? '',
+        avatarId: (await avatar.getAttribute('data-openbitfun-avatar-id')) ?? '',
+        nameId: (await avatar.getAttribute('data-openbitfun-name-id')) ?? '',
         name: (await name.getText()).trim(),
         imageSource: (await image.getAttribute('src')) ?? '',
       });
@@ -152,14 +152,14 @@ export class SessionTree {
   async waitForPullRequestOverviewState(): Promise<'loaded' | 'unavailable' | 'error'> {
     const section = await $(`${this.overviewPanelSelector} [data-testid="flowchat-header-pull-requests"]`);
     await browser.waitUntil(async () => {
-      const state = await section.getAttribute('data-bf-state');
+      const state = await section.getAttribute('data-openbitfun-state');
       return state === 'loaded' || state === 'unavailable' || state === 'error';
     }, {
       timeout: 30000,
       interval: 250,
       timeoutMsg: 'The pull request overview did not leave its loading state',
     });
-    return await section.getAttribute('data-bf-state') as 'loaded' | 'unavailable' | 'error';
+    return await section.getAttribute('data-openbitfun-state') as 'loaded' | 'unavailable' | 'error';
   }
 
   async hasPullRequestEmptyState(): Promise<boolean> {

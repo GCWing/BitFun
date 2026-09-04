@@ -15,7 +15,7 @@ pub mod types;
 
 pub use policy::{
     validate_canvas_imports, validate_canvas_source_policy, CanvasImportPolicyDiagnostic,
-    CanvasImportPolicyDiagnosticKind, BITFUN_CANVAS_IMPORT,
+    CanvasImportPolicyDiagnosticKind, OPENBITFUN_CANVAS_IMPORT,
 };
 pub use ports::{
     CanvasPortError, CanvasPortErrorKind, CanvasPortFuture, CanvasPortResult, CanvasStoragePort,

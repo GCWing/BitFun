@@ -383,12 +383,12 @@ export class AppManager implements IAppManager {
   private clearPersistedPanelState(): void {
     try {
       // Clear AppManager persisted state
-      localStorage.removeItem('bitfun-app-state');
+      localStorage.removeItem('openbitfun-app-state');
       
       // Clear other potential panel state keys
-      localStorage.removeItem('BitFun-left-panel-width');
-      localStorage.removeItem('BitFun-left-panel-collapsed');
-      localStorage.removeItem('BitFun-right-panel-collapsed');
+      localStorage.removeItem('OpenBitFun-left-panel-width');
+      localStorage.removeItem('OpenBitFun-left-panel-collapsed');
+      localStorage.removeItem('OpenBitFun-right-panel-collapsed');
       localStorage.removeItem('right-panel-collapsed');
       localStorage.removeItem(STORAGE_KEYS.RIGHT_PANEL_WIDTH);
     } catch (error) {

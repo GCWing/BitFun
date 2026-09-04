@@ -45,16 +45,16 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert({
       {...props}
       aria-live={ariaLive ?? (tone === "error" ? "assertive" : "polite")}
       className={classNames(styles.root, className)}
-      data-bf-component="alert"
-      data-bf-tone={tone}
+      data-openbitfun-component="alert"
+      data-openbitfun-tone={tone}
       ref={ref}
       role="alert"
     >
-      {showIcon && <span className={styles.icon} data-bf-part="icon"><Icon name={toneIcons[tone]} size="sm" /></span>}
-      <span className={styles.content} data-bf-part="content">
-        {title !== undefined && <span className={styles.title} data-bf-part="title">{title}</span>}
-        <span className={styles.message} data-bf-part="message">{message}</span>
-        {description !== undefined && <span className={styles.description} data-bf-part="description">{description}</span>}
+      {showIcon && <span className={styles.icon} data-openbitfun-part="icon"><Icon name={toneIcons[tone]} size="sm" /></span>}
+      <span className={styles.content} data-openbitfun-part="content">
+        {title !== undefined && <span className={styles.title} data-openbitfun-part="title">{title}</span>}
+        <span className={styles.message} data-openbitfun-part="message">{message}</span>
+        {description !== undefined && <span className={styles.description} data-openbitfun-part="description">{description}</span>}
       </span>
       {closable && (
         <IconButton

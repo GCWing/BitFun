@@ -1,11 +1,11 @@
 use crate::error::{SkinMarketError, SkinMarketResult};
-use bitfun_product_domains::appearance_market::{
+use image::GenericImageView;
+use openbitfun_product_domains::appearance_market::{
     AppearanceMarketPackageMeta, AppearancePackageMode, APPEARANCE_MARKET_MAX_ENTRIES,
     APPEARANCE_MARKET_MAX_MANIFEST_BYTES, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
     APPEARANCE_MARKET_MAX_PREVIEW_BYTES, APPEARANCE_MARKET_MAX_PREVIEW_PIXELS,
     APPEARANCE_MARKET_MAX_UNCOMPRESSED_BYTES,
 };
-use image::GenericImageView;
 use semver::Version;
 use serde::Deserialize;
 use serde_json::Value;
@@ -389,10 +389,10 @@ pub fn validate_appearance_package(bytes: &[u8]) -> SkinMarketResult<ValidatedAp
 }
 
 fn validate_manifest(manifest: &AppearanceManifest) -> SkinMarketResult<()> {
-    if manifest.schema != "bitfun.appearance" || manifest.schema_version != 1 {
+    if manifest.schema != "openbitfun.appearance" || manifest.schema_version != 1 {
         return Err(SkinMarketError::bad_request(
             "unsupported_manifest_schema",
-            "Appearance packages must use bitfun.appearance schema version 1.",
+            "Appearance packages must use openbitfun.appearance schema version 1.",
         ));
     }
     validate_identifier(&manifest.id, "package id")?;
@@ -969,7 +969,7 @@ mod tests {
 
     fn manifest() -> Value {
         serde_json::json!({
-            "schema": "bitfun.appearance",
+            "schema": "openbitfun.appearance",
             "schemaVersion": 1,
             "id": "example.aurora",
             "name": "Aurora",

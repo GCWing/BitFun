@@ -1,4 +1,4 @@
-//! Platform-neutral host port for automating BitFun's built-in browser.
+//! Platform-neutral host port for automating OpenBitFun's built-in browser.
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -11,7 +11,7 @@ use tokio::sync::broadcast;
 use super::automation_client::{
     BrowserAutomationCapabilities, BrowserAutomationClient, BrowserAutomationEvent,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 
 const BUILTIN_EVENT_CAPACITY: usize = 128;
 
@@ -94,26 +94,26 @@ pub fn builtin_browser_host_available() -> bool {
     read_lock(host_slot()).is_some()
 }
 
-fn host() -> BitFunResult<Arc<dyn BuiltInBrowserHost>> {
+fn host() -> OpenBitFunResult<Arc<dyn BuiltInBrowserHost>> {
     read_lock(host_slot()).clone().ok_or_else(|| {
-        BitFunError::tool(
-            "BitFun's built-in browser automation host is unavailable in this runtime. This capability requires an active Desktop product surface."
+        OpenBitFunError::tool(
+            "OpenBitFun's built-in browser automation host is unavailable in this runtime. This capability requires an active Desktop product surface."
                 .to_string(),
         )
     })
 }
 
-pub async fn list_builtin_browser_targets() -> BitFunResult<Vec<BuiltInBrowserTarget>> {
+pub async fn list_builtin_browser_targets() -> OpenBitFunResult<Vec<BuiltInBrowserTarget>> {
     host()?.list_targets().await.map_err(|error| {
-        BitFunError::tool(format!("Built-in browser target discovery failed: {error}"))
+        OpenBitFunError::tool(format!("Built-in browser target discovery failed: {error}"))
     })
 }
 
 pub async fn open_builtin_browser(
     request: BuiltInBrowserOpenRequest,
-) -> BitFunResult<BuiltInBrowserClient> {
+) -> OpenBitFunResult<BuiltInBrowserClient> {
     let target = host()?.open(request).await.map_err(|error| {
-        BitFunError::tool(format!("Built-in browser surface failed to open: {error}"))
+        OpenBitFunError::tool(format!("Built-in browser surface failed to open: {error}"))
     })?;
     set_default_builtin_browser_target(Some(target.id.clone()));
     Ok(BuiltInBrowserClient {
@@ -178,7 +178,7 @@ pub fn publish_builtin_browser_page_load(target_id: &str, event: &str, url: &str
 
 pub async fn connect_builtin_browser(
     requested_target_id: Option<&str>,
-) -> BitFunResult<BuiltInBrowserClient> {
+) -> OpenBitFunResult<BuiltInBrowserClient> {
     connect_builtin_browser_matching(requested_target_id, None, None).await
 }
 
@@ -190,7 +190,7 @@ pub async fn connect_builtin_browser_matching(
     requested_target_id: Option<&str>,
     target_url: Option<&str>,
     target_title: Option<&str>,
-) -> BitFunResult<BuiltInBrowserClient> {
+) -> OpenBitFunResult<BuiltInBrowserClient> {
     let targets = list_builtin_browser_targets().await?;
     let target = select_builtin_browser_target(
         &targets,
@@ -213,9 +213,9 @@ fn select_builtin_browser_target(
     target_url: Option<&str>,
     target_title: Option<&str>,
     default_target_id: Option<&str>,
-) -> BitFunResult<BuiltInBrowserTarget> {
+) -> OpenBitFunResult<BuiltInBrowserTarget> {
     if targets.is_empty() {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "No built-in browser target is available. Open a URL with browser.open_builtin first."
                 .to_string(),
         ));
@@ -227,7 +227,7 @@ fn select_builtin_browser_target(
             .find(|target| target.id == requested_id)
             .cloned()
             .ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Built-in browser page '{requested_id}' was not found. It may have been closed."
                 ))
             });
@@ -250,7 +250,7 @@ fn select_builtin_browser_target(
             })
             .cloned()
             .ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "No built-in browser page matched target_url={normalized_url:?} target_title={normalized_title:?}"
                 ))
             });
@@ -262,7 +262,7 @@ fn select_builtin_browser_target(
         .or_else(|| targets.first())
         .cloned()
         .ok_or_else(|| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "No built-in browser target is available. Open a URL with browser.open_builtin first."
                     .to_string(),
             )
@@ -282,7 +282,7 @@ impl BuiltInBrowserClient {
 
 #[async_trait]
 impl BrowserAutomationClient for BuiltInBrowserClient {
-    async fn send(&self, method: &str, params: Option<Value>) -> BitFunResult<Value> {
+    async fn send(&self, method: &str, params: Option<Value>) -> OpenBitFunResult<Value> {
         host()?
             .execute(BuiltInBrowserCommand {
                 target_id: self.target.id.clone(),
@@ -291,7 +291,7 @@ impl BrowserAutomationClient for BuiltInBrowserClient {
             })
             .await
             .map_err(|error| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Built-in browser adapter failed for {method}: {error}"
                 ))
             })

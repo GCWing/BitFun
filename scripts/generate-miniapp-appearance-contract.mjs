@@ -11,7 +11,7 @@ const outputPath = path.join(
   repositoryRoot,
   'src/crates/contracts/product-domains/src/miniapp/generated/default_appearance_style.html',
 );
-const themeEntryPath = path.join(repositoryRoot, 'design-system/packages/theme-bitfun/dist/index.js');
+const themeEntryPath = path.join(repositoryRoot, 'design-system/packages/theme-openbitfun/dist/index.js');
 const systemEntryPath = path.join(repositoryRoot, 'design-system/packages/design-tokens/dist/index.js');
 const checkOnly = process.argv.includes('--check');
 
@@ -28,7 +28,7 @@ const systemDeclarations = renderDeclarations('system');
 const darkDeclarations = renderDeclarations('theme', 'dark');
 const lightDeclarations = renderDeclarations('theme', 'light');
 const generated = [
-  '<style id="bitfun-appearance-default">',
+  '<style id="openbitfun-appearance-default">',
   '  :root {',
   '    color-scheme: light dark;',
   '    background: transparent;',
@@ -54,15 +54,15 @@ const generated = [
   '  }',
   '  *::-webkit-scrollbar-thumb {',
   '    border-radius: 999px;',
-  '    background: var(--bitfun-scrollbar-thumb);',
+  '    background: var(--openbitfun-scrollbar-thumb);',
   '  }',
   '  *::-webkit-scrollbar-thumb:hover {',
-  '    background: var(--bitfun-scrollbar-thumb-hover);',
+  '    background: var(--openbitfun-scrollbar-thumb-hover);',
   '  }',
   '  @supports (scrollbar-color: transparent transparent) {',
   '    * {',
   '      scrollbar-width: thin;',
-  '      scrollbar-color: var(--bitfun-scrollbar-thumb) transparent;',
+  '      scrollbar-color: var(--openbitfun-scrollbar-thumb) transparent;',
   '    }',
   '  }',
   '  @supports selector(::-webkit-scrollbar) {',
@@ -95,7 +95,7 @@ function validateContract(value) {
   }
   const names = new Set();
   for (const variable of value.variables) {
-    if (!/^--bitfun-[a-z0-9-]+$/.test(variable.name ?? '')) {
+    if (!/^--openbitfun-[a-z0-9-]+$/.test(variable.name ?? '')) {
       throw new Error(`Invalid MiniApp appearance variable: ${String(variable.name)}.`);
     }
     if (names.has(variable.name)) throw new Error(`Duplicate MiniApp appearance variable: ${variable.name}.`);

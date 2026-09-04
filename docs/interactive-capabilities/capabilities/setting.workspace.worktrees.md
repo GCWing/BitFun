@@ -41,22 +41,22 @@ Configure the root, branch prefix, and cleanup rules for Git worktrees, and insp
 3. 保存规则或管理现有 Worktree
    Save policy or manage existing worktrees
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 
 | 选项 / Option | 可用值 / Values | 中文说明 | English description |
 | --- | --- | --- | --- |
-| 受管 Worktree 根目录 / Managed-worktree root | `string` | 设置 BitFun 创建受管 Worktree 的统一根目录。 | Set the common root where BitFun creates managed worktrees. |
+| 受管 Worktree 根目录 / Managed-worktree root | `string` | 设置 OpenBitFun 创建受管 Worktree 的统一根目录。 | Set the common root where OpenBitFun creates managed worktrees. |
 | Worktree 分支前缀 / Worktree branch prefix | `string` | 设置自动创建分支使用的前缀。 | Set the prefix used for automatically created branches. |
 | 复制本地改动 / Copy local changes | `boolean` | 创建隔离 Worktree 时复制未提交改动。 | Copy uncommitted changes when creating an isolated worktree. |
-| 自动清理 Worktree / Automatic worktree cleanup | `boolean` | 允许 BitFun 自动清理超过保留上限的受管 Worktree。 | Allow BitFun to prune managed worktrees beyond the retention limit. |
+| 自动清理 Worktree / Automatic worktree cleanup | `boolean` | 允许 OpenBitFun 自动清理超过保留上限的受管 Worktree。 | Allow OpenBitFun to prune managed worktrees beyond the retention limit. |
 | Worktree 保留上限 / Worktree retention limit | `integer` (1–100) | 设置自动清理前最多保留的受管 Worktree 数量。 | Set the maximum managed worktrees retained before cleanup. |
 
 ## 可以直接对 Agent 说 / Try saying

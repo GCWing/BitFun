@@ -57,8 +57,8 @@ test("OverflowText measures real clipping for fade and marquee treatments", asyn
   assert.match(styles, /text-overflow:\s*clip/);
   assert.match(styles, /data-overflow-behavior="fade"/);
   assert.match(styles, /data-overflow-behavior="marquee"/);
-  assert.match(styles, /--bf-layout-overflow-text-fade-extent/);
-  assert.match(styles, /bf-overflow-text-marquee/);
+  assert.match(styles, /--openbitfun-layout-overflow-text-fade-extent/);
+  assert.match(styles, /openbitfun-overflow-text-marquee/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
   assert.match(styles, /\.root:dir\(rtl\)/);
   assert.doesNotMatch(styles, /text-overflow:\s*ellipsis/);

@@ -63,7 +63,7 @@ describe('DiffFullscreenViewer presence', () => {
   it('keeps the last diff stable during exit before unmounting it', () => {
     renderViewer(true, '/repo/old.ts');
     expect(document.querySelector('.diff-fullscreen-overlay')?.getAttribute('data-state')).toBe('open');
-    expect(document.querySelector('button[aria-label="tooltip.close"]')?.getAttribute('data-bf-component')).toBe('icon-button');
+    expect(document.querySelector('button[aria-label="tooltip.close"]')?.getAttribute('data-openbitfun-component')).toBe('icon-button');
 
     renderViewer(false, '/repo/new.ts');
     expect(document.querySelector('.diff-fullscreen-overlay')?.getAttribute('data-state')).toBe('closed');

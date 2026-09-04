@@ -76,7 +76,7 @@ const LazyAppLayout = lazy(async () => {
 const LazyGlobalSearchRoot = lazy(() => import('./global-search/GlobalSearchRoot'));
 
 /**
- * BitFun main application component.
+ * OpenBitFun main application component.
  *
  * Unified architecture:
  * - Use a single AppLayout component
@@ -103,7 +103,7 @@ function App() {
   const interactiveShellReadyRef = useRef(false);
   const interactiveShellReadyFrameRef = useRef<number | null>(null);
   const reportedFrontendTransactionRef = useRef<string | null>(null);
-  const bitFunControlStartupRef = useRef(false);
+  const openBitFunControlStartupRef = useRef(false);
   const workspaceLoadingRef = useRef(workspaceLoading);
   const appLayoutReadyRef = useRef(false);
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
@@ -126,7 +126,7 @@ function App() {
     }
     interactiveShellReadyRef.current = true;
     startupTrace.markPhase('interactive_shell_ready', { reason });
-    window.dispatchEvent(new CustomEvent('bitfun:interactive-shell-ready', {
+    window.dispatchEvent(new CustomEvent('openbitfun:interactive-shell-ready', {
       detail: { reason },
     }));
     setInteractiveShellReady(true);
@@ -184,7 +184,7 @@ function App() {
       return;
     }
     const transactionId = new URLSearchParams(window.location.search)
-      .get('bitfunFrontendTransaction');
+      .get('openbitfunFrontendTransaction');
     if (!transactionId || reportedFrontendTransactionRef.current === transactionId) {
       return;
     }
@@ -255,7 +255,7 @@ function App() {
     let disposed = false;
 
     void import('@tauri-apps/api/event')
-      .then(({ listen }) => listen('bitfun_main_window_close_requested', () => {
+      .then(({ listen }) => listen('openbitfun_main_window_close_requested', () => {
         userCloseRequestedRef.current = true;
         startupTrace.markPhase('main_window_user_close_requested', { reason: 'user-close-requested' });
       }))
@@ -288,7 +288,7 @@ function App() {
       await api.invoke('show_main_window');
       log.debug('Main window shown', { reason });
       startupTrace.markPhase('main_window_shown', { reason });
-      window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', { detail: { reason } }));
+      window.dispatchEvent(new CustomEvent('openbitfun:main-window-shown', { detail: { reason } }));
     } catch (error: any) {
       log.error('Failed to show main window', error);
 
@@ -299,7 +299,7 @@ function App() {
         await mainWindow.setFocus();
         log.debug('Main window shown via fallback', { reason });
         startupTrace.markPhase('main_window_shown_fallback', { reason });
-        window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', { detail: { reason } }));
+        window.dispatchEvent(new CustomEvent('openbitfun:main-window-shown', { detail: { reason } }));
       } catch (fallbackError) {
         log.error('Fallback window show failed', fallbackError);
         mainWindowShownRef.current = false;
@@ -343,7 +343,7 @@ function App() {
     if (isTauriRuntime()) {
       mainWindowShownRef.current = true;
       startupTrace.markPhase('main_window_shown', { reason: 'startup-native' });
-      window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', {
+      window.dispatchEvent(new CustomEvent('openbitfun:main-window-shown', {
         detail: { reason: 'startup-native' },
       }));
       return;
@@ -387,17 +387,17 @@ function App() {
     if (
       !isTauriRuntime()
       || !shouldScheduleDeferredStartupSystems({ interactiveShellReady, startupOverlayVisible })
-      || bitFunControlStartupRef.current
+      || openBitFunControlStartupRef.current
     ) {
       return;
     }
-    bitFunControlStartupRef.current = true;
-    void import('./global-search/bitfunControlBridge')
-      .then(({ initializeBitFunControlBridge }) => initializeBitFunControlBridge())
-      .then(() => startupTrace.markPhase('bitfun_control_surface_ready'))
+    openBitFunControlStartupRef.current = true;
+    void import('./global-search/openBitFunControlBridge')
+      .then(({ initializeOpenBitFunControlBridge }) => initializeOpenBitFunControlBridge())
+      .then(() => startupTrace.markPhase('openbitfun_control_surface_ready'))
       .catch(error => {
-        bitFunControlStartupRef.current = false;
-        log.error('Failed to initialize the BitFun control surface', error);
+        openBitFunControlStartupRef.current = false;
+        log.error('Failed to initialize the OpenBitFun control surface', error);
       });
   }, [interactiveShellReady, startupOverlayVisible]);
 
@@ -844,7 +844,7 @@ function App() {
         if (cancelled || !runtimeInfo.previousUnexpectedExit?.notifyOnStartup) {
           return;
         }
-        const recoveryKey = `bitfun:unexpected-exit-notice:${runtimeInfo.previousUnexpectedExit.sessionLogDir || 'unknown'}`;
+        const recoveryKey = `openbitfun:unexpected-exit-notice:${runtimeInfo.previousUnexpectedExit.sessionLogDir || 'unknown'}`;
         if (sessionStorage.getItem(recoveryKey) === 'shown') {
           return;
         }
@@ -887,54 +887,6 @@ function App() {
         });
       } catch (error) {
         log.warn('Failed to check previous unexpected exit status', error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [interactiveShellReady, t]);
-
-  useEffect(() => {
-    if (!interactiveShellReady) {
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { configAPI } = await import('@/infrastructure/api');
-        const validation = await configAPI.validateConfig();
-        const recoveryDiagnostics = (validation.diagnostics || []).filter(diagnostic =>
-          diagnostic.code === 'CONFIG_DEFAULT_RECOVERY' ||
-          diagnostic.code === 'CONFIG_SHAPE_REPAIRED' ||
-          diagnostic.code === 'INVALID_MODEL_DISABLED' ||
-          diagnostic.code === 'MODEL_FIELD_NOT_APPLICABLE' ||
-          diagnostic.code === 'MODEL_REFERENCE_REPAIRED'
-        );
-        if (cancelled || recoveryDiagnostics.length === 0) {
-          return;
-        }
-        const recoveryKey = `bitfun:config-recovery-notice:${recoveryDiagnostics
-          .map(diagnostic => `${diagnostic.code}:${diagnostic.path}`)
-          .join('|')}`;
-        if (sessionStorage.getItem(recoveryKey) === 'shown') {
-          return;
-        }
-        sessionStorage.setItem(recoveryKey, 'shown');
-        notificationService.warning(t('logging.configRecovery.message', {
-          count: recoveryDiagnostics.length,
-        }), {
-          title: t('logging.configRecovery.title'),
-          duration: 0,
-          metadata: {
-            source: 'config-startup-recovery',
-            diagnosticCodes: recoveryDiagnostics.map(diagnostic => diagnostic.code),
-            diagnosticPaths: recoveryDiagnostics.map(diagnostic => diagnostic.path),
-          },
-        });
-      } catch (error) {
-        log.warn('Failed to check configuration recovery status', error);
       }
     })();
 

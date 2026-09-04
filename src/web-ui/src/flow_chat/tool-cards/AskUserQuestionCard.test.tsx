@@ -116,8 +116,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
-    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="ask-user"] [data-openbitfun-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-openbitfun-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -128,8 +128,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
-    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="ask-user"] [data-openbitfun-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-openbitfun-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -140,7 +140,7 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('button[data-bf-part="summary"]')).not.toBeNull();
+    expect(container.querySelector('button[data-openbitfun-part="summary"]')).not.toBeNull();
   });
 
   it('restores an unsubmitted answer after the session card is remounted', () => {
@@ -248,9 +248,9 @@ describe('AskUserQuestionCard', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-component="ask-user"]')?.getAttribute('data-bf-state'))
+    expect(container.querySelector('[data-openbitfun-component="ask-user"]')?.getAttribute('data-openbitfun-state'))
       .toBe('error');
-    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+    expect(container.querySelector('[data-openbitfun-part="status-label"]')?.textContent)
       .toBe('toolCards.askUser.unsupportedOnPeer');
     expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.disabled)
       .toBe(true);
@@ -273,7 +273,7 @@ describe('AskUserQuestionCard', () => {
     expect(otherRadio).not.toBeNull();
     act(() => otherRadio?.click());
 
-    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
+    const customInput = container.querySelector<HTMLInputElement>('[data-openbitfun-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -286,7 +286,7 @@ describe('AskUserQuestionCard', () => {
     act(renderCard);
 
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
-    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('CockroachDB');
+    expect(container.querySelector<HTMLInputElement>('[data-openbitfun-part="custom-input"] input')?.value).toBe('CockroachDB');
   });
 
   it('keeps the custom input mounted and focused during Chinese IME composition', () => {
@@ -304,7 +304,7 @@ describe('AskUserQuestionCard', () => {
     const otherRadio = container.querySelector<HTMLInputElement>('input[value="Other"]');
     act(() => otherRadio?.click());
 
-    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
+    const customInput = container.querySelector<HTMLInputElement>('[data-openbitfun-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       customInput?.focus();
@@ -315,7 +315,7 @@ describe('AskUserQuestionCard', () => {
       }
     });
 
-    expect(container.querySelector('[data-bf-part="custom-input"] input')).toBe(customInput);
+    expect(container.querySelector('[data-openbitfun-part="custom-input"] input')).toBe(customInput);
     expect(document.activeElement).toBe(customInput);
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
 
@@ -329,7 +329,7 @@ describe('AskUserQuestionCard', () => {
       }
     });
 
-    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('你');
+    expect(container.querySelector<HTMLInputElement>('[data-openbitfun-part="custom-input"] input')?.value).toBe('你');
     expect(document.activeElement).toBe(customInput);
   });
 
@@ -352,7 +352,7 @@ describe('AskUserQuestionCard', () => {
       otherCheckbox?.click();
     });
 
-    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
+    const customInput = container.querySelector<HTMLInputElement>('[data-openbitfun-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -364,7 +364,7 @@ describe('AskUserQuestionCard', () => {
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked).toBe(true);
 
-    const submitButton = container.querySelector<HTMLButtonElement>('[data-bf-part="submit"] button');
+    const submitButton = container.querySelector<HTMLButtonElement>('[data-openbitfun-part="submit"] button');
     expect(submitButton?.disabled).toBe(false);
     await act(async () => submitButton?.click());
 
@@ -392,11 +392,11 @@ describe('AskUserQuestionCard', () => {
       container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.click();
     });
     const submitButton = container.querySelector<HTMLButtonElement>(
-      '[data-bf-part="submit"] button',
+      '[data-openbitfun-part="submit"] button',
     );
     await act(async () => submitButton?.click());
 
-    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+    expect(container.querySelector('[data-openbitfun-part="status-label"]')?.textContent)
       .toBe('toolCards.askUser.submitFailed');
     expect(submitButton?.disabled).toBe(false);
   });

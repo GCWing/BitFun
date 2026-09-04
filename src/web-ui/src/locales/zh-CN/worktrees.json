@@ -43,7 +43,7 @@
     },
     "autoDelete": {
       "label": "自动删除旧 Worktree",
-      "description": "新建 worktree 后，如果工作区超过保留数量，BitFun 会删除最旧且可安全清理的托管 worktree。"
+      "description": "新建 worktree 后，如果工作区超过保留数量，OpenBitFun 会删除最旧且可安全清理的托管 worktree。"
     },
     "autoDeleteLimit": {
       "label": "自动删除上限",
@@ -53,15 +53,15 @@
   },
   "management": {
     "title": "工作区 Worktrees",
-    "description": "仅显示当前执行主机上 BitFun Worktree 根目录内的 worktree，并按所属工作区分组。",
-    "loading": "正在扫描 BitFun Worktree…",
-    "loadFailed": "无法加载 BitFun Worktree 列表。",
+    "description": "仅显示当前执行主机上 OpenBitFun Worktree 根目录内的 worktree，并按所属工作区分组。",
+    "loading": "正在扫描 OpenBitFun Worktree…",
+    "loadFailed": "无法加载 OpenBitFun Worktree 列表。",
     "refresh": "刷新 Worktree",
     "retry": "重试",
     "worktreeCount": "{{count}} 个 Worktree",
     "deleted": "已删除 {{path}}。",
     "empty": {
-      "title": "暂无 BitFun Worktree",
+      "title": "暂无 OpenBitFun Worktree",
       "description": "为隔离会话创建的 worktree 会显示在这里。"
     },
     "lifecycle": {

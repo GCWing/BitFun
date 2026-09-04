@@ -1,5 +1,5 @@
 /**
- * BitFun global motion baseline.
+ * OpenBitFun global motion baseline.
  *
  * Semantic controls and surfaces participate automatically. Product-specific
  * motion can opt in without adding another keyframe:
@@ -16,7 +16,7 @@
  * Interactive transition timing is intentionally centralized here.
  */
 
-@keyframes bitfun-motion-view-enter {
+@keyframes openbitfun-motion-view-enter {
   from {
     opacity: 0.92;
   }
@@ -26,7 +26,7 @@
   }
 }
 
-@keyframes bitfun-motion-view-exit {
+@keyframes openbitfun-motion-view-exit {
   from {
     opacity: 1;
   }
@@ -36,7 +36,7 @@
   }
 }
 
-@keyframes bitfun-motion-popup-enter {
+@keyframes openbitfun-motion-popup-enter {
   from {
     opacity: 0;
     translate: 0 -4px;
@@ -50,7 +50,7 @@
   }
 }
 
-@keyframes bitfun-motion-dialog-enter {
+@keyframes openbitfun-motion-dialog-enter {
   from {
     opacity: 0;
     translate: 0 8px;
@@ -64,7 +64,7 @@
   }
 }
 
-@keyframes bitfun-motion-overlay-enter {
+@keyframes openbitfun-motion-overlay-enter {
   from {
     opacity: 0;
   }
@@ -105,14 +105,14 @@
   ) {
     transform-origin: center;
     transition:
-      translate var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      scale var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      translate var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      scale var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   :where(
@@ -139,14 +139,14 @@
    * the component already owns a transition or a Suspense fallback.
    */
   :where([data-motion='view']):where(:not([data-motion='none'])) {
-    animation: bitfun-motion-view-enter 140ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-motion-view-enter 140ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   :where(
     [data-scene-transition='exit'],
     [data-motion='view-exit']
   ):where(:not([data-motion='none'])) {
-    animation: bitfun-motion-view-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-motion-view-exit 120ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   /**
@@ -172,7 +172,7 @@
     [class*='-context-menu ']
   ):where(:not([data-motion='none']):not([data-motion='presence'])) {
     transform-origin: center top;
-    animation: bitfun-motion-popup-enter 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-motion-popup-enter 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   /**
@@ -192,7 +192,7 @@
     )
   ) {
     transform-origin: center;
-    animation: bitfun-motion-dialog-enter 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    animation: openbitfun-motion-dialog-enter 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
   :where(
@@ -206,7 +206,7 @@
     body > [class$='-backdrop'],
     body > [class$='__backdrop']
   ):where(:not([data-motion='none'])) {
-    animation: bitfun-motion-overlay-enter 160ms ease-out both;
+    animation: openbitfun-motion-overlay-enter 160ms ease-out both;
   }
 
   /**
@@ -215,17 +215,17 @@
    */
   :where(
     .v-card--interactive,
-    .bitfun-context-card--interactive,
-    .bitfun-nav-panel__section-header--interactive
+    .openbitfun-context-card--interactive,
+    .openbitfun-nav-panel__section-header--interactive
   ):where(:not([data-motion='none'])) {
     transform-origin: center;
     transition:
-      translate var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      scale var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      translate var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      scale var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     transition-property:
       translate,
       scale,
@@ -238,8 +238,8 @@
   @media (hover: hover) and (pointer: fine) {
     :where(
       .v-card--interactive,
-      .bitfun-context-card--interactive,
-      .bitfun-nav-panel__section-header--interactive
+      .openbitfun-context-card--interactive,
+      .openbitfun-nav-panel__section-header--interactive
     ):where(:not([data-motion='none'])):hover {
       translate: 0 -1px;
     }
@@ -247,8 +247,8 @@
 
   :where(
     .v-card--interactive,
-    .bitfun-context-card--interactive,
-    .bitfun-nav-panel__section-header--interactive
+    .openbitfun-context-card--interactive,
+    .openbitfun-nav-panel__section-header--interactive
   ):where(:not([data-motion='none'])):active {
     translate: 0 0;
     scale: 0.99;

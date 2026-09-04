@@ -1,8 +1,8 @@
-# BitFun Relay Server
+# OpenBitFun Relay Server
 
-WebSocket / HTTP relay for BitFun **Remote Connect** and **account login**.
+WebSocket / HTTP relay for OpenBitFun **Remote Connect** and **account login**.
 
-Open-source BitFun does **not** ship a public hosted login service. If you want
+Open-source OpenBitFun does **not** ship a public hosted login service. If you want
 Desktop / CLI **account login**, cross-device session & settings sync, or
 **Peer Device Mode** (control another online device on the same account), you
 must:
@@ -10,7 +10,7 @@ must:
 1. Deploy this relay yourself
 2. Enable the account database (`RELAY_DB_PATH`)
 3. Create user accounts out-of-band with `relay-admin` (no public sign-up)
-4. Point BitFun Desktop or CLI at your relay URL and log in
+4. Point OpenBitFun Desktop or CLI at your relay URL and log in
 
 The relay stays **zero-knowledge**: clients encrypt with a master key derived
 locally; the server stores Argon2id password hashes and AES-GCM-wrapped keys,
@@ -26,7 +26,7 @@ One-click Docker deploy (`bash deploy.sh`) targets:
 | Linux | **arm64** (`aarch64`) |
 
 The default path requires Docker Engine plus permission to talk to its daemon.
-BitFun Desktop installs Docker automatically when the SSH user has root/sudo.
+OpenBitFun Desktop installs Docker automatically when the SSH user has root/sudo.
 Docker Compose, Cargo, git, tar, and build toolchains are not required on the
 customer server. Compose is used only by the explicit
 `deploy.sh --build-from-source` maintenance path.
@@ -41,8 +41,8 @@ mainland route. The Desktop wizard offers **Auto / Mainland China / Global** so
 an operator can override inaccurate cloud-IP geolocation:
 
 ```bash
-BITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
-BITFUN_MIRROR=global bash deploy.sh      # restore BitFun-managed upstream sources
+OPENBITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
+  OPENBITFUN_MIRROR=global bash deploy.sh      # restore OpenBitFun-managed upstream sources
 bash deploy.sh --cn-mirror
 bash deploy.sh --global-mirror
 ```
@@ -50,7 +50,7 @@ bash deploy.sh --global-mirror
 Engine installation defaults to Aliyun docker-ce and mirrored get.docker.com.
 The daemon's Docker Hub mirrors remain useful for explicit source builds, but
 they do not accelerate GHCR; `release-download.sh` therefore uses GHCR-specific
-repository prefixes. Switching to global restores only BitFun-managed host
+repository prefixes. Switching to global restores only OpenBitFun-managed host
 mirror entries. See `mirror.sh` for the installer/source-build knobs.
 
 ## Two operating modes
@@ -61,7 +61,7 @@ mirror entries. See `mirror.sh` for the installer/source-build knobs.
 | **Account-enabled** | `RELAY_DB_PATH` set to a persistent SQLite path | Everything above **plus** login, device presence, device RPC (Peer HostInvoke), encrypted session/settings sync. |
 
 Docker Compose in this directory **already enables account mode**
-(`RELAY_DB_PATH=/app/data/bitfun_relay.db`). Manual / cargo runs must set the
+(`RELAY_DB_PATH=/app/data/openbitfun_relay.db`). Manual / cargo runs must set the
 variable yourself or accounts stay disabled.
 
 ## Features
@@ -80,7 +80,7 @@ Use this checklist on a machine you control (VPS, LAN server, or localhost).
 
 ### Desktop one-click deploy (preferred for end users)
 
-BitFun Desktop can SSH to your host without a manual clone. One click installs
+OpenBitFun Desktop can SSH to your host without a manual clone. One click installs
 Docker when necessary, verifies the signed release image descriptor locally,
 pulls the latest amd64/arm64 image through the selected network route, and
 starts it by immutable digest. It never builds on the customer server and never
@@ -92,7 +92,7 @@ Remote Connect → Network Relay → Self-Hosted → the same action.
 - Orchestration: `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`
 - Wizard + invariants: `src/web-ui/src/features/relay-deploy/README.md`
 
-Task state lives under `~/.bitfun/relay-deploy`; no repository checkout is
+Task state lives under `~/.openbitfun/relay-deploy`; no repository checkout is
 created. Closing the wizard cancels the remote task and restores a staged
 previous container. Account passwords are provisioned locally and imported via
 `relay-admin import-user`.
@@ -115,8 +115,8 @@ use and for constructing the release image in CI.
 Verifying an archive by hand:
 
 ```bash
-BASE=https://github.com/GCWing/BitFun/releases/latest/download
-ASSET=bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+BASE=https://github.com/GCWing/OpenBitFun/releases/latest/download
+ASSET=openbitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
 curl -fsSLO "$BASE/$ASSET" -O "$BASE/$ASSET.sig" -O "$BASE/minisign.pub"
 base64 -d <"$ASSET.sig" >"$ASSET.minisig"
 minisign -Vm "$ASSET" -p minisign.pub -x "$ASSET.minisig"
@@ -131,14 +131,14 @@ need Apple/Authenticode certificates, which the project does not currently hold.
 ### 1. Deploy the relay (manual / server shell)
 
 ```bash
-git clone https://github.com/GCWing/BitFun
-cd BitFun/src/apps/relay-server
+git clone https://github.com/GCWing/OpenBitFun
+cd OpenBitFun/src/apps/relay-server
 bash deploy.sh
 ```
 
 `deploy.sh` must run **on the target server** (it does not SSH elsewhere).
 Its default path requires Docker on **linux/amd64** or **linux/arm64** and pulls
-`ghcr.io/gcwing/bitfun-relay-server:latest`; it does not compile locally.
+`ghcr.io/gcwing/openbitfun-relay-server:latest`; it does not compile locally.
 Use `--build-from-source` only when deliberately exercising the source path.
 
 Clone on the server, as above, rather than uploading a Windows checkout. Git for
@@ -163,7 +163,7 @@ Verify:
 
 ```bash
 curl -fsS http://127.0.0.1:9700/health
-docker ps --filter name=bitfun-relay
+docker ps --filter name=openbitfun-relay
 ```
 
 ### 2. Confirm account database is on
@@ -171,16 +171,16 @@ docker ps --filter name=bitfun-relay
 The published image deploy and the Compose source path both set:
 
 ```yaml
-RELAY_DB_PATH=/app/data/bitfun_relay.db
+RELAY_DB_PATH=/app/data/openbitfun_relay.db
 ```
 
 Data lives in the `relay-server_relay-db` Docker volume. If you run the binary
 without Docker, export a persistent path first:
 
 ```bash
-export RELAY_DB_PATH=/var/lib/bitfun/bitfun_relay.db
+export RELAY_DB_PATH=/var/lib/openbitfun/openbitfun_relay.db
 mkdir -p "$(dirname "$RELAY_DB_PATH")"
-RELAY_PORT=9700 ./target/release/bitfun-relay-server
+RELAY_PORT=9700 ./target/release/openbitfun-relay-server
 ```
 
 If the process logs `RELAY_DB_PATH not set — account features disabled`, login
@@ -194,44 +194,44 @@ as `RELAY_DB_PATH`.
 
 ```bash
 # Interactive password prompt (recommended)
-docker exec -it bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice
+docker exec -it openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db add-user --username alice
 
 # Non-interactive (scripts / CI)
-docker exec bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db add-user \
+docker exec openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db add-user \
   --username alice --password 'choose-a-strong-password'
 
 # List accounts
-docker exec bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db list-users
+docker exec openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db list-users
 ```
 
 Other commands:
 
 ```bash
 # Reset password (also rotates the master key — old synced blobs become unreadable)
-docker exec -it bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db reset-password --username alice
+docker exec -it openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db reset-password --username alice
 
 # Rename (credentials / user_id unchanged)
-docker exec bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db rename-user \
+docker exec openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db rename-user \
   --username alice --new-username alice2
 
 # Delete account and all of its relay-side data
-docker exec bitfun-relay \
-  /app/relay-admin --db /app/data/bitfun_relay.db delete-user --username alice
+docker exec openbitfun-relay \
+  /app/relay-admin --db /app/data/openbitfun_relay.db delete-user --username alice
 ```
 
 Without Docker, build and run the same tool from this crate:
 
 ```bash
-cargo build --release -p bitfun-relay-server
+cargo build --release -p openbitfun-relay-server
 ./target/release/relay-admin --db "$RELAY_DB_PATH" add-user --username alice
 ```
 
-### 4. Point BitFun clients at your relay
+### 4. Point OpenBitFun clients at your relay
 
 Relay URL examples:
 
@@ -252,11 +252,11 @@ the `/relay` suffix to match the official server format
 
 **CLI**
 
-1. Run `bitfun`, open `/login`.
+1. Run `openbitfun`, open `/login`.
 2. Fill **Auth Server**, **Username**, **Password**, then Login.
 3. After login, the CLI can act as a **Peer Host** for same-account Desktops.
 
-Clients remember a non-secret hint (`~/.bitfun/account_hint.json`: username +
+Clients remember a non-secret hint (`~/.openbitfun/account_hint.json`: username +
 relay URL) and an encrypted session file for restart without retyping the
 password.
 
@@ -283,17 +283,16 @@ Copying only `src/apps/relay-server` is no longer sufficient; deployments must
 also include `src/crates/services/relay-service`. The repository keeps one
 Docker build layout rather than duplicating the shared service.
 
-The Rust crate path `bitfun_relay_server` remains as a thin compatibility
-facade, including its existing module paths and four-argument router builder.
-New library consumers should depend on `bitfun-relay-service`.
+The standalone library facade is `openbitfun_relay_server`; reusable relay
+runtime ownership remains in the internal `openbitfun-relay-service` crate.
 
 ## Quick Start (service ops)
 
 ### Recommended: Run on the target server
 
 ```bash
-git clone https://github.com/GCWing/BitFun
-cd BitFun/src/apps/relay-server
+git clone https://github.com/GCWing/OpenBitFun
+cd OpenBitFun/src/apps/relay-server
 bash deploy.sh
 ```
 
@@ -332,12 +331,12 @@ bash deploy.sh
 
 ```bash
 # From repository root
-cargo build --release -p bitfun-relay-server
+cargo build --release -p openbitfun-relay-server
 
 # Account-enabled (persistent DB path required for login)
-export RELAY_DB_PATH="$HOME/.bitfun-relay/bitfun_relay.db"
+export RELAY_DB_PATH="$HOME/.openbitfun-relay/openbitfun_relay.db"
 mkdir -p "$(dirname "$RELAY_DB_PATH")"
-RELAY_PORT=9700 ./target/release/bitfun-relay-server
+RELAY_PORT=9700 ./target/release/openbitfun-relay-server
 ```
 
 ## Deployment Checklist
@@ -412,10 +411,10 @@ See `Caddyfile` for the Caddy equivalent.
 |----------|---------|-------------|
 | `RELAY_PORT` | `9700` | Server listen port |
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
-| `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
+| `RELAY_ROOM_WEB_DIR` | `/tmp/openbitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
 | `RELAY_ASSET_STORE_MAX_BYTES` | `1073741824` | Global content-addressed asset capacity (1 GiB by default). New uploads return HTTP 507 after the limit is reached; existing content remains readable. |
 | `RELAY_ROOM_TTL` | `300` | Idle room TTL in seconds (0 = no expiry). Active heartbeats and commands refresh activity. |
-| `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/bitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
+| `RELAY_DB_PATH` | _(none)_ | SQLite path for account storage. **Unset = pure relay (no login).** Set a persistent path (Compose: `/app/data/openbitfun_relay.db`) to enable login, device routing, and sync. Accounts are provisioned only via `relay-admin`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | _(none)_ | Comma-separated browser origin allowlist, for example `https://remote.example.com`. Empty means same-origin only. `*` is rejected when account APIs are enabled. |
 | `RELAY_PAGE_PUBLIC_BASE_URL` | _(none)_ | Browser-visible base URL for untrusted published Page content, for example `https://pages.example.com`. Configure together with `RELAY_PAGE_AUTH_BASE_URL`. |
 | `RELAY_PAGE_AUTH_BASE_URL` | _(none)_ | Browser-visible base URL for the trusted Relay Page login UI, for example `https://relay.example.com/relay`. It must use a different browser origin from `RELAY_PAGE_PUBLIC_BASE_URL`. |

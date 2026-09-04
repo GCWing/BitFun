@@ -33,8 +33,8 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
     hasWorkspace: true,
     currentWorkspace: {
       id: 'workspace-1',
-      name: 'BitFun',
-      rootPath: 'D:/workspace/BitFun',
+      name: 'OpenBitFun',
+      rootPath: 'D:/workspace/OpenBitFun',
     },
     openedWorkspacesList: [],
     openWorkspace: vi.fn(),
@@ -84,7 +84,7 @@ describe('WelcomePanel Git summary loading', () => {
     act(() => {
       root.unmount();
     });
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
     container.remove();
   });
 
@@ -96,7 +96,7 @@ describe('WelcomePanel Git summary loading', () => {
       root.render(<WelcomePanel sessionMode="agentic" />);
     });
 
-    expect(gitApiMock.isGitRepository).toHaveBeenCalledWith('D:/workspace/BitFun');
+    expect(gitApiMock.isGitRepository).toHaveBeenCalledWith('D:/workspace/OpenBitFun');
 
     act(() => {
       root.unmount();
@@ -117,9 +117,9 @@ describe('WelcomePanel Git summary loading', () => {
       root.render(<WelcomePanel sessionMode="agentic" />);
     });
 
-    expect(gitApiMock.getStatus).toHaveBeenCalledWith('D:/workspace/BitFun', 'welcome_panel');
-    expect(container.querySelector('[data-bf-part="workspaceAction"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="gitAction"]')).not.toBeNull();
+    expect(gitApiMock.getStatus).toHaveBeenCalledWith('D:/workspace/OpenBitFun', 'welcome_panel');
+    expect(container.querySelector('[data-openbitfun-part="workspaceAction"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="gitAction"]')).not.toBeNull();
   });
 
   it('does not render the retired panda mascot', async () => {
@@ -127,7 +127,7 @@ describe('WelcomePanel Git summary loading', () => {
       root.render(<WelcomePanel sessionMode="claw" workspacePath="D:/workspace/Assistant" />);
     });
 
-    expect(container.querySelector('[data-bf-part="mascot"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="mascot"]')).toBeNull();
     expect(container.querySelector('img[src^="/panda_full_"]')).toBeNull();
   });
 
@@ -137,11 +137,11 @@ describe('WelcomePanel Git summary loading', () => {
       root.render(<WelcomePanel sessionMode="agentic" />);
     });
 
-    const trigger = container.querySelector<HTMLButtonElement>('[data-bf-part="workspaceAction"]');
+    const trigger = container.querySelector<HTMLButtonElement>('[data-openbitfun-part="workspaceAction"]');
     await act(async () => trigger?.click());
 
-    const menu = document.querySelector<HTMLElement>('[data-bf-part="workspaceMenu"]');
-    expect(menu?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    const menu = document.querySelector<HTMLElement>('[data-openbitfun-part="workspaceMenu"]');
+    expect(menu?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(menu?.style.visibility).toBe('visible');
   });
 });

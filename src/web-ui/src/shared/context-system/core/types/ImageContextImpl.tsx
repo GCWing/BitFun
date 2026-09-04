@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 ;

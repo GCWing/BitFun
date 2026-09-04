@@ -1,7 +1,7 @@
 //! WorkspaceInfo → frontend DTO JSON (aligned with desktop WorkspaceInfoDto).
 
-use bitfun_core::service::remote_ssh::LOCAL_WORKSPACE_SSH_HOST;
-use bitfun_core::service::workspace::manager::{WorkspaceInfo, WorkspaceKind};
+use openbitfun_core::service::remote_ssh::LOCAL_WORKSPACE_SSH_HOST;
+use openbitfun_core::service::workspace::manager::{WorkspaceInfo, WorkspaceKind};
 use serde_json::{json, Value};
 
 pub(crate) fn workspace_info_to_json(info: &WorkspaceInfo) -> Value {

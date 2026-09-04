@@ -3,7 +3,7 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('installUpdateWithProgress');
 
-export const UPDATE_PROGRESS_EVENT = 'bitfun-update-progress';
+export const UPDATE_PROGRESS_EVENT = 'openbitfun-update-progress';
 
 export interface UpdateDownloadProgressPayload {
   downloaded: number;

@@ -1,137 +1,137 @@
-.bitfun-thread-goal-modal__body {
-  padding: var(--bf-space-5) var(--bf-space-6) var(--bf-space-6);
+.openbitfun-thread-goal-modal__body {
+  padding: var(--openbitfun-space-5) var(--openbitfun-space-6) var(--openbitfun-space-6);
 }
 
-.bitfun-thread-goal-menu,
-.bitfun-thread-goal-edit,
-.bitfun-thread-goal-resume {
+.openbitfun-thread-goal-menu,
+.openbitfun-thread-goal-edit,
+.openbitfun-thread-goal-resume {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-5);
+  gap: var(--openbitfun-space-5);
   min-width: 0;
 }
 
-.bitfun-thread-goal-menu__header {
+.openbitfun-thread-goal-menu__header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
   min-height: 28px;
 }
 
-.bitfun-thread-goal-menu__status-badge {
+.openbitfun-thread-goal-menu__status-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   padding: 6px 12px;
-  border-radius: var(--bf-radius-pill);
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-modifier-leading-dense-line-height);
+  border-radius: var(--openbitfun-radius-pill);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
   border: 1px solid transparent;
 
   &--active,
   &--paused,
   &--blocked {
-    color: var(--bf-color-status-warning-content);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 12%, transparent);
-    border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 32%, transparent);
+    color: var(--openbitfun-color-status-warning-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 32%, transparent);
   }
 
   &--usageLimited,
   &--budgetLimited {
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-surface-subtle);
-    border-color: var(--bf-color-border-subtle);
+    color: var(--openbitfun-color-content-secondary);
+    background: var(--openbitfun-color-surface-subtle);
+    border-color: var(--openbitfun-color-border-subtle);
   }
 
   &--complete {
-    color: var(--bf-color-status-success-content);
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
-    border-color: color-mix(in srgb, var(--bf-color-status-success-content) 32%, transparent);
+    color: var(--openbitfun-color-status-success-content);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 32%, transparent);
   }
 }
 
-.bitfun-thread-goal-menu__usage {
+.openbitfun-thread-goal-menu__usage {
   margin: 0;
-  font-size: var(--bf-type-flow-micro-font-size);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   text-align: right;
 }
 
-.bitfun-thread-goal-menu__section {
+.openbitfun-thread-goal-menu__section {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
-  padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-4);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-subtle);
-  border: 1px solid var(--bf-color-border-subtle);
+  gap: var(--openbitfun-space-3);
+  padding: var(--openbitfun-space-4) var(--openbitfun-space-4) var(--openbitfun-space-4);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-thread-goal-menu__section-title {
+.openbitfun-thread-goal-menu__section-title {
   margin: 0;
   padding: 0;
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
   text-transform: uppercase;
-  color: var(--bf-color-content-muted);
-  line-height: var(--bf-type-modifier-leading-snug-line-height);
+  color: var(--openbitfun-color-content-muted);
+  line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
 }
 
-.bitfun-thread-goal-menu__objective {
+.openbitfun-thread-goal-menu__objective {
   margin: 0;
   padding: 0;
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-primary);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.bitfun-thread-goal-menu__workflow {
+.openbitfun-thread-goal-menu__workflow {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
-.bitfun-thread-goal-menu__workflow-step {
+.openbitfun-thread-goal-menu__workflow-step {
   display: flex;
   align-items: flex-start;
-  gap: var(--bf-space-3);
-  font-size: var(--bf-type-flow-support-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
-  color: var(--bf-color-content-secondary);
+  gap: var(--openbitfun-space-3);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  color: var(--openbitfun-color-content-secondary);
 }
 
-.bitfun-thread-goal-menu__workflow-marker {
+.openbitfun-thread-goal-menu__workflow-marker {
   flex-shrink: 0;
   width: 10px;
   height: 10px;
   margin-top: 5px;
   border-radius: 50%;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
   box-sizing: border-box;
 
   &--done {
-    background: var(--bf-color-status-success-content);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-status-success-content) 20%, transparent);
+    background: var(--openbitfun-color-status-success-content);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-status-success-content) 20%, transparent);
   }
 
   &--current {
-    background: var(--bf-color-accent-default);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
+    background: var(--openbitfun-color-accent-default);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-accent-default) 22%, transparent);
   }
 
   &--pending {
     background: transparent;
-    border: 2px solid color-mix(in srgb, var(--bf-color-content-muted) 75%, transparent);
+    border: 2px solid color-mix(in srgb, var(--openbitfun-color-content-muted) 75%, transparent);
   }
 
   &--skipped {
@@ -139,46 +139,46 @@
   }
 }
 
-.bitfun-thread-goal-menu__workflow-step--done .bitfun-thread-goal-menu__workflow-text,
-.bitfun-thread-goal-menu__workflow-step--current .bitfun-thread-goal-menu__workflow-text {
-  color: var(--bf-color-content-primary);
+.openbitfun-thread-goal-menu__workflow-step--done .openbitfun-thread-goal-menu__workflow-text,
+.openbitfun-thread-goal-menu__workflow-step--current .openbitfun-thread-goal-menu__workflow-text {
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-thread-goal-menu__workflow-step--current .bitfun-thread-goal-menu__workflow-text {
-  font-weight: var(--bf-type-label-sm-font-weight);
+.openbitfun-thread-goal-menu__workflow-step--current .openbitfun-thread-goal-menu__workflow-text {
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
 }
 
-.bitfun-thread-goal-menu__workflow-step--skipped {
+.openbitfun-thread-goal-menu__workflow-step--skipped {
   opacity: 0.55;
 }
 
-.bitfun-thread-goal-menu__workflow-text {
+.openbitfun-thread-goal-menu__workflow-text {
   flex: 1;
   min-width: 0;
 }
 
-.bitfun-thread-goal-menu__workflow-note {
-  margin: var(--bf-space-2) 0 0;
-  padding: var(--bf-space-3) 0 0;
-  border-top: 1px solid var(--bf-color-border-subtle);
-  font-size: var(--bf-type-flow-micro-font-size);
-  line-height: var(--bf-type-support-line-height);
-  color: var(--bf-color-content-muted);
+.openbitfun-thread-goal-menu__workflow-note {
+  margin: var(--openbitfun-space-2) 0 0;
+  padding: var(--openbitfun-space-3) 0 0;
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  line-height: var(--openbitfun-type-support-line-height);
+  color: var(--openbitfun-color-content-muted);
 }
 
-.bitfun-thread-goal-menu__footer {
+.openbitfun-thread-goal-menu__footer {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
-  margin-top: var(--bf-space-1);
-  padding-top: var(--bf-space-4);
-  border-top: 1px solid var(--bf-color-border-subtle);
+  gap: var(--openbitfun-space-3);
+  margin-top: var(--openbitfun-space-1);
+  padding-top: var(--openbitfun-space-4);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-thread-goal-menu__actions {
+.openbitfun-thread-goal-menu__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   justify-content: stretch;
 
   > * {
@@ -187,58 +187,58 @@
   }
 }
 
-.bitfun-thread-goal-menu__hint {
+.openbitfun-thread-goal-menu__hint {
   margin: 0;
   padding: 0;
-  font-size: var(--bf-type-flow-micro-font-size);
-  color: var(--bf-color-content-muted);
-  line-height: var(--bf-type-body-sm-line-height);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  color: var(--openbitfun-color-content-muted);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   text-align: center;
 }
 
-.bitfun-thread-goal-menu--empty {
+.openbitfun-thread-goal-menu--empty {
   align-items: stretch;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
   text-align: left;
 }
 
-.bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__hint {
-  padding: var(--bf-space-2) 0;
+.openbitfun-thread-goal-menu--empty .openbitfun-thread-goal-menu__hint {
+  padding: var(--openbitfun-space-2) 0;
   text-align: left;
 }
 
-.bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__actions {
+.openbitfun-thread-goal-menu--empty .openbitfun-thread-goal-menu__actions {
   > * {
     width: 100%;
     flex: none;
   }
 }
 
-.bitfun-thread-goal-edit__hint,
-.bitfun-thread-goal-resume__hint {
+.openbitfun-thread-goal-edit__hint,
+.openbitfun-thread-goal-resume__hint {
   margin: 0;
-  font-size: var(--bf-type-flow-support-font-size);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-support-line-height);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-support-line-height);
 }
 
-.bitfun-thread-goal-resume__subtitle {
+.openbitfun-thread-goal-resume__subtitle {
   margin: 0;
-  padding: var(--bf-space-4);
-  border-radius: var(--bf-radius-lg);
-  font-size: var(--bf-type-flow-control-font-size);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-support-line-height);
-  background: var(--bf-color-surface-subtle);
-  border: 1px solid var(--bf-color-border-subtle);
+  padding: var(--openbitfun-space-4);
+  border-radius: var(--openbitfun-radius-lg);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-support-line-height);
+  background: var(--openbitfun-color-surface-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   word-break: break-word;
 }
 
-.bitfun-thread-goal-edit__actions,
-.bitfun-thread-goal-resume__actions {
+.openbitfun-thread-goal-edit__actions,
+.openbitfun-thread-goal-resume__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   justify-content: flex-end;
-  padding-top: var(--bf-space-2);
+  padding-top: var(--openbitfun-space-2);
 }

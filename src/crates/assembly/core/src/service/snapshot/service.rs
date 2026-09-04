@@ -7,8 +7,8 @@ use crate::service::snapshot::types::{
     OperationType, SessionInfo, SnapshotConfig, SnapshotError, SnapshotResult,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeContext;
-use bitfun_runtime_ports::WorkspaceFileSystem;
 use log::{debug, info};
+use openbitfun_runtime_ports::WorkspaceFileSystem;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -126,7 +126,7 @@ impl SnapshotService {
             step_started_at.elapsed().as_millis()
         );
         info!(
-            "Snapshot service initialized: git_isolated={} bitfun_dir={} duration_ms={}",
+            "Snapshot service initialized: git_isolated={} openbitfun_dir={} duration_ms={}",
             isolation_status,
             self.runtime_context.runtime_root.display(),
             total_started_at.elapsed().as_millis()
@@ -593,7 +593,7 @@ impl SnapshotService {
         };
         Ok(SystemStats {
             git_isolated: isolation_status,
-            bitfun_dir: self.runtime_context.runtime_root.clone(),
+            openbitfun_dir: self.runtime_context.runtime_root.clone(),
         })
     }
 
@@ -765,7 +765,7 @@ impl SnapshotService {
         &self.workspace_dir
     }
 
-    pub fn get_bitfun_dir(&self) -> &Path {
+    pub fn get_openbitfun_dir(&self) -> &Path {
         &self.runtime_context.runtime_root
     }
 
@@ -796,5 +796,5 @@ impl SnapshotService {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SystemStats {
     pub git_isolated: bool,
-    pub bitfun_dir: PathBuf,
+    pub openbitfun_dir: PathBuf,
 }

@@ -19,7 +19,7 @@ export class SharedMarketAccountError extends Error {
 }
 
 export function csrfTokenFromCookie(cookieHeader: string): string | undefined {
-  const prefix = 'bitfun_skin_csrf=';
+  const prefix = 'openbitfun_skin_csrf=';
   return cookieHeader
     .split(';')
     .map((item) => item.trim())

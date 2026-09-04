@@ -1,7 +1,7 @@
  
 
 import React, { useMemo } from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { ContextItem } from '../../../types/context';
 import { contextRegistry } from '../../../services/ContextRegistry';
@@ -51,12 +51,12 @@ export const ContextCard: React.FC<ContextCardProps> = ({
   const content = renderer 
     ? renderer.render(context, { compact, interactive, showPreview })
     : (
-      <div className="bitfun-context-card__fallback">
-        <div className="bitfun-context-card__icon">
+      <div className="openbitfun-context-card__fallback">
+        <div className="openbitfun-context-card__icon">
           <AlertCircle size={20} />
         </div>
-        <div className="bitfun-context-card__content">
-          <div className="bitfun-context-card__title">
+        <div className="openbitfun-context-card__content">
+          <div className="openbitfun-context-card__title">
             {t('contextSystem.contextCard.unknownType', { type: context.type })}
           </div>
         </div>
@@ -66,56 +66,56 @@ export const ContextCard: React.FC<ContextCardProps> = ({
   
   const validationClass = validationState 
     ? validationState.valid 
-      ? 'bitfun-context-card--valid' 
-      : 'bitfun-context-card--invalid'
+      ? 'openbitfun-context-card--valid'
+      : 'openbitfun-context-card--invalid'
     : '';
   
   return (
     <div 
       className={`
-        bitfun-context-card
-        bitfun-context-card--${context.type}
+        openbitfun-context-card
+        openbitfun-context-card--${context.type}
         ${validationClass}
-        ${compact ? 'bitfun-context-card--compact' : ''}
-        ${interactive ? 'bitfun-context-card--interactive' : ''}
+        ${compact ? 'openbitfun-context-card--compact' : ''}
+        ${interactive ? 'openbitfun-context-card--interactive' : ''}
         ${className}
       `.trim()}
       data-context-id={context.id}
       data-context-type={context.type}
-      data-bf-component="context-list"
-      data-bf-part="card"
-      data-bf-state={validationState ? (validationState.valid ? 'valid' : 'invalid') : undefined}
+      data-openbitfun-component="context-list"
+      data-openbitfun-part="card"
+      data-openbitfun-state={validationState ? (validationState.valid ? 'valid' : 'invalid') : undefined}
     >
       
       {definition && (
         <div 
-          className="bitfun-context-card__indicator"
+          className="openbitfun-context-card__indicator"
           style={{ backgroundColor: definition.color }}
-          data-bf-component="context-list"
-          data-bf-part="cardIndicator"
+          data-openbitfun-component="context-list"
+          data-openbitfun-part="cardIndicator"
         />
       )}
       
       
-      <div className="bitfun-context-card__body" data-bf-component="context-list" data-bf-part="cardBody">
+      <div className="openbitfun-context-card__body" data-openbitfun-component="context-list" data-openbitfun-part="cardBody">
         {content}
       </div>
       
       
       {interactive && (
-        <div className="bitfun-context-card__toolbar" data-bf-component="context-list" data-bf-part="cardToolbar">
+        <div className="openbitfun-context-card__toolbar" data-openbitfun-component="context-list" data-openbitfun-part="cardToolbar">
           
-          <div className="bitfun-context-card__validation">
+          <div className="openbitfun-context-card__validation">
             {isValidating ? (
-              <Loader2 size={14} className="bitfun-context-card__spinner" />
+              <Loader2 size={14} className="openbitfun-context-card__spinner" />
             ) : validationState ? (
               validationState.valid ? (
-                <Icon name="check-circle" size="sm" className="bitfun-context-card__icon--success" />
+                <Icon name="check-circle" size="sm" className="openbitfun-context-card__icon--success" />
               ) : (
                 <span title={validationState.error}>
                   <AlertCircle 
                     size={14} 
-                    className="bitfun-context-card__icon--error"
+                    className="openbitfun-context-card__icon--error"
                   />
                 </span>
               )
@@ -125,7 +125,7 @@ export const ContextCard: React.FC<ContextCardProps> = ({
           
           {onRemove && (
             <button
-              className="bitfun-context-card__remove-btn"
+              className="openbitfun-context-card__remove-btn"
               onClick={handleRemove}
               title={t('contextSystem.contextCard.removeContext')}
             >
@@ -137,7 +137,7 @@ export const ContextCard: React.FC<ContextCardProps> = ({
       
       
       {validationState && !validationState.valid && validationState.error && (
-        <div className="bitfun-context-card__error" data-bf-component="context-list" data-bf-part="cardError" data-bf-state="invalid">
+        <div className="openbitfun-context-card__error" data-openbitfun-component="context-list" data-openbitfun-part="cardError" data-openbitfun-state="invalid">
           <AlertCircle size={12} />
           <span>{validationState.error}</span>
         </div>
@@ -145,9 +145,9 @@ export const ContextCard: React.FC<ContextCardProps> = ({
       
       
       {validationState && validationState.valid && validationState.warnings && validationState.warnings.length > 0 && (
-        <div className="bitfun-context-card__warnings">
+        <div className="openbitfun-context-card__warnings">
           {validationState.warnings.map((warning, idx) => (
-            <div key={idx} className="bitfun-context-card__warning">
+            <div key={idx} className="openbitfun-context-card__warning">
               <AlertCircle size={12} />
               <span>{warning}</span>
             </div>

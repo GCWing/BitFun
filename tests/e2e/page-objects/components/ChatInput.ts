@@ -6,11 +6,11 @@ import { browser, $ } from '@wdio/globals';
 
 export class ChatInput extends BasePage {
   private selectors = {
-    container: '[data-testid="chat-input-container"], .bitfun-chat-input, .chat-input-container, .chat-input',
-    textarea: '.rich-text-input[contenteditable="true"], [data-testid="chat-input-textarea"], .bitfun-chat-input [contenteditable="true"], .chat-input textarea, textarea[class*="chat"]',
-    sendBtn: '[data-testid="chat-input-send-btn"], button.bitfun-chat-input__send-button, button.chat-input__send-btn, button[class*="send"]',
+    container: '[data-testid="chat-input-container"], .openbitfun-chat-input, .chat-input-container, .chat-input',
+    textarea: '.rich-text-input[contenteditable="true"], [data-testid="chat-input-textarea"], .openbitfun-chat-input [contenteditable="true"], .chat-input textarea, textarea[class*="chat"]',
+    sendBtn: '[data-testid="chat-input-send-btn"], button.openbitfun-chat-input__send-button, button.chat-input__send-btn, button[class*="send"]',
     attachmentBtn: '[data-testid="chat-input-attachment-btn"], .chat-input__attachment-btn',
-    cancelBtn: '[data-testid="chat-input-cancel-btn"], .bitfun-chat-input__send-button--breathing, .chat-input__cancel-btn, button[class*="cancel"]',
+    cancelBtn: '[data-testid="chat-input-cancel-btn"], .openbitfun-chat-input__send-button--breathing, .chat-input__cancel-btn, button[class*="cancel"]',
   };
 
   private getSelectAllModifier(): 'Meta' | 'Control' {
@@ -20,7 +20,7 @@ export class ChatInput extends BasePage {
   async isVisible(): Promise<boolean> {
     const containerSelectors = [
       '[data-testid="chat-input-container"]',
-      '.bitfun-chat-input',
+      '.openbitfun-chat-input',
       '.chat-input-container',
       '.chat-input',
     ];
@@ -42,7 +42,7 @@ export class ChatInput extends BasePage {
   async waitForLoad(): Promise<void> {
     const containerSelectors = [
       '[data-testid="chat-input-container"]',
-      '.bitfun-chat-input',
+      '.openbitfun-chat-input',
       '.chat-input-container',
       '.chat-input',
     ];
@@ -64,7 +64,7 @@ export class ChatInput extends BasePage {
   private async findTextarea(): Promise<WebdriverIO.Element | null> {
     const selectors = [
       '.rich-text-input[contenteditable="true"]',
-      '.bitfun-chat-input__input-area [contenteditable="true"]',
+      '.openbitfun-chat-input__input-area [contenteditable="true"]',
       '[contenteditable="true"]',
       '[data-testid="chat-input-textarea"]',
       '.chat-input textarea',
@@ -187,7 +187,7 @@ export class ChatInput extends BasePage {
   async clickSend(): Promise<void> {
     const selectors = [
       '[data-testid="chat-input-send-btn"]',
-      'button.bitfun-chat-input__send-button',
+      'button.openbitfun-chat-input__send-button',
       'button.chat-input__send-btn',
       'button[class*="send"]',
       'button[aria-label*="send" i]',
@@ -222,7 +222,7 @@ export class ChatInput extends BasePage {
   async isSendButtonEnabled(): Promise<boolean> {
     const selectors = [
       '[data-testid="chat-input-send-btn"]',
-      'button.bitfun-chat-input__send-button',
+      'button.openbitfun-chat-input__send-button',
       'button.chat-input__send-btn',
       'button[class*="send"]',
       'button[aria-label*="send" i]',

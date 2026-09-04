@@ -35,7 +35,7 @@ impl RuntimeInstanceIdentity {
         })?;
 
         let mut hasher = Sha256::new();
-        hasher.update(b"bitfun-agent-runtime-instance-v2\0");
+        hasher.update(b"openbitfun-agent-runtime-instance-v2\0");
         for part in [product_identity, release_channel, user_identity] {
             hasher.update(part.as_bytes());
             hasher.update(b"\0");

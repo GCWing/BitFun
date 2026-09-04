@@ -39,23 +39,23 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             height: '100%',
             padding: '32px',
             textAlign: 'center',
-            background: 'var(--bf-color-surface-canvas)',
-            color: 'var(--bf-color-content-primary)',
-            fontFamily: 'var(--bf-type-body-md-font-family)',
+            background: 'var(--openbitfun-color-surface-canvas)',
+            color: 'var(--openbitfun-color-content-primary)',
+            fontFamily: 'var(--openbitfun-type-body-md-font-family)',
           }}
         >
           {/* typography-audit: allow -- warning glyph geometry, not product text */}
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠</div>
           <h2 style={{
-            fontSize: 'var(--bf-type-flow-section-title-font-size)',
-            fontWeight: 'var(--bf-type-flow-section-title-font-weight)',
+            fontSize: 'var(--openbitfun-type-flow-section-title-font-size)',
+            fontWeight: 'var(--openbitfun-type-flow-section-title-font-weight)',
             margin: '0 0 8px',
           }}>
             Something went wrong
           </h2>
           <p style={{
-            fontSize: 'var(--bf-type-body-sm-font-size)',
-            color: 'var(--bf-color-content-muted)',
+            fontSize: 'var(--openbitfun-type-body-sm-font-size)',
+            color: 'var(--openbitfun-color-content-muted)',
             margin: '0 0 24px',
             maxWidth: '280px',
           }}>
@@ -67,10 +67,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               padding: '12px 32px',
               border: 'none',
               borderRadius: '14px',
-              background: 'var(--bf-color-accent-default)',
-              color: 'var(--bf-color-action-primary-content)',
-              fontSize: 'var(--bf-type-body-lg-font-size)',
-              fontWeight: 'var(--bf-type-label-selected-font-weight)',
+              background: 'var(--openbitfun-color-accent-default)',
+              color: 'var(--openbitfun-color-action-primary-content)',
+              fontSize: 'var(--openbitfun-type-body-lg-font-size)',
+              fontWeight: 'var(--openbitfun-type-label-selected-font-weight)',
               cursor: 'pointer',
             }}
           >

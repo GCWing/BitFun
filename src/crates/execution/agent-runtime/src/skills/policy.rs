@@ -240,7 +240,7 @@ mod tests {
         for skill in [
             "agent-eval-canvas",
             "docs-canvas",
-            "bitfun-canvas",
+            "openbitfun-canvas",
             "pr-review-canvas",
         ] {
             for mode_id in [
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn product_creation_skills_default_only_in_creative_mode() {
-        for skill in ["miniapp-dev", "bitfun-frontend-dev"] {
+        for skill in ["miniapp-dev", "openbitfun-frontend-dev"] {
             for mode_id in [
                 "agentic",
                 "coding_shared",

@@ -1,4 +1,4 @@
-.bitfun-acp-mode-selector {
+.openbitfun-acp-mode-selector {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -13,27 +13,27 @@
     border: none;
     border-radius: 10px;
     background: transparent;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-meta-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
     cursor: pointer;
     opacity: 0.72;
     outline: none;
 
-    .bitfun-chat-input__box:focus-within &,
+    .openbitfun-chat-input__box:focus-within &,
     &:hover,
     &:focus-visible,
     &--open {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       opacity: 1;
     }
 
     &:hover,
     &--open {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &:focus-visible {
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent);
     }
 
     &:disabled {
@@ -50,10 +50,10 @@
 
   &__menu {
     --acp-mode-menu-offset: -4px;
-    --bf-overlay-menu-inline-size: min(240px, calc(100vw - 16px));
+    --openbitfun-overlay-menu-inline-size: min(240px, calc(100vw - 16px));
 
     min-width: clamp(0px, 190px, calc(100vw - 16px));
-    z-index: var(--bf-layer-popover);
+    z-index: var(--openbitfun-layer-popover);
     transform-origin: center top;
     transition:
       opacity 100ms ease,
@@ -88,16 +88,16 @@
     justify-content: space-between;
     gap: 8px;
     padding: 5px 7px 7px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__header-hint {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     opacity: 0.8;
   }
 
@@ -108,9 +108,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      letter-spacing: var(--bf-type-body-sm-letter-spacing);
-      font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
 
   }
@@ -123,13 +123,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-acp-mode-selector__menu {
+  .openbitfun-acp-mode-selector__menu {
     transition: opacity 100ms linear;
   }
 }
 
 @media (max-width: 520px) {
-  .bitfun-acp-mode-selector__trigger {
+  .openbitfun-acp-mode-selector__trigger {
     max-width: 92px;
   }
 }

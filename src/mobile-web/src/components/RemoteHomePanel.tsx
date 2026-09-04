@@ -35,7 +35,7 @@ const RemoteHomePanel: React.FC<RemoteHomePanelProps> = ({
           <span className="remote-home__menu remote-home__menu--placeholder" aria-hidden="true" />
         )}
         <div className="remote-home__heading">
-          <h2 id="remote-home-title">BitFun</h2>
+          <h2 id="remote-home-title">OpenBitFun</h2>
         </div>
         <span className="remote-home__header-spacer" aria-hidden="true" />
       </header>
@@ -51,7 +51,7 @@ const RemoteHomePanel: React.FC<RemoteHomePanelProps> = ({
           aria-busy={conversationStarting}
         >
           <svg className="remote-home__composer-plus" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
-          <span>{t('shell.askBitFun')}</span>
+          <span>{t('shell.askOpenBitFun')}</span>
           {conversationStarting ? (
             <span className="spinner remote-home__composer-spinner" aria-hidden="true" />
           ) : (

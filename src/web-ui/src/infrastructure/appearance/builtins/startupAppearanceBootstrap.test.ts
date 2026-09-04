@@ -52,7 +52,7 @@ describe('startup appearance bootstrap manifest', () => {
       accentColor: chrome?.accent[500] ?? palette?.colors.accent[500],
     });
 
-    const monochrome = manifest.appearances.find(entry => entry.id === 'bitfun-monochrome');
+    const monochrome = manifest.appearances.find(entry => entry.id === 'openbitfun-monochrome');
     expect(monochrome).toMatchObject({
       bgPrimary: '#1c1c1f',
       bgSecondary: '#262626',

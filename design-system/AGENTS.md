@@ -7,17 +7,17 @@ This file applies to `design-system/**`. Repository-wide rules in the root `AGEN
 ## Architecture
 
 - Public packages live under `packages/`; private authoring and validation tools live under `tooling/`; Design Lab lives under `apps/`.
-- `@bitfun/ui` owns React anatomy, behavior, accessibility, and stable variants. It must remain independent from product routes, stores, locale catalogs, Tauri APIs, and concrete themes.
-- `@bitfun/design-tokens` owns theme-independent names and system scales. `@bitfun/theme-bitfun` supplies replaceable reference and semantic values.
+- `@openbitfun/ui` owns React anatomy, behavior, accessibility, and stable variants. It must remain independent from product routes, stores, locale catalogs, Tauri APIs, and concrete themes.
+- `@openbitfun/design-tokens` owns theme-independent names and system scales. `@openbitfun/theme-openbitfun` supplies replaceable reference and semantic values.
 - Components consume semantic or system CSS variables. Raw colors are forbidden in public component CSS. Component-private variables use the `--_` prefix.
 - Files under `dist/` are generated and must not be edited or committed.
-- Design Lab may alias `@bitfun/ui` to source only during Vite development for HMR. Its production build must consume package exports.
-- `@bitfun/ui/registry` is the source of truth for published components. Design Lab derives navigation, counts, token scopes, and detail routes from that registry; Lab-only previews or copy must never add, retain, or remove a package component.
+- Design Lab may alias `@openbitfun/ui` to source only during Vite development for HMR. Its production build must consume package exports.
+- `@openbitfun/ui/registry` is the source of truth for published components. Design Lab derives navigation, counts, token scopes, and detail routes from that registry; Lab-only previews or copy must never add, retain, or remove a package component.
 
 ## Publication boundary
 
 - Public manifests expose only `dist/`, README, and package metadata.
-- React and React DOM stay peer dependencies of `@bitfun/ui`.
+- React and React DOM stay peer dependencies of `@openbitfun/ui`.
 - Workspace dependencies use the `workspace:` protocol and must be converted to semver ranges by `pnpm pack`.
 - New public package boundaries require a real consumer; do not create empty placeholder packages.
 

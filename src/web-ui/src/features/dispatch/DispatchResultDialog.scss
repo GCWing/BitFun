@@ -5,26 +5,26 @@
   min-height: 0;
   max-height: min(78vh, 720px);
   flex-direction: column;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-label-md-font-size);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-label-md-font-size);
 
   &__header {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: var(--bf-space-4) var(--bf-space-4) var(--bf-space-3);
+    padding: var(--openbitfun-space-4) var(--openbitfun-space-4) var(--openbitfun-space-3);
   }
 
   &__title {
     margin: 0;
-    font-size: var(--bf-type-flow-section-title-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-snug-line-height);
+    font-size: var(--openbitfun-type-flow-section-title-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
   }
 
   &__subtitle {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__body {
@@ -32,8 +32,8 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: var(--bf-space-3);
-    padding: 0 var(--bf-space-4) var(--bf-space-4);
+    gap: var(--openbitfun-space-3);
+    padding: 0 var(--openbitfun-space-4) var(--openbitfun-space-4);
 
     // Height-constrained column flex: children must keep their content size and
     // let the container scroll instead of shrinking.
@@ -45,33 +45,33 @@
   &__pending {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__field {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
 
     code {
       overflow-wrap: anywhere;
-      color: var(--bf-color-content-secondary);
-      font-family:var(--bf-type-code-md-font-family);
-      font-size: var(--bf-type-label-sm-font-size);
+      color: var(--openbitfun-color-content-secondary);
+      font-family:var(--openbitfun-type-code-md-font-family);
+      font-size: var(--openbitfun-type-label-sm-font-size);
     }
   }
 
   &__field-label {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__details {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
 
     summary {
       width: fit-content;
@@ -80,50 +80,50 @@
 
       &:hover,
       &:focus-visible {
-        color: var(--bf-color-content-primary);
+        color: var(--openbitfun-color-content-primary);
       }
     }
   }
 
   &__details-body {
     display: grid;
-    gap: var(--bf-space-2);
-    margin-top: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-subtle);
+    gap: var(--openbitfun-space-2);
+    margin-top: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__group {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
     overflow: hidden;
 
     &[data-conflict='true'] {
-      border-color: var(--bf-color-status-warning-border);
+      border-color: var(--openbitfun-color-status-warning-border);
     }
   }
 
   &__group-header {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-subtle);
-    font-size: var(--bf-type-label-md-font-size);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-subtle);
+    font-size: var(--openbitfun-type-label-md-font-size);
 
     > svg {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
 
     > span {
       margin-left: auto;
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-label-sm-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-label-sm-font-size);
       font-variant-numeric: tabular-nums;
     }
   }
@@ -134,23 +134,23 @@
 
   ul {
     margin: 0;
-    padding: var(--bf-space-2) var(--bf-space-3);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
     list-style: none;
 
     li {
       display: flex;
       align-items: baseline;
-      gap: var(--bf-space-2);
+      gap: var(--openbitfun-space-2);
       padding: 2px 0;
       overflow-wrap: anywhere;
-      color: var(--bf-color-content-secondary);
-      font-family:var(--bf-type-code-md-font-family);
-      font-size: var(--bf-type-label-sm-font-size);
+      color: var(--openbitfun-color-content-secondary);
+      font-family:var(--openbitfun-type-code-md-font-family);
+      font-size: var(--openbitfun-type-label-sm-font-size);
 
       > strong {
         min-width: 2ch;
-        color: var(--bf-color-content-muted);
-        font-weight: var(--bf-type-label-selected-font-weight);
+        color: var(--openbitfun-color-content-muted);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
       }
 
       > span {
@@ -161,33 +161,33 @@
     // Deletions read as removals, not as ordinary paths.
     &[data-kind='deleted'] li {
       text-decoration: line-through;
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
 
     em {
       margin-left: auto;
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
       // The list is monospaced for paths; this annotation is prose.
-      font-family:var(--bf-type-body-sm-font-family);
-      font-size: var(--bf-type-label-sm-font-size);
+      font-family:var(--openbitfun-type-body-sm-font-family);
+      font-size: var(--openbitfun-type-label-sm-font-size);
       font-style: normal;
       white-space: nowrap;
     }
   }
 
   &__empty {
-    padding: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
+    padding: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3) var(--bf-space-4);
-    border-top: 1px solid var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-canvas);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   &__spin {

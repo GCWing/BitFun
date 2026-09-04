@@ -2,11 +2,11 @@
  * PageDeploy tool card — shows deploy slug / version result.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
-import { PageDeployToolCard } from '@bitfun/ui/flow-chat';
+import { PageDeployToolCard } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -90,7 +90,7 @@ export const PageDeployDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   return (
     <div
       ref={cardRootRef}
-      data-bf-adapter="page-deploy"
+      data-openbitfun-adapter="page-deploy"
       data-testid="chat-page-deploy-card"
       data-tool-card-id={toolId ?? ''}
       data-status={status}

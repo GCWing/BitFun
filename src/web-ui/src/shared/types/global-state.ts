@@ -17,7 +17,7 @@ const logger = createLogger('GlobalStateAPI');
 
 declare global {
   // Native startup may inject this once to avoid a first-window IPC waterfall.
-  var __BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__:
+  var __OPENBITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__:
     | APIWorkspaceStartupStateSnapshot
     | undefined;
 }
@@ -406,7 +406,7 @@ function mapRemoteWorkspaceSnapshot(
 function mapApplicationState(state: APIApplicationState): ApplicationState {
   const now = new Date().toISOString();
   return {
-    appId: 'bitfun',
+    appId: 'openbitfun',
     startupTime: new Date(Date.now() - state.uptime).toISOString(),
     version: state.version,
     userSettings: createDefaultUserSettings(),
@@ -466,14 +466,14 @@ function consumeBootstrapWorkspaceStartupStateSnapshot():
   if (
     !Object.prototype.hasOwnProperty.call(
       globalThis,
-      '__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
+      '__OPENBITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
     )
   ) {
     return undefined;
   }
 
-  const snapshot = globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
-  delete globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+  const snapshot = globalThis.__OPENBITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+  delete globalThis.__OPENBITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
 
   if (!isWorkspaceStartupStateSnapshot(snapshot)) {
     logger.warn('Ignored invalid bootstrap workspace startup state snapshot');

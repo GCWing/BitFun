@@ -1,4 +1,4 @@
-use bitfun_product_domains::canvas::{
+use openbitfun_product_domains::canvas::{
     parse_canvas_artifact_ref, validate_canvas_imports, validate_canvas_source_policy,
     CanvasArtifact, CanvasArtifactRef, CanvasDiagnostic, CanvasDiagnosticCategory,
     CanvasDiagnosticSeverity, CanvasId, CanvasImportPolicyDiagnosticKind, CanvasRevision,
@@ -27,7 +27,10 @@ fn canvas_artifact_ref_uses_logical_uri_not_path() {
 
     let uri = reference.to_uri();
 
-    assert_eq!(uri, "bitfun-canvas://session/session%201/canvas/canvas%201");
+    assert_eq!(
+        uri,
+        "openbitfun-canvas://session/session%201/canvas/canvas%201"
+    );
     assert!(!uri.contains("/Users/"));
     assert!(!uri.contains("\\"));
 
@@ -38,10 +41,10 @@ fn canvas_artifact_ref_uses_logical_uri_not_path() {
 #[test]
 fn canvas_artifact_ref_rejects_unsafe_path_segments() {
     for uri in [
-        "bitfun-canvas://session/..%2Fother/canvas/canvas_1",
-        "bitfun-canvas://session/../canvas/canvas_1",
-        "bitfun-canvas://session/session_1/canvas/canvas%2Fwith%2Fslash",
-        "bitfun-canvas://session/session%5C1/canvas/canvas_1",
+        "openbitfun-canvas://session/..%2Fother/canvas/canvas_1",
+        "openbitfun-canvas://session/../canvas/canvas_1",
+        "openbitfun-canvas://session/session_1/canvas/canvas%2Fwith%2Fslash",
+        "openbitfun-canvas://session/session%5C1/canvas/canvas_1",
     ] {
         assert!(
             parse_canvas_artifact_ref(uri).is_err(),
@@ -133,11 +136,11 @@ fn canvas_diagnostic_shape_is_structured() {
     let diagnostic = CanvasDiagnostic {
         severity: CanvasDiagnosticSeverity::Error,
         category: CanvasDiagnosticCategory::ImportPolicy,
-        message: "Only bitfun/canvas imports are allowed".to_string(),
+        message: "Only openbitfun/canvas imports are allowed".to_string(),
         code: Some("canvas.import.unsupported".to_string()),
         line: Some(2),
         column: Some(8),
-        suggested_fix: Some("Import UI helpers from bitfun/canvas.".to_string()),
+        suggested_fix: Some("Import UI helpers from openbitfun/canvas.".to_string()),
     };
 
     let value = serde_json::to_value(&diagnostic).unwrap();
@@ -146,14 +149,14 @@ fn canvas_diagnostic_shape_is_structured() {
     assert_eq!(value["category"], "import_policy");
     assert_eq!(
         value["suggestedFix"],
-        "Import UI helpers from bitfun/canvas."
+        "Import UI helpers from openbitfun/canvas."
     );
 }
 
 #[test]
 fn canvas_import_policy_rejects_relative_and_dynamic_imports() {
     let source = r#"
-import { Stack } from 'bitfun/canvas';
+import { Stack } from 'openbitfun/canvas';
 import React from 'react';
 import helper from './helper';
 export * from './exports';
@@ -188,7 +191,7 @@ fn canvas_import_policy_allows_canvas_compat_imports() {
     let source = r#"
 import { useState, useEffect } from 'react';
 import { Stack } from 'cursor/canvas';
-import { Text } from 'bitfun/canvas';
+import { Text } from 'openbitfun/canvas';
 "#;
 
     let diagnostics = validate_canvas_imports(source);

@@ -11,5 +11,5 @@ export const browserPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'webviewHost', propertyProfile: 'layout', visualRole: 'content' },
     { id: 'placeholder', visualRole: 'content' },
   ],
-  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } }],
+  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } }],
 };

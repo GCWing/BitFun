@@ -2,7 +2,7 @@
 
 #[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     AgentMessageWorkspaceReferencesRequest, AgentWorkspaceReference,
     AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult,
     WorkspaceDiffSnapshot,

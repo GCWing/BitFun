@@ -1,11 +1,11 @@
-# BitFun MiniApp Market Web
+# OpenBitFun MiniApp Market Web
 
 这里是 MiniApp 市场独立网页的源码目录。生产地址是
 `https://market.openbitfun.com/miniapp/`。
 
 > 最短结论：修改这个目录里的网页，完成检查并提交 Git commit 后，按照
 > [生产部署手册](../../deploy/miniapp-market/README.md)重建并重启
-> `bitfun-miniapp-market` 容器。网页和 Rust 后端在同一个 Docker 镜像中，
+> `openbitfun-miniapp-market` 容器。网页和 Rust 后端在同一个 Docker 镜像中，
 > 不要单独把 `dist/` 上传到服务器。
 
 ## 给 AI Agent 的执行约束
@@ -36,7 +36,7 @@
 | `src/api.ts` | `/miniapp/api/v1` 客户端、CSRF、登录和下载 URL |
 | `src/types.ts` | 网页使用的 API DTO |
 | `src/MiniAppIcon.tsx` | 将 MiniApp 元数据中的 Lucide 图标名安全解析为图标组件 |
-| `src/GetBitfunCta.tsx` | 目录页和详情页共用的「下载 BitFun 客户端」引流入口 |
+| `src/GetOpenBitFunCta.tsx` | 目录页和详情页共用的「下载 OpenBitFun 客户端」引流入口 |
 | `src/links.ts` | 官网与下载页的对外链接常量 |
 | `src/i18n.ts` | `zh-CN`、`zh-TW`、`en-US` 文案与 fallback |
 | `src/format.ts` | 市场页面的日期和数字格式化 |
@@ -48,7 +48,7 @@
 
 ### 站点图标
 
-`public/favicon.svg` 是唯一的图标源文件，画的是 BitFun 立方体标志的简化
+`public/favicon.svg` 是唯一的图标源文件，画的是 OpenBitFun 立方体标志的简化
 等轴测版本（16px 下仍然可辨认）。`favicon.ico`、`apple-touch-icon.png`、
 `icon-192.png`、`icon-512.png` 都是按同一份几何数据栅格化出来的产物：小尺寸
 去掉了面与面之间的缝隙并放大立方体，否则 16px 下三个面会糊成一团。
@@ -57,7 +57,7 @@
 `index.html` 里的 `<link rel="icon">` 必须带 `/miniapp/` 前缀——站点不在
 域名根目录下，浏览器默认探测的 `/favicon.ico` 会被 Nginx 挡在 404。
 
-BitFun 桌面端内嵌的原生市场 Scene 不在这里。它位于
+OpenBitFun 桌面端内嵌的原生市场 Scene 不在这里。它位于
 `src/web-ui/src/app/scenes/miniapps/`，通过
 `src/apps/desktop/src/api/miniapp_market_api.rs` 访问市场。
 
@@ -68,7 +68,7 @@ BitFun 桌面端内嵌的原生市场 Scene 不在这里。它位于
 市场展示图用于列表卡片和详情页。素材形式不做限制，建议画面清晰、主体突出，
 并把关键信息放在画面中部。
 
-网页市场和 BitFun 桌面端的市场都用 `aspect-ratio: 16 / 9` + `object-fit: cover`
+网页市场和 OpenBitFun 桌面端的市场都用 `aspect-ratio: 16 / 9` + `object-fit: cover`
 渲染展示图，所以非 16:9 的图会被**居中裁剪**，上下或左右被切掉：
 
 | 位置 | 文件 |
@@ -109,7 +109,7 @@ pnpm install
 `var/miniapp-market/`，默认配置只适合开发：
 
 ```bash
-cargo run -p bitfun-miniapp-market-server
+cargo run -p openbitfun-miniapp-market-server
 ```
 
 终端二启动 Vite：
@@ -167,7 +167,7 @@ pnpm run theme:color-audit:all
 - 三种语言可切换，窄屏和宽屏没有明显溢出；
 - API 失败会显示可理解的错误，不在控制台泄露凭据；
 - 网页投稿关闭时看不到投稿/更新/撤回按钮，直接访问 `/miniapp/submit` 会提示
-  改用 BitFun Desktop，“我的投稿”仍可查看；
+  改用 OpenBitFun Desktop，“我的投稿”仍可查看；
 - 登录、桌面投稿或审核相关改动使用测试账号走完对应流程。
 
 ## API 类型变更

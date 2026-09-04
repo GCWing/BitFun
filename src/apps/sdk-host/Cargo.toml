@@ -1,5 +1,5 @@
 [package]
-name = "bitfun-sdk-host-app"
+name = "openbitfun-sdk-host-app"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,14 +7,14 @@ description = "Standalone local Agent SDK Host implementation candidate"
 autobins = false
 
 [[bin]]
-name = "bitfun-sdk-host"
+name = "openbitfun-sdk-host"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-core = { path = "../../crates/assembly/core", features = [
+openbitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
+openbitfun-core = { path = "../../crates/assembly/core", features = [
     "agent-runtime",
     "document-read",
     "subscription-auth",
@@ -27,12 +27,12 @@ bitfun-core = { path = "../../crates/assembly/core", features = [
     "tools-image-analysis",
     "tools-agent-control",
 ] }
-bitfun-sdk-host = { path = "../../crates/interfaces/sdk-host" }
-bitfun-services-core = { path = "../../crates/services/services-core", features = [
+openbitfun-sdk-host = { path = "../../crates/interfaces/sdk-host" }
+openbitfun-services-core = { path = "../../crates/services/services-core", features = [
     "process-runtime",
     "tls-provider",
 ] }
-bitfun-transport = { path = "../../crates/adapters/transport" }
+openbitfun-transport = { path = "../../crates/adapters/transport" }
 futures-util = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-std", "io-util", "macros", "rt-multi-thread", "sync", "time"] }

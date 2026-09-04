@@ -328,7 +328,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     ) as HTMLElement | null;
     expect(skillPill).toBeTruthy();
     expect(skillPill?.getAttribute('data-tag-format')).toBe('[$pdf]');
-    expect(skillPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
+    expect(skillPill?.querySelector('[data-openbitfun-component="icon"][data-openbitfun-name="extension"]')).toBeTruthy();
     expect(editor.textContent).toContain('pdf');
   });
 
@@ -337,7 +337,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     const editor = await renderHarness(harnessRef);
 
     await act(async () => {
-      harnessRef.current?.setValue('[[bitfun-additional-mode:review]]');
+      harnessRef.current?.setValue('[[openbitfun-additional-mode:review]]');
     });
 
     const reviewPill = editor.querySelector(
@@ -345,8 +345,8 @@ describeWithJsdom('RichTextInput external sync', () => {
     ) as HTMLElement | null;
     expect(reviewPill).toBeTruthy();
     expect(reviewPill?.classList.contains('rich-text-tag-pill--skill-ref')).toBe(true);
-    expect(reviewPill?.getAttribute('data-bf-context-type')).toBe('additional-mode-reference');
-    expect(reviewPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
+    expect(reviewPill?.getAttribute('data-openbitfun-context-type')).toBe('additional-mode-reference');
+    expect(reviewPill?.querySelector('[data-openbitfun-component="icon"][data-openbitfun-name="extension"]')).toBeTruthy();
     expect(reviewPill?.textContent).toContain('Review');
   });
 
@@ -697,7 +697,7 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(onChange).toHaveBeenCalledWith('[$pdf]', emptyContexts);
     const skillPill = editor?.querySelector('.rich-text-tag-pill--skill-ref');
     expect(skillPill).toBeTruthy();
-    expect(skillPill?.querySelector('[data-bf-component="icon"][data-bf-name="extension"]')).toBeTruthy();
+    expect(skillPill?.querySelector('[data-openbitfun-component="icon"][data-openbitfun-name="extension"]')).toBeTruthy();
     expect(skillPill?.nextSibling?.textContent).toBe(' ');
     const selection = window.getSelection();
     expect(selection?.anchorNode).toBe(editor);
@@ -789,11 +789,11 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(editor).toBeTruthy();
 
     await act(async () => {
-      editor?.appendInlineTokenAtEnd?.('[[bitfun-additional-mode:review]]');
+      editor?.appendInlineTokenAtEnd?.('[[openbitfun-additional-mode:review]]');
     });
 
     expect(onChange).toHaveBeenCalledWith(
-      'hello [[bitfun-additional-mode:review]]',
+      'hello [[openbitfun-additional-mode:review]]',
       emptyContexts,
     );
     expect(editor?.querySelector('.rich-text-tag-pill--additional-mode-ref')).toBeTruthy();

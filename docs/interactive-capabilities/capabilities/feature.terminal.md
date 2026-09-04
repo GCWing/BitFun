@@ -43,7 +43,7 @@ Run a shell in the current project, inspect output, keep command history, and sh
 3. 输入命令；需要时新建额外终端
    Enter a command and create extra terminals as needed
 
-入口 / Entry: BitFun 功能入口
+入口 / Entry: OpenBitFun 功能入口
 
 ## Agent 可替你做什么 / What an agent can do for you
 

@@ -107,10 +107,10 @@ export function FileOperationToolCard({
       <div
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component="file-operation-tool-card"
-        data-bf-operation={operation}
-        data-bf-part="root"
-        data-bf-status={status}
+        data-openbitfun-component="file-operation-tool-card"
+        data-openbitfun-operation={operation}
+        data-openbitfun-part="root"
+        data-openbitfun-status={status}
       >
         <AmbientToolCard
           header={(
@@ -120,8 +120,8 @@ export function FileOperationToolCard({
                 <span
                   className={styles.path}
                   data-path={path}
-                  data-bf-operation={operation}
-                  data-bf-part="path"
+                  data-openbitfun-operation={operation}
+                  data-openbitfun-part="path"
                   data-testid={pathTestId}
                   title={path}
                 >
@@ -159,10 +159,10 @@ export function FileOperationToolCard({
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="file-operation-tool-card"
-      data-bf-operation={operation}
-      data-bf-part="root"
-      data-bf-status={status}
+      data-openbitfun-component="file-operation-tool-card"
+      data-openbitfun-operation={operation}
+      data-openbitfun-part="root"
+      data-openbitfun-status={status}
     >
       <ProminentToolCard
         collapsibleErrorContent
@@ -176,9 +176,9 @@ export function FileOperationToolCard({
               <ToolCardActions>
                 <IconButton
                   aria-label={onOpenFile.label}
-                  data-bf-affordance="open-panel-right"
-                  data-bf-part="openPanelButton"
-                  icon={<ArrowUpRight aria-hidden="true" data-bf-icon="open-panel-right" />}
+                  data-openbitfun-affordance="open-panel-right"
+                  data-openbitfun-part="openPanelButton"
+                  icon={<ArrowUpRight aria-hidden="true" data-openbitfun-icon="open-panel-right" />}
                   onClick={onOpenFile.onPress}
                   size="sm"
                   data-testid={onOpenFile.testId}
@@ -192,7 +192,7 @@ export function FileOperationToolCard({
             ) : (
               <span
                 className={styles.path}
-                data-bf-operation={operation}
+                data-openbitfun-operation={operation}
                 data-path={path}
                 data-testid={pathTestId}
                 title={path}
@@ -215,7 +215,7 @@ export function FileOperationToolCard({
                 <TriangleAlert
                   aria-hidden="true"
                   className={styles.warningStatusIcon}
-                  data-bf-icon="warning"
+                  data-openbitfun-icon="warning"
                 />
               )
               : loading

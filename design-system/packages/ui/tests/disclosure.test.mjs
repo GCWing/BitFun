@@ -12,12 +12,12 @@ test("Disclosure connects its trigger and region with accessible state", () => {
     createElement("button", null, "Reset"),
   ));
 
-  assert.match(markup, /data-bf-component="disclosure"/);
+  assert.match(markup, /data-openbitfun-component="disclosure"/);
   assert.match(markup, /data-open="true"/);
   assert.match(markup, /aria-expanded="true"/);
-  assert.match(markup, /aria-controls="bf-disclosure-[^"]+-content"/);
+  assert.match(markup, /aria-controls="openbitfun-disclosure-[^"]+-content"/);
   assert.match(markup, /role="region"/);
-  assert.match(markup, /aria-labelledby="bf-disclosure-[^"]+-trigger"/);
+  assert.match(markup, /aria-labelledby="openbitfun-disclosure-[^"]+-trigger"/);
   assert.doesNotMatch(markup, /inert=""/);
 });
 
@@ -40,8 +40,8 @@ test("Disclosure uses public geometry tokens and honors reduced motion", async (
     "utf8",
   );
 
-  assert.match(styles, /--bf-layout-disclosure-trigger-min-block-size/);
-  assert.match(styles, /--bf-layout-disclosure-content-padding-inline/);
+  assert.match(styles, /--openbitfun-layout-disclosure-trigger-min-block-size/);
+  assert.match(styles, /--openbitfun-layout-disclosure-content-padding-inline/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

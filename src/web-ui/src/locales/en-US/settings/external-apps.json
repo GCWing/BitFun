@@ -25,7 +25,7 @@
   },
   "hooks": {
     "title": "Hooks",
-    "description": "View Hook configuration from OpenCode, Claude Code, and Codex. BitFun only reads config files without running any code.",
+    "description": "View Hook configuration from OpenCode, Claude Code, and Codex. OpenBitFun only reads config files without running any code.",
     "refresh": "Refresh Hooks",
     "refreshing": "Refreshing Hooks…",
     "showMoreSources": "Show {{count}} more sources",
@@ -54,7 +54,7 @@
       "unknown": "Unknown"
     },
     "diagnostics": "Diagnostics",
-    "readOnly": "Read only. BitFun only displays these configurations and does not run any Hooks.",
+    "readOnly": "Read only. OpenBitFun only displays these configurations and does not run any Hooks.",
     "unsupported": {
       "remote": "Hook inspection is not available for remote workspaces in this version.",
       "peer": "Hook inspection is not available through Peer Device Mode in this version."
@@ -88,8 +88,8 @@
     },
     "diagnosticCategory": {
       "nativeDisabled": "Hooks are disabled in this native configuration.",
-      "activationUnknown": "BitFun only read the config files without running the source application, so it cannot confirm whether these Hooks are enabled. This is informational only and does not affect other features.",
-      "staticCoverage": "BitFun discovered some Hooks by reading the config files. The source application may register additional Hooks at runtime that only become visible when the app is actually running.",
+      "activationUnknown": "OpenBitFun only read the config files without running the source application, so it cannot confirm whether these Hooks are enabled. This is informational only and does not affect other features.",
+      "staticCoverage": "OpenBitFun discovered some Hooks by reading the config files. The source application may register additional Hooks at runtime that only become visible when the app is actually running.",
       "opaque": "Some Hook registration logic requires executing source code to identify, which static inspection cannot resolve.",
       "inspectionLimit": "Some Hook configuration was omitted by a static inspection safety limit.",
       "invalidConfiguration": "Some Hook configuration is invalid or could not be parsed.",
@@ -97,8 +97,8 @@
       "generic": "Hook inspection reported a diagnostic."
     },
     "projection": {
-      "tool_before": "Corresponds to BitFun tool-before",
-      "tool_after": "Corresponds to BitFun tool-after",
+      "tool_before": "Corresponds to OpenBitFun tool-before",
+      "tool_after": "Corresponds to OpenBitFun tool-after",
       "nativeOnly": "Native-only event",
       "opaque": "Opaque static registration"
     }
@@ -128,7 +128,7 @@
   "bulkActions": {
     "enablePending": "Enable all pending ({{count}})",
     "disableAll": "Disable all",
-    "enableRisk": "This approves exactly the {{count}} items currently shown. If discovery changes, BitFun will ask you to review again.",
+    "enableRisk": "This approves exactly the {{count}} items currently shown. If discovery changes, OpenBitFun will ask you to review again.",
     "enabled": "Enabled the selected pending items.",
     "disabled": "Disabled the selected items."
   },
@@ -170,7 +170,7 @@
     "remoteReadOnlyHint": "This remote project is view only. Switch to a local project to manage it.",
     "backupAndReset": "Back up and reset",
     "resetConfirmTitle": "Back up and reset policy?",
-    "resetConfirmMessage": "BitFun will preserve the newer policy in a local backup, replace it with safe defaults, and keep external execution off until you enable it.",
+    "resetConfirmMessage": "OpenBitFun will preserve the newer policy in a local backup, replace it with safe defaults, and keep external execution off until you enable it.",
     "recoveryResetComplete": "The incompatible policy was backed up and reset to safe defaults.",
     "inherited": "Inherited",
     "projectOverride": "Project override",
@@ -230,7 +230,7 @@
   "operationErrors": {
     "rejected": "The current settings do not allow this change.",
     "refreshRequired": "The catalog changed before this action completed. Refresh, review the current state, and try again.",
-    "policyIncompatible": "External settings were written by a newer BitFun version. Back up and reset them before making changes.",
+    "policyIncompatible": "External settings were written by a newer OpenBitFun version. Back up and reset them before making changes.",
     "unavailableRetry": "Temporarily unavailable. Try again later.",
     "internal": "The action failed and no settings were changed. Try again below. If it keeps failing, contact support with the reference number.",
     "referenceId": "Support reference (include when contacting support): {{id}}"
@@ -239,18 +239,18 @@
     "summary": "{{count}} items need attention. Review the details to see what is affected.",
     "sourceSummary": "{{name}} has {{count}} issues",
     "category": {
-      "confirmationStateUnavailable": "BitFun could not verify saved tool confirmations, so affected tools remain disabled. Check BitFun settings storage, then refresh.",
-      "conflictHistoryUnavailable": "BitFun could not save conflict information, so affected names remain unavailable. Check BitFun settings storage, then refresh.",
+      "confirmationStateUnavailable": "OpenBitFun could not verify saved tool confirmations, so affected tools remain disabled. Check OpenBitFun settings storage, then refresh.",
+      "conflictHistoryUnavailable": "OpenBitFun could not save conflict information, so affected names remain unavailable. Check OpenBitFun settings storage, then refresh.",
       "checkInProgress": "One source is still being checked. Existing content remains available.",
       "checkTimedOut": "Checking one source took too long. Other content remains available; refresh to try again.",
-      "confirmationRequired": "A source needs your confirmation before BitFun can use it.",
+      "confirmationRequired": "A source needs your confirmation before OpenBitFun can use it.",
       "sourceTooLarge": "Some files were skipped because the source is too large. Reduce its size, then refresh.",
       "invalidSettings": "Some settings could not be read and were skipped. Fix the source, then refresh.",
-      "unreadableSource": "BitFun could not read part of a source. Check file access, then refresh.",
-      "notSupported": "This type of external content is not supported yet, so BitFun did not load or run it.",
-      "checkFailed": "BitFun could not check one source. Other sources remain available; refresh to retry.",
+      "unreadableSource": "OpenBitFun could not read part of a source. Check file access, then refresh.",
+      "notSupported": "This type of external content is not supported yet, so OpenBitFun did not load or run it.",
+      "checkFailed": "OpenBitFun could not check one source. Other sources remain available; refresh to retry.",
       "runtimeUnavailable": "An MCP server from this source is unavailable. Disable it, fix its configuration or authentication, then enable it again.",
-      "sourceIssue": "BitFun could not finish checking one source. Existing usable content remains available; refresh or review the technical details."
+      "sourceIssue": "OpenBitFun could not finish checking one source. Existing usable content remains available; refresh or review the technical details."
     }
   },
   "sources": {
@@ -266,11 +266,11 @@
   },
   "agents": {
     "title": "Found agents",
-    "description": "Agents stay in their original application. Before enabling one, review its model, tools, and where it runs. BitFun asks again if its instructions or these settings change.",
+    "description": "Agents stay in their original application. Before enabling one, review its model, tools, and where it runs. OpenBitFun asks again if its instructions or these settings change.",
     "disable": "Disable",
     "enable": "Enable agent",
     "reviewTitle": "Review how {{name}} runs",
-    "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
+    "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. OpenBitFun asks again if its instructions, model, tools, or configuration sources change.",
     "role": {
       "primary": "Main sessions",
       "subagent": "One-run tasks; no follow-up",
@@ -295,11 +295,11 @@
     "affectedAgents": "Affects {{count}} agents",
     "effectiveModel": "Uses {{model}}",
     "configuredEffort": "Configured effort: {{value}}",
-    "selectLabel": "Choose a BitFun model for {{request}}",
+    "selectLabel": "Choose a OpenBitFun model for {{request}}",
     "automatic": "Matched automatically",
     "targetUnavailable": "Unavailable: {{target}}",
     "request": {
-      "default": "BitFun default",
+      "default": "OpenBitFun default",
       "inherit": "Parent session model"
     },
     "profile": {
@@ -314,7 +314,7 @@
       "model": "Configured model"
     },
     "method": {
-      "default": "BitFun default",
+      "default": "OpenBitFun default",
       "inherit": "Inherited from the parent session",
       "exact": "Exact configured model",
       "explicit": "User binding",
@@ -346,14 +346,14 @@
     "activationBlocked": "This agent cannot be enabled.",
     "degradedOnly": "Some settings will not apply.",
     "configurationUnavailable": {
-      "reason": "BitFun could not read its model settings, so this agent cannot be enabled.",
+      "reason": "OpenBitFun could not read its model settings, so this agent cannot be enabled.",
       "impact": "{{impact}}",
-      "nextStep": "Check BitFun model settings, then refresh."
+      "nextStep": "Check OpenBitFun model settings, then refresh."
     },
     "modelUnavailable": {
-      "reason": "The requested model is not available in BitFun.",
+      "reason": "The requested model is not available in OpenBitFun.",
       "impact": "{{impact}}",
-      "nextStep": "Choose an available model in the source application, or configure an available model in BitFun, then refresh."
+      "nextStep": "Choose an available model in the source application, or configure an available model in OpenBitFun, then refresh."
     },
     "toolUnavailable": {
       "reason": "Unavailable tools: {{tools}}",
@@ -366,12 +366,12 @@
       "nextStep": "Add a prompt in the source application, then refresh."
     },
     "unsupportedSetting": {
-      "reason": "BitFun does not support the {{setting}} setting, so this agent cannot be enabled.",
+      "reason": "OpenBitFun does not support the {{setting}} setting, so this agent cannot be enabled.",
       "impact": "{{impact}}",
       "nextStep": "Remove that setting in the source application, then refresh."
     },
     "ignoredSetting": {
-      "reason": "BitFun does not support the {{setting}} setting and will ignore it. This does not affect usage.",
+      "reason": "OpenBitFun does not support the {{setting}} setting and will ignore it. This does not affect usage.",
       "impact": "{{impact}}",
       "nextStep": ""
     },
@@ -399,19 +399,19 @@
       "nextStep": "Fix the agent configuration in the source application, then refresh."
     },
     "unsupportedBehavior": {
-      "reason": "This agent uses settings that BitFun does not support, so it cannot be enabled.",
+      "reason": "This agent uses settings that OpenBitFun does not support, so it cannot be enabled.",
       "impact": "{{impact}}",
       "nextStep": "Update the agent in the source application, then refresh."
     },
     "ignoredOption": {
-      "reason": "BitFun does not support this setting and will ignore it. This does not affect usage.",
+      "reason": "OpenBitFun does not support this setting and will ignore it. This does not affect usage.",
       "impact": "{{impact}}",
       "nextStep": ""
     }
   },
   "agentConflicts": {
     "title": "Agents with the same name",
-    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of these agents changes.",
+    "description": "OpenBitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of these agents changes.",
     "agentName": "Multiple agents are named {{name}}",
     "disableAll": "Do not use any of these",
     "pending": "Choose which agent to use for future tasks. Choosing an external agent also confirms the model, tools, and where it runs as shown below.",
@@ -433,7 +433,7 @@
     "workingDirectory": "Starts in: {{location}}",
     "environmentCount": "{{count}} environment variables configured",
     "environmentNames": "Environment variables: {{names}}",
-    "environmentReads": "Reads from the BitFun environment: {{names}}",
+    "environmentReads": "Reads from the OpenBitFun environment: {{names}}",
     "argumentCount": "Command arguments: {{count}}",
     "headerCount": "{{count}} HTTP headers configured",
     "headerNames": "HTTP headers: {{names}}",
@@ -442,34 +442,34 @@
     "timeoutCatalog": "catalog {{duration}}",
     "timeoutExecution": "execution {{duration}}",
     "timeoutMilliseconds": "{{value}} ms",
-    "changePolicy": "BitFun asks again before loading a changed server configuration.",
+    "changePolicy": "OpenBitFun asks again before loading a changed server configuration.",
     "failureReason": "Reason: {{reason}}",
     "failureReasons": {
       "authentication": "Authentication is required for this MCP server.",
       "timeout": "The MCP server did not finish starting before its timeout.",
       "commandUnavailable": "The configured MCP command could not be started.",
       "workingDirectoryUnavailable": "The configured MCP working directory is unavailable.",
-      "connectionFailed": "BitFun could not connect to the MCP server.",
+      "connectionFailed": "OpenBitFun could not connect to the MCP server.",
       "protocolFailed": "The MCP server did not complete the MCP startup handshake.",
-      "nativeConfigurationUnavailable": "BitFun could not read the current MCP configuration.",
+      "nativeConfigurationUnavailable": "OpenBitFun could not read the current MCP configuration.",
       "hostReadOnly": "This host can discover MCP servers but cannot run them.",
       "configurationChanged": "The MCP configuration changed before activation. Refresh and confirm it again.",
-      "configurationInvalid": "The MCP configuration cannot be used by the BitFun runtime.",
+      "configurationInvalid": "The MCP configuration cannot be used by the OpenBitFun runtime.",
       "hostUnavailable": "The MCP runtime is not available in this host.",
-      "installFailed": "BitFun could not register this MCP server with the runtime.",
-      "preparationFailed": "BitFun could not prepare this MCP configuration for activation.",
+      "installFailed": "OpenBitFun could not register this MCP server with the runtime.",
+      "preparationFailed": "OpenBitFun could not prepare this MCP configuration for activation.",
       "serverMissing": "The MCP server is no longer registered with the runtime.",
       "runtimeFailed": "The MCP server failed or stopped unexpectedly.",
       "stopped": "The MCP server is not currently running.",
-      "statusUnavailable": "BitFun could not read the current MCP server status.",
-      "other": "The MCP server failed to start. Check its source configuration and BitFun logs."
+      "statusUnavailable": "OpenBitFun could not read the current MCP server status.",
+      "other": "The MCP server failed to start. Check its source configuration and OpenBitFun logs."
     },
-    "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting BitFun is usually not required.",
+    "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting OpenBitFun is usually not required.",
     "unsupportedGuidance": "Change this setting in the source application, then refresh.",
     "enable": "Enable server",
     "disable": "Disable",
     "empty": "No MCP servers found.",
-    "emptyGuidance": "BitFun looks for MCP servers in the following locations but found none:",
+    "emptyGuidance": "OpenBitFun looks for MCP servers in the following locations but found none:",
     "emptyLocation": {
       "userGlobal": "User global: ~/.config/opencode/opencode.json",
       "project": "Project: .opencode/opencode.json",
@@ -482,7 +482,7 @@
   },
   "mcpApprovals": {
     "title": "MCP servers to review",
-    "description": "BitFun found executable or network configuration from another AI application. It is not started or contacted until you confirm it.",
+    "description": "OpenBitFun found executable or network configuration from another AI application. It is not started or contacted until you confirm it.",
     "compactWarning": "Enabling can run this command with your user permissions or connect to this service; the server can receive data sent in tool calls.",
     "showDetails": "Show configuration and risk",
     "warning": "Local commands can read the listed environment variables, and remote requests can send the listed headers. Review these details before enabling.",
@@ -504,18 +504,18 @@
   },
   "mcpConflicts": {
     "title": "MCP servers with the same name",
-    "description": "BitFun does not choose silently. Choose the BitFun or external server to use; the choice is remembered until one of these configurations changes.",
+    "description": "OpenBitFun does not choose silently. Choose the OpenBitFun or external server to use; the choice is remembered until one of these configurations changes.",
     "serverName": "Multiple MCP servers are named {{name}}",
     "pending": "Choose one server. Choosing an external server also confirms that configuration.",
     "currentSelection": "The current choice is used. Choose another available option to change it.",
     "unavailable": "Currently unavailable",
-    "nativeDisabled": "Enable this BitFun server before selecting it",
+    "nativeDisabled": "Enable this OpenBitFun server before selecting it",
     "review": "Review {{name}}",
     "approveAndUse": "Approve and use {{name}}"
   },
   "tools": {
     "title": "Found tools",
-    "description": "Tool code stays in its original location. BitFun does not run it while checking the source.",
+    "description": "Tool code stays in its original location. OpenBitFun does not run it while checking the source.",
     "review": "Review settings",
     "disable": "Disable these tools",
     "reviewTitle": "Review {{name}} from {{source}}",
@@ -560,9 +560,9 @@
     "disabled": "The source or its tool capability is disabled by policy.",
     "active": "The tool code is loaded and ready to use.",
     "conflict": "Another tool has the same name.",
-    "unsupported": "This tool file contains code or operations that BitFun does not support.",
+    "unsupported": "This tool file contains code or operations that OpenBitFun does not support.",
     "runtime_unavailable": "The required JavaScript run environment is unavailable.",
-    "load_failed": "BitFun could not load this tool file."
+    "load_failed": "OpenBitFun could not load this tool file."
   },
   "toolNextStep": {
     "approval_required": "Review the source and access above, then enable or keep these tools disabled.",
@@ -570,13 +570,13 @@
     "disabled": "Enable this source or its tool capability before using these tools.",
     "active": "No action needed. Disable these tools to stop using this source's tools.",
     "conflict": "Choose which tool to use below, or leave them disabled.",
-    "unsupported": "Change the source to a single JavaScript file supported by BitFun, then refresh.",
+    "unsupported": "Change the source to a single JavaScript file supported by OpenBitFun, then refresh.",
     "runtime_unavailable": "Install or repair Node.js, then refresh. You can continue without these external JavaScript tools while the run environment is unavailable.",
     "load_failed": "Fix the source and refresh, or keep these tools disabled."
   },
   "toolConflicts": {
     "title": "Tools with the same name",
-    "description": "Pending and current choices stay visible. Until you choose, BitFun keeps using an available local or MCP tool; if none is available, this name stays disabled. Choices are remembered until the available tools change.",
+    "description": "Pending and current choices stay visible. Until you choose, OpenBitFun keeps using an available local or MCP tool; if none is available, this name stays disabled. Choices are remembered until the available tools change.",
     "toolName": "Multiple tools are named {{name}}",
     "pending": "Choose which tool to use when this name is called.",
     "currentSelection": "The current choice is used for this tool name. Choose another option above to change it.",
@@ -613,7 +613,7 @@
   },
   "conflicts": {
     "title": "Commands with the same name",
-    "description": "BitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of the sources changes.",
+    "description": "OpenBitFun does not choose silently. Pending and current choices stay visible, and a choice is remembered until one of the sources changes.",
     "commandName": "More than one source provides /{{name}}",
     "pending": "Choose an available source to use this command.",
     "currentSelection": "The current source is used for this command. Choose another available source above to change it.",
@@ -639,7 +639,7 @@
       },
       "command": {
         "description": "{{count}} commands found · from {{scope}}",
-        "effect": "Allows calling OpenCode commands in BitFun.",
+        "effect": "Allows calling OpenCode commands in OpenBitFun.",
         "risk": ""
       },
       "mcp": {

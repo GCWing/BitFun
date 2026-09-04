@@ -1,4 +1,4 @@
-# BitFun Web UI 动效排查与优化清单
+# OpenBitFun Web UI 动效排查与优化清单
 
 本清单覆盖 `src/web-ui` 的桌面端与 Server/Web 共用 React 前端。排查对象包括按钮、输入控件、菜单、Tooltip、Select、弹窗、抽屉、页面/面板切换、列表增删与排序、拖拽、滚动导航、进度与异步状态，以及 Flow Chat 和工具面板中的交互反馈。
 

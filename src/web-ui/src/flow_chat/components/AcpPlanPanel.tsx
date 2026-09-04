@@ -1,4 +1,4 @@
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CircleDashed, LoaderCircle } from 'lucide-react';
@@ -13,17 +13,17 @@ export interface AcpPlanPanelProps {
 function statusIcon(status: string): React.ReactNode {
   switch (status) {
     case 'completed':
-      return <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} className="bitfun-acp-plan__icon bitfun-acp-plan__icon--done" />;
+      return <Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} className="openbitfun-acp-plan__icon openbitfun-acp-plan__icon--done" />;
     case 'in_progress':
       return (
         <LoaderCircle
           size={13}
-          className="bitfun-acp-plan__icon bitfun-acp-plan__icon--active"
+          className="openbitfun-acp-plan__icon openbitfun-acp-plan__icon--active"
         />
       );
     default:
       return (
-        <CircleDashed size={13} className="bitfun-acp-plan__icon bitfun-acp-plan__icon--pending" />
+        <CircleDashed size={13} className="openbitfun-acp-plan__icon openbitfun-acp-plan__icon--pending" />
       );
   }
 }
@@ -35,24 +35,24 @@ export const AcpPlanPanel: React.FC<AcpPlanPanelProps> = ({ entries }) => {
   const done = entries.filter((entry) => entry.status === 'completed').length;
 
   return (
-    <div data-bf-component="acp-plan-panel" data-bf-part="root" className="bitfun-acp-plan" data-testid="acp-plan-panel">
-      <div data-bf-component="acp-plan-panel" data-bf-part="header" className="bitfun-acp-plan__header">
-        <span data-bf-component="acp-plan-panel" data-bf-part="title" className="bitfun-acp-plan__title">{t('chatInput.acpPlan.title')}</span>
-        <span data-bf-component="acp-plan-panel" data-bf-part="progress" className="bitfun-acp-plan__progress">
+    <div data-openbitfun-component="acp-plan-panel" data-openbitfun-part="root" className="openbitfun-acp-plan" data-testid="acp-plan-panel">
+      <div data-openbitfun-component="acp-plan-panel" data-openbitfun-part="header" className="openbitfun-acp-plan__header">
+        <span data-openbitfun-component="acp-plan-panel" data-openbitfun-part="title" className="openbitfun-acp-plan__title">{t('chatInput.acpPlan.title')}</span>
+        <span data-openbitfun-component="acp-plan-panel" data-openbitfun-part="progress" className="openbitfun-acp-plan__progress">
           {done}/{entries.length}
         </span>
       </div>
-      <ul data-bf-component="acp-plan-panel" data-bf-part="list" className="bitfun-acp-plan__list">
+      <ul data-openbitfun-component="acp-plan-panel" data-openbitfun-part="list" className="openbitfun-acp-plan__list">
         {entries.map((entry, index) => (
           <li
             key={`${index}-${entry.content}`}
-            data-bf-component="acp-plan-panel"
-            data-bf-part="item"
-            data-bf-status={entry.status}
-            className={`bitfun-acp-plan__item bitfun-acp-plan__item--${entry.status}`}
+            data-openbitfun-component="acp-plan-panel"
+            data-openbitfun-part="item"
+            data-openbitfun-status={entry.status}
+            className={`openbitfun-acp-plan__item openbitfun-acp-plan__item--${entry.status}`}
           >
             {statusIcon(entry.status)}
-            <span data-bf-component="acp-plan-panel" data-bf-part="content" className="bitfun-acp-plan__content">{entry.content}</span>
+            <span data-openbitfun-component="acp-plan-panel" data-openbitfun-part="content" className="openbitfun-acp-plan__content">{entry.content}</span>
           </li>
         ))}
       </ul>

@@ -23,17 +23,17 @@
 //! contract is identical regardless of the routing path.
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-pub use bitfun_product_domains::miniapp::host_routing::is_host_primitive;
-use bitfun_product_domains::miniapp::host_routing::{
+pub use openbitfun_product_domains::miniapp::host_routing::is_host_primitive;
+use openbitfun_product_domains::miniapp::host_routing::{
     command_basename_allowed, command_basename_for_allowlist, fs_policy_scopes,
     fs_resolved_path_allowed, host_allowed_by_allowlist, plan_fs_host_call,
     plan_fs_legacy_path_check, plan_shell_host_call, shell_exec_default_env, split_host_method,
     FsAccessMode, MiniAppFsHostCallPlan, MiniAppHostPlanError, MiniAppHostPlanErrorKind,
 };
-use bitfun_product_domains::miniapp::permission_policy::{
+use openbitfun_product_domains::miniapp::permission_policy::{
     resolve_policy_with_request, MiniAppPermissionPolicyRequest,
 };
-use bitfun_product_domains::miniapp::types::MiniAppPermissions;
+use openbitfun_product_domains::miniapp::types::MiniAppPermissions;
 use serde_json::{json, Value};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -390,7 +390,7 @@ async fn dispatch_shell(
     let mut cmd = if let Some(argv) = plan.argv.as_ref() {
         let program = resolve_shell_program(&argv[0]);
         let mut c =
-            bitfun_services_core::process_manager::create_tokio_command(program.as_os_str());
+            openbitfun_services_core::process_manager::create_tokio_command(program.as_os_str());
         if argv.len() > 1 {
             c.args(&argv[1..]);
         }
@@ -398,13 +398,13 @@ async fn dispatch_shell(
     } else {
         #[cfg(target_os = "windows")]
         {
-            let mut c = bitfun_services_core::process_manager::create_tokio_command("cmd");
+            let mut c = openbitfun_services_core::process_manager::create_tokio_command("cmd");
             c.args(["/C", &plan.command]);
             c
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let mut c = bitfun_services_core::process_manager::create_tokio_command("sh");
+            let mut c = openbitfun_services_core::process_manager::create_tokio_command("sh");
             c.args(["-c", &plan.command]);
             c
         }
@@ -720,7 +720,7 @@ fn is_private_ipv6(address: Ipv6Addr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::miniapp::types::{MiniAppPermissions, ShellPermissions};
+    use openbitfun_product_domains::miniapp::types::{MiniAppPermissions, ShellPermissions};
 
     #[test]
     fn command_basename_allows_windows_git_executable_paths() {

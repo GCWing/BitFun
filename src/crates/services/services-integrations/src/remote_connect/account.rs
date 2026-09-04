@@ -8,7 +8,7 @@
 use anyhow::{anyhow, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use bitfun_services_core::session::SessionMetadata;
+use openbitfun_services_core::session::SessionMetadata;
 #[cfg(test)]
 use rand::RngCore;
 use serde::{Deserialize, Serialize};

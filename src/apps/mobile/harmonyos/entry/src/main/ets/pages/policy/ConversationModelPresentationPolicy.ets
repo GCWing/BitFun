@@ -77,6 +77,6 @@ export class ConversationModelPresentationPolicy {
       normalized !== 'openai' &&
       normalized !== 'google' &&
       normalized !== 'azure' &&
-      normalized !== 'bitfun';
+      normalized !== 'openbitfun';
   }
 }

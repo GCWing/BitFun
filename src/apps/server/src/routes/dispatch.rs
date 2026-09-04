@@ -4,10 +4,10 @@
 //! same platform-neutral controller used by Desktop, backed by saved SSH
 //! profiles and the observer-only outbound index.
 
-use bitfun_core::external_sources::{
+use openbitfun_core::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
 };
-use bitfun_core::service::dispatch::{
+use openbitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
     probe_dispatch_target, start_dispatch_cli_install, submit_dispatch, sync_dispatch_model_config,

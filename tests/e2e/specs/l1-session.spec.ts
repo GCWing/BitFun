@@ -42,7 +42,7 @@ describe('L1 Session', () => {
       await browser.pause(500);
 
       const selectors = [
-        '.bitfun-session-scene',
+        '.openbitfun-session-scene',
         '[class*="session-scene"]',
         '[class*="SessionScene"]',
         '[data-mode]',  // Session scene has data-mode attribute
@@ -69,7 +69,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionScene = await $('.bitfun-session-scene');
+      const sessionScene = await $('.openbitfun-session-scene');
       const exists = await sessionScene.isExisting();
 
       if (exists) {
@@ -98,7 +98,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionsSection = await $('.bitfun-nav-panel__inline-list');
+      const sessionsSection = await $('.openbitfun-nav-panel__inline-list');
       const exists = await sessionsSection.isExisting();
 
       if (exists) {
@@ -116,7 +116,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionItems = await browser.$$('.bitfun-nav-panel__inline-item');
+      const sessionItems = await browser.$$('.openbitfun-nav-panel__inline-item');
       console.log('[L1] Session items found:', sessionItems.length);
 
       expect(sessionItems.length).toBeGreaterThanOrEqual(0);
@@ -196,7 +196,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionItems = await browser.$$('.bitfun-nav-panel__inline-item');
+      const sessionItems = await browser.$$('.openbitfun-nav-panel__inline-item');
 
       if (sessionItems.length < 2) {
         console.log('[L1] Not enough sessions to test switching');
@@ -224,7 +224,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const activeSessions = await browser.$$('.bitfun-nav-panel__inline-item.is-active');
+      const activeSessions = await browser.$$('.openbitfun-nav-panel__inline-item.is-active');
       console.log('[L1] Active sessions:', activeSessions.length);
 
       expect(activeSessions.length).toBeGreaterThanOrEqual(0);
@@ -238,7 +238,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionItems = await browser.$$('.bitfun-nav-panel__inline-item');
+      const sessionItems = await browser.$$('.openbitfun-nav-panel__inline-item');
       if (sessionItems.length === 0) {
         console.log('[L1] No sessions to test rename');
         this.skip();
@@ -277,7 +277,7 @@ describe('L1 Session', () => {
         return;
       }
 
-      const sessionScene = await $('.bitfun-session-scene');
+      const sessionScene = await $('.openbitfun-session-scene');
       const exists = await sessionScene.isExisting();
 
       if (!exists) {
@@ -289,7 +289,7 @@ describe('L1 Session', () => {
       console.log('[L1] Initial mode:', initialMode);
 
       // Double-click to toggle mode
-      const resizer = await $('.bitfun-pane-resizer');
+      const resizer = await $('.openbitfun-pane-resizer');
       const resizerExists = await resizer.isExisting();
 
       if (resizerExists) {

@@ -1,12 +1,12 @@
 use super::manager::PersistenceManager;
 use crate::agentic::core::{MessageContent, Session, SessionKind};
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_services_core::session::SessionBranchBoundary;
-use bitfun_services_core::session::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_services_core::session::SessionBranchBoundary;
+use openbitfun_services_core::session::{
     build_branched_session_metadata, format_branch_session_name, resolve_branch_session_lineage,
     BranchSessionMetadataFacts,
 };
-pub use bitfun_services_core::session::{SessionBranchRequest, SessionBranchResult};
+pub use openbitfun_services_core::session::{SessionBranchRequest, SessionBranchResult};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,9 +24,9 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         request: &SessionBranchRequest,
-    ) -> BitFunResult<SessionBranchResult> {
-        bitfun_core_types::validate_session_id(&request.source_session_id)
-            .map_err(BitFunError::Validation)?;
+    ) -> OpenBitFunResult<SessionBranchResult> {
+        openbitfun_core_types::validate_session_id(&request.source_session_id)
+            .map_err(OpenBitFunError::Validation)?;
         let branch_allocation_lock = self
             .get_session_branch_allocation_lock(workspace_path)
             .await;
@@ -39,7 +39,7 @@ impl PersistenceManager {
             .load_session_metadata(workspace_path, &request.source_session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!(
+                OpenBitFunError::NotFound(format!(
                     "Source session metadata not found: {}",
                     request.source_session_id
                 ))
@@ -60,7 +60,7 @@ impl PersistenceManager {
             .await?;
 
         if source_turns.is_empty() {
-            return Err(BitFunError::Validation(
+            return Err(OpenBitFunError::Validation(
                 "Source session has no persisted turns to branch".to_string(),
             ));
         }
@@ -69,7 +69,7 @@ impl PersistenceManager {
             .iter()
             .position(|turn| turn.turn_id == request.source_turn_id)
             .ok_or_else(|| {
-                BitFunError::NotFound(format!(
+                OpenBitFunError::NotFound(format!(
                     "Source turn not found in persisted session: {}",
                     request.source_turn_id
                 ))
@@ -249,7 +249,7 @@ impl PersistenceManager {
             self.save_session_metadata(workspace_path, &branched_metadata)
                 .await?;
 
-            Ok::<(), BitFunError>(())
+            Ok::<(), OpenBitFunError>(())
         }
         .await;
 
@@ -289,8 +289,8 @@ mod tests {
 
     impl TestWorkspace {
         fn new() -> Self {
-            let path =
-                std::env::temp_dir().join(format!("bitfun-session-branch-test-{}", Uuid::new_v4()));
+            let path = std::env::temp_dir()
+                .join(format!("openbitfun-session-branch-test-{}", Uuid::new_v4()));
             std::fs::create_dir_all(&path).expect("test workspace should be created");
             Self { path }
         }

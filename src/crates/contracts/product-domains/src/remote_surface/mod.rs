@@ -1,7 +1,7 @@
 //! Product Operation Registry: the surface-neutral contract for every product
 //! operation that can cross a host boundary.
 //!
-//! BitFun has one Agent Runtime but several ways to reach it: the local Desktop
+//! OpenBitFun has one Agent Runtime but several ways to reach it: the local Desktop
 //! window, a remote SSH/Docker workspace, a Peer Device controller driving a
 //! Desktop or CLI host, and detached dispatch. Each of those surfaces used to
 //! keep its own hand-written table of what a command may do there (the desktop
@@ -195,7 +195,7 @@ impl OperationDefinition {
 /// refused with a stable message so an older controller learns the owner is
 /// gone instead of receiving an unknown-command error.
 pub const RETIRED_COMMAND_PREFIXES: &[(&str, &str)] =
-    &[("lsp_", "the BitFun LSP runtime has been retired")];
+    &[("lsp_", "the OpenBitFun LSP runtime has been retired")];
 
 /// Every operation, sorted by id.
 pub fn operations() -> &'static [OperationDefinition] {
@@ -281,7 +281,7 @@ impl PeerRefusal {
                 host.display_name()
             ),
             Self::UnknownToHost { host } => format!(
-                "command '{command}' is unknown to this BitFun {} peer host version; upgrade the peer host or check the command name",
+                "command '{command}' is unknown to this OpenBitFun {} peer host version; upgrade the peer host or check the command name",
                 host.display_name()
             ),
         }
@@ -646,7 +646,7 @@ mod tests {
             "peer_mode_ping",
             "dispatch_submit",
             "relay_deploy_start",
-            "mark_bitfun_control_surface_ready",
+            "mark_openbitfun_control_surface_ready",
         ] {
             assert!(
                 local.contains(anchor),
@@ -685,7 +685,7 @@ mod tests {
                 reason: retired_reason("lsp_open").unwrap()
             }
             .message("lsp_open"),
-            "command 'lsp_open' is unsupported because the BitFun LSP runtime has been retired"
+            "command 'lsp_open' is unsupported because the OpenBitFun LSP runtime has been retired"
         );
         let cli = PeerRefusal::HostUnsupported {
             host: PeerHostKind::Cli,

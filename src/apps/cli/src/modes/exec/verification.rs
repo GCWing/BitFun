@@ -21,12 +21,12 @@ pub(super) struct VerifyConfig {
 
 impl VerifyConfig {
     pub(super) fn from_env() -> Self {
-        let timeout = std::env::var("BITFUN_PATCH_VERIFY_TIMEOUT_SEC")
+        let timeout = std::env::var("OPENBITFUN_PATCH_VERIFY_TIMEOUT_SEC")
             .ok()
             .and_then(|value| value.trim().parse::<u64>().ok())
             .map(Duration::from_secs)
             .unwrap_or_else(|| Duration::from_secs(900));
-        let max_retries = std::env::var("BITFUN_PATCH_VERIFY_MAX_RETRIES")
+        let max_retries = std::env::var("OPENBITFUN_PATCH_VERIFY_MAX_RETRIES")
             .ok()
             .and_then(|value| value.trim().parse::<u32>().ok())
             .unwrap_or(1);
@@ -63,11 +63,11 @@ pub(super) async fn run_verifier(
     retries_used: u32,
 ) -> VerifyOutcome {
     let mut process = if cfg!(windows) {
-        let mut process = bitfun_core::util::process_manager::create_tokio_command("cmd");
+        let mut process = openbitfun_core::util::process_manager::create_tokio_command("cmd");
         process.arg("/C").arg(command);
         process
     } else {
-        let mut process = bitfun_core::util::process_manager::create_tokio_command("sh");
+        let mut process = openbitfun_core::util::process_manager::create_tokio_command("sh");
         process.arg("-c").arg(command);
         process
     };
@@ -202,7 +202,7 @@ pub(super) fn changed_files(
 ) -> Vec<String> {
     let mut files = BTreeSet::new();
     if let Some(diff_base) = diff_base {
-        if let Ok(output) = bitfun_core::util::process_manager::create_command("git")
+        if let Ok(output) = openbitfun_core::util::process_manager::create_command("git")
             .args(["diff", diff_base, "--name-only", "--find-renames", "-z"])
             .current_dir(workspace)
             .output()
@@ -212,7 +212,7 @@ pub(super) fn changed_files(
             }
         }
     }
-    if let Ok(output) = bitfun_core::util::process_manager::create_command("git")
+    if let Ok(output) = openbitfun_core::util::process_manager::create_command("git")
         .args(["ls-files", "--others", "--exclude-standard", "-z"])
         .current_dir(workspace)
         .output()

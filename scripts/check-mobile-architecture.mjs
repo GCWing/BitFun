@@ -307,12 +307,12 @@ for (const platform of ['android', 'ios']) {
       const packageSuffix = module.replace(/^core-/, '');
       // Two spellings, because an app includes shared/ as a composite build
       // rather than as subprojects: `project(":core-x")` inside shared/, and the
-      // substituted coordinate `"com.bitfun.mobile:core-x"` (optionally
+      // substituted coordinate `"com.openbitfun.mobile:core-x"` (optionally
       // versioned) from an app. Matching only the first would let an app declare
       // a forbidden edge in the one form it is actually able to write.
       const referencesModule =
         new RegExp(`["'][\\w.-]*:${module}(?::[^"']*)?["']`).test(source) ||
-        new RegExp(`com\\.bitfun\\.mobile\\.core\\.${packageSuffix}\\b`).test(source);
+        new RegExp(`com\\.openbitfun\\.mobile\\.core\\.${packageSuffix}\\b`).test(source);
       if (referencesModule) {
         appReachesInternalModules.push(`${relative(file)} -> ${module}`);
       }
