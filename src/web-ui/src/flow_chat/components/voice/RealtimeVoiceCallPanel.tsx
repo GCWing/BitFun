@@ -5,11 +5,11 @@ import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
 import './RealtimeVoiceCall.scss';
 
 /**
- * Realtime voice mode content for the shared Hello popup.
+ * Realtime voice mode content for shared compact conversation surfaces.
  *
- * The popup owns the floating surface and mode switch; this component only
- * renders the active call so voice never competes with FlowChat as a second
- * client-level launcher.
+ * ConversationModeSurface owns the text/voice switch; this component only
+ * renders the active call so compact hosts cannot drift into parallel voice
+ * implementations.
  */
 export function RealtimeVoiceCallPanel() {
   const { t } = useTranslation('settings/voice-input');

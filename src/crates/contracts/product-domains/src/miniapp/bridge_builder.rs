@@ -38,6 +38,44 @@ pub fn build_bridge_script(
 
   const _call = (method, params) => _rpc('worker.call', {{ method, params: params || {{}} }});
 
+  // Host submissions are request-scoped. Coalesce a replay while it is in
+  // flight and retain a bounded result cache so a late duplicate can receive
+  // the same acknowledgement without invoking MiniApp business logic twice.
+  const _chatUserMessagePending = new Map();
+  const _chatUserMessageOutcomes = new Map();
+  const _CHAT_USER_MESSAGE_OUTCOME_LIMIT = 128;
+  const _runChatUserMessage = (requestId, payload, handlers) => {{
+    const completed = _chatUserMessageOutcomes.get(requestId);
+    if (completed) return Promise.resolve(completed);
+    const pending = _chatUserMessagePending.get(requestId);
+    if (pending) return pending;
+
+    const execution = (handlers.length
+      ? Promise.all(handlers.map((handler) => {{
+          try {{
+            return Promise.resolve(handler(payload));
+          }} catch (error) {{
+            return Promise.reject(error);
+          }}
+        }})).then(
+          () => ({{}}),
+          (error) => ({{ error: error instanceof Error ? error.message : String(error) }}),
+        )
+      : Promise.resolve({{ error: 'MiniApp has no chat:userMessage handler.' }}))
+      .then((outcome) => {{
+        _chatUserMessagePending.delete(requestId);
+        _chatUserMessageOutcomes.set(requestId, outcome);
+        while (_chatUserMessageOutcomes.size > _CHAT_USER_MESSAGE_OUTCOME_LIMIT) {{
+          const oldestRequestId = _chatUserMessageOutcomes.keys().next().value;
+          if (oldestRequestId === undefined) break;
+          _chatUserMessageOutcomes.delete(oldestRequestId);
+        }}
+        return outcome;
+      }});
+    _chatUserMessagePending.set(requestId, execution);
+    return execution;
+  }};
+
   function _applyAppearanceVars(vars) {{
     if (!vars || typeof vars !== 'object') return;
     const root = document.documentElement.style;
@@ -159,6 +197,8 @@ pub fn build_bridge_script(
       // Opens the bubble and prefills its composer without sending, so the
       // MiniApp can offer example prompts the user still edits and submits.
       setComposerDraft: (text) => _rpc('chat.setComposerDraft', {{ text }}),
+      // Returning a Promise from the callback keeps realtime voice attached
+      // until MiniApp post-processing and any Agent retries have completed.
       onUserMessage:   (fn) => app.on('chat:userMessage', fn),
       offUserMessage:  (fn) => app.off('chat:userMessage', fn),
     }},
@@ -245,6 +285,18 @@ pub fn build_bridge_script(
           const evtKey = 'worker:' + payload.event;
           (app._eventHandlers[evtKey] || []).forEach(f => f(payload.data));
           (app._eventHandlers['worker:*'] || []).forEach(f => f(payload.event, payload.data));
+        }}
+      }} else if (event === 'chat:userMessage') {{
+        const handlers = app._eventHandlers[event] || [];
+        const requestId = payload && typeof payload.requestId === 'string'
+          ? payload.requestId
+          : '';
+        if (!requestId) {{
+          handlers.forEach(f => f(payload));
+        }} else {{
+          void _runChatUserMessage(requestId, payload, handlers)
+            .then((outcome) => _rpc('chat.completeUserMessage', {{ requestId, ...outcome }}))
+            .catch(() => undefined);
         }}
       }} else {{
         (app._eventHandlers[event] || []).forEach(f => f(payload));

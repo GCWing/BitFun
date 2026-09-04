@@ -22,6 +22,7 @@ import { RealtimePcmPlayer } from './realtimeVoiceAudio';
 import { applyRealtimeAsrSnapshot } from './realtimeVoiceTranscript';
 import {
   runBitFunVoiceTask,
+  runMiniAppVoiceTask,
   summarizeVoiceTaskConclusion,
   VoiceTaskCancelledError,
   type VoiceTaskProgress,
@@ -32,9 +33,13 @@ import {
   buildVoiceClientContext,
   resolveOpenedVoiceWorkspace,
   serializeVoiceClientContext,
+  shouldRouteVoiceTaskToMiniApp,
+  type VoiceMiniAppCallTarget,
   switchOpenedVoiceWorkspace,
   type VoiceOwnedTaskContext,
 } from './voiceClientContext';
+import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
+import { requestMiniAppComposerMessage } from '@/app/scenes/miniapps/miniAppComposerMessages';
 
 const log = createLogger('RealtimeVoiceCall');
 const AUDIO_CHUNK_DURATION_MS = 20;
@@ -59,7 +64,7 @@ export interface RealtimeVoiceCallController {
   taskSessionId: string | null;
   taskPhase: VoiceTaskProgressPhase | null;
   taskProgressText: string;
-  start: () => void;
+  start: (target?: VoiceMiniAppCallTarget) => void;
   end: () => void;
   toggleMute: () => void;
   openSettings: () => void;
@@ -88,9 +93,10 @@ function silentPcm16Base64(sampleRate: number): string {
  * This union mirrors the client tool schemas in
  * `src/crates/services/services-integrations/src/speech/realtime.rs`; it is not
  * the workspace Agent tool contract. `run_task` crosses that boundary by
- * delegating a complete request to a normal Agent session. The delegated Agent
+ * delegating a complete request to either a normal workspace Agent session or
+ * the Agentic MiniApp conversation that launched Voice. The delegated owner
  * independently resolves its filesystem, terminal, MCP, browser, and other
- * tools together with their usual permission policy.
+ * tools together with the usual permission policy.
  *
  * Extension rule for future agents:
  * - Add direct BitFun client operations here and in the Rust Voice schema.
@@ -117,8 +123,9 @@ type VoiceTaskOutcome =
 interface ActiveVoiceTask {
   callId: string;
   sessionId: string | null;
-  workspaceId: string;
-  workspaceName: string;
+  target:
+    | { kind: 'workspace'; id: string; name: string }
+    | { kind: 'miniapp'; id: string; name: string };
   state: 'starting' | 'running' | 'stopping';
   controller: AbortController;
   outcome: Promise<VoiceTaskOutcome>;
@@ -165,12 +172,23 @@ function parseFunctionCall(call: SpeechRealtimeFunctionCall): VoiceFunctionComma
 
 function activeTaskContext(task: ActiveVoiceTask | null): VoiceOwnedTaskContext | null {
   if (!task) return null;
-  return {
+  const common = {
     sessionId: task.sessionId,
-    workspaceId: task.workspaceId,
-    workspaceName: task.workspaceName,
     state: task.state,
   };
+  return task.target.kind === 'miniapp'
+    ? {
+        ...common,
+        kind: 'miniapp',
+        appId: task.target.id,
+        appName: task.target.name,
+      }
+    : {
+        ...common,
+        kind: 'workspace',
+        workspaceId: task.target.id,
+        workspaceName: task.target.name,
+      };
 }
 
 function settleActiveTask(task: ActiveVoiceTask, outcome: VoiceTaskOutcome): void {
@@ -218,6 +236,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
   const assistantSpeechFallbackTimerRef = useRef<number | null>(null);
   const providerErrorRef = useRef(false);
   const activeTaskRef = useRef<ActiveVoiceTask | null>(null);
+  const callTargetRef = useRef<VoiceMiniAppCallTarget | null>(null);
   const bufferStartupEventsRef = useRef(false);
   const startupEventsRef = useRef<SpeechRealtimeEvent[]>([]);
   const spokenProgressQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -379,9 +398,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
 
   /**
    * Dispatches Voice client commands only. It may read or mutate client state,
-   * create one normal Agent session, or cancel the task owned by this call. It
-   * must not become a second executor for workspace Agent tools; task-level
-   * delegation and lifecycle events are the boundary between the two systems.
+   * create one normal Agent session, route through the captured Agentic
+   * MiniApp conversation, or cancel the task owned by this call. It must not
+   * become a second executor for Agent tools; task-level delegation and
+   * lifecycle events are the boundary between the two systems.
    */
   const handleFunctionCall = useCallback(async (
     callSessionId: string,
@@ -399,7 +419,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           call.callId,
           JSON.stringify({
             ok: true,
-            context: buildVoiceClientContext(activeTaskContext(activeTaskRef.current)),
+            context: buildVoiceClientContext(
+              activeTaskContext(activeTaskRef.current),
+              callTargetRef.current,
+            ),
           }),
         );
         setStatus(t('voiceCall.call.status.thinking'));
@@ -420,7 +443,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
               path: workspace.rootPath,
               kind: workspace.workspaceKind,
             },
-            context: buildVoiceClientContext(activeTaskContext(activeTaskRef.current)),
+            context: buildVoiceClientContext(
+              activeTaskContext(activeTaskRef.current),
+              callTargetRef.current,
+            ),
           }),
         );
         setStatus(t('voiceCall.call.status.listening'));
@@ -505,14 +531,34 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           JSON.stringify({
             ok: false,
             error: 'A BitFun task is already running through the client voice assistant',
-            context: buildVoiceClientContext(activeTaskContext(activeTaskRef.current)),
+            context: buildVoiceClientContext(
+              activeTaskContext(activeTaskRef.current),
+              callTargetRef.current,
+            ),
           }),
         );
         return;
       }
 
-      const workspace = resolveOpenedVoiceWorkspace(command.workspaceReference);
-      if (command.activateWorkspace) {
+      const taskCommand = command;
+      const callTarget = callTargetRef.current;
+      const miniAppTarget = shouldRouteVoiceTaskToMiniApp(
+        callTarget,
+        taskCommand.workspaceReference,
+      ) ? callTarget : null;
+      if (miniAppTarget) {
+        const liveClaim = useMiniAppStore.getState().composerClaims[miniAppTarget.appId];
+        if (
+          liveClaim?.token !== miniAppTarget.claimToken
+          || liveClaim.sessionId !== miniAppTarget.sessionId
+        ) {
+          throw new Error('The MiniApp conversation changed after this voice call started');
+        }
+      }
+      const workspace = miniAppTarget
+        ? null
+        : resolveOpenedVoiceWorkspace(taskCommand.workspaceReference);
+      if (workspace && taskCommand.activateWorkspace) {
         await switchOpenedVoiceWorkspace(workspace.id);
       }
 
@@ -522,9 +568,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       });
       const activeTask: ActiveVoiceTask = {
         callId: call.callId,
-        sessionId: null,
-        workspaceId: workspace.id,
-        workspaceName: workspace.name,
+        sessionId: miniAppTarget?.sessionId ?? null,
+        target: miniAppTarget
+          ? { kind: 'miniapp', id: miniAppTarget.appId, name: miniAppTarget.appName }
+          : { kind: 'workspace', id: workspace!.id, name: workspace!.name },
         state: 'starting',
         controller: new AbortController(),
         outcome,
@@ -536,24 +583,40 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       const startingText = t('voiceCall.call.taskPhases.starting');
       setTaskProgressText(startingText);
       setStatus(startingText);
-      const result = await runBitFunVoiceTask(command.task, {
-        workspace,
-        showSession: command.activateWorkspace,
+      const observerOptions = {
         signal: activeTask.controller.signal,
-        onSessionCreated: sessionId => {
+        onSessionCreated: (sessionId: string) => {
           activeTask.sessionId = sessionId;
           activeTask.state = 'running';
           setTaskSessionId(sessionId);
         },
-        onProgress: progress => {
+        onProgress: (progress: VoiceTaskProgress) => {
           const activeSpeechSessionId = sessionRef.current?.sessionId;
           if (activeSpeechSessionId) speakProgress(activeSpeechSessionId, progress);
         },
-        onTextProgress: text => {
+        onTextProgress: (text: string) => {
           const activeSpeechSessionId = sessionRef.current?.sessionId;
           if (activeSpeechSessionId) speakTextProgress(activeSpeechSessionId, text);
         },
-      });
+      };
+      const result = miniAppTarget
+        ? await runMiniAppVoiceTask(taskCommand.task, {
+            ...observerOptions,
+            sessionId: miniAppTarget.sessionId,
+            submit: signal => requestMiniAppComposerMessage({
+              token: miniAppTarget.claimToken,
+              source: 'realtime_voice',
+              text: taskCommand.task,
+              displayText: taskCommand.task,
+              sessionId: miniAppTarget.sessionId,
+              workspacePath: miniAppTarget.workspacePath,
+            }, signal),
+          })
+        : await runBitFunVoiceTask(taskCommand.task, {
+            ...observerOptions,
+            workspace: workspace!,
+            showSession: taskCommand.activateWorkspace,
+          });
       settleActiveTask(activeTask, { status: 'completed', result });
       setTaskSessionId(result.sessionId);
       const outcomeText = result.conclusion
@@ -744,6 +807,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
         break;
       case 'closed':
         sessionRef.current = null;
+        callTargetRef.current = null;
         void cleanupMedia();
         if (phase === 'ending') {
           setPhase('idle');
@@ -793,15 +857,17 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       setTaskProgressText('');
       setTaskSessionId(null);
       setStatus('');
+      callTargetRef.current = null;
     });
   }, [cleanupMedia, phase, t]);
 
-  const start = useCallback(() => {
+  const start = useCallback((target?: VoiceMiniAppCallTarget) => {
     if (phase !== 'idle' || disabled) return;
     if (!isTauriRuntime()) {
       notificationService.error(t('messages.unsupported'));
       return;
     }
+    callTargetRef.current = target ?? null;
     const callId = activeCallIdRef.current + 1;
     activeCallIdRef.current = callId;
     spokenProgressEpochRef.current += 1;
@@ -844,6 +910,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     } catch (error) {
       bufferStartupEventsRef.current = false;
       startupEventsRef.current = [];
+      callTargetRef.current = null;
       log.error('Failed to prepare realtime audio output', { error });
       setPhase('error');
       setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
@@ -861,12 +928,16 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           await cleanupMedia();
           setPhase('idle');
           setStatus('');
+          callTargetRef.current = null;
           notificationService.info(t('voiceCall.call.configureFirst'));
           openSettings();
           return;
         }
         const session = await speechAPI.startRealtimeSession(
-          serializeVoiceClientContext(activeTaskContext(activeTaskRef.current)),
+          serializeVoiceClientContext(
+            activeTaskContext(activeTaskRef.current),
+            callTargetRef.current,
+          ),
         );
         if (activeCallIdRef.current !== callId) {
           bufferStartupEventsRef.current = false;
@@ -899,6 +970,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
             if (sessionRef.current?.sessionId !== session.sessionId) return;
             activeCallIdRef.current += 1;
             sessionRef.current = null;
+            callTargetRef.current = null;
             setPhase('error');
             setStatus(t('voiceCall.call.status.microphoneDisconnected'));
             void cleanupMedia().finally(() => {
@@ -936,6 +1008,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
         log.error('Failed to start realtime voice call', { error });
         setPhase('error');
         setStatus(message);
+        callTargetRef.current = null;
         notificationService.error(t('voiceCall.call.startFailed'));
         await cleanupMedia();
         if (failedSession) {
@@ -958,6 +1031,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     spokenProgressEpochRef.current += 1;
     bufferStartupEventsRef.current = false;
     startupEventsRef.current = [];
+    callTargetRef.current = null;
     const session = sessionRef.current;
     sessionRef.current = null;
     void cleanupMedia();

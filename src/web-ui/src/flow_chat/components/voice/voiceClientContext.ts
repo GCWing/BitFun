@@ -8,11 +8,32 @@ import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/t
 const MAX_CONTEXT_WORKSPACES = 24;
 const MAX_CONTEXT_SESSIONS = 12;
 
-export interface VoiceOwnedTaskContext {
+interface VoiceOwnedTaskBaseContext {
   sessionId: string | null;
-  workspaceId: string;
-  workspaceName: string;
   state: 'starting' | 'running' | 'stopping';
+}
+
+export type VoiceOwnedTaskContext = VoiceOwnedTaskBaseContext & (
+  | {
+      kind: 'workspace';
+      workspaceId: string;
+      workspaceName: string;
+    }
+  | {
+      kind: 'miniapp';
+      appId: string;
+      appName: string;
+    }
+);
+
+/** Immutable routing target captured when Voice starts inside a MiniApp bubble. */
+export interface VoiceMiniAppCallTarget {
+  kind: 'miniapp';
+  appId: string;
+  appName: string;
+  claimToken: string;
+  sessionId: string;
+  workspacePath?: string;
 }
 
 function latestTurnStatus(session: Session): string {
@@ -39,7 +60,10 @@ function workspaceForSession(
  * This is context data for the Voice control plane, not a workspace Agent tool
  * registry. Do not add Agent tool schemas or execution capabilities here.
  */
-export function buildVoiceClientContext(voiceTask: VoiceOwnedTaskContext | null = null) {
+export function buildVoiceClientContext(
+  voiceTask: VoiceOwnedTaskContext | null = null,
+  callTarget: VoiceMiniAppCallTarget | null = null,
+) {
   const workspaceState = workspaceManager.getState();
   const allWorkspaces = Array.from(workspaceState.openedWorkspaces.values());
   const workspaces = allWorkspaces.slice(0, MAX_CONTEXT_WORKSPACES);
@@ -67,6 +91,16 @@ export function buildVoiceClientContext(voiceTask: VoiceOwnedTaskContext | null 
   return {
     scope: 'bitfun_client',
     captured_at: new Date().toISOString(),
+    // Keep immutable call routing near the front of the bounded snapshot so it
+    // remains prominent even when the client has many open workspaces/sessions.
+    voice_call_target: callTarget ? {
+      kind: 'miniapp',
+      app_id: callTarget.appId,
+      app_name: callTarget.appName,
+      session_id: callTarget.sessionId,
+      workspace_path: callTarget.workspacePath ?? null,
+      task_routing: 'miniapp_conversation',
+    } : null,
     active_scene: sceneState.activeTabId || null,
     open_scenes: sceneState.openTabs.map(tab => tab.id),
     active_workspace_id: activeWorkspace?.id ?? null,
@@ -96,17 +130,29 @@ export function buildVoiceClientContext(voiceTask: VoiceOwnedTaskContext | null 
     visible_sessions: sessions,
     voice_owned_task: voiceTask ? {
       session_id: voiceTask.sessionId,
-      workspace_id: voiceTask.workspaceId,
-      workspace_name: voiceTask.workspaceName,
       state: voiceTask.state,
+      target_kind: voiceTask.kind,
+      workspace_id: voiceTask.kind === 'workspace' ? voiceTask.workspaceId : null,
+      workspace_name: voiceTask.kind === 'workspace' ? voiceTask.workspaceName : null,
+      miniapp_id: voiceTask.kind === 'miniapp' ? voiceTask.appId : null,
+      miniapp_name: voiceTask.kind === 'miniapp' ? voiceTask.appName : null,
     } : null,
   };
 }
 
 export function serializeVoiceClientContext(
   voiceTask: VoiceOwnedTaskContext | null = null,
+  callTarget: VoiceMiniAppCallTarget | null = null,
 ): string {
-  return JSON.stringify(buildVoiceClientContext(voiceTask));
+  return JSON.stringify(buildVoiceClientContext(voiceTask, callTarget));
+}
+
+/** An explicit workspace in the provider tool call always overrides MiniApp routing. */
+export function shouldRouteVoiceTaskToMiniApp(
+  callTarget: VoiceMiniAppCallTarget | null,
+  workspaceReference?: string,
+): callTarget is VoiceMiniAppCallTarget {
+  return Boolean(callTarget && !workspaceReference?.trim());
 }
 
 function matchingOpenedWorkspaces(reference: string): WorkspaceInfo[] {

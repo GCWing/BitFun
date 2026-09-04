@@ -416,7 +416,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
   const [viewportHeightPx, setViewportHeightPx] = useState(0);
   const [viewportWidthPx, setViewportWidthPx] = useState(0);
-  const [isAtScrollStart, setIsAtScrollStart] = useState(true);
   /** Last scroller box the resize observer saw, to tell it apart from a content change. */
   const observedViewportBoxRef = useRef<{ width: number; height: number } | null>(null);
   /** Native minimization withdraws the scroller without unmounting the session. */
@@ -1414,9 +1413,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
     const nextIsAtScrollStart = scroller.scrollTop <= FLOWCHAT_SCROLL_START_THRESHOLD_PX;
-    setIsAtScrollStart(previous => (
-      previous === nextIsAtScrollStart ? previous : nextIsAtScrollStart
-    ));
+    const nextAttribute = nextIsAtScrollStart ? 'true' : 'false';
+    if (scroller.dataset.scrollAtStart !== nextAttribute) {
+      // This attribute drives only the CSS mask. Keeping it out of React state
+      // prevents a visual scroll update from re-rendering the virtualizer and
+      // evaluating the history boundary a second time for the same gesture.
+      scroller.dataset.scrollAtStart = nextAttribute;
+    }
   }, []);
 
   /*
@@ -2387,6 +2390,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerElementRef.current = scroller;
     setScrollerElement(scroller);
     if (scroller) {
+      updateIsAtScrollStart();
       if (!scroller.hasAttribute('tabindex')) {
         scroller.tabIndex = -1;
       }
@@ -2397,7 +2401,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       if (isUsableFlowChatViewportRect(initialViewportBox)) {
         setViewportHeightPx(initialViewportBox.height);
         setViewportWidthPx(initialViewportBox.width);
-        updateIsAtScrollStart();
         // Seed the box so the observer's first callback is not read as a resize.
         observedViewportBoxRef.current = initialViewportBox;
       }
@@ -2527,7 +2530,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         className="virtual-message-list__scroller"
         data-flowchat-scroller="true"
         data-testid="flowchat-scroller"
-        data-scroll-at-start={isAtScrollStart ? 'true' : 'false'}
         style={{
           '--_flow-chat-input-overlay-inset': `${inputOverlayInsetPx}px`,
         } as React.CSSProperties}

@@ -33,9 +33,9 @@ const MAX_TOOL_RESULT_BYTES: usize = 16 * 1024;
 const MAX_SPOKEN_PROGRESS_CHARS: usize = 600;
 const MAX_CLIENT_CONTEXT_CHARS: usize = 16 * 1024;
 
-const BITFUN_VOICE_INSTRUCTIONS: &str = r#"You are BitFun's client-level realtime voice assistant. Reply naturally and concisely in the user's language. Your voice call belongs to the whole BitFun client, not to one chat session or one workspace.
+const BITFUN_VOICE_INSTRUCTIONS: &str = r#"You are BitFun's client-level realtime voice assistant. Reply naturally and concisely in the user's language. Your voice call normally belongs to the whole BitFun client. When voice_call_target.kind is miniapp, the call started inside that MiniApp's floating conversation and MiniApp-related tasks should stay in that conversation.
 
-Use get_bitfun_client_context whenever the user asks about the current client, open workspaces/projects, visible sessions, running tasks, or names a workspace whose exact id is not already known from a fresh context result. Never guess a workspace id. Use switch_bitfun_workspace for navigation-only requests. When the user asks you to inspect, create, change, run, debug, research, or otherwise complete work, call run_bitfun_task with a complete standalone task description and the intended workspace_id. Omit workspace_id only when the user clearly means the active workspace. Set activate_workspace to true when the user asks to enter, switch to, or visibly work in that workspace; use false only for an explicit background request.
+Use get_bitfun_client_context whenever the user asks about the current client, open workspaces/projects, visible sessions, running tasks, or names a workspace whose exact id is not already known from a fresh context result. Never guess a workspace id. Use switch_bitfun_workspace for navigation-only requests. When the user asks you to inspect, create, change, run, debug, research, or otherwise complete work, call run_bitfun_task with a complete standalone task description. If voice_call_target.kind is miniapp and the request belongs to that MiniApp, omit workspace_id so BitFun routes the task through the MiniApp's existing conversation and domain workflow. An explicitly supplied workspace_id overrides MiniApp routing and starts a normal workspace Agent task. Outside a MiniApp call, include the intended workspace_id, or omit it only when the user clearly means the active workspace. Set activate_workspace to true when the user asks to enter, switch to, or visibly work in a workspace; use false only for an explicit background request.
 
 If the user asks to stop, cancel, abort, or interrupt the BitFun task currently running through this client voice assistant, call stop_bitfun_task immediately. A stop request is a control operation, not a new task: never pass it to run_bitfun_task and never claim the task stopped before the stop_bitfun_task result confirms it. Do not claim that work is complete before the tool result arrives. BitFun will speak brief public progress summaries while the Agent task is running; do not expose private reasoning, raw logs, or tool payloads. BitFun also speaks a concise final outcome itself. When a task tool result contains outcome_spoken=true, do not repeat that outcome; wait for the user's next request. If outcome_spoken is false or absent, summarize the outcome clearly and mention any user action still required. Never invent client state or task results."#;
 
@@ -602,11 +602,12 @@ fn session_create_payload(
             // This is the provider-hosted Voice model's client control-plane
             // tool list. It is intentionally independent from the tool registry
             // assembled for a normal BitFun Agent session. In particular,
-            // `run_bitfun_task` delegates one complete user intent to a newly
-            // created Agent session; Voice never receives, mirrors, or proxies
-            // that session's filesystem, terminal, MCP, browser, or other tools.
-            // The delegated session resolves its own tools and permissions in
-            // the normal workspace execution path.
+            // `run_bitfun_task` delegates one complete user intent either to a
+            // newly created workspace Agent session or, when the call target
+            // says so, through an Agentic MiniApp's existing chat contract.
+            // Voice never receives, mirrors, or proxies that Agent session's
+            // filesystem, terminal, MCP, browser, or other tools. The delegated
+            // owner resolves its own tools and permissions.
             //
             // Add a Voice tool only for a direct client-level operation that
             // cannot be expressed as an Agent task. A new Voice tool requires
@@ -649,7 +650,7 @@ fn session_create_payload(
                 {
                     "type": "function",
                     "name": "run_bitfun_task",
-                    "description": "Start a new BitFun Agent session in the intended opened workspace, autonomously complete the requested task with normal tools and permissions, and return the final result. Use get_bitfun_client_context first when the user names a workspace or project.",
+                    "description": "Complete one task through BitFun and return the final result. When voice_call_target.kind is miniapp, omit workspace_id for work that belongs to that MiniApp so BitFun reuses its conversation and domain workflow. Otherwise start a normal Agent session in the intended opened workspace; use get_bitfun_client_context first when the user names a workspace or project.",
                     "parameters": {
                         "type": "object",
                         "additionalProperties": false,
@@ -660,11 +661,11 @@ fn session_create_payload(
                             },
                             "workspace_id": {
                                 "type": "string",
-                                "description": "Exact opened workspace id from get_bitfun_client_context. Omit only when the user clearly means the active workspace."
+                                "description": "Exact opened workspace id from get_bitfun_client_context. When voice_call_target.kind is miniapp, omit this for work that belongs to the MiniApp; supplying it explicitly overrides MiniApp routing. Outside a MiniApp call, omit only when the user clearly means the active workspace."
                             },
                             "activate_workspace": {
                                 "type": "boolean",
-                                "description": "Whether to activate the target workspace and show the new Agent session. Defaults to true; use false only for an explicit background request."
+                                "description": "For normal workspace tasks, whether to activate the target workspace and show the new Agent session. Ignored when routing through a MiniApp conversation. Defaults to true; use false only for an explicit background request."
                             }
                         },
                         "required": ["task"]
@@ -939,7 +940,13 @@ mod tests {
             .unwrap();
         assert!(instructions.contains("never claim the task stopped"));
         assert!(instructions.contains("outcome_spoken=true"));
+        assert!(instructions.contains("voice_call_target.kind is miniapp"));
         assert!(instructions.contains("workspace-1"));
+        assert!(payload
+            .pointer("/session/tools/2/parameters/properties/workspace_id/description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| description
+                .contains("supplying it explicitly overrides MiniApp routing")));
         assert_eq!(
             payload.pointer("/extension/extra/enable_proactive_speak"),
             Some(&json!(true))

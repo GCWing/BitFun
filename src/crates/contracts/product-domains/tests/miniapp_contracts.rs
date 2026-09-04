@@ -591,6 +591,8 @@ fn miniapp_bridge_exposes_topic_session_lifecycle() {
     assert!(bridge.contains("agent.ensureSession"));
     assert!(bridge.contains("chat.focusSession"));
     assert!(bridge.contains("chat.clearSession"));
+    assert!(bridge.contains("_chatUserMessagePending"));
+    assert!(bridge.contains("chat.completeUserMessage"));
 }
 
 #[test]

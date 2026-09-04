@@ -376,6 +376,10 @@ mod tests {
         assert_eq!(compiled, legacy);
         assert!(compiled.contains("data-bf-appearance-mode=\"dark\""));
         assert!(compiled.contains("console.log('ready');"));
+        assert!(compiled.contains("event === 'chat:userMessage'"));
+        assert!(compiled.contains("_chatUserMessagePending"));
+        assert!(compiled.contains("Promise.all(handlers.map"));
+        assert!(compiled.contains("_rpc('chat.completeUserMessage'"));
     }
 
     #[test]

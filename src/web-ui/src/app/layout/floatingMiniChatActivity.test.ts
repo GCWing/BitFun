@@ -20,20 +20,34 @@ function readSource(relativePath: string): string {
 }
 
 describe('floating MiniApp chat activity', () => {
-  it('uses the design-system launcher with the catalog mic for Hello', () => {
+  it('uses the realtime phone icon in the design-system launcher for Hello', () => {
     const component = readSource('./FloatingMiniChat.tsx');
     expect(component).toContain('IconButton, LauncherButton, Tooltip');
     expect(component).toContain('<LauncherButton');
-    expect(component).toContain('leadingIcon={<Icon name="mic" />}');
+    expect(component).toContain(
+      'className="bitfun-fmc__button bitfun-fmc__button--hello"',
+    );
+    expect(component).toContain(
+      'leadingIcon={<Phone size={16} aria-hidden="true" />}',
+    );
     expect(component).toContain("tVoice('voiceCall.call.launcherLabel')");
     expect(component).not.toContain('className="bitfun-fmc__button-label"');
   });
 
-  it('leaves the standalone Hello visual states with LauncherButton', () => {
+  it('keeps Hello compact until fine-pointer hover or keyboard focus', () => {
     const stylesheet = readSource('./FloatingMiniChat.scss');
 
     expect(stylesheet).not.toContain('--bf-color-control-launcher');
     expect(stylesheet).not.toContain('--bf-color-control-highlight');
+    expect(stylesheet).toContain('.bitfun-fmc__button--hello');
+    expect(stylesheet).toContain(
+      'inline-size: var(--bf-control-launcher-button-block-size);',
+    );
+    expect(stylesheet).toContain('@media (hover: hover) and (pointer: fine)');
+    expect(stylesheet).toContain(
+      'inline-size: var(--bf-control-launcher-button-min-inline-size);',
+    );
+    expect(stylesheet).toContain('&:focus-visible');
   });
 
   it.each([

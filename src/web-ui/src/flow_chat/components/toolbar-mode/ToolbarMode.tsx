@@ -4,10 +4,10 @@
  *
  * Two window states:
  * - Collapsed: a compact status strip (latest activity + confirm/cancel controls).
- * - Expanded: the main window session surface verbatim — ChatPane renders the
- *   same FlowChat conversation and ChatInput composer the session scene uses, so
- *   this mode never drifts behind the normal chat UI and needs no parallel
- *   conversation/composer implementation of its own.
+ * - Expanded: ConversationModeSurface matches the Hello bubble's text/voice
+ *   capability shell, while ChatPane renders the same FlowChat conversation
+ *   and ChatInput composer the session scene uses. This mode therefore owns no
+ *   parallel conversation, composer, or realtime-voice implementation.
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
@@ -25,6 +25,11 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { SessionMenu, useFlowChatSessions } from '../session-menu';
+import {
+  ConversationModeSurface,
+  ConversationVoiceModeIcon,
+} from '../voice/ConversationModeSurface';
+import { useRealtimeVoiceCall } from '../voice/RealtimeVoiceCallContext';
 
 const log = createLogger('ToolbarMode');
 import ChatPane from '@/app/scenes/session/ChatPane';
@@ -33,6 +38,7 @@ import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
   const { t } = useTranslation('flow-chat');
+  const { t: tVoice } = useTranslation('settings/voice-input');
   const {
     isToolbarMode,
     isExpanded,
@@ -56,6 +62,9 @@ export const ToolbarMode: React.FC = () => {
   const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
   const { workspacePath } = useCurrentWorkspace();
   const { activeSession, sessionTitle } = useFlowChatSessions();
+  const { phase: voicePhase, end: endVoiceCall } = useRealtimeVoiceCall();
+  const isVoiceMode = voicePhase !== 'idle';
+  const surfaceTitle = isVoiceMode ? tVoice('voiceCall.call.title') : sessionTitle;
 
   const lastMessageContent = useMemo(() => {
     if (!activeSession || !activeSession.dialogTurns || activeSession.dialogTurns.length === 0) {
@@ -174,8 +183,14 @@ export const ToolbarMode: React.FC = () => {
   }, []);
 
   const handleExpand = useCallback(async () => {
+    if (isVoiceMode) endVoiceCall();
     await disableToolbarMode();
-  }, [disableToolbarMode]);
+  }, [disableToolbarMode, endVoiceCall, isVoiceMode]);
+
+  const handleToggleExpanded = useCallback(async () => {
+    if (isExpanded && isVoiceMode) endVoiceCall();
+    await toggleExpanded();
+  }, [endVoiceCall, isExpanded, isVoiceMode, toggleExpanded]);
 
   const handleCancel = useCallback(() => {
     window.dispatchEvent(new CustomEvent('toolbar-cancel-task'));
@@ -228,12 +243,16 @@ export const ToolbarMode: React.FC = () => {
     ].filter(Boolean).join(' ') || undefined} className={containerClassName} onMouseDown={handleStartDrag}>
       <div className="bitfun-toolbar-mode__header" data-bf-component="toolbar-mode" data-bf-part="header">
         <div className="bitfun-toolbar-mode__header-left" data-bf-component="toolbar-mode" data-bf-part="headerLeft">
-          {isExpanded ? <SessionMenu onOpenChange={handleSessionMenuOpenChange} /> : null}
+          {isExpanded
+            ? (isVoiceMode
+                ? <ConversationVoiceModeIcon />
+                : <SessionMenu onOpenChange={handleSessionMenuOpenChange} />)
+            : null}
         </div>
 
         <div className="bitfun-toolbar-mode__title-wrapper" data-bf-component="toolbar-mode" data-bf-part="title">
-          <div className="bitfun-toolbar-mode__title-display" title={sessionTitle}>
-            <span className="bitfun-toolbar-mode__title-text">{sessionTitle}</span>
+          <div className="bitfun-toolbar-mode__title-display" title={surfaceTitle}>
+            <span className="bitfun-toolbar-mode__title-text">{surfaceTitle}</span>
           </div>
         </div>
 
@@ -278,7 +297,7 @@ export const ToolbarMode: React.FC = () => {
                       data-bf-component="toolbar-mode"
                       data-bf-part="overflowItem"
                       onClick={() => {
-                        void toggleExpanded();
+                        void handleToggleExpanded();
                         setShowHeaderOverflowMenu(false);
                       }}
                     >
@@ -306,7 +325,7 @@ export const ToolbarMode: React.FC = () => {
                   <button
                     type="button"
                     className="toolbar-btn toolbar-btn--overflow"
-                    onClick={() => void toggleExpanded()}
+                    onClick={() => void handleToggleExpanded()}
                     aria-label={t('toolCards.toolbar.expandChat')}
                   >
                     <PanelTopOpen size={14} />
@@ -329,20 +348,26 @@ export const ToolbarMode: React.FC = () => {
       </div>
 
       {isExpanded ? (
-        /* Main window session surface, reused as-is: same conversation view and
-           same full composer, so there is nothing extra to maintain here. */
-        <div className="bitfun-toolbar-mode__session-surface" data-bf-component="toolbar-mode" data-bf-part="sessionSurface">
-          <ChatPane
-            width={0}
-            isFullscreen={false}
-            isSceneActive
-            workspacePath={workspacePath}
-            showChatInput
-          />
+        /* ConversationModeSurface is also used by the Hello bubble. It owns
+           text/voice mode while ChatPane remains the one shared chat surface. */
+        <div
+          className="bitfun-toolbar-mode__session-surface"
+          data-bf-component="toolbar-mode"
+          data-bf-part="sessionSurface"
+        >
+          <ConversationModeSurface switchTestId="toolbar-realtime-voice-mode-switch">
+            <ChatPane
+              width={0}
+              isFullscreen={false}
+              isSceneActive
+              workspacePath={workspacePath}
+              showChatInput
+            />
+          </ConversationModeSurface>
         </div>
       ) : (
         <div className="bitfun-toolbar-mode__content-row" data-bf-component="toolbar-mode" data-bf-part="content">
-          <div className="bitfun-toolbar-mode__stream-content" onClick={toggleExpanded} data-bf-component="toolbar-mode" data-bf-part="stream" data-bf-content-kind={currentStreamState.toolName ? 'tool' : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? 'todo' : 'text'} data-bf-state={currentStreamState.isStreaming ? 'streaming' : undefined}>
+          <div className="bitfun-toolbar-mode__stream-content" onClick={() => void handleToggleExpanded()} data-bf-component="toolbar-mode" data-bf-part="stream" data-bf-content-kind={currentStreamState.toolName ? 'tool' : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? 'todo' : 'text'} data-bf-state={currentStreamState.isStreaming ? 'streaming' : undefined}>
             {currentStreamState.toolName ? (
               <div className="bitfun-toolbar-mode__tool" data-bf-component="toolbar-mode" data-bf-part="tool">
                 <span className="bitfun-toolbar-mode__tool-name" data-bf-component="toolbar-mode" data-bf-part="toolName">{currentStreamState.toolName}</span>

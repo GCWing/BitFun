@@ -470,7 +470,7 @@ function hasUsableDeckForRevision() {
 async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction) {
   if (promptSubmitGuard || backendRunInFlight) {
     setStatus(t('bubbleBusy'));
-    return;
+    throw new Error(t('bubbleBusy'));
   }
   const instruction = String(rawInstruction || '').trim();
   if (!instruction) {
@@ -497,6 +497,7 @@ async function submitInstruction(rawInstruction, rawDisplayText = rawInstruction
     failGenerationFromError(error);
     rerender();
     await persist(true);
+    throw error;
   } finally {
     promptSubmitGuard = false;
   }
@@ -1643,7 +1644,10 @@ async function runCoworkDeckGeneration(operation, instruction, options = {}) {
         const requestInput = buildDeckRunRequestInput(
           buildBackendRequestBase(operation, instruction),
           {
-            sessionId: retrySession?.id,
+            // A topic session exists before the first user request. Session
+            // reuse alone is therefore not evidence of an interrupted run;
+            // only recovery attempts should receive continuation semantics.
+            continueAfterInterruption: attempt > 1,
             projectContractDiagnostic,
           },
         );
@@ -1715,7 +1719,9 @@ async function runCoworkDeckGeneration(operation, instruction, options = {}) {
           sessionId: retrySession?.id || undefined,
           appDataWorkspace: retrySession?.project?.workspaceSubdir,
           resultKind: project ? 'text' : undefined,
-          displayText: options.displayText || instruction,
+          displayText: attempt === 1
+            ? (options.displayText || instruction)
+            : t('generationRetryDisplayText', { attempt, max: maxAttempts }),
         });
         retrySession.id = sessionId || retrySession.id;
         state.agentSession = {
@@ -3791,6 +3797,8 @@ runtime().chat?.onUserMessage?.((payload) => {
   const text = String(payload?.text || '').trim();
   if (!text) return;
   const displayText = String(payload?.displayText || '').trim() || text;
-  void submitInstruction(text, displayText);
+  // The returned Promise is part of the host completion contract used by
+  // realtime voice. It spans Agent retries, file verification, and persistence.
+  return submitInstruction(text, displayText);
 });
 init();

@@ -20,9 +20,8 @@ describe('FlowChat transcript edge fade', () => {
     expect(component).toContain(
       "'--_flow-chat-input-overlay-inset': `${inputOverlayInsetPx}px`",
     );
-    expect(component).toContain(
-      "data-scroll-at-start={isAtScrollStart ? 'true' : 'false'}",
-    );
+    expect(component).toContain('scroller.dataset.scrollAtStart = nextAttribute;');
+    expect(component).not.toContain('const [isAtScrollStart, setIsAtScrollStart]');
     expect(component).toContain(
       'const FLOWCHAT_SCROLL_START_THRESHOLD_PX = 1;',
     );

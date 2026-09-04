@@ -4,6 +4,7 @@ import {
   extractVoiceTaskConclusion,
   extractVoiceTaskProgressTexts,
   extractVoiceTaskSummary,
+  selectVoiceTaskTurn,
   summarizeVoiceTaskConclusion,
   summarizeVoiceTaskProgress,
 } from './voiceTaskBridge';
@@ -34,6 +35,17 @@ function sessionWithItems(
 }
 
 describe('extractVoiceTaskSummary', () => {
+  it('does not mistake a completed pre-existing MiniApp turn for new voice work', () => {
+    const session = sessionWithItems([]);
+    const oldTurn = session.dialogTurns[0];
+
+    expect(selectVoiceTaskTurn(session, new Set([oldTurn.id]))).toBeUndefined();
+
+    const newTurn = { ...oldTurn, id: 'turn-2', status: 'processing' as const };
+    session.dialogTurns.push(newTurn);
+    expect(selectVoiceTaskTurn(session, new Set([oldTurn.id]))?.id).toBe('turn-2');
+  });
+
   it('returns assistant text without exposing thinking or tool payloads', () => {
     const session = sessionWithItems([
       { id: 'thinking', type: 'thinking', content: 'private reasoning', status: 'completed' },

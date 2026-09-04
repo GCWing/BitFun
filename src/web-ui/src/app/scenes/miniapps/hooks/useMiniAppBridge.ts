@@ -26,6 +26,10 @@ import {
   normalizeMiniAppBubbleCustomization,
   type MiniAppComposerMessageDetail,
 } from '../miniAppStore';
+import {
+  completeMiniAppComposerMessage,
+  rejectPendingMiniAppComposerMessages,
+} from '../miniAppComposerMessages';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { shouldOpenMiniAppAgentRunInMainScene } from './miniAppAgentVisibility';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
@@ -482,6 +486,10 @@ export function useMiniAppBridge(
             return;
           }
           if (method === 'chat.releaseComposer') {
+            rejectPendingMiniAppComposerMessages(
+              composerTokenRef.current,
+              'MiniApp released the floating chat composer before the message completed',
+            );
             useMiniAppStore.getState().releaseComposer(appId, composerTokenRef.current);
             reply(null);
             return;
@@ -533,6 +541,20 @@ export function useMiniAppBridge(
               sessionId,
             );
             reply(null);
+            return;
+          }
+          if (method === 'chat.completeUserMessage') {
+            const requestId = String(params.requestId ?? '').trim();
+            if (!requestId) {
+              replyError('chat.completeUserMessage: requestId is required.');
+              return;
+            }
+            const completed = completeMiniAppComposerMessage(
+              composerTokenRef.current,
+              requestId,
+              typeof params.error === 'string' ? params.error : undefined,
+            );
+            reply({ completed });
             return;
           }
           replyError(`Unknown chat method: ${method}`);
@@ -682,6 +704,8 @@ export function useMiniAppBridge(
           : {}),
         ...(detail.sessionId !== undefined ? { sessionId: detail.sessionId } : {}),
         ...(detail.workspacePath !== undefined ? { workspacePath: detail.workspacePath } : {}),
+        ...(detail.requestId !== undefined ? { requestId: detail.requestId } : {}),
+        ...(detail.source !== undefined ? { source: detail.source } : {}),
       };
       iframeRef.current?.contentWindow?.postMessage(
         { type: 'bitfun:event', event: 'chat:userMessage', payload },
@@ -699,6 +723,10 @@ export function useMiniAppBridge(
     const currentAppId = app.id;
     const token = composerTokenRef.current;
     return () => {
+      rejectPendingMiniAppComposerMessages(
+        token,
+        'MiniApp closed before the floating chat message completed',
+      );
       useMiniAppStore.getState().releaseComposer(currentAppId, token);
     };
   }, [app.id]);

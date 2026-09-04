@@ -255,6 +255,16 @@ test('PPT topic lifecycle eagerly creates or rebinds its dedicated session', asy
   assert.match(uiSource, /async function ensureDeckAgentSession\(\)/);
   assert.match(uiSource, /payload\?\.displayText/);
   assert.match(uiSource, /displayText: options\.displayText \|\| requestInput\.instruction/);
+  assert.match(uiSource, /continueAfterInterruption: attempt > 1/);
+  assert.match(
+    uiSource,
+    /displayText: attempt === 1[\s\S]*generationRetryDisplayText/,
+  );
+  assert.match(uiSource, /return submitInstruction\(text, displayText\);/);
+  assert.doesNotMatch(
+    uiSource,
+    /buildDeckRunRequestInput\([\s\S]{0,180}sessionId: retrySession\?\.id/,
+  );
   assert.match(
     uiSource,
     /async function restoreHistory[\s\S]*await clearFocusedDeckAgentSession\(\);[\s\S]*await ensureDeckAgentSession\(\);/,
@@ -867,7 +877,7 @@ test('persistDeckProjectSeed reports mkdir and slide write failures for same-ses
   });
 });
 
-test('request always carries seed diagnostics while continuation depends on an existing session', () => {
+test('request always carries seed diagnostics while only a recovery attempt is a continuation', () => {
   assert.equal(typeof deckProjectContract.buildDeckRunRequestInput, 'function');
   const diagnostic = {
     code: 'missing_slide_files',
@@ -875,7 +885,7 @@ test('request always carries seed diagnostics while continuation depends on an e
   };
   const request = deckProjectContract.buildDeckRunRequestInput(
     { operation: 'generate', instruction: '继续' },
-    { sessionId: 'session-1', projectContractDiagnostic: diagnostic },
+    { continueAfterInterruption: true, projectContractDiagnostic: diagnostic },
   );
 
   assert.equal(request.continueAfterInterruption, true);
@@ -884,7 +894,7 @@ test('request always carries seed diagnostics while continuation depends on an e
   assert.deepEqual(
     deckProjectContract.buildDeckRunRequestInput(
       { operation: 'generate' },
-      { sessionId: '', projectContractDiagnostic: diagnostic },
+      { continueAfterInterruption: false, projectContractDiagnostic: diagnostic },
     ),
     { operation: 'generate', projectContractDiagnostic: diagnostic },
   );
@@ -898,7 +908,7 @@ test('first-turn prompt receives seed filesystem continuation diagnostics', () =
   };
   const request = deckProjectContract.buildDeckRunRequestInput(
     { operation: 'generate', instruction: '生成演示稿' },
-    { sessionId: '', projectContractDiagnostic: diagnostic },
+    { continueAfterInterruption: false, projectContractDiagnostic: diagnostic },
   );
   const prompt = buildAgentPrompt(request);
 

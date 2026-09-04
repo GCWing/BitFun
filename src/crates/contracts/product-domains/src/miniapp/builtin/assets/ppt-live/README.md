@@ -34,7 +34,7 @@ PPT Live 同时是 BitFun **Agentic MiniApp** 的样板间：它自己**没有�
 | `app.agent.ensureSession(options)` | 在主题打开时创建或重新绑定专属隐藏会话；PPT Live 用 `agentSession.id` 恢复老主题，用新的 appdata 工作目录初始化新主题 |
 | `app.agent.run(prompt, options)` | `prompt` 承载 MiniApp 内部任务协议；`options.displayText` 单独承载会话框中显示的用户原始输入，避免把内部 prompt 或通用占位文案展示给用户 |
 | `app.chat.claimComposer(options)` | 注册到标准气泡聊天窗；本应用 tab 激活时用户输入改送本应用。可声明 `title`、`composer.placeholder` 与 `welcome`（标题、说明、工作区标签、示例 prompt），由宿主在共享组件内按主题安全渲染。不能修改面板尺寸、输入器布局或控件。幂等 upsert，locale 变更时重调可更新文案 |
-| `app.chat.onUserMessage(fn)` | 接收共享 ChatInput 的提交，payload 至少含 `{ text }`，并可包含 `displayText`、`contexts`、`composerPresentation`、`sessionId` 与 `workspacePath` |
+| `app.chat.onUserMessage(fn)` | 接收共享 ChatInput 或实时语音的提交，payload 至少含 `{ text }`，并可包含 `displayText`、`contexts`、`composerPresentation`、`sessionId`、`workspacePath`、`requestId` 与 `source`。回调应返回覆盖完整处理周期的 Promise，宿主据此等待 MiniApp 后处理完成 |
 | `app.chat.focusSession(sessionId)` | 把经校验的本应用 Agent 会话绑定到气泡；气泡打开时临时展示该会话，关闭后恢复用户原来的普通会话 |
 | `app.chat.clearSession()` | 新建或切换主题时先清除旧绑定，避免准备新会话期间短暂显示上一个主题 |
 | `app.chat.setComposerDraft(text)` | 展开气泡并预填输入框，**不发送**——欢迎页的示例 prompt 用它，用户仍可编辑后再发 |

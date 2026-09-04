@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 259,
+        version: 260,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -591,6 +591,11 @@ mod tests {
         assert!(app
             .ui_js
             .contains("displayText: options.displayText || requestInput.instruction"));
+        assert!(app.ui_js.contains("continueAfterInterruption: attempt > 1"));
+        assert!(app.ui_js.contains("generationRetryDisplayText"));
+        assert!(app
+            .ui_js
+            .contains("return submitInstruction(text2, displayText)"));
         assert!(app.ui_js.contains("project.json"));
         assert!(app.ui_js.contains("slides/slide-"));
         let ui_source = include_str!("builtin/assets/ppt-live/ui.js");
