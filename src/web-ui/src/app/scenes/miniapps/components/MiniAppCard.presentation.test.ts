@@ -27,15 +27,17 @@ describe('Mini App card presentation', () => {
     const submissions = readRelative('../views/MiniAppSubmissionsView.tsx');
     const tabs = readRelative('../MiniAppGalleryScene.tsx');
 
-    expect(library).toContain('<SegmentedControl');
-    expect(library).toContain('variant="pills"');
+    expect(library).toContain('className="miniapp-gallery__filters"');
+    expect(library).toContain('className="miniapp-gallery__categories"');
+    expect(library).not.toContain('<SegmentedControl');
     expect(library).toContain(
       'buildMiniAppLibraryItems(marketItems, apps, marketOrigins, sort)',
     );
     expect(library).toContain('<MiniAppLibraryRow');
     expect(library).not.toContain('<MiniAppCard');
-    expect(tabs).toContain('distribution="fill"');
-    expect(tabs).toContain('size="md"');
+    expect(tabs).toContain('<TabGroup');
+    expect(tabs).not.toContain('distribution="fill"');
+    expect(tabs).toContain('size="sm"');
     expect(tabs).toContain("type MiniAppGalleryTab = 'apps' | 'submissions';");
     expect(tabs).not.toContain('MiniAppMarketView');
     expect(submissions).toContain('<Disclosure');
@@ -100,19 +102,19 @@ describe('Mini App card presentation', () => {
     expect(stylesheet).toContain('grid-template-columns: minmax(0, 224px) minmax(0, 1fr);');
   });
 
-  it('keeps catalog search beside the All Apps heading instead of in the page header', () => {
+  it('groups catalog controls below the tabs without repeating the page heading', () => {
     const source = readRelative('../views/MiniAppLibraryView.tsx');
     const headerStart = source.indexOf('<GalleryPageHeader');
     const tabsStart = source.indexOf('{tabs}', headerStart);
-    const allAppsStart = source.indexOf('<GalleryZone', tabsStart);
-    const allAppsEnd = source.indexOf('</GalleryZone>', allAppsStart);
+    const allAppsStart = source.indexOf('<section className="gallery-zone"', tabsStart);
+    const allAppsEnd = source.indexOf('</section>', allAppsStart);
     const pageHeader = source.slice(headerStart, tabsStart);
     const allAppsZone = source.slice(allAppsStart, allAppsEnd);
 
     expect(pageHeader).not.toContain('<SearchField');
-    expect(allAppsZone).toContain("title={t('allApps')}");
+    expect(allAppsZone).toContain("aria-label={t('allApps')}");
     expect(allAppsZone).toMatch(
-      /titleAdornment=\{\([\s\S]*?miniapp-gallery__heading-actions[\s\S]*?<NumberBadge[\s\S]*?<SearchField[\s\S]*?tools=\{\([\s\S]*?<Select/,
+      /miniapp-gallery__filters[\s\S]*?<SearchField[\s\S]*?miniapp-gallery__categories[\s\S]*?miniapp-gallery__sort[\s\S]*?<NumberBadge/,
     );
   });
 

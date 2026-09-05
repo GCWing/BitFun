@@ -7,7 +7,6 @@ import {
   MenuItem,
   NumberBadge,
   SearchField,
-  SegmentedControl,
   Select,
   StatusPill,
   type SelectOption,
@@ -31,7 +30,6 @@ import {
   GalleryLayout,
   GalleryPageHeader,
   GallerySkeleton,
-  GalleryZone,
 } from '@/app/components';
 import { useApp } from '@/app/hooks/useApp';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
@@ -840,26 +838,27 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         data-openbitfun-part="content"
         className="gallery-zones"
       >
-        <GalleryZone
-          title={t('allApps')}
-          titleAdornment={(
-            <span
-              className="miniapp-gallery__heading-actions"
-              data-openbitfun-component="miniapp-gallery-view"
-              data-openbitfun-part="tools"
-            >
-              <NumberBadge value={libraryItems.length} />
-              <SearchField
-                className="miniapp-gallery__search"
-                leadingIcon={<Icon name="search" size="lg" aria-hidden />}
-                onValueChange={setQuery}
-                placeholder={t('searchPlaceholder')}
+        <section className="gallery-zone" aria-label={t('allApps')}>
+          <div className="miniapp-gallery__filters" data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="tools">
+            <SearchField
+              className="miniapp-gallery__search"
+              leadingIcon={<Icon name="search" size="sm" aria-hidden />}
+              onValueChange={setQuery}
+              placeholder={t('searchPlaceholder')}
+              aria-label={t('searchPlaceholder')}
+              size="sm"
+              value={query}
+            />
+            <div data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="categoryFilters">
+              <Select
+                className="miniapp-gallery__categories"
+                options={CATEGORIES.map((value) => ({ label: categoryLabel(value, t), value }))}
+                value={category}
+                onValueChange={(value) => setCategory(value as MiniAppCategory)}
+                aria-label={t('market.catalog')}
                 size="sm"
-                value={query}
               />
-            </span>
-          )}
-          tools={(
+            </div>
             <Select
               className="miniapp-gallery__sort"
               size="sm"
@@ -868,24 +867,9 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
               onValueChange={(value) => setSort(value as MarketSort)}
               aria-label={t('market.sortLabel')}
             />
-          )}
-        >
-          <div data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="categoryFilters">
-            <SegmentedControl
-              className="miniapp-gallery__categories"
-              options={CATEGORIES.map((value) => ({
-                label: (
-                  <span data-openbitfun-component="miniapp-gallery-view" data-openbitfun-part="categoryFilter">
-                    {categoryLabel(value, t)}
-                  </span>
-                ),
-                value,
-              }))}
-              value={category}
-              onValueChange={(value) => setCategory(value as MiniAppCategory)}
-              aria-label={t('market.catalog')}
-              variant="pills"
-            />
+            <span className="miniapp-gallery__result-count" aria-label={t('allApps')}>
+              <NumberBadge value={libraryItems.length} />
+            </span>
           </div>
 
           {catalogError ? (
@@ -908,7 +892,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
           ) : null}
 
           {renderLibrary()}
-        </GalleryZone>
+        </section>
       </div>
 
       <MiniAppDetailModal
