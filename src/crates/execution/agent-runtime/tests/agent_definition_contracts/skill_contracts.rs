@@ -351,6 +351,23 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         resolve_builtin_default_enabled("agent-browser", "coding_shared"),
         Some(false)
     );
+    assert_eq!(
+        resolve_builtin_default_enabled("agent-browser", "Ultra"),
+        Some(true)
+    );
+    assert_eq!(resolve_builtin_default_enabled("plan", "Ultra"), Some(true));
+    assert_eq!(
+        resolve_builtin_default_enabled("find-skills", "Ultra"),
+        Some(false)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("agent-browser", "SwarmWorker"),
+        Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("plan", "SwarmWorker"),
+        Some(false)
+    );
     for (mode_id, expected) in [
         ("coding_shared", true),
         ("Cowork", true),
@@ -1092,8 +1109,8 @@ fn explicit_invocation_hidden_builtin_fallback_is_runtime_owned() {
 
 #[test]
 fn explicit_invocation_reaches_default_hidden_agent_browser() {
-    // agent-browser is default-off in every mode (ControlHub browser domain is
-    // the default path), but an explicit invocation must still resolve it.
+    // Modes that use ControlHub keep agent-browser default-hidden, but an exact
+    // explicit invocation must still resolve it.
     let candidate = SkillCandidate {
         info: builtin_skill("agent-browser"),
         priority: 10,

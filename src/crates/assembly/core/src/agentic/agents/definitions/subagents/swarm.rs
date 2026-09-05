@@ -162,6 +162,7 @@ impl SwarmWorkerAgent {
                 "ExecControl",
                 "WebSearch",
                 "WebFetch",
+                "Skill",
             ]
             .into_iter()
             .map(str::to_string)

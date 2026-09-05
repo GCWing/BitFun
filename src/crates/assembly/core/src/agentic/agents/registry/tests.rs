@@ -450,6 +450,25 @@ fn agent_list_and_delete_are_exposed_only_to_swarm_planners() {
 }
 
 #[test]
+fn skill_tool_is_exposed_only_to_ultra_and_swarm_worker_within_the_swarm_catalog() {
+    for spec in builtin_agent_specs() {
+        let agent = (spec.factory)();
+        if !matches!(
+            agent.id(),
+            "Ultra" | "SwarmPlanner" | "SwarmWorker" | "SwarmReviewer"
+        ) {
+            continue;
+        }
+        assert_eq!(
+            agent.default_tools().iter().any(|tool| tool == "Skill"),
+            matches!(agent.id(), "Ultra" | "SwarmWorker"),
+            "unexpected Skill exposure for {}",
+            agent.id()
+        );
+    }
+}
+
+#[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
     for agent_type in [
         "Explore",
