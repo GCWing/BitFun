@@ -35,3 +35,9 @@ iOS, and HarmonyOS files.
 
 Verify generated dimensions, small-size rim contrast, favicon references, and
 icon containers with `node --test scripts/generate-brand-assets.test.mjs`.
+
+`source/release-letter-mascot.svg` preserves the authored character from
+`openbitfun-letter.html`. Its named body, rigid head/rod, and eye parts are used
+by the release letter's connected animation rig. The gradients belong to this
+illustration, not to the application theme. Vite bundles this source directly;
+it is independent of the application icon generator and needs no PNG export.

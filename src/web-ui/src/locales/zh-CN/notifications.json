@@ -50,6 +50,17 @@
     "assistantBootstrapWaitingForModelConfiguration": "Assistant 引导正在等待 AI 模型配置。"
   },
   "announcements": {
+    "release_letter": {
+      "skip": "直接阅读",
+      "replay": "重播发布信动画",
+      "replay_mascot": "重播 OpenBitFun 角色跳动动画",
+      "phase_center": "01 / 定位中心",
+      "phase_circles": "02 / 圆规起笔",
+      "phase_frame": "03 / 骨架落位",
+      "phase_corners": "04 / 圆角成立",
+      "phase_outline": "05 / 线稿成形",
+      "phase_light": "06 / 柔光成形"
+    },
     "common": {
       "learn_more": "查看详情",
       "got_it": "知道了",

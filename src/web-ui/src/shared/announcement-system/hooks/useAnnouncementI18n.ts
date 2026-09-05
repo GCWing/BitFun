@@ -8,7 +8,7 @@ import { useI18n } from '@/infrastructure/i18n';
  * otherwise miss and echo the full key).
  */
 export function useAnnouncementI18n() {
-  const { t: baseT, ...rest } = useI18n();
+  const { t: baseT, ...rest } = useI18n('notifications');
 
   const t = useCallback(
     (key: string, options?: Record<string, unknown>) =>

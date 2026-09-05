@@ -8,6 +8,10 @@ import {
 } from '@openbitfun/ui';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
 import { useAnnouncementStore } from '../store/announcementStore';
+import { useReleaseLetterMotion } from '../hooks/useReleaseLetterMotion';
+import ReleaseLetterDrawing from './ReleaseLetterDrawing';
+import ReleaseLetterMascot from './ReleaseLetterMascot';
+import { SIGNATURE } from './releaseLetterMotion';
 import '../styles/ReleaseLetterModal.scss';
 
 interface ReleaseLetterParagraph {
@@ -29,8 +33,82 @@ export function parseReleaseLetterBody(body: string): ReleaseLetterParagraph[] {
     });
 }
 
+function ReleaseLetterScene({ title, body, titleId, descriptionId, closable }: {
+  title: string; body: string; titleId: string; descriptionId: string; closable: boolean;
+}) {
+  const { t, currentLanguage } = useAnnouncementI18n();
+  const { sceneRef, replay, skip, bounce } = useReleaseLetterMotion();
+  const paragraphs = parseReleaseLetterBody(body);
+  return (
+    <div ref={sceneRef} className="release-letter-scene" data-motion-state="intro" data-content-ready="false" lang={currentLanguage}>
+      <ScrollArea className="release-letter-scroll" data-openbitfun-component="announcement" data-openbitfun-part="releaseLetterScroll">
+        <article className="release-letter" aria-labelledby={titleId}>
+          <div className="release-letter__construction" aria-hidden="true" data-openbitfun-component="announcement" data-openbitfun-part="releaseLetterArtwork">
+            <div className="release-letter__drawing-box">
+              <ReleaseLetterDrawing />
+              <div className="release-letter__intro-wordmark">OpenBitFun</div>
+              <div className="release-letter__intro-rule" />
+            </div>
+          </div>
+          <header className="release-letter__header">
+            <div className="release-letter__brand" data-reveal="0">OpenBitFun</div>
+          </header>
+          <section className="release-letter__copy" data-openbitfun-component="announcement" data-openbitfun-part="releaseLetterCopy">
+            <h1 className="release-letter__title" id={titleId} data-reveal="1">{title}</h1>
+            <div className="release-letter__rule" aria-hidden="true" data-reveal="2" />
+            <div className="release-letter__paragraphs" id={descriptionId}>
+              {paragraphs.map((paragraph, index) => (
+                <p key={`${index}-${paragraph.text.slice(0, 20)}`} data-reveal={index + 3}>
+                  {paragraph.emphasized ? <strong>{paragraph.text}</strong> : paragraph.text}
+                </p>
+              ))}
+            </div>
+            <footer className="release-letter__signature" data-openbitfun-component="announcement" data-openbitfun-part="releaseLetterSignature">
+              <div className="release-letter__team">
+                <span aria-hidden="true" />
+                <p>
+                  <span className="release-letter__sr-only">{SIGNATURE}</span>
+                  <span aria-hidden="true">{Array.from(SIGNATURE).map((character, index) => (
+                    <span key={index} className="release-letter__typing-char" data-typing-char="" data-typed="false">{character}</span>
+                  ))}</span>
+                </p>
+              </div>
+              <button type="button" className="release-letter__mascot-button" onPointerEnter={bounce} onFocus={bounce} onClick={bounce} aria-label={t('announcements.release_letter.replay_mascot')}>
+                <ReleaseLetterMascot />
+              </button>
+            </footer>
+          </section>
+          <footer className="release-letter__marks" data-reveal="10" data-openbitfun-component="announcement" data-openbitfun-part="releaseLetterMarks">
+            <button type="button" className="release-letter__version-mark" onClick={replay} aria-label={t('announcements.release_letter.replay')}>
+              <span>1.0.0</span><span>A NEW BEGINNING</span>
+            </button>
+            <div className="release-letter__build-mark" aria-hidden="true"><span>BUILD MORE</span><span>TOGETHER</span></div>
+          </footer>
+        </article>
+      </ScrollArea>
+      <div className="release-letter__controls">
+        <button type="button" className="release-letter__skip" onClick={skip}>{t('announcements.release_letter.skip')}</button>
+        {closable && <DialogClose className="release-letter__close" aria-label={t('announcements.common.close')} />}
+      </div>
+      <div className="release-letter__intro-status" aria-hidden="true">
+        <div className="release-letter__intro-status-row">
+          <span>
+            <span data-phase="0">{t('announcements.release_letter.phase_center')}</span>
+            <span data-phase="1" hidden>{t('announcements.release_letter.phase_circles')}</span>
+            <span data-phase="2" hidden>{t('announcements.release_letter.phase_frame')}</span>
+            <span data-phase="3" hidden>{t('announcements.release_letter.phase_corners')}</span>
+            <span data-phase="4" hidden>{t('announcements.release_letter.phase_outline')}</span>
+            <span data-phase="5" hidden>{t('announcements.release_letter.phase_light')}</span>
+          </span>
+          <span>4.8 S</span>
+        </div>
+        <div className="release-letter__intro-track"><div className="release-letter__intro-progress" /></div>
+      </div>
+    </div>
+  );
+}
+
 const ReleaseLetterModal: React.FC = () => {
-  const { t } = useAnnouncementI18n();
   const {
     closeModal,
     markModalPresented,
@@ -58,7 +136,6 @@ const ReleaseLetterModal: React.FC = () => {
   const modal = openModal.modal;
   const page = modal.pages[0];
   if (!page) return null;
-  const paragraphs = parseReleaseLetterBody(page.body);
 
   return (
     <Dialog
@@ -82,92 +159,7 @@ const ReleaseLetterModal: React.FC = () => {
         data-openbitfun-part="releaseLetter"
       >
         <DialogBody className="release-letter-dialog__body" inset="none">
-          <ScrollArea
-            className="release-letter-scroll"
-            data-openbitfun-component="announcement"
-            data-openbitfun-part="releaseLetterScroll"
-          >
-            <article className="release-letter" aria-labelledby={titleId}>
-              <img
-                className="release-letter__construction"
-                src="/assets/announcements/release-letter-construction.png"
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-                data-openbitfun-component="announcement"
-                data-openbitfun-part="releaseLetterArtwork"
-              />
-
-              <header className="release-letter__header">
-                <div className="release-letter__brand">OpenBitFun</div>
-                {modal.closable && (
-                  <DialogClose
-                    className="release-letter__close"
-                    aria-label={t('announcements.common.close')}
-                  />
-                )}
-              </header>
-
-              <div className="release-letter__side-word release-letter__side-word--open" aria-hidden="true">
-                {'OPEN'.split('').map(letter => <span key={letter}>{letter}</span>)}
-              </div>
-              <div className="release-letter__side-word release-letter__side-word--bitfun" aria-hidden="true">
-                {'BITFUN'.split('').map(letter => <span key={letter}>{letter}</span>)}
-              </div>
-
-              <section
-                className="release-letter__copy"
-                data-openbitfun-component="announcement"
-                data-openbitfun-part="releaseLetterCopy"
-              >
-                <h1 className="release-letter__title" id={titleId}>{page.title}</h1>
-                <div className="release-letter__rule" aria-hidden="true" />
-                <div className="release-letter__paragraphs" id={descriptionId}>
-                  {paragraphs.map((paragraph, index) => (
-                    <p key={`${index}-${paragraph.text.slice(0, 20)}`}>
-                      {paragraph.emphasized
-                        ? <strong>{paragraph.text}</strong>
-                        : paragraph.text}
-                    </p>
-                  ))}
-                </div>
-
-                <footer
-                  className="release-letter__signature"
-                  data-openbitfun-component="announcement"
-                  data-openbitfun-part="releaseLetterSignature"
-                >
-                  <div className="release-letter__team">
-                    <span aria-hidden="true" />
-                    <p>OpenBitFun Team</p>
-                  </div>
-                  <img
-                    className="release-letter__mascot"
-                    src="/assets/announcements/release-letter-mascot.png"
-                    alt=""
-                    aria-hidden="true"
-                    draggable={false}
-                  />
-                </footer>
-              </section>
-
-              <footer
-                className="release-letter__marks"
-                aria-hidden="true"
-                data-openbitfun-component="announcement"
-                data-openbitfun-part="releaseLetterMarks"
-              >
-                <div className="release-letter__version-mark">
-                  <span>1.0.0</span>
-                  <span>A NEW BEGINNING</span>
-                </div>
-                <div className="release-letter__build-mark">
-                  <span>BUILD MORE</span>
-                  <span>TOGETHER</span>
-                </div>
-              </footer>
-            </article>
-          </ScrollArea>
+          {modalVisible && <ReleaseLetterScene key={openModal.id} title={page.title} body={page.body} titleId={titleId} descriptionId={descriptionId} closable={modal.closable} />}
         </DialogBody>
       </ThemeRoot>
     </Dialog>
