@@ -726,15 +726,15 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 }
 .issue-approval-effects {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1px;
   margin: 10px 0 0 38px;
   overflow: hidden;
   border: 1px solid var(--lx-border);
   border-radius: var(--lx-radius);
-  background: var(--lx-surface);
+  background: var(--lx-border);
 }
-.issue-approval-effects section { min-width: 0; padding: 10px 11px; }
-.issue-approval-effects section + section { border-left: 1px solid var(--lx-border); }
+.issue-approval-effects section { min-width: 0; padding: 10px 11px; background: var(--lx-surface); }
 .issue-approval-effects strong { color: var(--lx-text); font-size: 12px; }
 .issue-approval-effects section[data-tone="approve"] strong { color: var(--lx-success); }
 .issue-approval-effects section[data-tone="reject"] strong { color: var(--lx-error); }
@@ -1093,7 +1093,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .issue-columns {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: minmax(340px, 34%) minmax(0, 1fr);
+  grid-template-columns: minmax(380px, var(--issue-detail-width, 620px)) 9px minmax(360px, 1fr);
   min-height: 0;
 }
 .issue-detail {
@@ -1107,6 +1107,24 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   scrollbar-gutter: stable;
 }
 .issue-detail:has(#issue-approval-panel:not([hidden])) { background: var(--lx-surface); }
+.issue-splitter {
+  position: relative;
+  cursor: col-resize;
+  background: var(--lx-bg);
+  touch-action: none;
+}
+.issue-splitter::after {
+  position: absolute;
+  inset: 0 4px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transition: background .12s ease;
+}
+.issue-splitter:hover::after, .issue-splitter.is-focused::after, .issue-splitter.is-dragging::after {
+  background: color-mix(in srgb, var(--lx-accent) 45%, var(--lx-border));
+}
+.issue-splitter:focus { outline: 0; }
 .issue-timeline { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 140px; }
 .timeline-header {
   display: flex;
@@ -1138,6 +1156,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
     border-top: 1px solid var(--lx-border);
     border-right: 0;
   }
+  .issue-splitter { display: none; }
   .issue-timeline { order: 1; }
   .issue-approval-panel { position: static; max-height: none; }
 }

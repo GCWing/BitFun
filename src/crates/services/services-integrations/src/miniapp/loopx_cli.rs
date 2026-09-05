@@ -3122,9 +3122,9 @@ fn archive_runtime_args(goal_id: &str) -> Vec<OsString> {
 #[cfg(test)]
 mod custom_runner_contract_tests {
     use super::{
-        compact_objective, loopx_contract, matching_durable_progress, metadata_state,
-        plan_item_args, planned_settlement_token, project_goal_snapshot, quota_guard_args,
-        render_agent_reentry_instruction, LoopxCommandSource, SettlementBinding,
+        answer_gate_args, compact_objective, loopx_contract, matching_durable_progress,
+        metadata_state, plan_item_args, planned_settlement_token, project_goal_snapshot,
+        quota_guard_args, render_agent_reentry_instruction, LoopxCommandSource, SettlementBinding,
         VerifiedLoopxCommand,
     };
     use bitfun_product_domains::miniapp::loopx::{
@@ -3167,6 +3167,23 @@ mod custom_runner_contract_tests {
         assert_eq!(payload["labels"], json!(["bug", "needs-repro"]));
         assert_eq!(payload["number"], 42);
         assert_eq!(payload["kind"], "issue");
+    }
+
+    #[test]
+    fn answer_gate_args_mark_the_decision_as_an_explicit_effect() {
+        let request = loopx_contract::LoopxCliAnswerGateRequest {
+            context: loopx_contract::LoopxCliGoalContext::default(),
+            goal_id: "goal-1".to_string(),
+            agent_id: "agent-1".to_string(),
+            gate_id: "todo-user-gate".to_string(),
+            decision: loopx_contract::LoopxCliGateDecision::Approve,
+            note: None,
+            granted_scope: None,
+        };
+
+        let args = answer_gate_args(&request).expect("gate args");
+
+        assert!(args.contains(&OsString::from("--execute")));
     }
 
     #[test]
@@ -3701,6 +3718,7 @@ fn answer_gate_args(
         decision.to_string(),
         "--agent-id".to_string(),
         request.agent_id.clone(),
+        "--execute".to_string(),
     ];
     if let Some(note) = &request.note {
         if note.len() > 500 {

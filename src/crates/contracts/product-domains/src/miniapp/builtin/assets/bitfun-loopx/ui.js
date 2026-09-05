@@ -81,6 +81,7 @@ const COPY = {
     tasks: '任务',
     collapseTasks: '收起任务栏',
     resizeTasks: '调整任务栏宽度',
+    resizeIssueColumns: '调整详情和时间线宽度',
     expandTasks: '展开任务栏',
     noTasks: '暂无任务',
     emptyNoTask: '暂无任务',
@@ -439,6 +440,7 @@ const COPY = {
     tasks: 'Tasks',
     collapseTasks: 'Collapse task rail',
     resizeTasks: 'Resize task rail',
+    resizeIssueColumns: 'Resize detail and timeline',
     expandTasks: 'Expand task rail',
     noTasks: 'No tasks yet',
     emptyNoTask: 'No tasks yet',
@@ -803,6 +805,7 @@ const view = {
   issueLink: byId('issue-link'),
   issueUpdated: byId('issue-updated'),
   issueDetail: byId('issue-detail'),
+  issueSplitter: byId('issue-splitter'),
   issueApprovalPanel: byId('issue-approval-panel'),
   issueApprovalRaw: byId('issue-approval-raw'),
   issueApprovalRawText: byId('issue-approval-raw-text'),
@@ -879,6 +882,7 @@ const state = {
   gapRecovery: null,
   connected: false,
   railCollapsed: false,
+  issueDetailWidth: null,
   intakeHistory: [],
   outputHistory: [],
   outputKeys: new Set(),
@@ -4020,6 +4024,10 @@ const RAIL_MIN_WIDTH = 180;
 const RAIL_MAX_WIDTH = 520;
 const RAIL_DEFAULT_WIDTH = 286;
 const RAIL_WIDTH_STORAGE_KEY = 'loopx.railWidth';
+const ISSUE_DETAIL_MIN_WIDTH = 380;
+const ISSUE_DETAIL_MAX_WIDTH = 820;
+const ISSUE_DETAIL_DEFAULT_WIDTH = 620;
+const ISSUE_DETAIL_WIDTH_STORAGE_KEY = 'loopx.issueDetailWidth';
 
 function setRailWidth(width) {
   const workbench = view.taskRail.parentElement;
@@ -4128,8 +4136,116 @@ function persistRailWidth() {
   }
 }
 
+function issueDetailBounds() {
+  const columns = view.issueSplitter && view.issueSplitter.parentElement;
+  const total = columns ? columns.getBoundingClientRect().width : 0;
+  const max = total > 0
+    ? Math.min(ISSUE_DETAIL_MAX_WIDTH, Math.max(ISSUE_DETAIL_MIN_WIDTH, total - 360))
+    : ISSUE_DETAIL_MAX_WIDTH;
+  return {
+    min: ISSUE_DETAIL_MIN_WIDTH,
+    max: Math.max(ISSUE_DETAIL_MIN_WIDTH, max),
+  };
+}
+
+function clampIssueDetailWidth(width) {
+  const bounds = issueDetailBounds();
+  return Math.min(bounds.max, Math.max(bounds.min, width));
+}
+
+function setIssueDetailWidth(width) {
+  const next = clampIssueDetailWidth(width);
+  view.issueView.style.setProperty('--issue-detail-width', `${next}px`);
+  state.issueDetailWidth = next;
+}
+
+function persistIssueDetailWidth() {
+  const value = String(state.issueDetailWidth || ISSUE_DETAIL_DEFAULT_WIDTH);
+  try {
+    window.localStorage.setItem(ISSUE_DETAIL_WIDTH_STORAGE_KEY, value);
+  } catch {
+    /* storage unavailable: keep width for this session only */
+  }
+}
+
+function bindIssueSplitter() {
+  const splitter = view.issueSplitter;
+  if (!splitter) return;
+  let startX = 0;
+  let startWidth = 0;
+  let active = false;
+  const width = () => state.issueDetailWidth || ISSUE_DETAIL_DEFAULT_WIDTH;
+
+  const updateAria = () => {
+    const bounds = issueDetailBounds();
+    splitter.setAttribute('aria-valuemin', String(bounds.min));
+    splitter.setAttribute('aria-valuemax', String(bounds.max));
+    splitter.setAttribute('aria-valuenow', String(width()));
+  };
+
+  const move = (event) => {
+    if (!active) return;
+    setIssueDetailWidth(startWidth + (event.clientX - startX));
+    updateAria();
+    event.preventDefault();
+  };
+
+  const end = () => {
+    if (!active) return;
+    active = false;
+    splitter.classList.remove('is-dragging');
+    splitter.classList.remove('is-focused');
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', end);
+    document.body.style.userSelect = '';
+    updateAria();
+    persistIssueDetailWidth();
+  };
+
+  splitter.addEventListener('pointerdown', (event) => {
+    active = true;
+    startX = event.clientX;
+    startWidth = width();
+    splitter.classList.add('is-dragging');
+    document.body.style.userSelect = 'none';
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end);
+    event.preventDefault();
+  });
+  splitter.addEventListener('focus', () => splitter.classList.add('is-focused'));
+  splitter.addEventListener('blur', () => splitter.classList.remove('is-focused'));
+  splitter.addEventListener('dblclick', () => {
+    setIssueDetailWidth(ISSUE_DETAIL_DEFAULT_WIDTH);
+    updateAria();
+    persistIssueDetailWidth();
+  });
+  splitter.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const step = event.shiftKey ? 48 : 12;
+    const next = event.key === 'ArrowRight' ? width() + step : width() - step;
+    setIssueDetailWidth(next);
+    updateAria();
+    persistIssueDetailWidth();
+  });
+  splitter.setAttribute('aria-controls', 'issue-detail issue-timeline');
+  try {
+    const stored = window.localStorage.getItem(ISSUE_DETAIL_WIDTH_STORAGE_KEY);
+    const parsed = stored === null ? NaN : Number(stored);
+    setIssueDetailWidth(Number.isFinite(parsed) ? parsed : ISSUE_DETAIL_DEFAULT_WIDTH);
+  } catch {
+    setIssueDetailWidth(ISSUE_DETAIL_DEFAULT_WIDTH);
+  }
+  updateAria();
+  window.addEventListener('resize', () => {
+    setIssueDetailWidth(width());
+    updateAria();
+  });
+}
+
 function bindEvents() {
   bindRailSplitter();
+  bindIssueSplitter();
   view.modelSelect.addEventListener('pointerdown', () => void loadModelCatalog());
   view.modelSelect.addEventListener('focus', () => void loadModelCatalog());
   view.modelSelect.addEventListener('change', () => {

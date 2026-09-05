@@ -2698,7 +2698,7 @@ impl LoopxController {
             updated.phase,
             settlement.status
         );
-        let mut yielded_repository;
+        let yielded_repository;
         if agent_status == LoopxAgentTurnStatus::Failed {
             let reason = failure_summary.unwrap_or("Agent turn failed");
             self.append_task_event(&updated, LoopxEventKind::StateChanged, reason, true)
