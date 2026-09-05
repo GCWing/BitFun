@@ -46,6 +46,46 @@ When `PrintWindow` returns a mostly-black bitmap (DirectComposition / UWP):
 
 ## Verification
 
+For observation payloads, OCR projection, AX filtering/digests, and browser
+snapshot context, use the isolated compiler harness first. It compiles the
+production Rust files by path, with the actual DTO source and no replacement
+algorithms or native-host mocks. Cargo dependencies must already be cached
+(`cargo fetch --locked` on a fresh machine).
+
+```bash
+node scripts/test-computer-use-context.mjs
+cargo test -p openbitfun-desktop --lib context_integrity_tests
+```
+
+Native black-box fixtures use only a dedicated test window / rendered image:
+
+```bash
+# Node 22/24 and installed workspace dependencies; installed Chrome required.
+# CHROME_PATH can select another Chromium executable.
+node scripts/test-browser-snapshot.mjs --native-ocr
+# macOS + Accessibility permission; creates and closes its own AppKit window.
+node scripts/test-native-ax-context.mjs
+```
+
+The browser fixture runs production snapshot/resolver JavaScript in Chromium,
+then passes the actual DOM payload to compiled Rust presentation tests. The
+optional OCR step compiles the Desktop test target and invokes macOS Vision on
+the rendered JPEG. The AX fixture compiles the Desktop test target and checks
+native AX nodes, text, states, parent indices, cache entries, filtering, and DTO
+round trips. These are local macOS checks, not Windows/Linux or remote evidence.
+
+Observation invariants:
+
+- Rectangle containment does not prove two controls have the same action.
+- Projection uses content padding and authoritative global bounds; invalid
+  geometry and OCR matches outside the content are not actionable coordinates.
+- AX snapshot digests cover state and geometry as well as labels. A state-only
+  change must not be mistaken for a failed action and trigger duplicate input.
+- Stale interactive/visual indices must be returned to the caller for a fresh
+  choice, never silently reused after rebuilding a different view.
+- Element-budget omissions are reported in `omitted_element_count`, including
+  when text rendering is disabled; focused controls survive budget selection.
+
 ```bash
 cargo check -p openbitfun-desktop
 cargo test -p openbitfun-desktop

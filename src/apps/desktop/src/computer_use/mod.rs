@@ -1,5 +1,6 @@
 //! Desktop Computer use host (screenshots + enigo).
 
+mod ax_snapshot_digest;
 mod debug_overlay;
 mod desktop_host;
 mod interactive_filter;
@@ -19,6 +20,7 @@ mod macos_bg_input;
 mod macos_list_apps;
 #[cfg(target_os = "macos")]
 mod macos_skylight;
+mod ocr_context;
 mod screen_ocr;
 mod som_overlay;
 mod terminal_detect;

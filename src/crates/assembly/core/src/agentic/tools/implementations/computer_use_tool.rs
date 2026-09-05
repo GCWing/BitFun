@@ -1180,7 +1180,7 @@ impl Tool for ComputerUseTool {
 **`mouse_move` / `drag`:** **`use_screen_coordinates`: true** required — global coordinates from **`move_to_text`**, **`locate`**, AX, or **`pointer_global`**; never JPEG pixel guesses. \
 **`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** is **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), or **`click_element`** — do not nudge from the JPEG. \
 **`key_chord`:** Press key combination; prefer over **`click`** when shortcuts or **Enter**/**Escape**/**Tab** suffice. **Mandatory fresh screenshot only** when chord includes Return/Enter. \
-**`screenshot`:** JPEG for **confirmation** (optional pointer overlay). When the host requires a fresh capture before **`click`** or Enter **`key_chord`**, a bare `screenshot` is **~500×500** around the **mouse** or **caret** (also during quadrant drill). Use **`screenshot_reset_navigation`**: true to force **full-screen** for wide context. \
+**`screenshot`:** JPEG for **confirmation** (optional pointer overlay). Capture prefers the focused application window when available, with full-display fallback. Set **`screenshot_window`: true** to request the focused window. Read **`screenshot_id`**, **`image_content_rect`**, and **`image_global_bounds`** for the image identity and coordinate basis; follow **`interaction_state`** for verification requirements. \
 **`type_text`:** Type text; prefer clipboard for long content. Does **not** move the pointer — **Enter** **`key_chord`** may follow without a mandatory `screenshot` unless you moved the pointer since the last capture. If **`screenshot`** shows the correct chat is already open and the input may be focused, **try `type_text` first** before spending steps on `click_element` / `move_to_text`.",
             os, keys,
         ))
@@ -1235,12 +1235,7 @@ impl Tool for ComputerUseTool {
             "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXTitle ONLY. Use same language as the app UI. Prefer `text_contains` (also covers AXValue/AXDescription/AXHelp) when in doubt." },
             "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"TextField\", \"SearchField\")." },
             "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Best default when the visible label lives in value/description (e.g. AXStaticText cards)." },
-            "screenshot_crop_center_x": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop X center in full-capture native pixels." },
-            "screenshot_crop_center_y": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop Y center in full-capture native pixels." },
-            "screenshot_crop_half_extent_native": { "type": "integer", "minimum": 0, "description": "For `screenshot`: half-size of point crop in native pixels (default 250)." },
-            "screenshot_navigate_quadrant": { "type": "string", "enum": ["top_left", "top_right", "bottom_left", "bottom_right"], "description": "For `screenshot`: zoom into quadrant. Repeat until `quadrant_navigation_click_ready` is true." },
-            "screenshot_reset_navigation": { "type": "boolean", "description": "For `screenshot`: reset to full display before this capture." },
-            "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." },
+            "screenshot_window": { "type": "boolean", "description": "For screenshot: request the focused application window, with full-display fallback when the host cannot resolve it." },
             "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
             "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
             "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
@@ -2407,14 +2402,7 @@ mod tests {
         let full_keys = property_keys(&ComputerUseTool::new().input_schema());
         let text_only_keys = property_keys(&ComputerUseTool::input_schema_text_only());
 
-        let screenshot_only_fields = [
-            "screenshot_crop_center_x",
-            "screenshot_crop_center_y",
-            "screenshot_crop_half_extent_native",
-            "screenshot_navigate_quadrant",
-            "screenshot_reset_navigation",
-            "screenshot_implicit_center",
-        ];
+        let screenshot_only_fields = ["screenshot_window"];
         for field in screenshot_only_fields {
             assert!(
                 full_keys.contains(field),
@@ -2423,6 +2411,25 @@ mod tests {
             assert!(
                 !text_only_keys.contains(field),
                 "text-only schema should NOT contain `{field}`"
+            );
+        }
+    }
+
+    #[test]
+    fn schemas_do_not_advertise_ignored_screenshot_inputs() {
+        let full = property_keys(&ComputerUseTool::new().input_schema());
+        let text = property_keys(&ComputerUseTool::input_schema_text_only());
+        for field in [
+            "screenshot_crop_center_x",
+            "screenshot_crop_center_y",
+            "screenshot_crop_half_extent_native",
+            "screenshot_navigate_quadrant",
+            "screenshot_reset_navigation",
+            "screenshot_implicit_center",
+        ] {
+            assert!(
+                !full.contains(field) && !text.contains(field),
+                "ignored field {field}"
             );
         }
     }

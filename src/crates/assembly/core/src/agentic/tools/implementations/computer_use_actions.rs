@@ -860,6 +860,7 @@ impl ComputerUseActions {
                 "digest": view.digest,
                 "captured_at_ms": view.captured_at_ms,
                 "elements": view.elements,
+                "omitted_element_count": view.omitted_element_count,
                 "tree_text": view.tree_text,
                 "loop_warning": view.loop_warning,
                 "has_screenshot": view.screenshot.is_some(),

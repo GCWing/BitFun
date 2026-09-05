@@ -25,6 +25,7 @@
 // warnings elsewhere.
 #![allow(dead_code)]
 
+use super::ax_snapshot_digest::compute_digest;
 use crate::computer_use::ui_locate_common;
 use openbitfun_core::agentic::tools::computer_use_host::{
     AppInfo, AppStateSnapshot, AxNode, OcrAccessibilityHit, UiElementLocateQuery,
@@ -931,42 +932,6 @@ pub(super) fn get_app_state_snapshot_for_window(
         screenshot: None,
         loop_warning: None,
     })
-}
-
-fn compute_digest(nodes: &[AxNode]) -> String {
-    use sha1::{Digest, Sha1};
-    let mut h = Sha1::new();
-    for n in nodes {
-        h.update(n.idx.to_le_bytes());
-        h.update(n.parent_idx.unwrap_or(u32::MAX).to_le_bytes());
-        h.update(n.role.as_bytes());
-        h.update(b"\x1f");
-        h.update(n.subrole.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.title.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.identifier.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.description.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.help.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.value.as_deref().unwrap_or("").as_bytes());
-        h.update(b"\x1f");
-        h.update(n.enabled.to_string().as_bytes());
-        h.update(b"\x1f");
-        for a in &n.actions {
-            h.update(a.as_bytes());
-            h.update(b",");
-        }
-        h.update(b"\n");
-    }
-    let hash = h.finalize();
-    let mut hex = String::with_capacity(hash.len() * 2);
-    for b in hash.iter() {
-        hex.push_str(&format!("{:02x}", b));
-    }
-    hex
 }
 
 fn foreground_app_name() -> Option<String> {

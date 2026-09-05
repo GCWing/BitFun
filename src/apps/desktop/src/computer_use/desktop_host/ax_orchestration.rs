@@ -39,6 +39,65 @@ use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::time::{Duration, Instant};
 
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+mod context_integrity_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn stale_view_actions_do_not_rebuild_and_retarget_old_indices() {
+        let host = DesktopComputerUseHost::new();
+        // No running app is involved. A stale request must fail before capture
+        // or OS input, leaving the cached observation untouched.
+        let pid = i32::MAX;
+        {
+            let mut state = host.state.lock().unwrap();
+            state.interactive_view_cache.insert(
+                pid,
+                CachedInteractiveView {
+                    digest: "current-observation".into(),
+                    elements: vec![],
+                },
+            );
+            state.visual_mark_cache.insert(
+                pid,
+                CachedVisualMarkView {
+                    digest: "current-observation".into(),
+                    marks: vec![],
+                    screenshot_id: None,
+                },
+            );
+        }
+        let interactive = serde_json::from_value(serde_json::json!({
+            "i":0, "before_view_digest":"previous-observation"
+        }))
+        .unwrap();
+        let error = host
+            .interactive_click_impl(AppSelector::by_pid(pid), interactive)
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("STALE_INTERACTIVE_VIEW"),
+            "{error}"
+        );
+        let visual = serde_json::from_value(serde_json::json!({
+            "i":0, "before_view_digest":"previous-observation"
+        }))
+        .unwrap();
+        let error = host
+            .visual_click_impl(AppSelector::by_pid(pid), visual)
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("STALE_VISUAL_MARK_VIEW"),
+            "{error}"
+        );
+        assert_eq!(
+            host.state.lock().unwrap().interactive_view_cache[&pid].digest,
+            "current-observation"
+        );
+    }
+}
+
 impl DesktopComputerUseHost {
     pub(super) async fn app_click_impl(
         &self,
@@ -891,16 +950,24 @@ impl DesktopComputerUseHost {
                 max_elements,
                 clip_to_image_bounds: opts.focus_window_only,
             };
-            let elements = crate::computer_use::interactive_filter::build_interactive_elements(
-                &snap.nodes,
-                snap.screenshot.as_ref(),
-                &filter_opts,
-            );
-            let tree_text = if opts.include_tree_text {
+            let (elements, eligible_count) =
+                crate::computer_use::interactive_filter::build_interactive_elements_with_count(
+                    &snap.nodes,
+                    snap.screenshot.as_ref(),
+                    &filter_opts,
+                );
+            let omitted_element_count = eligible_count.saturating_sub(elements.len()) as u32;
+            let mut tree_text = if opts.include_tree_text {
                 crate::computer_use::interactive_filter::render_element_tree_text(&elements)
             } else {
                 String::new()
             };
+            if opts.include_tree_text && omitted_element_count > 0 {
+                tree_text.push_str(&format!(
+                    "Note: {} additional controls omitted by max_elements; request a larger view budget or use get_app_state/locate to inspect them.\n",
+                    omitted_element_count
+                ));
+            }
             let digest = compute_interactive_view_digest(&elements);
 
             let mut screenshot_out: Option<ComputerScreenshot> = None;
@@ -940,6 +1007,7 @@ impl DesktopComputerUseHost {
                 app: snap.app.clone(),
                 window_title: snap.window_title.clone(),
                 elements: elements.clone(),
+                omitted_element_count,
                 tree_text,
                 digest: digest.clone(),
                 captured_at_ms,
@@ -979,43 +1047,11 @@ impl DesktopComputerUseHost {
     ) -> OpenBitFunResult<InteractiveActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            // Resolve `i → node_idx` against the cached interactive view.
-            // On `STALE_INTERACTIVE_VIEW` we transparently rebuild the
-            // view ONCE and retry — this turns the most common UI-changed
-            // failure into an internal recovery instead of a hard error
-            // the model has to handle. Idempotency is preserved by
-            // capping at one rebuild + one retry.
-            let mut auto_rebuilt = false;
-            let node_idx = match self
+            // A rebuilt view can assign this index to a different control.
+            // Preserve stale-view errors so the caller observes and chooses again.
+            let node_idx = self
                 .resolve_interactive_index(&app, params.i, params.before_view_digest.as_deref())
-                .await
-            {
-                Ok(idx) => idx,
-                Err(err) if is_stale_interactive_view_error(&err) => {
-                    warn!(
-                        target: "computer_use::interactive_view",
-                        "interactive_click: STALE view detected, rebuilding once and retrying (i={}): {}",
-                        params.i, err
-                    );
-                    let rebuilt = self
-                        .build_interactive_view(app.clone(), InteractiveViewOpts::default())
-                        .await?;
-                    if rebuilt.elements.iter().any(|e| e.i == params.i) {
-                        auto_rebuilt = true;
-                        // Use the rebuilt view's digest, not the stale one
-                        // the caller passed in.
-                        self.resolve_interactive_index(&app, params.i, Some(&rebuilt.digest))
-                            .await?
-                    } else {
-                        return Err(OpenBitFunError::tool(format!(
-                            "INTERACTIVE_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); the UI has changed under you, re-call `build_interactive_view` and pick a fresh `i`",
-                            params.i,
-                            rebuilt.elements.len()
-                        )));
-                    }
-                }
-                Err(other) => return Err(other),
-            };
+                .await?;
 
             // Look up the cached element's image-pixel center as a
             // pointer fallback. Always available when `frame_image` was
@@ -1075,9 +1111,6 @@ impl DesktopComputerUseHost {
                 None
             };
             let mut note = format!("index_resolved_via_node_idx({})", node_idx);
-            if auto_rebuilt {
-                note.push_str(",auto_rebuilt_view_after_stale");
-            }
             if fallback_used {
                 note.push_str(",fallback_image_xy");
             }
@@ -1202,33 +1235,10 @@ impl DesktopComputerUseHost {
     ) -> OpenBitFunResult<VisualActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
-            let mut auto_rebuilt = false;
-            let mark = match self
+            // Visual indices are also tied to the view the caller actually saw.
+            let mark = self
                 .resolve_visual_mark(&app, params.i, params.before_view_digest.as_deref())
-                .await
-            {
-                Ok(mark) => mark,
-                Err(err) if is_stale_visual_mark_view_error(&err) => {
-                    warn!(
-                        target: "computer_use::visual_mark_view",
-                        "visual_click: STALE visual mark view detected, rebuilding once and retrying (i={}): {}",
-                        params.i, err
-                    );
-                    let rebuilt = self
-                        .build_visual_mark_view(app.clone(), VisualMarkViewOpts::default())
-                        .await?;
-                    let Some(mark) = rebuilt.marks.iter().find(|m| m.i == params.i).cloned() else {
-                        return Err(OpenBitFunError::tool(format!(
-                            "VISUAL_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); re-call `build_visual_mark_view` and pick a fresh `i`",
-                            params.i,
-                            rebuilt.marks.len()
-                        )));
-                    };
-                    auto_rebuilt = true;
-                    mark
-                }
-                Err(other) => return Err(other),
-            };
+                .await?;
 
             let screenshot_id = {
                 let pid = resolve_pid(self, &app).await?;
@@ -1264,10 +1274,7 @@ impl DesktopComputerUseHost {
             } else {
                 None
             };
-            let mut note = format!("visual_mark_image_xy({},{})", mark.x, mark.y);
-            if auto_rebuilt {
-                note.push_str(",auto_rebuilt_view_after_stale");
-            }
+            let note = format!("visual_mark_image_xy({},{})", mark.x, mark.y);
             Ok(VisualActionResult {
                 snapshot,
                 view,
@@ -1875,16 +1882,6 @@ fn top_regular_positions(
 /// error text rather than introducing a typed error enum because every
 /// `OpenBitFunError::tool` is already string-based throughout the host
 /// surface; adding a new variant would ripple through ~40 callers.
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn is_stale_interactive_view_error(err: &OpenBitFunError) -> bool {
-    err.to_string().contains("STALE_INTERACTIVE_VIEW")
-}
-
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn is_stale_visual_mark_view_error(err: &OpenBitFunError) -> bool {
-    err.to_string().contains("STALE_VISUAL_MARK_VIEW")
-}
-
 impl DesktopComputerUseHost {
     /// Return the image-pixel center `(x, y)` of the cached interactive
     /// element with the given `i`, when its `frame_image` is known. Used

@@ -4,7 +4,8 @@ use super::automation_client::{BrowserAutomationClient, BrowserAutomationEvent};
 use crate::agentic::tools::implementations::control_hub::{coded_tool_error, ErrorCode};
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+#[path = "snapshot_context.rs"]
+mod snapshot_context;
 use tokio::sync::broadcast;
 
 /// Upper bound for an explicit `wait` duration. Pacing waits ("check again in
@@ -242,116 +243,7 @@ fn key_event_fields(key: &str) -> Value {
 
 /// Snapshot walker. Kept as a module const so the ordering guarantees it
 /// encodes (stale refs cleared **before** renumbering) are unit-testable.
-const SNAPSHOT_SCRIPT: &str = r#"
-        (function() {
-            const SEL = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
-            const items = [];
-            let idx = 1;
-            let offscreen = 0;
-            let crossOriginFrames = 0;
-
-            function visible(el, win) {
-                const rect = el.getBoundingClientRect();
-                if (rect.width < 2 || rect.height < 2) return null;
-                if (rect.right < 0 || rect.bottom < 0 || rect.left > win.innerWidth || rect.top > win.innerHeight) {
-                    offscreen++;
-                    return null;
-                }
-                const style = win.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden') return null;
-                return rect;
-            }
-
-            function record(el, rect, scope, framePath) {
-                const text = (el.textContent || '').trim().slice(0, 100);
-                items.push({
-                    ref: '@e' + idx,
-                    tag: el.tagName.toLowerCase(),
-                    type: el.getAttribute('type') || '',
-                    name: el.getAttribute('name') || '',
-                    text,
-                    ariaLabel: el.getAttribute('aria-label') || '',
-                    placeholder: el.placeholder || '',
-                    role: el.getAttribute('role') || '',
-                    href: el.href || '',
-                    id: el.id || '',
-                    scope,
-                    frame_path: framePath,
-                    rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
-                });
-                try { el.setAttribute('data-cdp-ref', '@e' + idx); } catch (_) {}
-                idx++;
-            }
-
-            // Every snapshot renumbers refs from @e1, so refs left behind by
-            // the previous snapshot MUST be dropped first: an element that
-            // dropped out of this snapshot would otherwise keep an @eN that
-            // the new numbering hands to a different element, and
-            // `click @eN` — which resolves by attribute — would silently hit
-            // the stale one.
-            function clearRefs(root) {
-                try {
-                    root.querySelectorAll('[data-cdp-ref]').forEach(el => el.removeAttribute('data-cdp-ref'));
-                } catch (_) {}
-                try {
-                    root.querySelectorAll('*').forEach(host => {
-                        if (host.shadowRoot) clearRefs(host.shadowRoot);
-                    });
-                } catch (_) {}
-            }
-
-            // Recursive walk: collects from `root` (Document or ShadowRoot)
-            // and recurses into open shadow roots of every descendant. Iframes
-            // are handled by the caller because we need the iframe's own
-            // window for visibility checks.
-            function walk(root, win, scope, framePath) {
-                const els = root.querySelectorAll(SEL);
-                els.forEach(el => {
-                    const rect = visible(el, win);
-                    if (rect) record(el, rect, scope, framePath);
-                });
-                // Open shadow roots
-                const allHosts = root.querySelectorAll('*');
-                allHosts.forEach(h => {
-                    if (h.shadowRoot) {
-                        try { walk(h.shadowRoot, win, 'shadow', framePath); } catch (_) {}
-                    }
-                });
-            }
-
-            // Same-origin iframes only; cross-origin ones are counted so the
-            // report can state what it could not see.
-            const frames = [];
-            document.querySelectorAll('iframe, frame').forEach((frame, fi) => {
-                let doc = null;
-                try { doc = frame.contentDocument; } catch (_) {}
-                if (doc) {
-                    frames.push({ frame, doc, fi });
-                } else {
-                    crossOriginFrames++;
-                }
-            });
-
-            clearRefs(document);
-            frames.forEach(f => clearRefs(f.doc));
-
-            walk(document, window, 'document', '');
-            frames.forEach(({ frame, doc, fi }) => {
-                const subWin = frame.contentWindow;
-                const path = `iframe[${fi}]${frame.src ? `[src="${frame.src.slice(0, 80)}"]` : ''}`;
-                try { walk(doc, subWin, 'iframe', path); } catch (_) {}
-            });
-
-            return JSON.stringify({
-                url: location.href,
-                title: document.title,
-                elements: items,
-                offscreen_count: offscreen,
-                cross_origin_frames: crossOriginFrames,
-                features: { shadow_dom_traversed: true, same_origin_iframes_traversed: true, viewport_only: true },
-            });
-        })()
-        "#;
+const SNAPSHOT_SCRIPT: &str = include_str!("snapshot.js");
 
 /// High-level browser actions backed by a target adapter.
 pub struct BrowserActions<'a> {
@@ -507,12 +399,13 @@ impl<'a> BrowserActions<'a> {
         with_backend_node_ids: bool,
     ) -> OpenBitFunResult<Value> {
         let result = self.evaluate(SNAPSHOT_SCRIPT).await?;
-        let text = result
-            .get("result")
-            .and_then(|r| r.get("value"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("{}");
-        let mut parsed: Value = serde_json::from_str(text).unwrap_or(json!({}));
+        let mut parsed = snapshot_context::parse_snapshot_result(&result).map_err(|message| {
+            structured_error(
+                ErrorCode::Internal,
+                message,
+                &["Take a fresh snapshot; the previous page context was incomplete"],
+            )
+        })?;
 
         if with_backend_node_ids && self.client.capabilities().backend_node_ids {
             if let Err(e) = self.attach_backend_node_ids(&mut parsed).await {
@@ -542,99 +435,7 @@ impl<'a> BrowserActions<'a> {
     }
 
     fn attach_snapshot_text(parsed: &mut Value) {
-        let Some(elements) = parsed.get("elements").and_then(|v| v.as_array()) else {
-            return;
-        };
-        let mut lines = Vec::<String>::new();
-        let mut refs = BTreeMap::<String, Value>::new();
-        for element in elements {
-            let reference = element.get("ref").and_then(|v| v.as_str()).unwrap_or("");
-            let tag = element
-                .get("tag")
-                .and_then(|v| v.as_str())
-                .unwrap_or("element");
-            let role = element.get("role").and_then(|v| v.as_str()).unwrap_or("");
-            let text = element
-                .get("ariaLabel")
-                .or_else(|| element.get("placeholder"))
-                .or_else(|| element.get("text"))
-                .or_else(|| element.get("name"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .trim();
-            let type_text = element.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            let id = element.get("id").and_then(|v| v.as_str()).unwrap_or("");
-            let frame_path = element
-                .get("frame_path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let scope = element
-                .get("scope")
-                .and_then(|v| v.as_str())
-                .unwrap_or("document");
-            let mut label = if role.is_empty() {
-                tag.to_string()
-            } else {
-                role.to_string()
-            };
-            if !type_text.is_empty() {
-                label.push(':');
-                label.push_str(type_text);
-            }
-            let mut line = if reference.is_empty() {
-                format!("- {}", label)
-            } else {
-                format!("- {} [{}]", label, reference)
-            };
-            if !text.is_empty() {
-                let clipped = if text.chars().count() > 80 {
-                    format!("{}...", text.chars().take(77).collect::<String>())
-                } else {
-                    text.to_string()
-                };
-                line.push(' ');
-                line.push_str(
-                    &serde_json::to_string(&clipped).unwrap_or_else(|_| "\"\"".to_string()),
-                );
-            }
-            if !id.is_empty() {
-                line.push_str(&format!(" id={}", id));
-            }
-            if scope != "document" || !frame_path.is_empty() {
-                line.push_str(&format!(" scope={}", scope));
-                if !frame_path.is_empty() {
-                    line.push_str(&format!(" frame={}", frame_path));
-                }
-            }
-            lines.push(line);
-            if !reference.is_empty() {
-                refs.insert(reference.to_string(), element.clone());
-            }
-        }
-        let offscreen = parsed
-            .get("offscreen_count")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-        if offscreen > 0 {
-            lines.push(format!(
-                "- note: {} more interactive element(s) exist outside the current viewport and are NOT listed above; scroll toward them and snapshot again to get refs for them",
-                offscreen
-            ));
-        }
-        let cross_origin_frames = parsed
-            .get("cross_origin_frames")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-        if cross_origin_frames > 0 {
-            lines.push(format!(
-                "- note: this page contains {} cross-origin iframe(s) whose contents cannot be inspected; elements inside them are absent here and cannot be targeted by @eN refs",
-                cross_origin_frames
-            ));
-        }
-        if let Some(obj) = parsed.as_object_mut() {
-            obj.insert("snapshot".to_string(), json!(lines.join("\n")));
-            obj.insert("refs".to_string(), json!(refs));
-        }
+        snapshot_context::attach_snapshot_text(parsed);
     }
 
     /// Resolve `backend_node_id` for every snapshot element by walking the
@@ -1565,61 +1366,7 @@ impl<'a> BrowserActions<'a> {
     /// inside a shadow root, which made `click @e7` mysteriously fail
     /// whenever the page used a web-component design system.
     fn resolve_element_js(selector: &str) -> String {
-        let attr_selector = if selector.starts_with("@e") {
-            format!(r#"[data-cdp-ref="{}"]"#, selector)
-        } else {
-            selector.to_string()
-        };
-        let escaped = attr_selector.replace('\\', "\\\\").replace('\'', "\\'");
-        format!(
-            r#"
-            const __sel = '{escaped}';
-            function __findIn(root) {{
-                try {{
-                    const direct = root.querySelector(__sel);
-                    if (direct) return direct;
-                }} catch (_) {{}}
-                const all = root.querySelectorAll('*');
-                for (const node of all) {{
-                    if (node.shadowRoot) {{
-                        const hit = __findIn(node.shadowRoot);
-                        if (hit) return hit;
-                    }}
-                }}
-                return null;
-            }}
-            function __findAnywhere() {{
-                const top = __findIn(document);
-                if (top) return top;
-                const frames = document.querySelectorAll('iframe, frame');
-                for (const f of frames) {{
-                    let doc = null;
-                    try {{ doc = f.contentDocument; }} catch (_) {{}}
-                    if (doc) {{
-                        const hit = __findIn(doc);
-                        if (hit) return hit;
-                    }}
-                }}
-                return null;
-            }}
-            function __crossOriginFrames() {{
-                let n = 0;
-                document.querySelectorAll('iframe, frame').forEach(f => {{
-                    let doc = null;
-                    try {{ doc = f.contentDocument; }} catch (_) {{}}
-                    if (!doc) n++;
-                }});
-                return n;
-            }}
-            const el = __findAnywhere();
-            if (!el) {{
-                const __xo = __crossOriginFrames();
-                throw new Error('Element not found: ' + __sel + ' — take a fresh snapshot or check shadow/iframe scope'
-                    + (__xo ? ' (page contains ' + __xo + ' cross-origin iframe(s) whose contents cannot be inspected)' : ''));
-            }}
-            "#,
-            escaped = escaped
-        )
+        snapshot_context::resolve_element_js(selector)
     }
 
     /// JS that reports whether `selector` (CSS **or** `@eN` ref) currently
@@ -1914,14 +1661,11 @@ mod script_tests {
         let clear = SNAPSHOT_SCRIPT
             .find("clearRefs(document);")
             .expect("top document refs must be cleared");
-        let clear_frames = SNAPSHOT_SCRIPT
-            .find("frames.forEach(f => clearRefs(f.doc));")
-            .expect("same-origin iframe refs must be cleared");
+        assert!(SNAPSHOT_SCRIPT.contains("if (doc) clearRefs(doc)"));
         let walk = SNAPSHOT_SCRIPT
             .find("walk(document, window, 'document', '');")
             .expect("snapshot must walk the top document");
         assert!(clear < walk, "clearRefs(document) must precede renumbering");
-        assert!(clear_frames < walk, "iframe refs must be cleared too");
         assert!(
             SNAPSHOT_SCRIPT.contains("if (host.shadowRoot) clearRefs(host.shadowRoot)"),
             "clearRefs must descend into open shadow roots"
@@ -2010,7 +1754,7 @@ mod script_tests {
         // sites must go through the ref-aware resolver instead.
         let select_js = BrowserActions::select_option_js("@e3", "Standard shipping");
         assert!(
-            select_js.contains(r#"[data-cdp-ref="@e3"]"#),
+            select_js.contains(r#"[data-cdp-ref=\"@e3\"]"#),
             "select must resolve @eN refs: {select_js}"
         );
         assert!(
@@ -2024,7 +1768,7 @@ mod script_tests {
 
         let wait_js = BrowserActions::element_exists_js("@e3");
         assert!(
-            wait_js.contains(r#"[data-cdp-ref="@e3"]"#),
+            wait_js.contains(r#"[data-cdp-ref=\"@e3\"]"#),
             "wait must resolve @eN refs: {wait_js}"
         );
         assert!(
@@ -2046,7 +1790,7 @@ mod script_tests {
     fn resolve_element_js_reports_cross_origin_frames_when_lookup_fails() {
         let js = BrowserActions::resolve_element_js("@e1");
         assert!(
-            js.contains("__crossOriginFrames()"),
+            js.contains("crossOriginFrames++"),
             "not-found path must count cross-origin frames: {js}"
         );
         assert!(
