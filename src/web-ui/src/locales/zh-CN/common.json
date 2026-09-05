@@ -741,6 +741,7 @@
     "returnedToThisDevice": "已返回这台设备"
   },
   "accountLogin": {
+    "signedInAccount": "已登录账号",
     "username": "用户名",
     "password": "密码",
     "authServer": "服务器地址",

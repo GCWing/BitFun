@@ -741,6 +741,7 @@
     "returnedToThisDevice": "Returned to this device"
   },
   "accountLogin": {
+    "signedInAccount": "Signed-in account",
     "username": "Username",
     "password": "Password",
     "authServer": "Server Address",

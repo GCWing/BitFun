@@ -741,6 +741,7 @@
     "returnedToThisDevice": "已返回這台裝置"
   },
   "accountLogin": {
+    "signedInAccount": "已登入帳號",
     "username": "帳號",
     "password": "密碼",
     "authServer": "伺服器地址",
