@@ -982,6 +982,15 @@
   color: var(--openbitfun-color-content-muted);
 }
 
+.session-list__search-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .session-list__search-input {
   flex: 1;
   border: none;
@@ -1064,7 +1073,8 @@
 }
 
 .session-list__rename-input {
-  padding: 12px 14px;
+  min-height: 48px;
+  padding: 0 14px;
   border: 1px solid var(--openbitfun-color-border-subtle);
   @include squircle(12px);
   background: var(--openbitfun-color-surface-panel);
@@ -1072,10 +1082,14 @@
   font-size: var(--openbitfun-type-body-lg-font-size);
   outline: none;
 
-  &:focus {
+  &:focus-within {
     border-color: var(--openbitfun-color-accent-default);
     box-shadow: 0 0 0 3px var(--openbitfun-color-accent-surface);
   }
+}
+
+.session-list__rename-input input {
+  font-size: inherit;
 }
 
 .session-list__rename-actions {

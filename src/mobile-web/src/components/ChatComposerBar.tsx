@@ -1,5 +1,5 @@
 import React from 'react';
-import { MobileComposer, MobileIconButton, MobileTextarea } from '@openbitfun/ui/mobile';
+import { MobileComposer, MobileIconButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 
 interface PendingImage {
@@ -139,7 +139,7 @@ export default function ChatComposerBar({
       >
         <div className="chat-page__input-area">
           {expanded ? (
-            <MobileTextarea
+            <textarea
               className="chat-page__input"
               disabled={imageAnalyzing}
               onChange={(event) => onChange(event.target.value)}

@@ -97,7 +97,7 @@ function RenameSessionSheet({ compact, onClose, onConfirm, onValueChange, open, 
       <MobileTextField
         appearance="surface"
         autoFocus
-        inputClassName="session-list__rename-input"
+        className="session-list__rename-input"
         onChange={(event) => onValueChange(event.target.value)}
         onCompositionEnd={() => { compositionActiveRef.current = false; }}
         onCompositionStart={() => { compositionActiveRef.current = true; }}

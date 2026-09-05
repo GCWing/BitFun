@@ -15,7 +15,7 @@ import { RemoteSessionManager } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 
 interface PairingPageProps {
-  onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
+  onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager, preferredDeviceId?: string) => void;
 }
 
 interface PairAttemptOptions {
@@ -282,33 +282,14 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
         });
         accountSession.masterKey.fill(0);
 
-        const devices = await client.listDevices();
-        if (!isCurrentAttempt()) return;
-        const remoteDevices = devices.filter((device) => (
-          device.device_id !== client.controllerDeviceId
-        ));
-        const targetDeviceId = pairingTarget.targetDeviceId?.trim() ?? '';
-        const targetDevice = targetDeviceId
-          ? remoteDevices.find((device) => device.device_id === targetDeviceId)
-          : remoteDevices.find((device) => device.online) ?? remoteDevices[0];
-        if (!targetDevice) {
-          throw new Error(targetDeviceId
-            ? t('devices.deviceUnavailable')
-            : t('devices.noDevices'));
-        }
-        if (!targetDevice.online) {
-          throw new Error(t('devices.deviceUnavailable'));
-        }
-        client.setPairedDeviceId(targetDevice.device_id);
-
+        // Account authentication is complete. Device discovery and connection
+        // belong to the authenticated directory, including empty/offline/error
+        // states; none of them may return a successful login to this form.
         const store = useMobileStore.getState();
+        store.resetForDeviceSwitch();
         store.setAuthenticatedUserId(accountSession.userId);
         store.setAuthenticatedUserLabel(userIdValue);
-        store.setControlTarget({
-          deviceId: targetDevice.device_id,
-          deviceName: targetDevice.device_name || pairingTarget.targetDeviceName || null,
-          isHome: false,
-        });
+        store.setControlTarget(null);
         setConnectionStatus('paired');
         localStorage.setItem(MOBILE_USER_ID_KEY, userIdValue);
         localStorage.removeItem(MOBILE_FAILURE_COUNT_KEY);
@@ -316,7 +297,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
         setFailureCount(0);
         setLockUntil(null);
         setPassword('');
-        onPairedRef.current(client, new RemoteSessionManager(client));
+        onPairedRef.current(client, new RemoteSessionManager(client), pairingTarget.targetDeviceId?.trim() || undefined);
         return;
       }
 
@@ -642,7 +623,9 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
             <MobileStatus
               className="pairing-page__progress"
               loading
-              title={connectionStatus === 'paired' ? t('pairing.pairedLoadingSessions') : t('pairing.connectingAndPairing')}
+              title={connectionStatus === 'paired'
+                ? t(requiresAccountAuth ? 'devices.accountReady' : 'pairing.pairedLoadingSessions')
+                : t('pairing.connectingAndPairing')}
             />
           )}
         </section>

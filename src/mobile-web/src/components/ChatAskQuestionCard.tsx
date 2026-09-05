@@ -169,7 +169,7 @@ export default function ChatAskQuestionCard({ onAnswer, tool }: ChatAskQuestionC
                 <MobileTextField
                   appearance="surface"
                   disabled={submitted || submitting}
-                  inputClassName="chat-ask-card__custom-input"
+                  className="chat-ask-card__custom-input"
                   onChange={(event) => setCustomTexts((current) => ({ ...current, [questionIndex]: event.target.value }))}
                   placeholder={t('common.typeYourAnswer')}
                   value={customTexts[questionIndex] || ''}

@@ -78,13 +78,13 @@ export default function CompactSettingsSheet({
         <MobileCard padding="none" className="harmony-sidebar__settings-card">
           <MobileButton appearance="plain" block className="harmony-sidebar__settings-row" onClick={onToggleTheme}>
             <span className="harmony-sidebar__settings-row-icon"><ThemeToggleIcon isDark={isDark} /></span>
-            <span>{t('settings.appearance')}</span>
+            <span className="harmony-sidebar__settings-label">{t('settings.appearance')}</span>
             <small>{isDark ? 'Dark' : 'Light'}</small>
             <span className="harmony-sidebar__settings-chevron" aria-hidden="true">›</span>
           </MobileButton>
           <div className="harmony-sidebar__settings-row">
             <span className="harmony-sidebar__settings-row-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.45 3.3 5.45 3.3 9S14.2 18.55 12 21M12 3C9.8 5.45 8.7 8.45 8.7 12s1.1 6.55 3.3 9" /></svg></span>
-            <span>{t('settings.language')}</span>
+            <span className="harmony-sidebar__settings-label">{t('settings.language')}</span>
             <LanguageToggleButton className="harmony-sidebar__settings-language" />
             <span className="harmony-sidebar__settings-chevron" aria-hidden="true">›</span>
           </div>
@@ -94,7 +94,7 @@ export default function CompactSettingsSheet({
         <MobileCard padding="none" className="harmony-sidebar__settings-card">
           <div className="harmony-sidebar__settings-row">
             <span className="harmony-sidebar__settings-row-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65"><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></svg></span>
-            <span>{t('settings.defaultModel')}</span>
+            <span className="harmony-sidebar__settings-label">{t('settings.defaultModel')}</span>
             <small>{t('settings.followDesktop')}</small>
           </div>
         </MobileCard>

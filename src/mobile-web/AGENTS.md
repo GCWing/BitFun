@@ -12,6 +12,20 @@ Mobile web is the browser-based remote control client for OpenBitFun desktop ses
   through generated files. Do not import Web UI locale resources to reuse copy.
 - Do not commit local pairing URLs, user IDs, logs, screenshots with sensitive data, or temporary AI prompts.
 
+## Component style integration
+
+- Load `styles/reset.scss` before shared component CSS. Keep universal resets
+  and generic focus defaults in `openbitfun.reset`, below `openbitfun.components`;
+  unlayered resets erase shared spacing and focus behavior.
+- Adapt shared components through their public `data-openbitfun-part` hooks or
+  explicit app classes, not old native tags, positional children, or generated
+  CSS-module class names. Recheck selectors whenever component anatomy changes.
+- `MobileTextField.className` styles the field surface; `inputClassName` is only
+  for editor-specific behavior or typography. Keep borders/background/focus on
+  one surface and use the leading/trailing slots for icons.
+- Check compact, intermediate/foldable, and wide layouts, including expanded
+  controls and keyboard focus. A passing source contract test is not visual QA.
+
 ## Where to look first
 
 | Area | Paths |
@@ -28,6 +42,8 @@ Mobile web is the browser-based remote control client for OpenBitFun desktop ses
 Run the focused mobile-web checks after changes:
 
 ```bash
+pnpm --dir src/mobile-web run test:ui-components
+pnpm --dir src/mobile-web run test:account-login # account login without an online desktop
 pnpm --dir src/mobile-web run type-check
 pnpm run build:mobile-web
 ```

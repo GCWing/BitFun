@@ -110,16 +110,6 @@
     padding-left: 1.2rem;
   }
 
-  ul:has(> li > .file-card) {
-    list-style: none;
-    padding-left: 0;
-
-    > li {
-      margin-bottom: var(--size-gap-2);
-      &:last-child { margin-bottom: 0; }
-    }
-  }
-
   // ─── Inline code ────────────────────────────────────────────────────────────
 
   .inline-code {
@@ -191,6 +181,9 @@
   }
 
   .copy-button {
+    --_mobile-icon-button-size: 28px;
+    --_mobile-icon-size: 14px;
+
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
@@ -218,6 +211,113 @@
       color: var(--openbitfun-color-status-success-content);
       opacity: 1;
     }
+  }
+
+  .file-link {
+    display: inline;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--openbitfun-color-accent-default);
+    font: inherit;
+    text-decoration: underline;
+  }
+
+  .message-file-cards {
+    display: grid;
+    inline-size: min(100%, 420px);
+    gap: var(--size-gap-2);
+    margin-block-start: var(--size-gap-3);
+  }
+
+  .file-card {
+    display: flex;
+    inline-size: 100%;
+    min-block-size: 68px;
+    align-items: center;
+    gap: var(--size-gap-3);
+    padding: 12px;
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: 14px;
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-primary);
+    text-align: start;
+  }
+
+  button.file-card:active {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+  }
+
+  .file-card[data-status='loading'],
+  .file-card[data-status='error'] {
+    cursor: default;
+  }
+
+  .file-card[data-status='error'] {
+    opacity: 0.56;
+  }
+
+  .file-card__icon {
+    display: inline-flex;
+    inline-size: 34px;
+    block-size: 34px;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: var(--openbitfun-color-action-neutral-surface);
+    color: var(--openbitfun-color-content-muted);
+  }
+
+  .file-card__copy {
+    min-inline-size: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .file-card__name,
+  .file-card__meta {
+    display: block;
+  }
+
+  .file-card__name {
+    overflow: hidden;
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-body-xs-font-size);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-card__meta,
+  .file-card__placeholder,
+  .file-card__action {
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-support-font-size);
+  }
+
+  .file-card__meta {
+    margin-block-start: 2px;
+  }
+
+  .file-card__placeholder {
+    flex: 1;
+    opacity: 0.72;
+  }
+
+  .file-card__action {
+    display: inline-flex;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    flex: 0 0 44px;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--openbitfun-type-body-md-font-size);
+  }
+
+  .file-card[data-status='done'] .file-card__action {
+    color: var(--openbitfun-color-status-success-content);
   }
 
   pre {

@@ -133,16 +133,6 @@ function getModelDisplayName(model: RemoteModelConfig | null): string {
   return model.model_name || model.name || '';
 }
 
-function selectedReasoningLabel(
-  model: RemoteModelConfig | null,
-  catalog: RemoteModelCatalog | null,
-): string | undefined {
-  if (model?.reasoning?.status !== 'known') return undefined;
-  const selected = catalog?.session_reasoning_preset?.trim();
-  if (!selected) return undefined;
-  return model.reasoning.presets?.find(preset => preset.id === selected)?.label || selected;
-}
-
 function getSelectedModelInfo(
   selectedModelId: string,
   catalog: RemoteModelCatalog | null,
@@ -151,7 +141,6 @@ function getSelectedModelInfo(
   label: string;
   meta: string | null;
   enableThinking: boolean;
-  reasoningEffort?: string;
 } {
   if (selectedModelId === 'auto') {
     const resolved = resolveConcreteModelSelection(selectedModelId, catalog);
@@ -159,7 +148,6 @@ function getSelectedModelInfo(
       label: t('chat.modelAuto'),
       meta: t('chat.modelAutoDesc'),
       enableThinking: resolved?.reasoning?.status === 'known',
-      reasoningEffort: selectedReasoningLabel(resolved, catalog),
     };
   }
 
@@ -171,7 +159,6 @@ function getSelectedModelInfo(
         : t('chat.modelAuto'),
       meta: buildModelProviderMeta(resolved) || t('chat.modelAutoDesc'),
       enableThinking: resolved?.reasoning?.status === 'known',
-      reasoningEffort: selectedReasoningLabel(resolved, catalog),
     };
   }
 
@@ -188,7 +175,6 @@ function getSelectedModelInfo(
     label: getModelDisplayName(resolved),
     meta: buildModelProviderMeta(resolved),
     enableThinking: resolved.reasoning?.status === 'known',
-    reasoningEffort: selectedReasoningLabel(resolved, catalog),
   };
 }
 
@@ -251,23 +237,12 @@ export const ModelSelectorPill: React.FC<{
         disabled={disabled}
         aria-label={t('chat.modelSelection')}
       >
-        <span className="chat-model-selector__icon" aria-hidden="true">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-            <rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
-            <rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
-            <rect x="9" y="14" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
-            <path d="M10 7h4M12 10v4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-        </span>
         <span className="chat-model-selector__name">
           <span className="chat-model-selector__name-text">{selectedInfo.label}</span>
           {selectedInfo.enableThinking && (
             <SparklesIcon className="chat-model-selector__thinking" size={9} />
           )}
         </span>
-        {selectedInfo.reasoningEffort && (
-          <span className="chat-model-selector__effort">{selectedInfo.reasoningEffort}</span>
-        )}
         <span className="chat-model-selector__chevron" aria-hidden="true">
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
             <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

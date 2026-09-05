@@ -517,6 +517,18 @@ export class RemoteSessionManager {
     });
   }
 
+  async confirmTool(toolId: string): Promise<void> {
+    await this.request({ cmd: 'confirm_tool', tool_id: toolId });
+  }
+
+  async rejectTool(toolId: string, reason?: string): Promise<void> {
+    await this.request({
+      cmd: 'reject_tool',
+      tool_id: toolId,
+      reason: reason ?? undefined,
+    });
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     await this.request({ cmd: 'delete_session', session_id: sessionId });
   }

@@ -92,6 +92,7 @@
 
 .chat-page__header-menu button {
   min-height: 42px;
+  min-block-size: 42px;
   padding: 0 12px;
   border: 0;
   border-radius: 12px;
@@ -228,32 +229,19 @@
   width: 100%;
 }
 
-// User message — left-aligned with background
+// User message — the shared MobileMessage owns the single bubble surface.
 .chat-msg--user {
-  align-items: flex-start;
-}
-
-.chat-msg__user-card {
-  display: flex;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.chat-msg__user-avatar {
-  display: none;
+  align-items: flex-end;
 }
 
 .chat-msg__user-content {
-  width: 100%;
+  max-width: 100%;
   font-size: var(--openbitfun-type-body-md-font-size);
   line-height: var(--openbitfun-type-body-lg-line-height);
   color: var(--openbitfun-color-content-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   white-space: pre-wrap;
-  padding: 8px 12px;
-  background: var(--openbitfun-color-surface-subtle);
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: var(--size-radius-base);
 }
 
 .chat-msg__user-images {
@@ -292,6 +280,7 @@
   font-size: var(--openbitfun-type-body-xs-font-size);
   cursor: pointer;
   padding: 3px 0;
+  min-block-size: 0;
   text-align: left;
 
   &:active { opacity: 0.7; }

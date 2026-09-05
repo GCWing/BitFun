@@ -8,9 +8,8 @@
     display: inline-grid;
     inline-size: var(--_mobile-icon-button-size);
     block-size: var(--_mobile-icon-button-size);
-    min-inline-size: var(--_mobile-icon-button-size);
     place-items: center;
-    flex: 0 0 var(--_mobile-icon-button-size);
+    flex: 0 0 auto;
     margin: 0;
     padding: 0;
     border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);

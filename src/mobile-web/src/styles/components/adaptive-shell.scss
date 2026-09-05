@@ -4,20 +4,6 @@
  * same content in a persistent master-detail composition.
  */
 
-button,
-input,
-textarea {
-  font-family: inherit;
-}
-
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid var(--openbitfun-color-content-primary);
-  outline-offset: 2px;
-}
-
 .remote-shell {
   display: flex;
   width: 100%;
@@ -495,18 +481,6 @@ textarea:focus-visible,
 }
 
 .chat-msg--user { align-items: flex-end; }
-
-.chat-msg__user-card {
-  width: auto;
-  max-width: min(86%, 620px);
-}
-
-.chat-msg__user-content {
-  padding: 10px 13px;
-  border: 0;
-  border-radius: 16px 16px 5px 16px;
-  background: var(--openbitfun-color-surface-tertiary);
-}
 
 .chat-page__input-wrap {
   bottom: max(14px, env(safe-area-inset-bottom, 0px));

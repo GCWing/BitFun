@@ -201,20 +201,61 @@ function isLocalFileLink(href: string): string | null {
   return filePath;
 }
 
+function resolveFileReferenceHref(href: string): string | null {
+  if (
+    href.startsWith(COMPUTER_LINK_PREFIX) ||
+    href.startsWith(FILE_LINK_PREFIX) ||
+    href.startsWith('file:')
+  ) {
+    return normalizeFileLikeHref(href);
+  }
+  return isLocalFileLink(href);
+}
+
+interface ProjectedFileReference {
+  path: string;
+}
+
+function projectFileReferences(content: string): ProjectedFileReference[] {
+  const references: ProjectedFileReference[] = [];
+  const seen = new Set<string>();
+  const addReference = (href: string) => {
+    const path = resolveFileReferenceHref(href);
+    if (!path || seen.has(path)) return;
+    seen.add(path);
+    references.push({ path });
+  };
+
+  // Markdown attachment links stay readable inline; their richer cards are
+  // projected into a separate block below the message, matching HarmonyOS.
+  const markdownLinkPattern = /(?<!!)\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+["'][^"'\n]*["'])?\s*\)/g;
+  for (const match of content.matchAll(markdownLinkPattern)) {
+    addReference(match[1] || match[2] || '');
+  }
+
+  // Preserve support for assistant output that emits a bare computer/file URI.
+  const bareReferencePattern = /(?:computer|file):\/\/[^\s<>()\]]+/g;
+  for (const match of content.matchAll(bareReferencePattern)) {
+    addReference(match[0].replace(/[.,;:!?，。；：！？]+$/, ''));
+  }
+
+  return references.slice(0, 4);
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
 }
 
-const FileTextIcon: React.FC<{ size?: number; style?: React.CSSProperties }> = ({ size = 20, style }) => (
+const FileTextIcon: React.FC<{ size?: number; className?: string }> = ({ size = 20, className }) => (
   <svg
     width={size}
     height={size}
     viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    style={style}
+    className={className}
     aria-hidden="true"
   >
     <path d="M15.3929 4.05365L14.8912 4.61112L15.3929 4.05365ZM19.3517 7.61654L18.85 8.17402L19.3517 7.61654ZM21.654 10.1541L20.9689 10.4592V10.4592L21.654 10.1541ZM3.17157 20.8284L3.7019 20.2981H3.7019L3.17157 20.8284ZM20.8284 20.8284L20.2981 20.2981L20.2981 20.2981L20.8284 20.8284ZM14 21.25H10V22.75H14V21.25ZM2.75 14V10H1.25V14H2.75ZM21.25 13.5629V14H22.75V13.5629H21.25ZM14.8912 4.61112L18.85 8.17402L19.8534 7.05907L15.8947 3.49618L14.8912 4.61112ZM22.75 13.5629C22.75 11.8745 22.7651 10.8055 22.3391 9.84897L20.9689 10.4592C21.2349 11.0565 21.25 11.742 21.25 13.5629H22.75ZM18.85 8.17402C20.2034 9.3921 20.7029 9.86199 20.9689 10.4592L22.3391 9.84897C21.9131 8.89241 21.1084 8.18853 19.8534 7.05907L18.85 8.17402ZM10.0298 2.75C11.6116 2.75 12.2085 2.76158 12.7405 2.96573L13.2779 1.5653C12.4261 1.23842 11.498 1.25 10.0298 1.25V2.75ZM15.8947 3.49618C14.8087 2.51878 14.1297 1.89214 13.2779 1.5653L12.7405 2.96573C13.2727 3.16993 13.7215 3.55836 14.8912 4.61112L15.8947 3.49618ZM10 21.25C8.09318 21.25 6.73851 21.2484 5.71085 21.1102C4.70476 20.975 4.12511 20.7213 3.7019 20.2981L2.64124 21.3588C3.38961 22.1071 4.33855 22.4392 5.51098 22.5969C6.66182 22.7516 8.13558 22.75 10 22.75V21.25ZM1.25 14C1.25 15.8644 1.24841 17.3382 1.40313 18.489C1.56076 19.6614 1.89288 20.6104 2.64124 21.3588L3.7019 20.2981C3.27869 19.8749 3.02502 19.2952 2.88976 18.2892C2.75159 17.2615 2.75 15.9068 2.75 14H1.25ZM14 22.75C15.8644 22.75 17.3382 22.7516 18.489 22.5969C19.6614 22.4392 20.6104 22.1071 21.3588 21.3588L20.2981 20.2981C19.8749 20.7213 19.2952 20.975 18.2892 21.1102C17.2615 21.2484 15.9068 21.25 14 21.25V22.75ZM21.25 14C21.25 15.9068 21.2484 17.2615 21.1102 18.2892C20.975 19.2952 20.7213 19.8749 20.2981 20.2981L21.3588 21.3588C22.1071 20.6104 22.4392 19.6614 22.5969 18.489C22.7516 17.3382 22.75 15.8644 22.75 14H21.25ZM2.75 10C2.75 8.09318 2.75159 6.73851 2.88976 5.71085C3.02502 4.70476 3.27869 4.12511 3.7019 3.7019L2.64124 2.64124C1.89288 3.38961 1.56076 4.33855 1.40313 5.51098C1.24841 6.66182 1.25 8.13558 1.25 10H2.75ZM10.0298 1.25C8.15538 1.25 6.67442 1.24842 5.51887 1.40307C4.34232 1.56054 3.39019 1.8923 2.64124 2.64124L3.7019 3.7019C4.12453 3.27928 4.70596 3.02525 5.71785 2.88982C6.75075 2.75158 8.11311 2.75 10.0298 2.75V1.25Z" fill="currentColor"/>
@@ -273,35 +314,19 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     }
   }, [state, path, onDownload]);
 
-  const cardStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 14px',
-    border: '1px solid var(--openbitfun-color-border-subtle)',
-    borderRadius: '10px',
-    background: 'var(--openbitfun-color-surface-subtle)',
-    cursor: state.status === 'ready' || state.status === 'done' ? 'pointer' : 'default',
-    maxWidth: '300px',
-    verticalAlign: 'middle',
-    transition: 'background 0.15s',
-  };
-
-  const iconColor = 'var(--openbitfun-color-content-muted)';
-
   if (state.status === 'loading') {
     return (
-      <span className="file-card" style={cardStyle}>
-        <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
+      <span className="file-card" data-status="loading">
+        <span className="file-card__icon"><FileTextIcon size={20} /></span>
+        <span className="file-card__placeholder">{t('chat.fileLoading')}</span>
       </span>
     );
   }
   if (state.status === 'error') {
     return (
-      <span className="file-card" style={{ ...cardStyle, cursor: 'default', opacity: 0.5 }} title={state.message}>
-        <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
+      <span className="file-card" data-status="error" title={state.message}>
+        <span className="file-card__icon"><FileTextIcon size={20} /></span>
+        <span className="file-card__placeholder">{t('chat.fileUnavailable')}</span>
       </span>
     );
   }
@@ -314,37 +339,16 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     <MobileButton
       appearance="plain"
       className="file-card"
-      style={cardStyle}
+      data-status={state.status}
       onClick={handleClick}
       title={isDownloading ? t('chat.fileDownloading') : isDone ? t('chat.fileDownloaded') : t('chat.clickToDownload')}
     >
-      <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-      <span style={{ minWidth: 0, overflow: 'hidden' }}>
-        <span style={{
-          display: 'block',
-          fontSize: 'var(--openbitfun-type-body-xs-font-size)',
-          fontWeight: 'var(--openbitfun-type-label-lg-font-weight)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          color: 'var(--openbitfun-color-content-primary)',
-        }}>
-          {name}
-        </span>
-        <span style={{
-          display: 'block',
-          fontSize: 'var(--openbitfun-type-support-font-size)',
-          color: 'var(--openbitfun-color-content-muted)',
-          marginTop: '2px',
-        }}>
-          {formatFileSize(size)}
-        </span>
+      <span className="file-card__icon"><FileTextIcon size={20} /></span>
+      <span className="file-card__copy">
+        <span className="file-card__name">{name}</span>
+        <span className="file-card__meta">{formatFileSize(size)}</span>
       </span>
-      <span style={{
-        flexShrink: 0,
-        fontSize: 'var(--openbitfun-type-support-font-size)',
-        color: isDone ? 'var(--openbitfun-color-status-success-content)' : 'var(--openbitfun-color-content-muted)',
-      }}>
+      <span className="file-card__action">
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
       </span>
     </MobileButton>
@@ -359,6 +363,10 @@ interface MarkdownContentProps {
 export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownload, onGetFileInfo }) => {
   const { isDark } = useTheme();
   const syntaxTheme = isDark ? vscDarkPlus : vs;
+  const fileReferences = useMemo(
+    () => onFileDownload && onGetFileInfo ? projectFileReferences(content) : [],
+    [content, onFileDownload, onGetFileInfo],
+  );
 
   const components: React.ComponentProps<typeof ReactMarkdown>['components'] = useMemo(() => ({
     code({ className, children, ...props }: any) {
@@ -408,55 +416,18 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
     },
 
     a({ href, children }: any) {
-      const isComputerLink =
-        typeof href === 'string' && href.startsWith(COMPUTER_LINK_PREFIX);
-
-      if (isComputerLink && onGetFileInfo && onFileDownload) {
-        const filePath = normalizeFileLikeHref(href);
-        return (
-          <FileCard
-            path={filePath}
-            onGetFileInfo={onGetFileInfo}
-            onDownload={onFileDownload}
-          />
-        );
-      }
-      // Fallback: plain clickable link when only onFileDownload is available.
-      if (isComputerLink && onFileDownload) {
-        const filePath = normalizeFileLikeHref(href);
+      const filePath = typeof href === 'string' ? resolveFileReferenceHref(href) : null;
+      if (filePath && onFileDownload) {
         return (
           <MobileButton
             appearance="plain"
             className="file-link"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFileDownload(filePath); }}
             type="button"
-            style={{
-              cursor: 'pointer',
-              color: 'var(--openbitfun-color-accent-default)',
-              textDecoration: 'underline',
-              background: 'none',
-              border: 'none',
-              font: 'inherit',
-              padding: 0,
-            }}
           >
             {children}
           </MobileButton>
         );
-      }
-
-      // Local file path (e.g. /Users/.../report.pdf) → FileCard, excluding code files
-      if (onGetFileInfo && onFileDownload) {
-        const localPath = typeof href === 'string' ? isLocalFileLink(href) : null;
-        if (localPath) {
-          return (
-            <FileCard
-              path={localPath}
-              onGetFileInfo={onGetFileInfo}
-              onDownload={onFileDownload}
-            />
-          );
-        }
       }
 
       // Fallback: render as plain text for computer:// links without handler,
@@ -494,22 +465,36 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
   }), [syntaxTheme, isDark, onFileDownload, onGetFileInfo]);
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={components}
-      urlTransform={(url) => {
-        if (url.startsWith('computer://')) return url;
-        if (/^(https?|mailto|tel|file):/i.test(url) || url.startsWith('#') || url.startsWith('/')) {
-          return url;
-        }
-        // Preserve relative paths without a protocol (e.g. "report.pptx",
-        // "./output.pdf").  Content is from our own AI so javascript:/data:
-        // injection is not a concern; those contain ':' and are blocked above.
-        if (!url.includes(':')) return url;
-        return '';
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+    <>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        urlTransform={(url) => {
+          if (url.startsWith('computer://')) return url;
+          if (/^(https?|mailto|tel|file):/i.test(url) || url.startsWith('#') || url.startsWith('/')) {
+            return url;
+          }
+          // Preserve relative paths without a protocol (e.g. "report.pptx",
+          // "./output.pdf").  Content is from our own AI so javascript:/data:
+          // injection is not a concern; those contain ':' and are blocked above.
+          if (!url.includes(':')) return url;
+          return '';
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+      {fileReferences.length > 0 && onGetFileInfo && onFileDownload && (
+        <div className="message-file-cards">
+          {fileReferences.map((reference) => (
+            <FileCard
+              key={reference.path}
+              path={reference.path}
+              onGetFileInfo={onGetFileInfo}
+              onDownload={onFileDownload}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 };

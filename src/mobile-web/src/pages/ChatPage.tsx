@@ -242,6 +242,32 @@ const ChatPage: React.FC<ChatPageProps> = ({
     }
   }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError]);
 
+  const handleApproveTool = useCallback(async (toolId: string) => {
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) throw new RemoteControlTargetChangedError();
+    try {
+      await sessionMgr.confirmTool(toolId);
+      if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
+      pollerRef.current?.nudge();
+    } catch (err) {
+      reportRemoteSessionError(err, setError);
+      throw err;
+    }
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError]);
+
+  const handleRejectTool = useCallback(async (toolId: string) => {
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) throw new RemoteControlTargetChangedError();
+    try {
+      await sessionMgr.rejectTool(toolId, t('chat.rejectedByUser'));
+      if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
+      pollerRef.current?.nudge();
+    } catch (err) {
+      reportRemoteSessionError(err, setError);
+      throw err;
+    }
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError, t]);
+
   const handleCancelTool = useCallback((toolId: string, reason = t('common.cancel')) => {
     if (captureChatTargetEpoch() === null) return;
     sessionMgr.cancelTool(toolId, reason).catch((error) => {
@@ -984,8 +1010,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
           now={now}
           optimisticMessage={optimisticMsg}
           onAnswerQuestion={handleAnswerQuestion}
+          onApproveTool={handleApproveTool}
           onCancelActiveTool={(toolId) => handleCancelTool(toolId, 'User cancelled')}
           onCancelLegacyTool={handleCancelTool}
+          onRejectTool={handleRejectTool}
           onFileDownload={handleFileDownload}
           onGetFileInfo={handleGetFileInfo}
           onMessageContextMenu={(message, event) => {

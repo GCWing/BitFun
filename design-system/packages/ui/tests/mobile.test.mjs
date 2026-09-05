@@ -79,6 +79,19 @@ test("mobile entry exposes reusable composer and floating action anatomy", () =>
   assert.match(actions, /data-openbitfun-part="trailing"/);
 });
 
+test("mobile disclosure exposes stable parts without changing toggle semantics", () => {
+  for (const open of [false, true]) {
+    const markup = renderToStaticMarkup(createElement(MobileDisclosure, {
+      onToggle: () => undefined, open, title: "Advanced options",
+    }, "Server"));
+    assert.match(markup, new RegExp(`aria-expanded="${open}"`));
+    assert.match(markup, /<button[^>]*data-openbitfun-part="trigger"[^>]*type="button"/);
+    assert.match(markup, /data-openbitfun-part="title"/);
+    assert.match(markup, /data-openbitfun-part="chevron"/);
+    assert.equal(markup.includes('data-openbitfun-part="body"'), open);
+  }
+});
+
 test("mobile entry exposes the complete reusable mobile surface set", () => {
   const examples = [
     createElement(MobileActionSheet, { actions: [{ id: "rename", label: "Rename" }], onAction: () => undefined, onOpenChange: () => undefined, open: true, title: "Actions" }),

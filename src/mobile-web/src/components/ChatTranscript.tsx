@@ -4,6 +4,9 @@ import { useI18n } from '../i18n';
 import type { ActiveTurnSnapshot, ChatMessage, ChatMessageItem, RemoteToolStatus } from '../services/RemoteSessionManager';
 import ChatAskQuestionCard from './ChatAskQuestionCard';
 import { MarkdownContent } from './ChatMarkdown';
+import ChatToolApprovalActions, { isToolAwaitingApproval } from './ChatToolApprovalActions';
+
+type ToolApprovalHandler = (toolId: string) => Promise<void>;
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -227,7 +230,9 @@ export const TaskToolCard: React.FC<{
   now: number;
   subItems?: ChatMessageItem[];
   onCancelTool?: (toolId: string) => void;
-}> = ({ tool, now, subItems = [], onCancelTool }) => {
+  onApproveTool?: ToolApprovalHandler;
+  onRejectTool?: ToolApprovalHandler;
+}> = ({ tool, now, subItems = [], onCancelTool, onApproveTool, onRejectTool }) => {
   const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -249,6 +254,11 @@ export const TaskToolCard: React.FC<{
   const subTools = subItems.filter(i => i.type === 'tool' && i.tool);
   const subToolsDone = subTools.filter(i => i.tool!.status === 'completed').length;
   const subToolsRunning = subTools.filter(i => i.tool!.status === 'running').length;
+  const hasPendingSubtoolApproval = subTools.some(i => isToolAwaitingApproval(i.tool!));
+
+  useEffect(() => {
+    if (hasPendingSubtoolApproval) setStepsExpanded(true);
+  }, [hasPendingSubtoolApproval]);
 
   useEffect(() => {
     if (stepsExpanded && subItems.length > prevCountRef.current && scrollRef.current) {
@@ -298,6 +308,8 @@ export const TaskToolCard: React.FC<{
         )}
       </div>
 
+      <ChatToolApprovalActions tool={tool} onApprove={onApproveTool} onReject={onRejectTool} />
+
       {subItems.length > 0 && (
         <>
           <MobileButton appearance="plain" block className="chat-task-card__summary" onClick={() => setStepsExpanded(e => !e)}>
@@ -328,7 +340,8 @@ export const TaskToolCard: React.FC<{
                   const isDone = t.status === 'completed';
                   const isErr = t.status === 'failed' || t.status === 'error';
                   return (
-                    <div key={`sub-tool-${t.id}-${idx}`} className={`chat-task-card__step chat-task-card__step--tool ${isDone ? 'is-done' : isErr ? 'is-error' : 'is-running'}`}>
+                    <div key={`sub-tool-${t.id}-${idx}`} className="chat-task-card__step-wrap">
+                      <div className={`chat-task-card__step chat-task-card__step--tool ${isDone ? 'is-done' : isErr ? 'is-error' : 'is-running'}`}>
                       {isDone ? (
                         <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--openbitfun-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isErr ? (
@@ -344,6 +357,8 @@ export const TaskToolCard: React.FC<{
                       {isDone && t.duration_ms != null && (
                         <span className="chat-task-card__step-duration">{formatDuration(t.duration_ms)}</span>
                       )}
+                      </div>
+                      <ChatToolApprovalActions tool={t} onApprove={onApproveTool} onReject={onRejectTool} />
                     </div>
                   );
                 }
@@ -422,7 +437,9 @@ const ToolCard: React.FC<{
   tool: RemoteToolStatus;
   now: number;
   onCancelTool?: (toolId: string) => void;
-}> = ({ tool, now, onCancelTool }) => {
+  onApproveTool?: ToolApprovalHandler;
+  onRejectTool?: ToolApprovalHandler;
+}> = ({ tool, now, onCancelTool, onApproveTool, onRejectTool }) => {
   const { t } = useI18n();
   const toolKey = tool.name.toLowerCase().replace(/[\s-]/g, '_');
   const typeLabelKey = TOOL_TYPE_MAP[toolKey] || TOOL_TYPE_MAP[tool.name];
@@ -480,6 +497,7 @@ const ToolCard: React.FC<{
           </MobileButton>
         )}
       </div>
+      <ChatToolApprovalActions tool={tool} onApprove={onApproveTool} onReject={onRejectTool} />
     </MobileCard>
   );
 };
@@ -559,7 +577,9 @@ export const ToolList: React.FC<{
   tools: RemoteToolStatus[];
   now: number;
   onCancelTool?: (toolId: string) => void;
-}> = ({ tools, now, onCancelTool }) => {
+  onApproveTool?: ToolApprovalHandler;
+  onRejectTool?: ToolApprovalHandler;
+}> = ({ tools, now, onCancelTool, onApproveTool, onRejectTool }) => {
   const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -578,7 +598,7 @@ export const ToolList: React.FC<{
     return (
       <div className="chat-tool-list">
         {tools.map((tc) => (
-          <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} />
+          <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />
         ))}
       </div>
     );
@@ -602,7 +622,7 @@ export const ToolList: React.FC<{
       {expanded && (
         <div className="chat-tool-list__scroll" ref={scrollRef}>
           {tools.map((tc) => (
-            <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} />
+            <ToolCard key={tc.id} tool={tc} now={now} onCancelTool={onCancelTool} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />
           ))}
         </div>
       )}
@@ -735,6 +755,47 @@ function filterSubagentItems(items: ChatMessageItem[]): ChatMessageItem[] {
   return result;
 }
 
+/**
+ * Ordered items preserve transcript position, while the legacy `tools` array is
+ * the compatibility projection older/newer relay peers may update first. Keep
+ * the ordered presentation, but let the explicit projection refresh matching
+ * tool state and append tools that are absent from `items` so blocking prompts
+ * can never become invisible during a mixed-version remote session.
+ */
+export function reconcileOrderedItemsWithTools(
+  items: ChatMessageItem[],
+  explicitTools: RemoteToolStatus[] = [],
+): ChatMessageItem[] {
+  if (explicitTools.length === 0) return items;
+
+  const toolsById = new Map(explicitTools.map(tool => [tool.id, tool]));
+  const seenToolIds = new Set<string>();
+
+  const reconcileItems = (source: ChatMessageItem[]): ChatMessageItem[] => source.map((item) => {
+    const explicit = item.tool?.id ? toolsById.get(item.tool.id) : undefined;
+    const tool = item.tool && explicit
+      ? {
+          ...item.tool,
+          ...explicit,
+          duration_ms: explicit.duration_ms ?? item.tool.duration_ms,
+          start_ms: explicit.start_ms ?? item.tool.start_ms,
+          input_preview: explicit.input_preview ?? item.tool.input_preview,
+          tool_input: explicit.tool_input ?? item.tool.tool_input,
+        }
+      : item.tool;
+
+    if (tool?.id) seenToolIds.add(tool.id);
+    const subItems = item.subItems ? reconcileItems(item.subItems) : item.subItems;
+    return tool === item.tool && subItems === item.subItems ? item : { ...item, tool, subItems };
+  });
+
+  const reconciled = reconcileItems(items);
+  const missingItems = explicitTools
+    .filter(tool => !seenToolIds.has(tool.id))
+    .map(tool => ({ type: 'tool' as const, tool }));
+  return missingItems.length > 0 ? [...reconciled, ...missingItems] : reconciled;
+}
+
 function groupChatItems(items: ChatMessageItem[]) {
   const groups: { type: string; entries: ChatMessageItem[] }[] = [];
   for (const item of items) {
@@ -768,6 +829,8 @@ function renderStandardGroups(
   keyPrefix: string,
   now: number,
   onCancelTool?: (toolId: string) => void,
+  onApproveTool?: ToolApprovalHandler,
+  onRejectTool?: ToolApprovalHandler,
   animate?: boolean,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
@@ -796,7 +859,7 @@ function renderStandardGroups(
       const flushRegular = () => {
         if (regularBuf.length > 0) {
           rendered.push(
-            <ToolList key={`${keyPrefix}-tl-${gi}-${rendered.length}`} tools={regularBuf} now={now} onCancelTool={onCancelTool} />,
+            <ToolList key={`${keyPrefix}-tl-${gi}-${rendered.length}`} tools={regularBuf} now={now} onCancelTool={onCancelTool} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />,
           );
           regularBuf = [];
         }
@@ -805,10 +868,15 @@ function renderStandardGroups(
       const flushAll = () => { flushRead(); flushRegular(); };
 
       for (const entry of g.entries) {
-        if (entry.tool?.name === 'Task') {
+        if (entry.tool && entry.tool.name !== 'Task' && isToolAwaitingApproval(entry.tool)) {
           flushAll();
           rendered.push(
-            <TaskToolCard key={`${keyPrefix}-task-${gi}-${rendered.length}`} tool={entry.tool!} now={now} subItems={entry.subItems} onCancelTool={onCancelTool} />,
+            <ToolCard key={`${keyPrefix}-approval-${gi}-${rendered.length}`} tool={entry.tool} now={now} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />,
+          );
+        } else if (entry.tool?.name === 'Task') {
+          flushAll();
+          rendered.push(
+            <TaskToolCard key={`${keyPrefix}-task-${gi}-${rendered.length}`} tool={entry.tool!} now={now} subItems={entry.subItems} onCancelTool={onCancelTool} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />,
           );
         } else if (entry.tool?.name === 'TodoWrite') {
           flushAll();
@@ -845,6 +913,8 @@ export function renderOrderedItems(
   rawItems: ChatMessageItem[],
   now: number,
   onCancelTool?: (toolId: string) => void,
+  onApproveTool?: ToolApprovalHandler,
+  onRejectTool?: ToolApprovalHandler,
   onAnswer?: (toolId: string, answers: any) => Promise<void>,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
@@ -852,7 +922,7 @@ export function renderOrderedItems(
   const items = filterSubagentItems(rawItems);
   const askEntries = items.filter(item => isPendingAskUserQuestion(item.tool));
   if (askEntries.length === 0) {
-    return renderStandardGroups(groupChatItems(items), 'ordered', now, onCancelTool, false, onFileDownload, onGetFileInfo);
+    return renderStandardGroups(groupChatItems(items), 'ordered', now, onCancelTool, onApproveTool, onRejectTool, false, onFileDownload, onGetFileInfo);
   }
 
   const beforeAskItems: ChatMessageItem[] = [];
@@ -870,9 +940,9 @@ export function renderOrderedItems(
 
   return (
     <>
-      {renderStandardGroups(groupChatItems(beforeAskItems), 'ordered-before', now, onCancelTool, false, onFileDownload, onGetFileInfo)}
+      {renderStandardGroups(groupChatItems(beforeAskItems), 'ordered-before', now, onCancelTool, onApproveTool, onRejectTool, false, onFileDownload, onGetFileInfo)}
       {renderQuestionEntries(askEntries, 'ordered', onAnswer)}
-      {renderStandardGroups(groupChatItems(afterAskItems), 'ordered-after', now, onCancelTool, false, onFileDownload, onGetFileInfo)}
+      {renderStandardGroups(groupChatItems(afterAskItems), 'ordered-after', now, onCancelTool, onApproveTool, onRejectTool, false, onFileDownload, onGetFileInfo)}
     </>
   );
 }
@@ -884,6 +954,8 @@ export function renderActiveTurnItems(
   now: number,
   onAnswer: (toolId: string, answers: any) => Promise<void>,
   onCancelTool: (toolId: string) => void,
+  onApproveTool: ToolApprovalHandler,
+  onRejectTool: ToolApprovalHandler,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
 ) {
@@ -891,7 +963,7 @@ export function renderActiveTurnItems(
   const askEntries = items.filter(item => isPendingAskUserQuestion(item.tool));
 
   if (askEntries.length === 0) {
-    return renderStandardGroups(groupChatItems(items), 'active', now, onCancelTool, true, onFileDownload, onGetFileInfo, true);
+    return renderStandardGroups(groupChatItems(items), 'active', now, onCancelTool, onApproveTool, onRejectTool, true, onFileDownload, onGetFileInfo, true);
   }
 
   const beforeAskItems: ChatMessageItem[] = [];
@@ -909,9 +981,9 @@ export function renderActiveTurnItems(
 
   return (
     <>
-      {renderStandardGroups(groupChatItems(beforeAskItems), 'active-before', now, onCancelTool, true, onFileDownload, onGetFileInfo, true)}
+      {renderStandardGroups(groupChatItems(beforeAskItems), 'active-before', now, onCancelTool, onApproveTool, onRejectTool, true, onFileDownload, onGetFileInfo, true)}
       {renderQuestionEntries(askEntries, 'active', onAnswer)}
-      {renderStandardGroups(groupChatItems(afterAskItems), 'active-after', now, onCancelTool, true, onFileDownload, onGetFileInfo, true)}
+      {renderStandardGroups(groupChatItems(afterAskItems), 'active-after', now, onCancelTool, onApproveTool, onRejectTool, true, onFileDownload, onGetFileInfo, true)}
     </>
   );
 }
@@ -931,8 +1003,10 @@ interface ChatTranscriptProps {
   now: number;
   optimisticMessage: OptimisticMessage | null;
   onAnswerQuestion: (toolId: string, answers: any) => Promise<void>;
+  onApproveTool: ToolApprovalHandler;
   onCancelActiveTool: (toolId: string) => void;
   onCancelLegacyTool: (toolId: string) => void;
+  onRejectTool: ToolApprovalHandler;
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>;
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>;
   onMessageContextMenu: (message: ChatMessage, event: React.MouseEvent) => void;
@@ -956,8 +1030,10 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
   now,
   optimisticMessage,
   onAnswerQuestion,
+  onApproveTool,
   onCancelActiveTool,
   onCancelLegacyTool,
+  onRejectTool,
   onFileDownload,
   onGetFileInfo,
   onMessageContextMenu,
@@ -989,23 +1065,20 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
               onTouchCancel={onMessageTouchEnd}
               onContextMenu={(event) => onMessageContextMenu(message, event)}
             >
-              <div className="chat-msg__user-card">
-                <div className="chat-msg__user-avatar">U</div>
-                <div className="chat-msg__user-content">
-                  {sanitizeMessageText(message.content)}
-                  {message.images && message.images.length > 0 && (
-                    <div className="chat-msg__user-images">
-                      {message.images.map((image, imageIndex) => (
-                        <img
-                          key={imageIndex}
-                          src={image.data_url}
-                          alt={image.name}
-                          className="chat-msg__user-image"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div className="chat-msg__user-content">
+                {sanitizeMessageText(message.content)}
+                {message.images && message.images.length > 0 && (
+                  <div className="chat-msg__user-images">
+                    {message.images.map((image, imageIndex) => (
+                      <img
+                        key={imageIndex}
+                        src={image.data_url}
+                        alt={image.name}
+                        className="chat-msg__user-image"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </MobileMessage>
           );
@@ -1062,11 +1135,11 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           >
             {isOldResponse && isExpanded && toggle(true)}
             {hasItems ? (
-              renderOrderedItems(message.items!, now, undefined, onAnswerQuestion, onFileDownload, onGetFileInfo)
+              renderOrderedItems(reconcileOrderedItemsWithTools(message.items!, message.tools), now, undefined, onApproveTool, onRejectTool, onAnswerQuestion, onFileDownload, onGetFileInfo)
             ) : (
               <>
                 {message.thinking && <ThinkingBlock thinking={message.thinking} />}
-                {!!message.tools?.length && <ToolList tools={message.tools} now={now} />}
+                {!!message.tools?.length && <ToolList tools={message.tools} now={now} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />}
                 {message.content && (
                   <div className="chat-msg__assistant-content">
                     <MarkdownContent content={message.content} onFileDownload={onFileDownload} onGetFileInfo={onGetFileInfo} />
@@ -1081,18 +1154,21 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
       {activeTurn && (() => {
         const turnIsActive = activeTurn.status === 'active';
         if (activeTurn.items?.length) {
+          const reconciledItems = reconcileOrderedItemsWithTools(activeTurn.items, activeTurn.tools);
           return (
             <MobileMessage className="chat-msg chat-msg--assistant" roleType="assistant">
               {turnIsActive
                 ? renderActiveTurnItems(
-                    activeTurn.items,
+                    reconciledItems,
                     now,
                     onAnswerQuestion,
                     onCancelActiveTool,
+                    onApproveTool,
+                    onRejectTool,
                     onFileDownload,
                     onGetFileInfo,
                   )
-                : renderOrderedItems(activeTurn.items, now, undefined, undefined, onFileDownload, onGetFileInfo)}
+                : renderOrderedItems(reconciledItems, now, undefined, onApproveTool, onRejectTool, undefined, onFileDownload, onGetFileInfo)}
               {turnIsActive && !activeTurn.thinking && !activeTurn.text && activeTurn.tools.length === 0 && (
                 <div className="chat-msg__assistant-content"><TypingDots /></div>
               )}
@@ -1130,10 +1206,12 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
                 now={now}
                 subItems={tool.status === 'running' ? subItemsForTask : undefined}
                 onCancelTool={onCancelLegacyTool}
+                onApproveTool={onApproveTool}
+                onRejectTool={onRejectTool}
               />
             ))}
             {!hasRunningSubagent && regularTools.length > 0 && (
-              <ToolList tools={regularTools} now={now} onCancelTool={onCancelLegacyTool} />
+              <ToolList tools={regularTools} now={now} onCancelTool={onCancelLegacyTool} onApproveTool={onApproveTool} onRejectTool={onRejectTool} />
             )}
             {turnIsActive && askTools.map((tool) => (
               <ChatAskQuestionCard key={tool.id} tool={tool} onAnswer={onAnswerQuestion} />
@@ -1153,18 +1231,15 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
 
       {optimisticMessage && (
         <MobileMessage className="chat-msg chat-msg--user" roleType="user">
-          <div className="chat-msg__user-card">
-            <div className="chat-msg__user-avatar">U</div>
-            <div className="chat-msg__user-content">
-              {optimisticMessage.text}
-              {optimisticMessage.images.length > 0 && (
-                <div className="chat-msg__user-images">
-                  {optimisticMessage.images.map((image, imageIndex) => (
-                    <img key={imageIndex} src={image.data_url} alt={image.name} className="chat-msg__user-image" />
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="chat-msg__user-content">
+            {optimisticMessage.text}
+            {optimisticMessage.images.length > 0 && (
+              <div className="chat-msg__user-images">
+                {optimisticMessage.images.map((image, imageIndex) => (
+                  <img key={imageIndex} src={image.data_url} alt={image.name} className="chat-msg__user-image" />
+                ))}
+              </div>
+            )}
           </div>
         </MobileMessage>
       )}
