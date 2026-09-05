@@ -3747,15 +3747,15 @@ mod tests {
             .expect("run installed binary");
         assert!(run.status.success(), "openbitfun must run after install");
         assert!(String::from_utf8_lossy(&run.stdout).contains("openbitfun 1.2.3"));
-        assert!(!home.join(".local/bin/openbitfun").exists());
-        assert!(!home.join(".local/bin/openbitfun-cli").exists());
-        assert!(!home.join(".local/bin/openbitfun-cli").exists());
-        let leftovers = std::fs::read_dir(home.join(".local/bin"))
+        let installed_entries: Vec<_> = std::fs::read_dir(home.join(".local/bin"))
             .expect("read bin dir")
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_name().to_string_lossy().starts_with('.'))
-            .count();
-        assert_eq!(leftovers, 0, "staging directory must be cleaned up");
+            .map(|entry| entry.expect("read installed entry").file_name())
+            .collect();
+        assert_eq!(
+            installed_entries,
+            vec![std::ffi::OsString::from("openbitfun")],
+            "only the canonical CLI may remain; no aliases or staging directories"
+        );
     }
 
     #[cfg(unix)]
