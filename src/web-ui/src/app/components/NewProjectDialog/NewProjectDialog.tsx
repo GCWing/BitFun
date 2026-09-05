@@ -6,24 +6,19 @@ import {
   Button,
   Icon,
   Input,
+  Field,
   Dialog,
   DialogBody,
   DialogClose,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogHeading,
   DialogTitle,
 } from '@openbitfun/ui';
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  FolderPlus,
-  FolderOpen,
-  FileText,
-  FolderTree,
-  AlertCircle,
-} from 'lucide-react';
+import React, { useState, useCallback, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
-import { basenamePath } from '@/shared/utils/pathUtils';
 import './NewProjectDialog.scss';
 
 const log = createLogger('NewProjectDialog');
@@ -47,11 +42,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string>('');
 
-  const parentFolderName = useMemo(() => {
-    if (!parentPath) return '';
-    const pathWithoutTrailingSeparators = parentPath.replace(/[\\/]+$/, '') || parentPath;
-    return basenamePath(pathWithoutTrailingSeparators) || pathWithoutTrailingSeparators;
-  }, [parentPath]);
+  const formId = useId();
 
   // Combine parent path and project name
   const fullPath = useMemo(() => {
@@ -82,6 +73,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
 
   // Validate and create new project
   const handleConfirm = useCallback(async () => {
+    if (isCreating) return;
     // Validate form fields
     if (!parentPath || !parentPath.trim()) {
       setError(t('newProject.errorSelectParent'));
@@ -106,7 +98,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
     } finally {
       setIsCreating(false);
     }
-  }, [parentPath, projectName, onConfirm, onClose, t]);
+  }, [parentPath, projectName, onConfirm, onClose, t, isCreating]);
 
   // Reset form and close dialog
   const handleCancel = useCallback(() => {
@@ -125,127 +117,97 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   return (
     <Dialog
       open={isOpen}
-      onOpenChange={(nextOpen) => { if (!nextOpen) handleCancel(); }}
+      onOpenChange={(nextOpen) => { if (!nextOpen && !isCreating) handleCancel(); }}
       size="sm"
     >
       <DialogHeader>
         <DialogHeading>
-          <DialogTitle>{""}</DialogTitle>
+          <DialogTitle data-openbitfun-component="new-project-dialog" data-openbitfun-part="title">
+            {t('newProject.title')}
+          </DialogTitle>
+          <DialogDescription>{t('newProject.subtitle')}</DialogDescription>
         </DialogHeading>
-        <DialogClose />
+        <DialogClose disabled={isCreating} />
       </DialogHeader>
-      <DialogBody inset="none">
-      <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="root" className="new-project-dialog">
-        {/* Hero section */}
-        <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="hero" className="new-project-dialog__hero">
-          <div className="new-project-dialog__icon-wrapper">
-            <FolderPlus size={24} />
-          </div>
-          <h2 data-openbitfun-component="new-project-dialog" data-openbitfun-part="title" className="new-project-dialog__title">{t('newProject.title')}</h2>
-          <p className="new-project-dialog__subtitle">{t('newProject.subtitle')}</p>
-        </div>
-
-        {/* Form content */}
-        <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="content" className="new-project-dialog__content">
-          {/* Parent directory */}
-          <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="field" className="new-project-dialog__field">
-            <label className="new-project-dialog__label">
-              <FolderOpen size={14} />
-              {t('newProject.parentDirectory')}
-            </label>
-            <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="pathSelector" className="new-project-dialog__path-selector">
-              <Input
-                className="new-project-dialog__path-input"
-                type="text"
-                value={parentFolderName}
-                readOnly
-                placeholder={t('newProject.parentDirectoryPlaceholder')}
-              />
-              <Button
-                type="button"
-                className="new-project-dialog__select-btn"
-                variant="outline"
-                size="sm"
-                leadingIcon={<FolderOpen size={14} />}
-                onClick={handleSelectParentPath}
-              >
-                {t('newProject.select')}
-              </Button>
-            </div>
-          </div>
-
-          {/* Project name */}
-          <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="field" className="new-project-dialog__field">
-            <label className="new-project-dialog__label">
-              <FileText size={14} />
-              {t('newProject.projectName')}
-            </label>
-            <Input
-              className="new-project-dialog__name-input"
-              type="text"
-              value={projectName}
-              onChange={handleProjectNameChange}
-              placeholder={t('newProject.projectNamePlaceholder')}
-              disabled={isCreating}
-              autoFocus
-            />
-          </div>
-
-          {/* Full path display */}
-          {fullPath && (
-            <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="preview" className="new-project-dialog__preview">
-              <div className="new-project-dialog__preview-icon">
-                <FolderTree size={14} />
+      <DialogBody>
+        <form
+          id={formId}
+          data-openbitfun-component="new-project-dialog"
+          data-openbitfun-part="root"
+          className="new-project-dialog"
+          aria-busy={isCreating}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleConfirm();
+          }}
+        >
+          <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="content" className="new-project-dialog__content">
+            <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="field" className="new-project-dialog__field">
+              <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="pathSelector">
+                <Field
+                  label={t('newProject.parentDirectory')}
+                  controlWidth="fill"
+                  controlTrailing={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      leadingIcon={<Icon name="folder" size="sm" />}
+                      onClick={handleSelectParentPath}
+                      disabled={isCreating}
+                    >
+                      {t('newProject.select')}
+                    </Button>
+                  }
+                >
+                  <Input
+                    size="sm"
+                    type="text"
+                    value={parentPath}
+                    title={parentPath}
+                    readOnly
+                    disabled={isCreating}
+                    placeholder={t('newProject.parentDirectoryPlaceholder')}
+                  />
+                </Field>
               </div>
-              <div className="new-project-dialog__preview-content">
+            </div>
+            <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="field" className="new-project-dialog__field">
+              <Field label={t('newProject.projectName')} controlWidth="fill">
+                <Input
+                  size="sm"
+                  type="text"
+                  value={projectName}
+                  onChange={handleProjectNameChange}
+                  placeholder={t('newProject.projectNamePlaceholder')}
+                  disabled={isCreating}
+                  autoFocus
+                />
+              </Field>
+            </div>
+            {fullPath && (
+              <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="preview" className="new-project-dialog__preview">
                 <span className="new-project-dialog__preview-label">{t('newProject.fullPath')}</span>
-                <span className="new-project-dialog__preview-path" title={fullPath}>{fullPath}</span>
+                <span className="new-project-dialog__preview-path">{fullPath}</span>
               </div>
-            </div>
-          )}
-
-          {/* Error message */}
+            )}
+          </div>
           {error && (
-            <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="error" className="new-project-dialog__error">
-              <AlertCircle size={14} />
+            <div role="alert" data-openbitfun-component="new-project-dialog" data-openbitfun-part="error" className="new-project-dialog__error">
+              <Icon name="info" size="sm" />
               <span>{error}</span>
             </div>
           )}
-        </div>
-
-        {/* Footer buttons */}
-        <div data-openbitfun-component="new-project-dialog" data-openbitfun-part="footer" className="new-project-dialog__footer">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            disabled={isCreating}
-            leadingIcon={<Icon name="xmark" size="sm" />}
-          >
-
-            {t('newProject.cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="fill"
-            size="sm"
-            onClick={handleConfirm}
-            disabled={isCreating}
-            loading={isCreating}
-          >
-            {isCreating ? (
-              t('newProject.creating')
-            ) : (
-              <>
-                <Icon name="check-line" size="sm" />
-                {t('newProject.create')}
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-          </DialogBody>
+        </form>
+      </DialogBody>
+      <DialogFooter data-openbitfun-component="new-project-dialog" data-openbitfun-part="footer">
+        <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={isCreating}>
+          {t('newProject.cancel')}
+        </Button>
+        <Button type="submit" form={formId} variant="fill" size="sm" disabled={isCreating} loading={isCreating}>
+          {isCreating ? t('newProject.creating') : t('newProject.create')}
+        </Button>
+      </DialogFooter>
     </Dialog>
   );
 };
