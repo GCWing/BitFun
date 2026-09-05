@@ -1,7 +1,7 @@
 .openbitfun-remote-disclaimer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--openbitfun-space-3);
   color: var(--openbitfun-color-content-secondary);
   padding: 12px 0 14px;
 }
@@ -44,9 +44,9 @@
 }
 
 .openbitfun-remote-disclaimer__details {
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: 6px;
-  background: var(--openbitfun-color-surface-subtle);
+  border: 0;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
 
   summary {
     padding: 9px 12px;
@@ -54,6 +54,12 @@
     font-size: var(--openbitfun-type-label-sm-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     cursor: pointer;
+
+    &:focus-visible {
+      outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+      outline-offset: var(--openbitfun-focus-offset);
+      border-radius: inherit;
+    }
   }
 
   &[open] summary {
@@ -71,7 +77,8 @@
 
 .openbitfun-remote-disclaimer__actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 6px;
   padding-top: 10px;

@@ -950,7 +950,7 @@
     "cancelAndBack": "取消连接并返回",
     "methodSameNetwork": "同一网络",
     "methodOpenBitFunRelay": "OpenBitFun 中继",
-    "methodNgrok": "ngrok",
+    "methodNgrok": "内网穿透",
     "methodSelfHosted": "自建中继",
     "showConnectionCode": "显示连接码",
     "getPairingCode": "获取配对码",
