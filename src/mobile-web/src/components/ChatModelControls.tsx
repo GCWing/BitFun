@@ -229,6 +229,11 @@ export const ModelSelectorPill: React.FC<{
     void onSelect(modelId);
   };
 
+  const handleSelectReasoning = (presetId: string | null) => {
+    setOpen(false);
+    void onSelectReasoning(presetId);
+  };
+
   return (
     <div className="chat-model-selector" ref={rootRef}>
       <MobileButton
@@ -260,7 +265,7 @@ export const ModelSelectorPill: React.FC<{
         <MobileCard appearance="elevated" padding="none" className="chat-model-selector__dropdown">
           <div className="chat-model-selector__header">{t('chat.modelSelection')}</div>
           {availableModels.length > 6 && <MobileTextField type="search" className="chat-model-selector__search" aria-label={t('chat.searchModels')} placeholder={t('chat.searchModels')} value={query} onChange={event => setQuery(event.target.value)} />}
-          {!query.trim() && <ReasoningPresetOptions catalog={catalog} selectedModelId={selectedModelId} disabled={disabled} onSelect={onSelectReasoning} />}
+          {!query.trim() && <ReasoningPresetOptions catalog={catalog} selectedModelId={selectedModelId} disabled={disabled} onSelect={handleSelectReasoning} />}
           {!query.trim() && <section aria-label={t('chat.modelDefaults')}>
           <h3 className="chat-model-selector__group-title">{t('chat.modelDefaults')}</h3>
           <MobileButton
