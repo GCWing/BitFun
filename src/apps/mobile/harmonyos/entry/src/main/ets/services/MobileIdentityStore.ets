@@ -13,6 +13,7 @@ const INSTALL_ID_KEY = 'mobile_install_id';
 const USER_ID_KEY = 'user_id';
 const REMOTE_URL_KEY = 'remote_url';
 const PAIRING_SAVED_AT_KEY = 'pairing_saved_at';
+const CONTROL_TARGET_TYPE_KEY = 'control_target_type';
 const LAST_MODEL_ID_KEY = 'last_model_id';
 const USER_ID_LOCK_UNTIL_KEY = 'user_id_lock_until';
 const USER_ID_FAILURE_COUNT_KEY = 'user_id_failure_count';
@@ -22,6 +23,7 @@ export interface MobileIdentitySnapshot {
   userId: string;
   remoteUrl: string;
   pairingSavedAt: number;
+  controlTargetType: string;
   userIdFailureCount: number;
   userIdLockUntil: number;
 }
@@ -45,6 +47,7 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
       userId: await this.getString(USER_ID_KEY),
       remoteUrl: await this.getString(REMOTE_URL_KEY),
       pairingSavedAt: await this.getNumber(PAIRING_SAVED_AT_KEY),
+      controlTargetType: await this.getString(CONTROL_TARGET_TYPE_KEY),
       userIdFailureCount: await this.getNumber(USER_ID_FAILURE_COUNT_KEY),
       userIdLockUntil: await this.getNumber(USER_ID_LOCK_UNTIL_KEY)
     };
@@ -78,6 +81,12 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     await this.putString(REMOTE_URL_KEY, '');
     await this.putNumber(PAIRING_SAVED_AT_KEY, 0);
     await this.clearUserIdProtection();
+  }
+
+  async saveControlTargetType(controlTargetType: string): Promise<void> {
+    const normalized = controlTargetType === 'room' || controlTargetType === 'account_device' ?
+      controlTargetType : '';
+    await this.putString(CONTROL_TARGET_TYPE_KEY, normalized);
   }
 
   async saveUserIdProtection(failureCount: number, lockUntil: number): Promise<void> {

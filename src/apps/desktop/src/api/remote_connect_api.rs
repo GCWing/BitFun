@@ -73,10 +73,10 @@ static ACCOUNT_LOGIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_ne
 static ACCOUNT_CONTEXT_TRANSITION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Serializes QR-room starts with account identity boundaries.
 ///
-/// A room captures the account verifier and delegated-identity provider that
-/// existed when it was created. Login, logout, replacement, and expiry must
-/// therefore retire that room before publishing the new account state; a
-/// concurrent start is allowed only after the boundary has completed.
+/// An unpaired QR advertises the authentication mode that existed when it was
+/// created, so login/logout must retire that stale invitation. An established
+/// room is an independent control channel and survives the account boundary;
+/// its account-derived authority is cleared separately during the transition.
 static ACCOUNT_ROOM_BOUNDARY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static ACCOUNT_AUTO_SYNC_CANCEL: OnceLock<Notify> = OnceLock::new();
 static ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID: AtomicU64 = AtomicU64::new(0);
@@ -770,7 +770,7 @@ async fn invalidate_local_account_session_if_current(
         log::info!("Ignored auth failure from a stale account generation");
         return false;
     }
-    stop_pairing_room_for_account_boundary("account session expiry").await;
+    retire_unpaired_room_for_account_boundary("account session expiry").await;
     let Some(_transition_guard) = cancel_and_wait_if_account_current(expected_generation).await
     else {
         log::info!("Ignored auth failure from a stale account generation");
@@ -2392,7 +2392,7 @@ pub async fn account_cancel_pending_login(
     {
         return Ok(false);
     }
-    stop_pairing_room_for_account_boundary("pending account login cancellation").await;
+    retire_unpaired_room_for_account_boundary("pending account login cancellation").await;
     let transition_guard = ACCOUNT_CONTEXT_TRANSITION_LOCK.lock().await;
     if !account_context_is_current(generation)
         || !pending_login_is_owned_by(&request.pending_login_id)
@@ -2452,7 +2452,7 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         revoke_login_candidate(&client, &relay_url, &session, "account replacement race").await;
         return Err("account context changed".to_string());
     }
-    stop_pairing_room_for_account_boundary("account login or replacement").await;
+    retire_unpaired_room_for_account_boundary("account login or replacement").await;
     let Some(mut transition_guard) = cancel_and_wait_if_account_current(expected_generation).await
     else {
         revoke_login_candidate(&client, &relay_url, &session, "account replacement race").await;
@@ -2567,7 +2567,7 @@ async fn clear_account_login(revoke_relay_token: bool) {
     // cancellation and release its guard. This ensures no settings apply or
     // progress event can happen after logout completes.
     let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
-    stop_pairing_room_for_account_boundary("account logout").await;
+    retire_unpaired_room_for_account_boundary("account logout").await;
     let _sync_guard = cancel_and_wait_for_account_auto_sync().await;
     clear_account_login_state(revoke_relay_token).await;
 }
@@ -2584,7 +2584,7 @@ async fn clear_account_login_if_current(
     if !account_context_matches(expected_generation, expected_token).await {
         return false;
     }
-    stop_pairing_room_for_account_boundary("account session clear").await;
+    retire_unpaired_room_for_account_boundary("account session clear").await;
     let Some(_transition_guard) = cancel_and_wait_if_account_current(expected_generation).await
     else {
         return false;
@@ -2633,20 +2633,35 @@ async fn clear_account_login_state(revoke_relay_token: bool) {
     );
 }
 
-/// Retire the short-lived QR room at an account identity boundary.
+fn pairing_room_requires_rotation(state: &PairingState) -> bool {
+    !matches!(
+        state,
+        PairingState::Idle | PairingState::Connected | PairingState::Disconnected
+    )
+}
+
+/// Retire only an invitation whose encoded account mode is now stale.
 ///
 /// Callers hold `ACCOUNT_ROOM_BOUNDARY_LOCK` and invoke this before acquiring
 /// account sync/transition guards. That lock order lets an in-flight pairing
-/// finish its account check and avoids a room-lifecycle -> account-sync cycle.
-async fn stop_pairing_room_for_account_boundary(reason: &str) {
+/// finish or be retired and avoids a room-lifecycle -> account-sync cycle.
+/// A connected room retains its transport but loses account-derived authority
+/// through the normal context cleanup below this boundary.
+async fn retire_unpaired_room_for_account_boundary(reason: &str) {
     let holder = get_service_holder();
     let guard = holder.read().await;
     let Some(service) = guard.as_ref() else {
         return;
     };
-    if service.active_method().await.is_some() {
-        log::info!("Stopping QR pairing room at {reason}");
+    if service.active_method().await.is_none() {
+        return;
+    }
+    let pairing_state = service.pairing_state().await;
+    if pairing_room_requires_rotation(&pairing_state) {
+        log::info!("Retiring unpaired QR room at {reason}");
         service.stop_relay().await;
+    } else if pairing_state == PairingState::Connected {
+        log::info!("Preserving connected QR room across {reason}");
     }
 }
 
@@ -4744,6 +4759,21 @@ mod sync_state_tests {
             normalize_relay_url("https://relay.example.com///").unwrap(),
             "https://relay.example.com"
         );
+    }
+
+    #[test]
+    fn account_boundaries_rotate_invitations_but_preserve_connected_rooms() {
+        assert!(pairing_room_requires_rotation(
+            &PairingState::WaitingForScan
+        ));
+        assert!(pairing_room_requires_rotation(&PairingState::Handshaking));
+        assert!(pairing_room_requires_rotation(&PairingState::Verifying));
+        assert!(pairing_room_requires_rotation(&PairingState::Failed {
+            reason: "verification failed".to_string(),
+        }));
+        assert!(!pairing_room_requires_rotation(&PairingState::Connected));
+        assert!(!pairing_room_requires_rotation(&PairingState::Idle));
+        assert!(!pairing_room_requires_rotation(&PairingState::Disconnected));
     }
 
     #[test]

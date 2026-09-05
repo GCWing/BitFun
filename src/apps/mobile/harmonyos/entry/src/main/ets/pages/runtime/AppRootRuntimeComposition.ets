@@ -800,6 +800,9 @@ export abstract class AppRootRuntimeComposition {
           loadRecentWorkspaces: async (): Promise<void> => {
             await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
           },
+          saveControlTargetType: async (controlTargetType: string): Promise<void> => {
+            await this.remoteConnectionController.rememberControlTargetType(controlTargetType);
+          },
           onAccountDevices: (devices: CloudAccountDevice[]): void => {
             this.deviceDirectoryViewModel.syncDevices(devices);
           },

@@ -592,6 +592,7 @@ class AccountDeviceSwitchHarness {
   readonly accountDeviceSnapshots: CloudAccountDevice[][] = [];
   readonly loadingCatalogTargets: string[] = [];
   readonly changedWorkspaceSnapshots: string[][] = [];
+  readonly savedControlTargetTypes: string[] = [];
   readonly controller: SettingsController;
 
   constructor(
@@ -616,6 +617,9 @@ class AccountDeviceSwitchHarness {
       closeConnectSheet: (): void => {},
       navigateRemoteHome: (): void => {},
       loadRecentWorkspaces: async (): Promise<void> => {},
+      saveControlTargetType: async (controlTargetType: string): Promise<void> => {
+        this.savedControlTargetTypes.push(controlTargetType);
+      },
       onAccountDevices: (devices: CloudAccountDevice[]): void => {
         this.accountDeviceSnapshots.push(devices.slice());
       },
@@ -1415,6 +1419,34 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
     });
 
+    it('migrates an ordinary QR only when the same desktop is visible in the account', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new OfflineAccountClient());
+      await harness.controller.listCloudAccountDevices();
+
+      const target = await harness.controller.migrateLegacyPairingTarget(
+        'https://relay.example.com/#/pair?room=old-room&pk=old-key',
+        'desk-a',
+        'QR name'
+      );
+
+      expect(target?.deviceId).assertEqual('desk-a');
+      expect(target?.deviceName).assertEqual('Desktop A');
+      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
+    });
+
+    it('does not migrate an ordinary QR to an unknown account device', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+
+      const target = await harness.controller.migrateLegacyPairingTarget(
+        'https://relay.example.com/#/pair?room=old-room&pk=old-key',
+        'desk-unknown',
+        'Unknown desktop'
+      );
+
+      expect(target === undefined).assertTrue();
+      expect(harness.sessionStore.saved.length).assertEqual(0);
+    });
+
     it('does not migrate a legacy QR from another relay', 0, async () => {
       const harness = new AccountDeviceSwitchHarness();
 
@@ -1646,10 +1678,11 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.timelineResets).assertEqual(1);
     });
 
-    it('does not leave a separately paired room half-connected after account logout', 0, async () => {
+    it('keeps a separately paired room connected after account logout', 0, async () => {
       const harness = new AccountDeviceSwitchHarness();
       harness.remoteState.setControlTarget('room', 'room-device', 'Paired Desktop');
       harness.remoteState.setConnectionState('connected');
+      harness.remoteState.setHostCapabilities(['remote_chat']);
       harness.remoteState.setActiveSession({
         sessionId: 'room-session', title: 'Paired room', workspacePath: '/room', agentType: 'code'
       });
@@ -1658,11 +1691,35 @@ export default function transportAndGeneralChatUnitTest() {
       await harness.controller.logoutCloudAccount();
 
       expect(harness.remoteState.accountUserId).assertEqual('');
-      expect(harness.remoteState.controlTargetType).assertEqual('none');
-      expect(harness.remoteState.connectionState).assertEqual('disconnected');
-      expect(harness.remoteState.activeSession.sessionId).assertEqual('');
-      expect(harness.remoteState.statusText).assertEqual('');
-      expect(harness.timelineResets).assertEqual(1);
+      expect(harness.remoteState.controlTargetType).assertEqual('room');
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('room-device');
+      expect(harness.remoteState.connectionState).assertEqual('connected');
+      expect(harness.remoteState.activeSession.sessionId).assertEqual('room-session');
+      expect(harness.remoteState.statusText).assertEqual('Room is connected');
+      expect(harness.remoteState.hostCapabilities.join(',')).assertEqual('remote_chat');
+      expect(harness.timelineResets).assertEqual(0);
+      expect(harness.sessionManager.resets).assertEqual(0);
+      expect(harness.savedControlTargetTypes.length).assertEqual(0);
+    });
+
+    it('keeps a paired room connected when the phone account expires', 0, async () => {
+      const client = new ExpiringAccountClient();
+      const harness = new AccountDeviceSwitchHarness(client);
+      await harness.controller.listCloudAccountDevices();
+      harness.remoteState.setControlTarget('room', 'room-device', 'Paired Desktop');
+      harness.remoteState.setConnectionState('connected');
+      harness.remoteState.setStatusText('Room is connected');
+
+      try {
+        await harness.controller.listCloudAccountDevices();
+      } catch (_err) {
+      }
+
+      expect(harness.controller.hasCloudAccountSession()).assertFalse();
+      expect(harness.remoteState.controlTargetType).assertEqual('room');
+      expect(harness.remoteState.connectionState).assertEqual('connected');
+      expect(harness.remoteState.statusText).assertEqual('Room is connected');
+      expect(harness.sessionManager.resets).assertEqual(0);
     });
 
     it('promotes a delegated QR pairing to the cold-start account target', 0, async () => {
@@ -1698,6 +1755,17 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
     });
 
+    it('does not erase a remembered account target after choosing an ordinary room', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness();
+      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
+      const savesBeforeRoom = harness.sessionStore.saved.length;
+
+      await harness.controller.persistDelegatedAccountSession('desk-b', 'Desktop B');
+
+      expect(harness.controller.preferredCloudTarget()?.deviceId).assertEqual('desk-a');
+      expect(harness.sessionStore.saved.length).assertEqual(savesBeforeRoom);
+    });
+
     it('does not replace a signed-in account with a different delegated QR identity', 0, async () => {
       const manager = new ScriptedAccountSessionManager();
       manager.delegated = {
@@ -1724,6 +1792,7 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.remoteState.connectionState).assertEqual('connected');
       expect(harness.sessionStore.saved.length).assertEqual(1);
       expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
+      expect(harness.savedControlTargetTypes.join(',')).assertEqual('account_device');
     });
 
     it('puts the phone back on the previous desktop when a device switch fails', 0, async () => {

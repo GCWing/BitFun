@@ -50,6 +50,7 @@ export interface CloudAccountSettingsHooks {
   readonly closeConnectSheet: () => void;
   readonly navigateRemoteHome: () => void;
   readonly loadRecentWorkspaces: () => Promise<void>;
+  readonly saveControlTargetType: (controlTargetType: string) => Promise<void>;
   readonly onAccountDevices: (devices: CloudAccountDevice[]) => void;
   /** Snapshot the outgoing live device before teardown clears its lists. */
   readonly onBeforeControlTargetChange: () => void;
@@ -294,15 +295,9 @@ export class SettingsController {
     const cloud = this.requireCloud();
     const delegated = cloud.sessionManager.delegatedAccountSession();
     if (!delegated) {
-      if (this.cloudSession && this.preferredTargetDeviceId.length > 0) {
-        this.clearPreferredCloudTarget();
-        try {
-          await this.persistCurrentCloudSessionTarget('', '');
-          RemoteLogger.info('account target cleared after non-account room pairing');
-        } catch (err) {
-          RemoteLogger.warn(`account target clear persistence failed: ${String(err)}`);
-        }
-      }
+      // A room and an account target are independent recovery paths. Choosing
+      // an ordinary QR room must not erase the last account device; the saved
+      // control-target type decides which one the next launch tries first.
       return;
     }
     const existing = this.cloudSession;
@@ -380,14 +375,20 @@ export class SettingsController {
 
   async logoutCloudAccount(): Promise<void> {
     const cloud = this.requireCloud();
-    cloud.hooks.invalidatePreview();
-    this.teardownCloudAccountProjection(cloud);
+    const preserveRoom = this.hasRoomControlTarget(cloud);
+    if (!preserveRoom) {
+      cloud.hooks.invalidatePreview();
+    }
+    this.teardownCloudAccountProjection(cloud, preserveRoom);
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
-    cloud.remoteState.clearControlTarget();
-    cloud.remoteState.setHostCapabilities([]);
+    if (!preserveRoom) {
+      cloud.remoteState.clearControlTarget();
+      cloud.remoteState.setHostCapabilities([]);
+      await this.saveControlTargetType('');
+    }
     RemoteLogger.info('cloud account logout success');
   }
 
@@ -423,29 +424,33 @@ export class SettingsController {
   /**
    * Upgrades an older account record that predates persisted target devices.
    *
-   * A successful account-auth QR already tells us which stable desktop device
-   * was paired and which relay owns it. If the encrypted account session is on
-   * that same relay, prefer the account device on the next launch instead of
-   * retrying the QR room id, which may have rotated meanwhile.
+   * An account-auth QR directly identifies a stable account device. An ordinary
+   * QR may migrate only when the refreshed account roster independently proves
+   * that the same desktop device exists on the same relay. This prevents a
+   * stale room from silently switching control to another remembered desktop.
    */
   async migrateLegacyPairingTarget(
     remoteUrl: string,
     deviceId: string,
     deviceName: string
   ): Promise<PreferredCloudTarget | undefined> {
-    if (!this.cloudSession || this.preferredTargetDeviceId.length > 0 || deviceId.trim().length === 0) {
-      return this.preferredCloudTarget();
+    const targetId = deviceId.trim();
+    if (!this.cloudSession || targetId.length === 0) {
+      return undefined;
+    }
+    if (this.preferredTargetDeviceId.length > 0) {
+      return this.preferredTargetDeviceId === targetId ? this.preferredCloudTarget() : undefined;
     }
     try {
       const descriptor = RemoteDescriptorParser.parse(remoteUrl);
-      if (!descriptor.accountAuth || !ConnectScanDecisionPolicy.relayEndpointsCompatible(
+      const knownAccountDevice = this.knownAccountDevice(targetId);
+      if ((!descriptor.accountAuth && !knownAccountDevice) || !ConnectScanDecisionPolicy.relayEndpointsCompatible(
         this.cloudRelayUrl,
         descriptor.relayUrl
       )) {
         return undefined;
       }
-      const targetId = deviceId.trim();
-      const targetName = deviceName.trim() || targetId;
+      const targetName = knownAccountDevice?.deviceName || deviceName.trim() || targetId;
       this.setPreferredCloudTarget(targetId, targetName);
       this.restorePreferredCloudTargetProjection();
       try {
@@ -711,6 +716,7 @@ export class SettingsController {
       cloud.remoteState.setHostCapabilities(initialSync.capabilities || []);
       cloud.remoteState.setConnectionState('connected');
       this.setPreferredCloudTarget(deviceId, device.deviceName || deviceId);
+      await this.saveControlTargetType('account_device');
       this.resyncAccountDevicePresence();
       cloud.remoteState.setStatusText(RemoteI18n.t('connection.connected'));
       // Dismissing the picker and going home are the same event: the switch the
@@ -908,26 +914,49 @@ export class SettingsController {
 
   private async expireCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
-    cloud.hooks.invalidatePreview();
+    const preserveRoom = this.hasRoomControlTarget(cloud);
+    if (!preserveRoom) {
+      cloud.hooks.invalidatePreview();
+    }
     // Publish the signed-out projection before awaiting storage. A revoked
     // credential must never leave stale account devices actionable merely
     // because preferences or cache cleanup is slow (or fails).
-    this.teardownCloudAccountProjection(cloud);
+    this.teardownCloudAccountProjection(cloud, preserveRoom);
     this.store.replaceAccountModels([]);
     await this.refreshModelCatalog();
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
+    if (!preserveRoom) {
+      await this.saveControlTargetType('');
+    }
     RemoteLogger.info('cloud account session expired');
   }
 
   /** Publishes the complete signed-out projection as one synchronous transition. */
-  private teardownCloudAccountProjection(cloud: CloudAccountSettingsDependencies): void {
+  private teardownCloudAccountProjection(
+    cloud: CloudAccountSettingsDependencies,
+    preserveRoom: boolean
+  ): void {
     // Invalidate late device-selection completions before touching observable
     // state. During an in-flight switch the target is deliberately `none`, but
     // its busy/status/session projection still belongs to the account.
     this.accountDeviceSelectionVersion += 1;
-    this.resetAccountDeviceConnection(true);
+    if (!preserveRoom) {
+      this.resetAccountDeviceConnection(true);
+    }
     this.clearCloudAccountIdentity(cloud);
+  }
+
+  private hasRoomControlTarget(cloud: CloudAccountSettingsDependencies): boolean {
+    return cloud.remoteState.controlTargetType === 'room';
+  }
+
+  private async saveControlTargetType(controlTargetType: string): Promise<void> {
+    try {
+      await this.requireCloud().hooks.saveControlTargetType(controlTargetType);
+    } catch (err) {
+      RemoteLogger.warn(`control target preference persistence failed: ${String(err)}`);
+    }
   }
 
   /** Drops the remaining account identity facts after remote teardown. */

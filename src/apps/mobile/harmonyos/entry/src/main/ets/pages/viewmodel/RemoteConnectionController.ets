@@ -59,6 +59,7 @@ export class RemoteConnectionController {
   private autoReconnectAttempted: boolean = false;
   private failureCount: number = 0;
   private lockUntil: number = 0;
+  private restoredControlTargetType: string = '';
 
   constructor(
     pageState: RemotePageState,
@@ -106,6 +107,23 @@ export class RemoteConnectionController {
     return this.deviceId;
   }
 
+  controlTargetPreference(): string {
+    return this.restoredControlTargetType;
+  }
+
+  async rememberControlTargetType(controlTargetType: string): Promise<void> {
+    const normalized = controlTargetType === 'room' || controlTargetType === 'account_device' ?
+      controlTargetType : '';
+    this.restoredControlTargetType = normalized;
+    try {
+      await this.identity.saveControlTargetType(normalized);
+    } catch (err) {
+      // The live transport is already authoritative. A persistence failure may
+      // affect the next launch, but must not turn this connection into a failure.
+      RemoteLogger.warn(`control target preference persistence failed: ${String(err)}`);
+    }
+  }
+
   async restore(context: Context): Promise<void> {
     await this.restoreWithReconnectPolicy(context, true);
   }
@@ -129,6 +147,8 @@ export class RemoteConnectionController {
       this.deviceId = snapshot.installId;
       this.pageState.setUserId(snapshot.userId || snapshot.installId);
       this.pageState.setRemoteUrl(snapshot.remoteUrl);
+      this.restoredControlTargetType = snapshot.controlTargetType === 'room' ||
+        snapshot.controlTargetType === 'account_device' ? snapshot.controlTargetType : '';
       this.applyPairingProjection(snapshot.remoteUrl);
       this.models.setPreferredModelId(await this.identity.getLastModelId());
       this.failureCount = snapshot.userIdFailureCount;
@@ -185,6 +205,7 @@ export class RemoteConnectionController {
       this.pageState.setAuthenticatedUserId(initialSync.authenticatedUserId);
       this.pageState.setHostCapabilities(initialSync.capabilities || []);
       this.pageState.setControlTarget('room', this.pageState.desktopId, this.pageState.desktopName);
+      await this.rememberControlTargetType('room');
       this.sessions.setSessions(initialSync.sessions, initialSync.hasMoreSessions);
       this.setState(RemoteConnectionState.Connected);
       this.pageState.setConnectionFailureKind('');
@@ -243,6 +264,7 @@ export class RemoteConnectionController {
   }
 
   async disconnect(clearPairing: boolean): Promise<void> {
+    const clearingPreferredRoom = clearPairing && this.restoredControlTargetType === 'room';
     this.connection.invalidate();
     this.stopPolling();
     this.stopHeartbeat();
@@ -270,6 +292,9 @@ export class RemoteConnectionController {
       this.pageState.setAccountPairing(false, '');
       this.pageState.setRemoteUrlInputVisible(false);
       await this.identity.clearPairingInput();
+      if (clearingPreferredRoom) {
+        await this.rememberControlTargetType('');
+      }
       // Unpairing is the user saying they are done with that desktop. Leaving
       // its sessions on disk would put them back on Remote Home at the next
       // launch, with nothing behind them to open.

@@ -473,15 +473,18 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         } else if (payload && !payload.logged_in) {
           setCustomUrl('');
         }
-        // The backend retires the QR room at every account identity boundary.
-        // Drop its now-stale QR/result immediately and refresh the actual host
-        // state so the dialog cannot keep presenting that room as connected.
-        pendingOwnerRef.current = null;
-        connectionOwnerRef.current = null;
-        setConnectionOwner(null);
-        setConnectionResult(null);
+        // Account changes rotate an unpaired QR invitation, but an established
+        // room is an independent control channel and stays connected. Refresh
+        // first, then clear only UI state that the backend actually retired.
         void remoteConnectAPI.getStatus().then((nextStatus) => {
-          if (isOpenRef.current) applyStatus(nextStatus);
+          if (!isOpenRef.current) return;
+          applyStatus(nextStatus);
+          if (remotePairingStateName(nextStatus.pairing_state) !== 'connected') {
+            pendingOwnerRef.current = null;
+            connectionOwnerRef.current = null;
+            setConnectionOwner(null);
+            setConnectionResult(null);
+          }
         }).catch(() => undefined);
       },
     );

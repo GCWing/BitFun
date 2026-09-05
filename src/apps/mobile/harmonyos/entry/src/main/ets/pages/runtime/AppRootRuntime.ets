@@ -168,7 +168,29 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     // return before this happened, so the phone presented a new random device
     // id on every launch and could not reliably exclude itself from the list.
     await this.remoteConnectionController.restoreWithoutReconnect(this.host.context());
+    const controlTargetPreference = this.remoteConnectionController.controlTargetPreference();
     let preferredTarget = this.settingsController.preferredCloudTarget();
+
+    if (controlTargetPreference === 'room') {
+      await this.remoteConnectionController.reconnectRestoredPairing();
+      if ((this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected) {
+        return;
+      }
+      // A rotated room may fall back only to the same physical desktop through
+      // the account path. Never jump to an unrelated remembered account device.
+      if (preferredTarget?.deviceId !== this.remotePageState.desktopId) {
+        preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
+          this.remotePageState.remoteUrl,
+          this.remotePageState.desktopId,
+          this.remotePageState.desktopName
+        );
+      }
+      if (preferredTarget?.deviceId === this.remotePageState.desktopId) {
+        await this.restoreAccountDeviceTarget(false);
+      }
+      return;
+    }
+
     if (!preferredTarget && this.settingsController.hasCloudAccountSession()) {
       preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
         this.remotePageState.remoteUrl,
@@ -181,10 +203,10 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       return;
     }
     if (this.settingsController.hasCloudAccountSession()) {
-      // An explicit account login supersedes an older anonymous QR room. With
-      // no stable account target yet, leave the user on the already-hydrated
-      // device directory instead of auto-dialling a room that may have rotated.
-      RemoteLogger.info('account session restored without a target; skipped stale QR auto-reconnect');
+      // Legacy records have no explicit control-target preference. With no
+      // stable same-device target, leave the user on the hydrated directory
+      // instead of guessing whether an old QR should supersede the account.
+      RemoteLogger.info('account session restored without a target preference; skipped ambiguous QR reconnect');
       return;
     }
     await this.remoteConnectionController.reconnectRestoredPairing();
