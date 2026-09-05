@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { canonicalizeIcns } from './icns-container.mjs';
 
 const GENERATED_ICNS_FILES = [
   'src/apps/desktop/icons/openbitfun-app-icon.icns',
   'OpenBitFun-Installer/src-tauri/icons/openbitfun-app-icon.icns',
+];
+
+const HARMONY_MEDIA_DIRS = [
+  'src/apps/mobile/harmonyos/AppScope/resources/base/media',
+  'src/apps/mobile/harmonyos/entry/src/main/resources/base/media',
 ];
 
 function createChunk(type, payload) {
@@ -43,6 +48,25 @@ test('generated macOS icons use the canonical ICNS layout', () => {
   assert.ok(desktop.equals(canonicalizeIcns(desktop)), 'desktop ICNS is not canonical');
   assert.ok(installer.equals(canonicalizeIcns(installer)), 'installer ICNS is not canonical');
   assert.ok(desktop.equals(installer), 'desktop and installer ICNS files differ');
+});
+
+test('HarmonyOS generated media use valid resource identifiers', () => {
+  for (const directory of HARMONY_MEDIA_DIRS) {
+    for (const fileName of readdirSync(directory)) {
+      const resourceName = fileName.replace(/\.[^.]+$/, '');
+      assert.match(
+        resourceName,
+        /^[a-zA-Z0-9_]+$/,
+        `${directory}/${fileName} is not a valid HarmonyOS resource name`,
+      );
+    }
+  }
+
+  const appConfig = readFileSync('src/apps/mobile/harmonyos/AppScope/app.json5', 'utf8');
+  const moduleConfig = readFileSync('src/apps/mobile/harmonyos/entry/src/main/module.json5', 'utf8');
+  assert.match(appConfig, /\$media:openbitfun_app_icon/);
+  assert.match(moduleConfig, /\$media:openbitfun_app_icon/);
+  assert.match(moduleConfig, /\$media:openbitfun_start_window/);
 });
 
 test('ICNS canonicalization rejects malformed containers', () => {

@@ -20,16 +20,20 @@ export class DetectedRemoteUrlResult {
  * What a scanned pair URL should do next. Applying the URL and starting a
  * connect are separate steps: the detector never connects by itself.
  *
- * A OpenBitFun cloud session on this phone is already the account proof. An
- * account-auth QR for that same user must not ask for the password again;
- * it continues through the same-account device path instead of room pairing.
+ * An OpenBitFun cloud session on this phone is already the account proof. The
+ * account device directory is the authoritative membership check for a QR
+ * target; display usernames are not, because aliases and restored legacy
+ * records can legitimately differ. Reuse is still limited to the same relay,
+ * then device selection verifies the scanned desktop id through the
+ * authenticated directory instead of asking for the password based on a
+ * string mismatch.
  */
 export class ConnectScanDecisionPolicy {
   static decide(
     accountAuth: boolean,
     hasCloudAccountSession: boolean,
-    cloudUsername: string,
-    qrUsername: string,
+    _cloudUsername: string,
+    _qrUsername: string,
     desktopId: string,
     cloudRelayUrl: string = '',
     qrRelayUrl: string = ''
@@ -38,21 +42,12 @@ export class ConnectScanDecisionPolicy {
       return DetectedUrlAction.PAIR_NOW;
     }
     if (hasCloudAccountSession &&
-      ConnectScanDecisionPolicy.usernamesCompatible(cloudUsername, qrUsername) &&
       ConnectScanDecisionPolicy.relayEndpointsCompatible(cloudRelayUrl, qrRelayUrl)) {
       return desktopId.trim().length > 0 ?
         DetectedUrlAction.USE_CLOUD_DEVICE :
         DetectedUrlAction.SHOW_CLOUD_DEVICES;
     }
     return DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD;
-  }
-
-  static usernamesCompatible(cloudUsername: string, qrUsername: string): boolean {
-    const qr = qrUsername.trim();
-    if (qr.length === 0) {
-      return true;
-    }
-    return cloudUsername.trim() === qr;
   }
 
   static relayEndpointsCompatible(cloudRelayUrl: string, qrRelayUrl: string): boolean {
