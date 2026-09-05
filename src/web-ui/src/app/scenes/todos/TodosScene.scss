@@ -1,4 +1,4 @@
-$todos-stack-breakpoint: 1040px;
+$todos-stack-breakpoint: 880px;
 $todos-compact-breakpoint: 720px;
 
 .openbitfun-todos {
@@ -11,6 +11,7 @@ $todos-compact-breakpoint: 720px;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  container: todos-scene / inline-size;
 
   // ── Header ────────────────────────────────────────────────────────────────
 
@@ -21,8 +22,8 @@ $todos-compact-breakpoint: 720px;
     justify-content: space-between;
     gap: var(--openbitfun-space-4);
     min-width: 0;
-    min-height: 72px;
-    padding: var(--openbitfun-space-3) var(--openbitfun-space-5);
+    min-height: 96px;
+    padding: var(--openbitfun-space-5) var(--openbitfun-space-6);
     box-sizing: border-box;
     border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   }
@@ -51,7 +52,7 @@ $todos-compact-breakpoint: 720px;
 
   &__title {
     margin: 0;
-    font-size: var(--openbitfun-type-body-lg-font-size);
+    font-size: var(--openbitfun-type-heading-page-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
     line-height: var(--openbitfun-type-label-md-line-height);
     color: var(--openbitfun-color-content-primary);
@@ -162,8 +163,12 @@ $todos-compact-breakpoint: 720px;
     text-align: center;
     font-size: var(--openbitfun-type-label-md-font-size);
     color: var(--openbitfun-color-content-muted);
-    border: 1px dashed var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-base);
+    border: 0;
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
+    min-height: 96px;
+    display: grid;
+    place-items: center;
   }
 
   // ── Overview ──────────────────────────────────────────────────────────────
@@ -171,9 +176,9 @@ $todos-compact-breakpoint: 720px;
   &__overview {
     flex: 0 0 auto;
     padding: var(--openbitfun-space-3);
-    border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-base);
-    background: var(--openbitfun-color-surface-subtle);
+    border: 0;
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   &__overview-head {
@@ -258,9 +263,9 @@ $todos-compact-breakpoint: 720px;
     min-height: 76px;
     padding: var(--openbitfun-space-3);
     box-sizing: border-box;
-    border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-base);
-    background: var(--openbitfun-color-surface-subtle);
+    border: 1px solid transparent;
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
     cursor: pointer;
     transition:
       background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
@@ -270,7 +275,6 @@ $todos-compact-breakpoint: 720px;
     &:hover {
       background: var(--openbitfun-color-action-quiet-hover);
       border-color: var(--openbitfun-color-field-border-hover);
-      box-shadow: var(--openbitfun-shadow-xs);
     }
 
     &:focus-visible {
@@ -973,7 +977,7 @@ $todos-compact-breakpoint: 720px;
   }
 }
 
-@media (max-width: $todos-stack-breakpoint) {
+@container todos-scene (max-width: #{$todos-stack-breakpoint}) {
   .openbitfun-todos {
 
     &__head {
@@ -986,7 +990,10 @@ $todos-compact-breakpoint: 720px;
 
     &__panes {
       grid-template-columns: minmax(0, 1fr);
-      height: auto;
+      grid-template-rows: auto auto;
+      align-content: start;
+      overflow-y: auto;
+      height: 100%;
     }
 
     &__pane {
@@ -1006,7 +1013,7 @@ $todos-compact-breakpoint: 720px;
   }
 }
 
-@media (max-width: $todos-compact-breakpoint) {
+@container todos-scene (max-width: #{$todos-compact-breakpoint}) {
   .openbitfun-todos {
     &__head {
       flex-direction: column;
@@ -1067,11 +1074,13 @@ $todos-compact-breakpoint: 720px;
 
   }
 
+}
+
+@media (max-width: 720px) {
   .openbitfun-todos-editor-dialog {
     inline-size: 100%;
     max-inline-size: 100%;
   }
-
 }
 
 @container todo-editor (max-width: 840px) {
