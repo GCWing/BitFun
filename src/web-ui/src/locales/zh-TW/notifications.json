@@ -58,20 +58,12 @@
     "common": {
       "learn_more": "查看詳情",
       "got_it": "知道了",
-      "later": "稍後",
       "close": "關閉",
       "prev": "上一頁",
       "next": "下一頁",
       "done": "完成",
       "never_show_again": "不再顯示",
-      "page": "第",
-      "more_count": "還有 {{count}} 條"
-    },
-    "welcome": {
-      "toast_title": "歡迎使用 OpenBitFun",
-      "toast_desc": "AI 驅動的編程環境，助您事半功倍",
-      "modal_title": "歡迎來到 OpenBitFun",
-      "modal_body": "OpenBitFun 是一款以 AI 為核心的編程環境。\n\n通過多輪對話與工具協作，讓開發更高效。"
+      "page": "第"
     }
   },
   "confirm": {

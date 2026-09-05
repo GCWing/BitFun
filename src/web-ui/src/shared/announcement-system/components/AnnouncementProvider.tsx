@@ -16,11 +16,7 @@ const log = createLogger('AnnouncementProvider');
  * Add any card ID here to include it in the Ctrl+Shift+Alt+D preview cycle.
  * Order determines display sequence.
  */
-const DEBUG_CARD_IDS = [
-  'release_letter_1_0_0',
-  'feature_shortcuts_v0_2_2',
-  'feature_welcome',
-];
+const DEBUG_CARD_IDS = ['release_letter_1_0_0'];
 
 const ENV_PREVIEW_CARD_ID = import.meta.env.DEV
   ? import.meta.env.VITE_OPENBITFUN_ANNOUNCEMENT_PREVIEW_ID?.trim()
