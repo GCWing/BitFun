@@ -1,6 +1,5 @@
-import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconName, type IconSize } from '@openbitfun/ui';
+import { Button, Icon, ScrollArea, SearchField, Switch, Textarea, type IconSource } from '@openbitfun/ui';
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { Bot, CircleUserRound, Network, Package, PawPrint, Server, Webhook, Wrench } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -27,14 +26,6 @@ import {
 } from './ecosystemCompatibilityModel';
 import { useEcosystemCompatibilityStore } from './ecosystemCompatibilityStore';
 import './EcosystemCompatibilityScene.scss';
-
-function catalogLucide(name: IconName): LucideIcon {
-  return function CatalogLucide({ size }: { size?: number | string }) {
-    const n = typeof size === 'number' ? size : 15;
-    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return <Icon name={name} size={mapped} />;
-  } as LucideIcon;
-}
 
 const AcpAgentsConfig = lazy(
   () => import('@/infrastructure/config/components/AcpAgentsConfig'),
@@ -68,18 +59,18 @@ function EcosystemProductIcon({ productId, size }: {
   );
 }
 
-const IMPORT_ITEM_ICONS: Record<EcosystemImportItemKind, LucideIcon> = {
-  account: CircleUserRound,
-  settings: catalogLucide('settings'),
-  command: catalogLucide('command-mac'),
-  tool: Wrench,
-  subagent: Bot,
-  skill: Package,
-  mcp: Server,
-  hook: Webhook,
-  memory: catalogLucide('thinking'),
-  plugin: catalogLucide('extension'),
-  pet: PawPrint,
+const IMPORT_ITEM_ICONS: Record<EcosystemImportItemKind, IconSource> = {
+  account: { glyph: CircleUserRound },
+  settings: { name: 'settings' },
+  command: { name: 'command-mac' },
+  tool: { glyph: Wrench },
+  subagent: { glyph: Bot },
+  skill: { glyph: Package },
+  mcp: { glyph: Server },
+  hook: { glyph: Webhook },
+  memory: { name: 'thinking' },
+  plugin: { name: 'extension' },
+  pet: { glyph: PawPrint },
 };
 
 const GROUP_ORDER = ['connected', 'available', 'other'] as const;
@@ -444,7 +435,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
           </div>
           {importItems.map((item) => {
             const state = importItemState(item);
-            const ItemIcon = IMPORT_ITEM_ICONS[item.kind];
+            const itemIcon = IMPORT_ITEM_ICONS[item.kind];
             const ready = state === 'ready' || state === 'readyRename';
             const dimmed = [
               'notDetected',
@@ -481,7 +472,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
               >
                 <span className="ecosystem-compatibility__import-item" role="cell">
                   <span className="ecosystem-compatibility__import-item-icon" aria-hidden="true">
-                    <ItemIcon size={15} />
+                    <Icon {...itemIcon} size="sm" />
                   </span>
                   <span className="ecosystem-compatibility__import-item-copy">
                     <strong title={itemName}>{itemName}</strong>
@@ -598,7 +589,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
 
                     <div className="ecosystem-compatibility__runtime-mode">
                       <span className="ecosystem-compatibility__runtime-mode-icon" aria-hidden="true">
-                        <Bot size={16} />
+                        <Icon glyph={Bot} size="md" />
                       </span>
                       <div className="ecosystem-compatibility__runtime-mode-copy">
                         <div className="ecosystem-compatibility__runtime-mode-title">
@@ -715,7 +706,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
           </div>
         ) : (
           <div className="ecosystem-compatibility__empty-card">
-            <Network size={18} aria-hidden="true" />
+            <Icon glyph={Network} size="md" />
             <div>
               <strong>{t('run.notConfiguredTitle', { name: selectedRuntime.spec.name })}</strong>
               <p>{t('run.notConfiguredDescription', { name: selectedRuntime.spec.name })}</p>
@@ -927,7 +918,7 @@ const EcosystemCompatibilityScene: React.FC = () => {
             <div className="ecosystem-compatibility__unified-stack">
               {selectedRuntime.spec.development ? (
                 <div className="ecosystem-compatibility__development-card" role="status">
-                  <Bot size={20} aria-hidden="true" />
+                  <Icon glyph={Bot} size="lg" />
                   <div>
                     <strong>{t('comingSoon.title')}</strong>
                     <p>{t('comingSoon.notice', { name: selectedRuntime.spec.name })}</p>

@@ -1,7 +1,7 @@
-import { Button, Combobox, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
+import { Button, Combobox, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea, type IconSource } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Wrench, type LucideIcon } from 'lucide-react';
+import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Wrench } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
@@ -470,7 +470,7 @@ const AgentsHomeView: React.FC = () => {
   const selectedAgentCapabilityTabs = useMemo(() => {
     const tabs: Array<{
       key: CapabilityTab;
-      icon: LucideIcon;
+      icon: IconSource;
       label: string;
       count?: string;
     }> = [];
@@ -478,7 +478,7 @@ const AgentsHomeView: React.FC = () => {
     if (selectedAgent?.agentKind === 'subagent' && !selectedAgentIsExternal) {
       tabs.push({
         key: 'model',
-        icon: Cpu,
+        icon: { glyph: Cpu },
         label: t('agentCard.modelSelector.label'),
       });
     }
@@ -495,7 +495,7 @@ const AgentsHomeView: React.FC = () => {
 
       tabs.push({
         key: 'tools',
-        icon: Wrench,
+        icon: { glyph: Wrench },
         label: t('agentsOverview.tools'),
         count: selectedAgent?.agentKind === 'mode'
           ? `${currentToolCount}/${totalToolCount}`
@@ -511,11 +511,7 @@ const AgentsHomeView: React.FC = () => {
           : selectedAgentSkills.length;
       tabs.push({
         key: 'skills',
-        icon: (({ size = 14 }: { size?: number | string }) => {
-          const n = typeof size === 'number' ? size : 14;
-          const mapped = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-          return <Icon name="extension" size={mapped} />;
-        }) as LucideIcon,
+        icon: { name: 'extension' },
         label: t('agentsOverview.skills'),
         count: `${currentSkillCount}/${selectedAgentSkillConfigs.length}`,
       });
@@ -527,7 +523,7 @@ const AgentsHomeView: React.FC = () => {
         : selectedAgentEnabledSubagentIds;
       tabs.push({
         key: 'subagents',
-        icon: Bot,
+        icon: { glyph: Bot },
         label: t('agentsOverview.subagents'),
         count: `${currentSubagentIds.length}/${selectedAgentManageableSubagents.length}`,
       });
@@ -741,7 +737,7 @@ const AgentsHomeView: React.FC = () => {
 
           {!loading && catalogAgents.length === 0 ? (
             <GalleryEmpty
-              icon={<Bot size={32} strokeWidth={1.5} />}
+              icon={{ glyph: Bot }}
               message={allAgents.length === 0 ? t('agentsZone.empty.noAgents') : t('agentsZone.empty.noMatch')}
               testId="agent-list-empty"
             />
@@ -791,10 +787,9 @@ const AgentsHomeView: React.FC = () => {
       <GalleryDetailModal
         isOpen={Boolean(selectedAgent)}
         onClose={closeAgentDetails}
-        icon={selectedAgent ? React.createElement(
-          AGENT_ICON_MAP[(selectedAgent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot,
-          { size: 24, strokeWidth: 1.7 },
-        ) : <Bot size={24} />}
+        icon={selectedAgent
+          ? <Icon {...(AGENT_ICON_MAP[(selectedAgent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? { glyph: Bot })} size="lg" />
+          : <Icon glyph={Bot} size="lg" />}
         iconGradient={selectedAgent ? getCardGradient(selectedAgent.id || selectedAgent.name) : undefined}
         title={selectedAgent?.name ?? ''}
         titlePlacement="hero"
@@ -804,7 +799,7 @@ const AgentsHomeView: React.FC = () => {
           <>
             <StatusPill
               tone={selectedAgentBadge?.variant ?? 'neutral'}
-              leading={selectedAgent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
+              leading={<Icon glyph={selectedAgent.agentKind === 'mode' ? Cpu : Bot} />}
             >
               {selectedAgentBadge?.label}
             </StatusPill>
@@ -875,7 +870,7 @@ const AgentsHomeView: React.FC = () => {
                     aria-current={activeDetailSection === 'basic' ? 'page' : undefined}
                     onClick={() => setActiveDetailSection('basic')}
                   >
-                    <FileText size={14} />
+                    <Icon glyph={FileText} size="sm" />
                     <span>{t('agentsOverview.detail.basicInfo')}</span>
                   </button>
                   <button
@@ -884,13 +879,13 @@ const AgentsHomeView: React.FC = () => {
                     aria-current={activeDetailSection === 'behavior' ? 'page' : undefined}
                     onClick={() => setActiveDetailSection('behavior')}
                   >
-                    <MessageSquareText size={14} />
+                    <Icon glyph={MessageSquareText} size="sm" />
                     <span>{t('agentsOverview.detail.behaviorContext')}</span>
                     <span className="agent-card__config-nav-count">{selectedAgent.capabilities.length}</span>
                   </button>
                   <div className="agent-card__config-nav-divider" />
                   {selectedAgentCapabilityTabs.map((tab) => {
-                    const TabIcon = tab.icon;
+                    const tabIcon = tab.icon;
                     const isActive = activeDetailSection === tab.key;
                     return (
                       <button
@@ -901,7 +896,7 @@ const AgentsHomeView: React.FC = () => {
                         data-detail-section={tab.key}
                         onClick={() => setActiveDetailSection(tab.key)}
                       >
-                        <TabIcon size={14} />
+                        <Icon {...tabIcon} size="sm" />
                         <span>{tab.label}</span>
                         {tab.count ? <span className="agent-card__config-nav-count">{tab.count}</span> : null}
                       </button>
@@ -1017,7 +1012,7 @@ const AgentsHomeView: React.FC = () => {
               <div className="agent-card__section" data-testid="agent-detail-tools-section">
                 <div className="agent-card__section-head agent-card__section-head--tabs">
                   <div className="agent-card__section-title">
-                    {currentCapabilityMeta ? React.createElement(currentCapabilityMeta.icon, { size: 14 }) : null}
+                    {currentCapabilityMeta ? <Icon {...currentCapabilityMeta.icon} size="sm" /> : null}
                     <span>{currentCapabilityMeta?.label}</span>
                     {currentCapabilityMeta?.count ? (
                       <span className="agent-card__section-count">{currentCapabilityMeta.count}</span>
@@ -1082,7 +1077,7 @@ const AgentsHomeView: React.FC = () => {
                                   setPendingSubagentIds(null);
                                 }
                               }}
-                              icon={<RotateCcw size={12} />}
+                              icon={<Icon glyph={RotateCcw} />}
                             />
                           </Tooltip>
                           <Button

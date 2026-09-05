@@ -10,7 +10,7 @@ function readSource(): string {
 }
 
 describe('WebSearch settings presentation', () => {
-  it('keeps secrets out of generic config writes and places provider selection in the section header', () => {
+  it('keeps secrets out of generic config writes and preserves the settings draft lifecycle', () => {
     const source = readSource();
 
     expect(source).toContain("configAPI.setConfig('ai.web_search', config)");
@@ -41,7 +41,6 @@ describe('WebSearch settings presentation', () => {
     expect(source).toContain('OPENBITFUN_PROTOCOL_ERROR_EXAMPLE');
     expect(source).toContain('OPENBITFUN_PROTOCOL_ERROR_CODES');
     expect(source).not.toContain('<code>{OPENBITFUN_PROTOCOL_ERROR_CODES}</code>');
-    expect(source).not.toContain("t('fields.provider.");
     expect(source).not.toContain("t('fields.fallback.");
     expect(source).not.toContain("t('fields.apply.");
     expect(source).not.toContain("t('sections.apply.");

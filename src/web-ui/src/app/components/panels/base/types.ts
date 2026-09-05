@@ -3,6 +3,8 @@
  * Defines content types, interfaces, and configuration for the panel system.
  */
 
+import type { IconSource } from '@openbitfun/ui';
+
 export type PanelContentType = 
   | 'empty'
   | 'code-preview'
@@ -80,7 +82,7 @@ export interface TabbedFlexiblePanelRef {
 export interface PanelContentConfig {
   type: PanelContentType;
   displayName: string;
-  icon: React.ComponentType<{ size?: string | number }>;
+  icon: IconSource;
   supportsCopy: boolean;
   supportsDownload: boolean;
   showHeader: boolean;

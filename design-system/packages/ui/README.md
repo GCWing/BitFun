@@ -88,6 +88,23 @@ opacity. Theme colors remain caller-owned through `currentColor`. Asset
 fingerprints are reviewed with intentional resource updates so replacing a
 glyph with a similarly named substitute cannot pass unnoticed.
 
+Prefer a catalog `name` whenever it is an exact semantic match. When the
+catalog has no matching symbol, pass the Lucide component through `glyph` so
+the shared boundary applies the standard 1.6 line weight, semantic sizing,
+tone and accessibility behavior:
+
+```tsx
+import { Icon } from "@openbitfun/ui";
+import { Network } from "lucide-react";
+
+<Icon glyph={Network} size="sm" />
+```
+
+Do not set `strokeWidth` at product call sites. Let a button, menu, tab or
+navigation slot own the final glyph geometry; use `size` only for standalone
+icons. Raw Lucide rendering remains appropriate for intentionally filled
+marks, progress indicators, illustrations, or a reviewed optical exception.
+
 Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
 legacy `download`, `circle` and `turn` entries for compatibility; prefer
 `arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
@@ -102,7 +119,8 @@ catalog asset.
 
 ## Advanced selection and menus
 
-Use native `Select` for simple options. `Combobox` adds searchable single
+Use `Select` for simple options; its hidden native control preserves form
+participation. `Combobox` adds searchable single
 selection, grouped options, explicit custom-value creation and async loading
 states. `MultiSelect` owns multiple selection, removable tags and select-all.
 Controlled values are authoritative; option discovery remains host-owned.
@@ -112,6 +130,24 @@ The Web UI's legacy Select implementation is retired. Like retired Button and
 Switch overrides, legacy `components.select` Appearance rules are ignored at
 the existing read-only migration boundary; original packages are not rewritten.
 Selection visuals now come from the public field/menu semantic tokens.
+Choose `size` explicitly when composing form rows: selectors default to `md`,
+while `Input` defaults to `sm`. The shared `control.height.sm/md/lg` tokens and
+active density own the actual heights; consumers must not replace them with
+page-level heights or padding overrides. Picker bodies stay single-line and
+token-sized, with labels and validation messages outside that height. Select
+keeps its in-flow anchor mounted when the unified popup covers it, so opening
+does not change the surrounding layout.
+
+`Combobox` and `MultiSelect` use the same joined-surface pattern: the portalled
+search header covers the closed trigger, with a divider and scrollable options
+inside one border and shadow. Flipping above the field keeps the search header
+beside the anchor. Labels, validation, and the field id follow the active input;
+Escape or selection restores the trigger, and Tab continues from its position
+in the form. Search, typed values, and multiple selection remain component-owned.
+`SearchField variant="embedded"` removes its standalone pill surface for these
+compositions; its container must supply padding, height, and visible focus
+treatment. The default SearchField appearance is unchanged.
+
 `FieldGroup fieldSurface="ambient"` keeps text and picker field borders while
 letting their shells reuse the grouped surface. The default field surface stays
 theme-owned, and portalled menus remain on the opaque panel surface.

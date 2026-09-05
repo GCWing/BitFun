@@ -313,6 +313,7 @@ export function ComponentDetailPage({
   const [iconSize, setIconSize] = useState<IconSize>("lg");
   const [iconTone, setIconTone] = useState<IconTone>("inherit");
   const [selectValue, setSelectValue] = useState<string>("ask");
+  const [multiSelectValues, setMultiSelectValues] = useState<Array<string | number>>(["ask", "plan"]);
   const [size, setSize] = useState<PreviewSize>("md");
   const [fieldOrientation, setFieldOrientation] = useState<FieldOrientation>("horizontal");
   const [fieldShowLabelAction, setFieldShowLabelAction] = useState(false);
@@ -393,8 +394,9 @@ export function ComponentDetailPage({
         return ["raised", "subtle", "media"] as const;
       case "Input":
       case "SearchField":
-      case "Select":
         return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+      case "Select":
+        return ["default", "hover", "focus-visible", "open", "invalid", "disabled"] as const;
       case "Field":
       case "Icon":
       case "KeyHint":
@@ -1126,7 +1128,8 @@ export function ComponentDetailPage({
     if (component.name === "Combobox") {
       return (
         <Combobox
-          defaultOpen={state === "open" || state === "searching"}
+          defaultOpen={state === "open" || state === "searching" || state === "loading" || state === "empty"}
+          clearable
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           key={state}
@@ -1139,6 +1142,7 @@ export function ComponentDetailPage({
           ]}
           onCreateValue={state === "custom" ? value => value : undefined}
           aria-label="Mode"
+          size={size}
           value={selectValue}
         />
       );
@@ -1147,19 +1151,22 @@ export function ComponentDetailPage({
     if (component.name === "MultiSelect") {
       return (
         <MultiSelect
-          defaultOpen={state === "open" || state === "searching"}
+          defaultOpen={state === "open" || state === "searching" || state === "loading" || state === "empty"}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           key={state}
           loading={state === "loading"}
           onCreateValue={state === "custom" ? value => value : undefined}
-          options={state === "loading" ? [] : [
+          onValueChange={setMultiSelectValues}
+          options={state === "empty" || state === "loading" ? [] : [
             { label: "Ask", value: "ask" },
             { label: "Plan", value: "plan" },
             { disabled: true, label: "Agent", value: "agent" },
           ]}
           aria-label="Modes"
-          value={["ask", "plan"]}
+          showSelectAll
+          size={size}
+          value={multiSelectValues}
         />
       );
     }
@@ -1192,6 +1199,7 @@ export function ComponentDetailPage({
           invalid={state === "invalid"}
           leading={<Icon name="unselected" />}
           onValueChange={(value) => setSelectValue(String(value))}
+          open={state === "open" ? true : undefined}
           options={[
             { label: "Ask", value: "ask" },
             { label: "Plan", value: "plan" },
@@ -2056,7 +2064,7 @@ export function ComponentDetailPage({
                   </span>
                   {renderPreview(previewState)}
                 </div>
-              ) : component.name === "Combobox" ? (
+              ) : component.name === "Combobox" || component.name === "MultiSelect" ? (
                 <div className="component-combobox-preview" data-component="combobox">
                   <span>{stateLabel(previewState)}</span>
                   {renderPreview(previewState)}

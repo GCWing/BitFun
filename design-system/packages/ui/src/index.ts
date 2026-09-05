@@ -116,6 +116,7 @@ export {
   type IconName,
   type IconProps,
   type IconSize,
+  type IconSource,
   type IconTone,
 } from "./components/Icon";
 export { IconButton, type IconButtonProps } from "./components/IconButton";

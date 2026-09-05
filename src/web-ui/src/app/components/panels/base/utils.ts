@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Icon, type IconName, type IconSize } from '@openbitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { 
   Code, 
   FileText, 
@@ -17,20 +17,12 @@ import {
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
-function catalogPanelIcon(name: IconName): React.ComponentType<{ size?: string | number }> {
-  return function CatalogPanelIcon({ size }) {
-    const n = typeof size === 'number' ? size : 16;
-    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return React.createElement(Icon, { name, size: mapped });
-  };
-}
-
 // Configuration mapping for each panel content type
 export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig> = {
   'empty': {
     type: 'empty',
     displayName: 'Empty',
-    icon: FileText,
+    icon: { glyph: FileText },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -38,7 +30,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'code-preview': {
     type: 'code-preview',
     displayName: 'Code Preview',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: true
@@ -46,7 +38,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'code-viewer': {
     type: 'code-viewer',
     displayName: 'Code Viewer',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -54,7 +46,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'code-editor': {
     type: 'code-editor',
     displayName: 'Code Editor',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -62,7 +54,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'markdown-viewer': {
     type: 'markdown-viewer',
     displayName: 'Markdown Viewer',
-    icon: FileText,
+    icon: { glyph: FileText },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: true
@@ -70,7 +62,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'markdown-editor': {
     type: 'markdown-editor',
     displayName: 'Markdown Editor',
-    icon: FileText,
+    icon: { glyph: FileText },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -78,7 +70,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'text-viewer': {
     type: 'text-viewer',
     displayName: 'Text Viewer',
-    icon: catalogPanelIcon('eye'),
+    icon: { name: 'eye' },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: true
@@ -86,7 +78,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'file-viewer': {
     type: 'file-viewer',
     displayName: 'File Viewer',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -94,7 +86,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'image-viewer': {
     type: 'image-viewer',
     displayName: 'Image Viewer',
-    icon: catalogPanelIcon('image'),
+    icon: { name: 'image' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -102,7 +94,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'pdf-viewer': {
     type: 'pdf-viewer',
     displayName: 'PDF Viewer',
-    icon: FileText,
+    icon: { glyph: FileText },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -110,7 +102,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'html-preview': {
     type: 'html-preview',
     displayName: 'HTML Preview',
-    icon: catalogPanelIcon('browser'),
+    icon: { name: 'browser' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -118,7 +110,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'diff-code-editor': {
     type: 'diff-code-editor',
     displayName: 'Diff Editor',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -126,7 +118,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-diff': {
     type: 'git-diff',
     displayName: 'Git Diff',
-    icon: catalogPanelIcon('git'),
+    icon: { name: 'git' },
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -134,7 +126,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-settings': {
     type: 'git-settings',
     displayName: 'Git Settings',
-    icon: catalogPanelIcon('git'),
+    icon: { name: 'git' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -142,7 +134,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-graph': {
     type: 'git-graph',
     displayName: 'Git Graph',
-    icon: catalogPanelIcon('git'),
+    icon: { name: 'git' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -150,7 +142,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'git-branch-history': {
     type: 'git-branch-history',
     displayName: 'Git Branch History',
-    icon: catalogPanelIcon('git'),
+    icon: { name: 'git' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -158,7 +150,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'ai-session': {
     type: 'ai-session',
     displayName: 'AI Session',
-    icon: BookOpen,
+    icon: { glyph: BookOpen },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -166,7 +158,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'planner': {
     type: 'planner',
     displayName: 'Planner',
-    icon: ClipboardList,
+    icon: { glyph: ClipboardList },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -174,7 +166,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'ui-editor': {
     type: 'ui-editor',
     displayName: 'UI Editor',
-    icon: catalogPanelIcon('edit'),
+    icon: { name: 'edit' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -182,7 +174,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'ui-relation-graph': {
     type: 'ui-relation-graph',
     displayName: 'UI Relation Graph',
-    icon: Network,
+    icon: { glyph: Network },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -190,7 +182,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'design-tokens': {
     type: 'design-tokens',
     displayName: 'Design Tokens',
-    icon: catalogPanelIcon('settings'),
+    icon: { name: 'settings' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -198,7 +190,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'task-detail': {
     type: 'task-detail',
     displayName: 'Task Detail',
-    icon: ClipboardList,
+    icon: { glyph: ClipboardList },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -206,7 +198,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'plan-viewer': {
     type: 'plan-viewer',
     displayName: 'Plan Viewer',
-    icon: ClipboardList,
+    icon: { glyph: ClipboardList },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -214,7 +206,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'btw-session': {
     type: 'btw-session',
     displayName: 'Side Session',
-    icon: MessageSquareQuote,
+    icon: { glyph: MessageSquareQuote },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -222,7 +214,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'session-usage': {
     type: 'session-usage',
     displayName: 'Session Usage',
-    icon: Activity,
+    icon: { glyph: Activity },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -230,7 +222,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'background-command-output': {
     type: 'background-command-output',
     displayName: 'Command Output',
-    icon: catalogPanelIcon('terminal'),
+    icon: { name: 'terminal' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -238,7 +230,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'review-platform': {
     type: 'review-platform',
     displayName: 'Pull Requests',
-    icon: GitPullRequest,
+    icon: { glyph: GitPullRequest },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -246,7 +238,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'review-platform-pr-detail': {
     type: 'review-platform-pr-detail',
     displayName: 'Pull Request',
-    icon: GitPullRequest,
+    icon: { glyph: GitPullRequest },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -254,7 +246,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'terminal': {
     type: 'terminal',
     displayName: 'Terminal',
-    icon: Code,
+    icon: { glyph: Code },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -262,7 +254,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'generative-widget': {
     type: 'generative-widget',
     displayName: 'Widget Preview',
-    icon: Network,
+    icon: { glyph: Network },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -270,7 +262,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'openbitfun-canvas': {
     type: 'openbitfun-canvas',
     displayName: 'OpenBitFun Canvas',
-    icon: Network,
+    icon: { glyph: Network },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -278,7 +270,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   'browser': {
     type: 'browser',
     displayName: 'Browser',
-    icon: catalogPanelIcon('browser'),
+    icon: { name: 'browser' },
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
@@ -293,12 +285,10 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
  */
 export const getContentIcon = (type: PanelContentType): React.ReactElement => {
   if (!type || !PANEL_CONTENT_CONFIGS[type]) {
-    const DefaultIcon = PANEL_CONTENT_CONFIGS.empty.icon;
-    return React.createElement(DefaultIcon, { size: 16 });
+    return React.createElement(Icon, { ...PANEL_CONTENT_CONFIGS.empty.icon, size: 'md' });
   }
   const config = PANEL_CONTENT_CONFIGS[type];
-  const IconComponent = config.icon;
-  return React.createElement(IconComponent, { size: 16 });
+  return React.createElement(Icon, { ...config.icon, size: 'md' });
 };
 
 /**

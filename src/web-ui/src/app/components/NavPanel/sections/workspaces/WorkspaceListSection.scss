@@ -373,13 +373,6 @@
       transform: scale(0.7);
       color: var(--openbitfun-color-content-primary);
 
-      svg {
-        transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-      }
-
-      &.is-collapsed svg {
-        transform: rotate(-90deg);
-      }
     }
   }
 
@@ -417,13 +410,6 @@
     transform: scale(0.7);
     color: inherit;
 
-    svg {
-      transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-    }
-
-    &.is-collapsed svg {
-      transform: rotate(-90deg);
-    }
   }
 
   &__workspace-item-label {
@@ -1203,13 +1189,6 @@
     transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
                 transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-    svg {
-      transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-    }
-
-    &.is-collapsed svg {
-      transform: rotate(-90deg);
-    }
   }
 
   &__assistant-item-name-btn {

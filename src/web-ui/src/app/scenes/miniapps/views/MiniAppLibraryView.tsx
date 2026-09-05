@@ -635,7 +635,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
     if (libraryItems.length === 0 && !catalogLoading) {
       return (
         <GalleryEmpty
-          icon={<PackageCheck size={34} strokeWidth={1.35} />}
+          icon={{ glyph: PackageCheck }}
           message={query || category !== 'all'
             ? t('empty.noMatch')
             : t('market.library.empty')}

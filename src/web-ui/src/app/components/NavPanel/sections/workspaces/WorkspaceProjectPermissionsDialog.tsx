@@ -257,7 +257,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
         <div className="workspace-project-permissions-dialog__modal">
       <div data-openbitfun-component="workspace-project-permissions-dialog" data-openbitfun-part="root" className="workspace-project-permissions-dialog">
         <div data-openbitfun-component="workspace-project-permissions-dialog" data-openbitfun-part="intro" className="workspace-project-permissions-dialog__intro">
-          <ShieldCheck size={18} aria-hidden="true" />
+          <Icon glyph={ShieldCheck} size="md" />
           <p>{t('projectPermissions.description')}</p>
         </div>
 
@@ -412,7 +412,7 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
                 loading={rulesSaving}
                 disabled={!rulesValid || rulesRevision === null || isBusy}
                 onClick={() => void handleSaveRules()}
-                leadingIcon={<Save size={14} />}
+                leadingIcon={<Icon glyph={Save} />}
               >
 
                 {t('projectPermissions.saveRules')}

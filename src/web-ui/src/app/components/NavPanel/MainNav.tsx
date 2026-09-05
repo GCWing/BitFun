@@ -28,7 +28,7 @@ import {
 } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { FolderOpen, FolderPlus, Users, Network } from 'lucide-react';
+import { FolderOpen, FolderPlus, Network, Server, Users } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -275,13 +275,13 @@ const MainNav: React.FC<MainNavProps> = ({
       style={{ top: workspaceMenuPos.top, left: workspaceMenuPos.left }}
     >
       <MenuItem
-        leading={<FolderOpen size={13} />}
+        leading={<Icon glyph={FolderOpen} />}
         onClick={() => { closeWorkspaceMenu(); void handleOpenProject(); }}
       >
         {t('header.openProject')}
       </MenuItem>
       <MenuItem
-        leading={<FolderPlus size={13} />}
+        leading={<Icon glyph={FolderPlus} />}
         onClick={() => { closeWorkspaceMenu(); handleNewProject(); }}
       >
         {t('header.newProject')}
@@ -294,11 +294,7 @@ const MainNav: React.FC<MainNavProps> = ({
         {t('nav.workspaces.actions.newAssistant')}
       </MenuItem>
       <MenuItem
-        leading={(
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-6v6" />
-          </svg>
-        )}
+        leading={<Icon glyph={Server} />}
         onClick={handleOpenRemoteSSH}
       >
         {t('ssh.remote.connect')}
@@ -319,7 +315,7 @@ const MainNav: React.FC<MainNavProps> = ({
             return (
               <MenuItem
                 key={workspace.id}
-                leading={<FolderOpen size={13} aria-hidden="true" />}
+                leading={<Icon glyph={FolderOpen} />}
                 role="menuitemradio"
                 checked={isCurrent}
                 metadata={isCurrent ? <Icon name="check-line" size="xs" /> : undefined}
@@ -534,7 +530,7 @@ const MainNav: React.FC<MainNavProps> = ({
                   data-testid="agent-tab"
                 >
                   <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                    <Users size={15} />
+                    <Icon glyph={Users} size="sm" />
                   </span>
                   <span>{t('nav.items.agents')}</span>
                 </button>
@@ -580,7 +576,7 @@ const MainNav: React.FC<MainNavProps> = ({
                   data-testid="ecosystem-compatibility-tab"
                 >
                   <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                    <Network size={15} />
+                    <Icon glyph={Network} size="sm" />
                   </span>
                   <span>{t('nav.items.ecosystemCompatibility')}</span>
                   {hasUnseenEcosystemCompatibility ? (
@@ -618,7 +614,7 @@ const MainNav: React.FC<MainNavProps> = ({
                         onClick={toggleWorkspaceMenu}
                         data-testid="nav-workspace-add-btn"
                       >
-                        <FolderPlus size={14} aria-hidden="true" />
+                        <Icon glyph={FolderPlus} size="sm" />
                       </button>
                     </Tooltip>
                   </div>

@@ -138,7 +138,7 @@ export const NotificationCenter: React.FC = () => {
             open={isExpanded}
             onOpenChange={open => handleNotificationOpenChange(notification, open)}
             summary={<span title={title}>{title}</span>}
-            description={!usesMessageAsTitle && messageText
+            description={!isExpanded && !usesMessageAsTitle && messageText
               ? <OverflowText>{messageText}</OverflowText>
               : undefined}
             leading={

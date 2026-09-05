@@ -12,6 +12,8 @@ import styles from "./SearchField.module.css";
 
 export interface SearchFieldProps
   extends Omit<InputProps, "leading" | "trailing" | "type"> {
+  /** Embedded fields delegate the surface, padding, height, and focus treatment to their container. */
+  variant?: "default" | "embedded";
   clearLabel?: string;
   leadingIcon?: ReactNode;
   onClear?: MouseEventHandler<HTMLButtonElement>;
@@ -30,6 +32,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
   onSearch,
   shortcut,
   trailing,
+  variant = "default",
   ...props
 }, ref) {
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
@@ -65,7 +68,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       );
 
   return (
-    <span className={classNames(styles.root, className)} data-openbitfun-component="search-field">
+    <span className={classNames(styles.root, className)} data-openbitfun-component="search-field" data-variant={variant}>
       <Input
         {...props}
         className={styles.field}

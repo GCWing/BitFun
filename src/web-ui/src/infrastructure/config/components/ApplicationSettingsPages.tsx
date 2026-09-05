@@ -732,16 +732,17 @@ function TerminalSection() {
       <div className="openbitfun-terminal-config__content">
         <ConfigMessage message={message} />
 
+        {shouldShowCmdFallbackNotice && (
+          <Alert
+            tone="info"
+            message={t('terminal.controls.cmdFallbackMessage')}
+          />
+        )}
+
         <ConfigPageSection
           title={t('terminal.sections.terminal')}
           description={t('terminal.sections.terminalHint')}
         >
-          {shouldShowCmdFallbackNotice && (
-            <Alert
-              tone="info"
-              message={t('terminal.controls.cmdFallbackMessage')}
-            />
-          )}
           <ConfigPageRow
             label={t('terminal.sections.defaultTerminal')}
             description={t('terminal.controls.description')}
@@ -749,6 +750,7 @@ function TerminalSection() {
           >
             {availableShells.length > 0 ? (
               <Combobox
+                size="sm"
                 value={selectedShellValue}
                 onValueChange={(v) => handleShellChange(v === AUTO_DETECT_SHELL_VALUE ? '' : v as string)}
                 options={shellOptions}
@@ -766,6 +768,7 @@ function TerminalSection() {
             align="center"
           >
             <Select
+              size="sm"
               value={terminalPanelPosition}
               onValueChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
               options={terminalPanelPositionOptions}
@@ -872,6 +875,7 @@ function WindowBehaviorSetting() {
       >
         <div data-openbitfun-component="application-settings" data-openbitfun-part="windowBehavior">
           <Select
+            size="sm"
             value={behavior}
             onValueChange={(v) => { void handleChange(v as string); }}
             options={behaviorOptions}

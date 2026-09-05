@@ -15,11 +15,10 @@
     background: var(--openbitfun-color-field-background);
     transition:
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  .field:hover:not([data-disabled="true"]) {
+  .field:hover:where(:not([data-disabled="true"])) {
     border-color: var(--openbitfun-color-field-border-hover);
     background: var(--openbitfun-color-field-background-hover);
   }
@@ -31,15 +30,11 @@
 
   .field:focus-within {
     border-color: var(--openbitfun-color-field-border-focus);
-    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
+    box-shadow: none;
   }
 
   .field[data-invalid="true"] {
     border-color: var(--openbitfun-color-status-danger-border);
-  }
-
-  .field[data-invalid="true"]:focus-within {
-    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-status-danger-surface);
   }
 
   .field[data-disabled="true"] {
@@ -120,7 +115,6 @@
 
     .field:focus-within {
       border-color: Highlight;
-      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
   }
 }

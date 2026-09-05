@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const multiSelectMeta = {
   category: "form",
-  description: "An anchored searchable multi-value selector with structured options, tags, select-all, and explicit value creation.",
+  description: "A searchable multi-value selector with an embedded search header and structured options on one anchored surface, plus tags, select-all, and explicit value creation.",
   maturity: "stable",
   name: "MultiSelect",
   props: [
@@ -15,7 +15,7 @@ export const multiSelectMeta = {
     { defaultValue: "false", name: "showSelectAll", type: "boolean" },
     { defaultValue: "md", name: "size", type: "sm | md | lg" },
   ],
-  states: ["default", "open", "searching", "custom", "invalid", "disabled", "loading"],
+  states: ["default", "open", "searching", "custom", "invalid", "disabled", "loading", "empty"],
   tokens: [
     "color.field.background",
     "color.field.backgroundHover",
@@ -26,6 +26,7 @@ export const multiSelectMeta = {
     "color.content.secondary",
     "color.content.muted",
     "color.content.disabled",
+    "color.control.highlight.background",
     "color.action.neutral.content",
     "color.action.neutral.surface",
     "color.border.subtle",
@@ -39,10 +40,13 @@ export const multiSelectMeta = {
     "control.select.radius",
     "control.select.indicatorSize",
     "control.select.contentGap",
+    "control.select.trailingInset",
+    "control.iconButton.xsSize",
     "overlay.menu.inlineSize",
     "overlay.menu.surfacePadding",
     "overlay.menu.surfaceRadius",
     "overlay.menu.itemIconSize",
     "shadow.menu",
+    "type.label.selected.fontWeight",
   ],
 } as const satisfies ComponentMeta;

@@ -13,14 +13,19 @@
   .indicator,
   .popover,
   .search,
+  .divider,
+  .options,
   .message,
   .error {
     box-sizing: border-box;
   }
 
-  .root {
+  .root,
+  .popover {
     --_combobox-height: var(--openbitfun-control-height-md);
+  }
 
+  .root {
     position: relative;
     display: flex;
     inline-size: 100%;
@@ -30,11 +35,13 @@
     color: var(--openbitfun-color-content-primary);
   }
 
-  .root[data-size="sm"] {
+  .root[data-size="sm"],
+  .popover[data-size="sm"] {
     --_combobox-height: var(--openbitfun-control-height-sm);
   }
 
-  .root[data-size="lg"] {
+  .root[data-size="lg"],
+  .popover[data-size="lg"] {
     --_combobox-height: var(--openbitfun-control-height-lg);
   }
 
@@ -59,8 +66,10 @@
   .control {
     position: relative;
     display: grid;
+    grid-template-rows: minmax(0, 1fr);
     inline-size: 100%;
     min-inline-size: 0;
+    block-size: var(--_combobox-height);
   }
 
   .trigger {
@@ -69,9 +78,10 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: var(--_combobox-height);
+    block-size: 100%;
+    min-block-size: 0;
     margin: 0;
-    padding-block: var(--openbitfun-space-1);
+    padding-block: 0;
     padding-inline-start: var(--openbitfun-control-select-padding-inline);
     padding-inline-end: calc(
       var(--openbitfun-control-select-trailing-inset)
@@ -115,10 +125,14 @@
     background: transparent;
   }
 
-  .trigger:focus-visible,
-  .root[data-open="true"] .trigger {
+  .trigger:focus-visible {
     border-color: var(--openbitfun-color-field-border-focus);
     box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
+  }
+
+  .root[data-open="true"] .control {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .root[data-invalid="true"] .trigger {
@@ -275,33 +289,83 @@
     position: fixed;
     z-index: var(--openbitfun-layer-popover);
     display: flex;
-    min-inline-size: var(--openbitfun-overlay-menu-inline-size);
+    min-inline-size: 0;
     max-inline-size: calc(100vw - var(--openbitfun-space-4));
     min-block-size: 0;
     flex-direction: column;
-    gap: var(--openbitfun-space-1);
-    padding: var(--openbitfun-overlay-menu-surface-padding);
+    overflow: hidden;
+    padding: 0;
     border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
     border-radius: var(--openbitfun-overlay-menu-surface-radius);
     color: var(--openbitfun-color-action-neutral-content);
     background: var(--openbitfun-color-surface-panel);
     box-shadow: var(--openbitfun-shadow-menu);
+    animation: openbitfun-combobox-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-enter);
+  }
+
+  .popover[data-placement="top"] {
+    flex-direction: column-reverse;
+  }
+
+  .popover:focus-within {
+    border-color: var(--openbitfun-color-field-border-focus);
+  }
+
+  .popover[data-invalid="true"] {
+    border-color: var(--openbitfun-color-status-danger-border);
   }
 
   .search {
-    flex: 0 0 auto;
+    display: flex;
+    flex: 0 0 calc(
+      var(--_combobox-height)
+      - var(--openbitfun-border-width-default)
+      - var(--openbitfun-border-width-default)
+    );
+    block-size: calc(
+      var(--_combobox-height)
+      - var(--openbitfun-border-width-default)
+      - var(--openbitfun-border-width-default)
+    );
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--openbitfun-control-select-content-gap);
+    padding-inline-start: var(--openbitfun-control-select-padding-inline);
+    padding-inline-end: calc(
+      var(--openbitfun-control-select-trailing-inset)
+      - (var(--openbitfun-control-icon-button-xs-size) - var(--openbitfun-control-select-indicator-size)) / 2
+    );
   }
 
   .searchField {
+    flex: 1 1 auto;
     inline-size: 100%;
+    min-inline-size: 0;
+    block-size: 100%;
   }
 
-  .searchField [data-openbitfun-component="input"] {
-    border-radius: var(--openbitfun-control-select-radius);
+  .collapse {
+    flex: 0 0 auto;
+  }
+
+  .divider {
+    flex: 0 0 var(--openbitfun-border-width-default);
+    block-size: var(--openbitfun-border-width-default);
+    background: var(--openbitfun-color-border-subtle);
+  }
+
+  .options {
+    display: flex;
+    flex: 1 1 auto;
+    overflow: hidden;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: var(--openbitfun-overlay-menu-surface-padding);
   }
 
   .listbox {
     flex: 1 1 auto;
+    min-inline-size: 0;
     min-block-size: 0;
   }
 
@@ -312,6 +376,14 @@
 
   .listbox [data-openbitfun-part="group"] {
     gap: var(--openbitfun-overlay-menu-section-gap);
+  }
+
+  .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="label"] {
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+  }
+
+  .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="indicator"] {
+    color: var(--openbitfun-color-control-highlight-background);
   }
 
   .message {
@@ -339,7 +411,8 @@
       transition: none;
     }
 
-    .spinner {
+    .spinner,
+    .popover {
       animation: none;
     }
   }
@@ -347,14 +420,24 @@
   @media (forced-colors: active) {
     .trigger,
     .popover,
+    .popover[data-invalid="true"],
     .root[data-invalid="true"] .trigger {
       border-color: ButtonText;
     }
 
     .trigger:focus-visible,
-    .root[data-open="true"] .trigger {
+    .popover:focus-within {
       border-color: Highlight;
       box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
+
+    .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="indicator"] {
+      color: Highlight;
+    }
+  }
+
+  @keyframes openbitfun-combobox-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 }

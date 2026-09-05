@@ -78,12 +78,12 @@ describe('SettingsNav shared component composition', () => {
     target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   }
 
-  it('keeps the header outside the scroll area and applies content styles to the real content slot', () => {
+  it('keeps search outside the scroll area and applies content styles to the real content slot', () => {
     const nav = container.querySelector('nav')!;
     const header = nav.querySelector(':scope > [data-openbitfun-part="header"]')!;
     const viewport = nav.querySelector('[data-openbitfun-component="scroll-area"]')!;
     const content = viewport.querySelector('[data-openbitfun-part="content"]')!;
-    expect(header.querySelector('.openbitfun-settings-nav__title')).not.toBeNull();
+    expect(nav.getAttribute('aria-label')).toBe('shared:features.settings');
     expect(header.querySelector('input')).not.toBeNull();
     expect(viewport.contains(header)).toBe(false);
     expect(content.classList.contains('openbitfun-settings-nav__content')).toBe(true);

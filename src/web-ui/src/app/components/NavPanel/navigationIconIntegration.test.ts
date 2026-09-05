@@ -21,6 +21,23 @@ describe('navigation icon integration', () => {
     expect(entryMarkup).toContain('size="sm"');
   });
 
+  it('keeps extension subnavigation icons at one optical weight', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./MainNav.tsx', import.meta.url)),
+      'utf8',
+    );
+    const sublistStart = source.indexOf('data-testid="agent-skill-tabs"');
+    const sublistEnd = source.indexOf('</div>', sublistStart);
+    const sublistMarkup = source.slice(sublistStart, sublistEnd);
+
+    expect(sublistStart).toBeGreaterThanOrEqual(0);
+    expect(sublistEnd).toBeGreaterThan(sublistStart);
+    expect(sublistMarkup).toContain('<Icon glyph={Users} size="sm" />');
+    expect(sublistMarkup).toContain('<Icon name="extension" size="sm" />');
+    expect(sublistMarkup).toContain('<Icon glyph={Network} size="sm" />');
+    expect(sublistMarkup).not.toContain('strokeWidth');
+  });
+
   it('uses the reference clock icon for Task Board', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./MainNav.tsx', import.meta.url)),
@@ -44,9 +61,10 @@ describe('navigation icon integration', () => {
 
     expect(source).toContain("import { List, ListTree } from 'lucide-react'");
     expect(source).toContain('const ViewIcon = isAll ? List : ListTree');
-    expect(source).toContain('size={16}');
+    expect(source).toContain('glyph={ViewIcon}');
     expect(source).toContain('data-session-view-icon={grouping}');
     expect(source).toContain('data-testid="nav-workspace-session-view-toggle"');
+    expect(source).not.toContain('strokeWidth');
     expect(source).not.toContain('NavigationSessionView');
   });
 
@@ -61,7 +79,7 @@ describe('navigation icon integration', () => {
 
     expect(actionStart).toBeGreaterThanOrEqual(0);
     expect(actionEnd).toBeGreaterThan(actionStart);
-    expect(actionMarkup).toContain('<FolderPlus size={14}');
+    expect(actionMarkup).toContain('<Icon glyph={FolderPlus} size="sm"');
   });
 
   it('uses stable standard icons for every session-group type', () => {
@@ -80,7 +98,7 @@ describe('navigation icon integration', () => {
     expect(assistantMarkup).not.toContain('SessionGroupAssistant');
 
     expect(workspaceMarkup).toContain('workspaceIsRemote');
-    expect(workspaceMarkup).toContain('<Server size={14} strokeWidth={1.6} />');
+    expect(workspaceMarkup).toContain('<Icon glyph={Server} size="sm" />');
     expect(workspaceMarkup).toContain('<Icon name="folder" size="sm" />');
     expect(workspaceMarkup).not.toContain('SessionGroup');
   });

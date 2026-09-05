@@ -264,7 +264,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
         />
         {tabs}
         <GalleryEmpty
-          icon={<Github size={36} />}
+          icon={{ glyph: Github }}
           message={t('market.submissions.signInRequired')}
           action={<MarketAccountControls />}
         />

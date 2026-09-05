@@ -5,6 +5,7 @@ import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { createHash } from "node:crypto";
 import { Icon, iconNames, canonicalIconNames, iconAliases } from "../dist/index.js";
+import { Network } from "lucide-react";
 
 test("Icon exposes the complete named catalog without duplicate names", () => {
   assert.equal(iconNames.length, 66);
@@ -47,6 +48,25 @@ test("Icon exposes semantic size, tone, and accessible label independently", () 
   assert.match(markup, /data-openbitfun-tone="success"/);
 });
 
+test("Icon normalizes Lucide fallbacks without exposing product-owned line weight", () => {
+  const markup = renderToStaticMarkup(createElement(Icon, {
+    glyph: Network,
+    label: "Network",
+    size: "sm",
+    tone: "secondary",
+  }));
+
+  assert.match(markup, /data-openbitfun-component="icon"/);
+  assert.match(markup, /data-openbitfun-source="line"/);
+  assert.match(markup, /data-size="sm"/);
+  assert.match(markup, /data-openbitfun-tone="secondary"/);
+  assert.match(markup, /role="img"/);
+  assert.match(markup, /aria-label="Network"/);
+  assert.match(markup, /<svg[^>]*stroke-width="1.6"/);
+  assert.match(markup, /<svg[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(markup, /mask-image/);
+});
+
 test("Icon styles consume only public geometry and semantic color tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
@@ -55,6 +75,7 @@ test("Icon styles consume only public geometry and semantic color tokens", async
   assert.match(styles, /--openbitfun-color-content-primary/);
   assert.match(styles, /--openbitfun-color-status-success-content/);
   assert.match(styles, /mask-size:contain/);
+  assert.match(styles, /data-openbitfun-source=line/);
 });
 
 test("Icon mask assets are color-agnostic", async () => {

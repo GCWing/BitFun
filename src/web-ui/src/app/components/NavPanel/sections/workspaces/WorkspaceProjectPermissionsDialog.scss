@@ -22,7 +22,7 @@
     font-size: var(--openbitfun-type-label-sm-font-size);
     line-height: var(--openbitfun-type-body-sm-line-height);
 
-    svg {
+    > :where(svg, [data-openbitfun-component='icon']) {
       flex-shrink: 0;
       margin-top: 1px;
       color: var(--openbitfun-color-accent-default);

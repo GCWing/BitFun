@@ -167,6 +167,17 @@ describe('WorkspaceListSection layout styles', () => {
     );
   });
 
+  it('uses distinct disclosure icons for collapsed and expanded session groups', () => {
+    const source = readWorkspaceItemSource();
+    const stylesheet = readWorkspaceListStylesheet();
+
+    expect(source).toContain(
+      "const sessionDisclosureIcon = sessionsCollapsed ? 'chevron-right' : 'chevron-down';",
+    );
+    expect(source.match(/<Icon name=\{sessionDisclosureIcon\} size="sm" \/>/g)).toHaveLength(2);
+    expect(stylesheet).not.toContain('&.is-collapsed svg');
+  });
+
   it('keeps remote workspace directory and host metadata on one row with the status dot first', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const remoteChip = extractBlock(stylesheet, '&__workspace-item-remote');
@@ -235,7 +246,7 @@ describe('WorkspaceListSection layout styles', () => {
     const stylesheet = readWorkspaceListStylesheet();
 
     expect(itemSource).toContain('<Icon name="user" size="sm" />');
-    expect(itemSource).toContain('<Server size={14} strokeWidth={1.6} />');
+    expect(itemSource).toContain('<Icon glyph={Server} size="sm" />');
     expect(itemSource).toContain('<Icon name="folder" size="sm" />');
     expect(itemSource).not.toContain('SessionGroup');
     expect(listSource).not.toContain('nav.sessions.viewMenu.grouping.all');

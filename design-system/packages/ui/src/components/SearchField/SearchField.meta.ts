@@ -6,6 +6,7 @@ export const searchFieldMeta = {
   maturity: "stable",
   name: "SearchField",
   props: [
+    { defaultValue: "default", name: "variant", type: "default | embedded" },
     { name: "value", type: "string" },
     { name: "defaultValue", type: "string" },
     { name: "placeholder", type: "string" },
@@ -30,7 +31,6 @@ export const searchFieldMeta = {
     "color.field.border",
     "color.field.borderHover",
     "color.field.borderFocus",
-    "color.focus.ring",
     "color.status.danger.border",
     "control.height.sm",
     "control.height.md",

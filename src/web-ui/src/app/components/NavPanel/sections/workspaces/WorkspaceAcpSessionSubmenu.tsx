@@ -172,7 +172,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
         <MenuItem
           ref={triggerRef}
           className={`openbitfun-nav-panel__workspace-acp-menu-trigger${open ? ' is-open' : ''}`}
-          leading={<Bot size={13} aria-hidden="true" />}
+          leading={<Icon glyph={Bot} />}
           shortcut={<Icon name="chevron-right" size="sm" aria-hidden="true" />}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -206,7 +206,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
               return (
                 <MenuItem
                   key={client.id}
-                  leading={<Bot size={13} aria-hidden="true" />}
+                  leading={<Icon glyph={Bot} />}
                   onClick={() => onSelect(client)}
                   data-testid="nav-workspace-menu-create-acp-session"
                   data-acp-client-id={client.id}

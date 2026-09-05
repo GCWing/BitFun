@@ -3,7 +3,7 @@
  *
  * Extension pattern:
  *   1. Create `src/app/scenes/<scene>/XxxNav.tsx`
- *   2. Add one entry to SCENE_NAV_REGISTRY below
+ *   2. Register its component, bootstrap title key, and preloader below
  *
  * Scenes without a registered nav component fall back to MainNav (the default sidebar).
  */
@@ -13,6 +13,13 @@ import type { ComponentType } from 'react';
 import type { SceneTabId } from '../components/SceneBar/types';
 
 type LazyNavComponent = ReturnType<typeof lazy<ComponentType>>;
+
+interface SceneNavRegistration {
+  component: LazyNavComponent;
+  /** Resolved by NavBar through the bootstrap common/shared namespaces. */
+  titleKey: string;
+  preload: () => Promise<unknown>;
+}
 
 /**
  * The settings nav renders every label from the lazy `settings` namespace, so the
@@ -28,15 +35,17 @@ const loadSettingsNav = async () => {
 };
 const loadFileViewerNav = () => import('./file-viewer/FileViewerNav');
 
-const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
-  settings: lazy(loadSettingsNav),
-  'file-viewer': lazy(loadFileViewerNav),
-  // terminal: lazy(() => import('./terminal/TerminalNav')),
-};
-
-const SCENE_NAV_LOADERS: Partial<Record<SceneTabId, () => Promise<unknown>>> = {
-  settings: loadSettingsNav,
-  'file-viewer': loadFileViewerNav,
+const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, SceneNavRegistration>> = {
+  settings: {
+    component: lazy(loadSettingsNav),
+    titleKey: 'shared:features.settings',
+    preload: loadSettingsNav,
+  },
+  'file-viewer': {
+    component: lazy(loadFileViewerNav),
+    titleKey: 'nav.items.project',
+    preload: loadFileViewerNav,
+  },
 };
 
 /**
@@ -44,9 +53,13 @@ const SCENE_NAV_LOADERS: Partial<Record<SceneTabId, () => Promise<unknown>>> = {
  * or `null` if the scene uses the default MainNav.
  */
 export function getSceneNav(sceneId: SceneTabId): LazyNavComponent | null {
-  return SCENE_NAV_REGISTRY[sceneId] ?? null;
+  return SCENE_NAV_REGISTRY[sceneId]?.component ?? null;
+}
+
+export function getSceneNavTitleKey(sceneId: SceneTabId): string | null {
+  return SCENE_NAV_REGISTRY[sceneId]?.titleKey ?? null;
 }
 
 export async function preloadSceneNav(sceneId: SceneTabId): Promise<void> {
-  await SCENE_NAV_LOADERS[sceneId]?.();
+  await SCENE_NAV_REGISTRY[sceneId]?.preload();
 }

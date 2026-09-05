@@ -166,7 +166,7 @@ test("all theme variants expose the same semantic theme contract", async () => {
   }
 });
 
-test("primary text and primary action pairs meet normal text contrast", async () => {
+test("text, action, and field focus pairs meet their contrast requirements", async () => {
   const [reference, light, dark, highContrastLight, highContrastDark] = await Promise.all([
     readSource("reference.tokens.json"),
     readSource("light.tokens.json"),
@@ -183,6 +183,14 @@ test("primary text and primary action pairs meet normal text contrast", async ()
 
   for (const [mode, variant] of variants) {
     const backdrop = parseColor(variant["color.surface.canvas"].value);
+    assert.ok(
+      contrastRatio(
+        variant["color.field.background"].value,
+        variant["color.field.borderFocus"].value,
+        backdrop,
+      ) >= 3,
+      `${mode} field focus contrast fell below 3:1`,
+    );
     assert.ok(
       contrastRatio(
         variant["color.surface.canvas"].value,

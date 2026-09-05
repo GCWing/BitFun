@@ -249,7 +249,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           actions={[{
             id: 'reset',
             label: t('nav.sessions.viewMenu.filters.reset'),
-            icon: <RotateCcw size={12} aria-hidden="true" />,
+            icon: <Icon glyph={RotateCcw} />,
             onClick: () => {
               setActiveSubmenu(null);
               view.resetFilters();

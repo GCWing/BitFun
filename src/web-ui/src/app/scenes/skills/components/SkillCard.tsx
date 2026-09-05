@@ -42,7 +42,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
   ...rootProps
 }) => {
   const glyph = iconKind === 'market'
-    ? <Package size={20} strokeWidth={1.6} />
+    ? <Icon glyph={Package} size="lg" />
     : <Icon name="extension" size="lg" />;
   const openDetails = () => onOpenDetails?.();
 

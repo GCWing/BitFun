@@ -1,11 +1,17 @@
 {
   "title": "Web Search",
-  "subtitle": "Configure the search provider used by the WebSearch tool at runtime.",
+  "subtitle": "Choose the service your Agent uses to find information on the web.",
   "providers": {
-    "exaMcpFree": "Exa MCP (free, no API key)",
+    "exaMcpFree": "Exa MCP (free)",
     "exaSearchApi": "Exa Search API",
     "tavily": "Tavily Search API",
-    "openbitfunSearchHttp": "OpenBitFun Search HTTP Protocol"
+    "openbitfunSearchHttp": "Custom HTTP service"
+  },
+  "providerDescriptions": {
+    "exaMcpFree": "Use Exa's free search service without an API key or additional setup.",
+    "exaSearchApi": "Use your Exa API key to access the search service. Enter and save your credential below.",
+    "tavily": "Use your Tavily API key to access the search service. Enter and save your credential below.",
+    "openbitfunSearchHttp": "Connect a self-hosted or enterprise service that implements the OpenBitFun search protocol. Enter its address below and configure authentication if needed."
   },
   "auth": {
     "none": "No authentication",
@@ -30,6 +36,15 @@
     }
   },
   "fields": {
+    "provider": {
+      "label": "Provider",
+      "description": "Save the configuration to apply a provider change.",
+      "placeholder": "Choose a search service"
+    },
+    "providerHelp": {
+      "label": "Setup requirements",
+      "description": "Choose a search service to see its setup requirements."
+    },
     "endpoint": {
       "label": "Endpoint",
       "description": "HTTPS is required. Plain HTTP is accepted only for localhost or a loopback IP.",

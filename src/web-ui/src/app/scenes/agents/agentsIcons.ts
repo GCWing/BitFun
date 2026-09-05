@@ -1,8 +1,8 @@
 /**
  * Icon and color mapping for the agents scene
- * Catalog-mapped glyphs render through @openbitfun/ui Icon; the rest stay lucide.
+ * Shared icon sources for agent identity. Rendering stays owned by @openbitfun/ui Icon.
  */
-import { Icon, type IconName, type IconSize } from '@openbitfun/ui';
+import type { IconSource } from '@openbitfun/ui';
 import {
   Code2,
   FlaskConical,
@@ -14,44 +14,27 @@ import {
   Bot,
   Cpu,
   Microscope,
-  type LucideProps,
 } from 'lucide-react';
-import React from 'react';
 export { CAPABILITY_ACCENT } from './agentAppearance';
-
-function catalogSize(size?: number | string): IconSize {
-  const n = typeof size === 'number' ? size : 21;
-  if (n <= 11) return '2xs';
-  if (n <= 13) return 'xs';
-  if (n <= 15) return 'sm';
-  if (n <= 17) return 'md';
-  return 'lg';
-}
-
-function catalogIcon(name: IconName): React.FC<LucideProps> {
-  return function CatalogIcon({ size }) {
-    return React.createElement(Icon, { name, size: catalogSize(size) });
-  };
-}
 
 export type AgentIconKey =
   | 'code2' | 'eye' | 'flask' | 'bug' | 'filetext'
   | 'globe' | 'barchart' | 'layers' | 'penline' | 'server'
   | 'bot' | 'terminal' | 'microscope' | 'cpu';
 
-export const AGENT_ICON_MAP: Record<AgentIconKey, React.FC<LucideProps>> = {
-  code2: Code2,
-  eye: catalogIcon('eye'),
-  flask: FlaskConical,
-  bug: Bug,
-  filetext: FileText,
-  globe: catalogIcon('browser'),
-  barchart: BarChart2,
-  layers: Layers,
-  penline: catalogIcon('edit'),
-  server: Server,
-  bot: Bot,
-  terminal: catalogIcon('terminal'),
-  microscope: Microscope,
-  cpu: Cpu,
+export const AGENT_ICON_MAP: Record<AgentIconKey, IconSource> = {
+  code2: { glyph: Code2 },
+  eye: { name: 'eye' },
+  flask: { glyph: FlaskConical },
+  bug: { glyph: Bug },
+  filetext: { glyph: FileText },
+  globe: { name: 'browser' },
+  barchart: { glyph: BarChart2 },
+  layers: { glyph: Layers },
+  penline: { name: 'edit' },
+  server: { glyph: Server },
+  bot: { glyph: Bot },
+  terminal: { name: 'terminal' },
+  microscope: { glyph: Microscope },
+  cpu: { glyph: Cpu },
 };

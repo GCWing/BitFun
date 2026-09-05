@@ -312,18 +312,19 @@ test("StatusPill preview exposes compact indicator anatomy and semantic tones", 
   assert.match(detail, /tone=\{state as StatusPillTone\}/);
 });
 
-test("Select preview exposes native grouped selection and independent states", async () => {
+test("Select preview exposes the unified open surface and independent states", async () => {
   const [catalog, detail] = await Promise.all([
     readFile(catalogSource, "utf8"),
     readFile(detailSource, "utf8"),
   ]);
 
   assert.match(catalog, /case "Select"/);
-  assert.match(detail, /case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(detail, /case "Select":\s*return \["default", "hover", "focus-visible", "open", "invalid", "disabled"\] as const/);
   assert.match(detail, /onValueChange=\{\(value\) => setSelectValue\(String\(value\)\)\}/);
   assert.match(detail, /leading=\{<Icon name="unselected" \/>\}/);
   assert.match(detail, /disabled=\{state === "disabled"\}/);
   assert.match(detail, /invalid=\{state === "invalid"\}/);
+  assert.match(detail, /open=\{state === "open" \? true : undefined\}/);
 });
 
 test("ActionItem preview keeps its trigger and end actions as separate contracts", async () => {
@@ -412,7 +413,8 @@ test("ConfirmDialog preview exposes semantic, destructive, preview, and pending 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /case "Input":\s*case "SearchField":\s*case "Select":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Select":\s*return \["default", "hover", "focus-visible", "open", "invalid", "disabled"\] as const/);
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);
@@ -579,9 +581,11 @@ test("Toolbar preview keeps leading, centered, trailing, and overflow compositio
 test("Combobox details render their own live state and menus include nested interaction", async () => {
   const detail = await readFile(detailSource, "utf8");
   assert.match(detail, /data-component="combobox"/);
-  assert.match(detail, /defaultOpen=\{state === "open" \|\| state === "searching"\}/);
+  assert.match(detail, /defaultOpen=\{state === "open" \|\| state === "searching" \|\| state === "loading" \|\| state === "empty"\}/);
   assert.match(detail, /onCreateValue=\{state === "custom"/);
   assert.match(detail, /component\.name === "MultiSelect"/);
+  assert.match(detail, /onValueChange=\{setMultiSelectValues\}/);
+  assert.match(detail, /value=\{multiSelectValues\}/);
   assert.match(detail, /<NestedMenuPattern/);
 });
 

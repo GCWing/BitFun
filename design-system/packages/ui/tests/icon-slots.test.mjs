@@ -4,6 +4,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Button, Icon, IconButton, SessionIcon, TabGroup } from "../dist/index.js";
+import { Network } from "lucide-react";
 
 const slots = [
   ["Button", "icon", "inline-size", "100%"],
@@ -54,6 +55,19 @@ test("buttons route native and default-size catalog icons through identical slot
       assert.match(markup, /<span[^>]*class="[^"]*_icon_[^"]*"[^>]*><span[^>]*data-openbitfun-component="icon"/);
       assert.match(markup, /data-openbitfun-name="settings"[^>]*data-size="lg"/);
     }
+  }
+});
+
+test("buttons constrain normalized line fallbacks through the same icon slot", () => {
+  const lineIcon = createElement(Icon, { glyph: Network });
+  for (const [Component, props] of [
+    [Button, { children: "Network", leadingIcon: lineIcon }],
+    [IconButton, { "aria-label": "Network", icon: lineIcon }],
+  ]) {
+    const markup = renderToStaticMarkup(createElement(Component, props));
+    assert.match(markup, /data-openbitfun-component="icon"/);
+    assert.match(markup, /data-openbitfun-source="line"/);
+    assert.match(markup, /<svg[^>]*stroke-width="1.6"/);
   }
 });
 
