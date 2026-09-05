@@ -195,16 +195,15 @@ pub fn setup_tray(
     startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.menu", step_started);
 
     let step_started = Instant::now();
-    #[cfg(target_os = "macos")]
-    let icon = tauri::include_image!("icons/openbitfun-tray-template.png");
-    #[cfg(not(target_os = "macos"))]
-    let icon = tauri::include_image!("icons/hicolor/32x32/apps/openbitfun-desktop.png");
+    let icon = app
+        .default_window_icon()
+        .ok_or("No default window icon")?
+        .clone();
     startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.icon", step_started);
 
     let step_started = Instant::now();
     let tray = TrayIconBuilder::new()
         .icon(icon)
-        .icon_as_template(cfg!(target_os = "macos"))
         .menu(&initial_menu)
         .tooltip("OpenBitFun")
         .on_menu_event(|app, event| {

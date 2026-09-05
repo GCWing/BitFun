@@ -10,6 +10,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, '..');
 const SOURCE_DIR = path.join(ROOT_DIR, 'assets', 'brand', 'source');
 const SOURCE_SVG = path.join(SOURCE_DIR, 'openbitfun-mark.svg');
+const SOURCE_APP_MARK = path.join(SOURCE_DIR, 'openbitfun-app-mark.png');
 const SOURCE_MARKS = {
   dark: path.join(SOURCE_DIR, 'openbitfun-mark-dark.png'),
   light: path.join(SOURCE_DIR, 'openbitfun-mark-light.png'),
@@ -37,6 +38,7 @@ const LEGACY_APPLICATION_ASSETS = [
   'src/apps/desktop/icons/icon.png',
   'src/apps/desktop/icons/icon.ico',
   'src/apps/desktop/icons/icon.icns',
+  'src/apps/desktop/icons/openbitfun-tray-template.png',
   'src/apps/desktop/icons/Square30x30Logo.png',
   'src/apps/desktop/icons/Square44x44Logo.png',
   'src/apps/desktop/icons/Square71x71Logo.png',
@@ -77,6 +79,14 @@ const outputPath = (...segments) => path.join(ROOT_DIR, ...segments);
 async function writePng(filePath, buffer) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, buffer);
+}
+
+async function normalizePng(input) {
+  return sharp(input)
+    .ensureAlpha()
+    .resize({ width: BRAND_SIZE, height: BRAND_SIZE, fit: 'contain', kernel: 'lanczos3' })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toBuffer();
 }
 
 async function renderMark(svg, size, tone, opticalSize = size) {
@@ -194,7 +204,7 @@ async function generateTauriContainers(applicationIcon, renderIcon) {
     );
 
     // Keep Tauri's directory metadata, but rasterize each Windows size from
-    // the vector with its optical treatment instead of shrinking one bitmap.
+    // the canonical application artwork so the container matches the exports.
     const icoTemplate = await readFile(path.join(tempDir, 'icon.ico'));
     const frameCount = icoTemplate.readUInt16LE(4);
     const icoDirectory = Buffer.from(icoTemplate.subarray(0, 6 + frameCount * 16));
@@ -210,8 +220,8 @@ async function generateTauriContainers(applicationIcon, renderIcon) {
       icoOffset += png.length;
     }
 
-    // Let Tauri encode legacy RGB/mask chunks from each optical render;
-    // modern PNG representations also use direct vector renders.
+    // Let Tauri encode legacy RGB/mask chunks from the same application
+    // artwork; modern PNG representations use the matching exported sizes.
     const icnsTemplate = await readFile(path.join(tempDir, 'icon.icns'));
     const legacyChunks = new Map();
     for (const [size, types] of [[16, ['is32', 's8mk']], [32, ['il32', 'l8mk']]]) {
@@ -264,17 +274,16 @@ async function removeLegacyApplicationAssets() {
 
 async function generateBrandAssets() {
   const svg = await readFile(SOURCE_SVG, 'utf8');
-  const [darkMark, lightMark] = await Promise.all([
+  const [darkMark, lightMark, applicationSourceMark] = await Promise.all([
     renderMark(svg, BRAND_SIZE, '#202020'),
     renderMark(svg, BRAND_SIZE, '#e8e8e8'),
+    normalizePng(SOURCE_APP_MARK),
   ]);
   await writePng(SOURCE_MARKS.dark, darkMark);
   await writePng(SOURCE_MARKS.light, lightMark);
-  const applicationMark = await createApplicationMark(lightMark);
+  const applicationMark = await createApplicationMark(applicationSourceMark);
   const applicationIcon = await createApplicationIcon(applicationMark);
-  const applicationIconLarge = await createApplicationIcon(
-    await createApplicationMark(await renderMark(svg, APP_ICON_SIZE, '#e8e8e8')),
-  );
+  const applicationIconLarge = await resizePng(applicationIcon, APP_ICON_SIZE);
   const darkMarkSmall = await renderMark(svg, 128, '#202020');
   const lightMarkSmall = await renderMark(svg, 128, '#e8e8e8');
   const iconCache = new Map([
@@ -283,8 +292,7 @@ async function generateBrandAssets() {
   ]);
   const renderIcon = size => {
     if (!iconCache.has(size)) {
-      iconCache.set(size, renderMark(svg, size, '#e8e8e8')
-        .then(createApplicationMark).then(createApplicationIcon));
+      iconCache.set(size, resizePng(applicationIcon, size));
     }
     return iconCache.get(size);
   };
@@ -315,10 +323,6 @@ async function generateBrandAssets() {
 
   const desktopIconDir = outputPath('src', 'apps', 'desktop', 'icons');
   await writePng(path.join(desktopIconDir, 'openbitfun-app-icon.png'), applicationIconLarge);
-  // A 32 px Retina template represents a 16 pt menu-bar mark. Its alpha
-  // silhouette is tinted by macOS, including light menus and selected states.
-  await writePng(path.join(desktopIconDir, 'openbitfun-tray-template.png'),
-    await renderMark(svg, 32, '#000000', 16));
   await writePng(path.join(desktopIconDir, 'openbitfun-app-icon.ico'), tauriContainers.ico);
   await writePng(path.join(desktopIconDir, 'openbitfun-app-icon.icns'), tauriContainers.icns);
   for (const size of DESKTOP_HICOLOR_SIZES) {
