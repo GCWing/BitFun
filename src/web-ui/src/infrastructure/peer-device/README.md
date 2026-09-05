@@ -316,3 +316,9 @@ Still to migrate, in order: the interaction mailbox, then history positions.
 Incomplete login (cloud vs local settings choice) must not persist a session
 until `account_finalize_login`. See comments on
 `PENDING_SYNC_CHOICE` in `src/apps/desktop/src/api/remote_connect_api.rs`.
+
+18. **WSL belongs to the selected Windows host.** `wsl_workspaces_v1` gates
+    `ssh_list_wsl_distributions` and SSH profile requests with a `wsl` target
+    before RPC. Missing capability means unsupported, including older Desktop
+    and CLI peers. Discovery reports the host's OS availability; it must never
+    inspect or execute the controller's WSL installation as a fallback.

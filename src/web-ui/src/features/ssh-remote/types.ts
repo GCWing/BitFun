@@ -12,6 +12,7 @@ export interface SSHConnectionConfig {
   defaultWorkspace?: string;
   proxyJump?: string;
   container?: ContainerWorkspaceConfig;
+  wsl?: WslWorkspaceConfig;
   options?: SSHConnectionOptions;
 }
 
@@ -57,6 +58,7 @@ export interface SavedConnection {
   lastConnected?: number;
   proxyJump?: string;
   container?: ContainerWorkspaceConfig;
+  wsl?: WslWorkspaceConfig;
   options?: SSHConnectionOptions;
 }
 
@@ -176,4 +178,14 @@ export interface RemoteListeningPort {
   bindAddress: string;
   process?: string;
   pid?: number;
+}
+
+export interface WslWorkspaceConfig {
+  distribution: string;
+  user?: string;
+}
+
+export interface WslDistributions {
+  supported: boolean;
+  distributions: string[];
 }

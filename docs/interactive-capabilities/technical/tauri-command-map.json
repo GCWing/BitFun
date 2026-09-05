@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "9973af8307e72206bb5c4af5dfb3249fef2def6a27925a13aca9a25ac62ef8a3",
-  "commandCount": 665,
+  "catalogDigest": "9a3d11cb4a198369ceb62ae82e1d0e1e6bddb658f4a790ec84e9eb4123803e5a",
+  "commandCount": 666,
   "coverage": {
-    "commandCount": 665,
-    "documentedCommandCount": 632,
+    "commandCount": 666,
+    "documentedCommandCount": 633,
     "implementationCommandCount": 33,
     "implementationDigest": "35539d9c1510287cb47f4a68fe35859b78f93bb06cd66b86e58d878a48d8c509"
   },
@@ -9544,6 +9544,22 @@
       "rustPath": "api::ssh_api::ssh_list_saved_connections",
       "sourceFile": "src/apps/desktop/src/api/ssh_api.rs",
       "signature": "fn ssh_list_saved_connections( state: State<'_, AppState>, ) -> Result<Vec<SavedConnection>, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "ssh_list_wsl_distributions",
+      "moduleId": "ssh",
+      "capabilityId": "feature.remote-workspaces",
+      "capabilityIds": [
+        "feature.remote-workspaces"
+      ],
+      "documentedItemIds": [
+        "feature.remote-workspaces:wsl"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::ssh_api::ssh_list_wsl_distributions",
+      "sourceFile": "src/apps/desktop/src/api/ssh_api.rs",
+      "signature": "fn ssh_list_wsl_distributions( ) -> Result<openbitfun_core::service::remote_ssh::WslDistributions, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

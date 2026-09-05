@@ -48,6 +48,7 @@ export interface PeerHostCapabilities {
   readonly tokenUsageStatistics: boolean;
   /** MiniApp Agent runs accept immutable virtual context-file snapshots. */
   readonly miniAppAgentContextFilesV1: boolean;
+  readonly wslWorkspacesV1?: boolean;
   /** Typed ProductControl HostInvoke, including shared config read-back. */
   readonly productControlV1?: boolean;
   /**
@@ -164,6 +165,7 @@ const NO_CAPABILITIES: PeerHostCapabilities = {
   targetedSessionRollback: false,
   tokenUsageStatistics: false,
   miniAppAgentContextFilesV1: false,
+  wslWorkspacesV1: false,
   productControlV1: false,
   productControlNativeV1: false,
   productControlPresentationV1: false,
@@ -422,6 +424,7 @@ export class PeerConnectionManager {
       supportsTargetedSessionRollback: entry.capabilities.targetedSessionRollback,
       supportsTokenUsageStatistics: entry.capabilities.tokenUsageStatistics,
       supportsMiniAppAgentContextFilesV1: entry.capabilities.miniAppAgentContextFilesV1,
+      supportsWslWorkspacesV1: entry.capabilities.wslWorkspacesV1,
       supportsProductControlV1: entry.capabilities.productControlV1,
     });
     entry.health = 'ready';
@@ -502,6 +505,7 @@ export class PeerConnectionManager {
       targetedSessionRollback: caps?.targeted_session_rollback === true,
       tokenUsageStatistics: caps?.token_usage_statistics === true,
       miniAppAgentContextFilesV1: caps?.miniapp_agent_context_files_v1 === true,
+      wslWorkspacesV1: caps?.wsl_workspaces_v1 === true,
       productControlV1: caps?.product_control_v1 === true,
       productControlNativeV1: caps?.product_control_native_v1 === true,
       productControlPresentationV1:
@@ -569,6 +573,7 @@ export class PeerConnectionManager {
         supportsTargetedSessionRollback: capabilities.targetedSessionRollback,
         supportsTokenUsageStatistics: capabilities.tokenUsageStatistics,
         supportsMiniAppAgentContextFilesV1: capabilities.miniAppAgentContextFilesV1,
+        supportsWslWorkspacesV1: capabilities.wslWorkspacesV1,
         supportsProductControlV1: capabilities.productControlV1,
       });
       entry.consecutiveFailures = 0;
@@ -741,6 +746,7 @@ function capabilitiesEqual(
     a.targetedSessionRollback === b.targetedSessionRollback &&
     a.tokenUsageStatistics === b.tokenUsageStatistics &&
     a.miniAppAgentContextFilesV1 === b.miniAppAgentContextFilesV1 &&
+    a.wslWorkspacesV1 === b.wslWorkspacesV1 &&
     a.cancelTool === b.cancelTool &&
     a.toolCatalog === b.toolCatalog &&
     a.userQuestionResponse === b.userQuestionResponse &&

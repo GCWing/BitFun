@@ -1,6 +1,6 @@
 # Remote workspace transport
 
-This document defines the transport boundary for SSH and Docker workspaces.
+This document defines the transport boundary for SSH, Docker, and WSL workspaces.
 The Agent Runtime stays on the OpenBitFun host. Local and remote workspaces share
 file-tool algorithms through Session-bound IO providers; search retains native
 acceleration with shared matching and reduction. The convergence section below
@@ -58,6 +58,30 @@ published `22/tcp` endpoint:
 
 Runtime code only reads `effective_config`. The original `auto` value remains
 persisted so a later reconnect can discover that sshd has become available.
+
+## Native WSL
+
+WSL is an independent workspace target. The additive `wsl` profile field stores
+an explicit distribution and optional Linux user. Missing `wsl` preserves legacy
+SSH/Docker behavior. Reserved `wsl.invalid:0` legacy endpoint fields keep older
+readers from treating a WSL profile as a usable SSH endpoint. Connection drift
+and saved-profile deduplication include the WSL target.
+
+The Services integration launches `wsl.exe --distribution … --cd ~ --exec
+/bin/sh -lc …` on the owning Windows host through the managed command factory.
+Each argument stays separate; command stdout and file streams remain binary.
+Only Windows-side WSL listing and diagnostic output is decoded as UTF-16LE when
+needed. Interactive terminals use the existing local PTY adapter and WSL's
+configured default shell, with a POSIX cwd. Non-TTY commands share Docker's
+in-target PID/process-group supervision and separate signal channel.
+
+WSL uses shell filesystem operations, never SFTP or Windows-local path IO.
+The host advertises `wsl_workspaces_v1`; controllers reject WSL discovery and
+profile mutations before RPC if the peer lacks that capability. Discovery then
+reports the executing host's platform support. CLI peer setup is explicitly
+unsupported by the Product Operation Registry. Existing Remote Control sessions
+reuse the bound workspace providers, and Detached Dispatch does not create WSL
+profiles. Native WSL has no SSH transport for port forwarding.
 
 ## ProxyJump
 

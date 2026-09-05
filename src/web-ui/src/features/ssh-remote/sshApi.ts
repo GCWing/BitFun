@@ -4,6 +4,7 @@
 
 import type {
   SSHConnectionConfig,
+  WslDistributions,
   SSHConnectionResult,
   SavedConnection,
   RemoteFileEntry,
@@ -24,6 +25,10 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 
 export const sshApi = {
   // === Connection Management ===
+
+  async listWslDistributions(): Promise<WslDistributions> {
+    return api.invoke<WslDistributions>('ssh_list_wsl_distributions', {});
+  },
 
   /**
    * List all saved SSH connections

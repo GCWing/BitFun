@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "9973af8307e72206bb5c4af5dfb3249fef2def6a27925a13aca9a25ac62ef8a3",
-  "count": 211,
+  "catalogDigest": "9a3d11cb4a198369ceb62ae82e1d0e1e6bddb658f4a790ec84e9eb4123803e5a",
+  "count": 212,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 184,
+    "unstructuredInteraction": 185,
     "visualSelection": 18
   },
   "entries": [
@@ -1769,6 +1769,22 @@
       },
       "evidence": [
         "command:ssh_list_docker_containers"
+      ]
+    },
+    {
+      "capabilityId": "feature.remote-workspaces",
+      "itemId": "wsl",
+      "titleZh": "选择 Windows 主机上的 WSL 发行版作为工作区",
+      "titleEn": "Choose a WSL distribution on the Windows host as a workspace",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "打开远程连接对话框，由用户选择发行版、Linux 用户和工作区目录。",
+      "reasonEn": "Open the remote connection dialog for the user to choose a distribution, Linux user, and workspace directory.",
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "project.new"
+      },
+      "evidence": [
+        "command:ssh_list_wsl_distributions"
       ]
     },
     {

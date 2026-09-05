@@ -36,6 +36,7 @@ fn remote_ssh_legacy_agent_auth_keeps_default_private_key_fallback() {
     }
     assert_eq!(config.proxy_jump, None);
     assert_eq!(config.container, None);
+    assert_eq!(config.wsl, None);
     assert_eq!(config.options.connect_timeout_secs, 30);
     assert_eq!(config.options.auth_timeout_secs, 60);
     assert_eq!(config.options.auth_attempts, 3);
@@ -62,6 +63,7 @@ fn remote_ssh_legacy_agent_auth_keeps_default_private_key_fallback() {
     ));
     assert_eq!(saved.proxy_jump, None);
     assert_eq!(saved.container, None);
+    assert_eq!(saved.wsl, None);
     assert_eq!(saved.options.connect_timeout_secs, 30);
     assert_eq!(saved.options.auth_timeout_secs, 60);
     assert_eq!(saved.options.auth_attempts, 3);
@@ -92,6 +94,7 @@ fn remote_target_contract_uses_proxy_jump_and_kebab_case_container_access() {
             user: Some("trainer".to_string()),
             interactive: true,
         }),
+        wsl: None,
         options: Default::default(),
     };
 
@@ -453,4 +456,39 @@ fn remote_listening_port_wire_shape_stays_camel_case() {
     assert_eq!(value["bindAddress"], "127.0.0.1");
     assert_eq!(value["process"], "vite");
     assert_eq!(value["pid"], 4242);
+}
+
+#[test]
+fn wsl_target_and_legacy_ssh_profiles_round_trip_without_requiring_new_fields() {
+    let legacy = serde_json::json!({
+        "id": "legacy", "name": "legacy", "host": "example.test", "port": 22,
+        "username": "dev", "auth": { "type": "Password", "password": "" }
+    });
+    let config: SSHConnectionConfig = serde_json::from_value(legacy).unwrap();
+    let wire = serde_json::to_value(&config).unwrap();
+    assert!(wire.get("wsl").is_none());
+    let round_trip: SSHConnectionConfig = serde_json::from_value(wire).unwrap();
+    assert!(config.connection_params_equal(&round_trip));
+    assert!(!round_trip.uses_local_process());
+
+    let wsl_wire = serde_json::json!({
+        "id": "wsl-Ubuntu-", "name": "WSL", "host": "wsl.invalid", "port": 0,
+        "username": "", "auth": { "type": "PrivateKey", "keyPath": "" },
+        "wsl": { "distribution": "Ubuntu" }
+    });
+    let config: SSHConnectionConfig = serde_json::from_value(wsl_wire).unwrap();
+    assert!(config.uses_local_process());
+    assert!(config.uses_shell_filesystem());
+    assert!(!config.uses_local_docker());
+    assert!(!config.uses_docker_exec());
+    assert_eq!(config.wsl.as_ref().unwrap().user, None);
+    let round_trip: SSHConnectionConfig =
+        serde_json::from_value(serde_json::to_value(&config).unwrap()).unwrap();
+    assert!(config.connection_params_equal(&round_trip));
+    let mut other = round_trip;
+    other.wsl.as_mut().unwrap().distribution = "Debian".into();
+    assert!(!config.connection_params_equal(&other));
+    other.wsl.as_mut().unwrap().distribution = "Ubuntu".into();
+    other.wsl.as_mut().unwrap().user = Some("root".into());
+    assert!(!config.connection_params_equal(&other));
 }

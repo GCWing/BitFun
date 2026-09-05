@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:90117ec8e98d6d48",
+  "digest": "fnv1a64:66d9fd8002bf016a",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -13,6 +13,7 @@
       "targeted_session_rollback",
       "token_usage_statistics",
       "miniapp_agent_context_files_v1",
+      "wsl_workspaces_v1",
       "product_control_v1",
       "product_control_native_v1",
       "product_control_presentation_v1",
@@ -25,6 +26,7 @@
       "targeted_session_rollback",
       "token_usage_statistics",
       "miniapp_agent_context_files_v1",
+      "wsl_workspaces_v1",
       "product_control_v1",
       "product_control_native_v1",
       "product_control_presentation_v1",
@@ -7310,6 +7312,18 @@
     },
     {
       "id": "ssh_list_saved_connections",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the CLI peer host does not run this desktop IDE surface"
+      }
+    },
+    {
+      "id": "ssh_list_wsl_distributions",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {

@@ -33,6 +33,7 @@ import type {
   ConnectionTestStage,
   DockerContainerInfo,
   SSHConnectionConfig,
+  WslDistributions,
   SSHAuthMethod,
   SavedConnection,
   SSHConfigEntry,
@@ -68,11 +69,16 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const [connectionTest, setConnectionTest] = useState<ConnectionTestReport | null>(null);
   const [dockerContainers, setDockerContainers] = useState<DockerContainerInfo[]>([]);
 
+  const [wslDistributions, setWslDistributions] = useState<WslDistributions | null>(null);
+  const [wslError, setWslError] = useState<string | null>(null);
+  const [isListingWsl, setIsListingWsl] = useState(false);
+  const [wslRefresh, setWslRefresh] = useState(0);
+
   const error = localError || connectionError;
 
   // Form state
   const [formData, setFormData] = useState({
-    targetType: 'ssh' as 'ssh' | 'remoteDocker' | 'localDocker' | 'containerSshd',
+    targetType: 'ssh' as 'ssh' | 'remoteDocker' | 'localDocker' | 'containerSshd' | 'wsl',
     name: '',
     host: '',
     port: '22',
@@ -86,6 +92,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     fallbackKeyPath: '~/.ssh/id_rsa',
     verificationCode: '',
     proxyJump: '',
+    wslDistribution: '',
+    wslUser: '',
     containerName: '',
     containerAccess: 'auto' as 'auto' | 'docker-exec',
     dockerPath: 'docker',
@@ -164,9 +172,30 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     }
   }, [open, clearError]);
 
+  useEffect(() => {
+    if (!open || formData.targetType !== 'wsl') return;
+    let cancelled = false;
+    setIsListingWsl(true);
+    setWslDistributions(null);
+    setWslError(null);
+    sshApi.listWslDistributions().then((result) => {
+      if (cancelled) return;
+      setWslDistributions(result);
+      setFormData((prev) => ({
+        ...prev,
+        wslDistribution: prev.wslDistribution || result.distributions[0] || '',
+      }));
+    }).catch((error: unknown) => {
+      if (!cancelled) setWslError(error instanceof Error ? error.message : t('ssh.remote.wslDiscoveryFailed'));
+    }).finally(() => {
+      if (!cancelled) setIsListingWsl(false);
+    });
+    return () => { cancelled = true; };
+  }, [open, formData.targetType, wslRefresh, t]);
+
   // Load SSH config from ~/.ssh/config when host changes
   useEffect(() => {
-    if (!formData.host.trim()) return;
+    if (!formData.host.trim() || formData.targetType === 'wsl' || formData.targetType === 'localDocker') return;
 
     const loadSSHConfig = async () => {
       try {
@@ -200,7 +229,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     // Debounce the SSH config lookup
     const timeout = setTimeout(loadSSHConfig, 300);
     return () => clearTimeout(timeout);
-  }, [formData.host]);
+  }, [formData.host, formData.targetType]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -260,6 +289,29 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const buildConnectionConfig = async (
     requireContainer: boolean,
   ): Promise<SSHConnectionConfig | null> => {
+    if (formData.targetType === 'wsl') {
+      if (!wslDistributions?.supported) {
+        setLocalError(wslError || t('ssh.remote.wslUnsupported'));
+        return null;
+      }
+      const distribution = formData.wslDistribution.trim();
+      if (!distribution || !wslDistributions.distributions.includes(distribution)) {
+        setLocalError(t('ssh.remote.wslDistributionRequired'));
+        return null;
+      }
+      const user = formData.wslUser.trim();
+      return {
+        id: `wsl-${encodeURIComponent(distribution)}@${encodeURIComponent(user)}`,
+        name: formData.name.trim() || `WSL · ${distribution}${user ? ` · ${user}` : ''}`,
+        // Reserved, non-routable legacy SSH fields prevent older installs from
+        // treating this additive profile as a usable SSH endpoint.
+        host: 'wsl.invalid',
+        port: 0,
+        username: user,
+        auth: { type: 'PrivateKey', keyPath: '' },
+        wsl: { distribution, user: user || undefined },
+      };
+    }
     const isLocalDocker = formData.targetType === 'localDocker';
     const usesContainer = formData.targetType !== 'ssh';
     if (!isLocalDocker && !formData.host.trim()) {
@@ -442,6 +494,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             defaultWorkspace: conn.defaultWorkspace,
             proxyJump: conn.proxyJump,
             container: conn.container,
+            wsl: conn.wsl,
             options: conn.options,
           },
           { browseAfterConnect: true }
@@ -478,6 +531,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             defaultWorkspace: conn.defaultWorkspace,
             proxyJump: conn.proxyJump,
             container: conn.container,
+            wsl: conn.wsl,
             options: conn.options,
           },
           { browseAfterConnect: true }
@@ -515,6 +569,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       verificationCode: '',
       proxyJump: configHost.proxyJump || '',
       targetType: 'ssh',
+      wslDistribution: '',
+      wslUser: '',
       containerName: '',
       containerAccess: 'auto',
       dockerPath: 'docker',
@@ -548,6 +604,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         defaultWorkspace: conn.defaultWorkspace,
         proxyJump: conn.proxyJump,
         container: conn.container,
+        wsl: conn.wsl,
         options: conn.options,
       };
       await connect(conn.id, full, { browseAfterConnect: true });
@@ -568,9 +625,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const handleEditConnection = (e: React.MouseEvent, conn: SavedConnection) => {
     e.stopPropagation();
     const keyPath = conn.authType.type === 'PrivateKey' ? conn.authType.keyPath : '~/.ssh/id_rsa';
-    const defaultConnectionName = conn.container?.local
-      ? conn.container.name
-      : `${conn.username}@${conn.host}`;
+    const defaultConnectionName = conn.wsl
+      ? `WSL · ${conn.wsl.distribution}${conn.wsl.user ? ` · ${conn.wsl.user}` : ''}`
+      : conn.container?.local
+        ? conn.container.name
+        : `${conn.username}@${conn.host}`;
     const authType = conn.authType.type === 'Password'
       ? 'password'
       : conn.authType.type === 'PrivateKey'
@@ -578,13 +637,15 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         : conn.authType.type === 'Agent'
           ? 'agent'
           : 'keyboardInteractive';
-    const targetType = conn.container?.local
-      ? 'localDocker'
-      : conn.container?.access === 'docker-exec' || conn.container?.access === 'auto'
-        ? 'remoteDocker'
-        : conn.container?.access === 'sshd'
-          ? 'containerSshd'
-          : 'ssh';
+    const targetType = conn.wsl
+      ? 'wsl'
+      : conn.container?.local
+        ? 'localDocker'
+        : conn.container?.access === 'docker-exec' || conn.container?.access === 'auto'
+          ? 'remoteDocker'
+          : conn.container?.access === 'sshd'
+            ? 'containerSshd'
+            : 'ssh';
     setFormData({
       targetType,
       name: conn.name,
@@ -606,6 +667,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         : '~/.ssh/id_rsa',
       verificationCode: '',
       proxyJump: conn.proxyJump || '',
+      wslDistribution: conn.wsl?.distribution || '',
+      wslUser: conn.wsl?.user || '',
       containerName: conn.container?.name || '',
       containerAccess: conn.container?.access === 'docker-exec' ? 'docker-exec' : 'auto',
       dockerPath: conn.container?.dockerPath || 'docker',
@@ -661,6 +724,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     if (stage.id === 'container') {
       return `${t('ssh.remote.testStageContainer')} · ${stage.label}`;
     }
+    if (stage.id === 'wsl') return `WSL · ${stage.label}`;
     if (stage.id === 'docker-host') {
       return t('ssh.remote.testStageLocalDocker');
     }
@@ -671,9 +735,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     { label: t('ssh.remote.targetRemoteDocker'), value: 'remoteDocker' },
     { label: t('ssh.remote.targetLocalDocker'), value: 'localDocker' },
     { label: t('ssh.remote.targetContainerSshd'), value: 'containerSshd' },
+    { label: t('ssh.remote.targetWsl'), value: 'wsl' },
   ];
-  const isLocalDockerTarget = formData.targetType === 'localDocker';
-  const usesContainerTarget = formData.targetType !== 'ssh';
+  const isWslTarget = formData.targetType === 'wsl';
+  const isLocalProcessTarget = formData.targetType === 'localDocker' || isWslTarget;
+  const usesContainerTarget = formData.targetType !== 'ssh' && !isWslTarget;
+  const wslUnavailable = isListingWsl
+    || !wslDistributions?.supported
+    || !wslDistributions.distributions.includes(formData.wslDistribution);
 
   const filteredSavedConnections = savedConnections.filter((conn) => {
     if (!savedSearch.trim()) return true;
@@ -735,7 +804,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             </div>
           )}
 
-          <ScrollArea className="ssh-connection-dialog__scroll" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionContent">
+          <ScrollArea scrollbarVisibility="hidden" className="ssh-connection-dialog__scroll" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionContent">
           {/* Saved connections section */}
           {savedConnections.length > 0 && (
             <FormSection
@@ -755,7 +824,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 />
               )}
             >
-              <ScrollArea className="ssh-connection-dialog__saved-list" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionList">
+              <ScrollArea scrollbarVisibility="hidden" className="ssh-connection-dialog__saved-list" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionList">
                 {filteredSavedConnections.map((conn) => (
                   <div
                     key={conn.id}
@@ -771,7 +840,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <div className="ssh-connection-dialog__saved-info">
                       <span className="ssh-connection-dialog__saved-name">{conn.name}</span>
                       <span className="ssh-connection-dialog__saved-detail">
-                        {conn.container?.local
+                        {conn.wsl
+                          ? `WSL · ${conn.wsl.distribution}${conn.wsl.user ? ` · ${conn.wsl.user}` : ''}`
+                          : conn.container?.local
                           ? `Docker · ${conn.container.name}`
                           : `${conn.username}@${conn.host}:${conn.port}${conn.container ? ` · ${conn.container.name}` : ''}${conn.proxyJump ? ` · ${t('ssh.remote.via')} ${conn.proxyJump}` : ''}`}
                       </span>
@@ -833,7 +904,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 />
               )}
             >
-              <ScrollArea className="ssh-connection-dialog__saved-list">
+              <ScrollArea scrollbarVisibility="hidden" className="ssh-connection-dialog__saved-list">
                 {filteredSSHConfigHosts.map((configHost) => (
                   <div
                     key={configHost.host}
@@ -907,7 +978,42 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               />
             </FieldRow>
 
-            {!isLocalDockerTarget && (
+            {isWslTarget && (
+              <>
+                <Field label={t('ssh.remote.wslDistribution')} controlWidth="fill">
+                  <Select
+                    options={[
+                      { label: t('ssh.remote.wslSelectDistribution'), value: '' },
+                      ...(wslDistributions?.distributions ?? []).map((distribution) => ({ label: distribution, value: distribution })),
+                    ]}
+                    value={formData.wslDistribution}
+                    onValueChange={(value) => handleInputChange('wslDistribution', String(value))}
+                    disabled={isListingWsl || !wslDistributions?.supported}
+                    size="md"
+                  />
+                </Field>
+                <Button variant="outline" size="sm" onClick={() => setWslRefresh((value) => value + 1)} disabled={isListingWsl}>
+                  {isListingWsl && <Loader2 size={14} className="ssh-connection-dialog__spinner" />}
+                  {t('ssh.remote.wslRefresh')}
+                </Button>
+                <Field label={t('ssh.remote.wslUser')} controlWidth="fill">
+                  <DesignInput
+                    value={formData.wslUser}
+                    onChange={(event) => handleInputChange('wslUser', event.target.value)}
+                    placeholder={t('ssh.remote.wslDefaultUser')}
+                  />
+                </Field>
+                <div className="ssh-connection-dialog__hint" role={wslError ? 'alert' : 'status'}>
+                  {wslError || (wslDistributions?.supported === false
+                    ? t('ssh.remote.wslUnsupported')
+                    : wslDistributions?.distributions.length === 0
+                      ? t('ssh.remote.wslNoDistributions')
+                      : t('ssh.remote.wslHint'))}
+                </div>
+              </>
+            )}
+
+            {!isLocalProcessTarget && (
               <>
             {/* Host and Port */}
             <FieldRow padding="none" className="ssh-connection-dialog__row ssh-connection-dialog__row--host">
@@ -1043,7 +1149,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               </div>
             )}
 
-            {!isLocalDockerTarget && (
+            {!isLocalProcessTarget && (
               <>
             {/* Authentication Method */}
             <FieldRow padding="none" className="ssh-connection-dialog__field">
@@ -1234,7 +1340,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     </Field>
                   </div>
 
-                  {!isLocalDockerTarget && (
+                  {!isLocalProcessTarget && (
                     <>
                       <div className="ssh-connection-dialog__field">
                         <Field label={t('ssh.remote.proxyJump')} controlWidth="fill">
@@ -1344,7 +1450,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               variant="outline"
               size="sm"
               onClick={() => void handleTestConnection()}
-              disabled={isTesting || isConnecting || status === 'connecting'}
+              disabled={isTesting || isConnecting || status === 'connecting' || (isWslTarget && wslUnavailable)}
             >
               {isTesting && <Loader2 size={14} className="ssh-connection-dialog__spinner" />}
               {t('ssh.remote.testConnection')}
@@ -1364,9 +1470,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               disabled={
                 isConnecting
                 || status === 'connecting'
-                || (isLocalDockerTarget
-                  ? !formData.containerName.trim()
-                  : !formData.host.trim() || !formData.username.trim())
+                || (isWslTarget
+                  ? wslUnavailable
+                  : isLocalProcessTarget
+                    ? !formData.containerName.trim()
+                    : !formData.host.trim() || !formData.username.trim())
               }
             >
               {(isConnecting || status === 'connecting') ? (

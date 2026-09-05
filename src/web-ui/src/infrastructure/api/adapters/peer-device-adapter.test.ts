@@ -579,6 +579,25 @@ describe('PeerDeviceTransportAdapter queue', () => {
     expect(deviceRpc).not.toHaveBeenCalled();
   });
 
+  it.each(['ssh_connect', 'ssh_save_connection', 'ssh_test_connection', 'ssh_list_wsl_distributions'])(
+    'rejects %s for WSL before an older peer can ignore the target', async (command) => {
+      const deviceRpc = vi.fn();
+      const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+      await expect(adapter.request(command, { config: { wsl: { distribution: 'Ubuntu' } } }))
+        .rejects.toThrow('wsl_workspaces_v1_unsupported');
+      expect(deviceRpc).not.toHaveBeenCalled();
+    },
+  );
+
+  it('forwards a WSL profile to the negotiated host with its target intact', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({ resp: 'host_invoke_result', ok: true, value: { success: true } }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc, { supportsWslWorkspacesV1: true });
+    const config = { wsl: { distribution: 'Ubuntu', user: 'dev' } };
+    await expect(adapter.request('ssh_connect', { config })).resolves.toEqual({ success: true });
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(deviceRpc.mock.calls[0])).toContain('Ubuntu');
+  });
+
   it('forwards MiniApp Agent context files after version negotiation', async () => {
     const outcome = { sessionId: 'session-1', turnId: 'turn-1' };
     const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({

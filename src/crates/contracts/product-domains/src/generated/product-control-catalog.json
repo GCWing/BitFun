@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "9973af8307e72206bb5c4af5dfb3249fef2def6a27925a13aca9a25ac62ef8a3",
+  "digest": "9a3d11cb4a198369ceb62ae82e1d0e1e6bddb658f4a790ec84e9eb4123803e5a",
   "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
@@ -138,11 +138,11 @@
     "features": 22,
     "settings": 21,
     "userFacing": 43,
-    "documentedItems": 320,
+    "documentedItems": 321,
     "controlCoverage": {
       "direct": 48,
       "delegated": 61,
-      "interactive": 211,
+      "interactive": 212,
       "unsupported": 0
     }
   },
@@ -8145,6 +8145,7 @@
         "ssh-profiles",
         "ssh-auth",
         "docker",
+        "wsl",
         "remote-open",
         "remote-files",
         "transfer",
@@ -8288,6 +8289,52 @@
       "capabilityId": "feature.remote-workspaces",
       "itemIds": [
         "docker"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "project.new"
+      }
+    },
+    {
+      "id": "feature.remote-workspaces:open:wsl",
+      "capabilityId": "feature.remote-workspaces",
+      "itemIds": [
+        "wsl"
       ],
       "kind": "open",
       "risk": "ui",
@@ -23550,6 +23597,17 @@
           }
         },
         {
+          "id": "wsl",
+          "titleZh": "选择 Windows 主机上的 WSL 发行版作为工作区",
+          "titleEn": "Choose a WSL distribution on the Windows host as a workspace",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "打开远程连接对话框，由用户选择发行版、Linux 用户和工作区目录。",
+            "reasonEn": "Open the remote connection dialog for the user to choose a distribution, Linux user, and workspace directory."
+          }
+        },
+        {
           "id": "remote-open",
           "titleZh": "打开、关闭和移除远程工作区，并读取服务器信息",
           "titleEn": "Open, close, and remove remote workspaces, and inspect server information",
@@ -23701,6 +23759,8 @@
         "Connect with passwords, private keys, certificates, SSH config hosts, and jump hosts",
         "发现远程 Docker 容器并把容器作为工作环境",
         "Discover remote Docker containers and use a container as the work environment",
+        "选择 Windows 主机上的 WSL 发行版作为工作区",
+        "Choose a WSL distribution on the Windows host as a workspace",
         "打开、关闭和移除远程工作区，并读取服务器信息",
         "Open, close, and remove remote workspaces, and inspect server information",
         "浏览、读取、写入、创建、重命名和删除远程文件与目录",

@@ -4038,6 +4038,20 @@
           ]
         },
         {
+          "id": "wsl",
+          "titleZh": "选择 Windows 主机上的 WSL 发行版作为工作区",
+          "titleEn": "Choose a WSL distribution on the Windows host as a workspace",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "打开远程连接对话框，由用户选择发行版、Linux 用户和工作区目录。",
+            "reasonEn": "Open the remote connection dialog for the user to choose a distribution, Linux user, and workspace directory."
+          },
+          "evidence": [
+            "command:ssh_list_wsl_distributions"
+          ]
+        },
+        {
           "id": "remote-open",
           "titleZh": "打开、关闭和移除远程工作区，并读取服务器信息",
           "titleEn": "Open, close, and remove remote workspaces, and inspect server information",
