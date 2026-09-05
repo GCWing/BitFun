@@ -91,7 +91,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
               </span>
             ) : null}
           </span>
-          <Icon name="more" size="md" data-openbitfun-component="assistant-card" data-openbitfun-part="chevron" className="assistant-card__chevron" aria-hidden="true" />
+          <Icon name="chevron-right" size="sm" data-openbitfun-component="assistant-card" data-openbitfun-part="chevron" className="assistant-card__chevron" aria-hidden="true" />
         </span>
       </button>
 
@@ -99,8 +99,8 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
         <Button
           variant="outline"
           size="sm"
-          leadingIcon={<Icon name="settings" size="lg" />}
-          trailingIcon={<Icon name="chevron-right" size="lg" />}
+          leadingIcon={<Icon name="settings" size="sm" />}
+          trailingIcon={<Icon name="chevron-right" size="sm" />}
           className="assistant-card__configure"
           onClick={onClick}
           disabled={isDeleting || isSettingPrimary}
@@ -114,7 +114,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
             <Button
               variant="fill"
               size="sm"
-              leadingIcon={<Icon name="side-chat" size="lg" />}
+              leadingIcon={<Icon name="side-chat" size="sm" />}
               loading={isStartingSession}
               onClick={onNewSession}
               disabled={isStartingSession || isDeleting || isSettingPrimary}

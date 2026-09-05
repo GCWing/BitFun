@@ -28,38 +28,22 @@ describe('Nursery gallery presentation', () => {
     expect(gallerySection).toMatch(
       /\.nursery-gallery \{\s+background: var\(--openbitfun-color-surface-scene\);/,
     );
-    expect(gallerySection).toContain('background: var(--openbitfun-color-surface-raised);');
+    expect(gallerySection).toContain('background: var(--openbitfun-color-surface-tertiary);');
     expect(gallerySection).toContain('color: var(--openbitfun-color-content-primary);');
     expect(gallerySection).toContain('color: var(--openbitfun-color-content-muted);');
-    expect(gallerySection).toContain('border: 1px solid var(--openbitfun-color-border-subtle);');
+    expect(gallerySection).toContain('border-radius: var(--openbitfun-layout-field-group-radius);');
     expect(gallerySection).not.toContain('--openbitfun-color-content-on-dark');
     expect(gallerySection).not.toContain('--openbitfun-color-content-on-light');
     expect(gallerySection).not.toContain('--openbitfun-color-overlay-scrim');
   });
 
-  it('uses a compact layered pill for the default configuration action', () => {
+  it('uses the shared button for default configuration', () => {
     const source = readSibling('./NurseryGallery.tsx');
-    const stylesheet = readSibling('./NurseryView.scss');
-    const actionMarkupEnd = source.indexOf('className="nursery-defaults__action"');
-    const actionMarkupStart = source.lastIndexOf('<button', actionMarkupEnd);
-    const actionMarkup = source.slice(actionMarkupStart, source.indexOf('</button>', actionMarkupEnd));
-    const actionStart = stylesheet.indexOf('&__action {');
-    const actionEnd = stylesheet.indexOf('\n  }\n}', actionStart);
-    const actionSection = stylesheet.slice(actionStart, actionEnd);
-
-    expect(source).toContain('className="nursery-defaults__action-icon"');
-    expect(source).toContain('className="nursery-defaults__action-label"');
-    expect(source).toContain('className="nursery-defaults__action-chevron"');
-    expect(actionMarkup).toContain('<button');
-    expect(actionMarkup).not.toContain('data-openbitfun-component');
-    expect(actionMarkup).not.toContain('variant=');
-    expect(actionSection).toContain('width: 168px;');
-    expect(actionSection).toContain('height: 48px;');
-    expect(actionSection).toContain('border: 0;');
-    expect(actionSection).toContain('border-radius: var(--openbitfun-radius-pill);');
-    expect(actionSection).toContain('width: 44px;');
-    expect(actionSection).toContain('background-image: radial-gradient(');
-    expect(actionSection).toContain('mask-image: radial-gradient(');
+    const end = source.indexOf('className="nursery-defaults__action"');
+    const action = source.slice(source.lastIndexOf('<Button', end), source.indexOf('</Button>', end));
+    expect(action).toContain('variant="outline"');
+    expect(action).toContain('size="sm"');
+    expect(action).toContain('onClick={openDefaults}');
   });
 
   it('keeps assistant card content and actions in bounded regions', () => {
@@ -70,8 +54,8 @@ describe('Nursery gallery presentation', () => {
     const cardSection = stylesheet.slice(cardStart, cardEnd);
 
     expect(cardSection).toContain('&__main {');
-    expect(cardSection).toContain('min-height: 168px;');
-    expect(cardSection).toContain('padding: var(--openbitfun-space-3) 14px;');
+    expect(cardSection).toContain('min-height: 148px;');
+    expect(cardSection).toContain('padding: var(--openbitfun-space-4) var(--openbitfun-space-5);');
     expect(cardSection).toContain('min-height: 52px;');
     expect(cardSection).toContain('&__session-actions {');
     expect(cardSection).toContain('border-top: 1px solid var(--openbitfun-color-border-subtle);');
@@ -84,7 +68,7 @@ describe('Nursery gallery presentation', () => {
     expect(source).toMatch(/import \{[^}]*\bButton\b[^}]*} from '@openbitfun\/ui';/);
     expect(source).toContain('leadingIcon={<Icon name="settings"');
     expect(source).toContain('trailingIcon={<Icon name="chevron-right"');
-    expect(source).toContain('leadingIcon={<Icon name="side-chat" size="lg" />}');
+    expect(source).toContain('leadingIcon={<Icon name="side-chat" size="sm" />}');
     expect(source).toContain('className="assistant-card__configure"');
     expect(source).toContain('className="assistant-card__session-actions"');
     expect(source).not.toContain('className="assistant-card__body"');
