@@ -51,6 +51,7 @@ import {
 } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
+import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
@@ -164,7 +165,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const relatedPathCount = workspace.relatedPaths?.length ?? 0;
   const workspaceIsRemote = isRemoteWorkspace(workspace);
   const canShowSearchIndex =
-    isActive
+    WORKSPACE_SEARCH_AVAILABLE
+    && isActive
     && workspaceSearchEnabled
     && (
       workspace.workspaceKind === WorkspaceKind.Normal
@@ -201,6 +203,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, [isActive, workspace.rootPath, workspaceIsRemote]);
 
   useEffect(() => {
+    if (!WORKSPACE_SEARCH_AVAILABLE) return;
     let cancelled = false;
     let unsubscribeSettings: (() => void) | null = null;
     const cancelStartupSchedule = scheduleAfterStartupSignal(async () => {

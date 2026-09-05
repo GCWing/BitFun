@@ -29,13 +29,12 @@ struct WindowsInstallState {
 
 const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
-const REQUIRED_PAYLOAD_FILES: [&str; 6] = [
+const REQUIRED_PAYLOAD_FILES: [&str; 5] = [
     MAIN_APP_EXE,
     "frontend/dist/index.html",
     "mobile-web/dist/index.html",
     "resources/ext-host/extension-host.js",
     "resources/worker_host.js",
-    "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
 ];
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
 const DEFAULT_MODEL_CONTEXT_WINDOW: u64 = 200_000;

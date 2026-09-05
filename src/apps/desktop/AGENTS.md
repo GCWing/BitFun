@@ -75,7 +75,7 @@ required. The default dev profile keeps line tables while reducing PDB size.
 
 All commands that pass `--no-bundle` emit a staged runtime tree rather than a
 single-file application. The executable depends on the adjacent `frontend`,
-`flashgrep`, `mobile-web`, and `resources` directories. Use
+`mobile-web`, and `resources` directories. Use
 `pnpm run desktop:build:nsis` for a distributable Windows installer.
 
 ## DevTools feature (model rule)

@@ -13,7 +13,6 @@ import {
   statSync,
   writeFileSync,
 } from 'fs';
-import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 import { extractProductConfigArg } from './product-customization/cli.mjs';
 import { productBuildEnvironment } from './product-customization/projections.mjs';
 import { resolveProductDefinition } from './product-customization/resolver.mjs';
@@ -54,11 +53,8 @@ async function main() {
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
   preparePluginHost();
-  const flashgrepBinary = prepareMacOSFlashgrepForSigning(
-    ensureFlashgrepBinary(),
-    desktopDir,
-  );
-  process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
+  // Flashgrep distribution is temporarily suspended.
+  const flashgrepBinary = null;
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
   process.env.CI = 'true';
   if (process.platform === 'darwin' && requestsDmgBundle(forward)) {
@@ -107,7 +103,7 @@ async function main() {
 
   if (r.status === 0 && forward.includes('--no-bundle')) {
     console.warn(
-      '[tauri-build] No bundle was produced. The raw desktop executable depends on its adjacent frontend, flashgrep, mobile-web, and resources directories and must not be distributed by itself.'
+      '[tauri-build] No bundle was produced. The raw desktop executable depends on its adjacent frontend, mobile-web, and resources directories and must not be distributed by itself.'
     );
   }
 
@@ -373,6 +369,7 @@ function injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary) {
 }
 
 function bundledFlashgrepResources(primaryBinary) {
+  if (!primaryBinary) return [];
   const binaries = [primaryBinary];
 
   if (process.platform === 'win32') {
