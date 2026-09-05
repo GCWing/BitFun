@@ -22,7 +22,7 @@ import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp, Zap 
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
-import { GalleryDetailModal } from '@/app/components';
+import { GalleryDetailModal, GalleryPageHeader } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import {
   buildSkillCoverageSourceMap,
@@ -246,28 +246,33 @@ const SkillsScene: React.FC = () => {
 
   return (
     <div className="openbitfun-skills-scene" data-testid="agent-skill-panel" data-openbitfun-scene="skills" data-openbitfun-part="root" data-openbitfun-tab={activeTab}>
+      <GalleryPageHeader title={t('nav.title')} subtitle={t('nav.summary')} />
       <div className="skills-tabs-bar" data-testid="skills-tabs" data-openbitfun-scene="skills" data-openbitfun-part="header" data-openbitfun-tab={activeTab}>
         <div className="skills-tabs-bar__tabs" data-openbitfun-scene="skills" data-openbitfun-part="tabs">
-          <button
-            type="button"
-            className={`skills-tabs-bar__tab ${activeTab === 'installed' ? 'is-active' : ''}`}
+          <Button
+            size="sm"
+            variant={activeTab === 'installed' ? 'fill' : 'text'}
+            className="skills-tabs-bar__tab"
+            aria-pressed={activeTab === 'installed'}
             onClick={() => setActiveTab('installed')}
             data-openbitfun-scene="skills"
             data-openbitfun-part="tab"
             data-openbitfun-tab="installed"
             data-openbitfun-state={activeTab === 'installed' ? 'active' : undefined}
-          ><span>{t('installed.titleAll')}</span></button>
+          ><span>{t('installed.titleAll')}</span></Button>
           <span className="skills-tabs-bar__divider" data-openbitfun-scene="skills" data-openbitfun-part="tabDivider" />
-          <button
-            type="button"
-            className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
+          <Button
+            size="sm"
+            variant={activeTab === 'discover' ? 'fill' : 'text'}
+            className="skills-tabs-bar__tab"
+            aria-pressed={activeTab === 'discover'}
             disabled={!desktopConfigAvailable}
             onClick={() => setActiveTab('discover')}
             data-openbitfun-scene="skills"
             data-openbitfun-part="tab"
             data-openbitfun-tab="discover"
             data-openbitfun-state={activeTab === 'discover' ? 'active' : undefined}
-          ><span>{t('market.title')}</span></button>
+          ><span>{t('market.title')}</span></Button>
         </div>
       </div>
 

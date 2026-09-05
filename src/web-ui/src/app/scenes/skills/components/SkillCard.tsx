@@ -1,7 +1,6 @@
 import React from 'react';
 import { Icon } from '@openbitfun/ui';
 import { Package } from 'lucide-react';
-import { getCardGradient } from '@/shared/utils/cardGradients';
 import './SkillCard.scss';
 
 type SkillCardActionTone = 'primary' | 'danger' | 'success' | 'muted';
@@ -32,7 +31,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
   name,
   description,
   index = 0,
-  accentSeed,
+  accentSeed: _accentSeed,
   iconKind = 'skill',
   badges,
   meta,
@@ -54,7 +53,6 @@ const SkillCard: React.FC<SkillCardProps> = ({
       style={{
         ...style,
         '--surface-stagger-index': index,
-        '--skill-card-gradient': getCardGradient(accentSeed ?? name),
       } as React.CSSProperties}
       data-openbitfun-variant={iconKind}
       onClick={openDetails}
