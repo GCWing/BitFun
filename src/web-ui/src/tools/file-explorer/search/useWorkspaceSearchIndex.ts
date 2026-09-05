@@ -10,6 +10,7 @@ import {
   PEER_MODE_SEARCH_ACTIVE_POLL_MS,
   PEER_MODE_SEARCH_IDLE_POLL_MS,
 } from '@/infrastructure/peer-device/peerModeFlag';
+import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 
 const log = createLogger('useWorkspaceSearchIndex');
 const ACTIVE_TASK_POLL_MS = 1000;
@@ -65,7 +66,8 @@ function isTaskActive(status: WorkspaceSearchIndexStatus | null): boolean {
 export function useWorkspaceSearchIndex(
   options: UseWorkspaceSearchIndexOptions = {}
 ): UseWorkspaceSearchIndexResult {
-  const { workspacePath, enabled = true } = options;
+  const { workspacePath, enabled: requestedEnabled = true } = options;
+  const enabled = WORKSPACE_SEARCH_AVAILABLE && requestedEnabled;
 
   const [indexStatus, setIndexStatus] = useState<WorkspaceSearchIndexStatus | null>(null);
   const [loading, setLoading] = useState(false);

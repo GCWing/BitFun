@@ -12,8 +12,8 @@ use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use std::sync::{Arc, Mutex};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio_tungstenite::tungstenite::Message;
 #[cfg(windows)]
 use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
@@ -187,224 +187,257 @@ struct ReconnectCtx {
     device_name: String,
 }
 
+// One owner controls the socket, heartbeat, write deadline and reconnect loop.
+// A generation fences late completion when connect replaces an earlier run.
+struct ConnectionLifecycle {
+    generation: u64,
+    state: ConnectionState,
+    task: Option<tokio::task::JoinHandle<()>>,
+    cmd_tx: Option<mpsc::Sender<RelayMessage>>,
+    reconnect_ctx: Option<ReconnectCtx>,
+}
+
+type ConnectionOwner = Arc<Mutex<ConnectionLifecycle>>;
+
+// This is transport backpressure, not a limit on Agent work. A full queue
+// rejects enqueue explicitly; unacknowledged commands are never replayed.
+const RELAY_COMMAND_QUEUE_CAPACITY: usize = 64;
+const RELAY_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 pub struct RelayClient {
-    state: Arc<RwLock<ConnectionState>>,
+    lifecycle: ConnectionOwner,
     event_tx: mpsc::UnboundedSender<RelayEvent>,
-    cmd_tx: Arc<RwLock<Option<mpsc::UnboundedSender<RelayMessage>>>>,
     room_id: Arc<RwLock<Option<String>>>,
-    reconnect_ctx: Arc<RwLock<Option<ReconnectCtx>>>,
 }
 
 impl RelayClient {
     pub fn new() -> (Self, mpsc::UnboundedReceiver<RelayEvent>) {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let client = Self {
-            state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
+            lifecycle: Arc::new(Mutex::new(ConnectionLifecycle {
+                generation: 0,
+                state: ConnectionState::Disconnected,
+                task: None,
+                cmd_tx: None,
+                reconnect_ctx: None,
+            })),
             event_tx,
-            cmd_tx: Arc::new(RwLock::new(None)),
             room_id: Arc::new(RwLock::new(None)),
-            reconnect_ctx: Arc::new(RwLock::new(None)),
         };
         (client, event_rx)
     }
 
     pub async fn connection_state(&self) -> ConnectionState {
-        self.state.read().await.clone()
+        self.lifecycle.lock().unwrap().state.clone()
     }
 
     pub async fn connect(&self, ws_url: &str) -> Result<()> {
-        *self.state.write().await = ConnectionState::Connecting;
-
-        let ws_stream = dial(ws_url).await?;
-
-        info!("Connected to relay server at {ws_url}");
-        *self.state.write().await = ConnectionState::Connected;
-
-        *self.reconnect_ctx.write().await = Some(ReconnectCtx {
-            ws_url: ws_url.to_string(),
-            ..Default::default()
-        });
-
-        let _ = self.event_tx.send(RelayEvent::Connected);
-        self.launch_tasks(ws_stream).await;
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let generation = {
+            let mut room_id = self.room_id.write().await;
+            let mut owner = self.lifecycle.lock().unwrap();
+            if let Some(task) = owner.task.take() {
+                task.abort();
+            }
+            owner.generation += 1;
+            owner.state = ConnectionState::Connecting;
+            owner.cmd_tx = None;
+            owner.reconnect_ctx = Some(ReconnectCtx {
+                ws_url: ws_url.to_string(),
+                ..Default::default()
+            });
+            *room_id = None;
+            let generation = owner.generation;
+            owner.task = Some(tokio::spawn(Self::run_connection(
+                self.lifecycle.clone(),
+                self.room_id.clone(),
+                self.event_tx.clone(),
+                generation,
+                ws_url.to_string(),
+                ready_tx,
+            )));
+            generation
+        };
+        ready_rx
+            .await
+            .map_err(|_| anyhow!("Relay connection attempt cancelled"))??;
+        if self.lifecycle.lock().unwrap().generation != generation {
+            return Err(anyhow!("Relay connection attempt superseded"));
+        }
         Ok(())
     }
 
-    async fn launch_tasks(&self, ws_stream: WsStream) {
-        let (mut ws_write, ws_read) = ws_stream.split();
-        let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<RelayMessage>();
+    async fn run_connection(
+        lifecycle: ConnectionOwner,
+        room_id: Arc<RwLock<Option<String>>>,
+        event_tx: mpsc::UnboundedSender<RelayEvent>,
+        generation: u64,
+        ws_url: String,
+        ready: oneshot::Sender<Result<()>>,
+    ) {
+        let mut socket = match dial(&ws_url).await {
+            Ok(socket) => socket,
+            Err(error) => {
+                let mut owner = lifecycle.lock().unwrap();
+                if owner.generation == generation {
+                    owner.state = ConnectionState::Disconnected;
+                    owner.cmd_tx = None;
+                    owner.reconnect_ctx = None;
+                    let _ = event_tx.send(RelayEvent::Disconnected);
+                }
+                let _ = ready.send(Err(error));
+                return;
+            }
+        };
+        let mut ready = Some(ready);
+        loop {
+            let (cmd_tx, cmd_rx) = mpsc::channel(RELAY_COMMAND_QUEUE_CAPACITY);
+            {
+                let mut owner = lifecycle.lock().unwrap();
+                if owner.generation != generation {
+                    return;
+                }
+                owner.state = ConnectionState::Connected;
+                owner.cmd_tx = Some(cmd_tx);
+                let event = if let Some(ready) = ready.take() {
+                    let _ = ready.send(Ok(()));
+                    RelayEvent::Connected
+                } else {
+                    RelayEvent::Reconnected
+                };
+                let _ = event_tx.send(event);
+            }
+            info!("Relay transport connected");
+            Self::run_socket(socket, cmd_rx, &lifecycle, &room_id, &event_tx, generation).await;
+            {
+                let mut owner = lifecycle.lock().unwrap();
+                if owner.generation != generation {
+                    return;
+                }
+                owner.state = ConnectionState::Reconnecting;
+                // Drop all commands from the failed socket. Delivery may have
+                // happened without a response; the protocol caller owns recovery.
+                owner.cmd_tx = None;
+            }
+            let mut backoff = 2;
+            socket = loop {
+                tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+                let ctx = {
+                    let owner = lifecycle.lock().unwrap();
+                    if owner.generation != generation {
+                        return;
+                    }
+                    let Some(ctx) = owner.reconnect_ctx.clone() else {
+                        return;
+                    };
+                    ctx
+                };
+                match Self::reconnect(&ctx).await {
+                    Ok(socket) => break socket,
+                    Err(error) => {
+                        warn!("Relay reconnect failed: {error}");
+                        backoff = std::cmp::min(backoff * 2, 30);
+                    }
+                }
+            };
+        }
+    }
 
-        let cmd_tx_arc = self.cmd_tx.clone();
-        let state_arc = self.state.clone();
-        let room_id_arc = self.room_id.clone();
-        let event_tx = self.event_tx.clone();
-        let reconnect_arc = self.reconnect_ctx.clone();
+    async fn reconnect(ctx: &ReconnectCtx) -> Result<WsStream> {
+        let mut socket = dial(&ctx.ws_url).await?;
+        if !ctx.room_id.is_empty() {
+            write_relay_message(
+                &mut socket,
+                &RelayMessage::CreateRoom {
+                    room_id: Some(ctx.room_id.clone()),
+                    device_id: ctx.device_id.clone(),
+                    device_type: "desktop".to_string(),
+                    public_key: ctx.public_key.clone(),
+                },
+            )
+            .await?;
+        }
+        if !ctx.token.is_empty() {
+            write_relay_message(
+                &mut socket,
+                &RelayMessage::AuthConnect {
+                    token: ctx.token.clone(),
+                    device_name: ctx.device_name.clone(),
+                    device_kind: "desktop".to_string(),
+                },
+            )
+            .await?;
+        }
+        Ok(socket)
+    }
 
-        *cmd_tx_arc.write().await = Some(cmd_tx);
-
-        // ── Write task ──────────────────────────────────────────────────────
-        tokio::spawn(async move {
-            while let Some(msg) = cmd_rx.recv().await {
-                if let Ok(json) = serde_json::to_string(&msg) {
-                    if ws_write.send(Message::Text(json.into())).await.is_err() {
+    async fn run_socket(
+        socket: WsStream,
+        mut commands: mpsc::Receiver<RelayMessage>,
+        lifecycle: &ConnectionOwner,
+        room_id: &Arc<RwLock<Option<String>>>,
+        event_tx: &mpsc::UnboundedSender<RelayEvent>,
+        generation: u64,
+    ) {
+        let (mut writer, mut reader) = socket.split();
+        // Keep full-duplex progress under backpressure, but keep both futures
+        // inside this owner. Either failure drops both halves and the old queue.
+        let read = async {
+            loop {
+                match await_relay_inbound(reader.next()).await {
+                    Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str(&text) {
+                        Ok(msg) => {
+                            Self::dispatch(msg, event_tx, room_id, lifecycle, generation).await
+                        }
+                        Err(error) => warn!("Unparseable relay message: {error}"),
+                    },
+                    Ok(Some(Ok(Message::Close(_)))) | Ok(None) => break,
+                    Ok(Some(Err(error))) => {
+                        warn!("Relay WebSocket read failed: {error}");
                         break;
                     }
+                    Err(()) => {
+                        warn!("Relay inbound traffic timed out");
+                        break;
+                    }
+                    _ => {}
                 }
             }
-            debug!("Write task exited");
-        });
-
-        // ── Read task with reconnect loop ───────────────────────────────────
-        let mut ws_read = ws_read;
-        tokio::spawn(async move {
-            'outer: loop {
-                loop {
-                    let res = match await_relay_inbound(ws_read.next()).await {
-                        Ok(Some(res)) => res,
-                        Ok(None) => break,
-                        Err(_) => {
-                            warn!(
-                                "Relay connection received no traffic for {} seconds; \
-                                 treating socket as stale",
-                                RELAY_INBOUND_IDLE_TIMEOUT.as_secs()
-                            );
-                            break;
-                        }
-                    };
-                    match res {
-                        Ok(Message::Text(text)) => {
-                            match serde_json::from_str::<RelayMessage>(&text) {
-                                Ok(msg) => {
-                                    Self::dispatch(msg, &event_tx, &room_id_arc).await;
-                                }
-                                Err(e) => {
-                                    warn!("Unparseable relay msg: {e}");
-                                }
-                            }
-                        }
-                        Ok(Message::Ping(_)) => {}
-                        Ok(Message::Close(_)) => {
-                            info!("Relay server closed connection");
-                            break;
-                        }
-                        Err(e) => {
-                            error!("WebSocket read error: {e}");
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-
-                *state_arc.write().await = ConnectionState::Reconnecting;
-                info!("Relay connection dropped; will attempt reconnect");
-
-                let ctx = reconnect_arc.read().await.clone();
-                let Some(ctx) = ctx else {
-                    info!("No reconnect ctx — giving up");
-                    break 'outer;
-                };
-
-                if ctx.ws_url.is_empty() {
-                    break 'outer;
-                }
-
-                let mut backoff = 2u64;
-                loop {
-                    if *state_arc.read().await == ConnectionState::Disconnected {
-                        break 'outer;
-                    }
-
-                    info!("Reconnect in {backoff}s (url={})", &ctx.ws_url);
-                    tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
-
-                    match dial(&ctx.ws_url).await {
-                        Ok(new_stream) => {
-                            info!("Reconnected to relay server at {}", &ctx.ws_url);
-                            *state_arc.write().await = ConnectionState::Connected;
-
-                            let (mut new_write, new_read) = new_stream.split();
-                            let (new_cmd_tx, mut new_cmd_rx) =
-                                mpsc::unbounded_channel::<RelayMessage>();
-                            *cmd_tx_arc.write().await = Some(new_cmd_tx.clone());
-
-                            tokio::spawn(async move {
-                                while let Some(msg) = new_cmd_rx.recv().await {
-                                    if let Ok(json) = serde_json::to_string(&msg) {
-                                        if new_write.send(Message::Text(json.into())).await.is_err()
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                            });
-
-                            if !ctx.room_id.is_empty() {
-                                let recreate = RelayMessage::CreateRoom {
-                                    room_id: Some(ctx.room_id.clone()),
-                                    device_id: ctx.device_id.clone(),
-                                    device_type: "desktop".to_string(),
-                                    public_key: ctx.public_key.clone(),
-                                };
-                                let _ = new_cmd_tx.send(recreate);
-                                info!("Room '{}' recreated after reconnect", &ctx.room_id);
-                            }
-
-                            // Re-authenticate device routing after reconnect.
-                            if !ctx.token.is_empty() {
-                                let reauth = RelayMessage::AuthConnect {
-                                    token: ctx.token.clone(),
-                                    device_name: ctx.device_name.clone(),
-                                    device_kind: "desktop".to_string(),
-                                };
-                                let _ = new_cmd_tx.send(reauth);
-                                info!("Re-sent AuthConnect after reconnect");
-                            }
-
-                            let _ = event_tx.send(RelayEvent::Reconnected);
-                            ws_read = new_read;
-                            continue 'outer;
-                        }
-                        Err(e) => {
-                            warn!("Reconnect attempt failed: {e}");
-                            backoff = std::cmp::min(backoff * 2, 30);
-                        }
-                    }
-                }
-            }
-
-            *state_arc.write().await = ConnectionState::Disconnected;
-            let _ = event_tx.send(RelayEvent::Disconnected);
-        });
-
-        // ── Heartbeat task ──────────────────────────────────────────────────
-        let hb_state = self.state.clone();
-        let hb_cmd = self.cmd_tx.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                let st = hb_state.read().await.clone();
-                if st == ConnectionState::Disconnected {
+        };
+        let write = async {
+            let period = std::time::Duration::from_secs(30);
+            let mut heartbeat =
+                tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+            heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            while let Some(command) = next_relay_outbound(&mut commands, &mut heartbeat).await {
+                if let Err(error) = write_relay_message(&mut writer, &command).await {
+                    warn!("Relay WebSocket write failed: {error}");
                     break;
                 }
-                if st != ConnectionState::Connected {
-                    continue;
-                }
-                if let Some(tx) = hb_cmd.read().await.as_ref() {
-                    let _ = tx.send(RelayMessage::Heartbeat);
-                }
             }
-        });
+        };
+        let _ = futures::future::select(std::pin::pin!(read), std::pin::pin!(write)).await;
     }
 
     async fn dispatch(
         msg: RelayMessage,
         event_tx: &mpsc::UnboundedSender<RelayEvent>,
         room_id_store: &Arc<RwLock<Option<String>>>,
+        lifecycle: &ConnectionOwner,
+        generation: u64,
     ) {
+        let mut room_id_store = room_id_store.write().await;
+        let mut owner = lifecycle.lock().unwrap();
+        if owner.generation != generation {
+            return;
+        }
         match msg {
             RelayMessage::RoomCreated { room_id } => {
                 debug!("Room created/restored: {room_id}");
-                *room_id_store.write().await = Some(room_id.clone());
+                *room_id_store = Some(room_id.clone());
+                if let Some(ctx) = owner.reconnect_ctx.as_mut() {
+                    ctx.room_id = room_id.clone();
+                }
                 let _ = event_tx.send(RelayEvent::RoomCreated { room_id });
             }
             RelayMessage::PairRequest {
@@ -471,10 +504,24 @@ impl RelayClient {
     }
 
     pub async fn send(&self, msg: RelayMessage) -> Result<()> {
-        let guard = self.cmd_tx.read().await;
-        let tx = guard.as_ref().ok_or_else(|| anyhow!("not connected"))?;
-        tx.send(msg).map_err(|e| anyhow!("send failed: {e}"))?;
-        Ok(())
+        let owner = self.lifecycle.lock().unwrap();
+        Self::enqueue(&owner, msg)
+    }
+
+    fn enqueue(owner: &ConnectionLifecycle, msg: RelayMessage) -> Result<()> {
+        if owner.state != ConnectionState::Connected {
+            return Err(anyhow!("Relay transport is not connected"));
+        }
+        let tx = owner
+            .cmd_tx
+            .as_ref()
+            .ok_or_else(|| anyhow!("Relay transport is not connected"))?;
+        tx.try_send(msg).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => {
+                anyhow!("Relay send queue is full; request was not queued")
+            }
+            mpsc::error::TrySendError::Closed(_) => anyhow!("Relay connection is closed"),
+        })
     }
 
     pub async fn create_room(
@@ -483,22 +530,22 @@ impl RelayClient {
         public_key: &str,
         room_id: Option<&str>,
     ) -> Result<()> {
-        if let Some(rid) = room_id {
-            let mut guard = self.reconnect_ctx.write().await;
-            if let Some(ref mut ctx) = *guard {
-                ctx.device_id = device_id.to_string();
-                ctx.room_id = rid.to_string();
-                ctx.public_key = public_key.to_string();
-            }
+        let mut owner = self.lifecycle.lock().unwrap();
+        Self::enqueue(
+            &owner,
+            RelayMessage::CreateRoom {
+                room_id: room_id.map(str::to_string),
+                device_id: device_id.to_string(),
+                device_type: "desktop".to_string(),
+                public_key: public_key.to_string(),
+            },
+        )?;
+        if let Some(ctx) = owner.reconnect_ctx.as_mut() {
+            ctx.device_id = device_id.to_string();
+            ctx.room_id = room_id.unwrap_or_default().to_string();
+            ctx.public_key = public_key.to_string();
         }
-
-        self.send(RelayMessage::CreateRoom {
-            room_id: room_id.map(|s| s.to_string()),
-            device_id: device_id.to_string(),
-            device_type: "desktop".to_string(),
-            public_key: public_key.to_string(),
-        })
-        .await
+        Ok(())
     }
 
     /// Send a relay response back to the relay server for a bridged HTTP request.
@@ -520,29 +567,22 @@ impl RelayClient {
     /// `create_room` for the device-routing pathway). The relay validates the
     /// token and registers the device; success arrives as `RelayEvent::AuthOk`.
     pub async fn connect_authenticated(&self, token: &str, device_name: &str) -> Result<()> {
-        // Store credentials in reconnect context so the WS read task can
-        // re-send AuthConnect after a reconnect.
-        let mut guard = self.reconnect_ctx.write().await;
-        if let Some(ref mut ctx) = *guard {
-            ctx.token = token.to_string();
-            ctx.device_name = device_name.to_string();
-        } else {
-            *guard = Some(ReconnectCtx {
-                token: token.to_string(),
-                device_name: device_name.to_string(),
-                ..Default::default()
-            });
-        }
-        drop(guard);
-
+        let mut owner = self.lifecycle.lock().unwrap();
         // Only desktops hold a relay WebSocket — phones and watches talk HTTP —
         // so the kind is a constant here rather than a parameter.
-        self.send(RelayMessage::AuthConnect {
-            token: token.to_string(),
-            device_name: device_name.to_string(),
-            device_kind: "desktop".to_string(),
-        })
-        .await
+        Self::enqueue(
+            &owner,
+            RelayMessage::AuthConnect {
+                token: token.to_string(),
+                device_name: device_name.to_string(),
+                device_kind: "desktop".to_string(),
+            },
+        )?;
+        if let Some(ctx) = owner.reconnect_ctx.as_mut() {
+            ctx.token = token.to_string();
+            ctx.device_name = device_name.to_string();
+        }
+        Ok(())
     }
 
     /// Send an encrypted payload to another device in the same account. The
@@ -564,15 +604,70 @@ impl RelayClient {
     }
 
     pub async fn disconnect(&self) {
-        *self.state.write().await = ConnectionState::Disconnected;
-        *self.reconnect_ctx.write().await = None;
-        *self.cmd_tx.write().await = None;
+        let task = {
+            let mut room_id = self.room_id.write().await;
+            let mut owner = self.lifecycle.lock().unwrap();
+            owner.generation += 1;
+            owner.state = ConnectionState::Disconnected;
+            owner.cmd_tx = None;
+            owner.reconnect_ctx = None;
+            *room_id = None;
+            let task = owner.task.take();
+            if let Some(task) = &task {
+                task.abort();
+            }
+            let _ = self.event_tx.send(RelayEvent::Disconnected);
+            task
+        };
+        // The supervisor owns every socket/timer/future; joining cancellation
+        // releases them before returning, including an in-progress handshake.
+        if let Some(task) = task {
+            let _ = task.await;
+        }
         info!("Relay client disconnected");
     }
 
     pub fn room_id(&self) -> &Arc<RwLock<Option<String>>> {
         &self.room_id
     }
+}
+
+impl Drop for RelayClient {
+    fn drop(&mut self) {
+        let mut owner = self.lifecycle.lock().unwrap();
+        owner.generation += 1;
+        owner.state = ConnectionState::Disconnected;
+        owner.cmd_tx = None;
+        owner.reconnect_ctx = None;
+        if let Some(task) = owner.task.take() {
+            task.abort();
+        }
+    }
+}
+
+async fn next_relay_outbound(
+    commands: &mut mpsc::Receiver<RelayMessage>,
+    heartbeat: &mut tokio::time::Interval,
+) -> Option<RelayMessage> {
+    let received = std::pin::pin!(commands.recv());
+    let tick = std::pin::pin!(heartbeat.tick());
+    // select polls its first future first. A continuously ready command queue
+    // must not starve the keepalive that preserves the room and inbound health.
+    match futures::future::select(tick, received).await {
+        futures::future::Either::Left(_) => Some(RelayMessage::Heartbeat),
+        futures::future::Either::Right((command, _)) => command,
+    }
+}
+
+async fn write_relay_message<S>(socket: &mut S, message: &RelayMessage) -> Result<()>
+where
+    S: futures::Sink<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
+{
+    let json = serde_json::to_string(message)?;
+    tokio::time::timeout(RELAY_WRITE_TIMEOUT, socket.send(Message::Text(json.into())))
+        .await
+        .map_err(|_| anyhow!("Relay WebSocket write timed out"))??;
+    Ok(())
 }
 
 async fn dial(ws_url: &str) -> Result<WsStream> {
@@ -656,6 +751,285 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn connected_fixture() -> (
+        RelayClient,
+        mpsc::UnboundedReceiver<RelayEvent>,
+        tokio::net::TcpListener,
+        tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    ) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}/ws", listener.local_addr().unwrap());
+        let (client, events) = RelayClient::new();
+        let (connected, socket) = tokio::join!(client.connect(&url), async {
+            let (stream, _) = listener.accept().await.unwrap();
+            tokio_tungstenite::accept_async(stream).await.unwrap()
+        });
+        connected.unwrap();
+        (client, events, listener, socket)
+    }
+
+    #[tokio::test]
+    async fn failed_initial_dial_returns_to_disconnected() {
+        let (client, _) = RelayClient::new();
+        assert!(client.connect("invalid://relay").await.is_err());
+        assert_eq!(
+            client.connection_state().await,
+            ConnectionState::Disconnected
+        );
+        assert!(client.send(RelayMessage::Heartbeat).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn disconnect_closes_the_socket_without_waiting_for_inbound_timeout() {
+        let (client, _, _listener, mut socket) = connected_fixture().await;
+        client.disconnect().await;
+        let closed = tokio::time::timeout(std::time::Duration::from_millis(500), socket.next())
+            .await
+            .expect("disconnect must release the socket promptly");
+        assert!(!matches!(closed, Some(Ok(Message::Text(_)))));
+    }
+
+    #[tokio::test]
+    async fn dropping_client_closes_its_socket() {
+        let (client, _, _listener, mut socket) = connected_fixture().await;
+        drop(client);
+        tokio::time::timeout(std::time::Duration::from_millis(500), socket.next())
+            .await
+            .expect("dropping the owner must stop its transport tasks");
+    }
+
+    #[tokio::test]
+    async fn disconnect_during_backoff_does_not_reconnect() {
+        let (client, _, listener, mut socket) = connected_fixture().await;
+        socket.close(None).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while client.connection_state().await != ConnectionState::Reconnecting {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        // Let the reconnect task enter its first backoff before disconnecting.
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        client.disconnect().await;
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(2200), listener.accept())
+                .await
+                .is_err(),
+            "a disconnected owner must not dial again"
+        );
+        assert_eq!(
+            client.connection_state().await,
+            ConnectionState::Disconnected
+        );
+    }
+
+    #[tokio::test]
+    async fn disconnect_cancels_an_in_progress_handshake() {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}/ws", listener.local_addr().unwrap());
+        let (client, _) = RelayClient::new();
+        let client = Arc::new(client);
+        let connecting_client = client.clone();
+        let connecting = tokio::spawn(async move { connecting_client.connect(&url).await });
+        let (mut socket, _) = listener.accept().await.unwrap();
+        // Never answer the HTTP upgrade. Disconnect must cancel the dial too.
+        client.disconnect().await;
+        assert!(connecting.await.unwrap().is_err());
+        let mut bytes = Vec::new();
+        tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            socket.read_to_end(&mut bytes),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            client.connection_state().await,
+            ConnectionState::Disconnected
+        );
+    }
+
+    #[tokio::test]
+    async fn replacement_connection_retires_the_old_socket_and_preserves_the_new_one() {
+        let (client, _, _old_listener, mut old_socket) = connected_fixture().await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}/ws", listener.local_addr().unwrap());
+        let (result, mut socket) = tokio::join!(client.connect(&url), async {
+            tokio_tungstenite::accept_async(listener.accept().await.unwrap().0)
+                .await
+                .unwrap()
+        });
+        result.unwrap();
+        tokio::time::timeout(std::time::Duration::from_millis(500), old_socket.next())
+            .await
+            .expect("superseded socket must close");
+        client.send(RelayMessage::Heartbeat).await.unwrap();
+        let message = tokio::time::timeout(std::time::Duration::from_secs(1), socket.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            serde_json::from_str::<RelayMessage>(&message.into_text().unwrap()).unwrap(),
+            RelayMessage::Heartbeat
+        ));
+        assert_eq!(client.connection_state().await, ConnectionState::Connected);
+        client.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn reconnect_restores_server_assigned_room_and_account_before_new_commands() {
+        let (client, mut events, listener, mut socket) = connected_fixture().await;
+        client
+            .create_room("device", "public-key", None)
+            .await
+            .unwrap();
+        client
+            .connect_authenticated("test-token", "test-device")
+            .await
+            .unwrap();
+        for _ in 0..2 {
+            socket.next().await.unwrap().unwrap();
+        }
+        socket
+            .send(Message::Text(
+                serde_json::to_string(&RelayMessage::RoomCreated {
+                    room_id: "assigned-room".into(),
+                })
+                .unwrap()
+                .into(),
+            ))
+            .await
+            .unwrap();
+        while !matches!(events.recv().await, Some(RelayEvent::RoomCreated { .. })) {}
+        socket.close(None).await.unwrap();
+        let mut replacement = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio_tungstenite::accept_async(listener.accept().await.unwrap().0)
+                .await
+                .unwrap()
+        })
+        .await
+        .unwrap();
+        let room: RelayMessage = serde_json::from_str(
+            &replacement
+                .next()
+                .await
+                .unwrap()
+                .unwrap()
+                .into_text()
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            matches!(room, RelayMessage::CreateRoom { room_id: Some(id), device_id, public_key, .. }
+            if id == "assigned-room" && device_id == "device" && public_key == "public-key")
+        );
+        let auth: RelayMessage = serde_json::from_str(
+            &replacement
+                .next()
+                .await
+                .unwrap()
+                .unwrap()
+                .into_text()
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            matches!(auth, RelayMessage::AuthConnect { token, device_name, .. }
+            if token == "test-token" && device_name == "test-device")
+        );
+        client.disconnect().await;
+    }
+
+    #[tokio::test]
+    async fn full_outbound_queue_rejects_without_leaking_the_payload() {
+        let (client, _) = RelayClient::new();
+        let (tx, _rx) = mpsc::channel(1);
+        {
+            let mut owner = client.lifecycle.lock().unwrap();
+            owner.state = ConnectionState::Connected;
+            owner.cmd_tx = Some(tx);
+            owner.reconnect_ctx = Some(ReconnectCtx {
+                room_id: "accepted-room".into(),
+                token: "accepted-token".into(),
+                ..Default::default()
+            });
+        }
+        client.send(RelayMessage::Heartbeat).await.unwrap();
+        let error = client
+            .send(RelayMessage::AuthConnect {
+                token: "must-not-appear-in-error".into(),
+                device_name: "device".into(),
+                device_kind: "desktop".into(),
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Relay send queue is full; request was not queued"
+        );
+        assert!(client
+            .create_room("device", "key", Some("rejected-room"))
+            .await
+            .is_err());
+        assert!(client
+            .connect_authenticated("rejected-token", "device")
+            .await
+            .is_err());
+        let owner = client.lifecycle.lock().unwrap();
+        let ctx = owner.reconnect_ctx.as_ref().unwrap();
+        assert_eq!(ctx.room_id, "accepted-room");
+        assert_eq!(ctx.token, "accepted-token");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn heartbeat_deadline_is_not_starved_by_queued_commands() {
+        let (tx, mut commands) = mpsc::channel(2);
+        let period = std::time::Duration::from_secs(30);
+        let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+        heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        for id in ["first", "second"] {
+            tx.try_send(RelayMessage::RelayResponse {
+                correlation_id: id.into(),
+                encrypted_data: "test-payload".into(),
+                nonce: "test-nonce".into(),
+            })
+            .unwrap();
+        }
+        tokio::time::advance(period).await;
+        assert!(
+            matches!(
+                next_relay_outbound(&mut commands, &mut heartbeat).await,
+                Some(RelayMessage::Heartbeat)
+            ),
+            "a due heartbeat must progress even while the command queue is full"
+        );
+        for expected in ["first", "second"] {
+            assert!(matches!(
+                next_relay_outbound(&mut commands, &mut heartbeat).await,
+                Some(RelayMessage::RelayResponse { correlation_id, .. }) if correlation_id == expected
+            ));
+        }
+        drop(tx);
+        assert!(next_relay_outbound(&mut commands, &mut heartbeat)
+            .await
+            .is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stalled_writes_are_bounded() {
+        let mut sink = Box::pin(futures::sink::unfold((), |_, _: Message| async {
+            std::future::pending::<std::result::Result<(), tokio_tungstenite::tungstenite::Error>>()
+                .await
+        }));
+        let error = write_relay_message(&mut sink, &RelayMessage::Heartbeat)
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), "Relay WebSocket write timed out");
+    }
 
     #[tokio::test(start_paused = true)]
     async fn dial_timeout_bounds_a_pending_connection_attempt() {

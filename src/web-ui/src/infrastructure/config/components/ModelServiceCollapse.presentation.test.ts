@@ -51,6 +51,9 @@ describe('model service collapsed presentation', () => {
     expect(modelSettingsStyles).toMatch(
       /&__provider-group-header\s*\{[^}]*background:\s*transparent/,
     );
+    expect(modelSettingsStyles).toMatch(
+      /\.openbitfun-collection-item__details\s*\{[^}]*background:\s*transparent/,
+    );
   });
 
   it('draws one consistent divider between provider headers and model rows', () => {

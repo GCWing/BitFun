@@ -111,6 +111,11 @@ Tool cards reflow naturally and dispatch only `tool-card-toggle` after an
 expanded-state change, so the virtualizer can remeasure. There is no
 pre-collapse intent event and no per-card compensation.
 
+User-message text and both message-edit inputs use the same `flow-control`
+font-size role as the composer and rendered replies, following the user's font
+preference. User-message text also uses the reply's regular weight. Its
+first-line box must use that same font size when deriving row geometry.
+
 ## A Row's Mount Is Not an Arrival
 
 **No mount or enter animation may live inside `.virtual-item-wrapper`**, no

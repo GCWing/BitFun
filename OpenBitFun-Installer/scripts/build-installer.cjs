@@ -32,7 +32,6 @@ const REQUIRED_PAYLOAD_FILES = [
   "mobile-web/dist/index.html",
   "resources/ext-host/extension-host.js",
   "resources/worker_host.js",
-  "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
 ];
 
 function getMode(args) {
@@ -288,7 +287,6 @@ if (appExePath) {
     "swiftshader",
     "mobile-web",
     "frontend",
-    "flashgrep",
   ];
   for (const dirName of runtimeDirs) {
     const srcDir = path.join(releaseDir, dirName);

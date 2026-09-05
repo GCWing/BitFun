@@ -1,297 +1,62 @@
-/**
- * New Project Dialog Styles
- */
-// ==================== Dialog Container ====================
-
 .new-project-dialog {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  width: 460px;
-  max-width: 100%;
-
-  // ==================== Hero Section ====================
-
-  &__hero {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 8px 24px 24px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-
-  &__icon-wrapper {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 10px;
-    animation: new-project-icon-enter 0.4s ease-out;
-
-    svg {
-      color: var(--openbitfun-color-accent-default);
-    }
-  }
-
-  @keyframes new-project-icon-enter {
-    from {
-      opacity: 0;
-      transform: scale(0.8);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  &__title {
-    font-size: var(--openbitfun-type-flow-section-title-font-size);
-    font-weight: var(--openbitfun-type-label-selected-font-weight);
-    color: var(--openbitfun-color-content-primary);
-    margin: 0 0 6px 0;
-    position: relative;
-    z-index: 1;
-  }
-
-  &__subtitle {
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    color: var(--openbitfun-color-content-muted);
-    margin: 0;
-    position: relative;
-    z-index: 1;
-  }
-
-  // ==================== Content Area ====================
+  gap: var(--openbitfun-space-3);
 
   &__content {
-    padding: 0 24px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+    overflow: hidden;
+    background: var(--openbitfun-color-surface-tertiary);
+    border-radius: var(--openbitfun-radius-lg);
   }
 
-  // ==================== Form Fields ====================
+  &__field,
+  &__preview {
+    padding: var(--openbitfun-space-4);
 
-  &__field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    animation: new-project-field-enter 0.35s ease-out both;
-
-    &:nth-child(1) { animation-delay: 0.05s; }
-    &:nth-child(2) { animation-delay: 0.1s; }
-  }
-
-  @keyframes new-project-field-enter {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
+    + .new-project-dialog__field,
+    + .new-project-dialog__preview {
+      border-top: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
     }
   }
-
-  &__label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    font-weight: var(--openbitfun-type-label-sm-font-weight);
-    color: var(--openbitfun-color-content-secondary);
-    margin: 0;
-
-    svg {
-      width: 14px;
-      height: 14px;
-      color: var(--openbitfun-color-content-muted);
-    }
-  }
-
-  // ==================== Parent Directory Selector ====================
-
-  &__path-selector {
-    display: flex;
-    gap: 4px;
-    align-items: stretch;
-  }
-
-  &__path-input {
-    flex: 1;
-    min-width: 0;
-    border-style: dashed;
-
-    input {
-      cursor: default;
-      user-select: none;
-    }
-  }
-
-  &__select-btn {
-    min-width: 80px;
-    flex-shrink: 0;
-  }
-
-  // ==================== Project Name Input ====================
-
-  &__name-input {
-    width: 100%;
-  }
-
-  // ==================== Full Path Display ====================
 
   &__preview {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 16%, transparent);
-    border-radius: 8px;
-    animation: new-project-preview-enter 0.3s ease-out;
-  }
-
-  @keyframes new-project-preview-enter {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  &__preview-icon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    svg {
-      width: 14px;
-      height: 14px;
-      color: var(--openbitfun-color-accent-default);
-    }
-  }
-
-  &__preview-content {
-    flex: 1;
     min-width: 0;
-    display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--openbitfun-space-2);
   }
 
   &__preview-label {
-    font-size: var(--openbitfun-type-micro-font-size);
-    color: var(--openbitfun-color-content-muted);
-    text-transform: uppercase;
-    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
   }
 
   &__preview-path {
-    font-size: var(--openbitfun-type-meta-font-size);
-    font-family: var(--openbitfun-type-code-md-font-family);
+    overflow-wrap: anywhere;
     color: var(--openbitfun-color-content-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-family: var(--openbitfun-type-body-sm-font-family);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
-
-  // ==================== Error Message ====================
 
   &__error {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    align-items: flex-start;
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    border-radius: var(--openbitfun-radius-md);
     background: var(--openbitfun-color-status-danger-surface);
-    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 20%, transparent);
-    border-radius: 8px;
-    animation: new-project-error-shake 0.4s ease-out;
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    overflow-wrap: anywhere;
 
-    svg {
+    > [data-openbitfun-component='icon'] {
       flex-shrink: 0;
-      width: 14px;
-      height: 14px;
-      color: var(--openbitfun-color-status-danger-content);
     }
-
-    span {
-      font-size: var(--openbitfun-type-label-sm-font-size);
-      color: var(--openbitfun-color-status-danger-content);
-    }
-  }
-
-  @keyframes new-project-error-shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-4px); }
-    40% { transform: translateX(4px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(2px); }
-  }
-
-  // ==================== Footer Buttons ====================
-
-  &__footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 8px 16px;
-    border-top: 1px solid var(--openbitfun-color-border-subtle);
-    background: transparent;
-
-  }
-
-  &__btn-spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 28%, transparent);
-    border-top-color: var(--openbitfun-color-accent-default);
-    border-radius: 50%;
-    animation: new-project-spin 0.8s linear infinite;
-  }
-
-  @keyframes new-project-spin {
-    to { transform: rotate(360deg); }
-  }
-}
-
-// ==================== Responsive Design ====================
-
-@media (max-width: 520px) {
-  .new-project-dialog {
-    width: 100%;
-
-    &__hero {
-      padding: 8px 16px 20px;
-    }
-
-    &__content {
-      padding: 0 16px 16px;
-    }
-
-    &__footer {
-      padding: 10px 16px;
-    }
-
-    &__path-selector {
-      flex-direction: column;
-    }
-
-    &__select-btn {
-      width: 100%;
-    }
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .new-project-dialog__btn-spinner {
-    animation: none;
-    transform: none;
   }
 }

@@ -17,6 +17,23 @@ function request(query: string): GlobalSearchRequest {
 }
 
 describe('interactiveCapabilitySearchProvider', () => {
+  it('hides suspended Flashgrep controls while keeping session-title controls', async () => {
+    const capability = INTERACTIVE_CAPABILITY_CATALOG.capabilities.find(
+      ({ id }) => id === 'setting.workspace.session',
+    );
+    expect(capability?.options.map(({ id }) => id)).toEqual(['session-title-generation']);
+    expect(capability?.items.some(({ id }) => id === 'accelerated-search' || id === 'search-index'))
+      .toBe(false);
+    for (const query of ['Flashgrep', 'accelerated workspace search']) {
+      const result = await interactiveCapabilitySearchProvider.search(
+        request(query), new AbortController().signal,
+      );
+      if (query === 'Flashgrep') expect(result.items).toEqual([]);
+      expect(result.items.some(({ target }) => target.kind === 'capability'
+        && (target.itemId === 'accelerated-search' || target.itemId === 'search-index')))
+        .toBe(false);
+    }
+  });
   it('uses the curated feature-and-settings contract', () => {
     expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities).toHaveLength(
       INTERACTIVE_CAPABILITY_CATALOG.counts.userFacing,

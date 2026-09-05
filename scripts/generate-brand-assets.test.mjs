@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import sharp from 'sharp';
@@ -49,6 +50,27 @@ test('generated macOS icons use the canonical ICNS layout', () => {
   assert.ok(desktop.equals(canonicalizeIcns(desktop)), 'desktop ICNS is not canonical');
   assert.ok(installer.equals(canonicalizeIcns(installer)), 'installer ICNS is not canonical');
   assert.ok(desktop.equals(installer), 'desktop and installer ICNS files differ');
+});
+
+test('application icons preserve the submitted artwork independently from the startup Logo', async () => {
+  const applicationMark = readFileSync('assets/brand/source/openbitfun-app-mark.png');
+  const startupMark = readFileSync('assets/brand/source/openbitfun-mark-light.png');
+  const generatedIcon = readFileSync('assets/brand/exports/openbitfun-app-icon-512.png');
+
+  assert.equal(
+    createHash('sha256').update(applicationMark).digest('hex'),
+    '6cda0b01d037ef552690d210a1e5adfa807a806d685a49f46d110b1e3765b5a0',
+  );
+  assert.equal(
+    createHash('sha256').update(generatedIcon).digest('hex'),
+    'df460c4a43d9a68e15bee7b23b0bb68f7b9e70c26c68158ef82e2d4fd9e6288f',
+  );
+  assert.notDeepEqual(applicationMark, startupMark);
+
+  const metadata = await sharp(applicationMark).metadata();
+  assert.equal(metadata.width, 512);
+  assert.equal(metadata.height, 512);
+  assert.equal(metadata.hasAlpha, true);
 });
 
 test('brand exports provide decodable transparent PNGs at every advertised size', async () => {
@@ -112,20 +134,14 @@ test('small icons retain a bright rim around the entire silhouette', async () =>
   }
 });
 
-test('menu-bar template remains transparent and visible at its logical size', async () => {
-  const { data, info } = await sharp('src/apps/desktop/icons/openbitfun-tray-template.png')
-    .resize(16, 16).raw().toBuffer({ resolveWithObject: true });
-  assert.equal(info.channels, 4);
-  assert.equal(data[3], 0, 'template must not include the app background');
-  assert.equal(data[(8 * 16 + 8) * 4 + 3], 0, 'center must remain open');
-  let opaquePixels = 0;
-  for (let offset = 3; offset < data.length; offset += 4) {
-    if (data[offset] >= 200) opaquePixels++;
-  }
-  assert.ok(opaquePixels >= 24, 'template loses its silhouette at menu-bar size');
+test('desktop tray reuses the configured application icon', () => {
+  const source = readFileSync('src/apps/desktop/src/tray.rs', 'utf8');
+  assert.match(source, /default_window_icon\(\)/);
+  assert.doesNotMatch(source, /openbitfun-tray-template/);
+  assert.doesNotMatch(source, /icon_as_template/);
 });
 
-test('browser entry points reference generated optical favicons', () => {
+test('browser entry points reference generated application favicons', () => {
   for (const [htmlPath, assetDir] of [
     ['src/web-ui/index.html', 'src/web-ui/public/brand'],
     ['src/mobile-web/index.html', 'src/mobile-web/public/brand'],

@@ -575,63 +575,6 @@ async function startDesktopPreview() {
   await new Promise(() => {});
 }
 
-function flashgrepBinaryNames() {
-  if (process.platform === 'win32' && process.arch === 'x64') {
-    return ['flashgrep-x86_64-pc-windows-msvc.exe'];
-  }
-  if (process.platform === 'win32' && process.arch === 'arm64') {
-    return ['flashgrep-aarch64-pc-windows-msvc.exe'];
-  }
-  if (process.platform === 'darwin' && process.arch === 'x64') {
-    return ['flashgrep-x86_64-apple-darwin'];
-  }
-  if (process.platform === 'darwin' && process.arch === 'arm64') {
-    return ['flashgrep-aarch64-apple-darwin'];
-  }
-  if (process.platform === 'linux' && process.arch === 'x64') {
-    return [
-      'flashgrep-x86_64-unknown-linux-musl',
-      'flashgrep-x86_64-unknown-linux-gnu',
-    ];
-  }
-  if (process.platform === 'linux' && process.arch === 'arm64') {
-    return [
-      'flashgrep-aarch64-unknown-linux-musl',
-      'flashgrep-aarch64-unknown-linux-gnu',
-    ];
-  }
-  return [process.platform === 'win32' ? 'flashgrep.exe' : 'flashgrep'];
-}
-
-function flashgrepBinaryName() {
-  return flashgrepBinaryNames()[0];
-}
-
-function ensureFlashgrepBinary() {
-  for (const binaryName of flashgrepBinaryNames()) {
-    const binaryPath = path.join(ROOT_DIR, 'resources', 'flashgrep', binaryName);
-    if (!fs.existsSync(binaryPath)) {
-      continue;
-    }
-    return { ok: true, binaryPath };
-  }
-
-  return {
-    ok: false,
-    error: new Error(
-      `flashgrep binary not found for ${process.platform}/${process.arch}. Expected one of: ${flashgrepBinaryNames()
-        .map((name) => `resources/flashgrep/${name}`)
-        .join(', ')}`
-    ),
-  };
-}
-
-async function ensureFlashgrepBundleResource() {
-  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-flashgrep-resource.mjs')).href;
-  const helper = await import(helperUrl);
-  return helper.ensureFlashgrepBinary();
-}
-
 /**
  * Main entry
  */
@@ -661,7 +604,7 @@ async function main() {
   let currentStep = 1;
 
   // Step 1: Run all independent preparation tasks in parallel.
-  // copy-monaco / generate-version / mobile-web / flashgrep / plugin-host have no
+  // copy-monaco / generate-version / mobile-web / plugin-host have no
   // dependencies on each other; each task's output is line-prefixed so the
   // interleaved logs stay attributable. The DeepSeek bridge is not prepared
   // here: it is not a compile-time Tauri resource. Official desktop:build
@@ -670,7 +613,7 @@ async function main() {
     currentStep++,
     totalSteps,
     desktopMode
-      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep, plugin-host)'
+      ? 'Prepare resources (parallel: monaco, version, mobile-web, plugin-host)'
       : 'Prepare resources (parallel: monaco, version)'
   );
 
@@ -699,27 +642,6 @@ async function main() {
     prepTasks.push({
       name: 'Build mobile-web',
       promise: runCommandPrefixed('mobile-web', 'node', ['scripts/mobile-web-build.cjs', '--install']),
-    });
-    prepTasks.push({
-      name: 'Prepare workspace search daemon',
-      promise: (async () => {
-        const flashgrepResult = ensureFlashgrepBinary();
-        if (!flashgrepResult.ok) {
-          return {
-            ok: false,
-            code: null,
-            error: flashgrepResult.error || new Error('Workspace search daemon is missing'),
-          };
-        }
-        process.env.FLASHGREP_DAEMON_BIN = flashgrepResult.binaryPath;
-
-        try {
-          await ensureFlashgrepBundleResource();
-        } catch (error) {
-          return { ok: false, code: null, error };
-        }
-        return { ok: true, code: 0, error: null };
-      })(),
     });
   }
 

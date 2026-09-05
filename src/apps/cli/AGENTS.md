@@ -142,6 +142,12 @@ cargo check -p openbitfun-cli
 cargo test -p openbitfun-cli
 ```
 
+For streaming `exec` retry, context recovery, and final-event contracts:
+
+```bash
+cargo test --locked -p openbitfun-cli --test cli_command_contracts exec_cli_contracts::stream_json_
+```
+
 When a CLI change crosses a shared boundary, use the focused command maintained
 by that owner: Agent Runtime for port/SDK behavior, the IPC adapter for shared
 protocol behavior, Core for turn/tool/persistence behavior, Terminal for

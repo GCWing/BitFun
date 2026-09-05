@@ -49,6 +49,7 @@ describe('FlowChat semantic typography roles', () => {
     const stylesheets = [
       readSource('./ChatInput.scss'),
       readSource('./ChatInputWorkspaceStrip.scss'),
+      readSource('./FlowTextBlock.scss'),
       readSource('./modern/ModelRoundItem.scss'),
       readSource('./modern/UserMessageItem.scss'),
     ].join('\n');
@@ -134,7 +135,7 @@ describe('FlowChat semantic typography roles', () => {
     expect(extractBlock(modelRound, '.model-round-item__meta {')).toContain(
       'font-size: var(--openbitfun-type-flow-meta-font-size);',
     );
-    expectRole(userMessage, '.user-message-item__content {', 'body');
+    expectRole(userMessage, '.user-message-item__content {', 'control');
     expectRole(userMessage, '.user-message-item__steering-tag {', 'micro');
     expect(extractBlock(userMessage, '.user-message-item--failed {')).toContain(
       '--_failed-font-size: var(--openbitfun-type-flow-control-font-size);',
