@@ -16,7 +16,6 @@ import {
   LINE,
   MEDIA_SCRIM,
   MUTED,
-  SCRIM,
   SHADOW_SUBTLE,
   SOFT,
   STATUS_SUCCESS,
@@ -77,7 +76,6 @@ export struct ComposerBar {
     default_models: {}
   };
   @Param selectedModelId: string = '';
-  @Local showModelSelectorSheet: boolean = false;
   @Local showModelSelectorPopover: boolean = false;
   @Local isPreparingModelSelectorPopover: boolean = false;
   @Local keepExpandedForModelSelection: boolean = false;
@@ -118,13 +116,6 @@ export struct ComposerBar {
     this.closeModelSelector();
   }
 
-  @Monitor('showModelSelectorSheet')
-  onModelSelectorSheetChanged(): void {
-    if (!this.showModelSelectorSheet) {
-      this.restoreComposerFocusAfterModelSelection();
-    }
-  }
-
   build() {
     Column() {
       this.AdaptiveComposer()
@@ -139,7 +130,6 @@ export struct ComposerBar {
       bottom: this.presentation === ComposerPresentation.Floating ? 16 : 12
     })
     .backgroundColor(TRANSPARENT)
-    .bindSheet($$this.showModelSelectorSheet, this.ModelSelector(true), this.modelSelectorSheetOptions())
   }
 
   @Builder
@@ -242,7 +232,7 @@ export struct ComposerBar {
     .accessibilityText(`${RemoteI18n.t('chat.selectModel')} · ${this.displaySelectedModel()}`)
     .bindPopup(this.showModelSelectorPopover, {
       builder: () => {
-        this.ModelSelector(false)
+        this.ModelSelector()
       },
       placement: Placement.Top,
       popupColor: TRANSPARENT,
@@ -265,39 +255,13 @@ export struct ComposerBar {
       }
     })
     .onClick(() => {
-      if (this.presentation === ComposerPresentation.Floating) {
-        this.toggleModelSelectorPopover();
-      } else {
-        this.showModelSelectorSheet = true;
-      }
+      this.toggleModelSelectorPopover();
     })
   }
 
   @Builder
-  ModelSelector(asSheet: boolean) {
+  ModelSelector() {
     Column({ space: 10 }) {
-      if (asSheet) {
-        Row() {
-          Text(RemoteI18n.t('chat.selectModel'))
-            .fontSize(MobileDesignTypography.bodySmall.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(MUTED)
-          Blank()
-          Stack({ alignContent: Alignment.Center }) {
-            SymbolGlyph($r('sys.symbol.xmark'))
-              .fontSize(15)
-              .fontColor([MUTED])
-          }
-          .width(32)
-          .height(32)
-          .accessibilityText(RemoteI18n.t('common.close'))
-          .onClick(() => {
-            this.closeModelSelector(true);
-          })
-        }
-        .width('100%')
-      }
-
       List({ space: MobileDesignGeometry.composerModelSelectorRowGap }) {
         ForEach(this.selectorModels(), (model: ConversationUiModel) => {
           ListItem() {
@@ -311,16 +275,15 @@ export struct ComposerBar {
       .edgeEffect(EdgeEffect.Spring)
       .divider(null)
     }
-    .width(asSheet ? '100%' : MobileDesignGeometry.composerModelSelectorWidth)
+    .width(MobileDesignGeometry.composerModelSelectorWidth)
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
     .backgroundColor(CARD)
-    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
-      MobileDesignGeometry.composerModelSelectorRadius)
-    .border({ width: asSheet ? 0 : 0.5, color: asSheet ? TRANSPARENT : LINE })
+    .borderRadius(MobileDesignGeometry.composerModelSelectorRadius)
+    .border({ width: 0.5, color: LINE })
     .shadow({
-      radius: asSheet ? 0 : 18,
-      color: asSheet ? TRANSPARENT : SHADOW_SUBTLE,
-      offsetY: asSheet ? 0 : 7
+      radius: 18,
+      color: SHADOW_SUBTLE,
+      offsetY: 7
     })
   }
 
@@ -697,7 +660,7 @@ export struct ComposerBar {
   }
 
   private isModelSelectorExpanded(): boolean {
-    return this.showModelSelectorSheet || this.showModelSelectorPopover || this.isPreparingModelSelectorPopover;
+    return this.showModelSelectorPopover || this.isPreparingModelSelectorPopover;
   }
 
   private shouldShowModelControl(): boolean {
@@ -724,7 +687,10 @@ export struct ComposerBar {
   }
 
   private modelListHeight(): number {
-    const visibleRows = Math.min(this.enabledModels().length, 7);
+    // Five rows fit comfortably above the compact composer while the keyboard
+    // remains visible. Larger catalogs scroll inside the anchored menu.
+    const maxVisibleRows = this.presentation === ComposerPresentation.Compact ? 5 : 7;
+    const visibleRows = Math.min(this.enabledModels().length, maxVisibleRows);
     return visibleRows * MobileDesignGeometry.composerModelSelectorRowHeight +
       Math.max(0, visibleRows - 1) * MobileDesignGeometry.composerModelSelectorRowGap;
   }
@@ -740,7 +706,6 @@ export struct ComposerBar {
 
   private closeModelSelector(restoreInputFocus: boolean = false): void {
     const shouldRestore = restoreInputFocus && this.restoreInputFocusAfterModelSelection;
-    this.showModelSelectorSheet = false;
     this.showModelSelectorPopover = false;
     this.isPreparingModelSelectorPopover = false;
     if (shouldRestore) {
@@ -756,6 +721,13 @@ export struct ComposerBar {
       return;
     }
     if (this.isPreparingModelSelectorPopover) {
+      return;
+    }
+
+    if (this.presentation === ComposerPresentation.Compact) {
+      // On a phone this is an in-place upward menu, not a modal sheet. Keep the
+      // IME visible so model switching does not interrupt prompt composition.
+      this.showModelSelectorPopover = true;
       return;
     }
 
@@ -797,8 +769,8 @@ export struct ComposerBar {
   }
 
   private restoreComposerFocusAfterModelSelection(): void {
-    if (!this.restoreInputFocusAfterModelSelection || this.showModelSelectorSheet ||
-      this.showModelSelectorPopover || this.isPreparingModelSelectorPopover) {
+    if (!this.restoreInputFocusAfterModelSelection || this.showModelSelectorPopover ||
+      this.isPreparingModelSelectorPopover) {
       return;
     }
     if (this.restoreInputFocusTimerId >= 0) {
@@ -829,16 +801,6 @@ export struct ComposerBar {
   private async startVoiceInput(): Promise<void> {
     await this.releaseComposerKeyboard();
     this.onVoiceInput();
-  }
-
-  private modelSelectorSheetOptions(): SheetOptions {
-    return {
-      height: Math.min(480, 86 + this.modelListHeight()),
-      backgroundColor: TRANSPARENT,
-      maskColor: SCRIM,
-      showClose: false,
-      dragBar: true
-    };
   }
 
   private inputPlaceholder(): string {
