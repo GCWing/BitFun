@@ -462,6 +462,28 @@ describe('Markdown file links', () => {
     expect(onFileViewRequest).toHaveBeenCalledTimes(4);
   });
 
+  it('routes PDF links through the integrated file viewer instead of the file manager', async () => {
+    const pdfPath = 'D:\\SampleDocs\\Report.PDF';
+
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={`[Report.pdf](${pdfPath})`}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const link = container.querySelector<HTMLButtonElement>('button.file-link');
+    expect(link).not.toBeNull();
+
+    act(() => link?.click());
+
+    expect(onFileViewRequest).toHaveBeenCalledWith(pdfPath, 'Report.PDF', undefined);
+    expect(mocks.revealInExplorer).not.toHaveBeenCalled();
+  });
+
   it('does not load the math renderer for ordinary markdown', async () => {
     await act(async () => {
       root.render(
