@@ -655,7 +655,7 @@ export const FloatingMiniChat: React.FC = () => {
               className="openbitfun-fmc__close"
               icon={<Icon name="xmark" size="lg" />}
               onClick={handleClose}
-              size="md"
+              size="sm"
               aria-label={t('session.close')}
             />
           </Tooltip>

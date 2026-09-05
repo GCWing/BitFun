@@ -12,11 +12,10 @@
     display: flex;
     align-items: center;
     gap: var(--openbitfun-space-2);
-    padding-block: 0;
-    padding-inline: var(--openbitfun-space-4) 0;
+    padding-block: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-4) var(--openbitfun-space-2);
     border-bottom: 1px solid var(--openbitfun-color-border-default);
     background: var(--openbitfun-color-surface-canvas);
-    height: 40px;
     min-height: 40px;
     flex-shrink: 0;
     border-radius: var(--openbitfun-radius-base) var(--openbitfun-radius-base) 0 0;
@@ -28,6 +27,8 @@
     color: var(--openbitfun-color-content-primary);
     margin: 0;
     flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   &__header-actions {
@@ -36,41 +37,6 @@
     gap: 2px;
     flex-shrink: 0;
     margin-inline-start: auto;
-    padding-inline-end: 40px;
-  }
-
-  &__close {
-    position: absolute;
-    inset-block-start: 4px;
-    inset-inline-end: 4px;
-    z-index: 1;
-  }
-
-  &__header-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--openbitfun-radius-sm);
-    color: var(--openbitfun-color-content-secondary);
-    cursor: pointer;
-    transition:
-      background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
-      color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
-      transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
-
-    &:hover {
-      background: var(--openbitfun-color-action-neutral-surface);
-      color: var(--openbitfun-color-content-primary);
-    }
-
-    &:active {
-      transform: scale(0.95);
-    }
   }
 
 

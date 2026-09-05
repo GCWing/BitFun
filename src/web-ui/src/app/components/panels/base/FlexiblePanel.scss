@@ -34,13 +34,13 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--openbitfun-space-3);
+  padding: var(--openbitfun-space-1) var(--openbitfun-space-3);
   background: var(--openbitfun-color-surface-raised);
   border-bottom: none;
   backdrop-filter: var(--openbitfun-effect-blur-subtle);
   -webkit-backdrop-filter: var(--openbitfun-effect-blur-subtle);
-  height: 36px;
   min-height: 36px;
+  flex-shrink: 0;
   user-select: none;
   position: relative;
 }

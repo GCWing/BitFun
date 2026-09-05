@@ -16,20 +16,16 @@
     align-items: center;
     justify-content: space-between;
     min-height: 24px;
-    padding-inline-end: 24px;
+    gap: var(--openbitfun-space-2);
     margin-bottom: 10px;
   }
 
   &__title {
+    min-width: 0;
+    overflow-wrap: anywhere;
     font-size: var(--openbitfun-type-flow-control-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
     color: var(--openbitfun-color-content-primary);
-  }
-
-  &__close {
-    position: absolute;
-    inset-block-start: 4px;
-    inset-inline-end: 4px;
   }
 
   &__actions {

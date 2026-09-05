@@ -200,20 +200,19 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
       onClick={onClose}
     >
       <div data-openbitfun-component="branch-select-modal" data-openbitfun-part="root" className="branch-select-dialog" onClick={(e) => e.stopPropagation()}>
-        <Tooltip content={tCommon('actions.close')}>
-          <IconButton
-            className="branch-select-dialog__close"
-            data-openbitfun-component="branch-select-modal"
-            data-openbitfun-part="close"
-            icon={<Icon name="xmark" size="lg" />}
-            onClick={onClose}
-            size="md"
-            aria-label={tCommon('actions.close')}
-          />
-        </Tooltip>
-
         <div data-openbitfun-component="branch-select-modal" data-openbitfun-part="header" className="branch-select-dialog__header">
           <h2 className="branch-select-dialog__title">{retainedDisplay.title}</h2>
+          <Tooltip content={tCommon('actions.close')}>
+            <IconButton
+              className="branch-select-dialog__close"
+              data-openbitfun-component="branch-select-modal"
+              data-openbitfun-part="close"
+              icon={<Icon name="xmark" size="lg" />}
+              onClick={onClose}
+              size="sm"
+              aria-label={tCommon('actions.close')}
+            />
+          </Tooltip>
         </div>
 
         <div data-openbitfun-component="branch-select-modal" data-openbitfun-part="content" className="branch-select-dialog__content">

@@ -64,25 +64,22 @@
   }
 }
 
-// ==================== Close Button ====================
-
-.branch-select-dialog__close {
-  position: absolute;
-  inset-block-start: 8px;
-  inset-inline-end: 8px;
-  z-index: 10;
-}
-
 // ==================== Header Area ====================
 
 .branch-select-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: var(--openbitfun-space-3);
   flex-shrink: 0;
-  padding-block: 16px 12px;
-  padding-inline: 20px 48px;
+  padding-block: var(--openbitfun-space-2);
+  padding-inline: 20px var(--openbitfun-space-2);
   border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 .branch-select-dialog__title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--openbitfun-type-body-md-font-size);
   font-weight: var(--openbitfun-type-label-sm-font-weight);
   margin: 0;

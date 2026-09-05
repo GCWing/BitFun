@@ -9,7 +9,6 @@ import {
   SearchField,
   Dialog,
   DialogBody,
-  DialogHeader,
 } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
@@ -368,38 +367,33 @@ export const NotificationCenter: React.FC = () => {
       open={isOpen}
       onOpenChange={(nextOpen) => { if (!nextOpen) handleClose(); }}
       size="lg"
+      aria-label={t('components:notificationCenter.title')}
     >
-      <DialogHeader>
-      </DialogHeader>
       <DialogBody inset="none">
       <div className="notification-center" data-testid="notification-center" data-openbitfun-component="notification" data-openbitfun-part="centerRoot">
         
         <div className="notification-center__header" data-openbitfun-component="notification" data-openbitfun-part="centerHeader">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
           <div className="notification-center__header-actions">
-            <button
-              type="button"
-              className="notification-center__header-button"
+            <IconButton
+              icon={<CheckCheck size={16} />}
+              size="sm"
               onClick={handleMarkAllRead}
               title={t('components:notificationCenter.actions.markAllRead')}
               aria-label={t('components:notificationCenter.actions.markAllRead')}
-            >
-              <CheckCheck size={16} />
-            </button>
-            <button
-              type="button"
-              className="notification-center__header-button"
+            />
+            <IconButton
+              icon={<Icon name="delete" size="md" />}
+              size="sm"
               onClick={handleClearAll}
               title={t('components:notificationCenter.actions.clearAll')}
               aria-label={t('components:notificationCenter.actions.clearAll')}
-            >
-              <Icon name="delete" size="md" />
-            </button>
+            />
             <IconButton
               className="notification-center__close"
               icon={<Icon name="xmark" size="lg" />}
               onClick={handleClose}
-              size="md"
+              size="sm"
               title={t('common:actions.close')}
               aria-label={t('common:actions.close')}
               data-testid="notification-center-close-btn"

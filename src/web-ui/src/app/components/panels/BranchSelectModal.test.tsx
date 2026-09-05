@@ -46,18 +46,31 @@ describe('BranchSelectModal presence', () => {
   });
 
   const renderModal = (isOpen: boolean, title: string) => {
+    const onClose = vi.fn();
     act(() => {
       root.render(
         <BranchSelectModal
           isOpen={isOpen}
-          onClose={vi.fn()}
+          onClose={onClose}
           onSelect={vi.fn()}
           repositoryPath=""
           title={title}
         />,
       );
     });
+    return onClose;
   };
+
+  it('closes once from the title row without also activating the backdrop', () => {
+    const onClose = renderModal(true, 'Choose release branch');
+    const close = document.querySelector<HTMLButtonElement>(
+      '.branch-select-dialog__header button[aria-label="actions.close"]',
+    );
+
+    expect(close).not.toBeNull();
+    act(() => close!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it('retains the closed surface and last title until the exit window completes', () => {
     renderModal(true, 'Choose release branch');

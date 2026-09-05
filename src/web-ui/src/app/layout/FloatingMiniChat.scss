@@ -295,6 +295,13 @@ $panel-height: 680px;
   flex-direction: column;
   box-sizing: border-box;
 
+  // Keep the expanded Hello surface inset from the window corner. MiniApp
+  // panels already inherit their spacing from the root container.
+  .openbitfun-fmc[data-openbitfun-mode='chat'] & {
+    right: 16px;
+    bottom: 16px;
+  }
+
   // Pre-open state: collapsed into the button position. The collapsed panel
   // still overlaps the trigger, so it is hidden outright once the close
   // animation ends rather than relying on pointer-events alone.
@@ -372,10 +379,10 @@ $panel-height: 680px;
 // ─── Header ────────────────────────────────────────────────
 .openbitfun-fmc__header {
   flex: 0 0 auto;
-  height: 40px;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  padding-block: 0;
+  padding-block: var(--openbitfun-space-1);
   padding-inline: var(--openbitfun-space-2) var(--openbitfun-space-1);
   gap: 4px;
   border-bottom: 1px solid var(--openbitfun-color-border-subtle);

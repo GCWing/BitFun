@@ -27,13 +27,13 @@
     overflow: hidden;
   }
 
-  // Header - match TabBar height (36px)
+  // Preserve the compact header while allowing larger density controls to fit.
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 36px;
-    padding: 0 16px;
+    min-height: 36px;
+    padding: var(--openbitfun-space-1) 16px;
     flex-shrink: 0;
     border-bottom: 1px dashed var(--openbitfun-color-border-default);
   }
