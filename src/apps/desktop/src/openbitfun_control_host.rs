@@ -4,6 +4,8 @@
 //! owns concrete Desktop state reads/mutations and delegates only presentation
 //! actions (navigation/product actions) to the Web UI surface.
 
+mod miniapps;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -792,6 +794,7 @@ async fn configure_desktop_provider_option(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesktopProviderOperation {
+    MiniApp(miniapps::Operation),
     ListCompanionPets,
     UseCompanionPet,
     DeleteCompanionPet,
@@ -802,6 +805,7 @@ fn desktop_provider_operation(
     operation_id: &str,
 ) -> Option<DesktopProviderOperation> {
     match (provider_id, operation_id) {
+        ("miniapp", id) => miniapps::operation(id).map(DesktopProviderOperation::MiniApp),
         ("agent-companion-pet", "list") => Some(DesktopProviderOperation::ListCompanionPets),
         ("agent-companion-pet", "use") => Some(DesktopProviderOperation::UseCompanionPet),
         ("agent-companion-pet", "delete") => Some(DesktopProviderOperation::DeleteCompanionPet),
@@ -829,13 +833,22 @@ async fn select_companion(
     companion_state(state).await
 }
 
-async fn execute_companion_operation(
+async fn execute_desktop_provider_operation(
     app: &AppHandle,
     operation: DesktopProviderOperation,
     arguments: Option<&Value>,
 ) -> Result<Value, String> {
     let state = app.state::<AppState>();
     match operation {
+        DesktopProviderOperation::MiniApp(operation) => {
+            miniapps::execute(
+                &state.miniapp_manager,
+                state.js_worker_pool.as_deref(),
+                operation,
+                arguments,
+            )
+            .await
+        }
         DesktopProviderOperation::ListCompanionPets => companion_state(&state).await,
         DesktopProviderOperation::UseCompanionPet => {
             let arguments = arguments.and_then(Value::as_object).ok_or_else(|| {
@@ -1000,7 +1013,7 @@ async fn execute_desktop(
             operation_id: provider_operation_id,
         } => match desktop_provider_operation(provider_id, provider_operation_id) {
             Some(operation) => {
-                execute_companion_operation(app, operation, request.arguments.as_ref()).await
+                execute_desktop_provider_operation(app, operation, request.arguments.as_ref()).await
             }
             None => Err(format!(
                 "Product-control operation provider is not registered: {provider_id}:{provider_operation_id}"

@@ -2908,13 +2908,18 @@
       "items": [
         {
           "id": "gallery-lifecycle",
-          "titleZh": "查看、搜索、创建、导入、编辑和删除 Mini App",
-          "titleEn": "Browse, search, create, import, edit, and delete Mini Apps",
+          "titleZh": "查看、创建、编辑和删除已安装 Mini App",
+          "titleEn": "Inspect, create, update, and delete installed MiniApps",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“查看、搜索、创建、导入、编辑和删除 Mini App”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Browse, search, create, import, edit, and delete Mini Apps” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "direct",
+            "operations": [
+              "list-apps",
+              "inspect-app",
+              "create-app",
+              "update-app",
+              "delete-app"
+            ],
+            "options": []
           },
           "evidence": [
             "command:list_miniapps",
@@ -3160,17 +3165,59 @@
       ],
       "agentExamplesZh": [
         "打开 Mini Apps",
-        "带我去小应用市场"
+        "带我去小应用市场",
+        "创建一个番茄钟小应用",
+        "把已有小应用的按钮改成圆角",
+        "删除我指定的小应用"
       ],
       "agentExamplesEn": [
         "Open Mini Apps",
-        "Take me to the Mini App market"
+        "Take me to the Mini App market",
+        "Create a Pomodoro MiniApp",
+        "Round the buttons in an existing MiniApp",
+        "Delete the MiniApp I specify"
       ],
       "destination": {
         "kind": "action",
         "actionId": "surface.miniapps.open"
       },
-      "operations": []
+      "operations": [
+        {
+          "id": "list-apps",
+          "titleZh": "列出已安装小应用",
+          "titleEn": "List installed MiniApps",
+          "descriptionZh": "读取产品宿主上的已安装应用及版本。",
+          "descriptionEn": "Read installed apps and versions from the product host."
+        },
+        {
+          "id": "inspect-app",
+          "titleZh": "读取小应用源码",
+          "titleEn": "Inspect a MiniApp",
+          "descriptionZh": "按应用 ID 读取可编辑字段、源码、权限和版本，不返回控制端路径。",
+          "descriptionEn": "Read editable fields, source, permissions and version by app ID without controller-local paths."
+        },
+        {
+          "id": "create-app",
+          "titleZh": "创建小应用",
+          "titleEn": "Create a MiniApp",
+          "descriptionZh": "直接提交名称和源码，编译并保存到客户端；无需源码仓库或构建工具。",
+          "descriptionEn": "Compile and install a name and source directly in the client, without a repository or build tools."
+        },
+        {
+          "id": "update-app",
+          "titleZh": "修改小应用",
+          "titleEn": "Update a MiniApp",
+          "descriptionZh": "按应用 ID 修改指定字段，保留未提供的源码和用户数据，通知已打开的应用刷新。expectedVersion 可防止覆盖新的修改。",
+          "descriptionEn": "Patch specified fields by app ID, preserve omitted source and user data, and notify open runtimes. expectedVersion guards against stale edits."
+        },
+        {
+          "id": "delete-app",
+          "titleZh": "删除小应用",
+          "titleEn": "Delete a MiniApp",
+          "descriptionZh": "按应用 ID 停止后台任务并删除应用；仅在用户明确要求删除时使用。",
+          "descriptionEn": "Stop the worker and delete an installed app by ID, only on an explicit deletion request."
+        }
+      ]
     },
     {
       "id": "feature.canvas",

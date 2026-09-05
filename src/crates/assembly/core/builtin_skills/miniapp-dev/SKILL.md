@@ -102,6 +102,19 @@ description: 'Generate and refine OpenBitFun MiniApps. Use when the user wants a
 
 先判断当前任务属于哪一种，不要混用：
 
+#### 已打包客户端的直接管理（优先）
+
+用 `OpenBitFunControl` 的 `get` 查询 `feature.miniapps`，按返回的 schema
+调用 `list-apps`、`inspect-app`、`create-app`、`update-app`、`delete-app`。
+这些操作直接在持有应用的产品宿主编译、保存和通知界面，不需要源码仓库、
+Node.js 或本地目录。更新前先读取应用，使用它的 `appId` 和 `expectedVersion`；
+只传要修改的字段，省略的源码、权限和用户存储保持原样。
+删除只用于用户明确要求删除，不能用删除重建来实现修改。
+远程工作区或控制端不要用本地文件工具编辑宿主路径，使用以上结构化操作；
+目标不支持时报告具体限制。
+
+文件较多且当前是本地工作区时，可使用下面的文件编辑流程。
+
 #### 新建 MiniApp
 
 1. 调用 `InitMiniApp`，保存返回的 `app_id` 和根目录。

@@ -1317,6 +1317,53 @@ mod tests {
     }
 
     #[test]
+    fn miniapp_lifecycle_is_discoverable_and_headless_profiles_degrade_explicitly() {
+        let registry = ProductControlRegistry::global();
+        for operation in [
+            "list-apps",
+            "inspect-app",
+            "create-app",
+            "update-app",
+            "delete-app",
+        ] {
+            let definition = registry
+                .definition(&format!("feature.miniapps:operation:{operation}"))
+                .unwrap();
+            assert!(definition.availability[&ProductControlDeliveryProfile::Desktop].available);
+            for profile in [
+                ProductControlDeliveryProfile::Cli,
+                ProductControlDeliveryProfile::DetachedDispatch,
+            ] {
+                let state = &definition.availability[&profile];
+                assert!(!state.available);
+                assert!(state
+                    .reason
+                    .as_ref()
+                    .is_some_and(|reason| !reason.is_empty()));
+            }
+        }
+        let update = registry
+            .operation("feature.miniapps", "update-app")
+            .unwrap();
+        validate_operation_arguments(
+            &update.input_schema,
+            Some(&json!({ "appId": "installed-id", "expectedVersion": 2, "css": "body {}" })),
+        )
+        .unwrap();
+        validate_operation_argument_scopes(
+            update,
+            Some(&json!({"appId": "installed-id", "css": "body {}"})),
+            true,
+        )
+        .unwrap();
+        assert!(validate_operation_arguments(
+            &update.input_schema,
+            Some(&json!({ "appId": "installed-id", "expectedVersion": 0 }))
+        )
+        .is_err());
+    }
+
+    #[test]
     fn discovery_satisfies_the_shared_cross_surface_acceptance_corpus() {
         let catalog = catalog().unwrap();
         for acceptance in &catalog.search_acceptance {

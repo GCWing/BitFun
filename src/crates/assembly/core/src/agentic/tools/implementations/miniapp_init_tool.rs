@@ -128,6 +128,11 @@ Returns app_id and the app root directory. Use the root directory and file names
         input: &Value,
         context: &ToolUseContext,
     ) -> OpenBitFunResult<Vec<ToolResult>> {
+        if context.is_remote() {
+            return Err(OpenBitFunError::tool(
+                "InitMiniApp returns product-host-local files and cannot be used in a remote workspace. Use OpenBitFunControl get feature.miniapps and its structured create-app operation instead".to_string(),
+            ));
+        }
         let manager = try_get_global_miniapp_manager()
             .ok_or_else(|| OpenBitFunError::tool("MiniAppManager not initialized".to_string()))?;
 
