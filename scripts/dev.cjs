@@ -151,15 +151,21 @@ function spawnCommand(cmd, args, cwd = ROOT_DIR, envOverrides = {}, shell = fals
  */
 function runCommandPrefixed(prefix, cmd, args, cwd = ROOT_DIR, envOverrides = {}) {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
+    const spawnOptions = {
       cwd,
-      shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         ...envOverrides,
       },
-    });
+    };
+    const child = process.platform === 'win32'
+      ? spawn(
+          process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe',
+          ['/d', '/s', '/c', cmd, ...args],
+          spawnOptions,
+        )
+      : spawn(cmd, args, spawnOptions);
 
     const forward = (stream, out) => {
       let buffered = '';
