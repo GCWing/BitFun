@@ -1,5 +1,5 @@
-$gutter: clamp(28px, 4vw, 64px);
-$content-max: 1360px;
+$gutter: clamp(16px, 2.5vw, 28px);
+$content-max: 936px;
 
 .gallery-layout {
   display: flex;
@@ -46,14 +46,7 @@ $content-max: 1360px;
   position: sticky;
   top: 0;
   z-index: 10;
-  background: linear-gradient(
-    to bottom,
-    var(--openbitfun-color-surface-scene) 0%,
-    var(--openbitfun-color-surface-scene) 72%,
-    transparent 100%
-  );
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--openbitfun-color-surface-scene);
 
   &__identity {
     flex: 1;
@@ -104,7 +97,7 @@ $content-max: 1360px;
   flex-direction: column;
   gap: 28px;
   width: min(100%, $content-max);
-  padding: var(--openbitfun-space-5) $gutter var(--openbitfun-space-8);
+  padding: var(--openbitfun-space-3) $gutter var(--openbitfun-space-8);
   margin: 0 auto;
   box-sizing: border-box;
 }
@@ -187,9 +180,9 @@ $content-max: 1360px;
 
 .gallery-skeleton-card {
   height: var(--gallery-skeleton-height);
-  border-radius: var(--openbitfun-radius-lg);
-  background: var(--openbitfun-color-surface-subtle);
-  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
+  border: 0;
   position: relative;
   overflow: hidden;
   animation: gallery-item-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
@@ -224,6 +217,9 @@ $content-max: 1360px;
   letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   color: var(--openbitfun-color-content-muted);
   text-align: center;
+
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
 
   &--error {
     color: var(--openbitfun-color-status-danger-content);
