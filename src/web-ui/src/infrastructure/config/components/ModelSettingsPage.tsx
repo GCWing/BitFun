@@ -4154,8 +4154,8 @@ const ModelSettingsPage: React.FC = () => {
           />
         ) : renderEditingForm()}
               </DialogBody>
-        <DialogFooter appearance="floating">{reasoningPanelDraft ? undefined : (
-          <>
+        {!reasoningPanelDraft && (
+          <DialogFooter appearance="floating">
             <Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
               {t('actions.cancel')}
             </Button>
@@ -4167,8 +4167,8 @@ const ModelSettingsPage: React.FC = () => {
             >
               {t('actions.save')}
             </Button>
-          </>
-        )}</DialogFooter>
+          </DialogFooter>
+        )}
       </Dialog>
       <ConfirmDialog
         open={draftCloseConfirmOpen}

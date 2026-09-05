@@ -1,4 +1,4 @@
-import { Button, Combobox, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, NumberInput, Select, Switch, Textarea, Tooltip, type ComboboxOption, type SelectOption } from '@openbitfun/ui';
+import { Button, Combobox, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, Select, Switch, Textarea, Tooltip, type ComboboxOption, type SelectOption } from '@openbitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -13,11 +13,7 @@ import type { ModelsDevReasoningCatalog } from '@/infrastructure/api/service-api
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import {
-  availableReasoningActionTypes,
   cloneReasoningConfig,
-  nextReasoningActionType,
-  resolveDefaultReasoningEffortValue,
-  resolveReasoningEffortValues,
 } from '../utils/reasoningPresets';
 import './ReasoningPresetEditor.scss';
 
@@ -56,19 +52,12 @@ function tokenizeModelsDevSearch(value: string): string[] {
   return normalized ? normalized.split(' ') : [];
 }
 
-function defaultAction(
-  type: ReasoningPresetAction['type'],
-  defaultEffortValue: string,
-): ReasoningPresetAction {
-  switch (type) {
-    case 'toggle': return { type, enabled: true };
-    case 'budget_tokens': return { type, value: 8192 };
-    case 'request_patch': return { type, body: {} };
-    case 'effort': return { type, value: defaultEffortValue };
-  }
+function defaultRequestPatchAction(): ReasoningPresetAction {
+  return { type: 'request_patch', body: {} };
 }
 
 function parseJsonObject(value: string): Record<string, unknown> | null {
+  if (!value.trim()) return {};
   try {
     const parsed: unknown = JSON.parse(value);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -100,12 +89,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
   const invalidJsonKeysRef = useRef<Set<string>>(new Set());
   const presets = useMemo(() => value.presets ?? [], [value.presets]);
   const catalog = value.catalog ?? { source: 'auto' as const };
-  const actionOptions = useMemo<SelectOption[]>(() => [
-    { label: t('reasoningPresets.settingEffort'), value: 'effort' },
-    { label: t('reasoningPresets.settingToggle'), value: 'toggle' },
-    { label: t('reasoningPresets.settingBudget'), value: 'budget_tokens' },
-    { label: t('reasoningPresets.settingPatch'), value: 'request_patch' },
-  ], [t]);
   const catalogOptions = useMemo<ComboboxOption[]>(() => [
     { description: t('reasoningPresets.catalogAutoTooltip'), label: t('reasoningPresets.catalogAuto'), value: 'auto' },
     { description: t('reasoningPresets.catalogModelsDevTooltip'), label: t('reasoningPresets.catalogModelsDev'), value: 'models_dev' },
@@ -129,18 +112,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
         }] as const),
     ]).values()),
   ], [generatedProjection?.presets, presets, t]);
-  const effortValues = useMemo(
-    () => resolveReasoningEffortValues(generatedProjection),
-    [generatedProjection],
-  );
-  const effortOptions = useMemo<SelectOption[]>(() => effortValues.map(effort => ({
-    label: effort,
-    value: effort,
-  })), [effortValues]);
-  const defaultEffortValue = useMemo(
-    () => resolveDefaultReasoningEffortValue(generatedProjection),
-    [generatedProjection],
-  );
   const unavailablePresetLabels = useMemo(() => (
     generatedProjection?.unavailable_presets
       ?.map(preset => preset.label || preset.id)
@@ -254,11 +225,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
     next[index] = { ...next[index], ...changes };
     update({ ...value, presets: next });
   };
-  const updateAction = (presetIndex: number, actionIndex: number, action: ReasoningPresetAction) => {
-    const actions = [...(presets[presetIndex]?.actions ?? [])];
-    actions[actionIndex] = action;
-    updatePreset(presetIndex, { actions });
-  };
   const setJsonValidation = (key: string, invalid: boolean) => {
     if (invalid) invalidJsonKeysRef.current.add(key);
     else invalidJsonKeysRef.current.delete(key);
@@ -272,6 +238,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
 
   const formatPresetSummary = (preset: ReasoningPreset) => {
     const actions = preset.actions ?? [];
+    if (actions.length === 1 && actions[0]?.type === 'request_patch') return null;
     const patchCount = actions.filter(action => action.type === 'request_patch').length;
     const summaries = actions.flatMap(action => {
       switch (action.type) {
@@ -299,7 +266,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
       id,
       label: id,
       order: presets.length * 10,
-      actions: [defaultAction('effort', defaultEffortValue)],
+      actions: [defaultRequestPatchAction()],
     });
     setExpandedPresetIndex(presets.length);
   };
@@ -316,15 +283,6 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
       return previous;
     });
     update({ ...value, presets: next.map((preset, order) => ({ ...preset, order: order * 10 })) });
-  };
-
-  const moveAction = (presetIndex: number, actionIndex: number, direction: -1 | 1) => {
-    const actions = [...(presets[presetIndex]?.actions ?? [])];
-    const target = actionIndex + direction;
-    if (target < 0 || target >= actions.length) return;
-    [actions[actionIndex], actions[target]] = [actions[target], actions[actionIndex]];
-    resetJsonDraftState();
-    updatePreset(presetIndex, { actions });
   };
 
   return (
@@ -624,6 +582,18 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
           >
             {presets.map((preset, presetIndex) => {
               const expanded = expandedPresetIndex === presetIndex;
+              const actions = preset.actions ?? [];
+              const singlePatchAction = actions.length === 1 && actions[0]?.type === 'request_patch'
+                ? actions[0]
+                : undefined;
+              const usesSinglePatchEditor = actions.length === 0 || singlePatchAction !== undefined;
+              const jsonKey = `${presetIndex}:request-patch`;
+              const jsonValue = jsonDrafts[jsonKey]
+                ?? (Object.keys(singlePatchAction?.body ?? {}).length > 0
+                  ? JSON.stringify(singlePatchAction?.body, null, 2)
+                  : '');
+              const jsonIsValid = parseJsonObject(jsonValue) !== null;
+              const presetSummary = formatPresetSummary(preset);
               return (
                 <div
                   key={`${preset.id}-${presetIndex}`}
@@ -671,9 +641,11 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           {preset.label?.trim() || preset.id}
                         </button>
                       )}
-                      <span className="openbitfun-reasoning-preset-editor__row-preview">
-                        {formatPresetSummary(preset)}
-                      </span>
+                      {presetSummary && (
+                        <span className="openbitfun-reasoning-preset-editor__row-preview">
+                          {presetSummary}
+                        </span>
+                      )}
                     </div>
                     <div className="openbitfun-reasoning-preset-editor__row-badges">
                       {value.default_preset === preset.id && (
@@ -688,7 +660,7 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                         onChange={(event) => updatePreset(presetIndex, {
                           disabled: !event.target.checked,
                           actions: event.target.checked && !preset.actions?.length
-                            ? [defaultAction('effort', defaultEffortValue)]
+                            ? [defaultRequestPatchAction()]
                             : preset.actions,
                         })}
                       />
@@ -740,157 +712,105 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                       data-openbitfun-component="reasoning-preset-editor"
                       data-openbitfun-part="presetEditor"
                     >
-                      <div
-                        className="openbitfun-reasoning-preset-editor__actions"
-                        data-openbitfun-component="reasoning-preset-editor"
-                        data-openbitfun-part="actions"
-                      >
-                  {(preset.actions ?? []).map((action, actionIndex) => {
-                    const jsonKey = `${presetIndex}:${actionIndex}`;
-                    const jsonValue = jsonDrafts[jsonKey]
-                      ?? (action.type === 'request_patch' ? JSON.stringify(action.body, null, 2) : '{}');
-                    const jsonIsValid = action.type !== 'request_patch' || parseJsonObject(jsonValue) !== null;
-                    return (
-                      <div
-                        key={jsonKey}
-                        className="openbitfun-reasoning-preset-editor__action"
-                        data-openbitfun-component="reasoning-preset-editor"
-                        data-openbitfun-part="action"
-                      >
-                        <Select
-                          className="openbitfun-reasoning-preset-editor__action-type"
-                          size="sm"
-                          value={action.type}
-                          disabled={disabled}
-                          options={actionOptions.filter(option => (
-                            availableReasoningActionTypes(preset.actions ?? [], actionIndex)
-                              .includes(option.value as ReasoningPresetAction['type'])
-                          ))}
-                          onValueChange={(next) => {
-                            setJsonValidation(jsonKey, false);
-                            setJsonDrafts(previous => {
-                              const nextDrafts = { ...previous };
-                              delete nextDrafts[jsonKey];
-                              return nextDrafts;
-                            });
-                            updateAction(
-                              presetIndex,
-                              actionIndex,
-                              defaultAction(next as ReasoningPresetAction['type'], defaultEffortValue),
-                            );
-                          }}
-                        />
-                        {action.type === 'effort' && (
-                          <div className="openbitfun-reasoning-preset-editor__effort-control">
-                            <Combobox
-                              className="openbitfun-reasoning-preset-editor__effort-select"
-                              size="sm"
-                              value={action.value}
-                              disabled={disabled}
-                              options={effortOptions}
-                              onCreateValue={value => value}
-                              aria-label={t('reasoningPresets.settingEffort')}
-                              onValueChange={(next) => updateAction(presetIndex, actionIndex, {
-                                type: 'effort',
-                                value: String(next),
-                              })}
-                            />
-                            {!effortValues.includes(action.value.trim()) && (
-                              <Tooltip content={t('reasoningPresets.effortCustomWarning')} placement="top">
-                                <span
-                                  className="openbitfun-reasoning-preset-editor__effort-warning"
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-label={t('reasoningPresets.effortCustomWarning')}
-                                >
-                                  <AlertTriangle size={13} aria-hidden="true" />
-                                </span>
-                              </Tooltip>
-                            )}
-                          </div>
-                        )}
-                        {action.type === 'toggle' && (
-                          <Switch checked={action.enabled} disabled={disabled} onChange={(event) => updateAction(presetIndex, actionIndex, { type: 'toggle', enabled: event.target.checked })} />
-                        )}
-                        {action.type === 'budget_tokens' && (
-                          <NumberInput className="openbitfun-reasoning-preset-editor__action-value" size="sm" value={action.value} min={1} max={2_000_000_000} step={1024} disabled={disabled} disableWheel onValueChange={(next) => updateAction(presetIndex, actionIndex, { type: 'budget_tokens', value: next })} />
-                        )}
-                        {action.type === 'request_patch' && (
-                          <div className="openbitfun-reasoning-preset-editor__json">
-                            <Textarea
-                              value={jsonValue}
-                              disabled={disabled}
-                              rows={4}
-                              invalid={!jsonIsValid}
-                              errorMessage={!jsonIsValid ? t('reasoningPresets.invalidJson') : undefined}
-                              onChange={(event) => {
-                                const nextText = event.target.value;
-                                setJsonDrafts(previous => ({ ...previous, [jsonKey]: nextText }));
-                                const body = parseJsonObject(nextText);
-                                setJsonValidation(jsonKey, !body);
-                                if (body) updateAction(presetIndex, actionIndex, { type: 'request_patch', body });
-                              }}
-                            />
-                          </div>
-                        )}
+                      {usesSinglePatchEditor ? (
                         <div
-                          className="openbitfun-reasoning-preset-editor__action-controls"
+                          className="openbitfun-reasoning-preset-editor__patch-editor"
                           data-openbitfun-component="reasoning-preset-editor"
-                          data-openbitfun-part="actionControls"
+                          data-openbitfun-part="patchEditor"
                         >
-                          <Tooltip content={t('reasoningPresets.moveUp')}>
-                            <IconButton
-                              aria-label={t('reasoningPresets.moveUp')}
+                          <div className="openbitfun-reasoning-preset-editor__patch-heading">
+                            <span className="openbitfun-reasoning-preset-editor__patch-title">
+                              {t('reasoningPresets.settingPatch')}
+                            </span>
+                          </div>
+                          <Textarea
+                            aria-label={t('reasoningPresets.settingPatch')}
+                            value={jsonValue}
+                            placeholder={t('reasoningPresets.patchPlaceholder', {
+                              format: requestFormatLabel || t('reasoningPresets.unknownRequestFormat'),
+                            })}
+                            disabled={disabled}
+                            rows={6}
+                            invalid={!jsonIsValid}
+                            errorMessage={!jsonIsValid ? t('reasoningPresets.invalidJson') : undefined}
+                            onChange={(event) => {
+                              const nextText = event.target.value;
+                              setJsonDrafts(previous => ({ ...previous, [jsonKey]: nextText }));
+                              const body = parseJsonObject(nextText);
+                              setJsonValidation(jsonKey, !body);
+                              if (body) {
+                                updatePreset(presetIndex, {
+                                  actions: [{ type: 'request_patch', body }],
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="openbitfun-reasoning-preset-editor__legacy"
+                          data-openbitfun-component="reasoning-preset-editor"
+                          data-openbitfun-part="legacy"
+                        >
+                          <div
+                            className="openbitfun-reasoning-preset-editor__legacy-notice"
+                            data-openbitfun-component="reasoning-preset-editor"
+                            data-openbitfun-part="legacyNotice"
+                          >
+                            <AlertTriangle size={16} aria-hidden="true" />
+                            <div className="openbitfun-reasoning-preset-editor__legacy-copy">
+                              <strong>{t('reasoningPresets.legacyTitle')}</strong>
+                              <span>{t('reasoningPresets.legacyDescription')}</span>
+                            </div>
+                            <Button
+                              variant="outline"
                               size="sm"
-                              disabled={disabled || actionIndex === 0}
-                              onClick={() => moveAction(presetIndex, actionIndex, -1)}
-                              icon={<Icon name="arrow-up" size="sm" />}
-                            />
-                          </Tooltip>
-                          <Tooltip content={t('reasoningPresets.moveDown')}>
-                            <IconButton
-                              aria-label={t('reasoningPresets.moveDown')}
-                              size="sm"
-                              disabled={disabled || actionIndex === (preset.actions?.length ?? 0) - 1}
-                              onClick={() => moveAction(presetIndex, actionIndex, 1)}
-                              icon={<Icon name="arrow-down" size="sm" />}
-                            />
-                          </Tooltip>
-                          <Tooltip content={t('reasoningPresets.remove')}>
-                            <IconButton
-                              aria-label={t('reasoningPresets.remove')}
-                              size="sm"
-                              disabled={disabled || (preset.actions?.length ?? 0) <= 1}
+                              disabled={disabled}
                               onClick={() => {
                                 resetJsonDraftState();
-                                updatePreset(presetIndex, { actions: preset.actions?.filter((_, index) => index !== actionIndex) });
+                                updatePreset(presetIndex, {
+                                  actions: [defaultRequestPatchAction()],
+                                });
                               }}
-                              icon={<Icon name="delete" size="sm" />}
-                            />
-                          </Tooltip>
+                            >
+                              {t('reasoningPresets.convertToSinglePatch')}
+                            </Button>
+                          </div>
+                          <div
+                            className="openbitfun-reasoning-preset-editor__actions"
+                            data-openbitfun-component="reasoning-preset-editor"
+                            data-openbitfun-part="actions"
+                          >
+                            {actions.map((action, actionIndex) => (
+                              <div
+                                key={`${presetIndex}:legacy:${actionIndex}`}
+                                className="openbitfun-reasoning-preset-editor__action"
+                                data-openbitfun-component="reasoning-preset-editor"
+                                data-openbitfun-part="action"
+                              >
+                                <span className="openbitfun-reasoning-preset-editor__legacy-action-type">
+                                  {action.type === 'effort'
+                                    ? t('reasoningPresets.settingEffort')
+                                    : action.type === 'toggle'
+                                      ? t('reasoningPresets.settingToggle')
+                                      : action.type === 'budget_tokens'
+                                        ? t('reasoningPresets.settingBudget')
+                                        : t('reasoningPresets.settingPatch')}
+                                </span>
+                                <pre className="openbitfun-reasoning-preset-editor__legacy-action-value">
+                                  {action.type === 'request_patch'
+                                    ? JSON.stringify(action.body, null, 2)
+                                    : action.type === 'toggle'
+                                      ? t(action.enabled
+                                          ? 'reasoningPresets.actionSummaryEnabled'
+                                          : 'reasoningPresets.actionSummaryDisabled')
+                                      : String(action.value)}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={disabled}
-                    onClick={() => updatePreset(presetIndex, {
-                      actions: [
-                        ...(preset.actions ?? []),
-                        defaultAction(
-                          nextReasoningActionType(preset.actions ?? []),
-                          defaultEffortValue,
-                        ),
-                      ],
-                    })}
-                    leadingIcon={<Icon name="plus" size="sm" aria-hidden="true" />}
-                  >
-
-                    {t('reasoningPresets.addAction')}
-                  </Button>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
