@@ -5,9 +5,9 @@
   min-width: 0;
   min-height: 193px;
   box-sizing: border-box;
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: var(--openbitfun-radius-xl);
-  background-color: var(--openbitfun-color-surface-raised);
+  border: 1px solid transparent;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background-color: var(--openbitfun-color-surface-tertiary);
   position: relative;
   overflow: hidden;
   cursor: pointer;
@@ -20,10 +20,8 @@
     box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    transform: translateY(-2px);
     background-color: var(--openbitfun-color-surface-subtle);
     border-color: var(--openbitfun-color-border-default);
-    box-shadow: var(--openbitfun-shadow-xs);
   }
 
   &:active {
@@ -114,13 +112,10 @@
 
   &__run-dot {
     background: var(--openbitfun-color-status-success-content);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--openbitfun-color-status-success-content) 65%, transparent);
-    animation: miniapp-card-status-pulse 2s ease-in-out infinite;
   }
 
   &__customize-dot {
     background: var(--openbitfun-color-accent-default);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--openbitfun-color-accent-default) 68%, transparent);
   }
 
   &__content,
