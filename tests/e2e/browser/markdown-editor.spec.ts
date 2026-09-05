@@ -173,6 +173,64 @@ describe('Markdown rich text browser E2E', () => {
     await expect($('[data-testid="md-image"] img')).toHaveAttribute('title', 'Updated title');
   });
 
+
+  it('renders footnotes with shared numbering, anchors and live definition updates', async () => {
+    const markdown = '# Notes\n\nText[^a] and again[^a].\n\nOther[^b] with $x^2$.\n\n[^a]: Definition\n\n[^b]: Another definition';
+    await browser.url('about:blank');
+    await fetch('http://127.0.0.1:1450/file', { method: 'PUT', body: markdown });
+    await editor.open();
+    await expect($$('.ProseMirror [data-footnote-ref]')).toBeElementsArrayOfSize(3);
+    await expect($('.ProseMirror [data-footnote-ref]')).toHaveText('1');
+    await expect($$('.ProseMirror section[data-footnotes] li')).toBeElementsArrayOfSize(2);
+    const anchors = await browser.execute(() => {
+      const root = document.querySelector('.ProseMirror')!;
+      const ids = [...root.querySelectorAll('[id]')].map(node => node.id);
+      const links = [...root.querySelectorAll<HTMLAnchorElement>('[data-footnote-ref], [data-footnote-backref]')];
+      return { unique: new Set(ids).size === ids.length, resolved: links.every(link => ids.includes(link.hash.slice(1))) };
+    });
+    expect(anchors).toEqual({ unique: true, resolved: true });
+    await expect($('.ProseMirror > h1')).toHaveText('Notes');
+    const block = editor.block('footnoteDefinition');
+    await block.$('[data-testid="md-embed-preview"]').click();
+    await block.$('[data-testid="md-embed-source"]').setValue('[^a]: Updated definition');
+    await expect(block.$('section[data-footnotes]')).toHaveText(expect.stringContaining('Updated definition'));
+    await browser.keys('Escape');
+    await editor.save();
+    expect(await editor.savedSource()).toBe(markdown.replace('[^a]: Definition', '[^a]: Updated definition'));
+    await browser.refresh();
+    await expect($$('.ProseMirror [data-footnote-ref]')).toBeElementsArrayOfSize(3);
+    await expect($('.ProseMirror section[data-footnotes]')).toHaveText(expect.stringContaining('Updated definition'));
+  });
+
+  it('loads edited local image addresses through the workspace file adapter', async () => {
+    await browser.url('about:blank');
+    await fetch('http://127.0.0.1:1450/file', { method: 'PUT', body: '# Image\n\n![test](http://127.0.0.1:1447/tests/e2e/image.svg)' });
+    await editor.open();
+    await browser.execute(async () => {
+      // Track only the fixture filesystem boundary; use the production image loader.
+      const { workspaceAPI } = await import('/src/infrastructure/api/index.ts');
+      (window as any).__imageReads = [];
+      const original = workspaceAPI.readFileContent;
+      workspaceAPI.readFileContent = async (path: string) => {
+        (window as any).__imageReads.push(path);
+        if (path.endsWith('.png')) return 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFElEQVR4nGNoIBEwjGoY1TB8NQAAJYSAEGy7FvQAAAAASUVORK5CYII=';
+        return original(path);
+      };
+    });
+    for (const name of ['new.png', 'another.png']) {
+      await $('[data-testid="md-image"] img').click();
+      await $('[data-testid="md-image-src"]').setValue(`./${name}`);
+      await browser.keys('Enter');
+      await browser.waitUntil(async () => browser.execute((path: string) =>
+        (window as any).__imageReads.includes(path), `/workspace/${name}`));
+      await expect($('[data-testid="md-image"] img')).toHaveAttribute('src', expect.stringContaining('data:image/png;base64,'));
+      await browser.waitUntil(async () => browser.execute(() =>
+        document.querySelector<HTMLImageElement>('[data-testid="md-image"] img')?.naturalWidth === 16));
+    }
+    await editor.save();
+    expect(await editor.savedSource()).toContain('![test](./another.png)');
+  });
+
   it('recovers from invalid Mermaid and locks all embedded editors in readonly mode', async () => {
     const block = await editor.editBlock('mermaid', 'this is not valid mermaid');
     await expect(block.$('[data-testid="md-embed-source"]')).toBeDisplayed();

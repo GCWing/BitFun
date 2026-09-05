@@ -31,6 +31,7 @@ import {
 } from '@/shared/utils/startupTrace';
 import path from 'path-browserify';
 import './Markdown.scss';
+import { rehypeSourceRange, type MarkdownSourceRange } from './rehypeSourceRange';
 
 const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
@@ -823,6 +824,8 @@ const CopyButton: React.FC<{ code: string }> = ({ code }) => {
 
 export interface MarkdownRendererProps {
   content: string;
+  /** Display a region while resolving Markdown references against all content. */
+  sourceRange?: MarkdownSourceRange;
   basePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -844,6 +847,7 @@ function useLiveValueRef<T>(value: T): React.MutableRefObject<T> {
 
 export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   content, 
+  sourceRange,
   basePath,
   remoteConnectionId,
   remoteSshHost,
@@ -874,6 +878,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const onTabOpenRef = useLiveValueRef(onTabOpen);
   const onHttpLinkClickRef = useLiveValueRef(onHttpLinkClick);
   const traceContextRef = useLiveValueRef(traceContext);
+  const sourceRangeRef = useLiveValueRef(sourceRange);
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   const syntaxThemeRef = useLiveValueRef(syntaxTheme);
@@ -1512,6 +1517,11 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
           {...props}
           onClick={(e) => {
             e.preventDefault();
+            if (isHashLink && sourceRangeRef.current) {
+              const target = document.getElementById(hrefValue.slice(1));
+              target?.scrollIntoView({ block: 'nearest' });
+              target?.focus({ preventScroll: true });
+            }
           }}
           style={{ cursor: 'pointer' }}
         >
@@ -1592,13 +1602,14 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     remoteSshHostRef,
     syntaxThemeRef,
     traceContextRef,
+    sourceRangeRef,
   ]);
   
   const wrapperClassName = `markdown-renderer ${className}`.trim();
   const basicMarkdownRenderer = (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkAutolinkInternalLinks]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], [rehypeSourceRange, sourceRange]]}
       urlTransform={markdownUrlTransform}
       components={components}
     >
@@ -1618,7 +1629,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
           traceContext={traceContext}
         />
       )}
-      <MarkdownErrorBoundary fallbackContent={markdownContent}>
+      <MarkdownErrorBoundary fallbackContent={sourceRange ? markdownContent.slice(sourceRange.start, sourceRange.end) : markdownContent}>
         {shouldUseMathRenderer ? (
           <React.Suspense fallback={basicMarkdownRenderer}>
             <MarkdownMathRenderer
@@ -1627,6 +1638,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
               sanitizeSchema={sanitizeSchema}
               remarkAutolinkComputerFileLinks={remarkAutolinkInternalLinks}
               urlTransform={markdownUrlTransform}
+              sourceRange={sourceRange}
             />
           </React.Suspense>
         ) : basicMarkdownRenderer}

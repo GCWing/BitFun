@@ -4,6 +4,7 @@ import { Node } from '@tiptap/core';
 import { Selection, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { embeddedSource } from '../utils/embeddedSource';
+import { sourceBlockPreview } from '../utils/sourceBlockPreview';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
@@ -20,6 +21,8 @@ type RawHtmlInlineOptions = {
 };
 
 let sourceBackedBlockTextareaTargetCounter = 0;
+let referencePreviewCounter = 0;
+const referencePreviewPrefixes = new WeakMap<object, string>();
 
 function createRawHtmlInlinePreviewNode(
   html: string,
@@ -282,10 +285,16 @@ function createSourceBackedBlock(
 
     addNodeView() {
       return ({ editor, node, getPos }) => {
+        if (!referencePreviewPrefixes.has(editor)) {
+          referencePreviewPrefixes.set(editor, `md-reference-${++referencePreviewCounter}-`);
+        }
+        const referencePrefix = referencePreviewPrefixes.get(editor)!;
         let currentNode = node;
         let isEditing = false;
         let lastSyncedValue: string | null = null;
         let lastEditableState = editor.isEditable;
+        let lastReferenceContent: string | undefined;
+        let lastReferenceStart: number | undefined;
         let previewRoot: Root | null = null;
         let previewCheckTimer: number | null = null;
         let frontmatterEditingMinHeight = 0;
@@ -460,6 +469,10 @@ function createSourceBackedBlock(
 
 
         const renderPreview = (markdown: string) => {
+          const pos = getPos();
+          const referencePreview = name === 'renderOnlyBlock' || name === 'rawHtmlBlock'
+            ? typeof pos === 'number' ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined
+            : undefined;
           if (name === 'frontmatter') {
             previewRoot?.render(
               React.createElement(
@@ -549,6 +562,7 @@ function createSourceBackedBlock(
           previewRoot?.render(
             React.createElement(MarkdownRenderer, {
               content: markdown,
+              ...referencePreview,
               basePath: this.options.basePath,
               className: `${className}__markdown`,
             }),
@@ -564,6 +578,11 @@ function createSourceBackedBlock(
           const editable = editor.isEditable;
           const valueChanged = lastSyncedValue !== value;
           const editableChanged = lastEditableState !== editable;
+          const pos = getPos();
+          const referencePreview = (name === 'renderOnlyBlock' || name === 'rawHtmlBlock') && typeof pos === 'number'
+            ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined;
+          const referencesChanged = lastReferenceContent !== referencePreview?.content ||
+            lastReferenceStart !== referencePreview?.sourceRange.start;
 
           dom.setAttribute('data-readonly', editable ? 'false' : 'true');
 
@@ -580,12 +599,14 @@ function createSourceBackedBlock(
           }
           syncEditingState();
 
-          if (valueChanged || editableChanged) {
+          if (valueChanged || editableChanged || referencesChanged) {
             renderPreview(value);
           }
 
           lastSyncedValue = value;
           lastEditableState = editable;
+          lastReferenceContent = referencePreview?.content;
+          lastReferenceStart = referencePreview?.sourceRange.start;
         };
 
         const enterEditing = () => {
@@ -760,6 +781,7 @@ function createSourceBackedBlock(
         }, true);
         sync();
         editor.on('update', sync);
+        editor.on('transaction', sync);
 
         return {
           dom,
@@ -789,6 +811,7 @@ function createSourceBackedBlock(
           },
           destroy: () => {
             editor.off('update', sync);
+            editor.off('transaction', sync);
             document.removeEventListener('click', finishOutside, true);
             activeEditTargetService.clearActiveTarget(textareaTargetId);
             unbindEditTarget?.();

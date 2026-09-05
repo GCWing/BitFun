@@ -51,6 +51,7 @@ export const MarkdownImage = Node.create<MarkdownImageOptions>({
     return ({ editor, node, getPos }) => {
       let currentNode = node;
       let editing = false;
+      let lastSource: string | undefined;
       const dom = document.createElement('span');
       dom.className = 'm-editor-image';
       dom.dataset.testid = 'md-image';
@@ -88,10 +89,18 @@ export const MarkdownImage = Node.create<MarkdownImageOptions>({
       dom.append(image, action, fields);
       const sync = () => {
         const src = String(currentNode.attrs.src ?? '');
-        const resolvedSrc = src && isLocalPath(src)
-          ? getCachedLocalImageDataUrl(resolveImagePath(src, this.options.basePath)) ?? src
-          : src;
-        if (image.getAttribute('src') !== resolvedSrc) image.setAttribute('src', resolvedSrc);
+        if (src !== lastSource) {
+          lastSource = src;
+          delete image.dataset.localResolved;
+          image.removeAttribute('data-local-image');
+          image.removeAttribute('data-local-path');
+          image.removeAttribute('data-original-src');
+          image.classList.remove('local-image-loading', 'local-image-loaded', 'local-image-error');
+          const resolvedSrc = src && isLocalPath(src)
+            ? getCachedLocalImageDataUrl(resolveImagePath(src, this.options.basePath)) ?? src
+            : src;
+          image.setAttribute('src', resolvedSrc);
+        }
         image.alt = String(currentNode.attrs.alt ?? '');
         image.title = String(currentNode.attrs.title ?? '');
         if (!editor.isEditable) editing = false;
