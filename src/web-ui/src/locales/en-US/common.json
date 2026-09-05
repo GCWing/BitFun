@@ -741,6 +741,7 @@
     "returnedToThisDevice": "Returned to this device"
   },
   "accountLogin": {
+    "signedInAccount": "Signed-in account",
     "username": "Username",
     "password": "Password",
     "authServer": "Server Address",
@@ -949,7 +950,7 @@
     "cancelAndBack": "Cancel connection and go back",
     "methodSameNetwork": "Same network",
     "methodOpenBitFunRelay": "OpenBitFun Relay",
-    "methodNgrok": "ngrok",
+    "methodNgrok": "Network tunnel",
     "methodSelfHosted": "Self-hosted",
     "showConnectionCode": "Show connection code",
     "getPairingCode": "Get pairing code",

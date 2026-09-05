@@ -123,7 +123,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
 
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<MiniAppCategory>('all');
-  const [sort, setSort] = useState<MarketSort>('newest');
+  const [sort, setSort] = useState<MarketSort>('downloads');
   const [marketItems, setMarketItems] = useState<MarketListingSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string>();
   const [catalogLoading, setCatalogLoading] = useState(true);

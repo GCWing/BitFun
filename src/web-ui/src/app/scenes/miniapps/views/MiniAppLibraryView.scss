@@ -1,4 +1,3 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · tone: utilitarian · anchor hue: inherited · pre-emit critique: P5 H5 E5 S5 R5 V5 · contrast: pass · slop: pass · responsive: pass */
 .miniapp-gallery {
   &__header-actions {
     display: flex;
@@ -51,7 +50,7 @@
     .gallery-skeleton-card {
       width: 100%;
       min-height: 126px;
-      border-radius: var(--openbitfun-radius-xl);
+      border-radius: var(--openbitfun-layout-field-group-radius);
     }
   }
 
@@ -93,9 +92,9 @@
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: var(--openbitfun-radius-xl);
-  background: var(--openbitfun-color-surface-raised);
+  border: 0;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
   transition:
     background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
     border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);

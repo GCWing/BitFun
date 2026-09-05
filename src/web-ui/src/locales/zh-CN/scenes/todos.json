@@ -14,8 +14,8 @@
   "list": {
     "title": "待执行任务",
     "countTitle": "待执行任务（{{total}}）",
-    "hint": "一天内将要执行的任务，按时间先后排列。",
-    "empty": "还没有待执行任务。"
+    "hint": "一天内将要执行的任务，按时间先后排列",
+    "empty": "还没有待执行任务"
   },
   "overview": {
     "title": "计划概览",
@@ -25,12 +25,12 @@
   },
   "calendar": {
     "title": "更晚",
-    "hint": "全部计划执行时间，含 24 小时内的任务。",
+    "hint": "全部计划执行时间，含 24 小时内的任务",
     "previousMonth": "上个月",
     "nextMonth": "下个月",
     "today": "今天",
     "dayDetailTitle": "选中日期",
-    "dayEmpty": "这一天没有安排任务。",
+    "dayEmpty": "这一天没有安排任务",
     "clearDay": "清除选择",
     "dayCount": "已安排 {{total}} 项",
     "moreCount": "还有 {{total}} 项"
@@ -96,7 +96,7 @@
     },
     "advanced": {
       "title": "高级设置（可选）",
-      "empty": "单次任务当前不需要额外设置。"
+      "empty": "单次任务当前不需要额外设置"
     },
     "fields": {
       "name": "名称",

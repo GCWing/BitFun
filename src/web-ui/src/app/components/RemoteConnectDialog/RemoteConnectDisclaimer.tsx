@@ -61,7 +61,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
         <Button
           className="openbitfun-remote-disclaimer__action"
           variant="outline"
-          size="md"
+          size="sm"
           onClick={onClose}
         >
           {canAgree ? t('remoteConnect.disclaimerDecline') : t('actions.close')}
@@ -70,7 +70,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
           <Button
             className="openbitfun-remote-disclaimer__action"
             variant="fill"
-            size="md"
+            size="sm"
             onClick={onAgree}
             data-testid="remote-connect-disclaimer-agree"
           >

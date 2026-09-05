@@ -1,7 +1,7 @@
 {
   "nav": {
     "title": "技能",
-    "summary": "在本地已安装技能与外部技能市场之间快速切换查看。",
+    "summary": "在本地已安装技能与外部技能市场之间快速切换查看",
     "anchors": {
       "installed": "已安装技能",
       "market": "技能市场"
@@ -23,7 +23,7 @@
   },
   "page": {
     "title": "技能",
-    "subtitle": "统一管理已安装技能，并从外部技能市场发现更多可复用能力。",
+    "subtitle": "统一管理已安装技能，并从外部技能市场发现更多可复用能力",
     "searchPlaceholder": "搜索已安装技能和市场技能..."
   },
   "installed": {
@@ -104,12 +104,12 @@
   },
   "suite": {
     "title": "技能套件",
-    "subtitle": "选择一个模式后，可一键控制各组 Skill 的可见性；也可逐个调整 Skill 后按组保存。",
+    "subtitle": "选择一个模式后，可一键控制各组 Skill 的可见性；也可逐个调整 Skill 后按组保存",
     "modeLabel": "模式",
     "refreshTooltip": "刷新当前模式",
     "refreshAction": "刷新",
     "loading": "正在加载技能套件...",
-    "empty": "当前没有可用的 Skill。",
+    "empty": "当前没有可用的 Skill",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
@@ -205,7 +205,7 @@
     "errorPrefix": "加载失败: ",
     "loadFailed": "技能加载失败",
     "retry": "重试",
-    "desktopUnavailable": "请在桌面端管理技能。",
+    "desktopUnavailable": "请在桌面端管理技能",
     "remoteUnavailable": "远程连接时暂不支持管理技能。",
     "columns": {
       "source": "来源",

@@ -188,12 +188,7 @@ const NurseryGallery: React.FC = () => {
       data-openbitfun-part="root"
     >
       <GalleryPageHeader
-        title={(
-          <span className="nursery-gallery__page-title">
-            {t('nursery.gallery.title')}
-            <Icon name="spark" size="lg" aria-hidden="true" />
-          </span>
-        )}
+        title={t('nursery.gallery.title')}
         subtitle={t('nursery.gallery.subtitle')}
         actions={(
           <Button
@@ -259,17 +254,16 @@ const NurseryGallery: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             className="nursery-defaults__action"
+            leadingIcon={<Icon name="settings" size="sm" />}
+            trailingIcon={<Icon name="chevron-right" size="sm" />}
             onClick={openDefaults}
           >
-            <span className="nursery-defaults__action-icon" aria-hidden="true">
-              <Icon name="settings" size="md" />
-            </span>
-            <span className="nursery-defaults__action-label">{t('nursery.template.configure')}</span>
-            <Icon name="chevron-right" size="sm" className="nursery-defaults__action-chevron" aria-hidden="true" />
-          </button>
+            {t('nursery.template.configure')}
+          </Button>
         </section>
 
         <GalleryZone

@@ -48,7 +48,7 @@ describe('Skills scene presentation', () => {
     const discoverHeroEnd = stylesheet.indexOf('\n}', discoverHeroStart);
 
     expect(stylesheet).not.toContain('background: var(--openbitfun-color-surface-canvas);');
-    expect(stylesheet.slice(listSurfaceStart, listSurfaceEnd)).not.toContain('background:');
+    expect(stylesheet.slice(listSurfaceStart, listSurfaceEnd)).toContain('background: var(--openbitfun-color-surface-tertiary);');
     expect(stylesheet.slice(discoverHeroStart, discoverHeroEnd)).not.toContain('background:');
   });
 

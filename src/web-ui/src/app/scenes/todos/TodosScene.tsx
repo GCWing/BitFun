@@ -30,7 +30,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CalendarClock, CalendarDays } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { cronAPI, type CronJob, type CreateCronJobRequest, type UpdateCronJobRequest } from '@/infrastructure/api';
@@ -418,7 +418,6 @@ const TodosScene: React.FC = () => {
     >
       <header className="openbitfun-todos__head" data-openbitfun-scene="todos" data-openbitfun-part="header">
         <div className="openbitfun-todos__head-main">
-          <span className="openbitfun-todos__head-icon" aria-hidden="true"><CalendarClock size={24} /></span>
           <div className="openbitfun-todos__head-text">
             <h2 className="openbitfun-todos__title">{t('title')}</h2>
             <p className="openbitfun-todos__subtitle">{t('header.subtitle')}</p>

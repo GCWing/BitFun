@@ -1,6 +1,6 @@
 {
   "title": "小应用",
-  "subtitle": "在一个列表中发现、安装、更新和打开所有小应用。",
+  "subtitle": "在一个列表中发现、安装、更新和打开所有小应用",
   "searchPlaceholder": "搜索小应用...",
   "importFromFolder": "从文件夹导入",
   "importAction": "导入小应用",
@@ -108,7 +108,7 @@
   },
   "market": {
     "title": "MiniApp 市场",
-    "subtitle": "浏览经过人工审核、可在严格沙箱中运行的小应用。",
+    "subtitle": "浏览经过人工审核、可在严格沙箱中运行的小应用",
     "catalog": "应用目录",
     "sortLabel": "排序方式",
     "search": "搜索市场…",
@@ -125,7 +125,7 @@
       "continue": "打开 GitHub",
       "authorizing": "等待 GitHub 授权…"
     },
-    "empty": "暂时没有已发布的小应用。",
+    "empty": "暂时没有已发布的小应用",
     "loadMore": "加载更多",
     "tabs": {
       "label": "MiniApp 页面",
@@ -151,7 +151,7 @@
       "showcaseFallback": "{{name}} 暂无展示图",
       "remoteUnsupported": "此应用需要本地工作区。",
       "marketUnavailable": "小应用市场暂时不可用，已安装应用仍可正常使用。",
-      "empty": "暂时没有可用的小应用。"
+      "empty": "暂时没有可用的小应用"
     },
     "sort": {
       "newest": "最新发布",
@@ -247,7 +247,7 @@
     },
     "submissions": {
       "title": "我的投稿",
-      "subtitle": "从本机已安装应用生成规范包，添加市场展示图并提交人工审核。",
+      "subtitle": "从本机已安装应用生成规范包，添加市场展示图并提交人工审核",
       "signInRequired": "登录 GitHub 后才能创建和管理投稿。",
       "refresh": "刷新",
       "remoteUnsupported": "打包和上传仅支持本地工作区；浏览投稿记录不受影响。",

@@ -33,7 +33,7 @@ import {
 } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Monitor, MonitorSmartphone, Radar, Smartphone } from 'lucide-react';
+import { Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
@@ -94,8 +94,8 @@ function isWeixinRasterQrSrc(raw: string): boolean {
 
 const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
   { id: 'lan', labelKey: 'remoteConnect.methodSameNetwork' },
-  { id: 'openbitfun_server', labelKey: 'remoteConnect.methodOpenBitFunRelay' },
   { id: 'ngrok', labelKey: 'remoteConnect.methodNgrok' },
+  { id: 'openbitfun_server', labelKey: 'remoteConnect.methodOpenBitFunRelay' },
   { id: 'custom_server', labelKey: 'remoteConnect.methodSelfHosted' },
 ];
 
@@ -973,7 +973,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         )}
       </div>
       <p className="openbitfun-remote-connect__hint">{t('remoteConnect.connectedHint')}</p>
-      <Button variant="outline" size="md" onClick={onDisconnect}>
+      <Button variant="outline" size="sm" onClick={onDisconnect}>
         {t('remoteConnect.disconnect')}
       </Button>
     </div>
@@ -1045,7 +1045,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     title={t('remoteConnect.copyUrl')}
                     icon={qrCopied ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
                     onClick={() => void handleCopyPairingUrl()}
-                    size="md"
+                    size="sm"
                     variant="quiet"
                   />
                 </div>
@@ -1076,7 +1076,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           </div>
         </div>
         <div className="openbitfun-remote-connect__pairing-actions">
-          <Button variant="outline" size="md" onClick={handleCancelConnect}>
+          <Button variant="outline" size="sm" onClick={handleCancelConnect}>
             {t('remoteConnect.cancel')}
           </Button>
         </div>
@@ -1087,6 +1087,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   // ── Network group content ────────────────────────────────────────
 
   const NGROK_USAGE_URL = 'https://dashboard.ngrok.com/legacy/usage';
+
+  const networkLabel = (tabId: NetworkTab | null): string | null => {
+    const tab = NETWORK_TABS.find(item => item.id === tabId);
+    return tab ? t(tab.labelKey) : null;
+  };
 
   const renderNetworkContent = () => {
     if (isRelayConnected && connectedNetworkTab === networkTab) {
@@ -1121,39 +1126,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         data-openbitfun-part="body"
         className="openbitfun-remote-connect__body openbitfun-remote-connect__body--network"
       >
-        {renderInfoCard(
-          <>
-            {networkTab === 'lan' && (lanNetworkInfo?.availableIps.length || lanNetworkInfo?.gatewayIp) && (
-              <div className="openbitfun-remote-connect__info-meta-group">
-                {lanNetworkInfo && lanNetworkInfo.availableIps.length > 0 && (
-                  <div className="openbitfun-remote-connect__lan-ip-select">
-                    <span className="openbitfun-remote-connect__info-meta-label">
-                      {t('remoteConnect.currentIp')}
-                    </span>
-                    <Select
-                      className="openbitfun-remote-connect__lan-ip-dropdown"
-                      size="sm"
-                      value={selectedLanIp}
-                      onValueChange={(v) => setSelectedLanIp(String(v))}
-                      options={lanNetworkInfo.availableIps.map(e => ({
-                        label: `${e.ip} — ${e.interface_name}`,
-                        value: e.ip,
-                      }))}
-                    />
-                  </div>
-                )}
-                {(() => {
-                  const selectedIntf = lanNetworkInfo?.availableIps.find(e => e.ip === selectedLanIp);
-                  const gw = selectedIntf?.gateway_ip ?? null;
-                  if (!gw) return null;
-                  return (
-                    <p className="openbitfun-remote-connect__info-meta">
-                      {t('remoteConnect.gatewayIp')}: {gw}
-                    </p>
-                  );
-                })()}
-              </div>
-            )}
+        <section className="openbitfun-remote-connect__network-card" aria-labelledby="remote-connect-method-title">
+          <div className="openbitfun-remote-connect__network-heading">
+            <Icon name="browser" size="lg" aria-hidden="true" />
+            <h3 id="remote-connect-method-title">{networkLabel(networkTab)}</h3>
+          </div>
+          <div className="openbitfun-remote-connect__network-description">
             <p className="openbitfun-remote-connect__info-text">
               {networkTab === 'custom_server' ? (
                 <>
@@ -1187,34 +1165,70 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 t(`remoteConnect.desc_${networkTab}`)
               )}
             </p>
-          </>,
-        )}
-        {networkTab === 'custom_server' && (
-          <Field
-            className="openbitfun-remote-connect__field openbitfun-remote-connect__field--inline"
-            controlWidth="fill"
-            label={t('remoteConnect.serverUrl')}
-          >
-            <Input
-              className="openbitfun-remote-connect__input"
-              type="url"
-              placeholder="https://relay.example.com:9700"
-              value={customUrl}
-              onValueChange={setCustomUrl}
-              size="md"
-            />
-          </Field>
-        )}
-        {renderErrorBlock()}
-        <Button
-          variant="fill"
-          size="md"
-          className="openbitfun-remote-connect__primary-action"
-          loading={loading}
-          onClick={handleConnect}
-        >
-          {loading ? t('remoteConnect.connecting') : t('remoteConnect.showConnectionCode')}
-        </Button>
+          </div>
+          <div className="openbitfun-remote-connect__network-settings">
+            {networkTab === 'lan' && (lanNetworkInfo?.availableIps.length || lanNetworkInfo?.gatewayIp) && (
+              <div className="openbitfun-remote-connect__info-meta-group">
+                {lanNetworkInfo && lanNetworkInfo.availableIps.length > 0 && (
+                  <div className="openbitfun-remote-connect__lan-ip-select">
+                    <span className="openbitfun-remote-connect__info-meta-label">
+                      {t('remoteConnect.currentIp')}
+                    </span>
+                    <Select
+                      className="openbitfun-remote-connect__lan-ip-dropdown"
+                      size="sm"
+                      aria-label={t('remoteConnect.currentIp')}
+                      value={selectedLanIp}
+                      onValueChange={(v) => setSelectedLanIp(String(v))}
+                      options={lanNetworkInfo.availableIps.map(e => ({
+                        label: `${e.ip} — ${e.interface_name}`,
+                        value: e.ip,
+                      }))}
+                    />
+                  </div>
+                )}
+                {(() => {
+                  const selectedIntf = lanNetworkInfo?.availableIps.find(e => e.ip === selectedLanIp);
+                  const gw = selectedIntf?.gateway_ip ?? null;
+                  if (!gw) return null;
+                  return (
+                    <p className="openbitfun-remote-connect__info-meta">
+                      {t('remoteConnect.gatewayIp')}: {gw}
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
+            {networkTab === 'custom_server' && (
+              <Field
+                className="openbitfun-remote-connect__field openbitfun-remote-connect__field--inline"
+                controlWidth="fill"
+                label={t('remoteConnect.serverUrl')}
+              >
+                <Input
+                  className="openbitfun-remote-connect__input"
+                  type="url"
+                  placeholder="https://relay.example.com:9700"
+                  value={customUrl}
+                  onValueChange={setCustomUrl}
+                  size="sm"
+                />
+              </Field>
+            )}
+          </div>
+          <div className="openbitfun-remote-connect__network-actions">
+            {renderErrorBlock()}
+            <Button
+              variant="fill"
+              size="sm"
+              className="openbitfun-remote-connect__primary-action"
+              loading={loading}
+              onClick={handleConnect}
+            >
+              {loading ? t('remoteConnect.connecting') : t('remoteConnect.showConnectionCode')}
+            </Button>
+          </div>
+        </section>
       </div>
     );
   };
@@ -1251,7 +1265,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           </div>
           {botTab === 'weixin' && (
             <div className="openbitfun-remote-connect__connected-notice">
-              <Icon name="info" size="md" aria-hidden="true" />
+              <Icon name="info" size="sm" aria-hidden="true" />
               <p>{t('remoteConnect.botWeixinRestriction')}</p>
             </div>
           )}
@@ -1319,7 +1333,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     placeholder="123456:xxxxxxxxxxxxxxxxxxxxxxxx"
                     value={tgToken}
                     onValueChange={setTgToken}
-                    size="md"
+                    size="sm"
                   />
                 </Field>
               </div>
@@ -1372,7 +1386,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     placeholder="cli_xxxxxxxx"
                     value={feishuAppId}
                     onValueChange={setFeishuAppId}
-                    size="md"
+                    size="sm"
                   />
                 </Field>
                 <Field
@@ -1386,7 +1400,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     placeholder="xxxxxxxxxxxxxxxx"
                     value={feishuAppSecret}
                     onValueChange={setFeishuAppSecret}
-                    size="md"
+                    size="sm"
                   />
                 </Field>
               </div>
@@ -1424,7 +1438,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                       </div>
                     )}
                     <p className="openbitfun-remote-connect__hint">{t('remoteConnect.botWeixinPolling')}</p>
-                    <Button variant="outline" size="md" onClick={handleCancelWeixinQr}>
+                    <Button variant="outline" size="sm" onClick={handleCancelWeixinQr}>
                       {t('remoteConnect.botWeixinQrCancel')}
                     </Button>
                   </div>
@@ -1432,7 +1446,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 {weixinQrSessionKey && !weixinQrImageUrl && weixinAwaitingPhoneConfirm && (
                   <div className="openbitfun-remote-connect__weixin-qr openbitfun-remote-connect__weixin-qr--await">
                     <p className="openbitfun-remote-connect__hint">{t('remoteConnect.botWeixinAwaitingPhoneConfirm')}</p>
-                    <Button variant="outline" size="md" onClick={handleCancelWeixinQr}>
+                    <Button variant="outline" size="sm" onClick={handleCancelWeixinQr}>
                       {t('remoteConnect.botWeixinQrCancel')}
                     </Button>
                   </div>
@@ -1448,7 +1462,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                       placeholder={t('remoteConnect.botWeixinVerifyCodePlaceholder')}
                       value={weixinVerifyCode}
                       onValueChange={setWeixinVerifyCode}
-                      size="md"
+                      size="sm"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSubmitWeixinVerifyCode();
                       }}
@@ -1458,7 +1472,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     </p>
                     <Button
                       variant="fill"
-                      size="md"
+                      size="sm"
                       className="openbitfun-remote-connect__primary-action"
                       onClick={handleSubmitWeixinVerifyCode}
                       disabled={!weixinVerifyCode.trim()}
@@ -1470,7 +1484,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                 {!weixinQrSessionKey && !weixinQrImageUrl && !weixinNeedsVerifyCode && (
                   <Button
                     variant="fill"
-                    size="md"
+                    size="sm"
                     className="openbitfun-remote-connect__primary-action"
                     loading={loading}
                     onClick={handleStartWeixinQr}
@@ -1484,7 +1498,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             {botTab !== 'weixin' && (
               <Button
                 variant="fill"
-                size="md"
+                size="sm"
                 className="openbitfun-remote-connect__primary-action"
                 loading={loading}
                 onClick={handleConnect}
@@ -1508,11 +1522,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     : activeView === 'bot'
       ? isBotConnecting || !!weixinQrSessionKey || (loading && pendingOwnerRef.current === 'bot')
       : false;
-
-  const networkLabel = (tabId: NetworkTab | null): string | null => {
-    const tab = NETWORK_TABS.find(item => item.id === tabId);
-    return tab ? t(tab.labelKey) : null;
-  };
 
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
@@ -1574,13 +1583,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       </span>
       <span className="openbitfun-remote-connect__overview-action-status">
         {statusDetail && (
-          <span className="openbitfun-remote-connect__overview-action-status-detail">
+          <span className="openbitfun-remote-connect__overview-action-status-detail" title={statusDetail}>
             {statusDetail}
           </span>
         )}
         <StatusPill tone={statusPositive ? 'success' : 'neutral'}>{statusLabel}</StatusPill>
       </span>
-      <Icon name="chevron-right" size="md" className="openbitfun-remote-connect__overview-action-chevron" aria-hidden="true" />
+      <Icon name="chevron-right" size="sm" className="openbitfun-remote-connect__overview-action-chevron" aria-hidden="true" />
     </button>
   );
 
@@ -1598,7 +1607,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       >
         <h2 id="remote-connect-my-devices-title" className="openbitfun-remote-connect__overview-section-title">
           <span
-            className="openbitfun-remote-connect__section-marker openbitfun-remote-connect__section-marker--account"
+            className="openbitfun-remote-connect__visually-hidden"
             data-openbitfun-component="remote-connect-dialog"
             data-openbitfun-part="sectionMarker"
             aria-hidden="true"
@@ -1630,7 +1639,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         <div className="openbitfun-remote-connect__overview-section-heading">
           <h2 id="remote-connect-access-title" className="openbitfun-remote-connect__overview-section-title">
             <span
-              className="openbitfun-remote-connect__section-marker"
+              className="openbitfun-remote-connect__visually-hidden"
               data-openbitfun-component="remote-connect-dialog"
               data-openbitfun-part="sectionMarker"
               aria-hidden="true"
@@ -1714,7 +1723,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       >
         <Button
           className="openbitfun-remote-connect__back"
-          leadingIcon={<Icon name="arrow-left" size="lg" />}
+          leadingIcon={<Icon name="arrow-left" size="sm" />}
           onClick={() => handleViewChange('overview')}
           size="sm"
           variant="text"
@@ -1727,7 +1736,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           className="openbitfun-remote-connect__view-page-header"
           description={description}
           level={2}
-          size="lg"
+          size="md"
           title={<span id="remote-connect-view-title">{title}</span>}
         />
       </div>
@@ -1828,7 +1837,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               data-openbitfun-part="sidebarBrand"
             >
               <span className="openbitfun-remote-connect__sidebar-icon" aria-hidden="true">
-                <MonitorSmartphone size={34} strokeWidth={1.65} />
+                <MonitorSmartphone size={24} strokeWidth={1.75} />
               </span>
               <h2 id="remote-connect-center-title" className="openbitfun-remote-connect__sidebar-title">
                 {t('remoteConnect.centerTitle')}
@@ -1838,22 +1847,15 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                   className="openbitfun-remote-connect__disclaimer-trigger"
                   onClick={() => setShowDisclaimer(true)}
                   size="sm"
-                  variant="text"
+                  variant="outline"
                 >
                   {t('remoteConnect.disclaimerReview')}
                 </Button>
               </span>
-              <span className="openbitfun-remote-connect__sidebar-divider" aria-hidden="true" />
               <p className="openbitfun-remote-connect__sidebar-description">
                 {t('remoteConnect.overviewIntro')}
               </p>
             </div>
-            <Radar
-              className="openbitfun-remote-connect__sidebar-decoration"
-              size={300}
-              strokeWidth={0.55}
-              aria-hidden="true"
-            />
           </aside>
 
           <main
@@ -1876,6 +1878,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     <TabGroup
                       aria-label={t('remoteConnect.mobileBrowserTitle')}
                       className="openbitfun-remote-connect__tab-group"
+                      size="sm"
                       items={networkTabItems}
                       onValueChange={handleNetworkTabValueChange}
                       value={networkTab}
