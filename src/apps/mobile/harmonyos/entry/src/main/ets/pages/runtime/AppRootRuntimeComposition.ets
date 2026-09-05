@@ -1002,6 +1002,10 @@ export abstract class AppRootRuntimeComposition {
       close: (): void => this.appShellState.leaveSettings(),
       addConnection: (): void => this.openAddConnectionFromSettings(),
       disconnect: (): void => { this.disconnect(false); },
+      clearPairing: (): void => {
+        this.appShellState.setSettingsVisible(false);
+        this.disconnect(true);
+      },
       reconnect: (): void => { this.reconnect(); },
       openAccount: (): void => { this.appShellState.openSettings('account'); },
       cloudLogin: (relayUrl: string, username: string, password: string): Promise<string> =>

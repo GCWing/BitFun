@@ -233,6 +233,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.settings.accountDevice', '账号设备'],
   ['remote.settings.qrPairing', '扫码配对'],
   ['remote.settings.disconnect', '断开'],
+  ['remote.settings.disconnectTemporary', '断开临时连接'],
   ['remote.settings.reconnect', '重新连接'],
   ['remote.settings.otherConnectionMethods', '其他连接方式'],
   ['remote.settings.desktopProduct', 'OpenBitFun 桌面版'],

@@ -19,6 +19,7 @@ export struct AccountProfilePanel {
   @Param showNavigationHeader: boolean = false;
   @Param embeddedInSettings: boolean = false;
   @BuilderParam preferences: () => void = this.EmptyBuilder;
+  @BuilderParam connection: () => void = this.EmptyBuilder;
   @BuilderParam about: () => void = this.EmptyBuilder;
   @Event onBack: () => void = () => {};
   @Event onLoggedOut: () => void = () => {};
@@ -45,6 +46,7 @@ export struct AccountProfilePanel {
     Column({ space: 0 }) {
       if (this.embeddedInSettings) {
         this.CompactIdentityCard()
+        this.connection()
         this.preferences()
         this.DeviceManagementSection()
         this.about()

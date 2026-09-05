@@ -3,7 +3,7 @@ import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
-import { CARD, INK, LINE, MUTED, PAGE_BG } from './Theme';
+import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT, STATUS_DANGER } from './Theme';
 import { AccountProfilePanel } from './AccountProfilePanel';
 import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
@@ -26,12 +26,16 @@ export struct SettingsSheet {
   @Param accountUsername: string = '';
   @Param authenticatedUserId: string = '';
   @Param fallbackUserId: string = '';
+  @Param desktopName: string = '';
+  @Param desktopId: string = '';
   @Param deviceId: string = '';
   @Param controlTargetType: string = 'none';
   @Param controlTargetDeviceId: string = '';
   @Param connectionState: string = 'idle';
   @Event onClose: () => void = () => {};
   @Event onOpenAccount: () => void = () => {};
+  @Event onDisconnect: () => void = () => {};
+  @Event onClearPairing: () => void = () => {};
   @Event onReconnect: () => void = () => {};
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> =
@@ -112,6 +116,9 @@ export struct SettingsSheet {
             onOpenAccount: this.onOpenAccount,
             onLoggedOut: this.onClose,
             embeddedInSettings: true,
+            connection: () => {
+              this.CurrentConnectionSection()
+            },
             preferences: () => {
               this.GeneralSettingsSection()
             },
@@ -134,6 +141,87 @@ export struct SettingsSheet {
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  private CurrentConnectionSection() {
+    if (this.hasControlTarget()) {
+      this.SectionTitle(RemoteI18n.t('remote.settings.currentControl'))
+      Column() {
+        Row({ space: 14 }) {
+          Stack({ alignContent: Alignment.Center }) {
+            SymbolGlyph($r('sys.symbol.desktop'))
+              .fontSize(22)
+              .fontColor([MUTED])
+              .opacity(0.68)
+          }
+          .width(28)
+          .height(28)
+
+          Column({ space: 3 }) {
+            Text(this.connectionTitle())
+              .fontSize(MobileDesignTypography.bodyLarge.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(INK)
+              .width('100%')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.connectionDetail())
+              .fontSize(MobileDesignTypography.bodySmall.size)
+              .fontColor(MUTED)
+              .width('100%')
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+        .constraintSize({ minHeight: 68 })
+        .padding({ left: 18, right: 18, top: 12, bottom: 12 })
+        .alignItems(VerticalAlign.Center)
+
+        Divider().strokeWidth(1).color(LINE).margin({ left: 18, right: 18 })
+
+        Row({ space: 8 }) {
+          Text(this.connectionSourceLabel())
+            .fontSize(MobileDesignTypography.bodySmall.size)
+            .fontColor(MUTED)
+            .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+            .backgroundColor(SOFT)
+            .borderRadius(12)
+          Blank()
+          if (!this.isConnectedOrConnecting()) {
+            Text(RemoteI18n.t('remote.settings.reconnect'))
+              .fontSize(MobileDesignTypography.bodyMedium.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(INK)
+              .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+              .onClick(this.onReconnect)
+          }
+          Text(this.controlTargetType === 'room' ?
+            RemoteI18n.t('remote.settings.disconnectTemporary') :
+            RemoteI18n.t('remote.settings.disconnect'))
+            .fontSize(MobileDesignTypography.bodyMedium.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(STATUS_DANGER)
+            .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+            .onClick(() => {
+              if (this.controlTargetType === 'room') {
+                this.onClearPairing();
+              } else {
+                this.onDisconnect();
+              }
+            })
+        }
+        .width('100%')
+        .constraintSize({ minHeight: 54 })
+        .padding({ left: 18, right: 10 })
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .backgroundColor(CARD)
+      .borderRadius(MobileDesignGeometry.settingsCardRadius)
+      .margin({ bottom: 24 })
+    }
   }
 
   @Builder
@@ -364,6 +452,34 @@ export struct SettingsSheet {
         return this.onSaveGeneralChatConfig(apiUrl, apiKey, modelName, clearApiKey);
       }
     })
+  }
+
+  private hasControlTarget(): boolean {
+    return this.controlTargetType === 'room' || this.controlTargetType === 'account_device';
+  }
+
+  private isConnectedOrConnecting(): boolean {
+    return this.connectionState === 'connected' || this.connectionState === 'reconnecting' ||
+      this.connectionState === 'pairing' || this.connectionState === 'parsing';
+  }
+
+  private connectionTitle(): string {
+    return this.desktopName || this.desktopId || RemoteI18n.t('remote.settings.noDesktop');
+  }
+
+  private connectionDetail(): string {
+    if (this.connectionState === 'connected') {
+      return RemoteI18n.t('connection.connected');
+    }
+    if (this.connectionState === 'reconnecting') {
+      return RemoteI18n.t('connection.reconnecting');
+    }
+    return RemoteI18n.t('connection.disconnected');
+  }
+
+  private connectionSourceLabel(): string {
+    return this.controlTargetType === 'room' ? RemoteI18n.t('remote.settings.qrPairing') :
+      RemoteI18n.t('remote.settings.accountDevice');
   }
 
   private modelServiceStatus(): string {

@@ -233,6 +233,7 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['remote.settings.accountDevice', 'Account device'],
   ['remote.settings.qrPairing', 'QR pairing'],
   ['remote.settings.disconnect', 'Disconnect'],
+  ['remote.settings.disconnectTemporary', 'End temporary access'],
   ['remote.settings.reconnect', 'Reconnect'],
   ['remote.settings.otherConnectionMethods', 'Other ways to connect'],
   ['remote.settings.desktopProduct', 'OpenBitFun Desktop'],
