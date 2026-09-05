@@ -1374,6 +1374,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               <React.Fragment key={s.key}>
                 <div
                   className={`relay-deploy-wizard__step ${i === stepIndex ? 'active' : ''} ${i < stepIndex ? 'completed' : ''}`}
+                  aria-current={i === stepIndex ? 'step' : undefined}
                   data-openbitfun-component="relay-deploy"
                   data-openbitfun-part="step"
                   data-openbitfun-state={[i === stepIndex && 'active', i < stepIndex && 'completed'].filter(Boolean).join(' ') || undefined}
