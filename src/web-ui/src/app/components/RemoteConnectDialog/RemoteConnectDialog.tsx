@@ -1088,6 +1088,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const NGROK_USAGE_URL = 'https://dashboard.ngrok.com/legacy/usage';
 
+  const networkLabel = (tabId: NetworkTab | null): string | null => {
+    const tab = NETWORK_TABS.find(item => item.id === tabId);
+    return tab ? t(tab.labelKey) : null;
+  };
+
   const renderNetworkContent = () => {
     if (isRelayConnected && connectedNetworkTab === networkTab) {
       return (
@@ -1517,11 +1522,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     : activeView === 'bot'
       ? isBotConnecting || !!weixinQrSessionKey || (loading && pendingOwnerRef.current === 'bot')
       : false;
-
-  const networkLabel = (tabId: NetworkTab | null): string | null => {
-    const tab = NETWORK_TABS.find(item => item.id === tabId);
-    return tab ? t(tab.labelKey) : null;
-  };
 
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
