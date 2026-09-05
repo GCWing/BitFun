@@ -938,6 +938,12 @@ pub async fn run() {
                 let development_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("../../..")
                     .join("dist");
+                #[cfg(debug_assertions)]
+                let development_dist = if std::env::var("OPENBITFUN_E2E_STORAGE_GUARD").as_deref() == Ok("1")
+                    && std::env::var("OPENBITFUN_E2E_PACKAGED_FRONTEND").as_deref() == Ok("1")
+                {
+                    std::env::var_os("OPENBITFUN_E2E_FRONTEND_DIR").map(PathBuf::from).unwrap_or(development_dist)
+                } else { development_dist };
                 development_dist
                     .join("index.html")
                     .is_file()

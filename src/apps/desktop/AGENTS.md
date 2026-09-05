@@ -98,3 +98,20 @@ If the change affects startup, WebDriver, browser/computer-use, or packaged beha
 ```bash
 cargo build -p openbitfun-desktop
 ```
+
+To exercise packaged UI customization in an isolated native window without a
+development server, build Web UI assets, then use the focused Creation harness:
+
+```bash
+pnpm run build:web
+cargo build -p openbitfun-desktop --features devtools
+node tests/e2e/scripts/run-creation-runtime.mjs
+node tests/e2e/scripts/run-creation-runtime.mjs --suspended-paint  # occluded WebKit startup and reload
+```
+
+The harness copies a completed build into an independent frontend snapshot so
+concurrent builds cannot replace its lazy modules. It uses temporary product storage, a private WebView store, and
+`OPENBITFUN_E2E_PACKAGED_FRONTEND=1`. It checks state across document reloads;
+the private test store intentionally does not survive process exit.
+That debug-only switch takes effect only with the existing E2E storage guard;
+release builds always use the packaged protocol.
