@@ -172,7 +172,7 @@
   padding: 10px 12px 8px;
   font-size: var(--openbitfun-type-body-sm-font-size);
   font-weight: var(--openbitfun-type-label-selected-font-weight);
-  letter-spacing: normal;
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   color: var(--openbitfun-color-content-muted);
   border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }

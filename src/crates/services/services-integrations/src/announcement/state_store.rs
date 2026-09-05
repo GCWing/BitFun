@@ -5,38 +5,51 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use log::{debug, warn};
-use tokio::fs;
+use openbitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 
 use super::types::AnnouncementState;
 
+const SAVE_TO_PRIMARY: u8 = 0;
+const SAVE_TO_RECOVERY: u8 = 1;
+const SAVE_DISABLED: u8 = 2;
+
 #[derive(Debug)]
 pub enum AnnouncementStateStoreError {
-    Io(std::io::Error),
-    Serialization(serde_json::Error),
+    Json(JsonFileStoreError),
+    PersistenceDisabled { state_file: PathBuf },
 }
 
 impl fmt::Display for AnnouncementStateStoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(err) => write!(f, "IO error: {err}"),
-            Self::Serialization(err) => write!(f, "Serialization error: {err}"),
+            Self::Json(err) => write!(f, "{err}"),
+            Self::PersistenceDisabled { state_file } => write!(
+                f,
+                "Announcement state persistence is disabled because both the primary and recovery files are unreadable: {}",
+                state_file.display()
+            ),
         }
     }
 }
 
 impl std::error::Error for AnnouncementStateStoreError {}
 
-impl From<std::io::Error> for AnnouncementStateStoreError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
+impl From<JsonFileStoreError> for AnnouncementStateStoreError {
+    fn from(value: JsonFileStoreError) -> Self {
+        Self::Json(value)
     }
 }
 
-impl From<serde_json::Error> for AnnouncementStateStoreError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::Serialization(value)
+impl AnnouncementStateStoreError {
+    pub fn is_deserialization(&self) -> bool {
+        matches!(self, Self::Json(error) if error.is_deserialization())
+    }
+
+    pub fn is_serialization(&self) -> bool {
+        matches!(self, Self::Json(error) if error.is_serialization())
     }
 }
 
@@ -44,18 +57,24 @@ pub type AnnouncementStateStoreResult<T> = Result<T, AnnouncementStateStoreError
 
 pub struct AnnouncementStateStore {
     state_file: PathBuf,
+    recovery_file: PathBuf,
+    json_store: JsonFileStore,
+    save_target: AtomicU8,
 }
 
 impl AnnouncementStateStore {
     pub fn new(config_dir: impl AsRef<Path>) -> Self {
-        Self {
-            state_file: config_dir.as_ref().join("announcement-state.json"),
-        }
+        Self::from_state_file(config_dir.as_ref().join("announcement-state.json"))
     }
 
     pub fn from_state_file(state_file: impl Into<PathBuf>) -> Self {
+        let state_file = state_file.into();
+        let recovery_file = recovery_file_for(&state_file);
         Self {
-            state_file: state_file.into(),
+            state_file,
+            recovery_file,
+            json_store: JsonFileStore,
+            save_target: AtomicU8::new(SAVE_TO_PRIMARY),
         }
     }
 
@@ -65,38 +84,110 @@ impl AnnouncementStateStore {
 
     /// Load state from disk. Returns a default state if the file does not exist
     /// or cannot be parsed, preserving the legacy best-effort contract.
+    ///
+    /// An unreadable primary file is never overwritten. Subsequent saves use a
+    /// recovery sidecar so one damaged record cannot either erase the original
+    /// bytes or make a first-run announcement repeat forever.
     pub async fn load(&self) -> AnnouncementStateStoreResult<AnnouncementState> {
-        match fs::read_to_string(&self.state_file).await {
-            Ok(content) => {
-                let state =
-                    serde_json::from_str::<AnnouncementState>(&content).unwrap_or_else(|e| {
-                        warn!("Failed to parse announcement state, using default: {}", e);
-                        AnnouncementState::default()
-                    });
+        match self
+            .json_store
+            .read_optional::<AnnouncementState>(&self.state_file)
+            .await
+        {
+            Ok(Some(state)) => {
+                self.save_target.store(SAVE_TO_PRIMARY, Ordering::Release);
                 debug!("Loaded announcement state from {:?}", self.state_file);
                 Ok(state)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                debug!("Announcement state file not found, using default");
-                Ok(AnnouncementState::default())
-            }
-            Err(e) => {
-                warn!("Failed to read announcement state file: {}", e);
-                Ok(AnnouncementState::default())
+            Ok(None) => self.load_recovery_after_missing_primary().await,
+            Err(error) => {
+                warn!(
+                    "Failed to read announcement state file {}; preserving it and using recovery state: {}",
+                    self.state_file.display(),
+                    error
+                );
+                self.save_target.store(SAVE_TO_RECOVERY, Ordering::Release);
+                match self
+                    .json_store
+                    .read_optional::<AnnouncementState>(&self.recovery_file)
+                    .await
+                {
+                    Ok(Some(state)) => {
+                        debug!(
+                            "Loaded announcement recovery state from {:?}",
+                            self.recovery_file
+                        );
+                        Ok(state)
+                    }
+                    Ok(None) => Ok(AnnouncementState::default()),
+                    Err(recovery_error) => {
+                        self.save_target.store(SAVE_DISABLED, Ordering::Release);
+                        warn!(
+                            "Failed to read announcement recovery state {}; persistence is disabled for this process: {}",
+                            self.recovery_file.display(),
+                            recovery_error
+                        );
+                        Ok(AnnouncementState::default())
+                    }
+                }
             }
         }
     }
 
-    /// Persist state to disk.
+    /// Persist state using a same-directory atomic replacement.
     pub async fn save(&self, state: &AnnouncementState) -> AnnouncementStateStoreResult<()> {
-        if let Some(parent) = self.state_file.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).await?;
+        let target = match self.save_target.load(Ordering::Acquire) {
+            SAVE_TO_PRIMARY => &self.state_file,
+            SAVE_TO_RECOVERY => &self.recovery_file,
+            _ => {
+                return Err(AnnouncementStateStoreError::PersistenceDisabled {
+                    state_file: self.state_file.clone(),
+                });
             }
-        }
-        let content = serde_json::to_string_pretty(state)?;
-        fs::write(&self.state_file, content).await?;
-        debug!("Saved announcement state to {:?}", self.state_file);
+        };
+
+        let _cross_process_lock = self.json_store.acquire_cross_process_lock(target).await?;
+        self.json_store.write_atomic_strict(target, state).await?;
+        debug!("Saved announcement state to {:?}", target);
         Ok(())
     }
+
+    async fn load_recovery_after_missing_primary(
+        &self,
+    ) -> AnnouncementStateStoreResult<AnnouncementState> {
+        self.save_target.store(SAVE_TO_PRIMARY, Ordering::Release);
+        match self
+            .json_store
+            .read_optional::<AnnouncementState>(&self.recovery_file)
+            .await
+        {
+            Ok(Some(state)) => {
+                debug!(
+                    "Primary announcement state is missing; restoring from {:?}",
+                    self.recovery_file
+                );
+                Ok(state)
+            }
+            Ok(None) => {
+                debug!("Announcement state file not found, using default");
+                Ok(AnnouncementState::default())
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to read orphaned announcement recovery state {}; preserving it and using default: {}",
+                    self.recovery_file.display(),
+                    error
+                );
+                Ok(AnnouncementState::default())
+            }
+        }
+    }
+}
+
+fn recovery_file_for(state_file: &Path) -> PathBuf {
+    let stem = state_file
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("announcement-state");
+    state_file.with_file_name(format!("{stem}.recovery.json"))
 }

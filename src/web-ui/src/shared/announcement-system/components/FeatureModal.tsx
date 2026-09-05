@@ -1,6 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Icon, IconButton, ScrollArea } from '@openbitfun/ui';
-;
 import { useAnnouncementStore } from '../store/announcementStore';
 import FeatureModalPage from './FeatureModalPage';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -80,6 +79,7 @@ const FeatureModal: React.FC = () => {
     currentPage,
     setPage,
     closeModal,
+    markModalPresented,
   } = useAnnouncementStore();
 
   const [exiting, setExiting] = React.useState(false);
@@ -95,7 +95,22 @@ const FeatureModal: React.FC = () => {
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
   }, []);
 
-  if (!openModal || !modalVisible) return null;
+  useEffect(() => {
+    if (
+      openModal
+      && modalVisible
+      && openModal.modal?.presentation !== 'release_letter'
+      && backdropRef.current
+    ) {
+      markModalPresented(openModal);
+    }
+  }, [markModalPresented, modalVisible, openModal]);
+
+  if (
+    !openModal
+    || !modalVisible
+    || openModal.modal?.presentation === 'release_letter'
+  ) return null;
 
   const modal: ModalConfig = openModal.modal!;
   const pages = modal.pages ?? [];

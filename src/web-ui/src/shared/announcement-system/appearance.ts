@@ -12,6 +12,12 @@ export const announcementAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'modalPages' },
     { id: 'modalFooter' },
     { id: 'modalNavigation' },
+    { id: 'releaseLetter' },
+    { id: 'releaseLetterScroll' },
+    { id: 'releaseLetterArtwork' },
+    { id: 'releaseLetterCopy' },
+    { id: 'releaseLetterSignature' },
+    { id: 'releaseLetterMarks' },
   ],
   facets: [
     { id: 'depth', attribute: 'data-openbitfun-depth', values: ['1', '2'] },

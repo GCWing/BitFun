@@ -164,42 +164,115 @@ impl AnnouncementScheduler {
         is_version_first_open: bool,
         now: i64,
     ) -> bool {
-        // Never-show list takes absolute precedence.
-        if state.never_show_ids.contains(&card.id) {
+        is_card_eligible(
+            card,
+            state,
+            &self.current_version,
+            open_count,
+            is_version_first_open,
+            now,
+        )
+    }
+}
+
+fn is_card_eligible(
+    card: &AnnouncementCard,
+    state: &AnnouncementState,
+    current_version: &str,
+    open_count: u64,
+    is_version_first_open: bool,
+    now: i64,
+) -> bool {
+    // Never-show list takes absolute precedence.
+    if state.never_show_ids.contains(&card.id) {
+        return false;
+    }
+
+    // Dismissed within the current version cycle.
+    if state.dismissed_ids.contains(&card.id) {
+        return false;
+    }
+
+    // Expired remote card.
+    if let Some(expires) = card.expires_at {
+        if now >= expires {
             return false;
         }
+    }
 
-        // Dismissed within the current version cycle.
-        if state.dismissed_ids.contains(&card.id) {
+    // Version restriction.
+    if let Some(required_version) = &card.app_version {
+        if required_version != current_version {
             return false;
         }
+    }
 
-        // Expired remote card.
-        if let Some(expires) = card.expires_at {
-            if now >= expires {
-                return false;
-            }
-        }
+    // A card is only complete after the presentation surface reports that it
+    // mounted. `Always` deliberately stays eligible across failed starts until
+    // that durable acknowledgement exists.
+    if card.trigger.once_per_version && state.seen_ids.contains(&card.id) {
+        return false;
+    }
 
-        // Version restriction.
-        if let Some(required_version) = &card.app_version {
-            if required_version != &self.current_version {
-                return false;
-            }
-        }
+    match &card.trigger.condition {
+        TriggerCondition::VersionFirstOpen => is_version_first_open,
+        TriggerCondition::AppNthOpen { n } => open_count == *n,
+        TriggerCondition::Always => true,
+        TriggerCondition::Manual => false,
+        TriggerCondition::FeatureUsed { .. } => false,
+    }
+}
 
-        // once_per_version: skip if already seen in this version.
-        if card.trigger.once_per_version && state.seen_ids.contains(&card.id) {
-            return false;
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        // Trigger condition check.
-        match &card.trigger.condition {
-            TriggerCondition::VersionFirstOpen => is_version_first_open,
-            TriggerCondition::AppNthOpen { n } => open_count == *n,
-            TriggerCondition::Always => true,
-            TriggerCondition::Manual => false, // only via explicit `trigger_announcement`
-            TriggerCondition::FeatureUsed { .. } => false, // handled programmatically
-        }
+    fn release_letter() -> AnnouncementCard {
+        local_cards("zh-CN")
+            .into_iter()
+            .find(|card| card.id == "release_letter_1_0_0")
+            .expect("embedded release letter")
+    }
+
+    #[test]
+    fn release_letter_waits_for_a_durable_presentation_acknowledgement() {
+        let card = release_letter();
+        let state = AnnouncementState::default();
+
+        assert!(is_card_eligible(&card, &state, "1.0.0", 1, true, 0));
+
+        let state_after_scheduler_run = AnnouncementState {
+            last_seen_version: "1.0.0".to_string(),
+            app_open_count: 1,
+            ..Default::default()
+        };
+        assert!(is_card_eligible(
+            &card,
+            &state_after_scheduler_run,
+            "1.0.0",
+            2,
+            false,
+            0,
+        ));
+
+        let mut presented_state = state_after_scheduler_run;
+        presented_state.seen_ids.insert(card.id.clone());
+        assert!(!is_card_eligible(
+            &card,
+            &presented_state,
+            "1.0.0",
+            3,
+            false,
+            0,
+        ));
+
+        assert!(!is_card_eligible(
+            &card,
+            &AnnouncementState::default(),
+            "1.0.1",
+            1,
+            true,
+            0,
+        ));
     }
 }

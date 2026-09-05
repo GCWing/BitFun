@@ -95,7 +95,7 @@ default = []
 # feature group (e.g. `git`) only derive `TS` when that group is also enabled;
 # app-server's `ts` feature enables `product-full` which pulls `git`.
 ts = ["dep:ts-rs"]
-announcement = ["openbitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "tokio/fs", "tokio/sync"]
+announcement = ["openbitfun-services-core/json-io", "openbitfun-services-core/tls-provider", "reqwest", "reqwest/json", "reqwest/rustls-no-provider", "tokio/fs", "tokio/sync"]
 models-dev = [
     "openbitfun-services-core/tls-provider",
     "reqwest",

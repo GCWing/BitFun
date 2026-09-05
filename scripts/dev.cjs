@@ -367,7 +367,11 @@ function getNewestTrackedInput(entryPath) {
       return null;
     }
 
-    if (ext === '.md' && !entryPath.includes(`${path.sep}prompts${path.sep}`)) {
+    const isEmbeddedMarkdown = entryPath.includes(`${path.sep}prompts${path.sep}`)
+      || entryPath.includes(
+        `${path.sep}service${path.sep}announcement${path.sep}content${path.sep}`,
+      );
+    if (ext === '.md' && !isEmbeddedMarkdown) {
       return null;
     }
 
