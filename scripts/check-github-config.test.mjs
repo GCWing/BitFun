@@ -1098,6 +1098,18 @@ test('stages unique release asset names before publishing', () => {
   assert.equal(steps[uploadIndex].with.files, 'release-upload-assets/*');
 });
 
+test('Desktop packaging installs Bun before preparing the OpenCode extension Host', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8'),
+  );
+  const steps = workflow.jobs.package.steps;
+  const bunIndex = steps.findIndex((step) => step.uses === 'oven-sh/setup-bun@v2');
+  const buildIndex = steps.findIndex((step) => step.name === 'Build desktop app');
+  assert.ok(bunIndex >= 0 && bunIndex < buildIndex);
+  assert.equal(steps[bunIndex].if, undefined, 'every Desktop platform needs Bun');
+  assert.equal(steps[bunIndex].with['bun-version'], '1.3.14');
+});
+
 test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   const workflow = yaml.parse(
     readFileSync(
