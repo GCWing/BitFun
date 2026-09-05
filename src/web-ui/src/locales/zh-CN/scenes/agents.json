@@ -20,25 +20,26 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "决定根 Agent 如何组织任务、调用工具、协同智能体并整合结果。",
-    "gearLabel": "{{level}} 档",
-    "creativeTrack": "创意方向",
+    "subtitle": "决定 Agent 如何组织任务、调用工具、协同智能体并整合结果。",
+    "flowCaption": "同一任务 · 四种策略 · 一个结果",
+    "task": "任务",
+    "result": "结果",
     "profiles": {
       "minimal": {
         "name": "极简",
-        "purpose": "精简流程，快速推进，适合轻量任务。"
+        "purpose": "精简流程，快速推进"
       },
       "balanced": {
         "name": "标准",
-        "purpose": "平衡效率与质量，适用于大多数日常工作。"
+        "purpose": "平衡效率与质量"
       },
       "ultimate": {
         "name": "极致",
-        "purpose": "深度拆解与智能协同，适合复杂与高价值任务。"
+        "purpose": "深度拆解与智能协同"
       },
       "creative": {
         "name": "创造",
-        "purpose": "面向创新与探索，支持更灵活的执行与产出方式。"
+        "purpose": "OpenBitFun 的定制与创造"
       }
     }
   },

@@ -80,7 +80,7 @@ test("IconButton styles consume shared action and geometry tokens", async () => 
   assert.match(styles, /--openbitfun-radius-pill/);
 });
 
-test("every IconButton variant is composited over an opaque surface", async () => {
+test("quiet IconButtons are transparent at rest while emphasized variants retain an opaque surface", async () => {
   const styles = await readFile(
     new URL("../src/components/IconButton/IconButton.module.css", import.meta.url),
     "utf8",
@@ -88,11 +88,19 @@ test("every IconButton variant is composited over an opaque surface", async () =
 
   assert.match(
     styles,
-    /\.button\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/s,
+    /\.button\s*\{[^}]*--_icon-button-background:\s*transparent;[^}]*\n\s*background:\s*transparent;/s,
   );
   assert.match(
     styles,
     /\.button::before\s*\{[^}]*background:\s*var\(--_icon-button-background\)/s,
   );
-  assert.doesNotMatch(styles, /--_icon-button-background(?:-hover|-active)?:\s*transparent/);
+  assert.match(
+    styles,
+    /\.button\[data-openbitfun-variant="fill"\],\s*\.button\[data-openbitfun-variant="primary"\]\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/s,
+  );
+  assert.doesNotMatch(styles, /--_icon-button-background-(?:hover|active):\s*transparent/);
+  for (const state of ["hover", "active"]) {
+    assert.ok(styles.includes(`:is(:${state}, [data-openbitfun-preview-state="${state}"]):not(:disabled)::before`));
+  }
+  assert.match(styles, /\.button:focus-visible\s*\{[^}]*outline:.*var\(--openbitfun-color-focus-ring\)/s);
 });

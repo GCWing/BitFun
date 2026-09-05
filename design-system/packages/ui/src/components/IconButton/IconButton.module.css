@@ -1,6 +1,6 @@
 @layer openbitfun.components {
   .button {
-    --_icon-button-background: var(--openbitfun-color-surface-tertiary);
+    --_icon-button-background: transparent;
     --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface);
     --_icon-button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
     --_icon-button-content: var(--openbitfun-color-action-neutral-content);
@@ -19,7 +19,7 @@
     border: 0;
     border-radius: var(--openbitfun-radius-sm);
     color: var(--_icon-button-content);
-    background: var(--openbitfun-color-surface-tertiary);
+    background: transparent;
     cursor: pointer;
     isolation: isolate;
     transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
@@ -53,6 +53,11 @@
     --_icon-button-content: var(--openbitfun-color-action-neutral-content-disabled);
 
     cursor: not-allowed;
+  }
+
+  .button[data-openbitfun-variant="fill"],
+  .button[data-openbitfun-variant="primary"] {
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   .button[data-openbitfun-variant="fill"] {

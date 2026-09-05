@@ -1047,6 +1047,7 @@
     "copy": "复制",
     "copyCommit": "复制提交哈希",
     "dialogTitle": "关于 OpenBitFun",
+    "brandStatement": "AGENTS\nFOR A MORE\nOPEN WORLD",
     "tagline": "智能体运行环境 · Agent Runtime",
     "details": "版本与构建信息",
     "version": "版本 {{version}}",
@@ -1062,8 +1063,8 @@
     "nightlyBuild": "每日构建",
     "copyright": "© 2025 OpenBitFun. All rights reserved.",
     "allRightsReserved": "All rights reserved.",
-    "githubStarTitle": "觉得 OpenBitFun 有帮助？在 GitHub 点亮一颗 Star",
-    "githubStarDescription": "你的支持会让更多人发现 OpenBitFun，也会鼓励我们持续打磨它。",
+    "githubStarTitle": "喜欢 OpenBitFun？",
+    "githubStarDescription": "在 GitHub 点亮一颗 Star，让更多人发现它。",
     "githubStarAction": "点亮 Star",
     "updateSectionTitle": "应用更新",
     "updateSectionHint": "保持 OpenBitFun 为最新版本，以获取修复与新功能。"

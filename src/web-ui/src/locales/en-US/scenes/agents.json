@@ -20,25 +20,26 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "Defines how the root Agent structures work, calls tools, coordinates Agents, and integrates results.",
-    "gearLabel": "Gear {{level}}",
-    "creativeTrack": "Creative track",
+    "subtitle": "Defines how an Agent organizes tasks, calls tools, coordinates Agents, and brings results together.",
+    "flowCaption": "One task · Four strategies · One result",
+    "task": "Task",
+    "result": "Result",
     "profiles": {
       "minimal": {
         "name": "Minimal",
-        "purpose": "A lean flow for moving lightweight work forward quickly."
+        "purpose": "Lean flow, fast progress"
       },
       "balanced": {
         "name": "Standard",
-        "purpose": "Balances speed and quality for most everyday work."
+        "purpose": "Balance speed and quality"
       },
       "ultimate": {
         "name": "Ultimate",
-        "purpose": "Deeper decomposition and Agent collaboration for complex, high-value work."
+        "purpose": "Deep planning and collaboration"
       },
       "creative": {
         "name": "Creative",
-        "purpose": "Supports exploration with more flexible ways to execute and create results."
+        "purpose": "Customize and build on OpenBitFun"
       }
     }
   },
