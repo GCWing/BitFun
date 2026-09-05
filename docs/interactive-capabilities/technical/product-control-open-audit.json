@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "9a3d11cb4a198369ceb62ae82e1d0e1e6bddb658f4a790ec84e9eb4123803e5a",
+  "catalogDigest": "d7a7419ddd673eb733ae8bd33dbb3dcd3b4d1ce0acfc953067a3403fe26d6699",
   "count": 212,
   "reasonCounts": {
     "externalAuth": 4,
@@ -1777,8 +1777,8 @@
       "titleZh": "选择 Windows 主机上的 WSL 发行版作为工作区",
       "titleEn": "Choose a WSL distribution on the Windows host as a workspace",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "打开远程连接对话框，由用户选择发行版、Linux 用户和工作区目录。",
-      "reasonEn": "Open the remote connection dialog for the user to choose a distribution, Linux user, and workspace directory.",
+      "reasonZh": "“选择 Windows 主机上的 WSL 发行版作为工作区”需要读取执行主机的发行版列表，并由用户选择 Linux 用户和工作区目录；Agent 可打开连接入口，但当前没有覆盖完整配置流程的结构化 Command。",
+      "reasonEn": "“Choose a WSL distribution on the Windows host as a workspace” requires live distribution discovery on the executing host and user selection of a Linux user and workspace directory; the Agent can open the connection dialog, but no structured Command covers the complete setup workflow.",
       "presentationTarget": {
         "kind": "action",
         "actionId": "project.new"
