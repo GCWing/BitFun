@@ -320,6 +320,7 @@ enum MockModelResponse {
     Http403 { reason: String },
     DisconnectThenHttp403,
     MalformedSseThenImmediate,
+    ContextOverflowThenImmediate,
 }
 
 impl MockOpenAiServer {
@@ -347,6 +348,10 @@ impl MockOpenAiServer {
 
     pub(crate) fn malformed_sse_then_immediate() -> Self {
         Self::spawn(MockModelResponse::MalformedSseThenImmediate)
+    }
+
+    pub(crate) fn context_overflow_then_immediate() -> Self {
+        Self::spawn(MockModelResponse::ContextOverflowThenImmediate)
     }
 
     pub(crate) fn base_url(&self) -> &str {
@@ -437,6 +442,10 @@ impl MockOpenAiServer {
                                     | MockModelResponse::DisconnectThenHttp403
                             ) || (matches!(response, MockModelResponse::MalformedSseThenImmediate)
                                 && attempt < 2)
+                                || (matches!(
+                                    response,
+                                    MockModelResponse::ContextOverflowThenImmediate
+                                ) && attempt < 3)
                                 || (matches!(response, MockModelResponse::ProductControlLoop)
                                     && attempt < 5);
                         if accepts_more_requests {
@@ -488,6 +497,15 @@ fn serve_model_response(
     release_stream: &mpsc::Receiver<()>,
     stream_disconnected: &mpsc::Sender<()>,
 ) {
+    if matches!(response, MockModelResponse::ContextOverflowThenImmediate) && attempt == 0 {
+        let body = json!({
+            "error": {"code": "context_length_exceeded", "message": "Maximum context length exceeded"}
+        }).to_string();
+        write!(stream, "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
+            .expect("write context overflow response");
+        stream.flush().expect("flush context overflow response");
+        return;
+    }
     if matches!(response, MockModelResponse::DisconnectThenHttp403) && attempt > 0 {
         write_http_403(stream, "provider stream remained unavailable")
             .expect("write post-disconnect HTTP error");
