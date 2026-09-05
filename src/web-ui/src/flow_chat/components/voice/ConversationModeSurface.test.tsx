@@ -14,6 +14,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
   controller: {
+    enabled: true,
     phase: 'idle',
     start: vi.fn(),
     end: vi.fn(),
@@ -45,6 +46,7 @@ describe('ConversationModeSurface', () => {
   let root: Root;
 
   beforeEach(() => {
+    mocks.controller.enabled = true;
     mocks.controller.phase = 'idle';
     mocks.controller.start.mockReset();
     mocks.controller.end.mockReset();
@@ -108,5 +110,38 @@ describe('ConversationModeSurface', () => {
     expect(button?.disabled).toBe(true);
     button?.click();
     expect(mocks.controller.start).not.toHaveBeenCalled();
+  });
+
+  it('hides the realtime voice switch until the client voice assistant is enabled', async () => {
+    mocks.controller.enabled = false;
+    await act(async () => {
+      root.render(
+        <ConversationModeSurface>
+          <div data-testid="chat-surface" />
+        </ConversationModeSurface>,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="chat-surface"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="modeSwitch"]')).toBeNull();
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('keeps the hang-up switch while a call is already live after the assistant is disabled', async () => {
+    mocks.controller.enabled = false;
+    mocks.controller.phase = 'live';
+    await act(async () => {
+      root.render(
+        <ConversationModeSurface>
+          <div data-testid="chat-surface" />
+        </ConversationModeSurface>,
+      );
+    });
+
+    expect(container.querySelector('[data-openbitfun-part="modeSwitch"]')).not.toBeNull();
+    await act(async () => {
+      container.querySelector('button')?.click();
+    });
+    expect(mocks.controller.end).toHaveBeenCalledOnce();
   });
 });

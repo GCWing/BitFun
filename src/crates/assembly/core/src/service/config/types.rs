@@ -381,6 +381,7 @@ impl Default for VoiceInputConfig {
 
 /// Controller-local full-duplex voice-call preferences.
 ///
+/// The assistant stays off until the current controller explicitly enables it.
 /// The API key crosses only the controller-local settings IPC; starting a
 /// session resolves it in the Desktop adapter, so it is never forwarded to a
 /// remote workspace or peer HostInvoke request. Session execution selected by
@@ -401,7 +402,7 @@ pub struct VoiceCallConfig {
 impl Default for VoiceCallConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             provider: "volcengine".to_string(),
             api_key: String::new(),
             voice: "zh_female_vv_jupiter_bigtts".to_string(),
@@ -2085,9 +2086,25 @@ mod tests {
         let config: AppConfig = serde_json::from_value(serde_json::json!({}))
             .expect("legacy app config should deserialize");
 
-        assert!(config.voice_call.enabled);
+        assert!(!config.voice_call.enabled);
         assert_eq!(config.voice_call.provider, "volcengine");
         assert!(config.voice_call.api_key.is_empty());
+        assert_eq!(config.voice_call.voice, "zh_female_vv_jupiter_bigtts");
+    }
+
+    #[test]
+    fn persisted_realtime_voice_call_enabled_survives_default_change() {
+        let config: AppConfig = serde_json::from_value(serde_json::json!({
+            "voice_call": {
+                "enabled": true,
+                "api_key": "legacy-controller-key"
+            }
+        }))
+        .expect("saved realtime voice config should deserialize");
+
+        assert!(config.voice_call.enabled);
+        assert_eq!(config.voice_call.api_key, "legacy-controller-key");
+        assert_eq!(config.voice_call.provider, "volcengine");
         assert_eq!(config.voice_call.voice, "zh_female_vv_jupiter_bigtts");
     }
 
