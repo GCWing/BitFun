@@ -273,6 +273,24 @@ test('Desktop Tauri projection consumes only the resolved member identity', () =
   }
 });
 
+test('Desktop packaging works without the suspended Flashgrep resource', () => {
+  const fixture = join(tmpdir(), `openbitfun-without-flashgrep-${process.pid}-${Date.now()}`);
+  mkdirSync(fixture, { recursive: true });
+  const baseConfig = join(fixture, 'tauri.conf.json');
+  writeFileSync(baseConfig, JSON.stringify({
+    bundle: { resources: { '../../../resources/flashgrep': 'flashgrep' } },
+  }));
+  try {
+    const generated = prepareTauriConfig(baseConfig, { desktopDir: fixture });
+    const config = JSON.parse(readFileSync(generated, 'utf8'));
+    assert.ok(Object.entries(config.bundle.resources).every(([source, target]) =>
+      !source.includes('flashgrep') && !target.includes('flashgrep')));
+    assert.equal(config.bundle.resources['../../../dist'], 'frontend/dist');
+  } finally {
+    rmSync(fixture, { force: true, recursive: true });
+  }
+});
+
 test('Windows updater installs NSIS packages without showing its progress window', () => {
   const fixture = join(tmpdir(), `openbitfun-tauri-updater-${process.pid}-${Date.now()}`);
   const baseConfig = join(fixture, 'tauri.conf.json');

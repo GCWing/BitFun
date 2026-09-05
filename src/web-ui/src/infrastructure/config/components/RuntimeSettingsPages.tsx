@@ -59,6 +59,7 @@ import type {
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import SessionTitleConfig from './SessionTitleConfig';
+import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -1108,20 +1109,22 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
         {page === 'session-workspace' && settings ? (
           <>
 
-        {/* ── Accelerated workspace search ───────────────────────── */}
-        <ConfigPageSection
-          title={t('features.workspaceSearch.title')}
-          description={t('features.workspaceSearch.subtitle')}
-        >
-          <ConfigPageRow label={t('features.workspaceSearch.enable')} align="center">
-            <div className="openbitfun-runtime-settings__row-control" data-openbitfun-component="runtime-settings" data-openbitfun-part="control">
-              <Switch
-                checked={settings.enable_workspace_search}
-                onChange={(e) => updateSetting('enable_workspace_search', e.target.checked)}
-              />
-            </div>
-          </ConfigPageRow>
-        </ConfigPageSection>
+        {/* Flashgrep entry stays hidden while its binaries are not distributed. */}
+        {WORKSPACE_SEARCH_AVAILABLE && (
+          <ConfigPageSection
+            title={t('features.workspaceSearch.title')}
+            description={t('features.workspaceSearch.subtitle')}
+          >
+            <ConfigPageRow label={t('features.workspaceSearch.enable')} align="center">
+              <div className="openbitfun-runtime-settings__row-control" data-openbitfun-component="runtime-settings" data-openbitfun-part="control">
+                <Switch
+                  checked={settings.enable_workspace_search}
+                  onChange={(e) => updateSetting('enable_workspace_search', e.target.checked)}
+                />
+              </div>
+            </ConfigPageRow>
+          </ConfigPageSection>
+        )}
 
         <SessionTitleConfig />
 

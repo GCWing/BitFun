@@ -155,7 +155,7 @@ test('desktop:dev does not compile the DeepSeek profile', () => {
   assert.doesNotMatch(devScript, /\['run', 'prepare:dsh-profile'\]/);
   assert.match(
     devScript,
-    /Prepare resources \(parallel: monaco, version, mobile-web, flashgrep\)/,
+    /Prepare resources \(parallel: monaco, version, mobile-web, plugin-host\)/,
   );
 });
 
