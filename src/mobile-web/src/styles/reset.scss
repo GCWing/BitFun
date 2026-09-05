@@ -13,7 +13,7 @@
   button,
   input,
   textarea {
-    font-family: inherit;
+    font-family: var(--openbitfun-type-body-md-font-family);
   }
 
   button:focus-visible,

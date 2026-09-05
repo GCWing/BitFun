@@ -1,6 +1,7 @@
 import {
   Button,
-  Card,
+  Field,
+  StatusPill,
   Combobox,
   Icon,
   IconButton,
@@ -802,7 +803,8 @@ const ModelSettingsPage: React.FC = () => {
         return createModelDraft(modelName, draftBaseConfig, {
           configId: pinnedRowId,
           contextWindow: catalogModel?.limits?.context,
-          category: catalogModel?.capabilities.attachment ? 'multimodal' : undefined,
+          // New selections start as multimodal; existing model edits retain their category.
+          category: pinnedRowId ? (baseConfig?.category ?? 'general_chat') : 'multimodal',
         });
       })
     );
@@ -1102,8 +1104,8 @@ const ModelSettingsPage: React.FC = () => {
         model_name: '',
         enabled: true,
         context_window: 200000,
-        category: 'general_chat',
-        capabilities: ['text_chat', 'function_calling'],
+        category: 'multimodal',
+        capabilities: getCapabilitiesByCategory('multimodal'),
         recommended_for: [],
         metadata: {},
         inline_think_in_text: true,
@@ -1453,33 +1455,24 @@ const ModelSettingsPage: React.FC = () => {
     
     // Dynamically get translated name
     const providerName = t(`providers.${template.id}.name`);
-    const defaultModel = template.models[0] || '';
     
     setEditingConfig({
       name: providerName,
       base_url: template.baseUrl,
-      request_url: resolveRequestUrl(
-        template.baseUrl,
-        template.format,
-        defaultModel
-      ),
+      request_url: '',
       api_key: '',
-      model_name: defaultModel,
+      model_name: '',
       provider: template.format,
       enabled: true,
       context_window: 200000,
-      category: 'general_chat',
-      capabilities: ['text_chat', 'function_calling'],
+      category: 'multimodal',
+      capabilities: getCapabilitiesByCategory('multimodal'),
       recommended_for: [],
       metadata: {},
       inline_think_in_text: true,
     });
-    setSelectedModelDrafts(
-      defaultModel ? [createModelDraft(defaultModel, {
-        context_window: 200000,
-        reasoning: { catalog: { source: 'auto' }, presets: [] },
-      })] : []
-    );
+    // Provider templates supply available choices, never an implicit selection.
+    setSelectedModelDrafts([]);
     setEditingProviderModelIds(new Set());
     setShowAdvancedSettings(false);
     setCreationMode('form');
@@ -1503,8 +1496,8 @@ const ModelSettingsPage: React.FC = () => {
       provider: 'openai',  
       enabled: true,
       context_window: 200000,
-      category: 'general_chat',
-      capabilities: ['text_chat'],
+      category: 'multimodal',
+      capabilities: getCapabilitiesByCategory('multimodal'),
       recommended_for: [],
       metadata: {},
       inline_think_in_text: true,
@@ -2204,11 +2197,10 @@ const ModelSettingsPage: React.FC = () => {
         <ConfigPageContent className="openbitfun-model-settings__content openbitfun-model-settings__content--selection">
           <div className="openbitfun-model-settings__provider-selection" data-openbitfun-component="model-settings" data-openbitfun-part="providerSelection">
             
-            <Card
+            <button
+              type="button"
               data-testid="settings-model-custom-config-btn"
               data-provider-id="custom"
-              appearance="neutral"
-              padding="sm"
               className="openbitfun-model-settings__custom-option"
               onClick={handleSelectCustom}
             >
@@ -2219,7 +2211,7 @@ const ModelSettingsPage: React.FC = () => {
                   <div className="openbitfun-model-settings__custom-option-description" data-openbitfun-component="model-settings" data-openbitfun-part="customOptionDescription">{t('providerSelection.customDescription')}</div>
                 </div>
               </div>
-            </Card>
+            </button>
 
             
             <div className="openbitfun-model-settings__selection-divider" data-openbitfun-component="model-settings" data-openbitfun-part="selectionDivider">
@@ -2316,7 +2308,7 @@ const ModelSettingsPage: React.FC = () => {
 
 
             <div className="openbitfun-model-settings__selection-actions" data-openbitfun-component="model-settings" data-openbitfun-part="selectionActions">
-              <Button variant="outline" onClick={() => setCreationMode(null)}>
+              <Button variant="outline" size="sm" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}
               </Button>
             </div>
@@ -2520,19 +2512,22 @@ const ModelSettingsPage: React.FC = () => {
                 >
                   <div className="openbitfun-model-settings__selected-model-head-title">
                     <div className="openbitfun-model-settings__selected-model-head-top">
-                      <div className="openbitfun-model-settings__selected-model-toggle">
-                        {isExpanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
-                      </div>
+                      {canToggleExpand && (
+                        <div className="openbitfun-model-settings__selected-model-toggle">
+                          {isExpanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
+                        </div>
+                      )}
                       <div className="openbitfun-model-settings__selected-model-name">{modelDisplayName}</div>
                       {hasUnsavedChanges && (
-                        <span
+                        <StatusPill
+                          tone="warning"
                           className="openbitfun-model-settings__selected-model-unsaved"
                           title={t('providerSelection.unsavedModelHint')}
                           aria-label={t('providerSelection.unsavedModelHint')}
                           data-testid="settings-model-unsaved-badge"
                         >
                           {t('providerSelection.unsavedModel')}
-                        </span>
+                        </StatusPill>
                       )}
                     </div>
                     {!editingConfig.id && (
@@ -2567,8 +2562,7 @@ const ModelSettingsPage: React.FC = () => {
                 </div>
                 {isExpanded && (
                   <div className="openbitfun-model-settings__selected-model-grid">
-                    <div className="openbitfun-model-settings__selected-model-field">
-                      <span>{t('category.label')}</span>
+                    <Field className="openbitfun-model-settings__selected-model-field" label={t('category.label')} controlWidth="fill">
                       <Combobox
                         value={draft.category}
                         onValueChange={(value) => updateModelDraft(draft.modelName, { category: value as ModelCategory })}
@@ -2576,21 +2570,22 @@ const ModelSettingsPage: React.FC = () => {
                         size="sm"
                         className="openbitfun-model-settings__selected-model-category-select"
                       />
-                    </div>
-                    <div className="openbitfun-model-settings__selected-model-field">
-                      <span className="openbitfun-model-settings__inline-header-main">
-                        <span>{t('form.contextWindow')}</span>
+                    </Field>
+                    <Field
+                      className="openbitfun-model-settings__selected-model-field"
+                      label={t('form.contextWindow')}
+                      controlWidth="fill"
+                      labelAction={(
                         <Tooltip content={t('form.contextWindowHint')} placement="top">
-                          <span
-                            className="openbitfun-model-settings__inline-header-info"
-                            role="button"
-                            tabIndex={0}
+                          <IconButton
+                            size="xs"
+                            variant="quiet"
                             aria-label={t('form.contextWindowHint')}
-                          >
-                            <Icon name="info" size="sm" aria-hidden="true" />
-                          </span>
+                            icon={<Icon name="info" size="sm" />}
+                          />
                         </Tooltip>
-                      </span>
+                      )}
+                    >
                       <NumberInput
                         className="openbitfun-model-settings__selected-model-context-input"
                         value={draft.contextWindow}
@@ -2601,7 +2596,7 @@ const ModelSettingsPage: React.FC = () => {
                         size="sm"
                         disableWheel
                       />
-                    </div>
+                    </Field>
                     {draft.contextWindow > LONG_CONTEXT_WARNING_THRESHOLD_TOKENS && (
                       <div className="openbitfun-model-settings__warning-inline openbitfun-model-settings__context-window-warning">
                         <AlertTriangle size={14} />
@@ -2788,7 +2783,7 @@ const ModelSettingsPage: React.FC = () => {
                           }));
                         }}
                         placeholder={t('form.baseUrl')}
-                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
+                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.note || opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.url}` }))}
                         size="sm"
                       />
                     )}
@@ -2810,13 +2805,8 @@ const ModelSettingsPage: React.FC = () => {
                     />
                     {editingConfig.base_url && (
                       <div className="openbitfun-model-settings__resolved-url">
-                        <Input
-                          value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
-                          readOnly
-                          onFocus={(e) => e.target.select()}
-                          className="openbitfun-model-settings__resolved-url-input"
-                          size="sm"
-                        />
+                        <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
+                          <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
                       </div>
                     )}
                   </div>
@@ -2839,7 +2829,7 @@ const ModelSettingsPage: React.FC = () => {
                     size="sm"
                   />
                 </ConfigPageRow>
-                <ConfigPageRow label={t('form.modelSelection')} required wide multiline>
+                <ConfigPageRow label={t('form.modelSelection')} required multiline className="openbitfun-model-settings__model-selection-row">
                   <div className="openbitfun-model-settings__control-stack">
                     <div className="openbitfun-model-settings__model-picker-row">
                       <MultiSelect
@@ -2872,12 +2862,12 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button className="openbitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="secondary" size="sm" onClick={addManualModelDraft}>
+                      <Button className="openbitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
                     {modelFetchHint && (
-                      <small className={`resolved-url__hint ${remoteModelsError ? 'openbitfun-model-settings__json-status--error' : ''}`}>
+                      <small className={`resolved-url__hint openbitfun-model-settings__model-fetch-hint ${remoteModelsError ? 'openbitfun-model-settings__json-status--error' : ''}`}>
                         {modelFetchHint}
                       </small>
                     )}
@@ -2922,13 +2912,8 @@ const ModelSettingsPage: React.FC = () => {
                         />
                         {editingConfig.base_url && (
                           <div className="openbitfun-model-settings__resolved-url">
-                            <Input
-                              value={previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
-                              readOnly
-                              onFocus={(e) => e.target.select()}
-                              className="openbitfun-model-settings__resolved-url-input"
-                              size="sm"
-                            />
+                            <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
+                          <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
                           </div>
                         )}
                       </div>
@@ -2951,7 +2936,7 @@ const ModelSettingsPage: React.FC = () => {
 
             {!isFromTemplate && (
               <>
-                <ConfigPageRow label={t('form.modelSelection')} required wide multiline>
+                <ConfigPageRow label={t('form.modelSelection')} required multiline className="openbitfun-model-settings__model-selection-row">
                   <div className="openbitfun-model-settings__control-stack">
                     <div className="openbitfun-model-settings__model-picker-row">
                       {editingConfig.id ? (
@@ -3000,12 +2985,12 @@ const ModelSettingsPage: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         size="sm"
                       />
-                      <Button className="openbitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="secondary" size="sm" onClick={addManualModelDraft}>
+                      <Button className="openbitfun-model-settings__manual-model-add" data-testid="settings-model-add-custom-btn" variant="outline" size="sm" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
                     {modelFetchHint && (
-                      <small className={`resolved-url__hint ${remoteModelsError ? 'openbitfun-model-settings__json-status--error' : ''}`}>
+                      <small className={`resolved-url__hint openbitfun-model-settings__model-fetch-hint ${remoteModelsError ? 'openbitfun-model-settings__json-status--error' : ''}`}>
                         {modelFetchHint}
                       </small>
                     )}
@@ -4155,13 +4140,14 @@ const ModelSettingsPage: React.FC = () => {
         ) : renderEditingForm()}
               </DialogBody>
         {!reasoningPanelDraft && (
-          <DialogFooter appearance="floating">
-            <Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
               {t('actions.cancel')}
             </Button>
             <Button
               data-testid="settings-model-save-btn"
-              variant="primary"
+              variant="fill"
+              size="sm"
               onClick={() => void handleSave()}
               loading={isEditorSaving}
             >

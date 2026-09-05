@@ -53,7 +53,12 @@ describe('startup performance contract', () => {
     expect(alphaAt(8, 8)).toBe(0);
     expect(alphaAt(12, 12)).toBe(0);
     expect(alphaAt(20, 20)).toBe(0);
-    expect(alphaAt(64, 16)).toBeGreaterThan(240);
+    // The fine-line rim crosses this band; a single pixel from the former
+    // filled mark can land between antialiased strokes in the new artwork.
+    const topRimAlpha = Array.from({ length: 15 }, (_, x) =>
+      Array.from({ length: 9 }, (_, y) => alphaAt(57 + x, 12 + y)),
+    ).flat();
+    expect(Math.max(...topRimAlpha)).toBeGreaterThan(240);
     expect(alphaAt(64, 64)).toBe(0);
   });
 

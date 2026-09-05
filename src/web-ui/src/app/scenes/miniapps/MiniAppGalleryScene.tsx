@@ -4,7 +4,7 @@
  */
 import React, { Suspense, lazy, useState } from 'react';
 
-import { SegmentedControl } from '@openbitfun/ui';
+import { TabGroup } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -17,11 +17,10 @@ const MiniAppGalleryScene: React.FC = () => {
   const { t } = useI18n('scenes/miniapp');
   const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('apps');
   const tabs = (
-    <SegmentedControl
+    <div className="miniapp-gallery-tabs">
+    <TabGroup
       aria-label={t('title')}
-      className="miniapp-gallery-tabs"
-      distribution="fill"
-      options={[
+      items={[
         {
           value: 'apps',
           label: t('market.tabs.apps'),
@@ -31,10 +30,11 @@ const MiniAppGalleryScene: React.FC = () => {
           label: t('market.tabs.submissions'),
         },
       ]}
-      size="md"
+      size="sm"
       value={activeTab}
       onValueChange={(value) => setActiveTab(value as MiniAppGalleryTab)}
     />
+    </div>
   );
 
   return (

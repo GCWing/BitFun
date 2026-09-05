@@ -863,6 +863,11 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
 
   const start = useCallback((target?: VoiceMiniAppCallTarget) => {
     if (phase !== 'idle' || disabled) return;
+    if (voiceCallConfig && !voiceCallConfig.enabled) {
+      notificationService.info(t('voiceCall.call.configureFirst'));
+      openSettings();
+      return;
+    }
     if (!isTauriRuntime()) {
       notificationService.error(t('messages.unsupported'));
       return;
@@ -1024,6 +1029,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     openSettings,
     phase,
     t,
+    voiceCallConfig,
   ]);
 
   useEffect(() => () => {
@@ -1039,7 +1045,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
   }, [cleanupMedia]);
 
   return {
-    enabled: voiceCallConfig?.enabled !== false,
+    enabled: voiceCallConfig?.enabled === true,
     disabled,
     phase,
     muted,

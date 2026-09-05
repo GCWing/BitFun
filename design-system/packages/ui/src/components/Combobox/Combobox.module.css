@@ -174,6 +174,11 @@
 
   .tags {
     gap: var(--openbitfun-space-1);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   }
 
   .control[data-tags="true"] .tags {
@@ -207,14 +212,20 @@
     overflow: hidden;
     align-items: center;
     max-inline-size: 10rem;
+    min-block-size: var(--openbitfun-control-icon-button-xs-size);
     gap: var(--openbitfun-space-1);
-    padding-inline-start: var(--openbitfun-space-2);
-    border-radius: var(--openbitfun-radius-xs);
-    color: var(--openbitfun-color-action-neutral-content);
-    background: var(--openbitfun-color-action-neutral-surface);
+    padding-inline: var(--openbitfun-space-2);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-tertiary);
     pointer-events: auto;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tag:has(button) {
+    padding-inline-end: 0;
   }
 
   .tag > span {

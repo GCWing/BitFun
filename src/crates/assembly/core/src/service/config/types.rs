@@ -381,6 +381,7 @@ impl Default for VoiceInputConfig {
 
 /// Controller-local full-duplex voice-call preferences.
 ///
+/// The assistant stays off until the current controller explicitly enables it.
 /// The API key crosses only the controller-local settings IPC; starting a
 /// session resolves it in the Desktop adapter, so it is never forwarded to a
 /// remote workspace or peer HostInvoke request. Session execution selected by
@@ -401,7 +402,7 @@ pub struct VoiceCallConfig {
 impl Default for VoiceCallConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             provider: "volcengine".to_string(),
             api_key: String::new(),
             voice: "zh_female_vv_jupiter_bigtts".to_string(),
@@ -1618,7 +1619,6 @@ pub trait ConfigProvider: Send + Sync {
         old_config: &serde_json::Value,
         new_config: &serde_json::Value,
     ) -> OpenBitFunResult<()>;
-
 }
 
 /// Configuration change event.
@@ -2086,9 +2086,25 @@ mod tests {
         let config: AppConfig = serde_json::from_value(serde_json::json!({}))
             .expect("legacy app config should deserialize");
 
-        assert!(config.voice_call.enabled);
+        assert!(!config.voice_call.enabled);
         assert_eq!(config.voice_call.provider, "volcengine");
         assert!(config.voice_call.api_key.is_empty());
+        assert_eq!(config.voice_call.voice, "zh_female_vv_jupiter_bigtts");
+    }
+
+    #[test]
+    fn persisted_realtime_voice_call_enabled_survives_default_change() {
+        let config: AppConfig = serde_json::from_value(serde_json::json!({
+            "voice_call": {
+                "enabled": true,
+                "api_key": "legacy-controller-key"
+            }
+        }))
+        .expect("saved realtime voice config should deserialize");
+
+        assert!(config.voice_call.enabled);
+        assert_eq!(config.voice_call.api_key, "legacy-controller-key");
+        assert_eq!(config.voice_call.provider, "volcengine");
         assert_eq!(config.voice_call.voice, "zh_female_vv_jupiter_bigtts");
     }
 
@@ -2199,10 +2215,9 @@ mod tests {
 
     #[test]
     fn plugin_config_defaults_to_empty_when_missing() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({}),
-        ))
-        .expect("current global config should apply optional plugin defaults");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({})))
+                .expect("current global config should apply optional plugin defaults");
 
         assert!(config.plugin.is_empty());
         assert!(!config.has_configured_plugins());
@@ -2210,19 +2225,18 @@ mod tests {
 
     #[test]
     fn non_empty_plugin_config_requests_runtime_startup() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "plugin": [
-                "file:///C:/plugins/demo.mjs",
-                {
-                    "spec": "@my-org/custom-plugin",
-                    "options": { "mode": "strict" },
-                    "baseDirectory": "C:/workspace"
-                }
-            ]
-        }),
-        ))
-        .expect("plugin config should deserialize");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "plugin": [
+                    "file:///C:/plugins/demo.mjs",
+                    {
+                        "spec": "@my-org/custom-plugin",
+                        "options": { "mode": "strict" },
+                        "baseDirectory": "C:/workspace"
+                    }
+                ]
+            })))
+            .expect("plugin config should deserialize");
 
         assert_eq!(config.plugin.len(), 2);
         assert!(config.has_configured_plugins());
@@ -2230,12 +2244,11 @@ mod tests {
 
     #[test]
     fn empty_plugin_specs_do_not_request_runtime_startup() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "plugin": ["", "   ", { "spec": "" }]
-        }),
-        ))
-        .expect("empty plugin declarations should deserialize");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "plugin": ["", "   ", { "spec": "" }]
+            })))
+            .expect("empty plugin declarations should deserialize");
 
         assert!(!config.has_configured_plugins());
     }
@@ -2305,12 +2318,11 @@ mod tests {
             .expect("current AI config should default an omitted optional limit");
         assert_eq!(defaulted.ai.max_rounds, 0);
 
-        let limited: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "ai": { "max_rounds": 37 }
-        }),
-        ))
-        .expect("explicit max rounds should deserialize");
+        let limited: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "ai": { "max_rounds": 37 }
+            })))
+            .expect("explicit max rounds should deserialize");
         assert_eq!(limited.ai.max_rounds, 37);
     }
 
@@ -2331,21 +2343,20 @@ mod tests {
 
     #[test]
     fn user_tool_groups_preserve_the_versioned_ui_shape() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "user_tool_groups": {
-                    "version": 1,
-                    "groups": [{
-                        "id": "daily-code",
-                        "name": "Daily code changes",
-                        "toolNames": ["Read", "Edit"]
-                    }]
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "user_tool_groups": {
+                        "version": 1,
+                        "groups": [{
+                            "id": "daily-code",
+                            "name": "Daily code changes",
+                            "toolNames": ["Read", "Edit"]
+                        }]
+                    }
                 }
-            }
-        }),
-        ))
-        .expect("user tool groups should deserialize");
+            })))
+            .expect("user tool groups should deserialize");
 
         assert_eq!(
             config.app.user_tool_groups.groups[0].tool_names,
@@ -2379,21 +2390,20 @@ mod tests {
 
     #[test]
     fn user_skill_groups_preserve_the_versioned_ui_shape() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "user_skill_groups": {
-                    "version": 1,
-                    "groups": [{
-                        "id": "daily-coding",
-                        "name": "Daily coding",
-                        "skillKeys": ["builtin::find-skills", "user::review"]
-                    }]
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "user_skill_groups": {
+                        "version": 1,
+                        "groups": [{
+                            "id": "daily-coding",
+                            "name": "Daily coding",
+                            "skillKeys": ["builtin::find-skills", "user::review"]
+                        }]
+                    }
                 }
-            }
-        }),
-        ))
-        .expect("user skill groups should deserialize");
+            })))
+            .expect("user skill groups should deserialize");
 
         assert_eq!(
             config.app.user_skill_groups.groups[0].skill_keys,
@@ -2412,22 +2422,21 @@ mod tests {
 
     #[test]
     fn global_config_preserves_project_mcp_servers() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "project": {
-                "mcp_servers": [
-                    {
-                        "id": "project-docs",
-                        "name": "Project Docs",
-                        "server_type": "local",
-                        "command": "docs-mcp",
-                        "args": []
-                    }
-                ]
-            }
-        }),
-        ))
-        .expect("project scoped MCP config should deserialize");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "project": {
+                    "mcp_servers": [
+                        {
+                            "id": "project-docs",
+                            "name": "Project Docs",
+                            "server_type": "local",
+                            "command": "docs-mcp",
+                            "args": []
+                        }
+                    ]
+                }
+            })))
+            .expect("project scoped MCP config should deserialize");
 
         assert_eq!(
             config
@@ -2448,14 +2457,13 @@ mod tests {
 
     #[test]
     fn global_config_preserves_terminal_panel_position() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "terminal": {
-                "terminal_panel_position": "bottom"
-            }
-        }),
-        ))
-        .expect("terminal panel position config should deserialize");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "terminal": {
+                    "terminal_panel_position": "bottom"
+                }
+            })))
+            .expect("terminal panel position config should deserialize");
 
         assert_eq!(config.terminal.terminal_panel_position, "bottom");
 
@@ -2546,45 +2554,44 @@ mod tests {
 
     #[test]
     fn ai_experience_quick_actions_round_trip_through_global_config() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "language": "en-US",
-                "auto_update": true,
-                "telemetry": true,
-                "startup_behavior": "default",
-                "confirm_on_exit": true,
-                "restore_windows": false,
-                "zoom_level": 100,
-                "sidebar": { "width": 260, "collapsed": false },
-                "right_panel": { "width": 400, "collapsed": true },
-                "notifications": {
-                    "enabled": true,
-                    "position": "top-right",
-                    "duration": 4000,
-                    "dialog_completion_notify": true,
-                    "permission_request_notify": false,
-                    "enable_startup_tips": true
-                },
-                "ai_experience": {
-                    "enable_session_title_generation": true,
-                    "enable_welcome_panel_ai_analysis": false,
-                    "enable_visual_mode": false,
-                    "enable_agent_companion": true,
-                    "enable_workspace_search": false,
-                    "quick_actions": [
-                        {
-                            "id": "custom_1",
-                            "label": "Run tests",
-                            "prompt": "Run the test suite",
-                            "enabled": true
-                        }
-                    ]
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "language": "en-US",
+                    "auto_update": true,
+                    "telemetry": true,
+                    "startup_behavior": "default",
+                    "confirm_on_exit": true,
+                    "restore_windows": false,
+                    "zoom_level": 100,
+                    "sidebar": { "width": 260, "collapsed": false },
+                    "right_panel": { "width": 400, "collapsed": true },
+                    "notifications": {
+                        "enabled": true,
+                        "position": "top-right",
+                        "duration": 4000,
+                        "dialog_completion_notify": true,
+                        "permission_request_notify": false,
+                        "enable_startup_tips": true
+                    },
+                    "ai_experience": {
+                        "enable_session_title_generation": true,
+                        "enable_welcome_panel_ai_analysis": false,
+                        "enable_visual_mode": false,
+                        "enable_agent_companion": true,
+                        "enable_workspace_search": false,
+                        "quick_actions": [
+                            {
+                                "id": "custom_1",
+                                "label": "Run tests",
+                                "prompt": "Run the test suite",
+                                "enabled": true
+                            }
+                        ]
+                    }
                 }
-            }
-        }),
-        ))
-        .expect("minimal app config with quick_actions should deserialize");
+            })))
+            .expect("minimal app config with quick_actions should deserialize");
 
         let actions = &config.app.ai_experience.quick_actions;
         assert!(!config.app.notifications.permission_request_notify);
@@ -2622,16 +2629,15 @@ mod tests {
 
     #[test]
     fn app_flow_chat_default_mode_id_round_trips() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "flow_chat": {
-                    "default_mode_id": "PlannerPlus"
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "flow_chat": {
+                        "default_mode_id": "PlannerPlus"
+                    }
                 }
-            }
-        }),
-        ))
-        .expect("flow chat config should deserialize");
+            })))
+            .expect("flow chat config should deserialize");
 
         assert_eq!(
             config.app.flow_chat.default_mode_id.as_deref(),
@@ -2647,14 +2653,13 @@ mod tests {
 
     #[test]
     fn app_flow_chat_permission_mode_control_defaults_to_visible_without_persisting_default() {
-        let default_config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "flow_chat": {}
-            }
-        }),
-        ))
-        .expect("flow chat config without visibility preference should deserialize");
+        let default_config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "flow_chat": {}
+                }
+            })))
+            .expect("flow chat config without visibility preference should deserialize");
 
         assert!(default_config.app.flow_chat.show_permission_mode_control);
         let default_serialized =
@@ -2663,16 +2668,15 @@ mod tests {
             .get("show_permission_mode_control")
             .is_none());
 
-        let hidden_config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "app": {
-                "flow_chat": {
-                    "show_permission_mode_control": false
+        let hidden_config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "app": {
+                    "flow_chat": {
+                        "show_permission_mode_control": false
+                    }
                 }
-            }
-        }),
-        ))
-        .expect("flow chat config with hidden permission control should deserialize");
+            })))
+            .expect("flow chat config with hidden permission control should deserialize");
 
         assert!(!hidden_config.app.flow_chat.show_permission_mode_control);
         let hidden_serialized =
@@ -2858,16 +2862,15 @@ mod tests {
 
     #[test]
     fn current_editor_config_defaults_new_optional_visual_fields() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "editor": {
-                "font_size": 16,
-                "font_family": "Fixture Mono",
-                "line_height": 1.4
-            }
-        }),
-        ))
-        .expect("current editor config should default optional visual fields");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "editor": {
+                    "font_size": 16,
+                    "font_family": "Fixture Mono",
+                    "line_height": 1.4
+                }
+            })))
+            .expect("current editor config should default optional visual fields");
 
         assert_eq!(config.editor.font_size, 16);
         assert_eq!(config.editor.font_family, "Fixture Mono");
@@ -2940,31 +2943,30 @@ mod tests {
 
     #[test]
     fn deserializes_explicit_memories_config() {
-        let config: GlobalConfig = serde_json::from_value(current_global_config_with(
-            serde_json::json!({
-            "memories": {
-                "generate_memories": false,
-                "generate_for_btw_sessions": true,
-                "use_memories": false,
-                "external_context_policy": "skip_session",
-                "max_raw_memories_for_consolidation": 12,
-                "max_unused_days": 7,
-                "max_rollout_age_days": 14,
-                "max_rollouts_per_startup": 8,
-                "max_rollouts_scan_limit": 200,
-                "min_rollout_idle_hours": 12,
-                "phase1_max_concurrency": 3,
-                "phase1_retry_backoff_minutes": 45,
-                "phase1_lease_seconds": 600,
-                "phase2_lease_seconds": 1200,
-                "phase2_success_cooldown_seconds": 7200,
-                "phase2_retry_delay_seconds": 300,
-                "extract_model": "extractor",
-                "consolidation_model": "consolidator"
-            }
-        }),
-        ))
-        .expect("global config with memories section should deserialize");
+        let config: GlobalConfig =
+            serde_json::from_value(current_global_config_with(serde_json::json!({
+                "memories": {
+                    "generate_memories": false,
+                    "generate_for_btw_sessions": true,
+                    "use_memories": false,
+                    "external_context_policy": "skip_session",
+                    "max_raw_memories_for_consolidation": 12,
+                    "max_unused_days": 7,
+                    "max_rollout_age_days": 14,
+                    "max_rollouts_per_startup": 8,
+                    "max_rollouts_scan_limit": 200,
+                    "min_rollout_idle_hours": 12,
+                    "phase1_max_concurrency": 3,
+                    "phase1_retry_backoff_minutes": 45,
+                    "phase1_lease_seconds": 600,
+                    "phase2_lease_seconds": 1200,
+                    "phase2_success_cooldown_seconds": 7200,
+                    "phase2_retry_delay_seconds": 300,
+                    "extract_model": "extractor",
+                    "consolidation_model": "consolidator"
+                }
+            })))
+            .expect("global config with memories section should deserialize");
 
         assert!(!config.memories.generate_memories);
         assert!(config.memories.generate_for_btw_sessions);

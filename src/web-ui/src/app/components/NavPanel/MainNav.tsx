@@ -28,7 +28,7 @@ import {
 } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import { FolderOpen, FolderPlus, History, Users, Network } from 'lucide-react';
+import { FolderOpen, FolderPlus, Users, Network } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -305,12 +305,7 @@ const MainNav: React.FC<MainNavProps> = ({
       </MenuItem>
       <MenuSeparator />
       <MenuSection
-        title={(
-          <>
-            <History size={12} aria-hidden="true" />
-            <span>{t('header.recentWorkspaces')}</span>
-          </>
-        )}
+        title={t('header.recentWorkspaces')}
       >
         <ScrollArea className="openbitfun-nav-panel__workspace-menu-workspaces">
         {recentWorkspaces.length === 0 ? (

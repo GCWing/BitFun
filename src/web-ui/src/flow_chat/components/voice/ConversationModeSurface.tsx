@@ -32,21 +32,23 @@ export function ConversationModeSurface({
 }: ConversationModeSurfaceProps) {
   const { t } = useTranslation('settings/voice-input');
   const {
+    enabled,
     phase,
     start: startVoiceCall,
     end: endVoiceCall,
   } = useRealtimeVoiceCall();
   const isVoiceMode = phase !== 'idle';
   const isTransitioning = phase === 'connecting' || phase === 'ending';
+  const showModeSwitch = enabled || isVoiceMode;
 
   const handleModeSwitch = useCallback(() => {
     if (isVoiceMode) {
       endVoiceCall();
       return;
     }
-    if (voiceStartDisabled) return;
+    if (!enabled || voiceStartDisabled) return;
     startVoiceCall(voiceTarget);
-  }, [endVoiceCall, isVoiceMode, startVoiceCall, voiceStartDisabled, voiceTarget]);
+  }, [enabled, endVoiceCall, isVoiceMode, startVoiceCall, voiceStartDisabled, voiceTarget]);
 
   return (
     <div
@@ -66,39 +68,41 @@ export function ConversationModeSurface({
         {isVoiceMode ? <RealtimeVoiceCallPanel /> : children}
       </div>
 
-      <footer
-        className="openbitfun-conversation-mode-surface__switch"
-        data-openbitfun-component="conversation-mode-surface"
-        data-openbitfun-part="modeSwitch"
-      >
-        <button
-          type="button"
-          className={`openbitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
-          data-testid={switchTestId}
+      {showModeSwitch ? (
+        <footer
+          className="openbitfun-conversation-mode-surface__switch"
           data-openbitfun-component="conversation-mode-surface"
-          data-openbitfun-part="modeSwitchButton"
-          aria-pressed={isVoiceMode}
-          disabled={phase === 'ending' || (!isVoiceMode && voiceStartDisabled)}
-          onClick={handleModeSwitch}
+          data-openbitfun-part="modeSwitch"
         >
-          {isTransitioning ? (
-            <Loader2
-              className="openbitfun-conversation-mode-surface__switch-spinner"
-              size={15}
-              aria-hidden="true"
-            />
-          ) : isVoiceMode ? (
-            <Icon name="side-chat" size="sm" aria-hidden="true" />
-          ) : (
-            <Phone size={15} aria-hidden="true" />
-          )}
-          <span>
-            {t(isVoiceMode
-              ? 'voiceCall.call.switchToChat'
-              : 'voiceCall.call.switchToVoice')}
-          </span>
-        </button>
-      </footer>
+          <button
+            type="button"
+            className={`openbitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
+            data-testid={switchTestId}
+            data-openbitfun-component="conversation-mode-surface"
+            data-openbitfun-part="modeSwitchButton"
+            aria-pressed={isVoiceMode}
+            disabled={phase === 'ending' || (!isVoiceMode && voiceStartDisabled)}
+            onClick={handleModeSwitch}
+          >
+            {isTransitioning ? (
+              <Loader2
+                className="openbitfun-conversation-mode-surface__switch-spinner"
+                size={15}
+                aria-hidden="true"
+              />
+            ) : isVoiceMode ? (
+              <Icon name="side-chat" size="sm" aria-hidden="true" />
+            ) : (
+              <Phone size={15} aria-hidden="true" />
+            )}
+            <span>
+              {t(isVoiceMode
+                ? 'voiceCall.call.switchToChat'
+                : 'voiceCall.call.switchToVoice')}
+            </span>
+          </button>
+        </footer>
+      ) : null}
     </div>
   );
 }

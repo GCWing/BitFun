@@ -32,6 +32,7 @@ import { canCheckForAppUpdates, isTauriRuntime } from '@/infrastructure/update/t
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
+import { AboutBrandMark } from './AboutBrandMark';
 import './AboutDialog.scss';
 
 const log = createLogger('AboutDialog');
@@ -202,22 +203,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 aria-hidden="true"
               >
                 <div className="openbitfun-about-dialog__artwork">
-                  <img
-                    className="openbitfun-about-dialog__brand-mark openbitfun-about-dialog__brand-mark--dark"
-                    src="/brand/openbitfun-mark-dark.png"
-                    alt=""
-                    width={512}
-                    height={512}
-                    draggable={false}
-                  />
-                  <img
-                    className="openbitfun-about-dialog__brand-mark openbitfun-about-dialog__brand-mark--light"
-                    src="/brand/openbitfun-mark-light.png"
-                    alt=""
-                    width={512}
-                    height={512}
-                    draggable={false}
-                  />
+                  <AboutBrandMark active={isOpen} />
                 </div>
                 <p className="openbitfun-about-dialog__brand-statement">
                   {t('about.brandStatement')}

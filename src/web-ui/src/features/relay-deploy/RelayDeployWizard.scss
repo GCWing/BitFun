@@ -1,3 +1,11 @@
+.relay-deploy-dialog {
+  height: min(760px, calc(100dvh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
+
+  &__body {
+    overflow: hidden;
+  }
+}
+
 /**
  * Relay Deploy Wizard Styles
  * Mirrors the account-login / SSH connection dialog visual language.
@@ -9,9 +17,7 @@
   flex: 1;
   // Fixed shell height so step / error / terminal changes do not resize the modal.
   width: 100%;
-  height: min(640px, calc(100vh - 96px));
-  min-height: min(640px, calc(100vh - 96px));
-  max-height: min(640px, calc(100vh - 96px));
+  min-height: 0;
   overflow: hidden;
   container: relay-deploy / inline-size;
   font-family:var(--openbitfun-type-body-sm-font-family);
@@ -21,7 +27,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 16px 10px;
+    padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
     border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     flex-shrink: 0;
   }
@@ -89,22 +95,27 @@
   &__scroll {
     flex: 1;
     min-height: 0;
-    padding: 10px 0 6px;
+    padding: var(--openbitfun-space-5) 0;
     display: flex;
     flex-direction: column;
+    gap: var(--openbitfun-space-4);
+
+    > * {
+      flex-shrink: 0;
+    }
   }
 
   &__desc {
     margin: 0;
-    padding: 0 16px 10px;
+    padding: 0 var(--openbitfun-space-5);
     font-size: var(--openbitfun-type-label-sm-font-size);
     color: var(--openbitfun-color-content-secondary);
     line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
   &__section {
-    padding: 0 16px;
-    margin-bottom: 4px;
+    padding: 0 var(--openbitfun-space-5);
+    margin-bottom: 0;
   }
 
   &__section-header {
@@ -112,14 +123,14 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 6px;
+    margin-bottom: var(--openbitfun-space-3);
   }
 
   &__section-title {
     margin: 0;
-    font-size: var(--openbitfun-type-meta-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-content-primary);
     line-height: var(--openbitfun-type-body-sm-line-height);
   }
 
@@ -130,7 +141,9 @@
   &__server-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    overflow: hidden;
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   &__search-empty {
@@ -148,11 +161,11 @@
     align-items: center;
     gap: 8px;
     padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
-    border-radius: var(--openbitfun-radius-base);
+    border-radius: 0;
     background: var(--openbitfun-color-surface-tertiary);
-    border: 1px solid transparent;
+    border: 0;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover { background: var(--openbitfun-color-action-neutral-surface-hover); }
 
@@ -161,7 +174,9 @@
       outline-offset: var(--openbitfun-focus-offset);
     }
 
-    &--config:hover { border-color: var(--openbitfun-color-border-default); }
+    & + & {
+      border-top: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    }
   }
 
   &__server-icon {
@@ -199,20 +214,10 @@
   }
 
   &__divider {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    color: var(--openbitfun-color-content-muted);
-    font-size: var(--openbitfun-type-meta-font-size);
-
-    &::before,
-    &::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--openbitfun-color-border-subtle);
-    }
+    padding: 0 var(--openbitfun-space-5);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__form {
@@ -220,7 +225,7 @@
     flex-direction: column;
     gap: 12px;
     padding: var(--openbitfun-space-4);
-    margin-inline: var(--openbitfun-space-4);
+    margin-inline: var(--openbitfun-space-5);
     background: var(--openbitfun-color-surface-tertiary);
     border-radius: var(--openbitfun-layout-field-group-radius);
     scroll-margin-top: 8px;
@@ -280,7 +285,7 @@
     display: flex;
     flex-direction: column;
 
-    &--flex { flex: 1; }
+    &--flex { flex: 1; min-width: 0; }
     &--port { width: 76px; flex-shrink: 0; }
   }
 

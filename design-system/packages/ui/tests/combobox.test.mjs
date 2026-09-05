@@ -74,7 +74,7 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
 
   assert.match(styles, /--openbitfun-color-field-background/);
   assert.match(styles, /--openbitfun-overlay-menu-surface-radius/);
-  assert.match(styles, /--openbitfun-color-action-neutral-surface/);
+  assert.match(styles, /--openbitfun-color-surface-tertiary/);
   assert.match(styles, /--openbitfun-shadow-menu/);
   assert.match(styles, /position:\s*fixed/);
   assert.match(styles, /z-index:\s*var\(--openbitfun-layer-popover\)/);

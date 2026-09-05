@@ -58,21 +58,12 @@
   display: block;
   width: 100%;
   height: auto;
-  object-fit: contain;
+  color: var(--openbitfun-color-content-primary);
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   user-select: none;
   pointer-events: none;
-}
-
-.openbitfun-about-dialog__brand-mark--light {
-  display: none;
-}
-
-[data-color-scheme='dark'] .openbitfun-about-dialog__brand-mark--dark {
-  display: none;
-}
-
-[data-color-scheme='dark'] .openbitfun-about-dialog__brand-mark--light {
-  display: block;
 }
 
 .openbitfun-about-dialog__metadata {
@@ -351,6 +342,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .openbitfun-about-dialog__brand-flow {
+    display: none;
+  }
+
   .openbitfun-about-dialog__download-fill--indeterminate {
     animation: none;
     transform: none;
