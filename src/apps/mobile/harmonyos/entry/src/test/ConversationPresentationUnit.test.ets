@@ -629,6 +629,13 @@ export default function conversationPresentationUnitTest() {
       expect(SidebarConnectionActionPolicy.shouldShowScan('connected')).assertFalse();
     });
 
+    it('uses the complete chat and settings shell for QR access without an account', 0, () => {
+      expect(SidebarConnectionActionPolicy.shouldShowPrimaryNavigation('', 'room', 'connected')).assertTrue();
+      expect(SidebarConnectionActionPolicy.shouldShowPrimaryNavigation('', 'room', 'disconnected')).assertTrue();
+      expect(SidebarConnectionActionPolicy.shouldShowPrimaryNavigation('account-user', 'none', 'idle')).assertTrue();
+      expect(SidebarConnectionActionPolicy.shouldShowPrimaryNavigation('', 'none', 'idle')).assertFalse();
+    });
+
     it('merges matching QR targets and keeps unmatched QR targets beside account devices', 0, () => {
       expect(SidebarDeviceProjectionPolicy.shouldPrependControlTarget(
         [], 'room', 'desk-qr', true, false

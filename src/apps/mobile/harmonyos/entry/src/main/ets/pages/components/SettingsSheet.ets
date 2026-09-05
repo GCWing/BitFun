@@ -25,7 +25,9 @@ export struct SettingsSheet {
   @Param selectedGeneralChatModelId: string = '';
   @Param accountUsername: string = '';
   @Param authenticatedUserId: string = '';
+  @Param fallbackUserId: string = '';
   @Param deviceId: string = '';
+  @Param controlTargetType: string = 'none';
   @Param controlTargetDeviceId: string = '';
   @Param connectionState: string = 'idle';
   @Event onClose: () => void = () => {};
@@ -98,13 +100,16 @@ export struct SettingsSheet {
           AccountProfilePanel({
             accountUsername: this.accountUsername,
             accountUserId: this.authenticatedUserId,
+            fallbackUserId: this.fallbackUserId,
             deviceId: this.deviceId,
+            controlTargetType: this.controlTargetType,
             controlTargetDeviceId: this.controlTargetDeviceId,
             connectionState: this.connectionState,
             cloudLogout: this.cloudLogout,
             cloudListDevices: this.cloudListDevices,
             cloudSelectDevice: this.cloudSelectDevice,
             onReconnect: this.onReconnect,
+            onOpenAccount: this.onOpenAccount,
             onLoggedOut: this.onClose,
             embeddedInSettings: true,
             preferences: () => {
