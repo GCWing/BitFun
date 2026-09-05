@@ -9,7 +9,7 @@
   "loading": "載入中…",
   "page": {
     "title": "智能體",
-    "subtitle": "管理智能體及其執行框架，讓不同任務使用合適的能力組合。",
+    "subtitle": "管理智能體及其執行框架，讓不同任務使用合適的能力組合",
     "searchPlaceholder": "搜尋 Agent 名稱或描述…",
     "newAgent": "新增 Agent"
   },
@@ -20,7 +20,7 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "決定 Agent 如何組織任務、呼叫工具、協同智能體並整合結果。",
+    "subtitle": "決定 Agent 如何組織任務、呼叫工具、協同智能體並整合結果",
     "flowCaption": "同一任務 · 四種策略 · 一個結果",
     "task": "任務",
     "result": "結果",
@@ -57,7 +57,7 @@
   },
   "coreAgentsZone": {
     "title": "已接入 Agent",
-    "subtitle": "目前已經可以設定的 Runtime Agent；遷移期間仍會顯示舊 Mode 接線。",
+    "subtitle": "目前已經可以設定的 Runtime Agent；遷移期間仍會顯示舊 Mode 接線",
     "empty": "暫未檢測到核心智能體",
     "roleLabel": "主要應用 · ",
     "computerUseDisabledBadge": "已在設定中停用",
@@ -75,7 +75,7 @@
   },
   "agentsZone": {
     "title": "智能體",
-    "subtitle": "統一查看內置、用戶、項目和外部智能體，點擊卡片查看與設定能力。",
+    "subtitle": "統一查看內置、用戶、項目和外部智能體，點擊卡片查看與設定能力",
     "empty": {
       "noAgents": "目前沒有可用的 Agent",
       "noMatch": "沒有匹配的 Agent"
@@ -300,7 +300,7 @@
     "deleteFailed": "刪除失敗：",
     "form": {
       "title": "新增自定義 Agent",
-      "subtitle": "建立自定義 mode 或 sub-agent，分別定義它的提示詞、工具和運行時上下文策略。",
+      "subtitle": "建立自定義 mode 或 sub-agent，分別定義它的提示詞、工具和運行時上下文策略",
       "titleEdit": "編輯自定義 Agent",
       "subtitleEdit": "可修改顯示名稱、描述、系統提示詞、工具和運行時上下文策略。",
       "subtitleEditMode": "可修改顯示名稱、描述、系統提示詞、工具和運行時上下文策略。模型請在 ChatInput 中為該 Agent 選擇。",

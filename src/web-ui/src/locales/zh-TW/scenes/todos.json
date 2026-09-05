@@ -14,8 +14,8 @@
   "list": {
     "title": "待執行任務",
     "countTitle": "待執行任務（{{total}}）",
-    "hint": "一天內即將執行的任務，依時間先後排列。",
-    "empty": "目前還沒有待執行任務。"
+    "hint": "一天內即將執行的任務，依時間先後排列",
+    "empty": "目前還沒有待執行任務"
   },
   "overview": {
     "title": "計畫概覽",
@@ -25,12 +25,12 @@
   },
   "calendar": {
     "title": "更晚",
-    "hint": "全部排程執行時間，含 24 小時內的任務。",
+    "hint": "全部排程執行時間，含 24 小時內的任務",
     "previousMonth": "上個月",
     "nextMonth": "下個月",
     "today": "今天",
     "dayDetailTitle": "選取日期",
-    "dayEmpty": "這一天沒有安排任務。",
+    "dayEmpty": "這一天沒有安排任務",
     "clearDay": "清除選取",
     "dayCount": "已安排 {{total}} 項",
     "moreCount": "還有 {{total}} 項"
@@ -96,7 +96,7 @@
     },
     "advanced": {
       "title": "進階設定（選填）",
-      "empty": "單次任務目前不需要額外設定。"
+      "empty": "單次任務目前不需要額外設定"
     },
     "fields": {
       "name": "名稱",
