@@ -14,8 +14,10 @@
  * them even when the failure was in key agreement.
  */
 
-export const WATCH_PROVISION_REQUEST_KEY: string = 'openbitfun.account.provision.request';
-export const WATCH_PROVISION_RESPONSE_KEY: string = 'openbitfun.account.provision.response';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
+
+export const WATCH_PROVISION_REQUEST_KEY: string = HarmonyUpgradeIdentityContract.WATCH_PROVISION_REQUEST_KEY;
+export const WATCH_PROVISION_RESPONSE_KEY: string = HarmonyUpgradeIdentityContract.WATCH_PROVISION_RESPONSE_KEY;
 export const WATCH_PROVISION_PROTOCOL_VERSION: number = 1;
 
 /**

@@ -33,14 +33,19 @@ export class VoiceInputLifecycleController {
     if (snapshot.isListening || this.service.isListening()) {
       return this.stop(snapshot, true);
     }
-    if (snapshot.isBusy || snapshot.inputText.trim().length > 0 || snapshot.selectedImageCount > 0) {
+    if (snapshot.isBusy) {
       return false;
     }
+    // Intermediate recognizer results replace one another. Merge every result
+    // against the immutable draft captured at start so partial callbacks do
+    // not duplicate speech and existing text or attachments never block a
+    // user from continuing the prompt by voice.
+    const baseDraft = snapshot.inputText;
     try {
       this.callbacks.onStatusText(RemoteI18n.t('status.voiceStarting'));
       await this.service.start(context, {
         onText: (text: string, isFinal: boolean): void => {
-          this.callbacks.onInputText(snapshot.routeId, text);
+          this.callbacks.onInputText(snapshot.routeId, this.mergeDraft(baseDraft, text));
           if (isFinal) {
             this.callbacks.onStatusText(RemoteI18n.t('status.voiceRecognized'));
           }
@@ -59,6 +64,17 @@ export class VoiceInputLifecycleController {
       this.callbacks.onError(ConnectionErrorPolicy.errorText(err));
       return false;
     }
+  }
+
+  private mergeDraft(baseDraft: string, transcript: string): string {
+    const spoken = transcript.trim();
+    if (baseDraft.length === 0 || spoken.length === 0) {
+      return baseDraft.length === 0 ? spoken : baseDraft;
+    }
+    const last = baseDraft.charAt(baseDraft.length - 1);
+    const first = spoken.charAt(0);
+    const needsSpace = !/\s/.test(last) && /[\x21-\x7E]/.test(last) && /[A-Za-z0-9]/.test(first);
+    return `${baseDraft}${needsSpace ? ' ' : ''}${spoken}`;
   }
 
   async stop(snapshot: VoiceInputRouteSnapshot, showStatus: boolean): Promise<boolean> {

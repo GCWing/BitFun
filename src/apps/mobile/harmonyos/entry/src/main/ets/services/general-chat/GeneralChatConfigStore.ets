@@ -3,15 +3,16 @@ import { huks } from '@kit.UniversalKeystoreKit';
 import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { Encoding } from '../Encoding';
+import { HarmonyUpgradeIdentityContract } from '../HarmonyUpgradeIdentityContract';
 import { OhosError } from '../OhosError';
 import { GeneralChatTokenProvider } from './GeneralChatHttpTransport';
 
-const STORE_NAME = 'openbitfun_general_chat_config';
+const STORE_NAME = HarmonyUpgradeIdentityContract.GENERAL_CHAT_CONFIG_STORE;
 const API_URL_KEY = 'api_url';
 const MODEL_NAME_KEY = 'model_name';
 const API_KEY_CIPHER_KEY = 'api_key_cipher';
 const API_KEY_IV_KEY = 'api_key_iv';
-const HUKS_ALIAS = 'openbitfun_general_chat_api_key';
+const HUKS_ALIAS = HarmonyUpgradeIdentityContract.GENERAL_CHAT_HUKS_ALIAS;
 const SELECTED_MODEL_ID_KEY = 'selected_model_id';
 export const GENERAL_CHAT_LOCAL_MODEL_ID = 'local-general-chat';
 

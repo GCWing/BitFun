@@ -13,11 +13,15 @@ export class RemoteDescriptorParser {
     const roomId = params.get('room') || '';
     const publicKey = params.get('pk') || '';
     const relay = params.get('relay') || '';
+    const protocolVersion = (params.get('v') || '1').trim();
     const accountAuth = params.get('auth') === 'account';
     const accountUsername = (params.get('user') || '').trim();
 
     if (!roomId || !publicKey) {
       throw new Error(RemoteI18n.t('errors.remoteUrlMissingParams'));
+    }
+    if (protocolVersion !== '1') {
+      throw new Error(RemoteI18n.t('errors.remoteUrlInvalid'));
     }
 
     return {

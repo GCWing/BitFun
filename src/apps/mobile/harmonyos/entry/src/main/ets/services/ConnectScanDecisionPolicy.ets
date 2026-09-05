@@ -30,13 +30,16 @@ export class ConnectScanDecisionPolicy {
     hasCloudAccountSession: boolean,
     cloudUsername: string,
     qrUsername: string,
-    desktopId: string
+    desktopId: string,
+    cloudRelayUrl: string = '',
+    qrRelayUrl: string = ''
   ): string {
     if (!accountAuth) {
       return DetectedUrlAction.PAIR_NOW;
     }
     if (hasCloudAccountSession &&
-      ConnectScanDecisionPolicy.usernamesCompatible(cloudUsername, qrUsername)) {
+      ConnectScanDecisionPolicy.usernamesCompatible(cloudUsername, qrUsername) &&
+      ConnectScanDecisionPolicy.relayEndpointsCompatible(cloudRelayUrl, qrRelayUrl)) {
       return desktopId.trim().length > 0 ?
         DetectedUrlAction.USE_CLOUD_DEVICE :
         DetectedUrlAction.SHOW_CLOUD_DEVICES;
@@ -50,5 +53,27 @@ export class ConnectScanDecisionPolicy {
       return true;
     }
     return cloudUsername.trim() === qr;
+  }
+
+  static relayEndpointsCompatible(cloudRelayUrl: string, qrRelayUrl: string): boolean {
+    const cloud = ConnectScanDecisionPolicy.normalizedRelayEndpoint(cloudRelayUrl);
+    const qr = ConnectScanDecisionPolicy.normalizedRelayEndpoint(qrRelayUrl);
+    return cloud.length > 0 && cloud === qr;
+  }
+
+  private static normalizedRelayEndpoint(value: string): string {
+    let normalized = value.trim().toLowerCase();
+    if (normalized.indexOf('wss://') === 0) {
+      normalized = `https://${normalized.slice(6)}`;
+    } else if (normalized.indexOf('ws://') === 0) {
+      normalized = `http://${normalized.slice(5)}`;
+    }
+    while (normalized.length > 0 && normalized.charAt(normalized.length - 1) === '/') {
+      normalized = normalized.slice(0, normalized.length - 1);
+    }
+    if (normalized.endsWith('/ws')) {
+      normalized = normalized.slice(0, normalized.length - 3);
+    }
+    return normalized;
   }
 }

@@ -107,6 +107,23 @@ export class RemoteConnectionController {
   }
 
   async restore(context: Context): Promise<void> {
+    await this.restoreWithReconnectPolicy(context, true);
+  }
+
+  async restoreWithoutReconnect(context: Context): Promise<void> {
+    await this.restoreWithReconnectPolicy(context, false);
+  }
+
+  async reconnectRestoredPairing(): Promise<void> {
+    if (this.shouldAutoReconnect()) {
+      this.autoReconnectAttempted = true;
+      this.setState(RemoteConnectionState.Reconnecting);
+      this.pageState.setStatusText(RemoteI18n.t('status.restoringConnection'));
+      await this.connect(true);
+    }
+  }
+
+  private async restoreWithReconnectPolicy(context: Context, reconnect: boolean): Promise<void> {
     try {
       const snapshot: MobileIdentitySnapshot = await this.identity.init(context);
       this.deviceId = snapshot.installId;
@@ -121,11 +138,8 @@ export class RemoteConnectionController {
         await this.identity.clearUserIdProtection();
       }
       this.pageState.setRemoteUrlInputVisible(snapshot.remoteUrl.length > 0);
-      if (this.shouldAutoReconnect()) {
-        this.autoReconnectAttempted = true;
-        this.setState(RemoteConnectionState.Reconnecting);
-        this.pageState.setStatusText(RemoteI18n.t('status.restoringConnection'));
-        await this.connect(true);
+      if (reconnect) {
+        await this.reconnectRestoredPairing();
       }
     } catch (err) {
       this.pageState.setStatusText(ConnectionErrorPolicy.errorText(err));
@@ -137,6 +151,7 @@ export class RemoteConnectionController {
     if (this.pageState.isBusy) {
       return;
     }
+    const recovering = autoReconnect || this.pageState.connectionState === RemoteConnectionState.Reconnecting;
     try {
       RemoteLogger.info(`connect start auto=${autoReconnect ? '1' : '0'}`);
       this.pageState.setBusy(true);
@@ -202,9 +217,12 @@ export class RemoteConnectionController {
       if (result.shouldShowRemoteUrlInput) {
         this.pageState.setRemoteUrlInputVisible(true);
       }
-      this.setState(RemoteConnectionState.Failed);
+      const terminalFailure = result.failureKind === 'expired_room' ||
+        result.failureKind === 'invalid_link' || result.failureKind === 'protected_user';
+      this.setState(recovering && !terminalFailure ?
+        RemoteConnectionState.Reconnecting : RemoteConnectionState.Failed);
       RemoteLogger.error(`connect failed stage=connection message=${ConnectionErrorPolicy.errorText(err)}`);
-      if (!autoReconnect) {
+      if (!recovering) {
         this.openConnectSheet();
       }
     } finally {
@@ -221,7 +239,7 @@ export class RemoteConnectionController {
     }
     this.setState(RemoteConnectionState.Reconnecting);
     this.pageState.setStatusText(RemoteI18n.t('status.reconnecting'));
-    await this.connect();
+    await this.connect(true);
   }
 
   async disconnect(clearPairing: boolean): Promise<void> {
@@ -309,7 +327,8 @@ export class RemoteConnectionController {
   handleDetectedUrl(
     remoteUrl: string,
     hasCloudAccountSession: boolean = false,
-    cloudUsername: string = ''
+    cloudUsername: string = '',
+    cloudRelayUrl: string = ''
   ): DetectedRemoteUrlResult {
     try {
       this.applyRemoteUrl(remoteUrl);
@@ -320,7 +339,9 @@ export class RemoteConnectionController {
         hasCloudAccountSession,
         cloudUsername,
         descriptor.accountUsername,
-        RemoteUiState.desktopIdFromRemoteUrl(remoteUrl)
+        RemoteUiState.desktopIdFromRemoteUrl(remoteUrl),
+        cloudRelayUrl,
+        descriptor.relayUrl
       );
       if (action === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD) {
         this.pageState.setStatusText(RemoteI18n.t('connect.enterAccountToPair'));

@@ -566,6 +566,16 @@ export default function conversationPresentationUnitTest() {
       expect(REMOTE_CHAT_COMPOSER_CAPABILITIES.supportsAttachments).assertTrue();
     });
 
+    it('keeps voice reachable beside Send once a draft has content', 0, () => {
+      expect(ChatComposerPolicy.shouldShowSupplementalVoice('继续补充', 0, false, true)).assertTrue();
+      expect(ChatComposerPolicy.shouldShowSupplementalVoice('', 1, false, true)).assertTrue();
+      expect(ChatComposerPolicy.shouldShowSupplementalVoice('', 0, false, true)).assertFalse();
+      expect(ChatComposerPolicy.shouldShowSupplementalVoice('继续补充', 0, true, true)).assertFalse();
+      expect(ChatComposerPolicy.shouldShowSupplementalVoice('继续补充', 0, false, false)).assertFalse();
+      expect(ChatComposerPolicy.canUseSupplementalVoice(false)).assertTrue();
+      expect(ChatComposerPolicy.canUseSupplementalVoice(true)).assertFalse();
+    });
+
     it('names the primary composer action for assistive labels', 0, () => {
       expect(ChatComposerPolicy.primaryActionAccessibilityKey(ComposerPrimaryAction.Send, false))
         .assertEqual('chat.send');
@@ -737,12 +747,19 @@ export default function conversationPresentationUnitTest() {
     });
 
     it('reuses the signed-in cloud session instead of asking for the password again', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', 'desktop-1'))
+      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', 'desktop-1', 'https://relay.example.com', 'https://relay.example.com/'))
         .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', ''))
+      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', '', 'https://relay.example.com', 'wss://relay.example.com/ws'))
         .assertEqual(DetectedUrlAction.SHOW_CLOUD_DEVICES);
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', '', 'desktop-1'))
+      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', '', 'desktop-1', 'https://relay.example.com', 'https://relay.example.com'))
         .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
+    });
+
+    it('does not reuse an account session from a different relay', 0, () => {
+      expect(ConnectScanDecisionPolicy.decide(
+        true, true, 'alice', 'alice', 'desktop-1',
+        'https://relay-a.example.com', 'https://relay-b.example.com'
+      )).assertEqual(DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD);
     });
 
     it('still asks for a password when the QR belongs to a different account', 0, () => {

@@ -1,12 +1,18 @@
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { OhosError } from './OhosError';
+import { RemoteDescriptorParser } from './RemoteDescriptorParser';
+import { RemoteLogger } from './RemoteLogger';
 import { RemoteModelPreferenceStore } from './RemoteModelController';
 
-const STORE_NAME = 'openbitfun_remote_identity';
+// Persisted identifiers are compatibility contracts; the product rename must
+// not strand an installed phone's pairing snapshot in a second store.
+const STORE_NAME = HarmonyUpgradeIdentityContract.REMOTE_IDENTITY_STORE;
 const INSTALL_ID_KEY = 'mobile_install_id';
 const USER_ID_KEY = 'user_id';
 const REMOTE_URL_KEY = 'remote_url';
+const PAIRING_SAVED_AT_KEY = 'pairing_saved_at';
 const LAST_MODEL_ID_KEY = 'last_model_id';
 const USER_ID_LOCK_UNTIL_KEY = 'user_id_lock_until';
 const USER_ID_FAILURE_COUNT_KEY = 'user_id_failure_count';
@@ -15,6 +21,7 @@ export interface MobileIdentitySnapshot {
   installId: string;
   userId: string;
   remoteUrl: string;
+  pairingSavedAt: number;
   userIdFailureCount: number;
   userIdLockUntil: number;
 }
@@ -33,23 +40,43 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     if (!existingInstallId) {
       await this.putString(INSTALL_ID_KEY, installId);
     }
-    return {
+    const snapshot: MobileIdentitySnapshot = {
       installId,
       userId: await this.getString(USER_ID_KEY),
       remoteUrl: await this.getString(REMOTE_URL_KEY),
+      pairingSavedAt: await this.getNumber(PAIRING_SAVED_AT_KEY),
       userIdFailureCount: await this.getNumber(USER_ID_FAILURE_COUNT_KEY),
       userIdLockUntil: await this.getNumber(USER_ID_LOCK_UNTIL_KEY)
     };
+    if (snapshot.remoteUrl.length > 0) {
+      RemoteLogger.info(
+        `pairing snapshot restored room=${this.roomReference(snapshot.remoteUrl)} saved_at=${snapshot.pairingSavedAt}`
+      );
+    }
+    return snapshot;
   }
 
   async savePairingInput(userId: string, remoteUrl: string): Promise<void> {
-    await this.putString(USER_ID_KEY, userId.trim());
-    await this.putString(REMOTE_URL_KEY, remoteUrl.trim());
+    if (!this.preferences) {
+      throw new Error('Mobile identity store is not initialized.');
+    }
+    const normalizedUrl = remoteUrl.trim();
+    const savedAt = Date.now();
+    try {
+      await this.preferences.put(USER_ID_KEY, userId.trim());
+      await this.preferences.put(REMOTE_URL_KEY, normalizedUrl);
+      await this.preferences.put(PAIRING_SAVED_AT_KEY, savedAt);
+      await this.preferences.flush();
+    } catch (err) {
+      throw OhosError.wrap('mobile identity save pairing snapshot', err);
+    }
+    RemoteLogger.info(`pairing snapshot saved room=${this.roomReference(normalizedUrl)} saved_at=${savedAt}`);
   }
 
   async clearPairingInput(): Promise<void> {
     await this.putString(USER_ID_KEY, '');
     await this.putString(REMOTE_URL_KEY, '');
+    await this.putNumber(PAIRING_SAVED_AT_KEY, 0);
     await this.clearUserIdProtection();
   }
 
@@ -116,6 +143,14 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
       await this.preferences.flush();
     } catch (err) {
       throw OhosError.wrap('mobile identity put number', err);
+    }
+  }
+
+  private roomReference(remoteUrl: string): string {
+    try {
+      return RemoteDescriptorParser.parse(remoteUrl).roomId.slice(0, 8);
+    } catch (_err) {
+      return 'invalid';
     }
   }
 }

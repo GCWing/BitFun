@@ -1138,7 +1138,8 @@ export abstract class AppRootRuntimeComposition {
     const result = this.remoteConnectionController.handleDetectedUrl(
       url,
       this.settingsController.hasCloudAccountSession(),
-      this.remotePageState.accountUsername
+      this.remotePageState.accountUsername,
+      this.settingsController.cloudRelayEndpoint()
     );
     if (result.action === DetectedUrlAction.USE_CLOUD_DEVICE) {
       void this.settingsController.restoreCloudTarget(

@@ -31,6 +31,28 @@ export class ChatComposerPolicy {
     return text.trim().length === 0 && attachmentCount === 0 && !isBusy;
   }
 
+  /**
+   * Whether voice needs its secondary slot inside the input field.
+   *
+   * The primary slot belongs to Send as soon as the draft carries anything,
+   * but dictation is still an input method at that point. Keeping the inline
+   * affordance mounted while busy avoids layout movement; the component dims
+   * it until recording can start again.
+   */
+  static shouldShowSupplementalVoice(
+    text: string,
+    attachmentCount: number,
+    isVoiceListening: boolean,
+    showVoiceInput: boolean
+  ): boolean {
+    return showVoiceInput && !isVoiceListening &&
+      (text.trim().length > 0 || attachmentCount > 0);
+  }
+
+  static canUseSupplementalVoice(isBusy: boolean): boolean {
+    return !isBusy;
+  }
+
   // Which of the things the one round button on the right is offering. The
   // composer has a single primary slot rather than a row of buttons, so "which
   // action" is a decision, not a layout detail — and it is the same decision on

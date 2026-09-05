@@ -168,6 +168,9 @@ export struct ComposerBar {
             this.ModelControl()
           }
           Blank()
+          if (this.shouldShowSupplementalVoice()) {
+            this.SupplementalVoiceButton()
+          }
           this.PrimaryActionButton()
         }
         .width('100%')
@@ -397,6 +400,9 @@ export struct ComposerBar {
           this.inputText = value;
           this.onChatInputChange(value);
         })
+      if (this.shouldShowSupplementalVoice() && !this.isComposerExpanded()) {
+        this.SupplementalVoiceButton()
+      }
     }
     .layoutWeight(1)
     .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
@@ -484,7 +490,7 @@ export struct ComposerBar {
         return;
       }
       if (action === ComposerPrimaryAction.Voice) {
-        this.onVoiceInput();
+        void this.startVoiceInput();
       }
     })
   }
@@ -502,6 +508,24 @@ export struct ComposerBar {
     SymbolGlyph($r('sys.symbol.mic'))
       .fontSize(22)
       .fontColor([this.primaryActionForegroundColor()])
+  }
+
+  @Builder
+  SupplementalVoiceButton() {
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph($r('sys.symbol.mic'))
+        .fontSize(20)
+        .fontColor([INK])
+    }
+    .width(COMPOSER_ACTION_SIZE)
+    .height(COMPOSER_ACTION_SIZE)
+    .opacity(this.canUseSupplementalVoice() ? 0.72 : 0.32)
+    .accessibilityText(RemoteI18n.t('chat.voiceInput'))
+    .onClick(() => {
+      if (this.canUseSupplementalVoice()) {
+        void this.startVoiceInput();
+      }
+    })
   }
 
   @Builder
@@ -583,6 +607,19 @@ export struct ComposerBar {
   private canUseVoice(): boolean {
     return this.capabilities.showVoiceInput &&
       ChatComposerPolicy.canUseVoice(this.inputText, this.selectedImages.length, this.isBusy);
+  }
+
+  private shouldShowSupplementalVoice(): boolean {
+    return ChatComposerPolicy.shouldShowSupplementalVoice(
+      this.inputText,
+      this.selectedImages.length,
+      this.isVoiceListening,
+      this.capabilities.showVoiceInput
+    );
+  }
+
+  private canUseSupplementalVoice(): boolean {
+    return ChatComposerPolicy.canUseSupplementalVoice(this.isBusy);
   }
 
   // Dictation runs inside this app rather than in a system dialog, so listening
@@ -696,7 +733,7 @@ export struct ComposerBar {
     // IME releases the window. Opening the popup before this completes makes its
     // viewport and hit-testing inherit the keyboard-constrained layout.
     this.isPreparingModelSelectorPopover = true;
-    await this.releaseKeyboardForModelSelector();
+    await this.releaseComposerKeyboard();
 
     if (!this.isPreparingModelSelectorPopover || this.presentation !== ComposerPresentation.Floating) {
       return;
@@ -705,7 +742,7 @@ export struct ComposerBar {
     this.isPreparingModelSelectorPopover = false;
   }
 
-  private async releaseKeyboardForModelSelector(): Promise<void> {
+  private async releaseComposerKeyboard(): Promise<void> {
     const hostContext = this.getUIContext().getHostContext();
     if (!hostContext) {
       this.getUIContext().getFocusController().clearFocus();
@@ -719,6 +756,11 @@ export struct ComposerBar {
       // window event. Releasing focus still leaves the model anchor mounted.
     }
     this.getUIContext().getFocusController().clearFocus();
+  }
+
+  private async startVoiceInput(): Promise<void> {
+    await this.releaseComposerKeyboard();
+    this.onVoiceInput();
   }
 
   private modelSelectorSheetOptions(): SheetOptions {

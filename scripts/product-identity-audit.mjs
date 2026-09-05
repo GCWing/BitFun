@@ -24,6 +24,12 @@ const retiredIdentityDataBoundaryFiles = new Set([
   'deploy/openbitfun-host/README.md',
   'deploy/openbitfun-host/migrate-market-data-v1.py',
   'src/apps/relay-server/README.md',
+  // HarmonyOS must keep its published bundle id and encrypted-storage names
+  // for in-place upgrades. Runtime identifiers are centralized in one source;
+  // the manifest and backup policy are the only declarative exceptions.
+  'src/apps/mobile/harmonyos/AppScope/app.json5',
+  'src/apps/mobile/harmonyos/entry/src/main/ets/services/HarmonyUpgradeIdentityContract.ets',
+  'src/apps/mobile/harmonyos/entry/src/main/resources/base/profile/backup_config.json',
 ]);
 const noncanonicalIdentityDataBoundaryFiles = new Set([
   'deploy/openbitfun-host/migrate-market-data-v1.py',

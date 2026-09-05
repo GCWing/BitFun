@@ -473,12 +473,22 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         } else if (payload && !payload.logged_in) {
           setCustomUrl('');
         }
+        // The backend retires the QR room at every account identity boundary.
+        // Drop its now-stale QR/result immediately and refresh the actual host
+        // state so the dialog cannot keep presenting that room as connected.
+        pendingOwnerRef.current = null;
+        connectionOwnerRef.current = null;
+        setConnectionOwner(null);
+        setConnectionResult(null);
+        void remoteConnectAPI.getStatus().then((nextStatus) => {
+          if (isOpenRef.current) applyStatus(nextStatus);
+        }).catch(() => undefined);
       },
     );
     return () => {
       unlisten();
     };
-  }, []);
+  }, [applyStatus]);
 
   // The account status and pairing status intentionally expose opaque UUIDs
   // for identity checks. Resolve the persisted, non-secret login hint for the

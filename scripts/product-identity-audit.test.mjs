@@ -119,6 +119,21 @@ test('limits retired identity data to the one-time production migration boundary
   );
 });
 
+test('allows retired Harmony identifiers only at the upgrade identity boundary', () => {
+  const legacyBundle = `com.${retiredLowerName}.app`;
+  assert.deepEqual(
+    violationsFor(
+      `static readonly APP_BUNDLE: string = '${legacyBundle}';`,
+      'src/apps/mobile/harmonyos/entry/src/main/ets/services/HarmonyUpgradeIdentityContract.ets',
+    ),
+    [],
+  );
+  assert.equal(
+    violationsFor(`const bundle = '${legacyBundle}';`, 'src/apps/mobile/harmonyos/entry/src/main/ets/services/example.ets').length,
+    1,
+  );
+});
+
 test('rejects retired short CSS, DOM, dataset, layer, and environment prefixes', () => {
   const source = [
     `--${shortPrefix}-surface: white;`,

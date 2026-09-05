@@ -4,6 +4,7 @@ import { RemoteDescriptorParser } from './RemoteDescriptorParser';
 import { RemotePairingPolicy } from './RemotePairingPolicy';
 import { RemoteSessionManager } from './RemoteSessionManager';
 import { AsyncLifecycleGate } from './AsyncLifecycleGate';
+import { RemoteLogger } from './RemoteLogger';
 
 export interface RemoteConnectionRequest {
   remoteUrl: string;
@@ -52,8 +53,15 @@ export class RemoteConnectionCoordinator {
     if (!this.lifecycleGate.isCurrent(token)) {
       throw new Error('Remote connection was invalidated');
     }
-    await this.identityStore.savePairingInput(identity.userId, request.remoteUrl);
-    await this.identityStore.clearUserIdProtection();
+    try {
+      await this.identityStore.savePairingInput(identity.userId, request.remoteUrl);
+      await this.identityStore.clearUserIdProtection();
+    } catch (err) {
+      // Pairing has already succeeded. Keep the live channel usable and make
+      // the loss of restart durability explicit in logs instead of reporting
+      // the whole connection as failed.
+      RemoteLogger.warn(`pairing snapshot persistence failed: ${String(err)}`);
+    }
     if (!this.lifecycleGate.isCurrent(token)) {
       throw new Error('Remote connection was invalidated');
     }

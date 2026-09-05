@@ -2,10 +2,11 @@ import { relationalStore } from '@kit.ArkData';
 import { ChatMessage } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { OhosError } from './OhosError';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { RemoteChatCacheSlice, RemoteChatCacheStore } from './RemoteChatCache';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
-  name: 'openbitfun_remote_chat.db',
+  name: HarmonyUpgradeIdentityContract.REMOTE_CHAT_DATABASE,
   // A step above the S1 the general-chat store uses: these transcripts carry
   // the user's source, file paths and terminal output from a machine they own.
   securityLevel: relationalStore.SecurityLevel.S2
