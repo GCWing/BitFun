@@ -24,7 +24,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-          filter: blob:none
+          # Full-history verification needs blob sizes without thousands of
+          # individual lazy fetches; partial clones are useful for PR deltas.
+          filter: ${{ github.event_name == 'pull_request' && 'blob:none' || '' }}
 
       - uses: actions/setup-node@v5
         with:
