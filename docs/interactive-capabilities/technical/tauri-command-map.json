@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "54dbaf7f84805e6cd683cd103d1a2bbaeb556953e1f5ef9c3309221e36e472e2",
-  "commandCount": 661,
+  "catalogDigest": "c21d28e130de07890a2ebd6793cf78905c7749f577d8b8e547d9fe12a6e26a95",
+  "commandCount": 662,
   "coverage": {
-    "commandCount": 661,
-    "documentedCommandCount": 630,
+    "commandCount": 662,
+    "documentedCommandCount": 631,
     "implementationCommandCount": 31,
     "implementationDigest": "859a3a3cb1e4e27ca38cd9003cef14e8758483ce85417a2c22c6ab92df9dd2c3"
   },
@@ -2523,6 +2523,22 @@
       "sourceFile": "src/apps/desktop/src/api/session_api.rs",
       "signature": "fn fork_session( request: ForkSessionRequest, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<ForkSessionResponse, String>",
       "remoteWorkspacePolicy": "RemoteRouted"
+    },
+    {
+      "id": "frontend_update_candidate_failed",
+      "moduleId": "frontend_workbench",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:creative-frontend-authoring"
+      ],
+      "visibility": "documented",
+      "rustPath": "frontend_workbench::frontend_update_candidate_failed",
+      "sourceFile": "src/apps/desktop/src/frontend_workbench.rs",
+      "signature": "fn frontend_update_candidate_failed( state: tauri::State<'_, Arc<FrontendWorkbenchManager>>, webview: tauri::WebviewWindow, request: FrontendUpdateFailureRequest, ) -> Result<Value, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "frontend_update_candidate_ready",
@@ -5337,7 +5353,7 @@
       "visibility": "internal",
       "rustPath": "openbitfun_control_host::mark_openbitfun_control_surface_ready",
       "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
-      "signature": "fn mark_openbitfun_control_surface_ready()",
+      "signature": "fn mark_openbitfun_control_surface_ready( request: Option<ProductControlSurfaceReadyRequest>, )",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

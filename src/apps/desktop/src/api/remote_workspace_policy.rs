@@ -114,6 +114,7 @@ mod tests {
     fn frontend_update_decisions_are_local_desktop_only() {
         for command in [
             "frontend_update_candidate_ready",
+            "frontend_update_candidate_failed",
             "get_frontend_update_status",
             "confirm_frontend_update",
             "rollback_frontend_update",

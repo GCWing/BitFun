@@ -137,3 +137,38 @@ CI 必须结构性证明以下闭包，而不是依赖人工更新数量基线�
 新增用户功能时，维护者先在真实 owner/registry 注册业务事实，再补充说明 overlay；其余
 投影由生成器更新。禁止通过修改 reviewed count、digest baseline 或宽泛 allowlist 绕过
 闭包检查。
+
+## 8. 创造模式的运行时扩展
+
+创造模式使用两类边界。已有产品能力仍由 `OpenBitFunControl` 的闭集 owner 图控制；
+用户新建的命令由 `infrastructure/creation/creationCapabilities.ts` 中的激活期注册表持有。
+后者不向 ProductControl 注入任意 RPC，也不修改全局 Agent 工具表。Agent 使用
+`FrontendWorkbench inspect/invoke` 发现和调用当前自定义模块的命令；调用经过原有工具
+权限管线，每次 invoke 都要求新授权。命令描述和结果始终是用户数据。
+
+运行时提供命令参数声明与执行前校验、JSON 状态、事件订阅和诊断。命令、界面挂载点
+和事件可以共用状态；能力无需对应一个可见组件。Shell adapter 另外提供语义化 UI
+选择器、三个持久挂载槽、场景查询/事件和已有产品控制接口。`inspect` 回报真实存在的
+部件与槽、命令 schema、状态键和错误，而非仅回报静态文档。状态保存在本地 WebView
+的独立版本化命名空间；不承担 MiniApp KV、secret、跨设备同步或后台调度。不可读记录
+不被隐式重置；运行时事件不承诺持久重放。
+
+打包客户端保留不可变产品 bundle，自定义草稿只包含 CSS、浏览器 ES module 和自有
+assets。模块在真实 Shell 与产品控制桥就绪后激活，调用显式版本的 API；不再要求 Agent
+修改压缩 bundle 或依赖源码构建。预览成功才启动原生确认倒计时，激活异常的实际错误
+返回到工具。过期草稿拒绝覆盖新版本。确认后的 overlay 在兼容升级中使用新产品 bundle，
+旧完整前端版本继续可读。卸载激活实例会撤销命令、事件订阅与托管 DOM；代码回滚不
+删除持久状态。
+
+MiniApp 的 list/inspect/create/update/delete 经 Desktop ProductControl adapter 调用同一
+`MiniAppManager` 和 worker lifecycle owner。源文件内容以结构化数据传递并由产品编译，
+增量更新保留未提供的字段与 KV，`expectedVersion` 检查过期编辑；不把 host 路径当作
+Remote Workspace 文件路径。此类路径无关的结构化操作可由远程 workspace 会话使用
+其 Desktop 产品宿主；文件式 Init/Finalize 在远程 workspace 明确拒绝。
+
+UI 激活与动态命令需要可见的本地 Desktop：Remote Workspace、手机/机器人控制、
+Peer 控制与 Detached Dispatch 均明确拒绝，不在控制端兜底。Peer 表面切换撤销本机
+扩展 API；产品控制桥就绪时显式声明 `creationApiVersion`，旧 readiness 请求仍然有效，
+但不声明运行时扩展能力，避免向旧完整前端发送无人响应的命令。无窗口/旧宿主通过
+发现或 readiness 边界返回不可用。动态注册不构成后台
+Agent、插件权限或持久任务 owner 的迁移。

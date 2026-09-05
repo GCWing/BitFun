@@ -17,8 +17,8 @@ Install, create, and run lightweight apps inside OpenBitFun, combining UI, data,
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看、搜索、创建、导入、编辑和删除 Mini App
-  - Browse, search, create, import, edit, and delete Mini Apps
+- **Agent 可直接控制 / Direct Agent control** · 查看、创建、编辑和删除已安装 Mini App
+  - Inspect, create, update, and delete installed MiniApps
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 浏览市场、查看详情并安装或更新发布版本
   - Browse the market, inspect listings, and install or update releases
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录市场账户并收藏、评分和查看已安装来源
@@ -57,7 +57,11 @@ Install, create, and run lightweight apps inside OpenBitFun, combining UI, data,
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
+| 列出已安装小应用 / List installed MiniApps | 读取产品宿主上的已安装应用及版本。 | Read installed apps and versions from the product host. |
+| 读取小应用源码 / Inspect a MiniApp | 按应用 ID 读取可编辑字段、源码、权限和版本，不返回控制端路径。 | Read editable fields, source, permissions and version by app ID without controller-local paths. |
+| 创建小应用 / Create a MiniApp | 直接提交名称和源码，编译并保存到客户端；无需源码仓库或构建工具。 | Compile and install a name and source directly in the client, without a repository or build tools. |
+| 修改小应用 / Update a MiniApp | 按应用 ID 修改指定字段，保留未提供的源码和用户数据，通知已打开的应用刷新。expectedVersion 可防止覆盖新的修改。 | Patch specified fields by app ID, preserve omitted source and user data, and notify open runtimes. expectedVersion guards against stale edits. |
+| 删除小应用 / Delete a MiniApp | 按应用 ID 停止后台任务并删除应用；仅在用户明确要求删除时使用。 | Stop the worker and delete an installed app by ID, only on an explicit deletion request. |
 
 ## 可配置选项 / Configurable options
 
@@ -71,6 +75,12 @@ Install, create, and run lightweight apps inside OpenBitFun, combining UI, data,
   - “Open Mini Apps”
 - “带我去小应用市场”
   - “Take me to the Mini App market”
+- “创建一个番茄钟小应用”
+  - “Create a Pomodoro MiniApp”
+- “把已有小应用的按钮改成圆角”
+  - “Round the buttons in an existing MiniApp”
+- “删除我指定的小应用”
+  - “Delete the MiniApp I specify”
 
 Agent 会先查找相关功能或设置，确认目标后再替你打开、执行或修改。完整能力目录不会预先塞进对话上下文。
 

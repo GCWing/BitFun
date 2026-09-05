@@ -4,8 +4,8 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "54dbaf7f84805e6cd683cd103d1a2bbaeb556953e1f5ef9c3309221e36e472e2",
-  "ownerDigest": "8c1887b051aab537946c1e80afd24a5eb3936a083e01bbbce4227e6c7d8b0e48",
+  "digest": "c21d28e130de07890a2ebd6793cf78905c7749f577d8b8e547d9fe12a6e26a95",
+  "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
       "id": "companion-pet-mixed",
@@ -140,9 +140,9 @@
     "userFacing": 43,
     "documentedItems": 320,
     "controlCoverage": {
-      "direct": 47,
+      "direct": 48,
       "delegated": 61,
-      "interactive": 212,
+      "interactive": 211,
       "unsupported": 0
     }
   },
@@ -5611,27 +5611,27 @@
       }
     },
     {
-      "id": "feature.miniapps:open:gallery-lifecycle",
+      "id": "feature.miniapps:operation:list-apps",
       "capabilityId": "feature.miniapps",
       "itemIds": [
         "gallery-lifecycle"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "operation",
+      "risk": "read",
+      "executionHost": "productHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
           "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "reason": "This command requires a native product-host provider"
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
             "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_native_v1"
           ]
         },
         "remoteControl": {
@@ -5639,18 +5639,407 @@
         },
         "detachedDispatch": {
           "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "reason": "This command requires a native product-host provider"
         }
       },
       "inputSchema": {
-        "type": "object",
-        "additionalProperties": false
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "valueSource": {
+        "kind": "provider",
+        "providerId": "miniapp"
+      },
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "surface.miniapps.open"
+      }
+    },
+    {
+      "id": "feature.miniapps:operation:inspect-app",
+      "capabilityId": "feature.miniapps",
+      "itemIds": [
+        "gallery-lifecycle"
+      ],
+      "kind": "operation",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_native_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        }
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "appId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "appId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "provider",
+        "providerId": "miniapp"
+      },
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "surface.miniapps.open"
+      }
+    },
+    {
+      "id": "feature.miniapps:operation:create-app",
+      "capabilityId": "feature.miniapps",
+      "itemIds": [
+        "gallery-lifecycle"
+      ],
+      "kind": "operation",
+      "risk": "write",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_native_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        }
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "css": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "esmDependencies": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "html": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "npmDependencies": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "version"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "permissions": {
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "uiJs": {
+            "type": "string"
+          },
+          "workerJs": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "provider",
+        "providerId": "miniapp"
+      },
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "surface.miniapps.open"
+      }
+    },
+    {
+      "id": "feature.miniapps:operation:update-app",
+      "capabilityId": "feature.miniapps",
+      "itemIds": [
+        "gallery-lifecycle"
+      ],
+      "kind": "operation",
+      "risk": "write",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_native_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        }
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "appId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "css": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "esmDependencies": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "expectedVersion": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "html": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "npmDependencies": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "version"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "permissions": {
+            "type": "object"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "uiJs": {
+            "type": "string"
+          },
+          "workerJs": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "appId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "provider",
+        "providerId": "miniapp"
+      },
+      "presentationTarget": {
+        "kind": "action",
+        "actionId": "surface.miniapps.open"
+      }
+    },
+    {
+      "id": "feature.miniapps:operation:delete-app",
+      "capabilityId": "feature.miniapps",
+      "itemIds": [
+        "gallery-lifecycle"
+      ],
+      "kind": "operation",
+      "risk": "destructive",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_native_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This command requires a native product-host provider"
+        }
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "appId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedVersion": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "appId"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "provider",
+        "providerId": "miniapp"
+      },
       "presentationTarget": {
         "kind": "action",
         "actionId": "surface.miniapps.open"
@@ -18786,8 +19175,8 @@
         },
         {
           "id": "creative-frontend-authoring",
-          "titleZh": "让创造模式安全修改正在运行的 OpenBitFun 前端",
-          "titleEn": "Let Creative mode safely customize the running OpenBitFun frontend",
+          "titleZh": "让创造模式扩展客户端界面与运行时能力",
+          "titleEn": "Extend client UI and runtime capabilities in Creative mode",
           "control": {
             "kind": "delegate",
             "tools": [
@@ -18797,12 +19186,14 @@
               "Edit"
             ],
             "workflowZh": [
-              "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
-              "用原草稿 ID 调用 apply；宿主在真实应用界面就绪后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果"
+              "在本地桌面创造模式中调用 FrontendWorkbench prepare，阅读随包 API；只编辑草稿中的 CSS、JavaScript 和自有资源，无需源码或构建工具",
+              "用原草稿 ID 调用 apply；宿主在真实界面和自定义代码激活后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果",
+              "用 commands、state 和 events 组合可复用能力；通过 FrontendWorkbench inspect 发现命令和错误，再按 schema 用 invoke 验证执行"
             ],
             "workflowEn": [
-              "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
-              "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real app shell is ready, and apply waits for a final confirmed or rolled_back outcome"
+              "Call FrontendWorkbench prepare on the local Desktop in Creative mode, read the packaged API, and edit only draft CSS, JavaScript and owned assets without source or build tools",
+              "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real shell and customization activate, and apply waits for a final confirmed or rolled_back outcome",
+              "Compose commands, state and events into reusable capabilities; use FrontendWorkbench inspect to discover schemas and diagnostics, then invoke to verify execution"
             ]
           }
         },
@@ -19042,8 +19433,8 @@
         "Rename, archive, restore, delete, fork, and export sessions",
         "为会话选择模型、工作模式、记忆模式与权限模式",
         "Choose the model, work mode, memory mode, and permission mode per session",
-        "让创造模式安全修改正在运行的 OpenBitFun 前端",
-        "Let Creative mode safely customize the running OpenBitFun frontend",
+        "让创造模式扩展客户端界面与运行时能力",
+        "Extend client UI and runtime capabilities in Creative mode",
         "开始、引导、打断、取消或恢复一次 Agent 运行",
         "Start, steer, interrupt, cancel, or recover an agent turn",
         "查看并逐个或批量回答等待中的权限请求",
@@ -19074,10 +19465,12 @@
         "Read",
         "Write",
         "Edit",
-        "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
-        "用原草稿 ID 调用 apply；宿主在真实应用界面就绪后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果",
-        "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
-        "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real app shell is ready, and apply waits for a final confirmed or rolled_back outcome",
+        "在本地桌面创造模式中调用 FrontendWorkbench prepare，阅读随包 API；只编辑草稿中的 CSS、JavaScript 和自有资源，无需源码或构建工具",
+        "用原草稿 ID 调用 apply；宿主在真实界面和自定义代码激活后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果",
+        "用 commands、state 和 events 组合可复用能力；通过 FrontendWorkbench inspect 发现命令和错误，再按 schema 用 invoke 验证执行",
+        "Call FrontendWorkbench prepare on the local Desktop in Creative mode, read the packaged API, and edit only draft CSS, JavaScript and owned assets without source or build tools",
+        "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real shell and customization activate, and apply waits for a final confirmed or rolled_back outcome",
+        "Compose commands, state and events into reusable capabilities; use FrontendWorkbench inspect to discover schemas and diagnostics, then invoke to verify execution",
         "SessionControl",
         "SessionHistory",
         "Grep",
@@ -21724,13 +22117,18 @@
       "items": [
         {
           "id": "gallery-lifecycle",
-          "titleZh": "查看、搜索、创建、导入、编辑和删除 Mini App",
-          "titleEn": "Browse, search, create, import, edit, and delete Mini Apps",
+          "titleZh": "查看、创建、编辑和删除已安装 Mini App",
+          "titleEn": "Inspect, create, update, and delete installed MiniApps",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“查看、搜索、创建、导入、编辑和删除 Mini App”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Browse, search, create, import, edit, and delete Mini Apps” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "direct",
+            "operations": [
+              "list-apps",
+              "inspect-app",
+              "create-app",
+              "update-app",
+              "delete-app"
+            ],
+            "options": []
           }
         },
         {
@@ -21887,17 +22285,274 @@
       ],
       "agentExamplesZh": [
         "打开 Mini Apps",
-        "带我去小应用市场"
+        "带我去小应用市场",
+        "创建一个番茄钟小应用",
+        "把已有小应用的按钮改成圆角",
+        "删除我指定的小应用"
       ],
       "agentExamplesEn": [
         "Open Mini Apps",
-        "Take me to the Mini App market"
+        "Take me to the Mini App market",
+        "Create a Pomodoro MiniApp",
+        "Round the buttons in an existing MiniApp",
+        "Delete the MiniApp I specify"
       ],
       "destination": {
         "kind": "action",
         "actionId": "surface.miniapps.open"
       },
-      "operations": [],
+      "operations": [
+        {
+          "id": "list-apps",
+          "titleZh": "列出已安装小应用",
+          "titleEn": "List installed MiniApps",
+          "descriptionZh": "读取产品宿主上的已安装应用及版本。",
+          "descriptionEn": "Read installed apps and versions from the product host.",
+          "risk": "read",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          }
+        },
+        {
+          "id": "inspect-app",
+          "titleZh": "读取小应用源码",
+          "titleEn": "Inspect a MiniApp",
+          "descriptionZh": "按应用 ID 读取可编辑字段、源码、权限和版本，不返回控制端路径。",
+          "descriptionEn": "Read editable fields, source, permissions and version by app ID without controller-local paths.",
+          "risk": "read",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "appId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "appId"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "id": "create-app",
+          "titleZh": "创建小应用",
+          "titleEn": "Create a MiniApp",
+          "descriptionZh": "直接提交名称和源码，编译并保存到客户端；无需源码仓库或构建工具。",
+          "descriptionEn": "Compile and install a name and source directly in the client, without a repository or build tools.",
+          "risk": "write",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "css": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "esmDependencies": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "html": {
+                "type": "string"
+              },
+              "icon": {
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "npmDependencies": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "permissions": {
+                "type": "object"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "uiJs": {
+                "type": "string"
+              },
+              "workerJs": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "id": "update-app",
+          "titleZh": "修改小应用",
+          "titleEn": "Update a MiniApp",
+          "descriptionZh": "按应用 ID 修改指定字段，保留未提供的源码和用户数据，通知已打开的应用刷新。expectedVersion 可防止覆盖新的修改。",
+          "descriptionEn": "Patch specified fields by app ID, preserve omitted source and user data, and notify open runtimes. expectedVersion guards against stale edits.",
+          "risk": "write",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "appId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "css": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "esmDependencies": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "expectedVersion": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "html": {
+                "type": "string"
+              },
+              "icon": {
+                "type": "string"
+              },
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "npmDependencies": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "permissions": {
+                "type": "object"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "uiJs": {
+                "type": "string"
+              },
+              "workerJs": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "appId"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "id": "delete-app",
+          "titleZh": "删除小应用",
+          "titleEn": "Delete a MiniApp",
+          "descriptionZh": "按应用 ID 停止后台任务并删除应用；仅在用户明确要求删除时使用。",
+          "descriptionEn": "Stop the worker and delete an installed app by ID, only on an explicit deletion request.",
+          "risk": "destructive",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "appId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "expectedVersion": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "appId"
+            ],
+            "type": "object"
+          }
+        }
+      ],
       "options": [],
       "searchTerms": [
         "feature.miniapps",
@@ -21921,8 +22576,8 @@
         "Browse the Mini App market",
         "Install or create a Mini App",
         "Run it in its own scene and chat with its agent",
-        "查看、搜索、创建、导入、编辑和删除 Mini App",
-        "Browse, search, create, import, edit, and delete Mini Apps",
+        "查看、创建、编辑和删除已安装 Mini App",
+        "Inspect, create, update, and delete installed MiniApps",
         "浏览市场、查看详情并安装或更新发布版本",
         "Browse the market, inspect listings, and install or update releases",
         "登录市场账户并收藏、评分和查看已安装来源",
@@ -21947,8 +22602,14 @@
         "Withdraw and review market releases, and render slide pages",
         "打开 Mini Apps",
         "带我去小应用市场",
+        "创建一个番茄钟小应用",
+        "把已有小应用的按钮改成圆角",
+        "删除我指定的小应用",
         "Open Mini Apps",
         "Take me to the Mini App market",
+        "Create a Pomodoro MiniApp",
+        "Round the buttons in an existing MiniApp",
+        "Delete the MiniApp I specify",
         "InitMiniApp",
         "Read",
         "Write",

@@ -23,8 +23,8 @@ Work with AI in project context, create sessions, continue tasks, answer permiss
   - Rename, archive, restore, delete, fork, and export sessions
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为会话选择模型、工作模式、记忆模式与权限模式
   - Choose the model, work mode, memory mode, and permission mode per session
-- **由专用 Agent 工具控制 / Delegated Agent tool** · `FrontendWorkbench` / `Read` / `Write` / `Edit` · 让创造模式安全修改正在运行的 OpenBitFun 前端
-  - Let Creative mode safely customize the running OpenBitFun frontend
+- **由专用 Agent 工具控制 / Delegated Agent tool** · `FrontendWorkbench` / `Read` / `Write` / `Edit` · 让创造模式扩展客户端界面与运行时能力
+  - Extend client UI and runtime capabilities in Creative mode
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 开始、引导、打断、取消或恢复一次 Agent 运行
   - Start, steer, interrupt, cancel, or recover an agent turn
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并逐个或批量回答等待中的权限请求

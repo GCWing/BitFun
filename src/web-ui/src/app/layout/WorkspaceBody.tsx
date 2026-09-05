@@ -157,6 +157,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
       >
         <NavBar onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         <NavPanel className="openbitfun-workspace-body__nav-panel" />
+        <div data-openbitfun-creation-slot="sidebar-footer" />
       </div>
 
       <TerminalActionBridge />
@@ -183,6 +184,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           data-openbitfun-part="sceneSurface"
         >
           <SceneChromeProvider activeSceneId={activeSceneId}>
+            <div data-openbitfun-creation-slot="scene-header" />
             <SceneTopBar
               onMinimize={onMinimize}
               onMaximize={onMaximize}
@@ -193,6 +195,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
               workspacePath={currentWorkspace?.rootPath}
               isEntering={isEntering}
             />
+            <div data-openbitfun-creation-slot="scene-footer" />
           </SceneChromeProvider>
         </div>
         {sceneOverlay}

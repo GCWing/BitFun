@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "54dbaf7f84805e6cd683cd103d1a2bbaeb556953e1f5ef9c3309221e36e472e2",
-  "count": 212,
+  "catalogDigest": "c21d28e130de07890a2ebd6793cf78905c7749f577d8b8e547d9fe12a6e26a95",
+  "count": 211,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 185,
+    "unstructuredInteraction": 184,
     "visualSelection": 18
   },
   "entries": [
@@ -1101,27 +1101,6 @@
       },
       "evidence": [
         "source:src/web-ui/src/locales/zh-CN/settings/skills.json#list.item.shadowedDetail"
-      ]
-    },
-    {
-      "capabilityId": "feature.miniapps",
-      "itemId": "gallery-lifecycle",
-      "titleZh": "查看、搜索、创建、导入、编辑和删除 Mini App",
-      "titleEn": "Browse, search, create, import, edit, and delete Mini Apps",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“查看、搜索、创建、导入、编辑和删除 Mini App”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Browse, search, create, import, edit, and delete Mini Apps” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.miniapps.open"
-      },
-      "evidence": [
-        "command:list_miniapps",
-        "command:create_miniapp",
-        "command:miniapp_import_from_path",
-        "command:update_miniapp",
-        "command:delete_miniapp",
-        "command:get_miniapp"
       ]
     },
     {

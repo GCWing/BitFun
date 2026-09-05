@@ -522,6 +522,20 @@ mod startup_appearance_tests {
     }
 }
 
+fn use_development_frontend() -> bool {
+    #[cfg(debug_assertions)]
+    {
+        // Isolated E2E can exercise the production protocol using a debug
+        // executable and dist assets, without launching a development server.
+        !(std::env::var("OPENBITFUN_E2E_PACKAGED_FRONTEND").as_deref() == Ok("1")
+            && std::env::var("OPENBITFUN_E2E_STORAGE_GUARD").as_deref() == Ok("1"))
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        false
+    }
+}
+
 pub fn create_main_window(
     app_handle: &tauri::AppHandle,
     startup_trace_id: &str,
@@ -549,7 +563,7 @@ pub fn create_main_window(
         total_started_at.elapsed().as_millis()
     );
 
-    let main_url = if cfg!(debug_assertions) {
+    let main_url = if use_development_frontend() {
         match "http://localhost:1422".parse() {
             Ok(url) => WebviewUrl::External(url),
             Err(e) => {
@@ -602,6 +616,14 @@ pub fn create_main_window(
                 }
             }
         });
+
+    #[cfg(debug_assertions)]
+    if !use_development_frontend() {
+        // Product-path isolation alone does not isolate WKWebView storage.
+        // This guarded test window keeps a private store across document
+        // reloads and never opens the daily client's browser data store.
+        builder = builder.incognito(true);
+    }
 
     // On Windows, Tauri's native file-drop handler replaces WebView2's OLE drop
     // target and disables every HTML5 drag/drop interaction in the page. Keep
@@ -729,7 +751,7 @@ fn show_main_window_for_startup(
 }
 
 fn app_url(path: &str) -> WebviewUrl {
-    if cfg!(debug_assertions) {
+    if use_development_frontend() {
         match format!("http://localhost:1422/{}", path).parse() {
             Ok(url) => WebviewUrl::External(url),
             Err(e) => {

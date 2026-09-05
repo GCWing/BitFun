@@ -93,6 +93,11 @@ Returns app_id, version, changed, content_hash, and source_revision."#
         input: &Value,
         context: &ToolUseContext,
     ) -> OpenBitFunResult<Vec<ToolResult>> {
+        if context.is_remote() {
+            return Err(OpenBitFunError::tool(
+                "FinalizeMiniApp reads product-host-local files and cannot be used in a remote workspace. Use OpenBitFunControl get feature.miniapps and its structured update-app operation instead".to_string(),
+            ));
+        }
         let manager = try_get_global_miniapp_manager()
             .ok_or_else(|| OpenBitFunError::tool("MiniAppManager not initialized".to_string()))?;
         let app_id = input

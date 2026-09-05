@@ -4,6 +4,8 @@
 //! owns concrete Desktop state reads/mutations and delegates only presentation
 //! actions (navigation/product actions) to the Web UI surface.
 
+mod miniapps;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -47,6 +49,7 @@ type PendingResponse = oneshot::Sender<Result<Value, String>>;
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_STATE_REVISION: AtomicU64 = AtomicU64::new(1);
 static SURFACE_READY: AtomicBool = AtomicBool::new(false);
+static CREATION_API_VERSION: AtomicU64 = AtomicU64::new(0);
 static PENDING_RESPONSES: OnceLock<Mutex<HashMap<String, PendingResponse>>> = OnceLock::new();
 static PRODUCT_CONTROL_TRANSACTION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
@@ -133,6 +136,24 @@ async fn dispatch_surface_request(request: OpenBitFunControlHostRequest) -> Resu
         serde_json::to_value(request).map_err(|error| error.to_string())?,
         OPENBITFUN_CONTROL_RESPONSE_TIMEOUT,
         "complete the presentation request",
+    )
+    .await
+}
+
+/// Creation owns its command registry; ProductControl only supplies correlated transport.
+pub(crate) async fn dispatch_creation_runtime(
+    action: &str,
+    command_id: Option<String>,
+    arguments: Option<Value>,
+) -> Result<Value, String> {
+    if CREATION_API_VERSION.load(Ordering::Acquire) != 1 {
+        return Err("The active frontend does not advertise Creation API v1. Restore the installed frontend before using runtime discovery or commands".into());
+    }
+    dispatch_surface_event(
+        "agentic://creation-runtime-request",
+        json!({ "action": action, "commandId": command_id, "arguments": arguments.unwrap_or_else(|| json!({})) }),
+        OPENBITFUN_CONTROL_RESPONSE_TIMEOUT,
+        "complete the Creation runtime request",
     )
     .await
 }
@@ -792,6 +813,7 @@ async fn configure_desktop_provider_option(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesktopProviderOperation {
+    MiniApp(miniapps::Operation),
     ListCompanionPets,
     UseCompanionPet,
     DeleteCompanionPet,
@@ -802,6 +824,7 @@ fn desktop_provider_operation(
     operation_id: &str,
 ) -> Option<DesktopProviderOperation> {
     match (provider_id, operation_id) {
+        ("miniapp", id) => miniapps::operation(id).map(DesktopProviderOperation::MiniApp),
         ("agent-companion-pet", "list") => Some(DesktopProviderOperation::ListCompanionPets),
         ("agent-companion-pet", "use") => Some(DesktopProviderOperation::UseCompanionPet),
         ("agent-companion-pet", "delete") => Some(DesktopProviderOperation::DeleteCompanionPet),
@@ -829,13 +852,22 @@ async fn select_companion(
     companion_state(state).await
 }
 
-async fn execute_companion_operation(
+async fn execute_desktop_provider_operation(
     app: &AppHandle,
     operation: DesktopProviderOperation,
     arguments: Option<&Value>,
 ) -> Result<Value, String> {
     let state = app.state::<AppState>();
     match operation {
+        DesktopProviderOperation::MiniApp(operation) => {
+            miniapps::execute(
+                &state.miniapp_manager,
+                state.js_worker_pool.as_deref(),
+                operation,
+                arguments,
+            )
+            .await
+        }
         DesktopProviderOperation::ListCompanionPets => companion_state(&state).await,
         DesktopProviderOperation::UseCompanionPet => {
             let arguments = arguments.and_then(Value::as_object).ok_or_else(|| {
@@ -1000,7 +1032,7 @@ async fn execute_desktop(
             operation_id: provider_operation_id,
         } => match desktop_provider_operation(provider_id, provider_operation_id) {
             Some(operation) => {
-                execute_companion_operation(app, operation, request.arguments.as_ref()).await
+                execute_desktop_provider_operation(app, operation, request.arguments.as_ref()).await
             }
             None => Err(format!(
                 "Product-control operation provider is not registered: {provider_id}:{provider_operation_id}"
@@ -1069,14 +1101,29 @@ pub(crate) fn install(app: AppHandle) {
 
 /// Mark only the presentation adapter ready; direct product controls are
 /// installed during native setup and do not depend on the React listener.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct ProductControlSurfaceReadyRequest {
+    creation_api_version: Option<u64>,
+}
+
 #[tauri::command]
-pub(crate) fn mark_openbitfun_control_surface_ready() {
+pub(crate) fn mark_openbitfun_control_surface_ready(
+    request: Option<ProductControlSurfaceReadyRequest>,
+) {
+    CREATION_API_VERSION.store(
+        request
+            .and_then(|request| request.creation_api_version)
+            .unwrap_or(0),
+        Ordering::Release,
+    );
     SURFACE_READY.store(true, Ordering::Release);
 }
 
 #[tauri::command]
 pub(crate) fn mark_openbitfun_control_surface_unready() {
     SURFACE_READY.store(false, Ordering::Release);
+    CREATION_API_VERSION.store(0, Ordering::Release);
     let pending = std::mem::take(&mut *lock_pending_responses());
     for (_, sender) in pending {
         let _ = sender.send(Err(
@@ -1130,6 +1177,15 @@ pub(crate) async fn report_openbitfun_control_result(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_surface_readiness_does_not_claim_creation_support() {
+        let legacy: super::ProductControlSurfaceReadyRequest =
+            serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(legacy.creation_api_version, None);
+        let current: super::ProductControlSurfaceReadyRequest =
+            serde_json::from_value(serde_json::json!({"creationApiVersion": 1})).unwrap();
+        assert_eq!(current.creation_api_version, Some(1));
+    }
     use super::*;
 
     #[test]

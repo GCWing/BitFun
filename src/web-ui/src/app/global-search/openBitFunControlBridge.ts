@@ -3,6 +3,7 @@ import { appearanceService } from '@/infrastructure/appearance';
 import { configManager } from '@/infrastructure/config';
 import { i18nService, type LocaleId } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import { listenForCreationRequests } from '@/infrastructure/creation/creationBridge';
 import { activateInteractiveCapability } from './interactiveCapabilityActivator';
 import { activateProductAction } from './productActionActivator';
 import { getInteractiveCapability, getInteractiveControlDefinition } from './interactiveCapabilityCatalog';
@@ -45,6 +46,7 @@ export interface OpenBitFunControlEffectEvent extends OpenBitFunControlAppliedEv
 let requestUnlisten: (() => void) | null = null;
 let appliedUnlisten: (() => void) | null = null;
 let effectUnlisten: (() => void) | null = null;
+let creationUnlisten: (() => void) | null = null;
 let detachListenerInstalled = false;
 
 function errorMessage(error: unknown): string {
@@ -194,6 +196,7 @@ function markSurfaceDetached(): void {
 
 export async function initializeOpenBitFunControlBridge(): Promise<void> {
   if (requestUnlisten) return;
+  creationUnlisten = listenForCreationRequests();
   requestUnlisten = api.listen<OpenBitFunControlRequest>(REQUEST_EVENT, request => {
     void handleRequest(request);
   });
@@ -208,8 +211,10 @@ export async function initializeOpenBitFunControlBridge(): Promise<void> {
     detachListenerInstalled = true;
   }
   try {
-    await api.invoke('mark_openbitfun_control_surface_ready');
+    await api.invoke('mark_openbitfun_control_surface_ready', { request: { creationApiVersion: 1 } });
   } catch (error) {
+    creationUnlisten?.();
+    creationUnlisten = null;
     requestUnlisten();
     requestUnlisten = null;
     appliedUnlisten?.();

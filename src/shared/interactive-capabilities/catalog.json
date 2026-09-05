@@ -332,8 +332,8 @@
         },
         {
           "id": "creative-frontend-authoring",
-          "titleZh": "让创造模式安全修改正在运行的 OpenBitFun 前端",
-          "titleEn": "Let Creative mode safely customize the running OpenBitFun frontend",
+          "titleZh": "让创造模式扩展客户端界面与运行时能力",
+          "titleEn": "Extend client UI and runtime capabilities in Creative mode",
           "control": {
             "kind": "delegate",
             "tools": [
@@ -343,12 +343,14 @@
               "Edit"
             ],
             "workflowZh": [
-              "仅在本地桌面的创造模式中调用 FrontendWorkbench prepare，随后只编辑返回的草稿目录",
-              "用原草稿 ID 调用 apply；宿主在真实应用界面就绪后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果"
+              "在本地桌面创造模式中调用 FrontendWorkbench prepare，阅读随包 API；只编辑草稿中的 CSS、JavaScript 和自有资源，无需源码或构建工具",
+              "用原草稿 ID 调用 apply；宿主在真实界面和自定义代码激活后才启动不可变确认窗口的 15 秒倒计时，apply 会等待并返回 confirmed 或 rolled_back 的最终结果",
+              "用 commands、state 和 events 组合可复用能力；通过 FrontendWorkbench inspect 发现命令和错误，再按 schema 用 invoke 验证执行"
             ],
             "workflowEn": [
-              "Call FrontendWorkbench prepare only from Creative mode on the local desktop, then edit only the returned draft directory",
-              "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real app shell is ready, and apply waits for a final confirmed or rolled_back outcome"
+              "Call FrontendWorkbench prepare on the local Desktop in Creative mode, read the packaged API, and edit only draft CSS, JavaScript and owned assets without source or build tools",
+              "Apply with the original draft ID; the host starts the immutable review window's 15-second countdown only after the real shell and customization activate, and apply waits for a final confirmed or rolled_back outcome",
+              "Compose commands, state and events into reusable capabilities; use FrontendWorkbench inspect to discover schemas and diagnostics, then invoke to verify execution"
             ]
           },
           "evidence": [
@@ -357,7 +359,8 @@
             "command:frontend_update_candidate_ready",
             "command:get_frontend_update_status",
             "command:confirm_frontend_update",
-            "command:rollback_frontend_update"
+            "command:rollback_frontend_update",
+            "command:frontend_update_candidate_failed"
           ]
         },
         {
@@ -2908,13 +2911,18 @@
       "items": [
         {
           "id": "gallery-lifecycle",
-          "titleZh": "查看、搜索、创建、导入、编辑和删除 Mini App",
-          "titleEn": "Browse, search, create, import, edit, and delete Mini Apps",
+          "titleZh": "查看、创建、编辑和删除已安装 Mini App",
+          "titleEn": "Inspect, create, update, and delete installed MiniApps",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“查看、搜索、创建、导入、编辑和删除 Mini App”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Browse, search, create, import, edit, and delete Mini Apps” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "direct",
+            "operations": [
+              "list-apps",
+              "inspect-app",
+              "create-app",
+              "update-app",
+              "delete-app"
+            ],
+            "options": []
           },
           "evidence": [
             "command:list_miniapps",
@@ -3160,17 +3168,59 @@
       ],
       "agentExamplesZh": [
         "打开 Mini Apps",
-        "带我去小应用市场"
+        "带我去小应用市场",
+        "创建一个番茄钟小应用",
+        "把已有小应用的按钮改成圆角",
+        "删除我指定的小应用"
       ],
       "agentExamplesEn": [
         "Open Mini Apps",
-        "Take me to the Mini App market"
+        "Take me to the Mini App market",
+        "Create a Pomodoro MiniApp",
+        "Round the buttons in an existing MiniApp",
+        "Delete the MiniApp I specify"
       ],
       "destination": {
         "kind": "action",
         "actionId": "surface.miniapps.open"
       },
-      "operations": []
+      "operations": [
+        {
+          "id": "list-apps",
+          "titleZh": "列出已安装小应用",
+          "titleEn": "List installed MiniApps",
+          "descriptionZh": "读取产品宿主上的已安装应用及版本。",
+          "descriptionEn": "Read installed apps and versions from the product host."
+        },
+        {
+          "id": "inspect-app",
+          "titleZh": "读取小应用源码",
+          "titleEn": "Inspect a MiniApp",
+          "descriptionZh": "按应用 ID 读取可编辑字段、源码、权限和版本，不返回控制端路径。",
+          "descriptionEn": "Read editable fields, source, permissions and version by app ID without controller-local paths."
+        },
+        {
+          "id": "create-app",
+          "titleZh": "创建小应用",
+          "titleEn": "Create a MiniApp",
+          "descriptionZh": "直接提交名称和源码，编译并保存到客户端；无需源码仓库或构建工具。",
+          "descriptionEn": "Compile and install a name and source directly in the client, without a repository or build tools."
+        },
+        {
+          "id": "update-app",
+          "titleZh": "修改小应用",
+          "titleEn": "Update a MiniApp",
+          "descriptionZh": "按应用 ID 修改指定字段，保留未提供的源码和用户数据，通知已打开的应用刷新。expectedVersion 可防止覆盖新的修改。",
+          "descriptionEn": "Patch specified fields by app ID, preserve omitted source and user data, and notify open runtimes. expectedVersion guards against stale edits."
+        },
+        {
+          "id": "delete-app",
+          "titleZh": "删除小应用",
+          "titleEn": "Delete a MiniApp",
+          "descriptionZh": "按应用 ID 停止后台任务并删除应用；仅在用户明确要求删除时使用。",
+          "descriptionEn": "Stop the worker and delete an installed app by ID, only on an explicit deletion request."
+        }
+      ]
     },
     {
       "id": "feature.canvas",
