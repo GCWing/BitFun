@@ -114,15 +114,10 @@ jobs:
             "${CHANNEL}" "${VERSION}"
 
           git fetch origin main --tags --force
-          CHECKOUT_SHA="$(git rev-parse "${CHECKOUT_REF}^{commit}")"
+          CHECKOUT_SHA="$(node scripts/resolve-release-source.mjs "${CHECKOUT_REF}" "${TAG}")"
           if [[ "${GITHUB_REPOSITORY}" == "GCWing/OpenBitFun" ]] && \
              ! git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/main; then
             echo "Ref ${CHECKOUT_REF} (${CHECKOUT_SHA}) is not part of the protected main history." >&2
-            exit 1
-          fi
-          TAG_SHA="$(git rev-parse --verify --quiet "${TAG}^{commit}" || true)"
-          if [[ -n "${TAG_SHA}" && "${TAG_SHA}" != "${CHECKOUT_SHA}" ]]; then
-            echo "Existing tag ${TAG} points to ${TAG_SHA}, not requested commit ${CHECKOUT_SHA}." >&2
             exit 1
           fi
           CHECKOUT_REF="${CHECKOUT_SHA}"
@@ -322,6 +317,7 @@ jobs:
         run: bash scripts/ci/verify-appimage-fcitx.sh "${{ matrix.platform.target }}"
 
       - name: Upload bundles
+        id: bundles
         uses: actions/upload-artifact@v6
         with:
           name: openbitfun-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}-bundle
@@ -331,6 +327,21 @@ jobs:
             target/release/bundle
             src/apps/desktop/target/release/bundle
             OpenBitFun-Installer/src-tauri/target/release/openbitfun-installer.exe
+
+      - name: Record bundle download
+        shell: bash
+        env:
+          BUNDLE_URL: ${{ steps.bundles.outputs.artifact-url }}
+          BUNDLE_PLATFORM: ${{ matrix.platform.name }}
+          BUNDLE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          BUNDLE_COMMIT: ${{ needs.prepare.outputs.checkout_ref }}
+        run: |
+          {
+            printf '### %s package\n\n' "$BUNDLE_PLATFORM"
+            printf '[Download %s bundle](%s)\n\n' "$BUNDLE_TAG" "$BUNDLE_URL"
+            printf 'Source commit: `%s`\n\n' "$BUNDLE_COMMIT"
+            printf 'This artifact is available independently of other platform jobs. Release publication requires all platforms to succeed.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   linux-binaries:
     name: Linux CLI and Relay Server

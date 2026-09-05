@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -11,6 +11,7 @@ import {
 } from './release-channel.mjs';
 import { setBuildVersion } from './set-build-version.mjs';
 import { decodeMinisignPublicKey } from './write-minisign-public-key.mjs';
+import { resolveReleaseSource } from './resolve-release-source.mjs';
 
 const RAW_PUBLIC_KEY = `untrusted comment: minisign public key E3E0874CEC1C22C3
 RWTDIhzsTIfg41w2Gwiei0zNDKaLYm9dQVpEWNQ/Ulpyt2mbS2JE1U2M`;
@@ -168,3 +169,71 @@ function writeFixture(root, relative, content) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, content);
 }
+
+function releaseRepositoryFixture(t) {
+  const temporaryRoot = tmpdir();
+  const root = mkdtempSync(path.join(temporaryRoot, 'openbitfun-release-source-'));
+  t.after(() => {
+    assert.match(path.relative(temporaryRoot, root), /^openbitfun-release-source-[^\\/]+$/);
+    rmSync(root, { recursive: true, force: true });
+  });
+  const origin = path.join(root, 'origin');
+  const checkout = path.join(root, 'checkout');
+  mkdirSync(origin);
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+      cwd, encoding: 'utf8', windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git(origin, 'init', '--quiet', '--initial-branch=main');
+  git(origin, 'config', 'user.name', 'Release Source Test');
+  git(origin, 'config', 'user.email', 'release-source@example.invalid');
+  writeFileSync(path.join(origin, 'source.txt'), 'initial\n');
+  git(origin, 'add', 'source.txt');
+  git(origin, 'commit', '--quiet', '-m', 'Initial source');
+  const base = git(origin, 'rev-parse', 'HEAD');
+  git(origin, 'tag', '-a', 'v1.0.0-beta.1', '-m', 'Existing release');
+  git(root, 'clone', '--quiet', '--no-local', '--single-branch', origin, checkout);
+  writeFileSync(path.join(origin, 'source.txt'), 'release candidate\n');
+  git(origin, 'commit', '--quiet', '-am', 'Candidate source');
+  const candidate = git(origin, 'rev-parse', 'HEAD');
+  // Leave this commit outside advertised branch/tag history, as after a rewrite.
+  git(origin, 'update-ref', 'refs/heads/main', base);
+  return { origin, checkout, base, candidate, git };
+}
+
+test('release source fetches an available SHA outside advertised history', (t) => {
+  const { checkout, candidate } = releaseRepositoryFixture(t);
+  assert.equal(resolveReleaseSource({
+    cwd: checkout, checkoutRef: candidate, releaseTag: 'v1.0.0-beta.2',
+  }), candidate);
+});
+
+test('release source fetches a branch absent from the Actions checkout', (t) => {
+  const { origin, checkout, candidate, git } = releaseRepositoryFixture(t);
+  git(origin, 'update-ref', 'refs/heads/release-candidate', candidate);
+  assert.equal(resolveReleaseSource({
+    cwd: checkout, checkoutRef: 'release-candidate', releaseTag: 'v1.0.0-beta.2',
+  }), candidate);
+});
+
+test('release source preserves the existing tag and rejects different source commits', (t) => {
+  const { checkout, base, candidate, git } = releaseRepositoryFixture(t);
+  assert.equal(resolveReleaseSource({
+    cwd: checkout, checkoutRef: 'v1.0.0-beta.1', releaseTag: 'v1.0.0-beta.1',
+  }), base);
+  assert.throws(() => resolveReleaseSource({
+    cwd: checkout, checkoutRef: candidate, releaseTag: 'v1.0.0-beta.1',
+  }), /Existing tag .* choose a new release tag/);
+  assert.equal(git(checkout, 'rev-parse', 'v1.0.0-beta.1^{commit}'), base);
+});
+
+test('release source reports an unavailable ref instead of falling back to HEAD', (t) => {
+  const { checkout, base, git } = releaseRepositoryFixture(t);
+  assert.throws(() => resolveReleaseSource({
+    cwd: checkout, checkoutRef: 'missing-release-ref', releaseTag: 'v1.0.0-beta.2',
+  }), /Cannot fetch checkout ref missing-release-ref .* Start a new Desktop Package run/);
+  assert.equal(git(checkout, 'rev-parse', 'HEAD'), base);
+});

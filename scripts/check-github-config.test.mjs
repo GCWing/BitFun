@@ -1126,7 +1126,11 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   );
   assert.match(prepareStep.run, /GITHUB_REPOSITORY.*GCWing\/OpenBitFun/);
   assert.match(prepareStep.run, /merge-base --is-ancestor/);
-  assert.match(prepareStep.run, /rev-parse --verify --quiet/);
+  assert.match(
+    prepareStep.run,
+    /CHECKOUT_SHA="\$\(node scripts\/resolve-release-source\.mjs "\$\{CHECKOUT_REF\}" "\$\{TAG\}"\)"/,
+    'source resolution must enforce the release tag before package jobs start',
+  );
 
   const packageJob = workflow.jobs.package;
   assert.equal(
