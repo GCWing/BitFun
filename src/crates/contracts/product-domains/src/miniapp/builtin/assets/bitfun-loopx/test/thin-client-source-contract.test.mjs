@@ -89,7 +89,10 @@ test('LoopX UI is a thin client of the host-owned controller', async () => {
     [/\bapp\.(?:fs|shell)\b/, 'direct filesystem or shell APIs'],
     [/\b(?:argvPrefix|projectDirs?|srcDir)\b/, 'iframe-controlled CLI or checkout paths'],
     [/--registry\b|registry\.json|\bregistry(?:Path|Args)\b/i, 'direct registry CLI access'],
-    [/\bheartbeat(?!-prompt)/i, 'iframe-owned heartbeat scheduling'],
+    // The word alone appears in user-facing cadence copy and comments; only
+    // actual heartbeat scheduling constructs (calls or starter functions)
+    // are forbidden — the host owns every wake-up.
+    [/\bheartbeat(?!-prompt)[a-z_]*\s*\(|\b(?:start|stop|schedule|restart)Heartbeat\b/i, 'iframe-owned heartbeat scheduling'],
   ];
   for (const [pattern, description] of forbiddenSurfaces) {
     assert.ok(!pattern.test(ui), `ui.js must not contain ${description}`);
@@ -174,8 +177,9 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
 
   assert.match(html, /\blist\s*=\s*(['"])intake-history\1/i);
   assert.match(html, /\bid\s*=\s*(['"])resume-repository\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-progress-panel\1/i);
-  assert.match(html, /\bid\s*=\s*(['"])issue-progress-summary\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-decision-card\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-description-panel\1/i);
+  assert.match(html, /\bid\s*=\s*(['"])issue-number\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-view\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-title\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-state-pill\1/i);
@@ -192,9 +196,10 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
   assert.match(html, /\bid\s*=\s*(['"])issue-approval-reject\1/i);
   assert.match(html, /\bid\s*=\s*(['"])issue-description-panel\1/i);
   assert.ok(
-    html.indexOf('id="issue-approval-panel"') < html.indexOf('id="issue-progress-panel"')
-      && html.indexOf('id="issue-progress-panel"') < html.indexOf('id="issue-timeline"'),
-    'the approval request, current status, and timeline must stack in priority order',
+    html.indexOf('id="issue-approval-panel"') < html.indexOf('id="issue-decision-card"')
+      && html.indexOf('id="issue-decision-card"') < html.indexOf('id="issue-description-panel"')
+      && html.indexOf('id="issue-description-panel"') < html.indexOf('id="issue-timeline"'),
+    'the approval request, decision card, issue description, and timeline must stack in priority order',
   );
   for (const removedId of [
     'sync-button',
@@ -216,6 +221,8 @@ test('LoopX HTML exposes an accessible intake, task rail, and log-first workspac
     'issue-outcome',
     'issue-evidence-list',
     'issue-next-action',
+    'issue-progress-panel',
+    'issue-progress-summary',
   ]) {
     assert.doesNotMatch(html, new RegExp(`\\bid\\s*=\\s*(['"])${removedId}\\1`, 'i'));
   }
@@ -246,4 +253,29 @@ test('LoopX keeps intake history and renders one flat repository task list', asy
   assert.match(ui, /focusTaskLogs\(focusedTaskId\s*\|\|\s*null\)/);
   assert.match(ui, /selectTask\(taskId\s*\|\|\s*null\)/);
   assert.match(ui, /resetLoopxDialog\.close\(\)[\s\S]*resettingLoopxBackground/);
+});
+
+test('LoopX recovery copy keeps zh/en parity for plan-exhausted cards', async () => {
+  const ui = await readAsset('ui.js');
+  const keys = [
+    'decisionCardTitlePlanExhausted',
+    'decisionCardPlanExhaustedHint',
+    'recoveryReasonPlanExhausted',
+  ];
+  for (const key of keys) {
+    const occurrences = [...ui.matchAll(new RegExp(`${key}\s*:`, 'g'))].length;
+    assert.equal(
+      occurrences,
+      2,
+      `copy key ${key} must exist once per locale (zh-CN and en-US), found ${occurrences}`,
+    );
+  }
+  // The recovery card must branch on the plan-exhausted reason so the card is
+  // not stuck with the generic settlement-unverified copy.
+  assert.match(
+    ui,
+    /planExhausted\s*=\s*recovery\s*&&\s*task\.recoveryReason\s*===\s*['"]plan_exhausted['"]/,
+  );
+  assert.match(ui, /['"]decisionCardTitlePlanExhausted['"]/);
+  assert.match(ui, /['"]decisionCardPlanExhaustedHint['"]/);
 });

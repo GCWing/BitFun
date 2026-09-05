@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use bitfun_product_domains::miniapp::loopx::{
-    LoopxCliBuildTurnRequest, LoopxCliCallContext, LoopxCliCreateGoalRequest, LoopxCliErrorKind,
-    LoopxCliGoalContext, LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest,
+    LoopxAgentTurnStatus, LoopxCliBuildTurnRequest, LoopxCliCallContext, LoopxCliCreateGoalRequest,
+    LoopxCliErrorKind, LoopxCliGoalContext, LoopxCliHandshakeRequest, LoopxCliInspectGoalRequest,
     LoopxCliInstallManagedSourceRequest, LoopxCliIntakePlan, LoopxCliPlanItemRequest, LoopxCliPort,
-    LoopxCliProgress, LoopxCliProgressSink, LoopxCliRunDecision, LoopxCliSource, LoopxCliTodoPlan,
-    LoopxIssueKey, LoopxItemKind, LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey,
-    LoopxWorkspaceDisposeRequest, LoopxWorkspacePort, LoopxWorkspacePrepareRequest,
-    LoopxWorkspaceProbeRequest, LoopxWorkspaceResetRequest,
+    LoopxCliProgress, LoopxCliProgressSink, LoopxCliRunDecision, LoopxCliSettleTurnRequest,
+    LoopxCliSettlementStatus, LoopxCliSource, LoopxCliTodoPlan, LoopxIssueKey, LoopxItemKind,
+    LoopxPermissionScope, LoopxRemoteItemState, LoopxRepositoryKey, LoopxWorkspaceDisposeRequest,
+    LoopxWorkspacePort, LoopxWorkspacePrepareRequest, LoopxWorkspaceProbeRequest,
+    LoopxWorkspaceResetRequest,
 };
 use bitfun_services_integrations::miniapp::loopx_cli::{
     LoopxCliAdapterConfig, LoopxCliProcessAdapter, LoopxCommandPlan, LoopxCommandSource,
@@ -700,6 +701,7 @@ async fn item_plan_process_failure_preserves_the_stderr_cause() {
                     r#"{"ok":false,"error":"metadata projection failed"}"#.to_string(),
                 ],
                 stderr_tail: Vec::new(),
+                payload: None,
             })]),
     ));
     let adapter = adapter_with_runner(temporary.path(), runner, Arc::new(FakeLocator::new(None)));
@@ -819,7 +821,11 @@ async fn waiting_goal_projects_the_concrete_open_user_gate() {
         .await
         .unwrap();
 
-    assert_eq!(snapshot.run_decision, LoopxCliRunDecision::WaitingForUser);
+    // Since the custom-runner alignment (9fa63eb8c), `should_run=true` wins
+    // over a pending user gate: the controller keeps driving independent
+    // safe work while projecting the gate concurrently, so the snapshot is
+    // `RunNow` with the concrete open user gate still attached.
+    assert_eq!(snapshot.run_decision, LoopxCliRunDecision::RunNow);
     assert_eq!(snapshot.waiting_user_todo_count, 1);
     let gate = snapshot.pending_user_gate.expect("projected user gate");
     assert_eq!(gate.gate_id, "todo_release_approval");
@@ -843,6 +849,281 @@ async fn waiting_goal_projects_the_concrete_open_user_gate() {
     assert!(commands[1]
         .windows(2)
         .any(|args| { args == [OsString::from("todo"), OsString::from("list")] }));
+}
+
+/// The pinned CLI answers `turn plan` for its plan-exhausted replan frontier
+/// (all todos done or blocked, open replan obligation, no selected todo) with
+/// `ok:false`, the `host-bound routes require ... lineage` error, and exit 1.
+/// `inspect_goal` must salvage the typed payload into the equivalent
+/// read-only `RunNow`-without-todo snapshot so the controller parks the task
+/// instead of failing it with a raw process error (observed live on task
+/// anywhere-labs/dsh-desktop#827).
+#[tokio::test]
+async fn inspect_goal_salvages_the_replan_lineage_contract_error() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let turn_plan = json!({
+        "ok": false,
+        "schema_version": "loopx_turn_plan_v0",
+        "error": "host-bound routes require goal, agent, todo, and action-hash lineage",
+        "route": {"kind": "contract_error"},
+        "turn_envelope": {
+            "should_run": true,
+            "state": "active",
+            "effective_action": "autonomous_replan_required",
+            "open_count": 0,
+            "user": {"action_required": false, "open_count": 0},
+            "action": {"selected_todo": null},
+            "replan_action_packet": {"obligation_id": "replan-1"},
+            "compaction": {"within_budget": true},
+            "action_signature": {
+                "source_decision_hash": "sha256:replan-lineage-revision"
+            }
+        }
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([Err(LoopxProcessError::Exited {
+                code: Some(1),
+                stdout_tail: Vec::new(),
+                stderr_tail: Vec::new(),
+                payload: Some(turn_plan),
+            })]),
+    ));
+    let adapter = adapter_with_runner(
+        temporary.path(),
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+    );
+
+    let snapshot = adapter
+        .inspect_goal(
+            LoopxCliInspectGoalRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "inspect-replan-lineage".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-827".to_string(),
+                    generation: 6,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec!["shell".to_string()],
+                },
+                goal_id: "goal-827".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.run_decision, LoopxCliRunDecision::RunNow);
+    assert_eq!(snapshot.open_todo_count, 0);
+    assert_eq!(snapshot.waiting_user_todo_count, 0);
+    assert_eq!(snapshot.selected_todo, None);
+    assert_eq!(snapshot.durable_revision, "sha256:replan-lineage-revision");
+    // The open obligation must ride along so the controller drives the
+    // replan turn instead of parking the task.
+    assert_eq!(
+        snapshot.pending_replan_obligation_id.as_deref(),
+        Some("replan-1")
+    );
+    assert!(!snapshot.envelope_over_budget);
+    // The salvaged projection performs no follow-up todo list command.
+    assert_eq!(runner.plans().len(), 3);
+}
+
+/// A turn that completed its writeback and quota spend must still settle when
+/// the CLI answers the settlement inspection with the replan-lineage contract
+/// error: durable evidence comes from `history`, and the salvaged snapshot
+/// feeds `after_revision` (observed live: task #827's final onboarding turn
+/// failed settlement purely because of this inspection error).
+#[tokio::test]
+async fn settle_turn_survives_the_replan_lineage_contract_error() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let turn_plan = json!({
+        "ok": false,
+        "schema_version": "loopx_turn_plan_v0",
+        "error": "host-bound routes require goal, agent, todo, and action-hash lineage",
+        "turn_envelope": {
+            "should_run": true,
+            "state": "active",
+            "effective_action": "autonomous_replan_required",
+            "open_count": 0,
+            "user": {"action_required": false, "open_count": 0},
+            "action": {"selected_todo": null},
+            "replan_action_packet": {"obligation_id": "replan-1"},
+            "compaction": {"within_budget": true},
+            "action_signature": {
+                "source_decision_hash": "sha256:replan-lineage-revision"
+            }
+        }
+    });
+    let effect_id = "goal-827:bitfun-agent:todo-1:turn-827";
+    let history = json!({
+        "ok": true,
+        "goals": [{
+            "id": "goal-827",
+            "latest_runs": [
+                {
+                    "goal_id": "goal-827",
+                    "agent_id": "bitfun-agent",
+                    "todo_id": "todo-1",
+                    "turn_instance_id": "turn-827",
+                    "classification": "quota_slot_spent",
+                    "settlement_identity": {
+                        "schema_version": "quota_settlement_identity_v0",
+                        "effect_id": effect_id,
+                        "goal_id": "goal-827",
+                        "agent_id": "bitfun-agent",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-827"
+                    }
+                },
+                {
+                    "goal_id": "goal-827",
+                    "agent_id": "bitfun-agent",
+                    "todo_id": "todo-1",
+                    "turn_instance_id": "turn-827",
+                    "classification": "validated_progress",
+                    "delivery_outcome": "outcome_progress",
+                    "settlement_identity": {
+                        "schema_version": "quota_settlement_identity_v0",
+                        "effect_id": effect_id,
+                        "goal_id": "goal-827",
+                        "agent_id": "bitfun-agent",
+                        "todo_id": "todo-1",
+                        "turn_instance_id": "turn-827"
+                    }
+                }
+            ]
+        }]
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([
+                Err(LoopxProcessError::Exited {
+                    code: Some(1),
+                    stdout_tail: Vec::new(),
+                    stderr_tail: Vec::new(),
+                    payload: Some(turn_plan),
+                }),
+                output(history.to_string()),
+            ]),
+    ));
+    let adapter = adapter_with_runner(
+        temporary.path(),
+        runner.clone(),
+        Arc::new(FakeLocator::new(None)),
+    );
+
+    let settlement = adapter
+        .verify_turn_settlement(
+            LoopxCliSettleTurnRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "settle-replan-lineage".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-827".to_string(),
+                    generation: 6,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec![],
+                },
+                goal_id: "goal-827".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+                turn_id: "turn-827".to_string(),
+                settlement_token: effect_id.to_string(),
+                expected_durable_revision: "sha256:replan-lineage-revision".to_string(),
+                agent_status: LoopxAgentTurnStatus::Completed,
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(settlement.status, LoopxCliSettlementStatus::Settled);
+    assert_eq!(settlement.receipt_id, effect_id);
+    assert_eq!(settlement.after_revision, "sha256:replan-lineage-revision");
+    // The settlement must still consult durable history evidence.
+    let commands = runner
+        .plans()
+        .into_iter()
+        .skip(2)
+        .map(|plan| plan.args)
+        .collect::<Vec<_>>();
+    assert!(commands.iter().any(|args| {
+        args.windows(2)
+            .any(|w| w == [OsString::from("history"), OsString::from("--goal-id")])
+    }));
+}
+
+/// Only the exact replan-lineage contract error is salvaged; other non-zero
+/// exits keep their typed process error so unrelated CLI failures still
+/// surface.
+#[tokio::test]
+async fn inspect_goal_keeps_other_process_failures() {
+    let temporary = tempfile::tempdir().unwrap();
+    stage_bundle(temporary.path(), "v0.5.1", 1);
+    let worktree = temporary.path().join("worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let registry = worktree.join(".loopx").join("registry.json");
+    let unrelated = json!({
+        "ok": false,
+        "schema_version": "loopx_turn_plan_v0",
+        "error": "some other CLI failure",
+        "turn_envelope": {
+            "should_run": true,
+            "action": {"selected_todo": null},
+            "replan_action_packet": {"obligation_id": "replan-1"}
+        }
+    });
+    let runner = Arc::new(FakeRunner::with_results(
+        handshake_results("loopx 0.5.1", LOOPX_COMMAND_REFERENCE_SCHEMA)
+            .into_iter()
+            .chain([Err(LoopxProcessError::Exited {
+                code: Some(1),
+                stdout_tail: vec![r#"  "error": "some other CLI failure""#.to_string()],
+                stderr_tail: Vec::new(),
+                payload: Some(unrelated),
+            })]),
+    ));
+    let adapter = adapter_with_runner(temporary.path(), runner, Arc::new(FakeLocator::new(None)));
+
+    let error = adapter
+        .inspect_goal(
+            LoopxCliInspectGoalRequest {
+                context: LoopxCliGoalContext {
+                    call: LoopxCliCallContext {
+                        operation_id: "inspect-unrelated-failure".to_string(),
+                        deadline_at: None,
+                    },
+                    task_id: "task-x".to_string(),
+                    generation: 1,
+                    worktree_path: worktree.to_string_lossy().into_owned(),
+                    registry_path: registry.to_string_lossy().into_owned(),
+                    available_capabilities: vec![],
+                },
+                goal_id: "goal-x".to_string(),
+                agent_id: "bitfun-agent".to_string(),
+            },
+            &RecordingProgressSink::default(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.message.contains("some other CLI failure"));
 }
 
 #[tokio::test]
@@ -1445,6 +1726,7 @@ async fn workspace_probe_surfaces_the_actionable_git_stderr() {
         code: Some(128),
         stdout_tail: Vec::new(),
         stderr_tail: vec!["fatal: unable to access repository".to_string()],
+        payload: None,
     })]));
     let service = LoopxWorkspaceService::with_runner(
         LoopxWorkspaceServiceConfig::new(temporary.path().join("workspaces"), "git"),

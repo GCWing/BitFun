@@ -333,6 +333,16 @@ pub struct LoopxCliGoalSnapshot {
     /// Read-only projection of the frontier todo selected by the same LoopX
     /// envelope. Absent when LoopX did not select a todo; never authoritative.
     pub selected_todo: Option<LoopxCurrentTodo>,
+    /// Read-only projection of the autonomous replan obligation the same
+    /// envelope carries (`replan_action_packet.obligation_id`). When the
+    /// plan runs dry (no open todo, no selected todo) the pinned CLI still
+    /// projects `should_run=true` with this obligation and expects the host
+    /// to drive one bounded autonomous replan turn bound to it: the agent
+    /// writes back a successor todo, a typed terminal outcome, or a concrete
+    /// blocker through the replan writeback. Only a todo-less `RunNow`
+    /// frontier WITHOUT an open obligation is a host contract contradiction.
+    /// Absent when the envelope carries no replan obligation.
+    pub pending_replan_obligation_id: Option<String>,
     /// LoopX returned the turn envelope over its compaction budget
     /// (`compaction.within_budget == false`, route `contract_error`): the goal
     /// cannot be planned until its durable state shrinks. The host must not

@@ -115,9 +115,11 @@ const COPY = {
     outputThinkingSummary: '思考过程 · {value} 字（点击展开）',
     decisionCardTitle: '需要你的决策',
     decisionCardTitleRecovery: '工作段被中断，需要恢复',
+    decisionCardTitlePlanExhausted: '修复计划已执行完毕，等待收尾方式',
     decisionResume: '恢复重试',
     decisionCardGateHint: '请在下方审批面板中批准或拒绝该请求。',
     decisionCardRecoveryHint: '本段工作已结束，但结算未能确认持久进展；可恢复重试一次，结论详情见下方最新进展。',
+    decisionCardPlanExhaustedHint: '流程的待办已全部执行完，但没有留下可继续的待办、待批门禁或收尾声明，宿主不会伪造收尾。已产生的提交、未提交改动与证据均保留在任务工作区。你可以：从任务分支手动推送并开 PR / 在 issue 上评论说明；或等 goal 出现新待办（例如上游 PR 合并、新的监控结论）后再点“恢复重试”。',
     summaryVerdictNeedsFix: '🛠️ 需要修复',
     summaryVerdictAlreadyFixedUpstream: '✅ 上游已修复',
     summaryVerdictWontFix: '🚫 无需修复',
@@ -139,6 +141,7 @@ const COPY = {
     summaryPendingGate: '⏸️ 等你批准后继续（见上方审批面板）',
     recoveryReasonHostRestart: '中断原因：应用异常关闭导致执行中断',
     recoveryReasonExecutionFailure: '中断原因：执行过程失败',
+    recoveryReasonPlanExhausted: '中断原因：计划用尽——无待办、无待批门禁、无终局声明',
     recoveryReasonSettlementUnverified: '中断原因：结算未能确认持久进展（写入已验证，花费回执缺失）',
     recoveryReasonRepositoryPaused: '中断原因：同仓库其他任务失败后暂停队列',
     recoveryReasonManualRestore: '中断原因：手动恢复的归档任务',
@@ -474,9 +477,11 @@ const COPY = {
     outputThinkingSummary: 'Thinking · {value} chars (click to expand)',
     decisionCardTitle: 'Needs your decision',
     decisionCardTitleRecovery: 'Work segment was interrupted and needs recovery',
+    decisionCardTitlePlanExhausted: 'Fix plan completed; choose how to finish',
     decisionResume: 'Resume retry',
     decisionCardGateHint: 'Approve or reject the request in the approval panel below.',
     decisionCardRecoveryHint: 'This segment finished but settlement could not validate durable progress. You can retry recovery once; see the summary below for the conclusion.',
+    decisionCardPlanExhaustedHint: 'All plan todos are done, but the flow left no open todo, approval gate, or terminal declaration, and the host will not fabricate one. Commits, uncommitted changes, and evidence are preserved in the task worktree. You can push the task branch and open a PR / comment on the issue yourself, or wait until the goal gains a new todo or gate (for example after an upstream PR merge) and then use Resume retry.',
     summaryVerdictNeedsFix: '🛠️ Needs fix',
     summaryVerdictAlreadyFixedUpstream: '✅ Already fixed upstream',
     summaryVerdictWontFix: '🚫 Won\'t fix',
@@ -498,6 +503,7 @@ const COPY = {
     summaryPendingGate: '⏸️ Waiting for your approval (see the approval panel above)',
     recoveryReasonHostRestart: 'Interrupted by an abnormal app shutdown',
     recoveryReasonExecutionFailure: 'Interrupted by an execution failure',
+    recoveryReasonPlanExhausted: 'Interrupted because the plan ran dry: no open todo, no approval gate, no terminal declaration',
     recoveryReasonSettlementUnverified: 'Interrupted because settlement could not validate durable progress (writeback verified, quota spend receipt missing)',
     recoveryReasonRepositoryPaused: 'Interrupted because the repository queue paused after another task failed',
     recoveryReasonManualRestore: 'Interrupted because an archived task was manually restored',
@@ -2544,12 +2550,15 @@ function renderIssueStatus(task) {
     return;
   }
   card.replaceChildren();
+  const planExhausted = recovery && task.recoveryReason === 'plan_exhausted';
   const heading = document.createElement('strong');
-  heading.textContent = text(waiting ? 'decisionCardTitle' : 'decisionCardTitleRecovery');
+  heading.textContent = text(waiting
+    ? 'decisionCardTitle'
+    : (planExhausted ? 'decisionCardTitlePlanExhausted' : 'decisionCardTitleRecovery'));
   const body = document.createElement('p');
   body.className = 'issue-decision-card__message';
   const recoveryHint = String(task.pendingGateMessage || '').trim()
-    || text(waiting ? 'decisionCardGateHint' : 'decisionCardRecoveryHint');
+    || text(waiting ? 'decisionCardGateHint' : (planExhausted ? 'decisionCardPlanExhaustedHint' : 'decisionCardRecoveryHint'));
   body.textContent = recoveryHint;
   card.append(heading, body);
   const reasonKey = !waiting && task.recoveryReason

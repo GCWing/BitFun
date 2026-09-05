@@ -174,6 +174,14 @@ pub enum LoopxProcessError {
         code: Option<i32>,
         stdout_tail: Vec<String>,
         stderr_tail: Vec<String>,
+        /// Full JSON payload the CLI printed on stdout before the non-zero
+        /// exit, when it parses. The pinned CLI renders typed `ok:false`
+        /// failures as a complete payload followed by exit 1 (for example the
+        /// `RunNow`-without-todo replan frontier, whose host-bound route
+        /// lineage check fails); callers can salvage that projection instead
+        /// of failing on the raw process exit. `None` when stdout was not a
+        /// single JSON document.
+        payload: Option<Value>,
     },
     #[error("LoopX process timed out after {deadline_ms} ms")]
     Timeout {
@@ -329,6 +337,7 @@ impl LoopxProcessRunner for SystemLoopxProcessRunner {
                         code: status.code(),
                         stdout_tail: output_tail(&stdout_capture.bytes),
                         stderr_tail,
+                        payload: serde_json::from_slice(&stdout_capture.bytes).ok(),
                     });
                 }
                 if stdout_capture.exceeded_limit {
@@ -1729,9 +1738,9 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &request.context.available_capabilities,
                 operation_id,
             )?;
-            let output = run_port_command(self, &request.context, args, &observer).await?;
             let mut snapshot =
-                project_goal_snapshot(&request.goal_id, &output.payload, operation_id)?;
+                inspect_goal_snapshot(self, &request.goal_id, &request.context, args, &observer)
+                    .await?;
             if snapshot.waiting_user_todo_count > 0
                 || snapshot.run_decision == loopx_contract::LoopxCliRunDecision::WaitingForUser
             {
@@ -1908,11 +1917,14 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &request.context.available_capabilities,
                 operation_id,
             )?;
-            let inspection =
-                run_port_command(self, &request.context, inspection_args, &observer).await?;
-            require_payload_ok(&inspection.payload, operation_id)?;
-            let snapshot =
-                project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
+            let snapshot = inspect_goal_snapshot(
+                self,
+                &request.goal_id,
+                &request.context,
+                inspection_args,
+                &observer,
+            )
+            .await?;
             Ok(loopx_contract::LoopxCliAnswerGateResult {
                 goal_id: request.goal_id,
                 gate_id: request.gate_id,
@@ -1956,16 +1968,57 @@ impl loopx_contract::LoopxCliPort for LoopxCliProcessAdapter {
                 &request.context.available_capabilities,
                 operation_id,
             )?;
-            let inspection =
-                run_port_command(self, &request.context, inspection_args, &observer).await?;
-            require_payload_ok(&inspection.payload, operation_id)?;
-            require_schema(&inspection.payload, "loopx_turn_plan_v0", operation_id)?;
-            let snapshot =
-                project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?;
+            // The settlement inspection is read-only bookkeeping: its snapshot
+            // feeds `after_revision` and the terminal-state check, while the
+            // durable evidence below comes from `history`. When the pinned CLI
+            // answers this inspection with the plan-exhausted replan-lineage
+            // contract error (all todos done or blocked, open replan
+            // obligation, no selected todo), salvage the typed payload instead
+            // of failing the settlement of a turn that did complete its
+            // writeback and quota spend: the post-settlement goal projection
+            // then drives one autonomous replan turn bound to the obligation
+            // (or parks the task if no obligation remains) through the normal
+            // frontier handling.
+            let (snapshot, inspection_payload) = match run_port_command_raw(
+                self,
+                &request.context,
+                inspection_args,
+                &observer,
+            )
+            .await
+            {
+                Ok(inspection) => {
+                    require_payload_ok(&inspection.payload, operation_id)?;
+                    require_schema(&inspection.payload, "loopx_turn_plan_v0", operation_id)?;
+                    (
+                        project_goal_snapshot(&request.goal_id, &inspection.payload, operation_id)?,
+                        Some(inspection.payload),
+                    )
+                }
+                Err(RawPortError::Port(error)) => return Err(error),
+                Err(RawPortError::Adapter(error)) => {
+                    let Some(payload) = salvage_replan_lineage_payload(&error) else {
+                        return Err(map_port_error(error, operation_id));
+                    };
+                    log::warn!(
+                            "LoopX settlement inspection hit the plan-exhausted replan lineage contract error; continuing settlement from durable history evidence: task_id={} goal={} turn={} error=\"{}\"",
+                            request.context.task_id,
+                            request.goal_id,
+                            request.turn_id,
+                            LOOPX_REPLAN_LINEAGE_ERROR
+                        );
+                    (
+                        salvaged_replan_lineage_snapshot(&request.goal_id, &payload, operation_id)
+                            .map(|(snapshot, _)| snapshot)
+                            .ok_or_else(|| map_port_error(error, operation_id))?,
+                        None,
+                    )
+                }
+            };
             if is_legacy_turn_key(&request.settlement_token) {
-                if let Some(receipt) =
-                    matching_settlement_receipt(&inspection.payload, &request.settlement_token)
-                {
+                if let Some(receipt) = inspection_payload.as_ref().and_then(|payload| {
+                    matching_settlement_receipt(payload, &request.settlement_token)
+                }) {
                     return project_legacy_settlement(&request, &snapshot, receipt, operation_id);
                 }
             }
@@ -2772,8 +2825,17 @@ fn render_agent_reentry_instruction(
             "After the writeback validates, run this exact quota spend command once:\n`{spend_command}`\nRun it verbatim: do not add, remove, or reorder flags, and do not substitute the todo or turn ids. If it returns a typed rejection naming `repair_scheduler_execution_context` or an advanced guard, stop and report the rejection verbatim; do not retry with modified arguments."
         )
     };
+    // Replan turns have no selected todo: the replan obligation itself is the
+    // work item, so the generic "claim the selected todo" clause would point
+    // the agent at a todo that does not exist.
+    let work_clause = match binding {
+        Some(SettlementBinding::AutonomousReplan { .. }) => {
+            "This turn is an autonomous replan turn: no todo is selected and you must not invent a todo claim. Apply the `replan_action_packet` from the contract: first re-read the durable goal state and current evidence, then record exactly one required semantic outcome through the refresh-state writeback flags below — a concrete runnable successor todo only when an executable target is known, otherwise a typed terminal outcome (for example a coverage-backed `no_followup` with the goal vision closed) or a new concrete blocker with evidence. The replan ACK must carry a matching typed `--repair-delta-kind` (for example `no_followup`, `blocker`, `successor_or_supersede`, `goal_vision_patch`, or `exploration_exhausted`): an ACK without a delta is stored as a no-op and does not clear the obligation.".to_string()
+        }
+        _ => "Claim the selected executable todo before write-capable work. Execute only the selected action in the current worktree. Then use the LoopX CLI prefix to complete, update, block, or defer the selected todo and create a successor only when concrete follow-up remains.".to_string(),
+    };
     Ok(format!(
-        "You are the BitFun Agent executing one bounded LoopX-controlled work segment.\n\nLoopX CLI prefix for this task: `{cli_prefix}`\nThe BitFun runner already evaluated this turn's fresh quota guard. Do not run another scheduler or create another worktree.\n\nFollow the JSON contract below as the source of truth:\n<loopx_turn_contract>\n{contract_json}\n</loopx_turn_contract>\n\nClaim the selected executable todo before write-capable work. Execute only the selected action in the current worktree. Validate the real postcondition with tools; a prose claim is not evidence. Then use the LoopX CLI prefix to complete, update, block, or defer the selected todo and create a successor only when concrete follow-up remains. Run the contract's refresh-state writeback with these exact identity flags: `{binding_flags}`. {spend_instruction} BitFun owns wake, cancellation, UI projection, and scheduler application.\n\n{AGENT_SUMMARY_CONTRACT}"
+        "You are the BitFun Agent executing one bounded LoopX-controlled work segment.\n\nLoopX CLI prefix for this task: `{cli_prefix}`\nThe BitFun runner already evaluated this turn's fresh quota guard. Do not run another scheduler or create another worktree.\n\nFollow the JSON contract below as the source of truth:\n<loopx_turn_contract>\n{contract_json}\n</loopx_turn_contract>\n\n{work_clause} Validate the real postcondition with tools; a prose claim is not evidence. Run the contract's refresh-state writeback with these exact identity flags: `{binding_flags}`. {spend_instruction} BitFun owns wake, cancellation, UI projection, and scheduler application.\n\n{AGENT_SUMMARY_CONTRACT}"
     ))
 }
 
@@ -2783,12 +2845,42 @@ async fn run_port_command(
     args: Vec<OsString>,
     observer: &dyn LoopxProcessObserver,
 ) -> loopx_contract::LoopxCliResult<LoopxJsonOutput> {
+    run_port_command_raw(adapter, context, args, observer)
+        .await
+        .map_err(|error| raw_port_error_into(error, &context.call.operation_id))
+}
+
+/// Error surface of [`run_port_command_raw`]: either an already-typed port
+/// error (preflight/deadline) or the raw adapter error, which keeps the CLI's
+/// typed `ok:false` payload attached to a non-zero exit.
+enum RawPortError {
+    Port(loopx_contract::LoopxCliError),
+    Adapter(LoopxCliAdapterError),
+}
+
+fn raw_port_error_into(error: RawPortError, operation_id: &str) -> loopx_contract::LoopxCliError {
+    match error {
+        RawPortError::Port(error) => error,
+        RawPortError::Adapter(error) => map_port_error(error, operation_id),
+    }
+}
+
+/// Raw-error variant of [`run_port_command`]: callers that need to inspect the
+/// underlying [`LoopxCliAdapterError`] (for example to salvage a typed
+/// `ok:false` payload from a non-zero exit) use this instead.
+async fn run_port_command_raw(
+    adapter: &LoopxCliProcessAdapter,
+    context: &loopx_contract::LoopxCliGoalContext,
+    args: Vec<OsString>,
+    observer: &dyn LoopxProcessObserver,
+) -> Result<LoopxJsonOutput, RawPortError> {
     let operation_id = &context.call.operation_id;
     let deadline = effective_deadline(
         context.call.deadline_at,
         adapter.config.command_deadline,
         operation_id,
-    )?;
+    )
+    .map_err(RawPortError::Port)?;
     adapter
         .run_json_command(
             operation_id,
@@ -2799,7 +2891,41 @@ async fn run_port_command(
             observer,
         )
         .await
-        .map_err(|error| map_port_error(error, operation_id))
+        .map_err(RawPortError::Adapter)
+}
+
+/// Runs a `turn plan` inspection and projects its goal snapshot. When the
+/// pinned CLI exits 1 with the plan-exhausted replan-lineage contract error,
+/// the typed payload it printed is salvaged into the equivalent read-only
+/// `RunNow`-without-todo snapshot (with the open replan obligation id)
+/// instead of failing the operation: the host then drives one autonomous
+/// replan turn bound to that obligation, or parks the task when no
+/// obligation remains. Any other failure maps to the standard port error.
+async fn inspect_goal_snapshot(
+    adapter: &LoopxCliProcessAdapter,
+    goal_id: &str,
+    context: &loopx_contract::LoopxCliGoalContext,
+    args: Vec<OsString>,
+    observer: &dyn LoopxProcessObserver,
+) -> loopx_contract::LoopxCliResult<loopx_contract::LoopxCliGoalSnapshot> {
+    let operation_id = &context.call.operation_id;
+    match run_port_command_raw(adapter, context, args, observer).await {
+        Ok(output) => project_goal_snapshot(goal_id, &output.payload, operation_id),
+        Err(RawPortError::Port(error)) => Err(error),
+        Err(RawPortError::Adapter(error)) => {
+            let Some(payload) = salvage_replan_lineage_payload(&error) else {
+                return Err(map_port_error(error, operation_id));
+            };
+            log::warn!(
+                "LoopX turn plan projected the plan-exhausted replan frontier without a todo lineage; salvaging the typed payload: operation_id={} error=\"{}\"",
+                operation_id,
+                LOOPX_REPLAN_LINEAGE_ERROR
+            );
+            salvaged_replan_lineage_snapshot(goal_id, &payload, operation_id)
+                .map(|(snapshot, _)| snapshot)
+                .ok_or_else(|| map_port_error(error, operation_id))
+        }
+    }
 }
 
 async fn run_idempotent_global_command(
@@ -2837,6 +2963,102 @@ fn process_error_json(error: &LoopxCliAdapterError) -> Option<Value> {
         return None;
     };
     serde_json::from_str(&stdout_tail.join("\n")).ok()
+}
+
+/// The pinned LoopX v0.5.1 CLI renders its plan-exhausted replan frontier
+/// (every todo done or blocked, an open autonomous replan obligation, and no
+/// selected todo) as `route.kind=contract_error` on `turn plan`: host-bound
+/// routes demand a goal/agent/todo/action-hash lineage that a todo-less
+/// frontier cannot provide, so the CLI prints the typed `ok:false` payload and
+/// exits 1. This is the exact pinned-string marker for that projection.
+const LOOPX_REPLAN_LINEAGE_ERROR: &str =
+    "host-bound routes require goal, agent, todo, and action-hash lineage";
+
+/// Salvages the typed `turn plan` payload from the pinned CLI's
+/// replan-without-todo lineage contract error. Returns `None` for any other
+/// process failure so unrelated errors still surface unchanged. The caller
+/// must treat the result as read-only: the CLI already refused to execute, so
+/// nothing here writes goal state or fabricates a settlement.
+fn salvage_replan_lineage_payload(error: &LoopxCliAdapterError) -> Option<Value> {
+    let LoopxCliAdapterError::Process(LoopxProcessError::Exited {
+        payload: Some(payload),
+        ..
+    }) = error
+    else {
+        return None;
+    };
+    if payload.get("error").and_then(Value::as_str) != Some(LOOPX_REPLAN_LINEAGE_ERROR) {
+        return None;
+    }
+    let envelope = payload.get("turn_envelope")?;
+    // Only the plan-exhausted replan frontier is salvaged: the envelope must
+    // itself assert `should_run` with an open replan obligation and no
+    // selected todo. Any other host-route lineage failure keeps its error.
+    if envelope.get("should_run").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    let selected_todo = envelope
+        .pointer("/action/selected_todo/todo_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !selected_todo.is_empty() {
+        return None;
+    }
+    let obligation = envelope
+        .pointer("/replan_action_packet/obligation_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if obligation.is_empty() {
+        return None;
+    }
+    Some(payload.clone())
+}
+
+/// Projects the salvaged replan-lineage payload into the same read-only goal
+/// snapshot vocabulary `turn plan` uses on success. The frontier is actionable
+/// only through an autonomous replan, so the snapshot keeps `RunNow` with no
+/// open todo, no waiting user decision, no selected todo, and the open replan
+/// obligation id: the host's frontier handling then drives one bounded
+/// autonomous replan turn bound to that obligation.
+fn salvaged_replan_lineage_snapshot(
+    goal_id: &str,
+    payload: &Value,
+    operation_id: &str,
+) -> Option<(loopx_contract::LoopxCliGoalSnapshot, String)> {
+    let envelope = payload.get("turn_envelope")?;
+    let durable_revision = extract_durable_revision(payload, operation_id).ok()?;
+    let open_todo_count = envelope
+        .get("open_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let waiting_user_todo_count = envelope
+        .pointer("/user/open_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let obligation_id = envelope
+        .pointer("/replan_action_packet/obligation_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+    Some((
+        loopx_contract::LoopxCliGoalSnapshot {
+            goal_id: goal_id.to_string(),
+            state: loopx_contract::LoopxCliGoalState::Active,
+            durable_revision,
+            run_decision: loopx_contract::LoopxCliRunDecision::RunNow,
+            scheduler_hint_ms: scheduler_hint_ms(payload),
+            open_todo_count: open_todo_count.try_into().unwrap_or(u32::MAX),
+            waiting_user_todo_count: waiting_user_todo_count.try_into().unwrap_or(u32::MAX),
+            pending_user_gate: None,
+            selected_todo: None,
+            pending_replan_obligation_id: Some(obligation_id.clone()),
+            envelope_over_budget: envelope
+                .pointer("/compaction/within_budget")
+                .and_then(Value::as_bool)
+                == Some(false),
+        },
+        obligation_id,
+    ))
 }
 
 /// Maps the host-resolved remote state onto the state vocabulary LoopX's
@@ -3863,6 +4085,11 @@ fn project_goal_snapshot(
             .unwrap_or(u32::MAX),
         pending_user_gate: None,
         selected_todo: project_selected_todo(envelope),
+        pending_replan_obligation_id: envelope
+            .pointer("/replan_action_packet/obligation_id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
         envelope_over_budget: envelope
             .pointer("/compaction/within_budget")
             .and_then(Value::as_bool)
@@ -4147,6 +4374,7 @@ fn map_port_error(
             code,
             stdout_tail,
             stderr_tail,
+            ..
         }) if !stderr_tail.is_empty() || !stdout_tail.is_empty() => {
             let details = if stderr_tail.is_empty() {
                 stdout_tail

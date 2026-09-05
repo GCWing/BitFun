@@ -329,7 +329,9 @@ test('thin client boots from host state and completes the confirmed intake flow'
 
   try {
     window.eval(ui);
-    await waitFor(() => window.document.querySelectorAll('#log-list .log-row').length === 3, 'initial rendering');
+    // The merged timeline renders one compact block per output kind: the
+    // turn's thinking summary block plus the running tool block.
+    await waitFor(() => window.document.querySelectorAll('#log-list .log-row').length === 2, 'initial rendering');
 
     assert.deepEqual(callOrder.slice(0, 2), ['onEvent', 'attach']);
     assert.deepEqual(plain(attachRequests[0]), {});
@@ -427,10 +429,16 @@ test('thin client boots from host state and completes the confirmed intake flow'
     );
     assert.match(window.document.querySelector('#candidate-list').textContent, /Keep LoopX tasks alive/);
     assert.equal(window.document.querySelector('input[name="candidate"]').checked, true);
+    // High-risk scopes render unchecked by default but the intake gate now
+    // requires an explicit grant of every preview scope before creation:
+    // simulate the owner checking `publish` before confirming.
     assert.equal(
       window.document.querySelector('input[name="permission"][value="publish"]').checked,
       false,
     );
+    const publishGrant = window.document.querySelector('input[name="permission"][value="publish"]');
+    publishGrant.checked = true;
+    publishGrant.dispatchEvent(new window.Event('change', { bubbles: true }));
     assert.deepEqual(plain(storedHistory), [[
       'loopx.intakeHistory',
       ['https://github.com/GCWing/BitFun/issues/2382'],
@@ -452,6 +460,7 @@ test('thin client boots from host state and completes the confirmed intake flow'
       'workspace_read',
       'workspace_write',
       'agent_execution',
+      'publish',
     ]);
     assert.equal(createRequests[0].modelId, 'primary');
     assert.equal(createRequests[0].retryTerminal, false);
@@ -461,10 +470,10 @@ test('thin client boots from host state and completes the confirmed intake flow'
       window.document.querySelector('[data-task-id="task-2382-1"]').getAttribute('aria-pressed'),
       'true',
     );
-    // The creation flow focuses the task logs in the issue workspace; the
-    // progress panel still renders for the selected task.
+    // The creation flow focuses the task logs in the issue workspace; a
+    // running task renders no decision card (only waiting/recovery states do).
     assert.equal(window.document.querySelector('#issue-view').hidden, false);
-    assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
+    assert.equal(window.document.querySelector('#issue-decision-card').hidden, true);
     assert.deepEqual(forbiddenAccesses, []);
     assert.deepEqual(jsdomErrors, []);
   } finally {
@@ -606,20 +615,22 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     );
 
     assert.equal(window.document.querySelectorAll('#task-items .task-group').length, 0);
+    // The rail reads in actual execution order: running first, then the
+    // queue, then parked/awaiting-owner tasks, then finished work.
     assert.deepEqual(
       [...window.document.querySelectorAll('#task-items .task-item')].map((item) => item.dataset.taskId),
-      ['task-running', 'task-waiting', 'task-queued', 'task-failed', 'task-resolved-upstream'],
+      ['task-running', 'task-queued', 'task-waiting', 'task-failed', 'task-resolved-upstream'],
     );
     assert.equal(window.document.querySelector('#repository-actions').hidden, false);
     assert.match(window.document.querySelector('#resume-repository').textContent, /repository tasks \(1\)/i);
     assert.match(
       window.document.querySelector('[data-task-id="task-waiting"]').textContent,
-      /Awaiting approval/,
+      /Pending approval/,
     );
     assert.equal(window.document.querySelector('#approval-alert').hidden, false);
     assert.match(
       window.document.querySelector('[data-task-id="task-failed"]').textContent,
-      /Interrupted/,
+      /Pending recovery/,
     );
     window.document.querySelector('#reset-loopx').click();
     assert.equal(window.document.querySelector('#reset-loopx-dialog').open, true);
@@ -628,10 +639,16 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     assert.equal(window.document.querySelector('#reset-loopx-dialog').open, false);
 
     window.document.querySelector('[data-task-id="task-waiting"]').click();
-    assert.equal(window.document.querySelector('#issue-progress-panel').hidden, false);
+    // The waiting task renders the decision card mirroring the pending gate;
+    // the stale five-stage pipeline projection is gone.
+    assert.equal(window.document.querySelector('#issue-decision-card').hidden, false);
     assert.match(
-      window.document.querySelector('#issue-progress-summary').textContent,
-      /five stages/i,
+      window.document.querySelector('#issue-decision-card').textContent,
+      /Needs your decision/i,
+    );
+    assert.match(
+      window.document.querySelector('#issue-decision-card').textContent,
+      /Approve repository write scope for the issue repair/i,
     );
     assert.equal(window.document.querySelector('#issue-description-panel').hidden, false);
     await waitFor(
@@ -663,10 +680,9 @@ test('task rail is flat and exposes one repository recovery action', async () =>
     assert.equal(resolvedButton.dataset.state, 'completed');
     resolvedButton.click();
     assert.equal(window.document.querySelector('#issue-state-pill').textContent, 'Resolved upstream');
-    assert.match(
-      window.document.querySelector('#issue-progress-summary').textContent,
-      /The repair workflow is complete/i,
-    );
+    // Resolved-upstream tasks render no decision card; the summary carries
+    // the closure conclusion.
+    assert.equal(window.document.querySelector('#issue-decision-card').hidden, true);
     assert.match(window.document.querySelector('#issue-summary').textContent, /covered-upstream no-follow-up/i);
     assert.equal(window.document.querySelector('#task-actions button'), null);
     assert.deepEqual(jsdomErrors, []);

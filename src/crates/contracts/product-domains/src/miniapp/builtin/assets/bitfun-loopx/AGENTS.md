@@ -74,10 +74,22 @@ durable readback 为准，禁止用本地计数、transcript 或 UI 状态覆盖
    successor，执行 `refresh-state`，最后才以同一 identity spend quota。
 6. Agent terminal 后，宿主只读 `turn plan` 与 history，核验完全匹配的
    `goal_id + agent_id + turn_id + selected todo/replan obligation` durable writeback 和 quota
-   receipt。任何缺失或错绑都进入显式 recovery。
+   receipt。durable writeback 缺失或错绑进入显式 recovery（NoDurableProgress 先走一次
+   corrective turn）；cancelled/interrupted turn 的 RetryRequired 同样进显式 recovery，
+   宿主不得在 owner 打断后静默续跑。只有 Completed turn 的 RetryRequired（写回已验证、
+   仅 quota 回执缺失，即 CLI 假阴性结算；终局 frontier 下 guard 拒绝放行、无法补跑
+   turn）例外：宿主按结算后 Goal 投影决定下一状态，并落一条重要 task event 记录回执
+   缺失；宿主不补写、不伪造回执，也不得静默丢弃该记录。
 7. 只有 LoopX 投影 `Complete` 或 `Archived` 时，host task 才能 Completed。
-   `RunNow + 0 open todo` 是合同矛盾，必须 recovery；禁止宿主调用 `goal-lifecycle stop`
-   来伪造终局。
+   计划耗尽时（无 open todo、无 selected todo、无 waiting gate）CLI v0.5.1 会投影
+   `should_run=true` 并携带 `replan_action_packet.obligation_id`：宿主必须驱动一轮绑定该
+   obligation 的 autonomous replan turn（quota guard 放行，settlement 按
+   `autonomous_replan` effect id 核验），由 agent 写回 successor todo、typed 终局
+   （如 `coverage_backed_no_followup` + vision 闭环）或新 concrete blocker；CLI 的
+   replan stall 机制约束连续空转。只有 `RunNow + 0 open todo` 且无 open replan
+   obligation 才是合同矛盾，必须 park（`plan_exhausted`）等 owner 决策；禁止宿主调用
+   `goal-lifecycle stop` 来伪造终局。（2026-09-05 五 issue 实测修正：旧版把带 obligation
+   的耗尽态一律当矛盾处理，导致 0/5 全部停在 recovery，goal 无法自主收尾。）
 
 re-entry instruction 必须稳定且轻量，不得缓存 todo 列表、cadence、project policy、上一轮
 摘要或 raw transcript。`last_agent_summary` 仅用于 UI，不参与执行、settlement 或恢复判断。

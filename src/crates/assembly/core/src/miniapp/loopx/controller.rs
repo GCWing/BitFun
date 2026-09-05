@@ -35,7 +35,21 @@ const TURN_CONFLICT_RETRY_MS: u64 = 5_000;
 /// NoDurableProgress settlement. The note routes the agent through the LoopX
 /// CLI write boundary so settlement can validate the writeback; it never
 /// fabricates goal state on the agent's behalf.
-const LOOPX_DURABLE_COMPENSATION_NOTE: &str = "The previous turn finished, but LoopX settlement reported no validated durable progress. Re-submit the pending vision and resolution artifacts through the LoopX CLI write boundary (`loopx refresh-state`) so they are recorded inside the goal workspace; do not write these artifacts to paths outside the workspace such as the system temp directory. When the writeback receipts are confirmed, end the turn so settlement can validate them.";
+const LOOPX_DURABLE_COMPENSATION_NOTE: &str = "The previous turn finished, but LoopX settlement reported no validated durable progress. Re-submit the pending vision and resolution artifacts through the LoopX CLI write boundary (`loopx refresh-state`) so they are recorded inside the goal workspace; do not write these artifacts to paths outside the workspace such as the system temp directory. If the previous turn modified product source files under the worktree but did not commit them, commit those product changes to the task branch with a descriptive message before ending the turn (leave `.loopx`/`.codex` bookkeeping out of the commit). When the writeback receipts are confirmed, end the turn so settlement can validate them.";
+
+/// `recovery_reason` for a Goal that is still Active after its plan ran dry:
+/// no open todo, no waiting user decision, and no selected action remain, so
+/// the host contract forbids fabricating a terminal transition. The task
+/// parks with this explicit reason (instead of a generic execution failure)
+/// so the recovery card can explain the plan is exhausted and guide the
+/// owner: resume once the Goal gains a new todo or gate, or finish the
+/// delivery manually from the task branch.
+const LOOPX_PLAN_EXHAUSTED_REASON: &str = "plan_exhausted";
+
+/// Owner-facing message persisted on the task when the RunNow frontier is
+/// exhausted. Kept in English because the same text is host telemetry; the
+/// MiniApp renders localized guidance keyed off `recovery_reason`.
+const LOOPX_PLAN_EXHAUSTED_MESSAGE: &str = "LoopX goal is still active but its plan is exhausted: no open todo, no waiting user decision, and no selected action remain. BitFun does not fabricate a terminal Goal transition, so the task parks for an owner decision; the worktree, evidence, and any commits are preserved. Resume after the goal gains a new todo or gate (for example after an upstream PR merge), or finish the delivery manually from the task branch.";
 
 struct ScheduledTask {
     task_id: String,
@@ -1756,10 +1770,50 @@ impl LoopxController {
                     inspected.waiting_user_todo_count,
                     has_selected_todo,
                 ) {
-                    return Err(
-                        "LoopX allowed execution without an open todo; refusing to invent a terminal Goal transition"
-                            .to_string(),
+                    // Runtime-data correction (2026-09-05 five-issue run): the
+                    // pinned CLI v0.5.1 does NOT treat a todo-less `RunNow`
+                    // frontier as terminal. When every todo is done or blocked
+                    // and the goal vision is still open, it projects
+                    // `should_run=true` plus an autonomous replan obligation
+                    // and expects the host to drive one bounded replan turn
+                    // bound to that obligation: the agent then writes back a
+                    // successor todo, a typed terminal outcome (for example
+                    // `coverage_backed_no_followup`, after which the goal
+                    // projects Complete), or a concrete blocker. The quota
+                    // guard admits exactly that turn and the settlement
+                    // validates it by the `autonomous_replan` effect id.
+                    // Parking here stranded every task of the five-issue run
+                    // before any goal could close.
+                    let replan_frontier = todoless_run_now_frontier(
+                        inspected.pending_replan_obligation_id.as_deref(),
                     );
+                    if replan_frontier == TodolessRunNowFrontier::DriveReplanTurn {
+                        log::info!(
+                            "LoopX plan exhausted with an open autonomous replan obligation; driving one replan turn: task_id={} goal={} obligation={}",
+                            task_id,
+                            inspected.goal_id,
+                            inspected.pending_replan_obligation_id.as_deref().unwrap_or("-"),
+                        );
+                        // Fall through to the normal turn build below: the
+                        // guard produces the `AutonomousReplan` binding and
+                        // the re-entry instruction carries the replan flags.
+                    } else {
+                        // True contradiction: no open todo, no waiting user
+                        // decision, no selected action, and no replan
+                        // obligation the CLI would let the host drive. Park
+                        // with an explicit reason so the recovery card can
+                        // explain the plan is exhausted and guide the owner.
+                        // The task keeps its worktree, evidence, and commits,
+                        // and the repository slot yields to queued siblings.
+                        if task.state == LoopxTaskState::RecoveryRequired
+                            && task.recovery_reason.as_deref() == Some(LOOPX_PLAN_EXHAUSTED_REASON)
+                        {
+                            // Already parked with this exact diagnosis; do not
+                            // churn another transition/event on a re-drive.
+                            return Ok(());
+                        }
+                        return self.park_plan_exhausted(&task, &inspected.goal_id).await;
+                    }
                 }
                 if inspected.envelope_over_budget {
                     let message = "LoopX turn envelope exceeded its compaction budget (route contract_error); the Goal durable state for this Issue must shrink before work can resume. BitFun keeps the task queued and retries with backoff.";
@@ -2569,42 +2623,39 @@ impl LoopxController {
         failure_summary: Option<&str>,
         blocks_repository: bool,
     ) -> Result<(), String> {
-        let post_settlement_goal = if agent_status != LoopxAgentTurnStatus::Failed
-            && matches!(
-                settlement.status,
-                LoopxCliSettlementStatus::Settled | LoopxCliSettlementStatus::AlreadySettled
-            ) {
-            let runtime = self.runtime(&task.task_id).await;
-            let progress = BufferedProgress::default();
-            let inspected = self
-                .cli
-                .inspect_goal(
-                    LoopxCliInspectGoalRequest {
-                        context: self.goal_context(task, &runtime),
-                        goal_id: task.goal_id.clone().unwrap_or_default(),
-                        agent_id: task
-                            .agent_id
-                            .clone()
-                            .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string()),
-                    },
-                    &progress,
-                )
-                .await;
-            self.record_progress(progress.take()).await?;
-            match inspected {
-                Ok(snapshot) => Some(snapshot),
-                Err(error) => {
-                    log::warn!(
-                        "LoopX post-settlement Goal inspection failed: task_id={}, error={}",
-                        task.task_id,
-                        error
-                    );
-                    None
+        let post_settlement_goal =
+            if inspects_goal_after_settlement(agent_status, settlement.status) {
+                let runtime = self.runtime(&task.task_id).await;
+                let progress = BufferedProgress::default();
+                let inspected = self
+                    .cli
+                    .inspect_goal(
+                        LoopxCliInspectGoalRequest {
+                            context: self.goal_context(task, &runtime),
+                            goal_id: task.goal_id.clone().unwrap_or_default(),
+                            agent_id: task
+                                .agent_id
+                                .clone()
+                                .unwrap_or_else(|| DEFAULT_AGENT_ID.to_string()),
+                        },
+                        &progress,
+                    )
+                    .await;
+                self.record_progress(progress.take()).await?;
+                match inspected {
+                    Ok(snapshot) => Some(snapshot),
+                    Err(error) => {
+                        log::warn!(
+                            "LoopX post-settlement Goal inspection failed: task_id={}, error={}",
+                            task.task_id,
+                            error
+                        );
+                        None
+                    }
                 }
-            }
-        } else {
-            None
-        };
+            } else {
+                None
+            };
         // A NoDurableProgress settlement after a healthy agent turn usually
         // means the workflow produced its artifacts outside the CLI write
         // boundary (for example files under the system temp directory), so
@@ -2698,6 +2749,30 @@ impl LoopxController {
             updated.phase,
             settlement.status
         );
+        // Loud, auditable degradation for the false-negative settlement:
+        // the durable writeback validated and the Goal projection decided
+        // the next state, but the turn's quota spend receipt is permanently
+        // missing. The host neither retries nor fabricates the receipt; the
+        // loss is recorded as a task event so it stays visible in the
+        // timeline and telemetry. Cancelled/interrupted turns and failed
+        // post-settlement inspections keep the loud recovery card instead.
+        if agent_status == LoopxAgentTurnStatus::Completed
+            && settlement.status == LoopxCliSettlementStatus::RetryRequired
+            && post_settlement_goal.is_some()
+        {
+            let message = format!(
+                "LoopX settlement for turn {} reported RetryRequired: the durable writeback validated but the quota spend receipt is missing; the task continues from the authoritative Goal projection ({:?}). The receipt is not retried or fabricated by the host.",
+                settlement.turn_id,
+                updated.state
+            );
+            log::warn!(
+                "LoopX settlement quota receipt missing, continuing from goal projection: task_id={} turn={}",
+                updated.task_id,
+                settlement.turn_id
+            );
+            self.append_task_event(&updated, LoopxEventKind::SettlementRecorded, &message, true)
+                .await?;
+        }
         let yielded_repository;
         if agent_status == LoopxAgentTurnStatus::Failed {
             let reason = failure_summary.unwrap_or("Agent turn failed");
@@ -3510,6 +3585,47 @@ impl LoopxController {
         Ok(())
     }
 
+    /// Parks a task whose Goal is still Active after its plan ran dry. This
+    /// is the mandated recovery for the `RunNow + 0 open todo` frontier
+    /// contradiction: the host never fabricates a terminal Goal transition.
+    /// Unlike [`Self::fail_task`] it records an explicit, stable reason
+    /// (`plan_exhausted`) so the recovery card can offer targeted guidance
+    /// instead of a generic execution failure, and it still yields the
+    /// repository slot to queued sibling issues.
+    async fn park_plan_exhausted(
+        self: &Arc<Self>,
+        task: &LoopxTaskSnapshot,
+        goal_id: &str,
+    ) -> Result<(), String> {
+        log::warn!(
+            "LoopX plan exhausted, parking for owner decision: task_id={} goal={}",
+            task.task_id,
+            goal_id
+        );
+        let message = LOOPX_PLAN_EXHAUSTED_MESSAGE;
+        let updated = self
+            .mutate_task(&task.task_id, None, |current, _| {
+                current.state = LoopxTaskState::RecoveryRequired;
+                current.phase = LoopxPhase::Recovering;
+                current.recovery_reason = Some(LOOPX_PLAN_EXHAUSTED_REASON.to_string());
+                current.error = Some(message.to_string());
+                current.pending_gate_id = None;
+                current.pending_gate_message = None;
+                current.pending_gate_action_kind = None;
+                current.deadline_at = None;
+                current.revision = current.revision.saturating_add(1);
+            })
+            .await?;
+        self.append_task_event(&updated, LoopxEventKind::StateChanged, message, true)
+            .await?;
+        self.schedule_next_for_repository(
+            &updated.identity.item.repository.canonical_id(),
+            Some(&updated.task_id),
+        )
+        .await;
+        Ok(())
+    }
+
     /// Best-effort cleanup of the task's on-disk worktree. Called only from
     /// the explicit Archive action; failure is recorded as an event, never
     /// fatal to the transition.
@@ -3808,6 +3924,43 @@ fn bound_workspace_missing(task: &LoopxTaskSnapshot) -> bool {
 fn is_repository_recovery_candidate(task: &LoopxTaskSnapshot, repository_id: &str) -> bool {
     decide_repository_recovery_candidate(task, repository_id)
 }
+/// Whether `apply_settlement` should re-inspect the durable Goal after a
+/// settlement before deciding the task's next state.
+///
+/// `Settled`/`AlreadySettled` keep today's behavior (any non-failed agent
+/// status). `RetryRequired` from a COMPLETED turn is the pinned CLI's
+/// false-negative settlement: the durable writeback matched but the quota
+/// spend receipt is missing (observed live 2026-09-05 on dsh-desktop#830,
+/// whose final onboarding turn closed the goal vision but skipped
+/// `quota spend-slot`), so the authoritative Goal projection — not the
+/// missing bookkeeping receipt — decides what happens next, and a
+/// corrective turn is not an option because a terminal frontier refuses
+/// the quota guard. `RetryRequired` from a cancelled or interrupted turn
+/// keeps the explicit recovery path: the owner interrupted that turn, so
+/// the host does not silently re-drive it. A failed agent turn and
+/// `NoDurableProgress` (no validated writeback) keep their existing paths.
+fn inspects_goal_after_settlement(
+    agent_status: LoopxAgentTurnStatus,
+    settlement_status: LoopxCliSettlementStatus,
+) -> bool {
+    match settlement_status {
+        LoopxCliSettlementStatus::Settled | LoopxCliSettlementStatus::AlreadySettled => {
+            agent_status != LoopxAgentTurnStatus::Failed
+        }
+        LoopxCliSettlementStatus::RetryRequired => agent_status == LoopxAgentTurnStatus::Completed,
+        LoopxCliSettlementStatus::NoDurableProgress | LoopxCliSettlementStatus::GoalCompleted => {
+            false
+        }
+    }
+}
+
+/// Decides the task state after a turn settlement. When the post-settlement
+/// Goal inspection produced a snapshot, the CLI's authoritative projection
+/// wins: this covers normal settled turns and the false-negative
+/// `RetryRequired` settlement (validated writeback, missing quota receipt;
+/// see [`inspects_goal_after_settlement`]). Without a snapshot (inspection
+/// failed or not attempted), the settlement status alone decides — missing
+/// durable progress or a missing receipt then parks in explicit recovery.
 fn task_state_after_settlement(
     agent_status: LoopxAgentTurnStatus,
     settlement_status: LoopxCliSettlementStatus,
@@ -3843,6 +3996,32 @@ fn run_now_is_frontier_contradiction(
     has_selected_todo: bool,
 ) -> bool {
     open_todo_count == 0 && waiting_user_todo_count == 0 && !has_selected_todo
+}
+
+/// What the host does with a todo-less `RunNow` frontier. Runtime-data
+/// correction (2026-09-05 five-issue run): the pinned CLI v0.5.1 projects
+/// `should_run=true` with an autonomous replan obligation when the plan runs
+/// dry, and expects the host to drive one bounded replan turn bound to that
+/// obligation — parking there stranded every task of that run. Only a
+/// todo-less frontier WITHOUT an open obligation is a contract contradiction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TodolessRunNowFrontier {
+    /// Drive one autonomous replan turn bound to the open obligation: the
+    /// agent writes back a successor todo, a typed terminal outcome, or a
+    /// concrete blocker; settlement validates by the `autonomous_replan`
+    /// effect id and the CLI's replan stall threshold bounds no-op cycles.
+    DriveReplanTurn,
+    /// No actionable frontier remains: park with `plan_exhausted` for an
+    /// owner decision.
+    Park,
+}
+
+fn todoless_run_now_frontier(pending_replan_obligation_id: Option<&str>) -> TodolessRunNowFrontier {
+    if pending_replan_obligation_id.is_some_and(|value| !value.trim().is_empty()) {
+        TodolessRunNowFrontier::DriveReplanTurn
+    } else {
+        TodolessRunNowFrontier::Park
+    }
 }
 
 /// Read-only LoopX user gates: public issue/comment metadata access is
@@ -4100,6 +4279,71 @@ mod tests {
         assert!(run_now_is_frontier_contradiction(0, 0, false));
         assert!(!run_now_is_frontier_contradiction(2, 0, false));
         assert!(!run_now_is_frontier_contradiction(0, 1, false));
+    }
+
+    #[test]
+    fn todoless_run_now_frontier_drives_a_replan_turn_only_with_an_obligation() {
+        // Runtime-data correction (2026-09-05 five-issue run): the pinned CLI
+        // projects the plan-exhausted frontier as RunNow + replan obligation,
+        // expecting the host to drive one replan turn. Parking there stranded
+        // all five tasks in recovery before any goal could close.
+        assert_eq!(
+            todoless_run_now_frontier(Some("replan-d4066f99c1ea4b11")),
+            TodolessRunNowFrontier::DriveReplanTurn,
+        );
+        // A todo-less RunNow frontier without an obligation is the real
+        // contract contradiction: park for an owner decision.
+        assert_eq!(
+            todoless_run_now_frontier(None),
+            TodolessRunNowFrontier::Park,
+        );
+        assert_eq!(
+            todoless_run_now_frontier(Some("")),
+            TodolessRunNowFrontier::Park,
+        );
+        assert_eq!(
+            todoless_run_now_frontier(Some("   ")),
+            TodolessRunNowFrontier::Park,
+        );
+    }
+
+    #[test]
+    fn retry_required_from_a_completed_turn_recovers_from_the_goal_projection() {
+        // The false-negative settlement (observed live on dsh-desktop#830):
+        // a completed turn validated its durable writeback but skipped the
+        // quota spend. The Goal projection — not the missing receipt — must
+        // decide the next state, because a terminal frontier refuses the
+        // quota guard and no corrective turn can run.
+        assert!(inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Completed,
+            LoopxCliSettlementStatus::RetryRequired,
+        ));
+        // Cancelled/interrupted turns keep the explicit recovery path: the
+        // owner interrupted that turn, so the host must not silently
+        // re-drive it from the projection.
+        assert!(!inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Cancelled,
+            LoopxCliSettlementStatus::RetryRequired,
+        ));
+        assert!(!inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Interrupted,
+            LoopxCliSettlementStatus::RetryRequired,
+        ));
+        // Settled turns keep today's projection-driven handling for any
+        // non-failed agent status; failed turns and missing writebacks keep
+        // their existing explicit paths.
+        assert!(inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Cancelled,
+            LoopxCliSettlementStatus::Settled,
+        ));
+        assert!(!inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Failed,
+            LoopxCliSettlementStatus::Settled,
+        ));
+        assert!(!inspects_goal_after_settlement(
+            LoopxAgentTurnStatus::Completed,
+            LoopxCliSettlementStatus::NoDurableProgress,
+        ));
     }
 
     #[test]
