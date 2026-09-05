@@ -3706,6 +3706,10 @@ test('desktop preview rebuild inputs use the current crate layout', async () => 
     devScript,
     /'src', 'crates', '(?:core|transport|events|ai-adapters|webdriver|api-layer|assembly|adapters|contracts|execution|interfaces|services)'/,
   );
+  assert.match(
+    devScript,
+    /service\$\{path\.sep\}announcement\$\{path\.sep\}content/,
+  );
 });
 
 test('split core boundary check keeps self-test execution behavior', () => {

@@ -30,12 +30,11 @@ impl AnnouncementStateStore {
 fn map_state_store_error(
     err: openbitfun_services_integrations::announcement::AnnouncementStateStoreError,
 ) -> OpenBitFunError {
-    match err {
-        openbitfun_services_integrations::announcement::AnnouncementStateStoreError::Io(err) => {
-            OpenBitFunError::Io(err)
-        }
-        openbitfun_services_integrations::announcement::AnnouncementStateStoreError::Serialization(
-            err,
-        ) => OpenBitFunError::Serialization(err),
+    if err.is_deserialization() {
+        OpenBitFunError::Deserialization(err.to_string())
+    } else if err.is_serialization() {
+        OpenBitFunError::serialization(err.to_string())
+    } else {
+        OpenBitFunError::io(err.to_string())
     }
 }

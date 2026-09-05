@@ -104,6 +104,25 @@ pub enum ModalSize {
     Xl,
 }
 
+/// Visual treatment used by a modal.
+///
+/// The standard presentation remains the wire-compatible default. Bespoke,
+/// release-bound presentations must opt in explicitly so ordinary and remote
+/// announcements never inherit product-specific UI accidentally.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModalPresentation {
+    #[default]
+    Standard,
+    ReleaseLetter,
+}
+
+impl ModalPresentation {
+    fn is_standard(&self) -> bool {
+        matches!(self, Self::Standard)
+    }
+}
+
 /// What happens when the user finishes or closes the modal.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -163,6 +182,8 @@ pub struct ModalPage {
 pub struct ModalConfig {
     #[serde(default)]
     pub size: ModalSize,
+    #[serde(default, skip_serializing_if = "ModalPresentation::is_standard")]
+    pub presentation: ModalPresentation,
     /// Allow the user to close the modal with the × button.
     #[serde(default = "default_true")]
     pub closable: bool,

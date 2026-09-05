@@ -61,6 +61,7 @@ export interface ToastConfig {
 }
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
+export type ModalPresentation = 'standard' | 'release_letter';
 export type CompletionAction = 'dismiss' | 'never_show_again';
 export type PageLayout = 'text_only' | 'media_left' | 'media_right' | 'media_top' | 'fullscreen_media';
 export type MediaType = 'lottie' | 'video' | 'image' | 'gif';
@@ -80,6 +81,8 @@ export interface ModalPage {
 
 export interface ModalConfig {
   size: ModalSize;
+  /** Omitted by older payloads and by the standard Rust wire representation. */
+  presentation?: ModalPresentation;
   closable: boolean;
   pages: ModalPage[];
   completion_action: CompletionAction;

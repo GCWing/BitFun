@@ -15,8 +15,8 @@
 //!   separate modal pages, each with its own `# Heading` title.
 
 use super::types::{
-    AnnouncementCard, CardSource, CardType, CompletionAction, ModalConfig, ModalPage, ModalSize,
-    PageLayout, ToastConfig, TriggerCondition, TriggerRule,
+    AnnouncementCard, CardSource, CardType, CompletionAction, ModalConfig, ModalPage,
+    ModalPresentation, ModalSize, PageLayout, ToastConfig, TriggerCondition, TriggerRule,
 };
 
 include!(concat!(env!("OUT_DIR"), "/embedded_announcements.rs"));
@@ -37,6 +37,10 @@ struct TipFrontMatter {
 #[derive(Debug)]
 struct FeatureFrontMatter {
     id: String,
+    /// `feature` | `news` | `announcement` (default: feature)
+    card_type: String,
+    /// Exact application version for which this card is eligible.
+    app_version: Option<String>,
     /// `version_first_open` | `always` | `manual` (default: version_first_open)
     trigger: String,
     once_per_version: bool,
@@ -44,6 +48,8 @@ struct FeatureFrontMatter {
     toast_title: String,
     toast_desc: String,
     modal_size: String,
+    /// `standard` | `release_letter` (default: standard)
+    modal_presentation: String,
     completion_action: String,
     auto_dismiss_ms: Option<u64>,
     priority: i32,
@@ -103,12 +109,15 @@ fn parse_tip_front_matter(fm: &str) -> Option<TipFrontMatter> {
 
 fn parse_feature_front_matter(fm: &str) -> Option<FeatureFrontMatter> {
     let mut id = String::new();
+    let mut card_type = "feature".to_string();
+    let mut app_version: Option<String> = None;
     let mut trigger = "version_first_open".to_string();
     let mut once_per_version = true;
     let mut delay_ms: u64 = 2000;
     let mut toast_title = String::new();
     let mut toast_desc = String::new();
     let mut modal_size = "lg".to_string();
+    let mut modal_presentation = "standard".to_string();
     let mut completion_action = "never_show_again".to_string();
     let mut auto_dismiss_ms: Option<u64> = None;
     let mut priority: i32 = 0;
@@ -117,12 +126,17 @@ fn parse_feature_front_matter(fm: &str) -> Option<FeatureFrontMatter> {
         if let Some((k, v)) = parse_kv(line) {
             match k {
                 "id" => id = v.to_string(),
+                "card_type" => card_type = v.to_string(),
+                "app_version" => {
+                    app_version = (!v.is_empty()).then(|| v.to_string());
+                }
                 "trigger" => trigger = v.to_string(),
                 "once_per_version" => once_per_version = v == "true",
                 "delay_ms" => delay_ms = v.parse().unwrap_or(2000),
                 "toast_title" => toast_title = v.to_string(),
                 "toast_desc" => toast_desc = v.to_string(),
                 "modal_size" => modal_size = v.to_string(),
+                "modal_presentation" => modal_presentation = v.to_string(),
                 "completion_action" => completion_action = v.to_string(),
                 "auto_dismiss_ms" => auto_dismiss_ms = v.parse().ok(),
                 "priority" => priority = v.parse().unwrap_or(0),
@@ -136,12 +150,15 @@ fn parse_feature_front_matter(fm: &str) -> Option<FeatureFrontMatter> {
     }
     Some(FeatureFrontMatter {
         id,
+        card_type,
+        app_version,
         trigger,
         once_per_version,
         delay_ms,
         toast_title,
         toast_desc,
         modal_size,
+        modal_presentation,
         completion_action,
         auto_dismiss_ms,
         priority,
@@ -206,6 +223,12 @@ fn build_tip_card(fm: TipFrontMatter, body: &str) -> AnnouncementCard {
 }
 
 fn build_feature_card(fm: FeatureFrontMatter, body: &str) -> AnnouncementCard {
+    let card_type = match fm.card_type.as_str() {
+        "announcement" => CardType::Announcement,
+        "news" => CardType::News,
+        _ => CardType::Feature,
+    };
+
     let trigger_condition = match fm.trigger.as_str() {
         "always" => TriggerCondition::Always,
         "manual" => TriggerCondition::Manual,
@@ -217,6 +240,11 @@ fn build_feature_card(fm: FeatureFrontMatter, body: &str) -> AnnouncementCard {
         "md" => ModalSize::Md,
         "xl" => ModalSize::Xl,
         _ => ModalSize::Lg,
+    };
+
+    let modal_presentation = match fm.modal_presentation.as_str() {
+        "release_letter" => ModalPresentation::ReleaseLetter,
+        _ => ModalPresentation::Standard,
     };
 
     let completion_action = match fm.completion_action.as_str() {
@@ -240,9 +268,9 @@ fn build_feature_card(fm: FeatureFrontMatter, body: &str) -> AnnouncementCard {
 
     AnnouncementCard {
         id: fm.id,
-        card_type: CardType::Feature,
+        card_type,
         source: CardSource::Local,
-        app_version: None,
+        app_version: fm.app_version,
         priority: fm.priority,
         trigger: TriggerRule {
             condition: trigger_condition,
@@ -262,6 +290,7 @@ fn build_feature_card(fm: FeatureFrontMatter, body: &str) -> AnnouncementCard {
         } else {
             Some(ModalConfig {
                 size: modal_size,
+                presentation: modal_presentation,
                 closable: true,
                 completion_action,
                 pages,
@@ -331,4 +360,46 @@ pub fn load_features(locale: &str) -> Vec<AnnouncementCard> {
             Some(build_feature_card(fm, body))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn release_letter(locale: &str) -> AnnouncementCard {
+        load_features(locale)
+            .into_iter()
+            .find(|card| card.id == "release_letter_1_0_0")
+            .expect("release letter should be embedded for every supported locale")
+    }
+
+    #[test]
+    fn release_letter_is_an_exact_version_direct_announcement() {
+        let card = release_letter("zh-CN");
+
+        assert_eq!(card.card_type, CardType::Announcement);
+        assert_eq!(card.source, CardSource::Local);
+        assert_eq!(card.app_version.as_deref(), Some("1.0.0"));
+        assert_eq!(card.priority, 1000);
+        assert!(matches!(card.trigger.condition, TriggerCondition::Always));
+        assert!(card.trigger.once_per_version);
+        assert_eq!(card.trigger.delay_ms, 0);
+        assert!(matches!(
+            card.modal.as_ref().map(|modal| &modal.presentation),
+            Some(ModalPresentation::ReleaseLetter)
+        ));
+    }
+
+    #[test]
+    fn release_letter_copy_exists_for_all_supported_locales() {
+        let zh_cn = release_letter("zh-CN");
+        let en_us = release_letter("en-US");
+        let zh_tw = release_letter("zh-TW");
+
+        assert!(zh_cn.modal.unwrap().pages[0].body.contains("用它创造"));
+        assert!(en_us.modal.unwrap().pages[0]
+            .body
+            .contains("Create with it"));
+        assert!(zh_tw.modal.unwrap().pages[0].body.contains("用它創造"));
+    }
 }

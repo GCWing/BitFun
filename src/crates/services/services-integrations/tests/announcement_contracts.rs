@@ -2,13 +2,17 @@
 
 use openbitfun_services_integrations::announcement::{
     AnnouncementCard, AnnouncementRemoteFetchRequest, AnnouncementState, AnnouncementStateStore,
-    CardSource, CardType, CompletionAction, ModalConfig, ModalPage, ModalSize, PageLayout,
-    RemoteAnnouncementFetcher, ToastConfig, TriggerCondition, TriggerRule,
+    CardSource, CardType, CompletionAction, ModalConfig, ModalPage, ModalPresentation, ModalSize,
+    PageLayout, RemoteAnnouncementFetcher, ToastConfig, TriggerCondition, TriggerRule,
 };
 
 #[test]
 fn announcement_enum_defaults_preserve_variants_and_wire_values() {
     assert!(matches!(ModalSize::default(), ModalSize::Lg));
+    assert!(matches!(
+        ModalPresentation::default(),
+        ModalPresentation::Standard
+    ));
     assert!(matches!(
         CompletionAction::default(),
         CompletionAction::Dismiss
@@ -70,6 +74,7 @@ fn announcement_card_deserialization_preserves_default_contract() {
 fn announcement_modal_serialization_preserves_snake_case_contract() {
     let modal = ModalConfig {
         size: ModalSize::Xl,
+        presentation: ModalPresentation::Standard,
         closable: true,
         pages: vec![ModalPage {
             layout: PageLayout::FullscreenMedia,
@@ -94,6 +99,30 @@ fn announcement_modal_serialization_preserves_snake_case_contract() {
             "completion_action": "never_show_again"
         })
     );
+}
+
+#[test]
+fn release_letter_presentation_is_explicit_and_legacy_standard_is_omitted() {
+    let release = ModalConfig {
+        size: ModalSize::Xl,
+        presentation: ModalPresentation::ReleaseLetter,
+        closable: true,
+        pages: Vec::new(),
+        completion_action: CompletionAction::Dismiss,
+    };
+    assert_eq!(
+        serde_json::to_value(release).unwrap()["presentation"],
+        "release_letter"
+    );
+
+    let legacy: ModalConfig = serde_json::from_value(serde_json::json!({
+        "size": "lg",
+        "closable": true,
+        "pages": [],
+        "completion_action": "dismiss"
+    }))
+    .unwrap();
+    assert_eq!(legacy.presentation, ModalPresentation::Standard);
 }
 
 #[test]
@@ -159,6 +188,38 @@ async fn announcement_state_store_round_trips_state_and_defaults_missing_file() 
     assert!(loaded.dismissed_ids.contains("tip-b"));
 
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn announcement_state_store_preserves_a_damaged_primary_and_uses_recovery_state() {
+    let root = tempfile::tempdir().unwrap();
+    let state_file = root.path().join("announcement-state.json");
+    let recovery_file = root.path().join("announcement-state.recovery.json");
+    let damaged_bytes = b"{not-valid-json";
+    tokio::fs::write(&state_file, damaged_bytes).await.unwrap();
+
+    let store = AnnouncementStateStore::new(root.path());
+    let initial = store.load().await.expect("load damaged primary");
+    assert_eq!(initial.app_open_count, 0);
+
+    let mut recovered = AnnouncementState {
+        app_open_count: 2,
+        ..Default::default()
+    };
+    recovered
+        .seen_ids
+        .insert("release_letter_1_0_0".to_string());
+    store.save(&recovered).await.expect("save recovery state");
+
+    assert_eq!(tokio::fs::read(&state_file).await.unwrap(), damaged_bytes);
+    assert!(recovery_file.exists());
+
+    let reloaded = AnnouncementStateStore::new(root.path())
+        .load()
+        .await
+        .expect("reload recovery state");
+    assert_eq!(reloaded.app_open_count, 2);
+    assert!(reloaded.seen_ids.contains("release_letter_1_0_0"));
 }
 
 #[test]

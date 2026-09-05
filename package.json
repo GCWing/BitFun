@@ -109,6 +109,7 @@
     "preview": "pnpm --dir src/web-ui preview",
     "desktop:dev": "node scripts/dev.cjs desktop",
     "desktop:preview:debug": "node scripts/dev.cjs desktop-preview",
+    "desktop:preview:release-letter": "cross-env VITE_OPENBITFUN_ANNOUNCEMENT_PREVIEW_ID=release_letter_1_0_0 node scripts/dev.cjs desktop-preview",
     "desktop:dev:raw": "cross-env-shell CI=true \"cd src/apps/desktop && tauri dev\"",
     "target:gc": "node scripts/cargo-target-gc.mjs",
     "product:check": "node scripts/product-customization/cli.mjs check",

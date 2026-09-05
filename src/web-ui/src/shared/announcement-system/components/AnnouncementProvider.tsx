@@ -3,6 +3,7 @@ import { useAnnouncementStore } from '../store/announcementStore';
 import { announcementService } from '../services/AnnouncementService';
 import AnnouncementToastStack from './AnnouncementToastStack';
 import FeatureModal from './FeatureModal';
+import ReleaseLetterModal from './ReleaseLetterModal';
 import { configAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
@@ -16,9 +17,14 @@ const log = createLogger('AnnouncementProvider');
  * Order determines display sequence.
  */
 const DEBUG_CARD_IDS = [
+  'release_letter_1_0_0',
   'feature_shortcuts_v0_2_2',
   'feature_welcome',
 ];
+
+const ENV_PREVIEW_CARD_ID = import.meta.env.DEV
+  ? import.meta.env.VITE_OPENBITFUN_ANNOUNCEMENT_PREVIEW_ID?.trim()
+  : undefined;
 
 /**
  * Application-level provider for the announcement system.
@@ -30,7 +36,8 @@ const DEBUG_CARD_IDS = [
  *
  * The provider also renders the two global UI surfaces:
  *   - <AnnouncementToastStack>  (bottom-left)
- *   - <FeatureModal>            (centre-screen)
+ *   - <FeatureModal>            (standard centre-screen presentation)
+ *   - <ReleaseLetterModal>      (release-letter presentation)
  *
  * ─── Debug Mode ───────────────────────────────────────────────────────────────
  * In development (`import.meta.env.DEV`), press **Ctrl+Shift+Alt+D** to
@@ -48,6 +55,18 @@ const AnnouncementProvider: React.FC = () => {
 
     const load = async () => {
       try {
+        if (ENV_PREVIEW_CARD_ID) {
+          const previewCard = await announcementService.triggerCard(ENV_PREVIEW_CARD_ID);
+          if (cancelled) return;
+          if (!previewCard) {
+            log.warn('Announcement preview card was not found', { id: ENV_PREVIEW_CARD_ID });
+            return;
+          }
+          log.debug('Force-showing announcement preview card', { id: previewCard.id });
+          forceShowCards([previewCard]);
+          return;
+        }
+
         const cards = await announcementService.getPendingAnnouncements();
         if (cancelled) {
           return;
@@ -59,12 +78,7 @@ const AnnouncementProvider: React.FC = () => {
         const visibleCards = tipsEnabled ? cards : cards.filter((card) => card.card_type !== 'tip');
         if (visibleCards.length > 0) {
           log.debug('Announcement cards loaded', { count: visibleCards.length });
-          const maxDelay = Math.max(...visibleCards.map((c) => c.trigger.delay_ms ?? 0));
-          setTimeout(() => {
-            if (!cancelled) {
-              loadQueue(visibleCards);
-            }
-          }, maxDelay);
+          loadQueue(visibleCards);
         }
       } catch (e) {
         log.error('Failed to load announcement cards', e);
@@ -80,7 +94,7 @@ const AnnouncementProvider: React.FC = () => {
     }, {
       signalName: 'openbitfun:interactive-shell-ready',
       fallbackTimeoutMs: 10000,
-      frameCount: 1,
+      frameCount: 2,
       onError: error => {
         log.error('Failed to schedule announcement load after startup', error);
       },
@@ -90,7 +104,7 @@ const AnnouncementProvider: React.FC = () => {
       cancelled = true;
       cancelStartupSchedule();
     };
-  }, [initialised, loadQueue, markInitialised]);
+  }, [forceShowCards, initialised, loadQueue, markInitialised]);
 
   // ── Debug trigger ─────────────────────────────────────────────────────────
   const handleDebugTrigger = useCallback(async () => {
@@ -127,6 +141,7 @@ const AnnouncementProvider: React.FC = () => {
     <>
       <AnnouncementToastStack />
       <FeatureModal />
+      <ReleaseLetterModal />
     </>
   );
 };
