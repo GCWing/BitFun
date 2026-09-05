@@ -768,12 +768,10 @@ export class RelayHttpClient {
         throw this.delegatedIdentityChangeError(accountEpoch);
       }
       const status = (e as { status?: number })?.status;
-      const message = String((e as { message?: string })?.message || e);
-      const unauthorized =
-        status === 401
-        || message.includes('HTTP 401')
-        || message.includes('Unauthorized');
-      if (!unauthorized) throw e;
+      // Only the relay HTTP authentication boundary can authorize this retry.
+      // An encrypted host error may describe an upstream 401 after a mutation
+      // already ran; its human-readable message is not a transport status.
+      if (status !== 401) throw e;
 
       const refreshed = await this.refreshDelegatedIdentityAfterUnauthorized(identity);
       if (!refreshed) {

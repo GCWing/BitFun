@@ -1779,6 +1779,7 @@ mod tests {
         openbitfun_core::native_hooks::NativeHookOverview {
             enabled: true,
             project_hooks_enabled: true,
+            remote_workspace_unsupported: false,
             files: vec![
                 openbitfun_core::native_hooks::NativeHookFileView {
                     scope: "user",

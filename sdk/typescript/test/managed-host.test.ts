@@ -193,15 +193,21 @@ test(
     });
     const [chunk] = (await once(transport.readable, "data")) as [Buffer];
     const descendantPid = Number.parseInt(chunk.toString("utf8").trim(), 10);
-    if (!transport.readable.readableEnded) {
-      await once(transport.readable, "end");
-    }
-    assert.equal(transport.hasExited(), true);
-
     try {
+      if (!transport.readable.readableEnded) {
+        await once(transport.readable, "end");
+      }
+      // Pipe EOF can arrive before Node delivers ChildProcess's exit event.
+      // Establish actual parent exit before testing orphan-group cleanup.
+      const deadline = Date.now() + 1_000;
+      while (!transport.hasExited() && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(transport.hasExited(), true);
       await transport.close();
       assert.equal(await processExited(descendantPid), true);
     } finally {
+      await transport.close().catch(() => {});
       if (!(await processExited(descendantPid, 50))) {
         try {
           process.kill(descendantPid);

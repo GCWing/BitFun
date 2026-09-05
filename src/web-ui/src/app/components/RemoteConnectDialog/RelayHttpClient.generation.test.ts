@@ -3,6 +3,7 @@ import {
   DelegatedAccountChangedError,
   RelayHttpClient,
 } from '../../../../../mobile-web/src/services/RelayHttpClient';
+import { encrypt, fromB64 } from '../../../../../mobile-web/src/services/E2EEncryption';
 
 const masterKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 const replacementMasterKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(8)));
@@ -18,6 +19,28 @@ function deferred<T>() {
 }
 
 describe('RelayHttpClient delegated identity generations', () => {
+  it.each(['Unauthorized tool provider', 'Upstream returned HTTP 401'])(
+    'does not replay a mutation after an authenticated remote error: %s',
+    async (message) => {
+      const client = new RelayHttpClient('https://relay.example.com', 'room');
+      const delegate = vi.spyOn(client, 'sendCommand').mockResolvedValue({
+        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
+        user_id: 'user-a', device_id: 'home-a',
+      });
+      await client.requestDelegatedIdentity();
+      const encrypted = await encrypt(fromB64(masterKey), JSON.stringify({ resp: 'error', message }));
+      const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
+        encrypted_data: encrypted.data, nonce: encrypted.nonce,
+      }), { status: 200 }));
+      (client as any).fetchWithTimeout = fetchMock;
+
+      await expect(client.sendDeviceRpc('peer-a', { cmd: 'cancel_task', session_id: 'session-a' }))
+        .rejects.toThrow(message);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(delegate).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('advances the target epoch for an initial delegated account owner', async () => {
     const client = new RelayHttpClient('https://relay.example.com', 'room');
     const changes: number[] = [];
