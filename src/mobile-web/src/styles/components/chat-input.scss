@@ -144,7 +144,7 @@
   white-space: nowrap;
   font-size: var(--openbitfun-type-body-sm-font-size);
   font-weight: var(--openbitfun-type-label-md-font-weight);
-  letter-spacing: normal;
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
 }
 
 .chat-model-selector__dropdown {
