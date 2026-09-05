@@ -77,8 +77,9 @@ export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   renderLineHighlight: 'line',
 
   // Behavior
-  tabSize: 2,
+  tabSize: 4,
   insertSpaces: true,
+  detectIndentation: true,
   wordWrap: 'off',
   autoSave: 'afterDelay',
   autoSaveDelay: 1000,

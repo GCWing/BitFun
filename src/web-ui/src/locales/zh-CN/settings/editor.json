@@ -42,12 +42,13 @@
       "phase": "相位",
       "expand": "扩展",
       "solid": "常亮"
-    }
+    },
+    "lineHeightDesc": "相对于字号的倍数（em）。例如，14 px 字号配合 1.5 em 行高，实际为 21 px"
   },
   "behavior": {
-    "tabSize": "Tab 大小",
+    "tabSize": "Tab 宽度",
     "insertSpaces": "使用空格缩进",
-    "insertSpacesDesc": "Tab 键插入空格而非制表符",
+    "insertSpacesDesc": "开启时，Tab 键补齐空格到下一个制表位；关闭时插入制表符。不会转换已有文本",
     "wordWrap": "自动换行",
     "wordWrapOptions": {
       "off": "禁用",
@@ -65,7 +66,11 @@
     "smoothScrolling": "平滑滚动",
     "smoothScrollingDesc": "启用平滑滚动动画",
     "scrollBeyondLastLine": "允许滚动超过最后一行",
-    "scrollBeyondLastLineDesc": "可以将文件末尾滚动到屏幕中央"
+    "scrollBeyondLastLineDesc": "可以将文件末尾滚动到屏幕中央",
+    "tabSizeDesc": "制表位的字符列数（ch），默认为 4。使用空格缩进时，也决定每级缩进的宽度",
+    "detectIndentation": "自动检测缩进",
+    "detectIndentationDesc": "打开文件时优先识别已有缩进，否则使用上方默认值。关闭后始终使用默认值。状态栏中的调整仅作用于当前文件",
+    "detectIndentationUnsupported": "当前主机不支持保存缩进检测设置，升级主机后可启用此选项。"
   },
   "display": {
     "minimap": "显示缩略图",

@@ -37,6 +37,7 @@
 
    &__list {
      max-height: 280px;
+     overflow-y: auto;
      padding: var(--openbitfun-overlay-menu-surface-padding);
    }
 

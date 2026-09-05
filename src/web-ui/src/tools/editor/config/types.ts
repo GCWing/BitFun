@@ -70,6 +70,7 @@ export interface EditorConfig {
   // Behavior
   tabSize: number;
   insertSpaces: boolean;
+  detectIndentation: boolean;
   wordWrap: 'off' | 'on' | 'wordWrapColumn' | 'bounded';
   autoSave: 'off' | 'afterDelay' | 'onFocusChange' | 'onWindowChange';
   autoSaveDelay: number;

@@ -42,12 +42,13 @@
       "phase": "相位",
       "expand": "擴展",
       "solid": "常亮"
-    }
+    },
+    "lineHeightDesc": "相對於字級的倍數（em）。例如，14 px 字級搭配 1.5 em 行高，實際為 21 px"
   },
   "behavior": {
-    "tabSize": "Tab 大小",
-    "insertSpaces": "使用空格縮進",
-    "insertSpacesDesc": "Tab 鍵插入空格而非製表符",
+    "tabSize": "Tab 寬度",
+    "insertSpaces": "使用空格縮排",
+    "insertSpacesDesc": "開啟時，Tab 鍵補齊空格到下一個定位點；關閉時插入定位字元。不會轉換既有文字",
     "wordWrap": "自動換行",
     "wordWrapOptions": {
       "off": "停用",
@@ -65,7 +66,11 @@
     "smoothScrolling": "平滑滾動",
     "smoothScrollingDesc": "啟用平滑滾動動畫",
     "scrollBeyondLastLine": "允許滾動超過最後一行",
-    "scrollBeyondLastLineDesc": "可以將檔案末尾滾動到屏幕中央"
+    "scrollBeyondLastLineDesc": "可以將檔案末尾滾動到屏幕中央",
+    "tabSizeDesc": "定位點的字元欄數（ch），預設為 4。使用空格縮排時，也決定每級縮排的寬度",
+    "detectIndentation": "自動偵測縮排",
+    "detectIndentationDesc": "開啟檔案時優先辨識既有縮排，否則使用上方預設值。關閉後一律使用預設值。狀態列中的調整僅套用於目前檔案",
+    "detectIndentationUnsupported": "目前主機不支援儲存縮排偵測設定，升級主機後可啟用此選項。"
   },
   "display": {
     "minimap": "顯示縮略圖",

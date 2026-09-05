@@ -200,7 +200,7 @@
       "indentTab": "Tab: {{n}}",
       "goToLineHint": "Line or Line:Col (Enter to go, Esc to close)",
       "goToLinePlaceholder": "e.g. 10 or 10:5",
-      "selectIndent": "Select Indent",
+      "selectIndent": "Current file · indentation",
       "selectEncoding": "Select Encoding",
       "selectLanguageModeHint": "Select Language Mode (click to switch)",
       "indentOptionSpaces": "Spaces: {{n}}",

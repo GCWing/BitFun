@@ -42,12 +42,13 @@
       "phase": "Phase",
       "expand": "Expand",
       "solid": "Solid"
-    }
+    },
+    "lineHeightDesc": "Line height relative to font size (em). For example, 1.5 em at 14 px is 21 px."
   },
   "behavior": {
-    "tabSize": "Tab Size",
+    "tabSize": "Tab Width",
     "insertSpaces": "Insert Spaces",
-    "insertSpacesDesc": "Insert spaces instead of tabs",
+    "insertSpacesDesc": "On: Tab inserts spaces up to the next tab stop. Off: inserts a tab character. Existing text is not converted.",
     "wordWrap": "Word Wrap",
     "wordWrapOptions": {
       "off": "Off",
@@ -65,7 +66,11 @@
     "smoothScrolling": "Smooth Scrolling",
     "smoothScrollingDesc": "Enable smooth scrolling animation",
     "scrollBeyondLastLine": "Scroll Beyond Last Line",
-    "scrollBeyondLastLineDesc": "Scroll past the end of file to center content"
+    "scrollBeyondLastLineDesc": "Scroll past the end of file to center content",
+    "tabSizeDesc": "Width of a tab stop in character columns (ch). Default: 4. Also sets the indentation width when inserting spaces.",
+    "detectIndentation": "Detect Indentation",
+    "detectIndentationDesc": "Use the file’s indentation when opening it; otherwise use the defaults above. Turn off to always use your defaults. The status bar changes only the current file.",
+    "detectIndentationUnsupported": "This host does not support saving indentation detection settings. Upgrade the host to enable this option."
   },
   "display": {
     "minimap": "Show Minimap",

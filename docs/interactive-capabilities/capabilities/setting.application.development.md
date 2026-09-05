@@ -53,6 +53,7 @@ Tune code editor font, indentation, wrapping, formatting, and minimap behavior.
 | 编辑器光标闪烁 / Editor cursor blinking | `blink` / `smooth` / `phase` / `expand` / `solid` | 设置光标的闪烁动画。 | Set the cursor blinking animation. |
 | Tab 宽度 / Tab size | `integer` (1–8) | 设置一个 Tab 对应的空格数。 | Set the number of spaces represented by one tab. |
 | 使用空格缩进 / Insert spaces | `boolean` | 按 Tab 时插入空格而不是制表符。 | Insert spaces instead of a tab character. |
+| 自动检测缩进 / Detect indentation | `boolean` | 打开文件时识别已有缩进，否则使用默认缩进设置。 | Detect indentation when opening files, using configured defaults as a fallback. |
 | 自动换行 / Word wrapping | `off` / `on` / `wordWrapColumn` / `bounded` | 设置代码行的自动换行策略。 | Choose the code-line wrapping policy. |
 | 行号显示 / Line numbers | `on` / `off` / `relative` / `interval` | 设置行号显示方式。 | Choose how line numbers are displayed. |
 | 平滑滚动 / Smooth scrolling | `boolean` | 启用编辑器平滑滚动。 | Enable smooth editor scrolling. |

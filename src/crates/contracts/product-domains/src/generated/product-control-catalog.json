@@ -4,8 +4,8 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "e760eed82f192a25bb7b0fb296283e5edfb1ad8103d3aef460e58f2ae80f191c",
-  "ownerDigest": "debb8dff31726916663c6c87025f664cd991d29abeccb6b912b05ee3634ffed5",
+  "digest": "54dbaf7f84805e6cd683cd103d1a2bbaeb556953e1f5ef9c3309221e36e472e2",
+  "ownerDigest": "8c1887b051aab537946c1e80afd24a5eb3936a083e01bbbce4227e6c7d8b0e48",
   "searchAcceptance": [
     {
       "id": "companion-pet-mixed",
@@ -12286,6 +12286,50 @@
     },
     {
       "id": "setting.application.development:option:editor-insert-spaces",
+      "capabilityId": "setting.application.development",
+      "itemIds": [
+        "indent-wrap"
+      ],
+      "kind": "option",
+      "risk": "write",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "boolean"
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "application.editor"
+      }
+    },
+    {
+      "id": "setting.application.development:option:editor-detect-indentation",
       "capabilityId": "setting.application.development",
       "itemIds": [
         "indent-wrap"
@@ -25349,6 +25393,9 @@
                 "id": "editor-insert-spaces"
               },
               {
+                "id": "editor-detect-indentation"
+              },
+              {
                 "id": "editor-word-wrap"
               },
               {
@@ -25585,6 +25632,20 @@
           "handler": {
             "kind": "config",
             "path": "editor.insert_spaces"
+          }
+        },
+        {
+          "id": "editor-detect-indentation",
+          "titleZh": "自动检测缩进",
+          "titleEn": "Detect indentation",
+          "descriptionZh": "打开文件时识别已有缩进，否则使用默认缩进设置。",
+          "descriptionEn": "Detect indentation when opening files, using configured defaults as a fallback.",
+          "valueSchema": {
+            "type": "boolean"
+          },
+          "handler": {
+            "kind": "config",
+            "path": "editor.detect_indentation"
           }
         },
         {

@@ -200,7 +200,7 @@
       "indentTab": "Tab: {{n}}",
       "goToLineHint": "行 或 行:列（Enter 跳轉，Esc 關閉）",
       "goToLinePlaceholder": "例如 10 或 10:5",
-      "selectIndent": "選擇縮進",
+      "selectIndent": "目前檔案 · 縮排",
       "selectEncoding": "選擇編碼",
       "selectLanguageModeHint": "選擇語言模式（點擊即切換）",
       "indentOptionSpaces": "空格: {{n}}",

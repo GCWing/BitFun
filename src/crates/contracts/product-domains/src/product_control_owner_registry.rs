@@ -408,6 +408,12 @@ pub fn owner_definitions() -> Vec<ProductControlOwnerDefinition> {
         ),
         option(
             "setting.application.development",
+            "editor-detect-indentation",
+            boolean(),
+            config("editor.detect_indentation"),
+        ),
+        option(
+            "setting.application.development",
             "editor-word-wrap",
             string_enum(&["off", "on", "wordWrapColumn", "bounded"]),
             config("editor.word_wrap"),

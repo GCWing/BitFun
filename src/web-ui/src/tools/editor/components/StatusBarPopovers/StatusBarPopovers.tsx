@@ -117,16 +117,9 @@ export interface IndentOption {
   insertSpaces: boolean;
 }
 
-const INDENT_OPTIONS: Array<{ tabSize: number; insertSpaces: boolean }> = [
-  { tabSize: 1, insertSpaces: true },
-  { tabSize: 2, insertSpaces: true },
-  { tabSize: 4, insertSpaces: true },
-  { tabSize: 8, insertSpaces: true },
-  { tabSize: 1, insertSpaces: false },
-  { tabSize: 2, insertSpaces: false },
-  { tabSize: 4, insertSpaces: false },
-  { tabSize: 8, insertSpaces: false },
-];
+const INDENT_OPTIONS = [true, false].flatMap(insertSpaces =>
+  Array.from({ length: 8 }, (_, index) => ({ tabSize: index + 1, insertSpaces }))
+);
 
 export interface IndentPopoverProps {
   anchorRect: AnchorRect;

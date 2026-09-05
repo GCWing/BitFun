@@ -15,6 +15,7 @@ import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
+  DEFAULT_EDITOR_CONFIG,
   DEFAULT_EDITOR_FONT_FAMILY,
   DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_EDITOR_FONT_WEIGHT,
@@ -30,8 +31,9 @@ const DEFAULT_CONFIG: EditorConfig = {
   fontFamily: DEFAULT_EDITOR_FONT_FAMILY,
   fontWeight: DEFAULT_EDITOR_FONT_WEIGHT,
   lineHeight: DEFAULT_EDITOR_LINE_HEIGHT,
-  tabSize: 2,
-  insertSpaces: true,
+  tabSize: DEFAULT_EDITOR_CONFIG.tabSize,
+  insertSpaces: DEFAULT_EDITOR_CONFIG.insertSpaces,
+  detectIndentation: DEFAULT_EDITOR_CONFIG.detectIndentation,
   wordWrap: 'off',
   lineNumbers: 'on',
   minimap: {

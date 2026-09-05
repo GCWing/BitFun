@@ -2,7 +2,7 @@
 
 import { NumberInput, Select, Switch } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useI18n } from '@/infrastructure/i18n';
 import {
   ConfigFieldStatus,
   ConfigLoadingState,
@@ -129,6 +129,7 @@ function convertToSnakeCase(config: EditorConfigPartial): Record<string, any> {
   if (config.lineHeight !== undefined) result.line_height = config.lineHeight;
   if (config.tabSize !== undefined) result.tab_size = config.tabSize;
   if (config.insertSpaces !== undefined) result.insert_spaces = config.insertSpaces;
+  if (config.detectIndentation !== undefined) result.detect_indentation = config.detectIndentation;
   if (config.wordWrap !== undefined) result.word_wrap = config.wordWrap;
   if (config.lineNumbers !== undefined) result.line_numbers = config.lineNumbers;
   if (config.autoSave !== undefined) result.auto_save = config.autoSave;
@@ -166,6 +167,7 @@ function convertToCamelCase(config: Record<string, any>): EditorConfigPartial {
   if (config.line_height !== undefined) result.lineHeight = config.line_height;
   if (config.tab_size !== undefined) result.tabSize = config.tab_size;
   if (config.insert_spaces !== undefined) result.insertSpaces = config.insert_spaces;
+  if (config.detect_indentation !== undefined) result.detectIndentation = config.detect_indentation;
   if (config.word_wrap !== undefined) result.wordWrap = config.word_wrap;
   if (config.line_numbers !== undefined) result.lineNumbers = config.line_numbers;
   if (config.auto_save !== undefined) result.autoSave = config.auto_save;
@@ -231,7 +233,7 @@ function reconcileEditorPatch(
 }
 
 const EditorConfig: React.FC<EditorConfigProps> = () => {
-  const { t } = useTranslation('settings/editor');
+  const { t } = useI18n('settings/editor');
   
   
   const fontWeightOptionsTranslated = [
@@ -252,6 +254,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   
   const [config, setConfig] = useState<EditorConfigType>({ ...DEFAULT_EDITOR_CONFIG });
   const [isLoading, setIsLoading] = useState(true);
+  const [supportsIndentDetection, setSupportsIndentDetection] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
@@ -276,6 +279,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       setLoadFailed(false);
       const backendConfig = await configManager.getConfig<Record<string, any>>('editor');
       if (backendConfig) {
+        setSupportsIndentDetection(typeof backendConfig.detect_indentation === 'boolean');
         const camelCaseConfig = convertToCamelCase(backendConfig);
         const nextConfig = { ...DEFAULT_EDITOR_CONFIG, ...camelCaseConfig };
         configRef.current = nextConfig;
@@ -381,6 +385,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     key: K,
     value: EditorConfigType[K]
   ) => {
+    if (Object.is(configRef.current[key], value)) return;
     const next = { ...configRef.current, [key]: value };
     configRef.current = next;
     setConfig(next);
@@ -468,22 +473,27 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           <ConfigPageRow label={t('appearance.fontSize')} align="center">
             <NumberInput
               value={config.fontSize}
-              onValueChange={(v) => updateConfig('fontSize', v)}
+              onValueChange={(v) => updateConfig('fontSize', Math.round(v))}
               min={10}
               max={32}
               step={1}
               unit="px"
+              aria-label={t('appearance.fontSize')}
+              disableWheel
               size="sm"
             />
           </ConfigPageRow>
-          <ConfigPageRow label={t('appearance.lineHeight')} align="center">
+          <ConfigPageRow label={t('appearance.lineHeight')} description={t('appearance.lineHeightDesc')} align="center">
             <NumberInput
               value={config.lineHeight}
-              onValueChange={(v) => updateConfig('lineHeight', v)}
+              onValueChange={(v) => updateConfig('lineHeight', Math.round(v * 10) / 10)}
               min={1.0}
               max={3.0}
               step={0.1}
               precision={1}
+              unit="em"
+              aria-label={t('appearance.lineHeight')}
+              disableWheel
               size="sm"
             />
           </ConfigPageRow>
@@ -509,19 +519,36 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           title={t('sections.behavior.title')}
           description={t('sections.behavior.description')}
         >
-          <ConfigPageRow label={t('behavior.tabSize')} align="center">
+          <ConfigPageRow label={t('behavior.tabSize')} description={t('behavior.tabSizeDesc')} align="center">
             <NumberInput
               value={config.tabSize}
-              onValueChange={(v) => updateConfig('tabSize', v)}
+              onValueChange={(v) => updateConfig('tabSize', Math.round(v))}
               min={1}
               max={8}
+              step={1}
+              unit="ch"
+              aria-label={t('behavior.tabSize')}
+              disableWheel
               size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.insertSpaces')} description={t('behavior.insertSpacesDesc')} align="center">
             <Switch
+              aria-label={t('behavior.insertSpaces')}
               checked={config.insertSpaces}
               onChange={(e) => updateConfig('insertSpaces', e.target.checked)}
+            />
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('behavior.detectIndentation')}
+            description={t(supportsIndentDetection ? 'behavior.detectIndentationDesc' : 'behavior.detectIndentationUnsupported')}
+            align="center"
+          >
+            <Switch
+              aria-label={t('behavior.detectIndentation')}
+              checked={supportsIndentDetection && config.detectIndentation}
+              disabled={!supportsIndentDetection}
+              onChange={(e) => updateConfig('detectIndentation', e.target.checked)}
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.wordWrap')} align="center">

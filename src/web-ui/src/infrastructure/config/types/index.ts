@@ -478,6 +478,8 @@ export interface EditorConfig {
   line_height: number;
   tab_size: number;
   insert_spaces: boolean;
+  /** Absent on older hosts that cannot persist this setting. */
+  detect_indentation?: boolean;
   word_wrap: string;
   line_numbers: string;
   minimap: MinimapConfig;

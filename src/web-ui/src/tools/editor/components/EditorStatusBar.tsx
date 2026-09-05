@@ -1,6 +1,7 @@
 /** Status bar for cursor position, language, and encoding. */
 
 import React from 'react';
+import { DEFAULT_EDITOR_CONFIG } from '../config/defaults';
 
 import { useI18n } from '@/infrastructure/i18n';
 import './EditorStatusBar.scss';
@@ -91,7 +92,7 @@ export const EditorStatusBar: React.FC<EditorStatusBarProps> = ({
   selectedLines = 0,
   language,
   encoding = 'UTF-8',
-  tabSize = 2,
+  tabSize = DEFAULT_EDITOR_CONFIG.tabSize,
   insertSpaces = true,
   isReadOnly = false,
   onLanguageClick,

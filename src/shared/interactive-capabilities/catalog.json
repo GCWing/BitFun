@@ -6067,6 +6067,9 @@
                 "id": "editor-insert-spaces"
               },
               {
+                "id": "editor-detect-indentation"
+              },
+              {
                 "id": "editor-word-wrap"
               },
               {
@@ -6235,6 +6238,13 @@
           "titleEn": "Insert spaces",
           "descriptionZh": "按 Tab 时插入空格而不是制表符。",
           "descriptionEn": "Insert spaces instead of a tab character."
+        },
+        {
+          "id": "editor-detect-indentation",
+          "titleZh": "自动检测缩进",
+          "titleEn": "Detect indentation",
+          "descriptionZh": "打开文件时识别已有缩进，否则使用默认缩进设置。",
+          "descriptionEn": "Detect indentation when opening files, using configured defaults as a fallback."
         },
         {
           "id": "editor-word-wrap",

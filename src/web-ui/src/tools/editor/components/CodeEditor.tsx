@@ -12,6 +12,7 @@ import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
 import { getMonacoRuntime, monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
+import { applyModelIndentation, readModelIndentation, setModelIndentation, type Indentation } from '../services/ModelIndentation';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -46,6 +47,7 @@ import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
 import largeFileExpansionLabels from './largeFileExpansionLabels.json';
 import {
+  DEFAULT_EDITOR_CONFIG,
   DEFAULT_EDITOR_FONT_FAMILY,
   DEFAULT_EDITOR_FONT_SIZE,
   DEFAULT_EDITOR_FONT_WEIGHT,
@@ -292,7 +294,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const latestEditorConfigRef = useRef<Partial<EditorConfigType> | null>(null);
   const delayedFontApplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userLanguageOverrideRef = useRef(false);
-  const userIndentRef = useRef<{ tab_size: number; insert_spaces: boolean } | null>(null);
+  const [indentation, setIndentation] = useState<Indentation>({
+    tabSize: DEFAULT_EDITOR_CONFIG.tabSize,
+    insertSpaces: DEFAULT_EDITOR_CONFIG.insertSpaces,
+  });
   const largeFileModeRef = useRef(false);
   const largeFileExpansionBlockedLogRef = useRef(false);
   const pendingModelContentRef = useRef<string | null>(null);
@@ -355,6 +360,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const previousLoadingState = isLoadingContentRef.current;
     isLoadingContentRef.current = true;
     model.setValue(nextContent);
+    setIndentation(applyModelIndentation(model, latestEditorConfigRef.current ?? {}, true));
 
     queueMicrotask(() => {
       if (!isUnmountedRef.current) {
@@ -507,24 +513,22 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   useEffect(() => {
     const applyConfig = (config: Partial<EditorConfigType>) => {
-      const withUserIndent = userIndentRef.current
-        ? { ...config, ...userIndentRef.current }
-        : config;
       const appliedFontSize = config.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
       const newConfig: Partial<EditorConfigType> = {
-        ...withUserIndent,
+        ...config,
         minimap: {
           enabled: showMinimap,
-          side: withUserIndent.minimap?.side || 'right',
-          size: withUserIndent.minimap?.size || 'proportional'
+          side: config.minimap?.side || 'right',
+          size: config.minimap?.size || 'proportional'
         }
       };
       
       setEditorConfig(newConfig);
-      latestEditorConfigRef.current = withUserIndent;
+      latestEditorConfigRef.current = config;
 
-      const tabSize = withUserIndent.tab_size ?? config.tab_size ?? 2;
-      const insertSpaces = withUserIndent.insert_spaces !== undefined ? withUserIndent.insert_spaces : (config.insert_spaces !== undefined ? config.insert_spaces : true);
+      if (modelRef.current) {
+        setIndentation(applyModelIndentation(modelRef.current, config));
+      }
       if (editorRef.current) {
         editorRef.current.updateOptions({
           fontSize: appliedFontSize,
@@ -533,8 +537,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           lineHeight: config.line_height 
             ? Math.round(appliedFontSize * config.line_height)
             : 0,
-          tabSize,
-          insertSpaces,
           wordWrap: (config.word_wrap as any) || 'off',
           lineNumbers: config.line_numbers as any || 'on',
           minimap: { 
@@ -567,10 +569,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
     };
 
+    let cancelled = false;
+    let revision = 0;
     const loadEditorConfig = async () => {
+      const requestRevision = ++revision;
       try {
         const config = await configManager.getConfig<EditorConfigType>('editor');
-        if (config) {
+        if (config && !cancelled && requestRevision === revision) {
           applyConfig(config);
         }
       } catch (error) {
@@ -582,13 +587,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     
     const handleConfigChange = (newConfig: unknown) => {
       if (newConfig && typeof newConfig === 'object') {
+        revision += 1;
         applyConfig(newConfig as Partial<EditorConfigType>);
       }
     };
     
     globalEventBus.on('editor:config:changed', handleConfigChange);
+    const unwatch = configManager.watch('editor', () => { void loadEditorConfig(); });
     
     return () => {
+      cancelled = true;
+      unwatch();
       globalEventBus.off('editor:config:changed', handleConfigChange);
     };
   }, [showMinimap, largeFileMode]);
@@ -630,6 +639,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const container = containerRef.current;
     let editor: monaco.editor.IStandaloneCodeEditor | null = null;
     let model: monaco.editor.ITextModel | null = null;
+    let indentationListener: monaco.IDisposable | undefined;
+    let cancelled = false;
+    isUnmountedRef.current = false;
+    setMonacoReady(false);
 
     const initEditor = async () => {
       try {
@@ -649,12 +662,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           createLineHeight = c.line_height ? Math.round(createFontSize * c.line_height) : 0;
         };
         try {
+          const configBeforeLoad = latestEditorConfigRef.current;
           const preloadConfig = await configManager.getConfig<EditorConfigType>('editor');
-          if (preloadConfig) applyFontConfig(preloadConfig);
+          if (preloadConfig) {
+            applyFontConfig(preloadConfig);
+            if (latestEditorConfigRef.current === configBeforeLoad) latestEditorConfigRef.current = preloadConfig;
+          }
           else if (latestEditorConfigRef.current) applyFontConfig(latestEditorConfigRef.current);
         } catch (_) {}
         
         const monacoRuntime = await monacoInitManager.initialize();
+        if (cancelled) return;
 
         model = monacoModelManager.getOrCreateModel(
           filePath,
@@ -664,6 +682,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         );
         
         modelRef.current = model;
+        setIndentation(applyModelIndentation(model, latestEditorConfigRef.current ?? editorConfigRuntimeRef.current));
+        indentationListener = model.onDidChangeOptions(() => {
+          setIndentation(readModelIndentation(model!));
+        });
         const modelContent = model.getValue();
         const initialLargeFileMode = detectLargeFileMode(modelContent);
         largeFileModeRef.current = initialLargeFileMode;
@@ -711,8 +733,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           lineHeight: createLineHeight || (editorConfigRuntimeRef.current.line_height ? Math.round(createFontSize * editorConfigRuntimeRef.current.line_height) : 0),
           scrollBeyondLastLine: false,
           wordWrap: (editorConfigRuntimeRef.current.word_wrap as any) || 'off',
-          tabSize: editorConfigRuntimeRef.current.tab_size || 2,
-          insertSpaces: editorConfigRuntimeRef.current.insert_spaces !== undefined ? editorConfigRuntimeRef.current.insert_spaces : true,
           contextmenu: false,
           links: true,
           gotoLocation: {
@@ -806,6 +826,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         
         setMonacoReady(true);
         const applyOptionsFromConfig = (c: Partial<EditorConfigType>) => {
+          if (cancelled) return;
           const fs = c.font_size ?? DEFAULT_EDITOR_FONT_SIZE;
           editor!.updateOptions({
             fontSize: fs,
@@ -819,6 +840,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           if (latestConfig) applyOptionsFromConfig(latestConfig);
           else if (latestEditorConfigRef.current) applyOptionsFromConfig(latestEditorConfigRef.current);
         } catch (_) {}
+        if (cancelled) return;
         // Delayed font apply: config may not be ready when opening from file tree
         if (delayedFontApplyTimerRef.current) clearTimeout(delayedFontApplyTimerRef.current);
         delayedFontApplyTimerRef.current = setTimeout(() => {
@@ -1000,7 +1022,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     initEditor();
 
     return () => {
+      cancelled = true;
       isUnmountedRef.current = true;
+      indentationListener?.dispose();
+      if (modelRef.current === model) modelRef.current = null;
       clearScheduledNavigationSettlement();
       pendingNavigationRef.current = null;
       completedNavigationKeyRef.current = null;
@@ -1361,20 +1386,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [performJump]);
 
   const handleIndentConfirm = useCallback((tabSize: number, insertSpaces: boolean) => {
-    const merged = { tab_size: tabSize, insert_spaces: insertSpaces };
-    userIndentRef.current = merged;
-    setEditorConfig((prev) => ({ ...prev, ...merged }));
-    const editor = editorRef.current;
-    if (editor) {
-      editor.updateOptions({ tabSize, insertSpaces });
+    const model = modelRef.current;
+    if (model) {
+      setModelIndentation(model, { tabSize, insertSpaces });
+      setIndentation(readModelIndentation(model));
+      editorRef.current?.focus();
     }
-    // Async persistence, don't block UI update, don't trigger applyConfig override
-    configManager.getConfig<EditorConfigType>('editor').then((config) => {
-      const fullMerged = { ...(config || {}), ...merged };
-      return configManager.setConfig('editor', fullMerged);
-    }).catch((err) => {
-      log.warn('Failed to persist indent config', err);
-    });
   }, []);
 
   const fetchFileMetadata = useCallback(async () => {
@@ -2221,8 +2238,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         selectedLines={selection.lines}
         language={detectedLanguage}
         encoding={encoding}
-        tabSize={editorConfig.tab_size || 2}
-        insertSpaces={editorConfig.insert_spaces !== false}
+        tabSize={indentation.tabSize}
+        insertSpaces={indentation.insertSpaces}
         isReadOnly={readOnly}
         onPositionClick={(e) => openStatusBarPopover('position', e)}
         onIndentClick={(e) => openStatusBarPopover('indent', e)}
@@ -2242,8 +2259,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       {statusBarPopover === 'indent' && statusBarAnchorRect && (
         <IndentPopover
           anchorRect={statusBarAnchorRect}
-          currentTabSize={editorConfig.tab_size || 2}
-          currentInsertSpaces={editorConfig.insert_spaces !== false}
+          currentTabSize={indentation.tabSize}
+          currentInsertSpaces={indentation.insertSpaces}
           onConfirm={handleIndentConfirm}
           onClose={closeStatusBarPopover}
         />

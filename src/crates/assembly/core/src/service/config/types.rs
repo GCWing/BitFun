@@ -573,6 +573,7 @@ pub struct EditorConfig {
     pub render_line_highlight: String,
     pub tab_size: u32,
     pub insert_spaces: bool,
+    pub detect_indentation: bool,
     pub word_wrap: String,
     pub scroll_beyond_last_line: bool,
     pub smooth_scrolling: bool,
@@ -1793,8 +1794,9 @@ impl Default for EditorConfig {
             cursor_blinking: "smooth".to_string(),
             render_whitespace: "selection".to_string(),
             render_line_highlight: "line".to_string(),
-            tab_size: 2,
+            tab_size: 4,
             insert_spaces: true,
+            detect_indentation: true,
             word_wrap: "off".to_string(),
             scroll_beyond_last_line: false,
             smooth_scrolling: true,
@@ -2057,7 +2059,7 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AgentModelDefaultsConfig, AgentProfileConfig,
-        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, GlobalConfig,
+        AgentProfileView, AppConfig, AppLoggingConfig, AuthConfig, EditorConfig, GlobalConfig,
         MemoryExternalContextPolicy, ModelExchangeTracingMode, NotificationConfig, OpenCodePlan,
         SubagentBatchExecutionPolicy, SubagentModelSelection, SubscriptionProvider,
         UserSkillGroupsConfig, UserToolGroupsConfig, WebSearchConfig,
@@ -2828,6 +2830,30 @@ mod tests {
             defaults.builtin_subagent_selection("ResearchSpecialist"),
             SubagentModelSelection::fixed("fast")
         );
+    }
+
+    #[test]
+    fn editor_indentation_defaults_and_legacy_round_trip() {
+        let defaults: EditorConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(defaults.tab_size, 4);
+        assert!(defaults.insert_spaces);
+        assert!(defaults.detect_indentation);
+
+        // Old explicit preferences must not be reset during an upgrade.
+        let legacy = serde_json::json!({ "tab_size": 2, "insert_spaces": false });
+        let config: EditorConfig = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(config.tab_size, 2);
+        assert!(!config.insert_spaces);
+        assert!(config.detect_indentation);
+        let saved = serde_json::to_value(&config).unwrap();
+        for (key, value) in legacy.as_object().unwrap() {
+            assert_eq!(&saved[key], value);
+        }
+        let mut explicit = saved;
+        explicit["detect_indentation"] = serde_json::json!(false);
+        let config: EditorConfig = serde_json::from_value(explicit.clone()).unwrap();
+        assert!(!config.detect_indentation);
+        assert_eq!(serde_json::to_value(config).unwrap(), explicit);
     }
 
     #[test]

@@ -112,6 +112,7 @@ function convertToMonacoOptions(
     
     tabSize: config.tabSize,
     insertSpaces: config.insertSpaces,
+    detectIndentation: config.detectIndentation,
     wordWrap: config.wordWrap,
     scrollBeyondLastLine: config.scrollBeyondLastLine,
     smoothScrolling: config.smoothScrolling,
@@ -251,8 +252,8 @@ export function buildDiffEditorOptions(
 /** Build partial options for dynamic editor updates. */
 export function buildUpdateOptions(
   config: EditorConfigPartial
-): monaco.editor.IEditorOptions {
-  const options: monaco.editor.IEditorOptions = {};
+): monaco.editor.IStandaloneEditorConstructionOptions {
+  const options: monaco.editor.IStandaloneEditorConstructionOptions = {};
   
   if (config.fontSize !== undefined) {
     options.fontSize = config.fontSize;
@@ -264,7 +265,13 @@ export function buildUpdateOptions(
     options.lineHeight = Math.round(config.fontSize * config.lineHeight);
   }
   if (config.tabSize !== undefined) {
-    (options as any).tabSize = config.tabSize;
+    options.tabSize = config.tabSize;
+  }
+  if (config.insertSpaces !== undefined) {
+    options.insertSpaces = config.insertSpaces;
+  }
+  if (config.detectIndentation !== undefined) {
+    options.detectIndentation = config.detectIndentation;
   }
   if (config.wordWrap !== undefined) {
     options.wordWrap = config.wordWrap;
