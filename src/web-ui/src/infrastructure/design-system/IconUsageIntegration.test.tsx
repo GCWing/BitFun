@@ -113,7 +113,9 @@ describe('catalog icon consumer integration', () => {
   it('uses catalog marks in navigation, the creative entry and string-based menus', () => {
     expect(source('app/components/NavPanel/components/MiniAppEntry.tsx')).toContain('<Icon name="mini-app" size="md"');
     expect(source('app/components/NavBar/NavBar.tsx')).toContain('<Icon name="sidebar-left"');
-    expect(source('app/scenes/agents/AgentsScene.tsx')).toContain('<Icon name="creative"');
+    const harnessSource = source('app/scenes/agents/components/AgentHarnessOverview.tsx');
+    expect(harnessSource).toContain("{ id: 'creative', icon: 'creative'");
+    expect(harnessSource).toContain('<Icon name={icon}');
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("RefreshCw: 'refresh'");
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("MessageSquarePlus: 'side-chat'");
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("FileInput: 'duplicate'");
