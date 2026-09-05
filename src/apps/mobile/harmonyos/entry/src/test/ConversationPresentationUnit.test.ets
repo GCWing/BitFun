@@ -576,6 +576,12 @@ export default function conversationPresentationUnitTest() {
       expect(ChatComposerPolicy.canUseSupplementalVoice(true)).assertFalse();
     });
 
+    it('keeps the composer expanded while model selection returns to the active edit', 0, () => {
+      expect(ChatComposerPolicy.isExpanded('', false, false, true)).assertTrue();
+      expect(ChatComposerPolicy.isExpanded('', false, false, false)).assertFalse();
+      expect(ChatComposerPolicy.isExpanded('', false, true, false)).assertTrue();
+    });
+
     it('names the primary composer action for assistive labels', 0, () => {
       expect(ChatComposerPolicy.primaryActionAccessibilityKey(ComposerPrimaryAction.Send, false))
         .assertEqual('chat.send');

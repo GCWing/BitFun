@@ -100,9 +100,10 @@ export class ChatComposerPolicy {
   static isExpanded(
     text: string,
     inputFocused: boolean,
-    modelSelectorOpen: boolean
+    modelSelectorOpen: boolean,
+    continuingEditAfterModelSelection: boolean = false
   ): boolean {
-    return inputFocused || modelSelectorOpen || text.indexOf('\n') >= 0;
+    return inputFocused || modelSelectorOpen || continuingEditAfterModelSelection || text.indexOf('\n') >= 0;
   }
 
   static shouldShowAddButton(showAddButton: boolean, supportsAttachments: boolean): boolean {

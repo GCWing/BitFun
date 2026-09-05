@@ -80,6 +80,9 @@ export struct ComposerBar {
   @Local showModelSelectorSheet: boolean = false;
   @Local showModelSelectorPopover: boolean = false;
   @Local isPreparingModelSelectorPopover: boolean = false;
+  @Local keepExpandedForModelSelection: boolean = false;
+  private restoreInputFocusAfterModelSelection: boolean = false;
+  private restoreInputFocusTimerId: number = -1;
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   @Event onSend: () => void = () => {};
@@ -97,6 +100,10 @@ export struct ComposerBar {
       clearTimeout(this.sendTransitionTimerId);
       this.sendTransitionTimerId = -1;
     }
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+      this.restoreInputFocusTimerId = -1;
+    }
   }
 
   @Monitor('chatInput')
@@ -109,6 +116,13 @@ export struct ComposerBar {
   @Monitor('presentation')
   onPresentationChanged(): void {
     this.closeModelSelector();
+  }
+
+  @Monitor('showModelSelectorSheet')
+  onModelSelectorSheetChanged(): void {
+    if (!this.showModelSelectorSheet) {
+      this.restoreComposerFocusAfterModelSelection();
+    }
   }
 
   build() {
@@ -239,7 +253,15 @@ export struct ComposerBar {
       onStateChange: (event) => {
         if (!event.isVisible) {
           this.showModelSelectorPopover = false;
+          this.restoreComposerFocusAfterModelSelection();
         }
+      }
+    })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        // Capture focus before the sheet/popover moves it away. Choosing a
+        // model is part of the current edit, not the end of that edit.
+        this.beginModelSelectionFromComposer();
       }
     })
     .onClick(() => {
@@ -270,7 +292,7 @@ export struct ComposerBar {
           .height(32)
           .accessibilityText(RemoteI18n.t('common.close'))
           .onClick(() => {
-            this.closeModelSelector();
+            this.closeModelSelector(true);
           })
         }
         .width('100%')
@@ -337,7 +359,7 @@ export struct ComposerBar {
     .backgroundColor(this.isSelectedModel(model) ? SOFT : TRANSPARENT)
     .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
-      this.closeModelSelector();
+      this.closeModelSelector(true);
       this.onSelectModel(model.id);
     })
   }
@@ -387,6 +409,7 @@ export struct ComposerBar {
         .defaultFocus(false)
         .onFocus(() => {
           this.inputFocused = true;
+          this.cancelModelSelectionEditingContinuation();
         })
         .onBlur(() => {
           this.inputFocused = false;
@@ -668,7 +691,8 @@ export struct ComposerBar {
     return ChatComposerPolicy.isExpanded(
       this.inputText,
       this.inputFocused,
-      this.isModelSelectorExpanded()
+      this.isModelSelectorExpanded(),
+      this.keepExpandedForModelSelection
     );
   }
 
@@ -714,15 +738,21 @@ export struct ComposerBar {
     return [selected, ...models.filter((model: ConversationUiModel) => model.id !== selected.id)];
   }
 
-  private closeModelSelector(): void {
+  private closeModelSelector(restoreInputFocus: boolean = false): void {
+    const shouldRestore = restoreInputFocus && this.restoreInputFocusAfterModelSelection;
     this.showModelSelectorSheet = false;
     this.showModelSelectorPopover = false;
     this.isPreparingModelSelectorPopover = false;
+    if (shouldRestore) {
+      this.restoreComposerFocusAfterModelSelection();
+    } else if (!restoreInputFocus) {
+      this.cancelModelSelectionEditingContinuation();
+    }
   }
 
   private async toggleModelSelectorPopover(): Promise<void> {
     if (this.showModelSelectorPopover) {
-      this.closeModelSelector();
+      this.closeModelSelector(true);
       return;
     }
     if (this.isPreparingModelSelectorPopover) {
@@ -756,6 +786,44 @@ export struct ComposerBar {
       // window event. Releasing focus still leaves the model anchor mounted.
     }
     this.getUIContext().getFocusController().clearFocus();
+  }
+
+  private beginModelSelectionFromComposer(): void {
+    if (!this.inputFocused) {
+      return;
+    }
+    this.keepExpandedForModelSelection = true;
+    this.restoreInputFocusAfterModelSelection = true;
+  }
+
+  private restoreComposerFocusAfterModelSelection(): void {
+    if (!this.restoreInputFocusAfterModelSelection || this.showModelSelectorSheet ||
+      this.showModelSelectorPopover || this.isPreparingModelSelectorPopover) {
+      return;
+    }
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+    }
+    // Let the selector release its focus scope first. Retaining the expanded
+    // layout during this handoff removes the collapse/re-expand jump.
+    this.restoreInputFocusTimerId = setTimeout(() => {
+      this.restoreInputFocusTimerId = -1;
+      try {
+        this.getUIContext().getFocusController().requestFocus(this.inputId);
+      } catch (_error) {
+        // If the route disappeared during dismissal, component teardown owns
+        // the continuation and clears its timer.
+      }
+    }, MobileDesignMotion.structure);
+  }
+
+  private cancelModelSelectionEditingContinuation(): void {
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+      this.restoreInputFocusTimerId = -1;
+    }
+    this.restoreInputFocusAfterModelSelection = false;
+    this.keepExpandedForModelSelection = false;
   }
 
   private async startVoiceInput(): Promise<void> {
