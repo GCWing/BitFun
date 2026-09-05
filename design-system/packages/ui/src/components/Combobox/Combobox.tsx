@@ -621,6 +621,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
                     commitValues(selectedValues.filter((value) => value !== option.value));
                   }}
                   onMouseDown={(event) => event.preventDefault()}
+                  shape="circle"
                   size="xs"
                   variant="quiet"
                 />
