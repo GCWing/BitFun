@@ -482,43 +482,6 @@
 
 .chat-msg--user { align-items: flex-end; }
 
-.chat-page__input-wrap {
-  bottom: max(14px, env(safe-area-inset-bottom, 0px));
-  max-width: 760px;
-  padding: 0 16px;
-}
-
-.chat-page__send-btn {
-  width: 30px;
-  height: 30px;
-  border-color: var(--openbitfun-color-action-primary-background);
-  background: var(--openbitfun-color-action-primary-background);
-  color: var(--openbitfun-color-action-primary-content);
-
-  &:not(:disabled) {
-    border-color: var(--openbitfun-color-action-primary-background);
-    background: var(--openbitfun-color-action-primary-background);
-    color: var(--openbitfun-color-action-primary-content);
-  }
-
-  &:disabled {
-    border-color: transparent;
-    background: var(--openbitfun-color-surface-tertiary);
-    color: var(--openbitfun-color-content-disabled);
-  }
-}
-
-.chat-page__input-wrap:not(.is-expanded) .chat-page__send-btn {
-  width: 28px;
-  height: 28px;
-}
-
-.chat-page__scroll-to-bottom {
-  bottom: 92px;
-  border-color: var(--openbitfun-color-border-subtle);
-  background: var(--openbitfun-color-surface-panel);
-}
-
 @media (min-width: 900px) {
   .mobile-reconnect-banner { left: clamp(320px, 27vw, 368px); }
 

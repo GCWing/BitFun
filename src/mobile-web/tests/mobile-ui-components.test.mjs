@@ -3,9 +3,45 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const sourceDirectory = path.resolve(testDirectory, '../src');
+
+test('composer menus fit compact, wide and keyboard-reduced viewports', async () => {
+  const source = await readFile(path.join(sourceDirectory, 'components/composerMenuPlacement.ts'), 'utf8');
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+  const { composerMenuPlacement: place } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+  for (const width of [320, 390, 600, 768, 1280]) {
+    for (const height of [260, 844]) {
+      for (const menuWidth of [160, 180, 260, 330]) {
+        const viewport = { left: 0, top: 40, width, height };
+        const anchor = { left: width - 70, top: height, bottom: height + 32 };
+        const result = place(anchor, viewport, menuWidth, 345);
+        assert.ok(result.left >= 8);
+        assert.ok(result.left + result.width <= width - 8);
+        assert.ok(result.top >= viewport.top + 8);
+        assert.ok(result.top + result.maxHeight <= viewport.top + height - 8);
+        assert.ok(result.maxHeight > 0);
+      }
+    }
+  }
+  assert.equal(place({ left: 20, top: 10, bottom: 42 }, { left: 0, top: 0, width: 390, height: 844 }, 180, 200).top, 50);
+});
+
+test('model and reasoning menus escape toolbar clipping without collapsing the composer', async () => {
+  const menu = await readFile(path.join(sourceDirectory, 'components/ComposerAnchoredMenu.tsx'), 'utf8');
+  const controls = await readFile(path.join(sourceDirectory, 'components/ChatModelControls.tsx'), 'utf8');
+  const page = await readFile(path.join(sourceDirectory, 'pages/ChatPage.tsx'), 'utf8');
+  assert.match(menu, /createPortal\(/);
+  assert.match(menu, /document\.body/);
+  assert.match(menu, /visualViewport/);
+  assert.match(menu, /ResizeObserver/);
+  assert.match(menu, /!anchor\.contains\(target\) && !menu\.contains\(target\)/);
+  assert.match(menu, /event\.key !== 'Escape'/);
+  assert.equal((controls.match(/<ComposerSelectionSurface /g) || []).length, 1);
+  assert.match(page, /closest\('\[data-composer-popover\]'\)/);
+});
 const mobileEntry = path.resolve(
   testDirectory,
   '../../../design-system/packages/ui/src/mobile.ts',
@@ -143,7 +179,6 @@ test('large mobile pages delegate stable UI regions to app components', async ()
     'ChatMessageActions',
     'ChatTranscript',
     'ModelSelectorPill',
-    'ReasoningPresetPill',
   ]) {
     assert.match(chatPage, new RegExp(`\\b${component}\\b`), `ChatPage must delegate ${component}`);
   }
@@ -194,10 +229,11 @@ test('mobile remote control exposes approval commands and responsive composer co
   assert.doesNotMatch(composer, /\bMobileTextarea\b/);
   assert.doesNotMatch(modelControls, /chat-model-selector__icon/);
   assert.doesNotMatch(modelControls, /chat-model-selector__effort/);
-  assert.match(inputStyles, /\.chat-model-selector__trigger\s*\{[\s\S]*?height:\s*32px;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
+  assert.match(inputStyles, /\.chat-model-selector__trigger\s*\{[\s\S]*?height:\s*48px;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/);
   assert.match(harmonyStyles, /\.harmony-sidebar__footer\s*\{[\s\S]*?inline-size:\s*auto;/);
-  assert.match(harmonyStyles, /\.chat-page__composer\s*\{[\s\S]*?height:\s*52px;/);
-  assert.match(harmonyStyles, /\.chat-page__composer\[data-expanded='true'\]\s*\{[\s\S]*?min-height:\s*112px;/);
+  assert.doesNotMatch(harmonyStyles, /\.chat-page__composer\s*\{/);
+  assert.match(inputStyles, /\.chat-page__composer\s*\{/);
+  assert.doesNotMatch(inputStyles, /width:\s*(24|28|30)px;[\s]*height:\s*(24|28|30)px;/);
 });
 
 test('mobile transcript keeps one user bubble and projects file cards outside markdown links', async () => {
@@ -232,4 +268,19 @@ test('mobile transcript keeps one user bubble and projects file cards outside ma
   assert.doesNotMatch(markdownLinkRenderer, /<FileCard/);
   assert.match(markdownStyles, /\.message-file-cards\s*\{[\s\S]*?display:\s*grid;/);
   assert.match(markdownStyles, /\.file-card\s*\{[\s\S]*?inline-size:\s*100%;/);
+});
+
+
+test('mobile viewport follows the keyboard, restores insets and leaves pinch zoom alone', async () => {
+  const source = await readFile(path.join(sourceDirectory, 'hooks/useMobileViewport.ts'), 'utf8');
+  const code = ts.transpileModule(source.replace(/import .* from 'react';/, ''), {
+    compilerOptions: { module: ts.ModuleKind.ESNext },
+  }).outputText;
+  const { mobileViewportInsets: insets } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+  assert.deepEqual(insets(844, 844, 0, 1), { height: 844, top: 0, bottom: 0 });
+  assert.deepEqual(insets(844, 510, 0, 1), { height: 510, top: 0, bottom: 334 });
+  assert.deepEqual(insets(844, 510, 40, 1), { height: 510, top: 40, bottom: 294 });
+  assert.deepEqual(insets(510, 510, 0, 1), { height: 510, top: 0, bottom: 0 });
+  assert.deepEqual(insets(844, 844, 0, 1), { height: 844, top: 0, bottom: 0 });
+  assert.equal(insets(844, 422, 20, 2), null);
 });

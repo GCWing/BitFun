@@ -1,6 +1,6 @@
 @layer openbitfun.components {
   .root {
-    --_mobile-icon-button-size: 44px;
+    --_mobile-icon-button-size: var(--openbitfun-space-12);
     --_mobile-icon-size: 22px;
 
     position: relative;
@@ -29,7 +29,7 @@
   }
 
   .root[data-size="sm"] {
-    --_mobile-icon-button-size: 40px;
+    --_mobile-icon-button-size: var(--openbitfun-space-12);
     --_mobile-icon-size: 20px;
   }
 

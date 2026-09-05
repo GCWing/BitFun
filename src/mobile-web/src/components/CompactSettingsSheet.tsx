@@ -54,7 +54,7 @@ export default function CompactSettingsSheet({
   return (
     <MobileSheet
       className="harmony-sidebar__settings-sheet"
-      headerAction={<MobileIconButton appearance="plain" size="sm" onClick={onClose} aria-label={t('common.close')} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>} />}
+      headerAction={<MobileIconButton appearance="plain" onClick={onClose} aria-label={t('common.close')} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>} />}
       onOpenChange={onClose}
       open={open}
       title={t('shared.features.settings')}
@@ -76,17 +76,16 @@ export default function CompactSettingsSheet({
 
         <h3>{t('settings.generalSection')}</h3>
         <MobileCard padding="none" className="harmony-sidebar__settings-card">
-          <MobileButton appearance="plain" block className="harmony-sidebar__settings-row" onClick={onToggleTheme}>
+          <MobileButton appearance="plain" block className="harmony-sidebar__settings-row" role="switch" aria-checked={isDark} aria-label={t('settings.darkAppearance')} onClick={onToggleTheme}>
             <span className="harmony-sidebar__settings-row-icon"><ThemeToggleIcon isDark={isDark} /></span>
             <span className="harmony-sidebar__settings-label">{t('settings.appearance')}</span>
-            <small>{isDark ? 'Dark' : 'Light'}</small>
-            <span className="harmony-sidebar__settings-chevron" aria-hidden="true">›</span>
+            <small>{t(isDark ? 'settings.dark' : 'settings.light')}</small>
+            <span className="harmony-sidebar__theme-switch" data-checked={isDark} aria-hidden="true" />
           </MobileButton>
           <div className="harmony-sidebar__settings-row">
             <span className="harmony-sidebar__settings-row-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M3.5 9h17M3.5 15h17M12 3c2.2 2.45 3.3 5.45 3.3 9S14.2 18.55 12 21M12 3C9.8 5.45 8.7 8.45 8.7 12s1.1 6.55 3.3 9" /></svg></span>
             <span className="harmony-sidebar__settings-label">{t('settings.language')}</span>
             <LanguageToggleButton className="harmony-sidebar__settings-language" />
-            <span className="harmony-sidebar__settings-chevron" aria-hidden="true">›</span>
           </div>
         </MobileCard>
 

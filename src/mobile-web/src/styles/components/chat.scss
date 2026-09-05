@@ -338,23 +338,17 @@
 
 .chat-page__toast {
   position: fixed;
-  top: 48px;
+  top: 80px;
+  inline-size: auto;
   left: 16px;
   right: 16px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: var(--openbitfun-color-status-danger-content);
-  color: var(--openbitfun-color-action-primary-content);
   font-size: var(--openbitfun-type-body-sm-font-size);
   line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   z-index: 9999;
   white-space: pre-line;
   animation: toastSlideIn 0.25s ease-out;
-  backdrop-filter: blur(8px);
-
-  &--info {
-    background: var(--openbitfun-color-status-success-content);
-  }
 }
 
 @keyframes toastSlideIn {

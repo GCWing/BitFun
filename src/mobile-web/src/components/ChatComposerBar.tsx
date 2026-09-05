@@ -25,6 +25,7 @@ interface ChatComposerBarProps {
   onRemoveImage: (index: number) => void;
   onSend: () => void;
   pendingImages: PendingImage[];
+  remoteUnavailable: boolean;
   streaming: boolean;
 }
 
@@ -46,6 +47,7 @@ export default function ChatComposerBar({
   onRemoveImage,
   onSend,
   pendingImages,
+  remoteUnavailable,
   streaming,
 }: ChatComposerBarProps) {
   const { t } = useI18n();
@@ -89,7 +91,7 @@ export default function ChatComposerBar({
                 appearance="plain"
                 aria-label={t('common.submit')}
                 className="chat-page__send-btn"
-                disabled={!input.trim() && pendingImages.length === 0}
+                disabled={remoteUnavailable || (!input.trim() && pendingImages.length === 0)}
                 icon={(
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="M10 3L10 17M10 3L5 8M10 3L15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -124,20 +126,20 @@ export default function ChatComposerBar({
               onClick={onAttach}
             />
             {modelControls}
-            {pendingImages.length > 0 && (
-              <div className="chat-page__image-preview-row">
-                {pendingImages.map((image, index) => (
-                  <div key={`${image.name}-${index}`} className="chat-page__image-thumb">
-                    <img src={image.dataUrl} alt={image.name} />
-                    <MobileIconButton appearance="plain" size="sm" aria-label={t('common.close')} className="chat-page__image-remove" icon={<span aria-hidden="true">×</span>} onClick={() => onRemoveImage(index)} />
-                  </div>
-                ))}
-              </div>
-            )}
           </>
         )}
       >
         <div className="chat-page__input-area">
+          {pendingImages.length > 0 && (
+            <div className="chat-page__image-preview-row">
+              {pendingImages.map((image, index) => (
+                <div key={`${image.name}-${index}`} className="chat-page__image-thumb">
+                  <img src={image.dataUrl} alt={image.name} />
+                  <MobileIconButton appearance="plain" size="sm" aria-label={t('common.close')} className="chat-page__image-remove" icon={<span aria-hidden="true">×</span>} onClick={() => onRemoveImage(index)} />
+                </div>
+              ))}
+            </div>
+          )}
           {expanded ? (
             <textarea
               className="chat-page__input"

@@ -8,16 +8,15 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
 import {
-  REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
   RemoteSessionManager,
 } from './services/RemoteSessionManager';
 import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
 import { ThemeProvider } from './theme';
 import { useConnectionHealth } from './hooks/useConnectionHealth';
+import { useMobileViewport } from './hooks/useMobileViewport';
 import { useWideLayout } from './hooks/useWideLayout';
 import { useMobileStore } from './services/store';
 import RemoteHomePanel from './components/RemoteHomePanel';
-import HarnessProfilePicker from './components/HarnessProfilePicker';
 import './styles/index.scss';
 
 type Page = 'pairing' | 'workspace' | 'sessions' | 'chat' | 'devices';
@@ -41,14 +40,13 @@ function getNavClass(
 }
 
 const AppContent: React.FC = () => {
+  useMobileViewport();
   const { t } = useI18n();
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
   const [activeSessionAgentType, setActiveSessionAgentType] = useState('agentic');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
-  const [homeConversationStarting, setHomeConversationStarting] = useState(false);
-  const [homeHarnessPickerOpen, setHomeHarnessPickerOpen] = useState(false);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const isWideLayout = useWideLayout();
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
@@ -144,7 +142,6 @@ const AppContent: React.FC = () => {
         setActiveSessionName('Session');
         setActiveSessionAgentType('agentic');
         setChatAutoFocus(false);
-        setHomeHarnessPickerOpen(false);
         setPrevPage(null);
         setNavDir(null);
         pageStackRef.current = ['pairing', 'sessions'];
@@ -239,70 +236,6 @@ const AppContent: React.FC = () => {
     navigateTo('chat', 'push');
   }, [isWideLayout, navigateTo, page]);
 
-  const handleStartConversation = useCallback(async (agentTypeOverride?: string) => {
-    const activeManager = sessionMgrRef.current;
-    if (!activeManager || homeConversationStarting) return;
-    const targetEpoch = activeManager.controlTargetEpoch;
-    const state = useMobileStore.getState();
-    const assistantMode = !!state.currentAssistant && !state.currentWorkspace;
-    const workspacePath = assistantMode
-      ? state.currentAssistant?.path
-      : state.currentWorkspace?.path;
-    const identity = assistantMode
-      ? undefined
-      : {
-          remoteConnectionId: state.currentWorkspace?.remote_connection_id,
-          remoteSshHost: state.currentWorkspace?.remote_ssh_host,
-        };
-    const agentType = agentTypeOverride ?? (assistantMode ? 'claw' : 'code');
-
-    setHomeConversationStarting(true);
-    useMobileStore.getState().setError(null);
-    try {
-      const sessionId = await activeManager.createSession(
-        agentType,
-        undefined,
-        workspacePath,
-        identity,
-      );
-      if (
-        sessionMgrRef.current !== activeManager
-        || activeManager.controlTargetEpoch !== targetEpoch
-      ) return;
-      handleSelectSession(
-        sessionId,
-        assistantMode ? t('sessions.remoteClawSession') : t('sessions.remoteCodeSession'),
-        true,
-        agentType,
-      );
-    } catch (error: unknown) {
-      if (
-        sessionMgrRef.current === activeManager
-        && activeManager.controlTargetEpoch === targetEpoch
-      ) {
-        useMobileStore.getState().setError(
-          String((error as { message?: string })?.message || error),
-        );
-      }
-    } finally {
-      setHomeConversationStarting(false);
-    }
-  }, [handleSelectSession, homeConversationStarting, t]);
-
-  const handleRequestStartConversation = useCallback(() => {
-    const activeManager = sessionMgrRef.current;
-    const state = useMobileStore.getState();
-    const assistantMode = !!state.currentAssistant && !state.currentWorkspace;
-    if (
-      !assistantMode
-      && activeManager?.supportsHostCapability(REMOTE_CAPABILITY_HARNESS_PROFILES_V1)
-    ) {
-      setHomeHarnessPickerOpen(true);
-      return;
-    }
-    void handleStartConversation();
-  }, [handleStartConversation]);
-
   const handleBackToSessions = useCallback(() => {
     navigateTo('sessions', 'pop');
     setTimeout(() => setActiveSessionId(null), NAV_DURATION);
@@ -315,8 +248,6 @@ const AppContent: React.FC = () => {
     setActiveSessionName('Session');
     setActiveSessionAgentType('agentic');
     setChatAutoFocus(false);
-    setHomeConversationStarting(false);
-    setHomeHarnessPickerOpen(false);
     setPrevPage(null);
     setNavDir(null);
     pageStackRef.current = ['pairing', 'sessions'];
@@ -338,8 +269,6 @@ const AppContent: React.FC = () => {
     setActiveSessionName('Session');
     setActiveSessionAgentType('agentic');
     setChatAutoFocus(false);
-    setHomeConversationStarting(false);
-    setHomeHarnessPickerOpen(false);
     setCompactSidebarOpen(false);
     setPrevPage(null);
     setNavDir(null);
@@ -358,7 +287,6 @@ const AppContent: React.FC = () => {
   const isAnimating = navDir !== null;
   const currentPage: Page = page;
 
-  const shouldShow = (p: Page) => currentPage === p || (isAnimating && prevPage === p);
 
   const renderSessionList = () => sessionMgrRef.current && (
     <SessionListPage
@@ -389,24 +317,23 @@ const AppContent: React.FC = () => {
     }
     if (currentPage === 'chat' && sessionMgrRef.current && activeSessionId) {
       return (
-        <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
+        <Suspense fallback={<MobileStatus loading title={t('workspace.loadingInfo')} />}>
           <ChatPage
             sessionMgr={sessionMgrRef.current}
+            key={activeSessionId}
             sessionId={activeSessionId}
             sessionName={activeSessionName}
             agentType={activeSessionAgentType}
-            onBack={handleBackToSessions}
+            onBack={isWideLayout ? handleBackToSessions : () => setCompactSidebarOpen(true)}
             autoFocus={chatAutoFocus}
-            wideLayout
+            wideLayout={isWideLayout}
           />
         </Suspense>
       );
     }
     return (
       <RemoteHomePanel
-        onOpenWorkspace={handleOpenWorkspace}
-        onStartConversation={handleRequestStartConversation}
-        conversationStarting={homeConversationStarting}
+        onOpenSidebar={isWideLayout ? undefined : () => setCompactSidebarOpen(true)}
       />
     );
   };
@@ -433,92 +360,27 @@ const AppContent: React.FC = () => {
           onDeviceSelected={handleControlTargetChanged}
         />
       )}
-      {!accountDirectoryOpen && page !== 'pairing' && isWideLayout && sessionMgrRef.current && (
-        <div className="remote-shell remote-shell--wide">
-          <aside className="remote-shell__master" aria-label={t('sessions.sessionHistory')}>
+      {!accountDirectoryOpen && page !== 'pairing' && sessionMgrRef.current && (
+        <div className={isWideLayout ? 'remote-shell remote-shell--wide' : `nav-page compact-remote-shell${compactSidebarOpen ? ' is-sidebar-open' : ''}`}>
+          <aside
+            className={isWideLayout ? 'remote-shell__master' : 'compact-remote-shell__sidebar'}
+            aria-label={t('sessions.sessionHistory')}
+            aria-hidden={!isWideLayout && !compactSidebarOpen || undefined}
+            ref={(node) => { if (node) node.inert = !isWideLayout && !compactSidebarOpen; }}
+          >
             {renderSessionList()}
           </aside>
-          <section className="remote-shell__detail">
+          <MobileScrim
+            className="compact-remote-shell__scrim"
+            hidden={isWideLayout || !compactSidebarOpen}
+            aria-label={t('common.close')}
+            onClick={() => setCompactSidebarOpen(false)}
+          />
+          <section className={isWideLayout ? 'remote-shell__detail' : `compact-remote-shell__main ${getNavClass(currentPage, currentPage, navDir, isAnimating && currentPage !== prevPage)}`}>
             {renderDetailPage()}
           </section>
         </div>
       )}
-      {!accountDirectoryOpen && !isWideLayout && (
-        <>
-          {shouldShow('workspace') && sessionMgrRef.current && (
-            <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
-              <WorkspacePage
-                sessionMgr={sessionMgrRef.current}
-                onReady={handleWorkspaceReady}
-                onBack={doPopFromWorkspace}
-              />
-            </div>
-          )}
-          {shouldShow('devices') && clientRef.current && (
-            <div className={`nav-page ${getNavClass('devices', currentPage, navDir, isAnimating)}`}>
-              <DevicesPage
-                client={clientRef.current}
-                onBack={doPopFromDevices}
-              />
-            </div>
-          )}
-          {(shouldShow('sessions') || shouldShow('chat')) && sessionMgrRef.current && (
-            <div className={`nav-page compact-remote-shell${compactSidebarOpen ? ' is-sidebar-open' : ''}`}>
-              <aside
-                className="compact-remote-shell__sidebar"
-                aria-label={t('sessions.sessionHistory')}
-                aria-hidden={!compactSidebarOpen}
-              >
-                <SessionListPage
-                  sessionMgr={sessionMgrRef.current}
-                  client={clientRef.current ?? undefined}
-                  compact
-                  activeSessionId={activeSessionId}
-                  onSelectSession={handleSelectSession}
-                  onOpenWorkspace={handleOpenWorkspace}
-                  onDisconnect={handleDisconnect}
-                  onOpenDevices={() => navigateTo('devices', 'push')}
-                  onControlTargetChanged={handleControlTargetChanged}
-                />
-              </aside>
-              <MobileScrim
-                className="compact-remote-shell__scrim"
-                aria-label={t('common.close')}
-                onClick={() => setCompactSidebarOpen(false)}
-              />
-              <section className="compact-remote-shell__main">
-                {currentPage === 'chat' && activeSessionId ? (
-                  <Suspense fallback={<MobileStatus loading title={t('workspace.loadingInfo')} />}>
-                    <ChatPage
-                      sessionMgr={sessionMgrRef.current}
-                      sessionId={activeSessionId}
-                      sessionName={activeSessionName}
-                      agentType={activeSessionAgentType}
-                      onBack={() => setCompactSidebarOpen(true)}
-                      autoFocus={chatAutoFocus}
-                    />
-                  </Suspense>
-                ) : (
-                  <RemoteHomePanel
-                    onOpenSidebar={() => setCompactSidebarOpen(true)}
-                    onOpenWorkspace={handleOpenWorkspace}
-                    onStartConversation={handleRequestStartConversation}
-                    conversationStarting={homeConversationStarting}
-                  />
-                )}
-              </section>
-            </div>
-          )}
-        </>
-      )}
-      <HarnessProfilePicker
-        open={homeHarnessPickerOpen}
-        onClose={() => setHomeHarnessPickerOpen(false)}
-        onSelect={(agentType) => {
-          setHomeHarnessPickerOpen(false);
-          void handleStartConversation(agentType);
-        }}
-      />
     </div>
   );
 };
