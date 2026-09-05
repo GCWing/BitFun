@@ -14,9 +14,17 @@
     gap: var(--openbitfun-space-2);
   }
 
-  /** Computer use: authorized status label (Granted / 已授权) */
-  &__perm-status--granted {
-    color: var(--openbitfun-color-content-muted);
+  &__status-row {
+    --row-grid-cols: minmax(0, 1fr) minmax(0, var(--openbitfun-overlay-menu-inline-size));
+  }
+
+  &__status-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--openbitfun-space-2);
+    min-width: 0;
   }
 
   /** Computer use permission row: keep label short, avoid squashing action buttons (nowrap). */
@@ -257,6 +265,11 @@
   .openbitfun-runtime-settings {
     &__row-control {
       align-items: flex-start;
+    }
+
+    &__status-actions {
+      width: 100%;
+      justify-content: space-between;
     }
 
     &__platform-note {

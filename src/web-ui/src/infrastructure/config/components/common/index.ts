@@ -24,6 +24,8 @@ export type {
 } from './ConfigPageLayout';
 export { ConfigLoadingState } from './ConfigLoadingState';
 export type { ConfigLoadingStateProps } from './ConfigLoadingState';
+export { ConfigEmptyState } from './ConfigEmptyState';
+export type { ConfigEmptyStateProps } from './ConfigEmptyState';
 export { ConfigMessage } from './ConfigMessage';
 export type { ConfigMessageData, ConfigMessageProps } from './ConfigMessage';
 export { ConfigFieldStatus } from './ConfigFieldStatus';

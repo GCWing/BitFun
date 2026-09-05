@@ -1,6 +1,6 @@
 {
   "title": "语音输入",
-  "subtitle": "本地转写在当前设备处理且不上传音频；实时语音通话使用单独的云端配置。",
+  "subtitle": "本地转写在当前设备处理且不上传音频；实时语音通话使用单独的云端配置",
   "loading": "正在加载语音输入设置...",
   "sections": {
     "basic": "语音输入",
@@ -42,11 +42,11 @@
   "composer": {
     "enabled": {
       "label": "在输入框中显示语音按钮",
-      "description": "在对话输入框中使用麦克风输入文字。"
+      "description": "在对话输入框中使用麦克风输入文字"
     },
     "language": {
       "label": "识别语言",
-      "description": "默认自动识别；仅在识别不准确时指定语言。"
+      "description": "默认自动识别；仅在识别不准确时指定语言"
     }
   },
   "voiceCall": {
@@ -134,13 +134,13 @@
   "diagnostics": {
     "microphone": {
       "label": "输入设备",
-      "description": "默认跟随系统；此选择仅应用于当前设备。",
+      "description": "默认跟随系统；此选择仅应用于当前设备",
       "systemDefault": "系统默认",
       "unnamed": "麦克风 {{index}}"
     },
     "recognition": {
       "label": "测试语音输入",
-      "description": "说一小段话，同时检查麦克风和本地识别。",
+      "description": "说一小段话，同时检查麦克风和本地识别",
       "start": "开始测试",
       "finish": "结束录音",
       "preparing": "正在准备",
@@ -150,7 +150,7 @@
     "messages": {
       "deviceDisconnected": "所选麦克风已断开连接。",
       "recognitionFailed": "语音输入测试失败。",
-      "noSpeech": "没有识别到语音。"
+      "noSpeech": "没有识别到语音"
     }
   },
   "status": {
@@ -164,44 +164,44 @@
     "ready": {
       "badge": "已就绪",
       "title": "语音输入已就绪",
-      "description": "使用 {{model}} 在本机识别，音频不会上传。",
+      "description": "使用 {{model}} 在本机识别，音频不会上传",
       "summary": "已下载模型：<model>{{model}}</model>"
     },
     "setup": {
       "badge": "未下载",
       "title": "尚未下载语音模型",
-      "description": "下载后即可使用语音输入，约占用 {{size}}。",
+      "description": "下载后即可使用语音输入，约占用 {{size}}",
       "summary": "语音模型<warning>未下载</warning>，下载后即可使用语音输入。"
     },
     "downloading": {
       "badge": "下载中",
       "title": "正在下载语音模型",
-      "description": "{{model}} 下载完成后即可使用语音输入。"
+      "description": "{{model}} 下载完成后即可使用语音输入"
     },
     "verifying": {
       "badge": "校验中",
       "title": "正在校验语音模型",
-      "description": "正在确认 {{model}} 是否完整可用。"
+      "description": "正在确认 {{model}} 是否完整可用"
     },
     "deleting": {
       "badge": "删除中",
       "title": "正在删除语音模型",
-      "description": "正在从此设备移除 {{model}}。"
+      "description": "正在从此设备移除 {{model}}"
     },
     "unavailable": {
       "badge": "不可用",
       "title": "云端语音输入暂不可用",
-      "description": "云端配置已保留，请切换到本地识别。"
+      "description": "云端配置已保留，请切换到本地识别"
     },
     "error": {
       "badge": "需要修复",
       "title": "语音模型不可用",
-      "description": "{{model}} 无法使用，请查看详情并重新下载。"
+      "description": "{{model}} 无法使用，请查看详情并重新下载"
     }
   },
   "localModels": {
     "title": "本地语音模型",
-    "description": "选择此设备用于语音识别的模型。",
+    "description": "选择此设备用于语音识别的模型",
     "loading": "正在加载本地语音模型..."
   },
   "states": {
@@ -229,7 +229,7 @@
     "keep": "保留",
     "deleteConfirmTitle": "删除本地语音模型？",
     "deleteConfirmMessage": "{{name}} 将从本地存储中移除。",
-    "empty": "没有可用的语音模型。",
+    "empty": "没有可用的语音模型",
     "resourceHints": {
       "sensevoice": "轻量，日常推荐",
       "qwen3": "增强，多语种",

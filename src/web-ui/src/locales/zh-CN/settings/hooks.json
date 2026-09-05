@@ -1,10 +1,10 @@
 {
   "title": "Agent Hooks",
-  "subtitle": "在 Agent 生命周期事件中运行自定义命令。",
+  "subtitle": "在 Agent 生命周期事件中运行自定义命令",
   "loading": "正在加载 Hook 设置...",
   "activation": {
     "title": "启用",
-    "description": "Hooks 以你的用户权限运行，请只启用你信任的命令。"
+    "description": "Hooks 以你的用户权限运行，请只启用你信任的命令"
   },
   "fields": {
     "enabled": {
@@ -12,7 +12,7 @@
     },
     "projectHooks": {
       "label": "启用项目 Hook 文件",
-      "description": "读取并运行工作区内的 .openbitfun/config/hooks.json；仅对可信仓库开启。"
+      "description": "读取并运行工作区内的 .openbitfun/config/hooks.json；仅对可信仓库开启"
     }
   },
   "projectHooksRisk": {
@@ -23,26 +23,26 @@
   },
   "locations": {
     "title": "Hook 声明位置",
-    "description": "修改 hooks.json 后立即生效，无需重启 OpenBitFun。",
+    "description": "修改 hooks.json 后立即生效，无需重启 OpenBitFun",
     "userFile": {
       "label": "用户 Hook 文件",
-      "description": "OpenBitFun 用户配置目录中的 config/hooks.json。"
+      "description": "OpenBitFun 用户配置目录中的 config/hooks.json"
     },
     "projectFile": {
       "label": "项目 Hook 文件",
-      "description": "当前工作区中的 .openbitfun/config/hooks.json；需开启“启用项目 Hook 文件”。"
+      "description": "当前工作区中的 .openbitfun/config/hooks.json；需开启“启用项目 Hook 文件”"
     }
   },
   "imports": {
     "title": "已导入的 Hooks",
-    "description": "审阅并管理从 Claude Code 或 Codex 导入的 Hooks。",
+    "description": "审阅并管理从 Claude Code 或 Codex 导入的 Hooks",
     "masterDisabled": "导入内容会被保留，但总开关关闭时不会运行。",
     "refresh": "刷新",
     "remoteUnsupported": "远程工作区暂不支持导入 Hooks。",
     "loading": "正在加载已导入的 Hooks...",
     "loadFailed": "无法加载已导入的 Hooks。",
     "refreshFailed": "无法刷新已导入的 Hooks。",
-    "empty": "没有已导入的 Hook。可刷新检查 Claude Code 和 Codex。",
+    "empty": "没有已导入的 Hook。可刷新检查 Claude Code 和 Codex",
     "review": "审阅",
     "update": "审阅更新",
     "remove": "移除",
@@ -85,7 +85,7 @@
   },
   "compatibility": {
     "title": "Codex 兼容",
-    "description": "OpenBitFun 使用 Codex Hooks 合约，可直接运行兼容的 Hook 脚本。",
+    "description": "OpenBitFun 使用 Codex Hooks 合约，可直接运行兼容的 Hook 脚本",
     "reference": {
       "label": "事件与载荷参考",
       "open": "打开文档"

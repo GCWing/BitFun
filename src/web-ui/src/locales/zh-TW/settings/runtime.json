@@ -2,7 +2,7 @@
   "features": {
     "pet": {
       "title": "桌面寵物",
-      "subtitle": "控制 OpenBitFun 桌面寵物是否顯示以及使用的形象。",
+      "subtitle": "控制 OpenBitFun 桌面寵物是否顯示以及使用的形象",
       "enable": "顯示寵物",
       "petLabel": "寵物形象",
       "petDescription": "選擇預置形象，或匯入從 petdex.dev 下載的 Petdex zip。",
@@ -11,7 +11,7 @@
       "groupImported": "已匯入",
       "import": "匯入",
       "importing": "匯入中",
-      "importHint": "可以去 https://petdex.dev/ 下載形象 zip 後匯入。",
+      "importHint": "可以去 https://petdex.dev/ 下載形象 zip 後匯入",
       "importDialogTitle": "選擇 Petdex 形象 zip",
       "importFailed": "匯入寵物形象失敗",
       "delete": "刪除已匯入形象",
@@ -27,7 +27,7 @@
     },
     "workspaceSearch": {
       "title": "加速工作區搜尋",
-      "subtitle": "提升大型工作區中的檔案搜尋速度。關閉後仍可正常搜尋。",
+      "subtitle": "提升大型工作區中的檔案搜尋速度。關閉後仍可正常搜尋",
       "enable": "啟用加速工作區搜尋"
     }
   },
@@ -72,7 +72,7 @@
     "modeDescription": "作為新工作階段的預設設定，可在輸入框中暫時切換。"
   },
   "projectPermissions": {
-    "description": "「始終允許」會儲存為目前專案的記憶授權；靜態專案規則會在工具執行前直接套用。",
+    "description": "「始終允許」會儲存為目前專案的記憶授權；靜態專案規則會在工具執行前直接套用",
     "grantsTitle": "記憶授權",
     "grantsEmpty": "目前專案沒有記憶授權。",
     "removeGrant": "撤銷授權",
@@ -116,11 +116,11 @@
     "sectionTitle": "桌面控制",
     "sectionDescription": "允許 OpenBitFun 查看螢幕並操作滑鼠和鍵盤。",
     "enable": "允許桌面控制",
-    "enableDesc": "關閉後，OpenBitFun 將不再操作桌面應用程式。瀏覽器控制可單獨設定。",
+    "enableDesc": "關閉後，OpenBitFun 將不再操作桌面應用程式。瀏覽器控制可單獨設定",
     "accessibility": "輔助功能",
-    "accessibilityDesc": "允許 OpenBitFun 識別並操作其他應用程式中的介面。",
+    "accessibilityDesc": "允許 OpenBitFun 識別並操作其他應用程式中的介面",
     "screenCapture": "螢幕錄製",
-    "screenCaptureDesc": "允許 OpenBitFun 查看螢幕內容。",
+    "screenCaptureDesc": "允許 OpenBitFun 查看螢幕內容",
     "granted": "已授權",
     "notGranted": "未授權",
     "statusUnavailable": "狀態未知",
@@ -151,9 +151,9 @@
     "refreshStatus": "重新整理狀態",
     "connect": "連接瀏覽器",
     "defaultCdp": "使用現有瀏覽器",
-    "defaultCdpDesc": "使用已開啟的 Chrome 或 Edge，並保留分頁和登入狀態。連線時仍需在瀏覽器中確認。",
+    "defaultCdpDesc": "使用已開啟的 Chrome 或 Edge，並保留分頁和登入狀態。連線時仍需在瀏覽器中確認",
     "autoConnectOnStartup": "啟動時自動連接",
-    "autoConnectOnStartupDesc": "OpenBitFun 啟動後自動連線已開啟的瀏覽器。瀏覽器重新啟動後可能需要再次確認。",
+    "autoConnectOnStartupDesc": "OpenBitFun 啟動後自動連線已開啟的瀏覽器。瀏覽器重新啟動後可能需要再次確認",
     "defaultCdpEnabled": "已啟用",
     "defaultCdpDisabled": "未啟用",
     "enableDefaultCdp": "啟用並連線",
@@ -178,8 +178,12 @@
       "restarting": "正在重新啟動..."
     },
     "tabs": "個標籤頁",
+    "defaultBrowser": "系統預設瀏覽器",
+    "preferredBrowserConnectedDesc": "中斷連線後可切換瀏覽器",
+    "connected": "已連線",
+    "ready": "已就緒",
     "preferredBrowser": "瀏覽器",
-    "preferredBrowserDesc": "預設使用系統瀏覽器。",
+    "preferredBrowserDesc": "預設使用系統瀏覽器",
     "notInstalled": "未安裝"
   },
   "common": {

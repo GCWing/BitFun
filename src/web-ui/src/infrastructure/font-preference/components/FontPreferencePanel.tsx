@@ -1,9 +1,8 @@
 import {
-  FieldGroup,
   Input,
   NumberInput,
-  SegmentedControl,
-  type SegmentedControlOption,
+  Select,
+  type SelectOption,
 } from '@openbitfun/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,7 +50,7 @@ export function FontPreferencePanel() {
     ? (parseInt(customInput, 10) || 14)
     : parseInt(UI_FONT_SIZE_PRESETS[level].base, 10);
 
-  const levelOptions = useMemo<SegmentedControlOption[]>(
+  const levelOptions = useMemo<SelectOption[]>(
     () => [
       ...UI_LEVELS.map((l) => ({
         value: l,
@@ -72,89 +71,68 @@ export function FontPreferencePanel() {
       data-openbitfun-part="root"
     >
       <ConfigPageSection
-        bodySurface={false}
         className="font-pref-panel__section"
         title={t('appearance.fontSize.title')}
         description={t('appearance.fontSize.hint')}
       >
-        <FieldGroup
-          appearance="subtle"
-          className="font-pref-panel__surface"
-          dividers={false}
-          fieldSurface="default"
+        <ConfigPageRow
+          label={t('appearance.fontSize.uiSizeLabel')}
+          description={t('appearance.fontSize.uiSizeHint')}
+          align="center"
         >
-          <ConfigPageRow
-            className="font-pref-panel__row--ui"
-            label={t('appearance.fontSize.uiSizeLabel')}
-            description={t('appearance.fontSize.uiSizeHint')}
-            align="start"
-            multiline
-          >
-            <div className="font-pref-panel__ui-size">
-              <div
-                className="font-pref-panel__level-buttons"
-                data-testid="appearance-ui-font-level-group"
-              >
-                <SegmentedControl
-                  className="font-pref-panel__level-control"
-                  aria-label={t('appearance.fontSize.uiSizeLabel')}
-                  options={levelOptions}
-                  size="md"
-                  tone="neutral"
-                  value={level}
-                  variant="pills"
-                  onValueChange={(value) => void handleLevelClick(value as FontSizeLevel)}
-                />
-                {level === 'custom' && (
-                  <div
-                    className="font-pref-panel__custom-controls"
-                    role="group"
-                    aria-label={t('appearance.fontSize.customPxLabel')}
-                    data-testid="appearance-ui-font-custom-controls"
-                    data-openbitfun-component="font-preference"
-                    data-openbitfun-part="customControls"
-                  >
-                    <NumberInput
-                      className="font-pref-panel__custom-number-input"
-                      value={parseInt(customInput, 10) || 14}
-                      min={12}
-                      max={20}
-                      step={1}
-                      unit="px"
-                      variant="stepper"
-                      size="md"
-                      decrementLabel={`${t('appearance.fontSize.customPxLabel')} −1`}
-                      incrementLabel={`${t('appearance.fontSize.customPxLabel')} +1`}
-                      onValueChange={handleCustomValueChange}
-                      aria-label={t('appearance.fontSize.customPxLabel')}
-                      onFocus={() => void handleLevelClick('custom')}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Editable live preview */}
-              <div
-                className="font-pref-panel__preview"
-                data-openbitfun-component="font-preference"
-                data-openbitfun-part="preview"
-              >
-                <Input
-                  className="font-pref-panel__preview-input"
-                  aria-label={t('appearance.fontSize.previewLabel')}
-                  autoComplete="off"
-                  data-testid="appearance-ui-font-preview-input"
-                  onValueChange={setPreviewText}
-                  placeholder={t('appearance.fontSize.previewPlaceholder')}
-                  size="md"
-                  spellCheck={false}
-                  style={{ fontSize: `${previewBasePx}px` }}
-                  value={previewText}
-                />
-              </div>
+          <Select
+            aria-label={t('appearance.fontSize.uiSizeLabel')}
+            data-testid="appearance-ui-font-level-group"
+            options={levelOptions}
+            size="sm"
+            value={level}
+            onValueChange={(value) => void handleLevelClick(value as FontSizeLevel)}
+          />
+        </ConfigPageRow>
+        {level === 'custom' && (
+          <ConfigPageRow label={t('appearance.fontSize.customPxLabel')} align="center">
+            <div
+              className="font-pref-panel__custom-controls"
+              data-testid="appearance-ui-font-custom-controls"
+              data-openbitfun-component="font-preference"
+              data-openbitfun-part="customControls"
+            >
+              <NumberInput
+                value={parseInt(customInput, 10) || 14}
+                min={12}
+                max={20}
+                step={1}
+                unit="px"
+                variant="stepper"
+                size="sm"
+                decrementLabel={`${t('appearance.fontSize.customPxLabel')} −1`}
+                incrementLabel={`${t('appearance.fontSize.customPxLabel')} +1`}
+                onValueChange={handleCustomValueChange}
+                aria-label={t('appearance.fontSize.customPxLabel')}
+              />
             </div>
           </ConfigPageRow>
-        </FieldGroup>
+        )}
+        <ConfigPageRow label={t('appearance.fontSize.previewLabel')} multiline>
+          <div
+            className="font-pref-panel__preview"
+            data-openbitfun-component="font-preference"
+            data-openbitfun-part="preview"
+          >
+            <Input
+              className="font-pref-panel__preview-input"
+              aria-label={t('appearance.fontSize.previewLabel')}
+              autoComplete="off"
+              data-testid="appearance-ui-font-preview-input"
+              onValueChange={setPreviewText}
+              placeholder={t('appearance.fontSize.previewPlaceholder')}
+              size="sm"
+              spellCheck={false}
+              style={{ fontSize: `${previewBasePx}px` }}
+              value={previewText}
+            />
+          </div>
+        </ConfigPageRow>
       </ConfigPageSection>
     </div>
   );

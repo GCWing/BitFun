@@ -4,26 +4,26 @@
   "section": {
     "config": {
       "title": "執行行為",
-      "description": "控制工具調用時的確認與超時策略。"
+      "description": "控制工具調用時的確認與超時策略"
     },
     "list": {
       "title": "工具列表",
-      "description": "共 {{count}} 個可用工具。"
+      "description": "共 {{count}} 個可用工具"
     }
   },
   "config": {
     "autoExecute": "自動執行",
-    "autoExecuteDesc": "跳過工具執行前的用戶確認步驟。",
+    "autoExecuteDesc": "跳過工具執行前的用戶確認步驟",
     "subagentMaxConcurrency": "同時執行任務數",
-    "subagentMaxConcurrencyDesc": "可同時執行的任務數量。",
+    "subagentMaxConcurrencyDesc": "可同時執行的任務數量",
     "swarmMaxConcurrency": "Swarm 工作並發上限",
-    "swarmMaxConcurrencyDesc": "同一時間允許並行執行的 Swarm Worker 和 Reviewer 數量，與普通子智能體上限獨立。",
+    "swarmMaxConcurrencyDesc": "同一時間允許並行執行的 Swarm Worker 和 Reviewer 數量，與普通子智能體上限獨立",
     "confirmTimeout": "確認超時",
     "confirmTimeoutDesc": "等待用戶確認工具調用的最長時間（秒）。",
     "confirmTimeoutHint": "設為 0 可關閉確認超時。",
     "executionTimeout": "工具逾時",
-    "executionTimeoutDesc": "單次工具操作的最長時間。設為 0 表示不限制。",
-    "executionTimeoutHint": "設為 0 表示不限制。",
+    "executionTimeoutDesc": "單次工具操作的最長時間。設為 0 表示不限制",
+    "executionTimeoutHint": "設為 0 表示不限制",
     "subagentBatchPolicy": {
       "label": "任務並行方式",
       "desc": "選擇多個任務同時開始時的執行方式。",

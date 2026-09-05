@@ -66,6 +66,7 @@ import type { OpenCodePlan, SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
 import {
   ConfigActionBar,
+  ConfigEmptyState,
   ConfigPageHeader,
   ConfigPageLayout,
   ConfigPageContent,
@@ -3740,14 +3741,17 @@ const ModelSettingsPage: React.FC = () => {
             />
           )}
           {aiModels.length === 0 ? (
-            <div className="openbitfun-model-settings__empty" data-openbitfun-component="model-settings" data-openbitfun-part="empty">
-              <Wifi size={36} />
-              <p>{t('empty.noModels')}</p>
-              <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
-
-                {t('actions.createFirst')}
-              </Button>
-            </div>
+            <ConfigEmptyState
+              data-openbitfun-component="model-settings"
+              data-openbitfun-part="empty"
+              icon={<Wifi size={36} aria-hidden="true" />}
+              description={t('empty.noModels')}
+              actions={(
+                <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
+                  {t('actions.createFirst')}
+                </Button>
+              )}
+            />
           ) : (
             <div className="openbitfun-model-settings__collection" data-openbitfun-component="model-settings" data-openbitfun-part="collection" data-testid="settings-model-list">
               {providerGroups.map(group => {

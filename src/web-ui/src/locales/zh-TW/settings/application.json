@@ -7,18 +7,18 @@
   "applicationGroups": {
     "startupAndUpdates": {
       "title": "啟動與更新",
-      "description": "管理登入啟動、執行期間保持喚醒及版本檢查。"
+      "description": "管理登入啟動、執行期間保持喚醒及版本檢查"
     },
     "windowAndNotifications": {
       "title": "視窗與通知",
-      "description": "管理關閉視窗時的行為，以及需要提醒你的事件。"
+      "description": "管理關閉視窗時的行為，以及需要提醒你的事件"
     }
   },
   "appearance": {
     "title": "外觀",
     "hint": "介面語言與外觀",
     "interfaceTitle": "介面",
-    "interfaceHint": "選擇 OpenBitFun 介面的顯示語言。",
+    "interfaceHint": "選擇 OpenBitFun 介面的顯示語言",
     "language": "語言",
     "appearances": "外觀",
     "builtIn": "內置",
@@ -26,8 +26,8 @@
     "export": "導出",
     "delete": "刪除",
     "confirmDelete": "確定刪除外觀 \"{{name}}\" 嗎？",
-    "languageRowHint": "選擇一個語言包作為目前界面語言。",
-    "appearanceRowHint": "選擇界面外觀。",
+    "languageRowHint": "選擇一個語言包作為目前界面語言",
+    "appearanceRowHint": "選擇界面外觀",
     "systemAppearance": "跟隨系統",
     "systemAppearanceDescription": "根據系統設定自動使用亮色或暗色外觀，並隨系統切換而更新。",
     "presets": {
@@ -70,9 +70,9 @@
     },
     "fontSize": {
       "title": "字體大小",
-      "hint": "調整介面與對話區域的字體大小；編輯器字體大小請在編輯器設定中另外調整。",
+      "hint": "調整介面與對話區域的字體大小；編輯器字體大小請在編輯器設定中另外調整",
       "uiSizeLabel": "介面與對話",
-      "uiSizeHint": "選擇舒適的字體大小，套用至導覽、面板、設定與對話內容。",
+      "uiSizeHint": "選擇舒適的字體大小，套用至導覽、面板、設定與對話內容",
       "levels": {
         "compact": "緊湊",
         "small": "小",
@@ -121,18 +121,18 @@
       "path": "本次啟動日誌路徑"
     },
     "level": {
-      "description": "實時控制日誌輸出級別，修改後立即生效。"
+      "description": "實時控制日誌輸出級別，修改後立即生效"
     },
     "sensitiveDiagnostics": {
       "label": "包含敏感除錯資訊",
-      "description": "預設關閉。開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。OpenBitFun 不會自動上傳這些日誌檔案。"
+      "description": "預設關閉。開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。OpenBitFun 不會自動上傳這些日誌檔案"
     },
     "path": {
-      "description": "本次啟動寫入日誌檔案所在的目錄。"
+      "description": "本次啟動寫入日誌檔案所在的目錄"
     },
     "diagnostics": {
       "label": "診斷包",
-      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。OpenBitFun 不會自動上傳。",
+      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。OpenBitFun 不會自動上傳",
       "confirmTitle": "匯出診斷包？",
       "confirmSensitive": "診斷包將包含敏感除錯資訊，可能涉及 Prompt、模型請求與回應、工具參數和檔案路徑。請只儲存到可信位置，並在分享前檢查內容。",
       "confirmStandard": "診斷包可能包含本機路徑、運行環境和錯誤詳情。請只儲存到可信位置，並在分享前檢查內容。",
@@ -192,7 +192,7 @@
     "controls": {
       "refreshTooltip": "重新整理可用終端列表",
       "autoDetect": "自動檢測 (推薦)",
-      "description": "新增終端以及本地工作區中 agent 執行命令時使用的默認 Shell 類型。",
+      "description": "新增終端以及本地工作區中 agent 執行命令時使用的默認 Shell 類型",
       "cmdFallbackMessage": "Agent 執行命令時實際使用 PowerShell。",
       "placeholder": "選擇默認終端",
       "noShells": "未檢測到可用的終端"

@@ -5,6 +5,7 @@ import {
   NumberInput,
   Select,
   Switch,
+  StatusPill,
   Tooltip,
   type ComboboxOption,
   type SelectOption,
@@ -48,6 +49,7 @@ import {
   normalizeToolPermissionConfig,
   permissionConfigService,
 } from '../services/PermissionConfigService';
+import { i18nService } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useNotification, notificationService } from '@/shared/notification-system';
@@ -898,22 +900,30 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           ? t('computerUse.platformNotes.linux')
           : t('computerUse.platformNotes.generic')
     : null;
-  // A ready browser is not a failure state: OpenBitFun attaches to it the moment
-  // something needs it, so say that rather than the bare "not connected".
-  const browserStatusLabel = browserCdpAvailable
-    ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
-    : browserStatusLoading
-      ? t('loading.text')
-      : browserStatusError
-        ? t('browserControl.statusUnavailable')
-      : browserReady
-        ? t('browserControl.readyNotConnected')
-        : t('browserControl.notConnected');
-  const browserSelectOptions: ComboboxOption[] = browserOptions.map((option) => ({
-    value: option.value,
-    label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
-    disabled: !option.installed,
-  }));
+  const browserStatusLabel = browserStatusLoading
+    ? t('loading.text')
+    : browserStatusError
+      ? t('browserControl.statusUnavailable')
+      : browserCdpAvailable
+        ? t('browserControl.connected')
+        : browserReady
+          ? t('browserControl.ready')
+          : t('browserControl.notConnected');
+  const browserStatusDescription = !browserStatusLoading && !browserStatusError
+    ? browserCdpAvailable
+      ? `${browserKind} · ${i18nService.formatNumber(browserPageCount)} ${t('browserControl.tabs')}`
+      : browserReady ? t('browserControl.readyNotConnected') : undefined
+    : undefined;
+  const browserSelectOptions: ComboboxOption[] = browserOptions.map((option) => {
+    const label = option.value === DEFAULT_BROWSER_CONTROL_BROWSER
+      ? t('browserControl.defaultBrowser')
+      : option.label;
+    return {
+      value: option.value,
+      label: option.installed ? label : `${label} (${t('browserControl.notInstalled')})`,
+      disabled: !option.installed,
+    };
+  });
 
   const pageCopyKey = page === 'session-workspace'
     ? 'sessionWorkspace'
@@ -1334,24 +1344,19 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 label={t('computerUse.accessibility')}
                 description={t('computerUse.accessibilityDesc')}
                 align="center"
-                balanced
+                className="openbitfun-runtime-settings__status-row"
               >
                 <div
-                  className="openbitfun-runtime-settings__row-control"
+                  className="openbitfun-runtime-settings__status-actions"
                   data-openbitfun-component="runtime-settings"
                   data-openbitfun-part="control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
                 >
-                  <span className={!computerUseStatusLoading && computerUseAccess ? 'openbitfun-runtime-settings__perm-status--granted' : undefined}>
+                  <StatusPill
+                    tone={computerUseStatusLoading ? 'neutral' : computerUseStatusError ? 'warning' : computerUseAccess ? 'success' : 'warning'}
+                    role="status"
+                  >
                     {computerUseAccessLabel}
-                  </span>
+                  </StatusPill>
                   {platform === 'macos' && (
                     <Button
                       className="openbitfun-runtime-settings__row-action-btn"
@@ -1369,24 +1374,19 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 label={t('computerUse.screenCapture')}
                 description={t('computerUse.screenCaptureDesc')}
                 align="center"
-                balanced
+                className="openbitfun-runtime-settings__status-row"
               >
                 <div
-                  className="openbitfun-runtime-settings__row-control"
+                  className="openbitfun-runtime-settings__status-actions"
                   data-openbitfun-component="runtime-settings"
                   data-openbitfun-part="control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
                 >
-                  <span className={!computerUseStatusLoading && computerUseScreen ? 'openbitfun-runtime-settings__perm-status--granted' : undefined}>
+                  <StatusPill
+                    tone={computerUseStatusLoading ? 'neutral' : computerUseStatusError ? 'warning' : computerUseScreen ? 'success' : 'warning'}
+                    role="status"
+                  >
                     {computerUseScreenLabel}
-                  </span>
+                  </StatusPill>
                   {platform === 'macos' && (
                     <Button
                       className="openbitfun-runtime-settings__row-action-btn"
@@ -1434,6 +1434,14 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
         {/* ── Browser control (CDP) ──────────────────────────────── */}
         <ConfigPageSection
           title={t('browserControl.sectionTitle')}
+          extra={IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
+            <ConfigRefreshButton
+              tooltip={t('browserControl.refreshStatus')}
+              loading={browserStatusLoading}
+              disabled={browserControlBusy}
+              onClick={() => void refreshBrowserControlStatus()}
+            />
+          ) : undefined}
           description={
             IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
           }
@@ -1445,11 +1453,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                   ? { type: 'error', text: t('browserControl.statusLoadFailed') }
                   : null}
               />
-              {/* Only show browser selector when CDP is not connected */}
-              {!browserCdpAvailable && (
               <ConfigPageRow
                 label={t('browserControl.preferredBrowser')}
-                description={t('browserControl.preferredBrowserDesc')}
+                description={t(browserCdpAvailable ? 'browserControl.preferredBrowserConnectedDesc' : 'browserControl.preferredBrowserDesc')}
                 align="center"
               >
                 <div className="openbitfun-runtime-settings__row-control" data-openbitfun-component="runtime-settings" data-openbitfun-part="control">
@@ -1457,50 +1463,31 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                     value={preferredBrowser}
                     options={browserSelectOptions}
                     size="sm"
-                    disabled={browserControlBusy || browserStatusLoading || browserStatusError || browserSelectOptions.length === 0}
+                    disabled={browserCdpAvailable || browserControlBusy || browserStatusLoading || browserStatusError || browserSelectOptions.length === 0}
                     onValueChange={(value) => void handleBrowserControlBrowserChange(value)}
                   />
                 </div>
               </ConfigPageRow>
-              )}
               {browserDefaultCdpSupported && (
                 <ConfigPageRow
                   label={t('browserControl.defaultCdp')}
                   description={t('browserControl.defaultCdpDesc')}
                   align="center"
-                  balanced
+                  className="openbitfun-runtime-settings__status-row"
                 >
                   <div
-                    className="openbitfun-runtime-settings__row-control"
+                    className="openbitfun-runtime-settings__status-actions"
                     data-openbitfun-component="runtime-settings"
                     data-openbitfun-part="control"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      flexWrap: 'nowrap',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: 8,
-                    }}
                   >
-                    <span className={browserDefaultCdpEnabled ? 'openbitfun-runtime-settings__perm-status--granted' : undefined}>
-                      {t(browserDefaultCdpEnabled
+                    <StatusPill
+                      tone={browserStatusLoading ? 'neutral' : browserStatusError ? 'warning' : browserDefaultCdpEnabled ? 'success' : 'neutral'}
+                      role="status"
+                    >
+                      {t(browserStatusLoading ? 'loading.text' : browserStatusError ? 'browserControl.statusUnavailable' : browserDefaultCdpEnabled
                         ? 'browserControl.defaultCdpEnabled'
                         : 'browserControl.defaultCdpDisabled')}
-                    </span>
-                    {!browserCdpAvailable && (
-                      <Button
-                        className="openbitfun-runtime-settings__row-action-btn"
-                        size="sm"
-                        variant="outline"
-                        disabled={browserControlBusy || browserStatusLoading || browserStatusError}
-                        onClick={() => void handleBrowserControlEnableDefaultCdp()}
-                      >
-                        {t(browserDefaultCdpEnabled
-                          ? 'browserControl.connect'
-                          : 'browserControl.enableDefaultCdp')}
-                      </Button>
-                    )}
+                    </StatusPill>
                   </div>
                 </ConfigPageRow>
               )}
@@ -1509,85 +1496,59 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                   label={t('browserControl.autoConnectOnStartup')}
                   description={t('browserControl.autoConnectOnStartupDesc')}
                   align="center"
-                  balanced
                 >
                   <div className="openbitfun-runtime-settings__row-control" data-openbitfun-component="runtime-settings" data-openbitfun-part="control">
                     <Switch
                       checked={browserAutoConnectOnStartup}
                       onChange={(e) => void handleBrowserAutoConnectChange(e.target.checked)}
-                      disabled={browserStatusError}
+                      disabled={browserControlBusy || browserStatusLoading || browserStatusError}
                     />
                   </div>
                 </ConfigPageRow>
               )}
               <ConfigPageRow
                 label={t('browserControl.status')}
-                description={t('browserControl.statusDesc') || undefined}
+                description={browserStatusDescription}
                 align="center"
-                balanced
+                className="openbitfun-runtime-settings__status-row"
               >
                 <div
-                  className="openbitfun-runtime-settings__row-control"
+                  className="openbitfun-runtime-settings__status-actions"
                   data-openbitfun-component="runtime-settings"
                   data-openbitfun-part="control"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                    minWidth: 0,
-                  }}
                 >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                      maxWidth: '100%',
-                    }}
+                  <StatusPill
+                    tone={browserStatusLoading ? 'neutral' : browserStatusError ? 'warning' : browserCdpAvailable ? 'success' : 'neutral'}
+                    role="status"
                     title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
                   >
-                    <span
-                      className={!browserStatusLoading && browserCdpAvailable ? 'openbitfun-runtime-settings__perm-status--granted' : undefined}
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-                    >
-                      {browserStatusLabel}
-                    </span>
-                    <Tooltip content={t('browserControl.refreshStatus')}>
-                      <IconButton
-                        type="button"
-                        size="sm"
-                        aria-label={t('browserControl.refreshStatus')}
-                        disabled={browserControlBusy || browserStatusLoading}
-                        onClick={() => void refreshBrowserControlStatus()}
-                        icon={<Icon name="refresh" size="sm" />}
-                      />
-                    </Tooltip>
-                  </span>
+                    {browserStatusLabel}
+                  </StatusPill>
                   {browserCdpAvailable ? (
                     <Button
                       className="openbitfun-runtime-settings__row-action-btn"
                       size="sm"
                       variant="outline"
-                      disabled={browserControlBusy || browserStatusLoading}
+                      disabled={browserControlBusy || browserStatusLoading || browserStatusError}
                       onClick={() => void handleBrowserControlDisconnect()}
                     >
                       {t('browserControl.disconnect')}
                     </Button>
-                  ) : !browserDefaultCdpSupported ? (
+                  ) : (
                     <Button
                       className="openbitfun-runtime-settings__row-action-btn"
                       size="sm"
                       variant="outline"
-                      disabled={browserControlBusy || browserStatusLoading}
-                      onClick={() => void handleBrowserControlLaunch()}
+                      disabled={browserControlBusy || browserStatusLoading || browserStatusError}
+                      onClick={() => void (browserDefaultCdpSupported
+                        ? handleBrowserControlEnableDefaultCdp()
+                        : handleBrowserControlLaunch())}
                     >
-                      {t('browserControl.connect')}
+                      {t(browserDefaultCdpSupported && !browserDefaultCdpEnabled
+                        ? 'browserControl.enableDefaultCdp'
+                        : 'browserControl.connect')}
                     </Button>
-                  ) : null}
+                  )}
                 </div>
               </ConfigPageRow>
             </>

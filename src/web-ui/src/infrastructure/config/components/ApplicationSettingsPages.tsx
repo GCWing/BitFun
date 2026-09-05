@@ -1,4 +1,4 @@
-import { Alert, Button, Combobox, ConfirmDialog, Select, Switch, Tooltip, type ComboboxOption } from '@openbitfun/ui';
+import { Alert, Button, Combobox, ConfirmDialog, IconButton, Input, Select, Switch, Tooltip, type ComboboxOption } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Archive, FolderOpen } from 'lucide-react';
@@ -30,6 +30,9 @@ import type {
 import './ApplicationSettingsPages.scss';
 
 const log = createLogger('ApplicationSettings');
+
+// Combobox reserves the empty string for no selection; config uses it for auto-detection.
+const AUTO_DETECT_SHELL_VALUE = '__auto_detect_shell__';
 
 type TerminalShellOption = ComboboxOption & {
   shell?: ShellInfo;
@@ -509,6 +512,7 @@ function LoggingSection() {
           >
             <Select
               value={configLevel}
+              size="sm"
               onValueChange={(v) => handleLevelChange(v as string)}
               options={levelOptions}
               disabled={saving}
@@ -533,18 +537,24 @@ function LoggingSection() {
             multiline
           >
             <div className="openbitfun-logging-config__path-row" data-openbitfun-component="application-settings" data-openbitfun-part="logPath">
-              <div className="openbitfun-logging-config__path-box">
-                {runtimeInfo?.sessionLogDir || '-'}
-              </div>
+              <Input
+                className="openbitfun-logging-config__path-box"
+                aria-label={t('logging.sections.path')}
+                title={runtimeInfo?.sessionLogDir || undefined}
+                value={runtimeInfo?.sessionLogDir || '-'}
+                readOnly
+                size="sm"
+              />
               <Tooltip content={t('logging.actions.openFolderTooltip')} placement="top">
-                <button
-                  type="button"
-                  className="openbitfun-logging-config__open-btn"
+                <IconButton
+                  aria-label={t('logging.actions.openFolderTooltip')}
+                  variant="quiet"
+                  size="sm"
                   onClick={handleOpenFolder}
+                  loading={openingFolder}
                   disabled={openingFolder || !runtimeInfo?.sessionLogDir}
-                >
-                  <FolderOpen size={14} />
-                </button>
+                  icon={<FolderOpen size={14} aria-hidden />}
+                />
               </Tooltip>
             </div>
           </ConfigPageRow>
@@ -556,8 +566,8 @@ function LoggingSection() {
             <Button
               type="button"
               variant="outline"
-              size="md"
-              leadingIcon={<Archive />}
+              size="sm"
+              leadingIcon={<Archive size={14} aria-hidden />}
               data-testid="diagnostics-export-button"
               onClick={() => {
                 setExportConfirmOpen(true);
@@ -675,7 +685,7 @@ function TerminalSection() {
 
   const shellOptions = useMemo<TerminalShellOption[]>(
     () => [
-      { value: '', label: t('terminal.controls.autoDetect') },
+      { value: AUTO_DETECT_SHELL_VALUE, label: t('terminal.controls.autoDetect') },
       ...availableShells.map((shell) => ({
         description: shell.path,
         value: shell.path,
@@ -692,7 +702,7 @@ function TerminalSection() {
       availableShells.find((shell) => shell.shellType === defaultShell),
     [availableShells, defaultShell],
   );
-  const selectedShellValue = selectedShell?.path ?? defaultShell;
+  const selectedShellValue = selectedShell?.path ?? (defaultShell || AUTO_DETECT_SHELL_VALUE);
 
   const terminalPanelPositionOptions = useMemo(
     () => [
@@ -740,7 +750,7 @@ function TerminalSection() {
             {availableShells.length > 0 ? (
               <Combobox
                 value={selectedShellValue}
-                onValueChange={(v) => handleShellChange(v as string)}
+                onValueChange={(v) => handleShellChange(v === AUTO_DETECT_SHELL_VALUE ? '' : v as string)}
                 options={shellOptions}
                 placeholder={t('terminal.controls.placeholder')}
                 disabled={saving}

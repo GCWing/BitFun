@@ -3,7 +3,7 @@
   "subtitle": "Interface language, appearance, and global font size",
   "package": {
     "title": "Appearance",
-    "description": "Choose a built-in theme inside the OpenBitFun default card, or select another installed skin shown alongside it. Hover a thumbnail for a larger preview; assets stay on this device.",
+    "description": "Choose a built-in theme or an installed appearance package. Hover over a thumbnail to preview; assets stay on this device.",
     "import": "Import package",
     "importSuccess": "Imported {{name}}",
     "importFailed": "Could not import the appearance package. Review the issue details.",
@@ -16,7 +16,7 @@
     "deleteSuccess": "Deleted {{name}}",
     "deleteFailed": "Could not delete appearance package: {{error}}",
     "nativeName": "OpenBitFun default",
-    "nativeDescription": "Choose from the built-in themes.",
+    "nativeDescription": "Choose a built-in theme",
     "builtinTheme": "Built-in theme",
     "unknownAuthor": "Unknown author",
     "empty": "No imported appearance packages yet.",

@@ -394,35 +394,8 @@
   }
 
   &__empty {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--openbitfun-space-3);
-    padding: var(--openbitfun-space-5);
-    border: 1px dashed var(--openbitfun-color-border-default);
-    border-radius: var(--openbitfun-radius-md);
-    color: var(--openbitfun-color-content-muted);
     animation: openbitfun-worktree-results-enter 180ms var(--openbitfun-motion-easing-standard) both;
     transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-    svg {
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    h4 {
-      margin: 0;
-      color: var(--openbitfun-color-content-primary);
-      font-size: var(--openbitfun-type-label-md-font-size);
-      font-weight: var(--openbitfun-type-label-sm-font-weight);
-      line-height: var(--openbitfun-type-body-sm-line-height);
-    }
-
-    p {
-      margin: var(--openbitfun-space-1) 0 0;
-      color: var(--openbitfun-color-content-secondary);
-      font-size: var(--openbitfun-type-label-sm-font-size);
-      line-height: var(--openbitfun-type-body-lg-line-height);
-    }
   }
 }
 

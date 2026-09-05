@@ -28,7 +28,7 @@
 
   &__gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--openbitfun-space-4);
     width: 100%;
     min-width: 0;
@@ -37,22 +37,28 @@
   &__card {
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--openbitfun-space-4);
     width: 100%;
-    height: 160px;
+    min-height: 104px;
+    padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
+    box-sizing: border-box;
     overflow: hidden;
-    border-radius: var(--openbitfun-radius-md);
-    background: var(--openbitfun-color-action-quiet-hover);
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
     color: var(--openbitfun-color-content-primary);
   }
 
   &__card-select {
     display: flex;
     flex: 1;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--openbitfun-space-4);
     width: 100%;
     min-width: 0;
-    height: 100%;
+    min-height: 72px;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -78,11 +84,12 @@
   &__card-preview {
     position: relative;
     display: flex;
-    flex: 0 0 97px;
+    flex: 0 0 104px;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    height: 97px;
+    width: 104px;
+    height: 72px;
+    border-radius: var(--openbitfun-radius-sm);
     overflow: hidden;
     background: var(--openbitfun-color-surface-workbench);
     color: var(--openbitfun-color-content-muted);
@@ -117,14 +124,15 @@
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
+    justify-content: center;
     min-width: 0;
-    padding: var(--openbitfun-space-2) var(--openbitfun-space-3) var(--openbitfun-space-3);
+    padding: 0;
   }
 
   &__card-body--inline {
     flex-direction: row;
     align-items: center;
-    gap: var(--openbitfun-space-2);
+    gap: var(--openbitfun-space-4);
   }
 
   &__card-copy {
@@ -136,27 +144,25 @@
 
     > strong,
     > .appearance-package-config__card-description {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
     }
 
     > strong {
-      font-size: var(--openbitfun-type-label-md-font-size);
+      font-size: var(--openbitfun-type-label-selected-font-size);
       font-weight: var(--openbitfun-type-label-selected-font-weight);
-      line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
+      line-height: var(--openbitfun-type-label-selected-line-height);
     }
 
     > .appearance-package-config__card-description {
       color: var(--openbitfun-color-content-secondary);
-      font-size: var(--openbitfun-type-meta-font-size);
-      line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
+      font-size: var(--openbitfun-type-support-font-size);
+      line-height: var(--openbitfun-type-modifier-leading-support-line-height);
     }
   }
 
   &__builtin-theme-select {
-    flex: 0 0 112px;
-    width: 112px;
+    flex: 0 0 var(--openbitfun-overlay-menu-inline-size);
+    width: var(--openbitfun-overlay-menu-inline-size);
     min-width: 0;
   }
 
@@ -199,7 +205,7 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--openbitfun-space-3);
+    gap: var(--openbitfun-space-2);
   }
 
   &__diagnostics {
@@ -1762,6 +1768,39 @@
     &--branch {
       width: 16px;
       opacity: 0.7;
+    }
+  }
+}
+
+@container config-panel (max-width: 640px) {
+  .appearance-package-config {
+    > [data-openbitfun-part='header'] {
+      flex-direction: column;
+    }
+
+    &__actions {
+      justify-content: flex-start;
+    }
+
+    &__card {
+      padding: var(--openbitfun-space-4);
+    }
+
+    &__card-preview {
+      flex-basis: 72px;
+      width: 72px;
+      height: 56px;
+    }
+
+    &__card-body--inline {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--openbitfun-space-2);
+    }
+
+    &__builtin-theme-select {
+      flex: 0 1 auto;
+      width: 100%;
     }
   }
 }

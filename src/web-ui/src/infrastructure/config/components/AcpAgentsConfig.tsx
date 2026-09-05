@@ -22,6 +22,8 @@ import {
   ConfigPageSection,
   ConfigPageSectionStack,
   ConfigLoadingState,
+  ConfigRefreshButton,
+  formatStandaloneUiText,
   ConfigMessage,
   ConfigRetryState,
 } from './common';
@@ -1323,7 +1325,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
           <Button
             variant="outline"
             size="sm"
-            trailingIcon={<Icon name="arrow-up-right" size="lg" />}
+            trailingIcon={<Icon name="arrow-up-right" size="sm" />}
             onClick={openLearnMore}
           >
             {t('actions.learnMore')}
@@ -1341,6 +1343,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
           className="openbitfun-acp-agents__tabs"
           data-openbitfun-component="acp-agents-config"
           data-openbitfun-part="tabs"
+          size="sm"
           items={viewTabs}
           onValueChange={handleViewChange}
           value={activeView}
@@ -1353,43 +1356,6 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
           data-openbitfun-component="acp-agents-config"
           data-openbitfun-part="manager"
         >
-          {activeView === 'local' && (
-          <div
-            className="openbitfun-acp-agents__toolbar"
-            data-openbitfun-component="acp-agents-config"
-            data-openbitfun-part="toolbar"
-          >
-            <Input
-              className="openbitfun-acp-agents__search"
-              value={registrySearch}
-              onChange={(event) => setRegistrySearch(event.target.value)}
-              placeholder={t('registry.searchPlaceholder')}
-              leading={<Icon name="search" size="sm" />}
-              size="md"
-            />
-            <div className="openbitfun-acp-agents__toolbar-actions">
-              <Select
-                className="openbitfun-acp-agents__filter-select"
-                options={registryFilterOptions}
-                value={registryFilter}
-                onValueChange={(value) => setRegistryFilter(value as RegistryFilter)}
-                size="sm"
-              />
-              {dirty && (
-                <Button
-                  variant="fill"
-                  size="sm"
-                  leadingIcon={<Save />}
-                  onClick={() => { void saveConfig(); }}
-                  loading={saving}
-                >
-                  {t('actions.save')}
-                </Button>
-              )}
-            </div>
-          </div>
-          )}
-
           {activeView === 'json' && (
             <ConfigPageSection
               title={t('json.title')}
@@ -1452,17 +1418,48 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
           <ConfigPageSection
             title={t('registry.title')}
             extra={(
-              <Button
-                variant="outline"
-                size="sm"
-                leadingIcon={<Icon name="refresh" size="lg" />}
+              <ConfigRefreshButton
+                tooltip={t('actions.refresh')}
                 onClick={() => { void refreshRequirementProbes({ force: true }); }}
                 loading={probingRequirements}
-              >
-                {t('actions.refresh')}
-              </Button>
+              />
             )}
           >
+          <div
+            className="openbitfun-acp-agents__toolbar"
+            data-openbitfun-component="acp-agents-config"
+            data-openbitfun-part="toolbar"
+          >
+            <Input
+              className="openbitfun-acp-agents__search"
+              value={registrySearch}
+              onChange={(event) => setRegistrySearch(event.target.value)}
+              placeholder={t('registry.searchPlaceholder')}
+              aria-label={t('registry.searchPlaceholder')}
+              leading={<Icon name="search" size="sm" />}
+              size="sm"
+            />
+            <div className="openbitfun-acp-agents__toolbar-actions">
+              <Select
+                className="openbitfun-acp-agents__filter-select"
+                options={registryFilterOptions}
+                value={registryFilter}
+                onValueChange={(value) => setRegistryFilter(value as RegistryFilter)}
+                size="sm"
+              />
+              {dirty && (
+                <Button
+                  variant="fill"
+                  size="sm"
+                  leadingIcon={<Save />}
+                  onClick={() => { void saveConfig(); }}
+                  loading={saving}
+                >
+                  {t('actions.save')}
+                </Button>
+              )}
+            </div>
+          </div>
           {loading ? (
             <div className="openbitfun-acp-agents__empty" data-openbitfun-component="acp-agents-config" data-openbitfun-part="empty">
               {t('clients.loading')}
@@ -1545,7 +1542,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                       <div className="openbitfun-acp-agents__registry-copy">
                         <span className="openbitfun-acp-agents__registry-name">{preset.name}</span>
                         <p className="openbitfun-acp-agents__registry-description">
-                          {getPresetDescription(preset.id)}
+                          {formatStandaloneUiText(getPresetDescription(preset.id))}
                         </p>
                       </div>
                     </div>
@@ -1575,7 +1572,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<Icon name="arrow-down" size="lg" />}
+                          leadingIcon={<Icon name="arrow-down" size="sm" />}
                           onClick={() => requestInstallPresetClient(preset)}
                           loading={installing}
                         >
@@ -1618,7 +1615,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          leadingIcon={<Icon name="plus" size="lg" />}
+                          leadingIcon={<Icon name="plus" size="sm" />}
                           onClick={() => addPresetClient(preset, {
                             manualCliRequired: selfManagedCliMissing,
                           })}
@@ -1880,7 +1877,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                           <Button
                             variant="outline"
                             size="sm"
-                            leadingIcon={<Icon name="refresh" size="lg" />}
+                            leadingIcon={<Icon name="refresh" size="sm" />}
                             onClick={() => {
                               loadedRemoteProbeIdsRef.current.delete(connection.id);
                               void refreshRemoteRequirementProbes(connection.id, {
@@ -1953,7 +1950,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                 </span>
                                 <div className="openbitfun-acp-agents__registry-copy">
                                   <span className="openbitfun-acp-agents__registry-name">{row.displayName}</span>
-                                  <p className="openbitfun-acp-agents__registry-description">{row.description}</p>
+                                  <p className="openbitfun-acp-agents__registry-description">{row.preset ? formatStandaloneUiText(row.description) : row.description}</p>
                                 </div>
                               </div>
                               <div
@@ -1998,7 +1995,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    leadingIcon={<Icon name="arrow-down" size="lg" />}
+                                    leadingIcon={<Icon name="arrow-down" size="sm" />}
                                     onClick={() => requestInstallPresetClient(row.preset!, {
                                       remoteConnectionId: connection.id,
                                       hostLabel: [connection.username, connection.host]
@@ -2033,7 +2030,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    leadingIcon={<Icon name="plus" size="lg" />}
+                                    leadingIcon={<Icon name="plus" size="sm" />}
                                     onClick={() => addPresetClient(row.preset!)}
                                   >
                                     {t('actions.add')}

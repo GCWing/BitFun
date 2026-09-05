@@ -86,7 +86,7 @@ describe('ACP Agent settings presentation', () => {
     const remoteAgentList = readBlock(
       stylesheet,
       '&__remote-agent-list {',
-      '@media (max-width: 860px)',
+      '@container config-panel (max-width: 640px)',
     );
 
     expect(remoteList).toContain('border-radius: inherit;');

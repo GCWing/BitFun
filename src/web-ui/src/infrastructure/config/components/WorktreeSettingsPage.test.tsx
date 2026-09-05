@@ -140,6 +140,18 @@ vi.mock('@openbitfun/ui', () => ({
 }));
 
 vi.mock('./common', () => ({
+  ConfigEmptyState: ({ icon, title, description, ...props }: {
+    icon: React.ReactNode;
+    title?: React.ReactNode;
+    description: React.ReactNode;
+    className?: string;
+  }) => (
+    <div {...props}>
+      {icon}
+      <div>{title}</div>
+      <div>{description}</div>
+    </div>
+  ),
   ConfigActionBar: ({
     discardLabel,
     onDiscard,

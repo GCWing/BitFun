@@ -7,18 +7,18 @@
   "applicationGroups": {
     "startupAndUpdates": {
       "title": "启动与更新",
-      "description": "管理登录启动、运行时唤醒和版本检查。"
+      "description": "管理登录启动、运行时唤醒和版本检查"
     },
     "windowAndNotifications": {
       "title": "窗口与通知",
-      "description": "管理关闭窗口时的行为，以及需要提醒你的事件。"
+      "description": "管理关闭窗口时的行为，以及需要提醒你的事件"
     }
   },
   "appearance": {
     "title": "外观",
     "hint": "界面语言与外观",
     "interfaceTitle": "界面",
-    "interfaceHint": "选择 OpenBitFun 界面的显示语言。",
+    "interfaceHint": "选择 OpenBitFun 界面的显示语言",
     "language": "语言",
     "appearances": "外观",
     "builtIn": "内置",
@@ -26,8 +26,8 @@
     "export": "导出",
     "delete": "删除",
     "confirmDelete": "确定删除外观 \"{{name}}\" 吗？",
-    "languageRowHint": "选择一个语言包作为当前界面语言。",
-    "appearanceRowHint": "选择界面外观。",
+    "languageRowHint": "选择一个语言包作为当前界面语言",
+    "appearanceRowHint": "选择界面外观",
     "systemAppearance": "跟随系统",
     "systemAppearanceDescription": "根据系统设置自动使用亮色或暗色外观，并随系统切换而更新。",
     "presets": {
@@ -70,9 +70,9 @@
     },
     "fontSize": {
       "title": "字体大小",
-      "hint": "调整界面与对话区域的字号；编辑器字号请在编辑器设置中单独配置。",
+      "hint": "调整界面与对话区域的字号；编辑器字号请在编辑器设置中单独配置",
       "uiSizeLabel": "界面与对话",
-      "uiSizeHint": "选择舒适的字号档位，应用于导航、面板、设置与对话内容。",
+      "uiSizeHint": "选择舒适的字号档位，应用于导航、面板、设置与对话内容",
       "levels": {
         "compact": "紧凑",
         "small": "小",
@@ -135,18 +135,18 @@
       "path": "本次启动日志路径"
     },
     "level": {
-      "description": "实时控制日志输出级别，修改后立即生效。"
+      "description": "实时控制日志输出级别，修改后立即生效"
     },
     "sensitiveDiagnostics": {
       "label": "包含敏感调试信息",
-      "description": "默认关闭。开启后，本地日志可能包含用户 Prompt、模型请求和响应 payload、工具参数、文件路径以及 Webview 事件 payload，用于问题排查。OpenBitFun 不会自动上传这些日志文件。"
+      "description": "默认关闭。开启后，本地日志可能包含用户 Prompt、模型请求和响应 payload、工具参数、文件路径以及 Webview 事件 payload，用于问题排查。OpenBitFun 不会自动上传这些日志文件"
     },
     "path": {
-      "description": "本次启动写入日志文件所在的目录。"
+      "description": "本次启动写入日志文件所在的目录"
     },
     "diagnostics": {
       "label": "诊断包",
-      "description": "将最近的本地日志、崩溃报告与运行时元数据导出为 zip 文件。OpenBitFun 不会自动上传。",
+      "description": "将最近的本地日志、崩溃报告与运行时元数据导出为 zip 文件。OpenBitFun 不会自动上传",
       "confirmTitle": "导出诊断包？",
       "confirmSensitive": "诊断包将包含敏感调试信息，可能涉及 Prompt、模型请求与响应、工具参数和文件路径。请只保存到可信位置，并在分享前检查内容。",
       "confirmStandard": "诊断包可能包含本机路径、运行环境和错误详情。请只保存到可信位置，并在分享前检查内容。",
@@ -206,7 +206,7 @@
     "controls": {
       "refreshTooltip": "刷新可用终端列表",
       "autoDetect": "自动检测 (推荐)",
-      "description": "新建终端以及本地工作区中 agent 执行命令时使用的默认 Shell 类型。",
+      "description": "新建终端以及本地工作区中 agent 执行命令时使用的默认 Shell 类型",
       "cmdFallbackMessage": "Agent 执行命令时实际使用 PowerShell。",
       "placeholder": "选择默认终端",
       "noShells": "未检测到可用的终端"

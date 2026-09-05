@@ -1,7 +1,7 @@
 {
   "page": {
     "title": "快捷動作",
-    "subtitle": "在聊天中快速執行常用 AI 指令。"
+    "subtitle": "在聊天中快速執行常用 AI 指令"
   },
   "loading": "載入中...",
   "quickActions": {
@@ -22,7 +22,7 @@
     },
     "custom": {
       "title": "自訂動作",
-      "empty": "還沒有自訂動作。"
+      "empty": "還沒有自訂動作"
     }
   },
   "edit": {

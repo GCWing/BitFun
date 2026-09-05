@@ -97,8 +97,8 @@ describe('AppearancePackageConfigSection', () => {
     expect(html).toContain('data-openbitfun-part="packageSection"');
     expect(html).toContain('data-openbitfun-part="packageActions"');
     expect(html).toContain('data-openbitfun-component="button"');
-    expect(html.match(/data-openbitfun-variant="fill"/g)).toHaveLength(2);
-    expect(html.match(/data-size="md"/g)).toHaveLength(2);
+    expect(html.match(/data-openbitfun-variant="outline"/g)).toHaveLength(2);
+    expect(html).not.toContain('data-size="md"');
     expect(html).toContain('openbitfun-config-page-section');
     expect(html).not.toContain('appearance-package-config__action-button');
     expect(html).not.toContain('.openbitfun-skin');
@@ -133,11 +133,11 @@ describe('AppearancePackageConfigSection', () => {
     const galleryRule = styles.match(/&__gallery \{([\s\S]*?)\n  \}/)?.[1] ?? '';
     const cardRule = styles.match(/&__card \{([\s\S]*?)\n  \}/)?.[1] ?? '';
 
-    expect(galleryRule).toContain('grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));');
+    expect(galleryRule).toContain('grid-template-columns: minmax(0, 1fr);');
     expect(cardRule).toContain('width: 100%;');
     expect(cardRule).not.toContain('border:');
     expect(styles).toMatch(/&__card-body--inline \{\s*flex-direction: row;/);
-    expect(styles).toMatch(/&__builtin-theme-select \{[\s\S]*?flex: 0 0 112px;/);
+    expect(styles).toMatch(/&__builtin-theme-select \{[\s\S]*?flex: 0 0 var\(--openbitfun-overlay-menu-inline-size\);/);
   });
 
   it('reuses the built-in high-density artwork in the hover preview without requesting a package asset', async () => {

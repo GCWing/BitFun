@@ -141,6 +141,10 @@ vi.mock('@openbitfun/ui', async importOriginal => ({
 }));
 
 vi.mock('./common', () => ({
+  formatStandaloneUiText: (text: string) => text.replace(/[。.]$/, ''),
+  ConfigRefreshButton: ({ tooltip, onClick }: { tooltip: string; onClick: () => void }) => (
+    <button type="button" aria-label={tooltip} onClick={onClick}>{tooltip}</button>
+  ),
   ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
   ConfigMessage: ({ message }: { message: { text: string } | null }) => (
     message ? <div>{message.text}</div> : null

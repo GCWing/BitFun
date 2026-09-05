@@ -30,6 +30,7 @@ export const configAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'collectionFilters' },
     { id: 'collectionList' },
     { id: 'loadingState' },
+    { id: 'emptyState' },
     { id: 'retryState' },
     { id: 'message' },
     { id: 'fieldStatus', propertyProfile: 'paint', visualRole: 'content' },

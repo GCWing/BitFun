@@ -1,6 +1,6 @@
 {
   "title": "ACP Agent",
-  "subtitle": "管理透過 ACP 連線的外部 Agent。",
+  "subtitle": "管理透過 ACP 連線的外部 Agent",
   "views": {
     "local": "本機",
     "ssh": "SSH",
@@ -26,7 +26,7 @@
   },
   "json": {
     "title": "進階 JSON 設定",
-    "description": "直接編輯目前執行主機上的 acpClients 設定。僅在列表無法表達所需參數時使用。",
+    "description": "直接編輯目前執行主機上的 acpClients 設定。僅在列表無法表達所需參數時使用",
     "discardTitle": "放棄未儲存的 JSON 修改？",
     "discardMessage": "離開進階 JSON 後，這些未儲存的修改將遺失。",
     "discardConfirm": "放棄修改"
@@ -42,11 +42,11 @@
     "confirm": "在目標主機安裝"
   },
   "presets": {
-    "opencode": { "description": "原生支援 ACP。" },
-    "dsh": { "description": "透過 OpenBitFun 內建 ACP 橋接，沿用 dsh 的模型與 API 金鑰。" },
-    "omp": { "description": "原生支援 ACP。" },
-    "claudeCode": { "description": "透過官方 ACP 適配器連線。" },
-    "codex": { "description": "透過官方 ACP 適配器連線。" }
+    "opencode": { "description": "原生支援 ACP" },
+    "dsh": { "description": "透過 OpenBitFun 內建 ACP 橋接，沿用 dsh 的模型與 API 金鑰" },
+    "omp": { "description": "原生支援 ACP" },
+    "claudeCode": { "description": "透過官方 ACP 適配器連線" },
+    "codex": { "description": "透過官方 ACP 適配器連線" }
   },
   "registry": {
     "title": "Agent 列表",
@@ -83,17 +83,17 @@
     "configInvalidDetail": "目前 ACP 設定暫時無法直接使用。",
     "toolPath": "路徑",
     "toolVersion": "版本",
-    "empty": "沒有匹配的 ACP Agent。"
+    "empty": "沒有匹配的 ACP Agent"
   },
   "clients": {
     "loading": "正在載入 ACP Agent…"
   },
   "remote": {
     "title": "SSH 伺服器",
-    "description": "檢測已儲存 SSH 伺服器上的 ACP Agent。",
-    "empty": "沒有已儲存的 SSH 伺服器。",
-    "emptyVisible": "沒有顯示中的 SSH 伺服器。",
-    "noAgents": "請先新增 ACP Agent，再檢測遠端伺服器。",
+    "description": "檢測已儲存 SSH 伺服器上的 ACP Agent",
+    "empty": "沒有已儲存的 SSH 伺服器",
+    "emptyVisible": "沒有顯示中的 SSH 伺服器",
+    "noAgents": "請先新增 ACP Agent，再檢測遠端伺服器",
     "refreshDetection": "重新整理檢測",
     "hideConnection": "在 ACP Agents 中隱藏「{{name}}」",
     "restoreConnection": "在 ACP Agents 中顯示「{{name}}」",

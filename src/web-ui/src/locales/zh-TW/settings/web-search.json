@@ -1,6 +1,6 @@
 {
   "title": "網頁搜尋",
-  "subtitle": "設定 WebSearch 工具執行時期使用的搜尋服務。",
+  "subtitle": "設定 WebSearch 工具執行時期使用的搜尋服務",
   "providers": {
     "exaMcpFree": "Exa MCP（免費，無需 API Key）",
     "exaSearchApi": "Exa Search API",
@@ -18,7 +18,7 @@
     },
     "http": {
       "title": "OpenBitFun Search HTTP Protocol v1",
-      "description": "連接實作固定 OpenBitFun 協定的自建或企業內部端點。"
+      "description": "連接實作固定 OpenBitFun 協定的自建或企業內部端點"
     },
     "protocol": {
       "title": "協定說明",
@@ -26,22 +26,22 @@
     },
     "credential": {
       "title": "裝置憑據",
-      "description": "Secret 僅在執行 WebSearch 的主機上加密儲存，不會同步。"
+      "description": "Secret 僅在執行 WebSearch 的主機上加密儲存，不會同步"
     }
   },
   "fields": {
     "endpoint": {
       "label": "端點",
-      "description": "必須使用 HTTPS；僅 localhost 或迴環 IP 可使用明文 HTTP。",
+      "description": "必須使用 HTTPS；僅 localhost 或迴環 IP 可使用明文 HTTP",
       "placeholder": "https://search.example.com/search"
     },
     "authMode": {
       "label": "驗證方式",
-      "description": "可選無需驗證、Bearer 憑據或一個受限自訂 Header。"
+      "description": "可選無需驗證、Bearer 憑據或一個受限自訂 Header"
     },
     "headerName": {
       "label": "Header 名稱",
-      "description": "用於填寫 X-API-Key 等自訂憑據 Header；Bearer 驗證請選擇「Bearer 憑據」。",
+      "description": "用於填寫 X-API-Key 等自訂憑據 Header；Bearer 驗證請選擇「Bearer 憑據」",
       "placeholder": "X-Search-Key"
     },
     "credentialStatus": {
@@ -50,7 +50,7 @@
     },
     "credential": {
       "label": "API Key 或 Secret",
-      "description": "儲存新值會取代目前裝置上的 Secret。",
+      "description": "儲存新值會取代目前裝置上的 Secret",
       "placeholder": "輸入憑據",
       "replacePlaceholder": "輸入新憑據以取代已儲存的值"
     }

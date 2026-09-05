@@ -16,6 +16,17 @@
   margin-bottom: var(--openbitfun-space-1);
 }
 
+.openbitfun-config-empty-state {
+  min-width: 0;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
+
+  > [data-openbitfun-component='empty'] {
+    box-sizing: border-box;
+    min-height: 200px;
+  }
+}
+
 .openbitfun-config-retry-state {
   display: flex;
   flex-direction: column;
@@ -85,4 +96,3 @@
     }
   }
 }
-

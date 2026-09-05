@@ -1,16 +1,16 @@
 {
   "title": "外部 AI 應用",
-  "subtitle": "查看從其他 AI 應用發現的兼容命令、工具、Agent 與 MCP。",
+  "subtitle": "查看從其他 AI 應用發現的兼容命令、工具、Agent 與 MCP",
   "governance": {
     "title": "外部來源與安全",
-    "subtitle": "管理目前執行主機的來源存取、安全策略、審批與衝突。"
+    "subtitle": "管理目前執行主機的來源存取、安全策略、審批與衝突"
   },
   "legacyHostNotice": "目前執行 Host 使用舊版外部來源協定；升級 Host 後才能使用安全模式。",
   "loading": "正在檢查外部來源…",
   "checkingNonBlocking": "正在檢查更新…",
   "applications": {
     "title": "已發現的應用",
-    "empty": "未發現相容的應用設定。",
+    "empty": "未發現相容的應用設定",
     "toggleLabel": "啟用或停用 {{name}}",
     "enableInAdvanced": "請先在進階設定中啟用外部應用。",
     "attentionRequired": "需要處理。請開啟進階設定繼續。",
@@ -25,7 +25,7 @@
   },
   "hooks": {
     "title": "Hooks",
-    "description": "檢視 OpenCode、Claude Code 與 Codex 的 Hook 設定。OpenBitFun 只讀取設定檔，不執行任何程式碼。",
+    "description": "檢視 OpenCode、Claude Code 與 Codex 的 Hook 設定。OpenBitFun 只讀取設定檔，不執行任何程式碼",
     "refresh": "重新整理 Hooks",
     "refreshing": "正在重新整理 Hooks…",
     "showMoreSources": "再顯示 {{count}} 個來源",
@@ -36,7 +36,7 @@
     "showMoreDiagnosticsForProvider": "再顯示 {{provider}} 的 {{count}} 筆診斷",
     "loading": "正在檢查 Hook 設定…",
     "pending": "Hook 探索仍在進行，目錄會自動更新。",
-    "empty": "未發現 Hook 設定。",
+    "empty": "未發現 Hook 設定",
     "error": "Hook 設定目前無法使用（{{code}}）。",
     "staleAfterRefresh": "重新整理失敗（{{code}}），正在顯示最近一次成功讀取的結果。",
     "pollInterrupted": "Hook 自動探索已中斷（{{code}}）。請重新整理重試；目前可見內容可能來自最近一次成功檢查。",
@@ -44,7 +44,7 @@
     "providerEmpty": "未發現此應用的 Hook 設定。",
     "providerFailed": "讀取此應用的 Hook 設定失敗，目前沒有可用內容。",
     "providerStaleEmpty": "上次成功讀取時沒有發現 Hook，且最新重新整理也失敗了。",
-    "noEntries": "此來源中沒有發現 Hook 事件。",
+    "noEntries": "此來源中沒有發現 Hook 事件",
     "entriesDeferred": "更多 Hook 可透過下方的「顯示更多」按鈕查看。",
     "matcher": "比對條件：{{matcher}}",
     "matcherValue": {
@@ -145,7 +145,7 @@
   },
   "safeMode": {
     "title": "外部來源安全模式",
-    "description": "阻止新的外部工具、Agent 與 MCP 呼叫，同時保留已探索的命令與診斷資訊；已在執行的呼叫不會被取消。",
+    "description": "阻止新的外部工具、Agent 與 MCP 呼叫，同時保留已探索的命令與診斷資訊；已在執行的呼叫不會被取消",
     "activeNotice": "目前 Host 程序已阻止新的外部呼叫；已在執行的呼叫仍可能完成，重新啟動或切換 Host 後安全模式會自動關閉。",
     "toggleLabel": "使用外部來源安全模式",
     "entered": "外部來源安全模式已啟用。",
@@ -166,8 +166,8 @@
     "updated": "已儲存。",
     "recoveryRequired": "設定版本較新，外部能力已關閉。",
     "unknownStatus": "設定狀態暫不支援，外部能力已關閉。",
-    "hostReadOnlyHint": "僅可檢視，請在桌面端管理。",
-    "remoteReadOnlyHint": "此遠端專案僅可檢視，請切回本機專案管理。",
+    "hostReadOnlyHint": "僅可檢視，請在桌面端管理",
+    "remoteReadOnlyHint": "此遠端專案僅可檢視，請切回本機專案管理",
     "backupAndReset": "備份並重設",
     "resetConfirmTitle": "備份並重設策略？",
     "resetConfirmMessage": "OpenBitFun 會在本機保留新版策略備份，恢復安全預設值，並在你主動開啟前維持外部執行關閉。",
@@ -182,12 +182,12 @@
     "modeLabel": "{{ecosystem}} 相容模式",
     "capabilityAccessLabel": "{{ecosystem}} 的{{capability}}存取策略",
     "unsupportedSafelyOff": "目前版本不支援（已安全關閉）",
-    "capabilitiesHint": "分別選擇各類外部內容的探索與使用方式。",
+    "capabilitiesHint": "分別選擇各類外部內容的探索與使用方式",
     "safetyLimited": "安全上限",
     "scope": {
       "user": "全域",
       "workspace": "目前專案",
-      "workspaceHint": "僅影響目前專案。",
+      "workspaceHint": "僅影響目前專案",
       "workspaceUnavailable": "開啟專案後可個別設定。"
     },
     "mode": {
@@ -255,9 +255,9 @@
   },
   "sources": {
     "title": "設定來源",
-    "description": "設定仍保留在原位置；開啟此頁面後會自動檢查變更。",
+    "description": "設定仍保留在原位置；開啟此頁面後會自動檢查變更",
     "globalOnly": "目前僅顯示適用於所有工作區的來源；開啟工作區後還會顯示該專案的來源。",
-    "empty": "未發現設定。",
+    "empty": "未發現設定",
     "commandCount": "{{count}} 個命令",
     "toolCount": "{{count}} 個工具",
     "agentCount": "{{count}} 個 Agent",
@@ -266,7 +266,7 @@
   },
   "agents": {
     "title": "發現的 Agent",
-    "description": "Agent 仍保留在原應用程式中。啟用前，請確認下方的模型、工具與執行位置；其指令或這些設定變更後，OpenBitFun 會再次請你確認。",
+    "description": "Agent 仍保留在原應用程式中。啟用前，請確認下方的模型、工具與執行位置；其指令或這些設定變更後，OpenBitFun 會再次請你確認",
     "disable": "停用",
     "enable": "啟用 Agent",
     "reviewTitle": "查看 {{name}} 的執行設定",
@@ -411,7 +411,7 @@
   },
   "agentConflicts": {
     "title": "同名 Agent",
-    "description": "OpenBitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個 Agent 發生變更前，OpenBitFun 會記住你的選擇。",
+    "description": "OpenBitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個 Agent 發生變更前，OpenBitFun 會記住你的選擇",
     "agentName": "找到多個名為 {{name}} 的 Agent",
     "disableAll": "暫不使用任何一個",
     "pending": "請選擇日後執行任務時使用哪一個 Agent。選擇外部 Agent 時，也會確認下方顯示的模型、工具與執行位置。",
@@ -422,7 +422,7 @@
   },
   "mcp": {
     "title": "找到的 MCP 伺服器",
-    "description": "MCP 設定仍保存在原應用程式中。外部伺服器在此處為唯讀；你可以將其停用，或回到原應用程式修改設定。",
+    "description": "MCP 設定仍保存在原應用程式中。外部伺服器在此處為唯讀；你可以將其停用，或回到原應用程式修改設定",
     "externalSource": "外部 AI 應用程式",
     "source": "來源：{{source}}",
     "sourceLocation": "設定位置：{{location}}",
@@ -468,7 +468,7 @@
     "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
     "enable": "啟用伺服器",
     "disable": "停用",
-    "empty": "未發現 MCP 伺服器。",
+    "empty": "未發現 MCP 伺服器",
     "emptyGuidance": "OpenBitFun 從以下位置的設定中查找 MCP 伺服器，但未找到任何設定：",
     "emptyLocation": {
       "userGlobal": "使用者全域：~/.config/opencode/opencode.json",
@@ -482,7 +482,7 @@
   },
   "mcpApprovals": {
     "title": "待確認的 MCP 伺服器",
-    "description": "OpenBitFun 從其他 AI 應用程式找到可執行命令或網路連線設定；確認前不會啟動程序或存取遠端位址。",
+    "description": "OpenBitFun 從其他 AI 應用程式找到可執行命令或網路連線設定；確認前不會啟動程序或存取遠端位址",
     "compactWarning": "啟用後，OpenBitFun 可能以你的使用者權限啟動該命令或連線至該服務；伺服器可接收工具呼叫中傳送的資料。",
     "showDetails": "查看設定與風險",
     "warning": "本機命令可讀取列出的環境變數，遠端請求可傳送列出的標頭；啟用前請核對這些詳細資訊。",
@@ -504,7 +504,7 @@
   },
   "mcpConflicts": {
     "title": "同名 MCP 伺服器",
-    "description": "OpenBitFun 不會自行選擇。請選擇使用 OpenBitFun 或外部伺服器；其中任一設定變更前，OpenBitFun 會記住本次選擇。",
+    "description": "OpenBitFun 不會自行選擇。請選擇使用 OpenBitFun 或外部伺服器；其中任一設定變更前，OpenBitFun 會記住本次選擇",
     "serverName": "有多個 MCP 伺服器名為 {{name}}",
     "pending": "請選擇一個伺服器。選擇外部伺服器時，也會確認其目前設定。",
     "currentSelection": "目前使用已選擇的伺服器；可選擇其他可用項目進行變更。",
@@ -515,7 +515,7 @@
   },
   "tools": {
     "title": "發現的工具",
-    "description": "工具程式碼仍保留在原位置；OpenBitFun 檢查來源時不會執行這些程式碼。",
+    "description": "工具程式碼仍保留在原位置；OpenBitFun 檢查來源時不會執行這些程式碼",
     "review": "查看設定",
     "disable": "停用這些工具",
     "reviewTitle": "查看 {{name}}（來自 {{source}}）",
@@ -525,7 +525,7 @@
   },
   "toolApprovals": {
     "title": "待確認的工具",
-    "description": "啟用其他應用程式中的工具程式碼前，請確認程式碼位置以及它可以存取的內容。",
+    "description": "啟用其他應用程式中的工具程式碼前，請確認程式碼位置以及它可以存取的內容",
     "source": "來源：{{location}}",
     "sourceRoot": "來源資料夾：{{location}}",
     "modulePath": "程式碼檔案：{{location}}",
@@ -576,7 +576,7 @@
   },
   "toolConflicts": {
     "title": "同名工具",
-    "description": "待選項目與目前選擇都會保留顯示。選擇前，OpenBitFun 會繼續使用可用的本機或 MCP 工具；若沒有可用工具，則停用此名稱。可用工具發生變更前，OpenBitFun 會記住你的選擇。",
+    "description": "待選項目與目前選擇都會保留顯示。選擇前，OpenBitFun 會繼續使用可用的本機或 MCP 工具；若沒有可用工具，則停用此名稱。可用工具發生變更前，OpenBitFun 會記住你的選擇",
     "toolName": "找到多個名為 {{name}} 的工具",
     "pending": "請選擇日後呼叫此工具名稱時使用哪一個工具。",
     "currentSelection": "呼叫此工具名稱時會使用目前選擇。若要變更，請在上方選擇其他工具。",
@@ -613,7 +613,7 @@
   },
   "conflicts": {
     "title": "同名命令",
-    "description": "OpenBitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個來源發生變更前，OpenBitFun 會記住你的選擇。",
+    "description": "OpenBitFun 不會無提示地替你選擇。待選項目與目前選擇都會保留顯示；其中一個來源發生變更前，OpenBitFun 會記住你的選擇",
     "commandName": "多個來源提供了 /{{name}}",
     "pending": "請選擇使用哪個來源的命令。",
     "currentSelection": "目前命令會使用已選來源。若要變更，請在上方選擇其他可用來源。",
@@ -622,7 +622,7 @@
   },
   "opencode": {
     "title": "OpenCode 擴充",
-    "description": "從 OpenCode 相容設定中發現的外部能力。",
+    "description": "從 OpenCode 相容設定中發現的外部能力",
     "summary": "發現 {{agents}} 個 Agent · {{commands}} 個命令 · {{tools}} 個工具 · {{mcps}} 個 MCP",
     "configLocations": "設定位置",
     "inherited": "繼承自整體模式",

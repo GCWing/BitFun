@@ -14,7 +14,7 @@ import {
 } from '@/infrastructure/appearance';
 import { notificationService } from '@/shared/notification-system';
 import { AppearanceMarketDialog } from './AppearanceMarketDialog';
-import { ConfigPageSection } from './common';
+import { ConfigPageSection, formatStandaloneUiText } from './common';
 
 const DEFAULT_APPEARANCE_PREVIEW_SRC = '/assets/appearance/openbitfun-default-preview@4x.png';
 
@@ -231,7 +231,7 @@ function AppearancePackagePreview({
         <span className="appearance-package-config__card-copy">
           <strong>{appearanceName}</strong>
           <span className="appearance-package-config__card-description">
-            {appearanceDescription}
+            {packageType === 'native' ? formatStandaloneUiText(appearanceDescription) : appearanceDescription}
           </span>
         </span>
         {children}
@@ -401,6 +401,7 @@ export function AppearancePackageConfigSection() {
       title={t('package.title')}
       description={t('package.description')}
       bodySurface={false}
+      fieldSurface="ambient"
       extra={(
         <div
           className="appearance-package-config__actions"
@@ -408,16 +409,16 @@ export function AppearancePackageConfigSection() {
           data-openbitfun-part="packageActions"
         >
           <Button
-            variant="fill"
-            size="md"
+            variant="outline"
+            size="sm"
             disabled={busy}
             onClick={() => setMarketOpen(true)}
           >
             {t('package.market.open')}
           </Button>
           <Button
-            variant="fill"
-            size="md"
+            variant="outline"
+            size="sm"
             disabled={busy}
             onClick={() => inputRef.current?.click()}
           >

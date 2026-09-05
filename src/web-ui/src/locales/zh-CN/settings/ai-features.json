@@ -34,7 +34,7 @@
     "saving": "保存中..."
   },
   "models": {
-    "empty": "暂无可用模型，请先在「模型」中添加模型。",
+    "empty": "暂无可用模型，请先在「模型」中添加模型",
     "placeholder": "使用主Agent模型",
     "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
   },

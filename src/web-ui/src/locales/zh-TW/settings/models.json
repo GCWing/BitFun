@@ -1,6 +1,6 @@
 {
   "title": "模型",
-  "subtitle": "管理預設模型、模型服務、訂閱帳戶、模型目錄與網路連線。",
+  "subtitle": "管理預設模型、模型服務、訂閱帳戶、模型目錄與網路連線",
   "editProvider": "編輯服務商設定",
   "newProvider": "新增服務商設定",
   "editModel": "編輯模型設定",
@@ -22,7 +22,7 @@
       "fast": "快速模型"
     },
     "models": {
-      "empty": "暫無可用模型，請先在「模型」中新增模型。",
+      "empty": "暫無可用模型，請先在「模型」中新增模型",
       "unavailable": "{{id}}（已停用或不存在）",
       "updateSuccess": "{{agentName}} 將使用 {{modelName}}"
     },
@@ -145,7 +145,7 @@
     "expandModelSettings": "展開「{{name}}」的詳細設置",
     "collapseModelSettings": "收起「{{name}}」的詳細設置",
     "unsavedModel": "待儲存",
-    "unsavedModelHint": "此模型包含尚未儲存的修改，請點擊模型編輯視窗底部的「儲存」完成持久化。",
+    "unsavedModelHint": "此模型包含尚未儲存的修改，請點擊模型編輯視窗底部的「儲存」完成持久化",
     "urlHint": "已預填官方 API 地址，如使用代理或私有部署可修改",
     "formatHint": "已根據提供商自動選擇，通常無需修改"
   },
@@ -293,7 +293,7 @@
     "provider": "請求格式",
     "providerPlaceholder": "選擇請求格式",
     "contextWindow": "上下文視窗大小",
-    "contextWindowHint": "此值主要用於判斷何時觸發上下文壓縮，可以小於供應商標稱的模型最大上下文視窗。",
+    "contextWindowHint": "此值主要用於判斷何時觸發上下文壓縮，可以小於供應商標稱的模型最大上下文視窗",
     "contextWindowLongWarning": "目前模型設定的上下文視窗超過 400K。超長上下文可能降低模型效果，建議將其調整到 300K 左右。",
     "maxTokens": "最大輸出Tokens",
     "maxTokensHint": "單次請求時限制模型輸出的最大token數量（影響響應長度）",
@@ -340,7 +340,7 @@
     "catalogModel": "模型",
     "catalogSearch": "快速查找",
     "catalogSearchPlaceholder": "輸入供應商或模型關鍵詞",
-    "catalogSearchHint": "選擇結果後會自動填入下方供應商和模型。",
+    "catalogSearchHint": "選擇結果後會自動填入下方供應商和模型",
     "catalogSearchResults": "models.dev 模型搜尋結果",
     "catalogSearchEmpty": "沒有符合的 models.dev 思考模型",
     "catalogSearchLimit": "結果較多，請繼續輸入以縮小範圍",
@@ -414,7 +414,7 @@
     "title": "流式超時",
     "effectiveNextRound": "修改後下一次對話生效",
     "label": "Chunk 空閒超時（秒）",
-    "hint": "流式響應開始後，兩次 chunk 之間的最大等待時間。留空表示無限等待。",
+    "hint": "流式響應開始後，兩次 chunk 之間的最大等待時間。留空表示無限等待",
     "placeholder": "留空表示不設超時",
     "invalid": "請輸入正整數秒數，或留空。",
     "save": "儲存流式超時",
@@ -423,7 +423,7 @@
   "streamTtftTimeout": {
     "title": "首 Token 超時",
     "label": "TTFT 超時（秒）",
-    "hint": "請求發出後，等待首個有效流式輸出的最長時間。留空表示無限等待。",
+    "hint": "請求發出後，等待首個有效流式輸出的最長時間。留空表示無限等待",
     "placeholder": "留空表示不設超時",
     "invalid": "請輸入正整數秒數，或留空。",
     "save": "儲存首 Token 超時",
@@ -431,9 +431,9 @@
   },
   "toolArgumentJsonRepair": {
     "title": "工具參數 JSON 修復",
-    "description": "修改將在下一輪模型呼叫生效。",
+    "description": "修改將在下一輪模型呼叫生效",
     "label": "修復非法 JSON 工具參數",
-    "hint": "僅在供應商確認工具呼叫正常完成後嘗試。修復可能在常規工具驗證前改寫非法 JSON。",
+    "hint": "僅在供應商確認工具呼叫正常完成後嘗試。修復可能在常規工具驗證前改寫非法 JSON",
     "saveSuccess": "工具參數 JSON 修復設定已儲存"
   },
   "capabilities": {
@@ -479,7 +479,7 @@
     "discard": "放棄修改",
     "continueEditing": "繼續編輯",
     "discardDraft": "放棄草稿",
-    "retainedHint": "模型編輯草稿已保留，尚未寫入正式設定。"
+    "retainedHint": "模型編輯草稿已保留，尚未寫入正式設定"
   },
   "draftConflict": {
     "title": "先處理未完成的模型草稿",
@@ -535,7 +535,7 @@
     "title": "models.dev 模型目錄",
     "detailsTitle": "models.dev 目錄詳情",
     "viewDetails": "查看 models.dev 目錄詳情",
-    "description": "用於推理預設供應商和模型綁定的目錄狀態。開啟模型設定時會自動檢查更新。",
+    "description": "用於推理預設供應商和模型綁定的目錄狀態。開啟模型設定時會自動檢查更新",
     "activeSource": "目前來源",
     "source": { "cache": "快取", "bundle": "內建快照", "empty": "無法使用" },
     "catalogSize": "目錄規模",
@@ -585,7 +585,7 @@
       "hint": "輸入JSON格式的請求體字段，用於覆蓋默認請求參數",
       "modeMerge": "合併",
       "modeTrim": "精簡",
-      "modeMergeHint": "在默認請求體基礎上合併自定義字段，可覆蓋已有字段。",
+      "modeMergeHint": "在默認請求體基礎上合併自定義字段，可覆蓋已有字段",
       "trimHintOpenAI": "發送前僅保留 model、messages、max_tokens，以及 stream / tools 等運行必需字段，再應用自定義請求體。",
       "trimHintResponses": "發送前僅保留 model、input、instructions、max_output_tokens，以及 stream / tools 等運行必需字段，再應用自定義請求體。",
       "trimHintAnthropic": "發送前僅保留 model、messages、system、max_tokens，以及 stream / tools 等運行必需字段，再應用自定義請求體。",

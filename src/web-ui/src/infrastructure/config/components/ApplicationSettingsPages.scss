@@ -14,61 +14,15 @@
 
   &__path-row {
     display: flex;
-    align-items: stretch;
-    gap: 8px;
-    width: 100%;
-
-    .openbitfun-logging-config__path-box {
-      flex: 1;
-      min-width: 0;
-    }
-  }
-
-  &__open-btn {
-    flex-shrink: 0;
-    align-self: stretch;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 36px;
-    min-width: 36px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--openbitfun-color-content-secondary);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-
-    &:hover:not(:disabled) {
-      background: var(--openbitfun-color-action-neutral-surface);
-      border-color: var(--openbitfun-color-border-subtle);
-      color: var(--openbitfun-color-content-primary);
-    }
-
-    &:active:not(:disabled) {
-      background: var(--openbitfun-color-action-neutral-surface-hover);
-    }
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
+    gap: var(--openbitfun-space-2);
+    width: 100%;
+    min-width: 0;
   }
 
   &__path-box {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 6px;
-    background: transparent;
-    border: 1px dashed var(--openbitfun-color-border-default);
-    color: var(--openbitfun-color-content-primary);
-    font-family:var(--openbitfun-type-code-md-font-family);
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    word-break: break-all;
-    overflow-wrap: anywhere;
-    line-height: var(--openbitfun-type-body-lg-line-height);
-    user-select: text;
+    flex: 1;
+    min-width: 0;
   }
 }
 

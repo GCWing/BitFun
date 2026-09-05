@@ -1,6 +1,7 @@
 .openbitfun-acp-agents {
   &__tabs {
     align-self: flex-start;
+    max-width: 100%;
   }
 
   &__toolbar {
@@ -8,6 +9,8 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--openbitfun-space-3);
     align-items: center;
+    padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
+    border-bottom: 1px solid var(--openbitfun-component-config-page-divider);
   }
 
   &__toolbar-actions {
@@ -49,11 +52,11 @@
 
   &__registry-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 82px 120px;
+    grid-template-columns: minmax(0, 1fr) auto 120px;
     gap: var(--openbitfun-space-2);
     align-items: center;
     min-height: 56px;
-    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
     border-bottom: 1px solid var(--openbitfun-component-config-page-divider);
     background: transparent;
 
@@ -61,12 +64,14 @@
       border-bottom: 0;
     }
 
-    &:hover {
-      background: var(--openbitfun-color-surface-subtle);
+    @media (hover: hover) and (pointer: fine) {
+      &:hover {
+        background: var(--openbitfun-component-config-page-row-hover-background);
+      }
     }
 
     &--remote {
-      grid-template-columns: minmax(0, 1fr) 92px 82px 120px;
+      grid-template-columns: minmax(0, 1fr) auto auto 120px;
     }
   }
 
@@ -84,10 +89,7 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-sm);
-    background: var(--openbitfun-color-action-neutral-surface-hover);
-    color: var(--openbitfun-color-content-secondary);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__registry-copy {
@@ -99,21 +101,21 @@
     min-width: 0;
     overflow: hidden;
     color: var(--openbitfun-color-content-primary);
-    font-size: var(--openbitfun-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-selected-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
-    line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
+    line-height: var(--openbitfun-type-label-selected-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__registry-description {
-    margin: 2px 0 0;
-    overflow: hidden;
+    margin: var(--openbitfun-space-1) 0 0;
     color: var(--openbitfun-color-content-secondary);
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    line-height: var(--openbitfun-type-meta-line-height);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-support-line-height);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
   }
 
   &__registry-command {
@@ -224,20 +226,35 @@
     flex-direction: column;
   }
 
-  @media (max-width: 860px) {
+  @container config-panel (max-width: 640px) {
     &__toolbar,
-    &__registry-row,
     &__remote-head,
     &__hidden-remote-row {
       grid-template-columns: 1fr;
+    }
+
+    &__registry-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: var(--openbitfun-space-4);
+    }
+
+    &__registry-main {
+      grid-column: 1 / -1;
+    }
+
+    &__registry-row--remote > .openbitfun-acp-agents__capabilities {
+      grid-column: 1 / -1;
+    }
+
+    &__toolbar {
+      padding: var(--openbitfun-space-4);
     }
 
     &__toolbar-actions,
     &__remote-actions,
     &__remote-head,
     &__capabilities,
-    &__status-cell,
-    &__confirmation-cell {
+    &__status-cell {
       justify-content: flex-start;
     }
 

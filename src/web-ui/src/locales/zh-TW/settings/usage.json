@@ -1,9 +1,9 @@
 {
   "title": "調用統計",
-  "subtitle": "目前執行主機本機儲存的歷史模型調用統計，不會跨主機合併或同步；包含按模型、供應商與端點統計的請求數、Token 用量與快取命中率。",
+  "subtitle": "目前執行主機本機儲存的歷史模型調用統計，不會跨主機合併或同步；包含按模型、供應商與端點統計的請求數、Token 用量與快取命中率",
   "overview": {
     "title": "統計概覽",
-    "description": "顯示目前執行主機在「{{timeRange}}」範圍內的調用資料，日期與小時依 {{timeZone}} 時區劃分；調整篩選後會自動重新整理。"
+    "description": "顯示目前執行主機在「{{timeRange}}」範圍內的調用資料，日期與小時依 {{timeZone}} 時區劃分；調整篩選後會自動重新整理"
   },
   "timeRange": {
     "label": "時間範圍",
@@ -30,7 +30,7 @@
     "clear": "清除篩選",
     "empty": {
       "title": "沒有符合的調用資料",
-      "description": "目前篩選條件下沒有調用記錄。"
+      "description": "目前篩選條件下沒有調用記錄"
     }
   },
   "refresh": "重新整理",
@@ -39,7 +39,7 @@
   "unsupported": "目前連線裝置的 OpenBitFun 版本較舊，暫不支援調用統計。",
   "empty": {
     "title": "暫無調用資料",
-    "description": "開始與模型對話後，這裡會顯示模型調用統計。"
+    "description": "開始與模型對話後，這裡會顯示模型調用統計"
   },
   "summary": {
     "requests": "請求數",
@@ -69,7 +69,7 @@
   },
   "trend": {
     "title": "Token 使用趨勢",
-    "description": "依時間查看輸入、輸出、快取寫入、快取讀取 Token 與快取命中率的變化。",
+    "description": "依時間查看輸入、輸出、快取寫入、快取讀取 Token 與快取命中率的變化",
     "dataTableCaption": "Token 使用趨勢明細",
     "time": "時間",
     "legend": {

@@ -9,7 +9,7 @@ import type {
   AIModelConfig,
   DefaultModels,
 } from '../types';
-import { ConfigPageRow } from './common';
+import { ConfigEmptyState, ConfigPageRow } from './common';
 import { createLogger } from '@/shared/utils/logger';
 import { useModelSelectPresentation } from './ModelSelectPresentation';
 import {
@@ -171,10 +171,13 @@ export const DefaultModelConfig: React.FC = () => {
 
   if (models.length === 0) {
     return (
-      <div className="default-model-config__empty" data-openbitfun-component="default-model-config" data-openbitfun-part="empty" data-openbitfun-state="empty">
-        <Layers size={48} />
-        <p>{t('empty.noModels')}</p>
-      </div>
+      <ConfigEmptyState
+        data-openbitfun-component="default-model-config"
+        data-openbitfun-part="empty"
+        data-openbitfun-state="empty"
+        icon={<Layers size={36} aria-hidden="true" />}
+        description={t('empty.noModels')}
+      />
     );
   }
 

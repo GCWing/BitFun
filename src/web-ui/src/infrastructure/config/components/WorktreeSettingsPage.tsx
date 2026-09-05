@@ -23,6 +23,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import {
   ConfigActionBar,
+  ConfigEmptyState,
   ConfigPageContent,
   ConfigPageHeader,
   ConfigPageLayout,
@@ -698,13 +699,12 @@ const WorktreeSettingsPage: React.FC = () => {
     }
     if (projects.length === 0 && !projectsMessage) {
       return (
-        <div className="openbitfun-worktree-settings__empty">
-          <FolderGit2 size={22} aria-hidden />
-          <div>
-            <h4>{t('management.empty.title')}</h4>
-            <p>{t('management.empty.description')}</p>
-          </div>
-        </div>
+        <ConfigEmptyState
+          className="openbitfun-worktree-settings__empty"
+          icon={<FolderGit2 size={36} aria-hidden />}
+          title={t('management.empty.title')}
+          description={t('management.empty.description')}
+        />
       );
     }
     if (projects.length === 0) {

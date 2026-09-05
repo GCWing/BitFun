@@ -331,27 +331,6 @@
   
   
   
-  &__empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--openbitfun-space-10) var(--openbitfun-space-5);
-    text-align: center;
-    color: var(--openbitfun-color-content-secondary);
-    
-    svg {
-      margin-bottom: var(--openbitfun-space-3);
-      opacity: 0.4;
-      color: var(--openbitfun-color-content-muted);
-    }
-    
-    p {
-      margin: 0;
-      font-size: var(--openbitfun-type-label-md-font-size);
-      line-height: var(--openbitfun-type-body-sm-line-height);
-    }
-  }
   
   
   
