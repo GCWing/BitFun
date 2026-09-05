@@ -449,6 +449,58 @@ fn stream_json_malformed_sse_retries_then_completes() {
 }
 
 #[test]
+fn stream_json_context_overflow_compresses_before_reissuing_the_model_request() {
+    let server = MockOpenAiServer::context_overflow_then_immediate();
+    let environment = CliTestEnvironment::new();
+    environment.configure_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.args([
+        "exec",
+        "Remember this request and continue after context recovery",
+        "--output-format",
+        "stream-json",
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
+    let stdout = stdout(&output);
+    assert!(output.status.success(), "{}\n{stdout}", stderr(&output));
+    // One rejected request, one summary request, then the recovered model round.
+    server.assert_chat_completion_requests(3);
+    let requests = server.chat_completion_request_bodies();
+    assert_ne!(
+        requests[0]["messages"], requests[1]["messages"],
+        "overflow must enter compression instead of replaying the original request"
+    );
+    assert_ne!(
+        requests[0]["messages"], requests[2]["messages"],
+        "recovery must send the compressed context"
+    );
+    let events = jsonl_events(&stdout);
+    let compression_started = events
+        .iter()
+        .position(|value| {
+            value["event"]["type"] == "ContextCompressionStarted"
+                && value["event"]["trigger"] == "context_overflow_recovery"
+        })
+        .expect("overflow should start recovery compression");
+    let compression_completed = events
+        .iter()
+        .position(|value| value["event"]["type"] == "ContextCompressionCompleted")
+        .expect("recovery compression should complete");
+    assert!(compression_started < compression_completed);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|value| is_terminal_event(value))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events.last().unwrap()["event"]["type"],
+        "DialogTurnCompleted"
+    );
+}
+
+#[test]
 fn stream_json_provider_http_403_emits_one_error_terminal() {
     let server = MockOpenAiServer::http_403("provider authorization denied");
     let environment = CliTestEnvironment::new();
@@ -461,7 +513,7 @@ fn stream_json_provider_http_403_emits_one_error_terminal() {
         "stream-json",
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(10);
+    server.assert_chat_completion_requests(1);
 
     let stdout = stdout(&output);
     assert!(!output.status.success(), "{stdout}");
@@ -524,7 +576,7 @@ fn stream_json_provider_and_patch_failures_publish_one_final_classification() {
         &output_target,
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(10);
+    server.assert_chat_completion_requests(1);
 
     let stdout = stdout(&output);
     let stderr = stderr(&output);
@@ -562,7 +614,7 @@ fn stream_json_provider_and_patch_failures_publish_one_final_classification() {
 }
 
 #[test]
-fn stream_json_disconnect_then_exhausted_retry_failure_emits_one_error_terminal() {
+fn stream_json_disconnect_then_authorization_failure_emits_one_error_terminal() {
     let server = MockOpenAiServer::disconnect_then_http_403();
     let environment = CliTestEnvironment::new();
     environment.configure_mock_model(server.base_url());
@@ -574,7 +626,7 @@ fn stream_json_disconnect_then_exhausted_retry_failure_emits_one_error_terminal(
         "stream-json",
     ]);
     let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(30));
-    server.assert_chat_completion_requests(10);
+    server.assert_chat_completion_requests(2);
 
     let stdout = stdout(&output);
     assert!(!output.status.success(), "{stdout}");

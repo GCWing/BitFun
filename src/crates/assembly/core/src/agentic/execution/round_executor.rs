@@ -122,7 +122,28 @@ impl RoundExecutor {
     const MAX_RATE_LIMIT_DELAY_MS: u64 = 60_000;
     const MAX_RETRY_EXPONENT_SHIFT: u32 = 6;
 
-    fn exhausted_request_error(error: &anyhow::Error, attempts: u32) -> OpenBitFunError {
+    /// Unknown and malformed provider responses retain the bounded recovery
+    /// introduced with the unified attempt budget. Only classified rejections
+    /// leave this loop immediately; context overflow is recovered by the caller.
+    fn should_retry_provider_error(category: &ErrorCategory) -> bool {
+        match category {
+            ErrorCategory::Auth
+            | ErrorCategory::Permission
+            | ErrorCategory::ProviderQuota
+            | ErrorCategory::ProviderBilling
+            | ErrorCategory::InvalidRequest
+            | ErrorCategory::ContentPolicy
+            | ErrorCategory::ContextOverflow => false,
+            ErrorCategory::Network
+            | ErrorCategory::RateLimit
+            | ErrorCategory::Timeout
+            | ErrorCategory::ProviderUnavailable
+            | ErrorCategory::ModelError
+            | ErrorCategory::Unknown => true,
+        }
+    }
+
+    fn terminal_request_error(error: &anyhow::Error, attempts: u32) -> OpenBitFunError {
         let mut provider_error = error
             .downcast_ref::<AiProviderError>()
             .cloned()
@@ -451,7 +472,9 @@ impl RoundExecutor {
                     error!("AI request failed: {:#}", e);
                     let provider_error = e.downcast_ref::<AiProviderError>().cloned();
                     let err_msg = format!("{e:#}");
-                    if local_attempt_index < max_attempts - 1 {
+                    let error = Self::terminal_request_error(&e, lifecycle.attempts_started());
+                    let retryable = Self::should_retry_provider_error(&error.error_category());
+                    if retryable && local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
                             &round_id,
@@ -481,12 +504,12 @@ impl RoundExecutor {
                         local_attempt_index += 1;
                         continue;
                     }
-                    let error = Self::exhausted_request_error(&e, lifecycle.attempts_started());
                     warn!(
-                        "AI request retry budget exhausted: session_id={}, round_id={}, attempts={}, category={:?}, error={}",
+                        "AI request stopped: session_id={}, round_id={}, attempts={}, reason={}, category={:?}, error={}",
                         context.session_id,
                         round_id,
                         lifecycle.attempts_started(),
+                        if retryable { "retry_budget_exhausted" } else { "non_retryable_error" },
                         error.error_category(),
                         error
                     );
@@ -808,6 +831,7 @@ impl RoundExecutor {
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
                     let stream_error_category = stream_err.error.error_category();
+                    let retryable = Self::should_retry_provider_error(&stream_error_category);
                     let provider_error = match &stream_err.error {
                         OpenBitFunError::AIProvider(error)
                         | OpenBitFunError::RecoverableContextOverflow(error) => Some(error),
@@ -819,7 +843,7 @@ impl RoundExecutor {
                         Self::error_trace_response("error", err_msg.clone()),
                     )
                     .await;
-                    if local_attempt_index < max_attempts - 1 {
+                    if retryable && local_attempt_index < max_attempts - 1 {
                         self.record_retry_diagnostic(
                             &context,
                             &round_id,
@@ -852,10 +876,11 @@ impl RoundExecutor {
                         continue;
                     }
                     warn!(
-                        "Stream retry budget exhausted: session_id={}, round_id={}, attempts={}, effective_output={}, category={:?}, error={}",
+                        "Stream stopped: session_id={}, round_id={}, attempts={}, reason={}, effective_output={}, category={:?}, error={}",
                         context.session_id,
                         round_id,
-                        max_attempts,
+                        lifecycle.attempts_started(),
+                        if retryable { "retry_budget_exhausted" } else { "non_retryable_error" },
                         stream_err.has_effective_output,
                         stream_error_category,
                         err_msg
@@ -1746,6 +1771,243 @@ mod tests {
         }
     }
 
+    struct RetryTestServer {
+        url: String,
+        requests: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+        stop: Arc<std::sync::atomic::AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl RetryTestServer {
+        fn new(replies: Vec<(u16, String)>) -> Self {
+            use std::io::{BufRead, Read, Write};
+            use std::sync::atomic::{AtomicBool, Ordering};
+
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let url = format!(
+                "http://{}/v1/chat/completions",
+                listener.local_addr().unwrap()
+            );
+            let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let captured = requests.clone();
+            let stop = Arc::new(AtomicBool::new(false));
+            let stopped = stop.clone();
+            assert!(!replies.is_empty());
+            let thread = std::thread::spawn(move || {
+                while !stopped.load(Ordering::Relaxed) {
+                    let mut socket = match listener.accept() {
+                        Ok((socket, _)) => socket,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_millis(5));
+                            continue;
+                        }
+                        Err(error) => panic!("accept retry fixture request: {error}"),
+                    };
+                    socket
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    socket
+                        .set_write_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut reader = std::io::BufReader::new(&mut socket);
+                    let mut content_length = 0;
+                    loop {
+                        let mut line = String::new();
+                        assert!(reader.read_line(&mut line).unwrap() > 0);
+                        if line == "\r\n" {
+                            break;
+                        }
+                        if let Some((name, value)) = line.split_once(':') {
+                            if name.eq_ignore_ascii_case("content-length") {
+                                content_length = value.trim().parse::<usize>().unwrap();
+                            }
+                        }
+                    }
+                    let mut body = vec![0; content_length];
+                    reader.read_exact(&mut body).unwrap();
+                    let mut requests = captured.lock().unwrap();
+                    let index = requests.len().min(replies.len() - 1);
+                    requests.push(serde_json::from_slice(&body).unwrap());
+                    drop(requests);
+                    let (status, body) = &replies[index];
+                    let content_type = if *status == 200 {
+                        "text/event-stream"
+                    } else {
+                        "application/json"
+                    };
+                    write!(socket, "HTTP/1.1 {status} Fixture\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            });
+            Self {
+                url,
+                requests,
+                stop,
+                thread: Some(thread),
+            }
+        }
+
+        fn client(&self) -> Arc<crate::infrastructure::ai::AIClient> {
+            Arc::new(crate::infrastructure::ai::AIClient::new(
+                openbitfun_core_types::AIConfig {
+                    name: "retry-test".to_string(),
+                    base_url: self.url.clone(),
+                    request_url: self.url.clone(),
+                    api_key: "retry-test-key".to_string(),
+                    model: "retry-test-model".to_string(),
+                    format: "openai".to_string(),
+                    context_window: 4096,
+                    max_tokens: Some(128),
+                    temperature: None,
+                    top_p: None,
+                    inline_think_in_text: false,
+                    custom_headers: None,
+                    custom_headers_mode: None,
+                    skip_ssl_verify: false,
+                    custom_request_body: None,
+                    custom_request_body_mode: None,
+                },
+            ))
+        }
+    }
+
+    impl Drop for RetryTestServer {
+        fn drop(&mut self) {
+            self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            if let Some(thread) = self.thread.take() {
+                if let Err(error) = thread.join() {
+                    if !std::thread::panicking() {
+                        std::panic::resume_unwind(error);
+                    }
+                }
+            }
+        }
+    }
+
+    fn retry_test_success() -> (u16, String) {
+        (
+            200,
+            format!(
+                "data: {}\n\ndata: [DONE]\n\n",
+                json!({
+                    "id": "retry-test",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "retry-test-model",
+                    "choices": [{"index": 0, "delta": {"content": "Recovered"}, "finish_reason": "stop"}]
+                })
+            ),
+        )
+    }
+
+    #[tokio::test]
+    async fn provider_rejections_stop_after_one_request_for_http_and_stream_errors() {
+        for (status, code, category) in [
+            (401, "invalid_api_key", ErrorCategory::Auth),
+            (403, "permission_error", ErrorCategory::Permission),
+            (413, "invalid_request_error", ErrorCategory::InvalidRequest),
+            (402, "insufficient_quota", ErrorCategory::ProviderQuota),
+            (
+                400,
+                "context_length_exceeded",
+                ErrorCategory::ContextOverflow,
+            ),
+        ] {
+            for in_stream in [false, true] {
+                let body =
+                    json!({"error": {"code": code, "message": "Request rejected"}}).to_string();
+                let reply = if in_stream {
+                    (200, format!("data: {body}\n\n"))
+                } else {
+                    (status, body)
+                };
+                // A second request would succeed, making an accidental retry
+                // fail this test immediately instead of waiting for the budget.
+                let server = RetryTestServer::new(vec![reply, retry_test_success()]);
+                let executor = test_round_executor();
+                let error = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    executor.execute_round(
+                        server.client(),
+                        test_round_context(),
+                        vec![super::AIMessage::user("Original request".to_string())],
+                        None,
+                        None,
+                    ),
+                )
+                .await
+                .expect("deterministic error should return promptly")
+                .expect_err("rejection must not retry");
+                assert_eq!(
+                    error.error_category(),
+                    category,
+                    "code={code}, in_stream={in_stream}"
+                );
+                assert_eq!(
+                    error.is_recoverable_context_overflow(),
+                    category == ErrorCategory::ContextOverflow
+                );
+                assert_eq!(server.requests.lock().unwrap().len(), 1);
+                let events = executor.event_queue.dequeue_batch(100).await;
+                assert!(!events.iter().any(|event| matches!(
+                    event.event,
+                    AgenticEvent::ModelRoundAttemptSuperseded { .. }
+                )));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn transient_and_malformed_provider_responses_still_retry() {
+        for reply in [
+            (
+                429,
+                json!({"error": {"code": "rate_limit_exceeded", "message": "Try later"}})
+                    .to_string(),
+            ),
+            (
+                503,
+                json!({"error": {"message": "Temporarily unavailable"}}).to_string(),
+            ),
+            (200, "data: not-json\n\n".to_string()),
+            (
+                200,
+                format!(
+                    "data: {}\n\n",
+                    json!({"error": {"code": "unrecognized", "message": "Unclassified provider failure"}})
+                ),
+            ),
+        ] {
+            let server = RetryTestServer::new(vec![reply, retry_test_success()]);
+            let result = tokio::time::timeout(
+                Duration::from_secs(5),
+                test_round_executor().execute_round(
+                    server.client(),
+                    test_round_context(),
+                    vec![super::AIMessage::user("Retry safely".to_string())],
+                    None,
+                    None,
+                ),
+            )
+            .await
+            .expect("one retry should complete")
+            .expect("recoverable response should retry");
+            assert!(result.had_assistant_text);
+            assert_eq!(server.requests.lock().unwrap().len(), 2);
+        }
+    }
+
+    #[test]
+    fn terminal_request_classification_preserves_full_error_chain() {
+        let source = anyhow::anyhow!("invalid api key").context("Provider request failed");
+        let error = RoundExecutor::terminal_request_error(&source, 1);
+        assert_eq!(error.error_category(), ErrorCategory::Auth);
+        assert!(!RoundExecutor::should_retry_provider_error(
+            &error.error_category()
+        ));
+        assert!(error.to_string().contains("invalid api key"));
+    }
+
     #[test]
     fn resolves_global_project_and_agent_permission_rules_before_execution() {
         let mut global = GlobalConfig::default();
@@ -2150,7 +2412,7 @@ mod tests {
             "OpenAI Streaming API TTFT timeout after 30s waiting for first effective stream output"
         )
         .context("OpenAI Streaming API failed after 1 attempts");
-        let error = RoundExecutor::exhausted_request_error(&source, 10);
+        let error = RoundExecutor::terminal_request_error(&source, 10);
         assert_eq!(error.error_category(), ErrorCategory::Timeout);
         assert!(error
             .to_string()
@@ -2168,7 +2430,7 @@ mod tests {
         );
         provider.category = ErrorCategory::RateLimit;
         let source = anyhow::Error::new(provider);
-        let error = RoundExecutor::exhausted_request_error(&source, 10);
+        let error = RoundExecutor::terminal_request_error(&source, 10);
         let detail = error.error_detail();
         assert_eq!(detail.category, ErrorCategory::RateLimit);
         assert_eq!(detail.http_status, Some(403));
@@ -2203,7 +2465,7 @@ mod tests {
             Some(400),
         ));
         assert!(matches!(
-            RoundExecutor::exhausted_request_error(&source, 10),
+            RoundExecutor::terminal_request_error(&source, 10),
             OpenBitFunError::RecoverableContextOverflow(_)
         ));
     }

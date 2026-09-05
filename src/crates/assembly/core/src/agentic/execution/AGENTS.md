@@ -1,5 +1,11 @@
 If you modify `stream_processor.rs`, run the stream integration tests before finishing.
 
+For model retry admission and recovery, use:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib agentic::execution::round_executor::tests
+```
+
 For complete shell constraint checks, use:
 
 ```bash
