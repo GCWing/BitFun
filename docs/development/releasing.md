@@ -47,6 +47,28 @@ than the current beta. This lets beta users move from `0.2.18-beta.N` to
 Beta and stable currently share the same bundle identity and data directories.
 Installing beta replaces stable; side-by-side installation is not supported.
 
+## Recovering a failed package run
+
+Each successful platform uploads its own bundle to the run's **Artifacts** list
+and records the download link and source SHA in its job summary. Another
+platform failing prevents Release publication, but does not remove those
+already uploaded bundles.
+
+Re-run failed jobs only while the successful jobs' artifacts still exist. If
+artifacts were removed, start a full `Desktop Package` run to recreate the
+complete set. If an old run cannot find a reusable workflow after a history
+rewrite, dispatch a new run from the current workflow branch instead of
+re-running the old workflow snapshot.
+
+For an existing release, use its tag as both `tag_name` and `checkout_ref`. For
+different source code, select a new release tag; do not move an existing tag to
+make a retry pass. The prepare job fetches a requested ref when it is absent
+locally, pins the resolved commit, and rejects a tag/source mismatch before
+starting platform builds. Unavailable refs fail with recovery instructions.
+
+Verify source selection with `node --test scripts/release-channel.test.mjs` and
+workflow wiring with `pnpm run check:github-config`.
+
 ## Mirror
 
 The mirror script defaults to stable. Run a separate beta sync with:
