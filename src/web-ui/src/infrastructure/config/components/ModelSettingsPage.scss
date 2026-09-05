@@ -235,6 +235,11 @@
 
     .openbitfun-collection-item__details {
       border-top: 1px solid var(--openbitfun-color-border-subtle);
+      // The provider group owns the persistent surface. Reusing the shared
+      // translucent details tint here makes the dark-theme composite nearly
+      // identical to the surrounding scene, leaving a page-colored gutter
+      // around the dashed inset section.
+      background: transparent;
     }
 
     .openbitfun-collection-item__details-toggle {
