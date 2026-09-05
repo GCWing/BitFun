@@ -33,6 +33,7 @@ impl UltraMode {
                 "WriteStdin",
                 "ExecControl",
                 "ListModels",
+                "Skill",
             ]
             .into_iter()
             .map(str::to_string)

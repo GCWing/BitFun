@@ -281,9 +281,8 @@ pub fn resolve_default_hidden_builtin_for_explicit_invocation(
         return ExplicitSkillInvocationResolution::NotFound;
     };
 
-    // gstack and computer-use builtins are default-hidden but remain explicitly
-    // invocable: computer-use (agent-browser) is opt-in everywhere because
-    // ControlHub's browser domain is the default browser-automation path.
+    // A mode may keep gstack and computer-use builtins default-hidden while
+    // still allowing an exact explicit invocation.
     if info.level == SkillLocation::User
         && info.is_builtin
         && matches!(

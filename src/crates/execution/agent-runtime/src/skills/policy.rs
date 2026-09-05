@@ -9,6 +9,8 @@ enum SkillModeId {
     Creative,
     ComputerUse,
     DeepResearch,
+    Ultra,
+    SwarmWorker,
     Other,
 }
 
@@ -21,6 +23,8 @@ impl SkillModeId {
             "Creative" => Self::Creative,
             "ComputerUse" => Self::ComputerUse,
             "DeepResearch" => Self::DeepResearch,
+            "Ultra" => Self::Ultra,
+            "SwarmWorker" => Self::SwarmWorker,
             _ => Self::Other,
         }
     }
@@ -41,6 +45,7 @@ impl PolicyEffect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SkillSelector {
     Group(BuiltinSkillGroup),
+    DirName(&'static str),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,10 +93,9 @@ const DISABLE_DEBUGGING: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
-// ControlHub's browser domain is the single default browser-automation path.
-// The computer-use skill group (agent-browser) stays opt-in in every mode so the
-// model never sees two parallel browser stacks; users can still enable it via
-// mode skill overrides or invoke it explicitly.
+// ControlHub's browser domain is the default browser-automation path for modes
+// that carry it. Ultra and SwarmWorker do not, so their narrow policies below
+// expose agent-browser instead.
 const DISABLE_COMPUTER_USE: SkillPolicyRule = SkillPolicyRule {
     selector: SkillSelector::Group(BuiltinSkillGroup::ComputerUse),
     effect: PolicyEffect::Disable,
@@ -114,6 +118,16 @@ const ENABLE_COORDINATION: SkillPolicyRule = SkillPolicyRule {
 
 const ENABLE_PLANNING: SkillPolicyRule = SkillPolicyRule {
     selector: SkillSelector::Group(BuiltinSkillGroup::Planning),
+    effect: PolicyEffect::Enable,
+};
+
+const ENABLE_AGENT_BROWSER: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::DirName("agent-browser"),
+    effect: PolicyEffect::Enable,
+};
+
+const ENABLE_PLAN: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::DirName("plan"),
     effect: PolicyEffect::Enable,
 };
 
@@ -173,6 +187,16 @@ const DEEP_RESEARCH_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     rules: &[ENABLE_META, ENABLE_COORDINATION],
 };
 
+const ULTRA_POLICY: ModeSkillPolicy = ModeSkillPolicy {
+    builtin_default: PolicyEffect::Disable,
+    rules: &[ENABLE_PLAN, ENABLE_AGENT_BROWSER],
+};
+
+const SWARM_WORKER_POLICY: ModeSkillPolicy = ModeSkillPolicy {
+    builtin_default: PolicyEffect::Disable,
+    rules: &[ENABLE_AGENT_BROWSER],
+};
+
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
     let policy_scope = resolve_mode_config_profile_id(mode_id);
     match SkillModeId::parse(policy_scope.as_ref()) {
@@ -181,6 +205,8 @@ fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
         SkillModeId::Creative => CREATIVE_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
         SkillModeId::DeepResearch => DEEP_RESEARCH_POLICY,
+        SkillModeId::Ultra => ULTRA_POLICY,
+        SkillModeId::SwarmWorker => SWARM_WORKER_POLICY,
         SkillModeId::ComputerUse | SkillModeId::Other => OPEN_META_ONLY_POLICY,
     }
 }
@@ -188,6 +214,7 @@ fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
 fn selector_matches(selector: SkillSelector, spec: &BuiltinSkillSpec) -> bool {
     match selector {
         SkillSelector::Group(group) => spec.group == group,
+        SkillSelector::DirName(dir_name) => spec.dir_name == dir_name,
     }
 }
 
@@ -216,7 +243,7 @@ mod tests {
     use crate::skills::catalog::BUILTIN_SKILL_SPECS;
 
     #[test]
-    fn agent_browser_defaults_off_in_every_mode() {
+    fn agent_browser_defaults_on_only_for_ultra_and_swarm_worker() {
         for mode_id in [
             "agentic",
             "coding_shared",
@@ -225,12 +252,41 @@ mod tests {
             "Cowork",
             "ComputerUse",
             "DeepResearch",
+            "Team",
+            "SwarmPlanner",
+            "SwarmReviewer",
             "SomeUnknownMode",
         ] {
             assert_eq!(
                 resolve_builtin_default_enabled("agent-browser", mode_id),
                 Some(false),
-                "agent-browser must stay opt-in for mode {mode_id}: ControlHub's browser domain is the default browser path"
+                "agent-browser should default off for mode {mode_id}"
+            );
+        }
+
+        for mode_id in ["Ultra", "SwarmWorker"] {
+            assert_eq!(
+                resolve_builtin_default_enabled("agent-browser", mode_id),
+                Some(true),
+                "agent-browser should be available in {mode_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn swarm_agents_expose_only_their_requested_builtin_skills_by_default() {
+        for spec in BUILTIN_SKILL_SPECS {
+            assert_eq!(
+                resolve_builtin_default_enabled(spec.dir_name, "Ultra"),
+                Some(matches!(spec.dir_name, "plan" | "agent-browser")),
+                "Ultra has unexpected default exposure for {}",
+                spec.dir_name
+            );
+            assert_eq!(
+                resolve_builtin_default_enabled(spec.dir_name, "SwarmWorker"),
+                Some(spec.dir_name == "agent-browser"),
+                "SwarmWorker has unexpected default exposure for {}",
+                spec.dir_name
             );
         }
     }
@@ -251,6 +307,8 @@ mod tests {
                 "Cowork",
                 "ComputerUse",
                 "DeepResearch",
+                "Ultra",
+                "SwarmWorker",
                 "SomeUnknownMode",
             ] {
                 assert_eq!(
@@ -297,6 +355,8 @@ mod tests {
             "Cowork",
             "ComputerUse",
             "DeepResearch",
+            "Ultra",
+            "SwarmWorker",
             "Team",
             "SomeUnknownMode",
         ] {
@@ -325,7 +385,7 @@ mod tests {
             );
         }
 
-        for mode_id in ["ComputerUse", "SomeUnknownMode"] {
+        for mode_id in ["ComputerUse", "Ultra", "SwarmWorker", "SomeUnknownMode"] {
             assert_eq!(
                 resolve_builtin_default_enabled("multitask", mode_id),
                 Some(false),
@@ -335,8 +395,15 @@ mod tests {
     }
 
     #[test]
-    fn plan_skill_replaces_plan_mode_in_writable_skill_workflows() {
-        for mode_id in ["agentic", "coding_shared", "Claw", "Cowork", "Creative"] {
+    fn plan_skill_defaults_on_for_planning_capable_workflows() {
+        for mode_id in [
+            "agentic",
+            "coding_shared",
+            "Claw",
+            "Cowork",
+            "Creative",
+            "Ultra",
+        ] {
             assert_eq!(
                 resolve_builtin_default_enabled("plan", mode_id),
                 Some(true),
@@ -344,7 +411,14 @@ mod tests {
             );
         }
 
-        for mode_id in ["ComputerUse", "DeepResearch", "SomeUnknownMode"] {
+        for mode_id in [
+            "ComputerUse",
+            "DeepResearch",
+            "SwarmWorker",
+            "SwarmPlanner",
+            "SwarmReviewer",
+            "SomeUnknownMode",
+        ] {
             assert_eq!(
                 resolve_builtin_default_enabled("plan", mode_id),
                 Some(false),
@@ -364,6 +438,8 @@ mod tests {
                 "Cowork",
                 "ComputerUse",
                 "DeepResearch",
+                "Ultra",
+                "SwarmWorker",
                 "SomeUnknownMode",
             ] {
                 assert_eq!(

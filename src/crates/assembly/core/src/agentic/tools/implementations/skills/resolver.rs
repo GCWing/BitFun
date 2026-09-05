@@ -67,8 +67,8 @@ mod tests {
             &presentation,
             "agentic"
         ));
-        // agent-browser is opt-in everywhere: ControlHub's browser domain is
-        // the default browser-automation path.
+        // Agentic and Cowork use ControlHub's browser domain by default, so
+        // agent-browser remains opt-in for those modes.
         assert!(!resolve_skill_default_enabled_for_mode(&browser, "agentic"));
         assert!(resolve_skill_default_enabled_for_mode(
             &presentation,

@@ -54,6 +54,23 @@ mod tests {
             resolve_builtin_default_enabled("ppt-design", "Other"),
             Some(false)
         );
+        assert_eq!(
+            resolve_builtin_default_enabled("agent-browser", "Ultra"),
+            Some(true)
+        );
+        assert_eq!(resolve_builtin_default_enabled("plan", "Ultra"), Some(true));
+        assert_eq!(
+            resolve_builtin_default_enabled("find-skills", "Ultra"),
+            Some(false)
+        );
+        assert_eq!(
+            resolve_builtin_default_enabled("agent-browser", "SwarmWorker"),
+            Some(true)
+        );
+        assert_eq!(
+            resolve_builtin_default_enabled("plan", "SwarmWorker"),
+            Some(false)
+        );
         for mode_id in ["agentic", "Claw", "Creative", "Cowork", "DeepResearch"] {
             assert_eq!(
                 resolve_builtin_default_enabled("openbitfun-canvas", mode_id),
