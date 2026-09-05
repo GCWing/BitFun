@@ -1,0 +1,13 @@
+@layer openbitfun.components {
+  .actions {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    gap: var(--openbitfun-space-1);
+  }
+
+  .cancel {
+    min-block-size: 52px;
+    color: var(--openbitfun-color-content-secondary);
+  }
+}

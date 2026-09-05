@@ -1,0 +1,9 @@
+@layer openbitfun.components {
+  .root { display: flex; box-sizing: border-box; inline-size: 100%; min-block-size: 44px; align-items: center; gap: var(--openbitfun-space-3); padding: var(--openbitfun-space-2) var(--openbitfun-space-4); border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle); border-radius: var(--openbitfun-radius-md); color: var(--openbitfun-color-content-secondary); background: var(--openbitfun-color-surface-subtle); font-size: var(--openbitfun-type-body-sm-font-size); }
+  .root[data-tone="info"] { border-color: var(--openbitfun-color-status-info-border); color: var(--openbitfun-color-status-info-content); background: var(--openbitfun-color-status-info-surface); }
+  .root[data-tone="warning"] { border-color: var(--openbitfun-color-status-warning-border); color: var(--openbitfun-color-status-warning-content); background: var(--openbitfun-color-status-warning-surface); }
+  .root[data-tone="danger"] { border-color: var(--openbitfun-color-status-danger-border); color: var(--openbitfun-color-status-danger-content); background: var(--openbitfun-color-status-danger-surface); }
+  .icon { display: grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .content { min-inline-size: 0; flex: 1; }
+  .action { flex: 0 0 auto; }
+}

@@ -1,0 +1,150 @@
+@layer openbitfun.components {
+  .root {
+    position: relative;
+    box-sizing: border-box;
+    display: grid;
+    inline-size: 100%;
+    min-inline-size: 0;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--openbitfun-space-1);
+    min-block-size: 48px;
+    padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-base);
+    transition:
+      min-block-size var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      border-radius var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  .root[data-interactive="true"] {
+    cursor: text;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .root[data-interactive="true"]:active {
+    transform: scale(0.99);
+    box-shadow: var(--openbitfun-shadow-sm);
+  }
+
+  .root[data-interactive="true"]:focus-visible {
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
+  }
+
+  .leading,
+  .editor,
+  .toolbar,
+  .startActions,
+  .endActions {
+    box-sizing: border-box;
+    min-inline-size: 0;
+  }
+
+  .leading,
+  .toolbar,
+  .startActions,
+  .endActions {
+    display: flex;
+    align-items: center;
+  }
+
+  .leading {
+    justify-content: center;
+  }
+
+  .editor {
+    display: flex;
+    min-block-size: 38px;
+    align-items: center;
+  }
+
+  .editor > :where(input, textarea) {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    margin: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+  }
+
+  .toolbar {
+    justify-content: flex-end;
+  }
+
+  .startActions {
+    display: none;
+  }
+
+  .endActions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: var(--openbitfun-space-1);
+  }
+
+  .root[data-expanded="true"] {
+    display: flex;
+    min-block-size: 110px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-xl);
+    box-shadow: var(--openbitfun-shadow-lg);
+  }
+
+  .root[data-expanded="true"] .leading {
+    display: none;
+  }
+
+  .root[data-expanded="true"] .editor {
+    min-block-size: 58px;
+    flex: 1 1 auto;
+    align-items: flex-start;
+  }
+
+  .root[data-expanded="true"] .toolbar {
+    display: flex;
+    min-block-size: 40px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--openbitfun-space-2);
+  }
+
+  .root[data-expanded="true"] .startActions {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    gap: var(--openbitfun-space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .root[data-expanded="true"] .startActions::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 700px) {
+    .root[data-expanded="true"] {
+      min-block-size: 116px;
+      padding: var(--openbitfun-space-3);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root { transition: none; }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: CanvasText; }
+  }
+}

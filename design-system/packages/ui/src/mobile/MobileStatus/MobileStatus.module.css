@@ -1,0 +1,13 @@
+@layer openbitfun.components {
+  .root { display: flex; box-sizing: border-box; min-block-size: 120px; flex-direction: column; align-items: center; justify-content: center; gap: var(--openbitfun-space-2); padding: var(--openbitfun-space-6); color: var(--openbitfun-color-content-secondary); text-align: center; }
+  .root[data-tone="info"] { color: var(--openbitfun-color-status-info-content); }
+  .root[data-tone="danger"] { color: var(--openbitfun-color-status-danger-content); }
+  .icon, .spinner { display: grid; inline-size: 28px; block-size: 28px; place-items: center; }
+  .icon > :where(svg, img) { inline-size: 100%; block-size: 100%; }
+  .spinner { border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: var(--openbitfun-radius-pill); animation: openbitfun-mobile-status-spin var(--openbitfun-motion-duration-loop) linear infinite; }
+  .title { color: var(--openbitfun-color-content-primary); font-size: var(--openbitfun-type-body-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); }
+  .description { max-inline-size: 36ch; color: var(--openbitfun-color-content-muted); font-size: var(--openbitfun-type-body-sm-font-size); }
+  .action { margin-block-start: var(--openbitfun-space-2); }
+  @keyframes openbitfun-mobile-status-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+}

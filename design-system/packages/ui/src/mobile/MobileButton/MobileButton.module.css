@@ -1,0 +1,48 @@
+@layer openbitfun.components {
+  .root {
+    box-sizing: border-box;
+    display: inline-flex;
+    min-block-size: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: var(--openbitfun-space-2);
+    margin: 0;
+    padding: 0 var(--openbitfun-space-4);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-border);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-xs);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    font: inherit;
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  .root[data-size="sm"] { min-block-size: 40px; padding-inline: var(--openbitfun-space-3); font-size: var(--openbitfun-type-label-sm-font-size); }
+  .root[data-size="lg"] { min-block-size: 50px; padding-inline: var(--openbitfun-space-5); font-size: var(--openbitfun-type-label-lg-font-size); }
+  .root[data-block="true"] { inline-size: 100%; }
+  .root[data-appearance="primary"] { border-color: var(--openbitfun-color-action-primary-background); color: var(--openbitfun-color-action-primary-content); background: var(--openbitfun-color-action-primary-background); }
+  .root[data-appearance="danger"] { border-color: var(--openbitfun-color-status-danger-border); color: var(--openbitfun-color-status-danger-content); background: var(--openbitfun-color-status-danger-surface); }
+  .root[data-appearance="plain"] { border-color: transparent; background: transparent; box-shadow: none; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:hover:not(:disabled) { background: var(--openbitfun-color-action-neutral-surface-hover); box-shadow: var(--openbitfun-shadow-sm); }
+    .root[data-appearance="primary"]:hover:not(:disabled) { background: var(--openbitfun-color-action-primary-hover); }
+  }
+  .root:active:not(:disabled) { background: var(--openbitfun-color-action-neutral-surface-pressed); transform: scale(0.98); }
+  .root[data-appearance="primary"]:active:not(:disabled) { background: var(--openbitfun-color-action-primary-pressed); }
+  .root:focus-visible { outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring); outline-offset: var(--openbitfun-focus-offset); }
+  .root:disabled { color: var(--openbitfun-color-action-neutral-content-disabled); cursor: not-allowed; box-shadow: none; }
+  .root[data-appearance="primary"]:disabled { background: var(--openbitfun-color-accent-disabled); }
+  .slot, .spinner { display: inline-grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .slot > :where(svg, img) { inline-size: 100%; block-size: 100%; }
+  .spinner { border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: var(--openbitfun-radius-pill); animation: openbitfun-mobile-button-spin var(--openbitfun-motion-duration-loop) linear infinite; }
+  .label { display: contents; }
+  @keyframes openbitfun-mobile-button-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .root { transition: none; } .spinner { animation: none; } }
+  @media (forced-colors: active) { .root { border-color: ButtonText; } .root:focus-visible { outline-color: Highlight; } }
+}

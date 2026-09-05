@@ -1,0 +1,38 @@
+@layer openbitfun.components {
+  .root,
+  .leading,
+  .trailing {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .root {
+    inline-size: 100%;
+    min-block-size: 48px;
+    justify-content: space-between;
+    gap: var(--openbitfun-space-3);
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .leading,
+  .trailing {
+    gap: var(--openbitfun-space-2);
+    pointer-events: auto;
+  }
+
+  .leading {
+    flex: 1 1 auto;
+  }
+
+  .trailing {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+  }
+
+  @media (max-width: 359px) {
+    .root { gap: var(--openbitfun-space-2); }
+  }
+}

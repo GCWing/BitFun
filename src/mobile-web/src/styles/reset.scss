@@ -1,0 +1,26 @@
+// Declare the reset before component CSS is imported. Unlayered resets override
+// every layered component, even when their selectors have lower specificity.
+@layer openbitfun.reset, openbitfun.components;
+
+@layer openbitfun.reset {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  input,
+  textarea {
+    font-family: inherit;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--openbitfun-color-content-primary);
+    outline-offset: 2px;
+  }
+}

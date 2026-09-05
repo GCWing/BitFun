@@ -92,6 +92,7 @@
 
 .chat-page__header-menu button {
   min-height: 42px;
+  min-block-size: 42px;
   padding: 0 12px;
   border: 0;
   border-radius: 12px;
@@ -228,32 +229,19 @@
   width: 100%;
 }
 
-// User message — left-aligned with background
+// User message — the shared MobileMessage owns the single bubble surface.
 .chat-msg--user {
-  align-items: flex-start;
-}
-
-.chat-msg__user-card {
-  display: flex;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.chat-msg__user-avatar {
-  display: none;
+  align-items: flex-end;
 }
 
 .chat-msg__user-content {
-  width: 100%;
+  max-width: 100%;
   font-size: var(--openbitfun-type-body-md-font-size);
   line-height: var(--openbitfun-type-body-lg-line-height);
   color: var(--openbitfun-color-content-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
   white-space: pre-wrap;
-  padding: 8px 12px;
-  background: var(--openbitfun-color-surface-subtle);
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: var(--size-radius-base);
 }
 
 .chat-msg__user-images {
@@ -292,6 +280,7 @@
   font-size: var(--openbitfun-type-body-xs-font-size);
   cursor: pointer;
   padding: 3px 0;
+  min-block-size: 0;
   text-align: left;
 
   &:active { opacity: 0.7; }
@@ -373,119 +362,6 @@
   to   { transform: translateY(0);     opacity: 1; }
 }
 
-// ── Message context menu (bottom sheet) ───────────────────────────
 .chat-msg--menu-active {
   opacity: 0.7;
-}
-
-.chat-msg__menu-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--openbitfun-color-overlay-scrim);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 1000;
-  animation: menuFadeIn var(--motion-fast) var(--easing-standard);
-}
-
-.chat-msg__menu-sheet {
-  width: 100%;
-  max-width: 440px;
-  background: var(--openbitfun-color-surface-raised);
-  border-radius: 20px 20px 0 0;
-  padding: var(--size-gap-2) var(--size-gap-4) var(--size-gap-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-gap-3);
-  animation: menuSlideUp var(--motion-base) motion.$easing-decelerate;
-}
-
-.chat-msg__menu-handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--openbitfun-color-border-subtle);
-  margin: 0 auto;
-}
-
-.chat-msg__menu-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.chat-msg__menu-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  border: none;
-  border-radius: 16px;
-  background: var(--openbitfun-color-surface-panel);
-  color: var(--openbitfun-color-content-primary);
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-label-lg-font-weight);
-  cursor: pointer;
-  text-align: left;
-
-  svg {
-    flex-shrink: 0;
-  }
-
-  &:active:not(:disabled) {
-    background: var(--openbitfun-color-surface-subtle);
-    transform: scale(0.99);
-  }
-
-  &:disabled {
-    opacity: var(--openbitfun-opacity-disabled);
-    cursor: not-allowed;
-  }
-
-  &--danger {
-    color: var(--openbitfun-color-status-danger-content);
-    background: var(--openbitfun-color-status-danger-surface);
-
-    &:active:not(:disabled) {
-      background: var(--openbitfun-color-status-danger-border);
-    }
-  }
-}
-
-.chat-msg__menu-cancel {
-  width: 100%;
-  padding: 14px;
-  border: none;
-  border-radius: 14px;
-  background: var(--openbitfun-color-surface-panel);
-  color: var(--openbitfun-color-content-secondary);
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-label-selected-font-weight);
-  cursor: pointer;
-
-  &:active {
-    background: var(--openbitfun-color-surface-subtle);
-  }
-}
-
-@keyframes menuFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes menuSlideUp {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-msg__menu-sheet,
-  .chat-msg__menu-overlay {
-    animation: none;
-  }
 }

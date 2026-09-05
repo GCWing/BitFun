@@ -1,0 +1,8 @@
+@layer openbitfun.components {
+  .root { display: inline-flex; min-block-size: 22px; align-items: center; gap: var(--openbitfun-space-1); padding: 1px var(--openbitfun-space-2); border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle); border-radius: var(--openbitfun-radius-pill); color: var(--openbitfun-color-content-secondary); background: var(--openbitfun-color-surface-tertiary); font-size: var(--openbitfun-type-label-xs-font-size); font-weight: var(--openbitfun-type-label-xs-font-weight); line-height: var(--openbitfun-type-label-xs-line-height); }
+  .root[data-tone="info"] { border-color: var(--openbitfun-color-status-info-border); color: var(--openbitfun-color-status-info-content); background: var(--openbitfun-color-status-info-surface); }
+  .root[data-tone="success"] { border-color: var(--openbitfun-color-status-success-border); color: var(--openbitfun-color-status-success-content); background: var(--openbitfun-color-status-success-surface); }
+  .root[data-tone="warning"] { border-color: var(--openbitfun-color-status-warning-border); color: var(--openbitfun-color-status-warning-content); background: var(--openbitfun-color-status-warning-surface); }
+  .root[data-tone="danger"] { border-color: var(--openbitfun-color-status-danger-border); color: var(--openbitfun-color-status-danger-content); background: var(--openbitfun-color-status-danger-surface); }
+  .dot { inline-size: 7px; block-size: 7px; border-radius: var(--openbitfun-radius-pill); background: currentColor; }
+}

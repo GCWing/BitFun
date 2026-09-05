@@ -1,0 +1,122 @@
+@layer openbitfun.components {
+  .root {
+    --_mobile-icon-button-size: 44px;
+    --_mobile-icon-size: 22px;
+
+    position: relative;
+    box-sizing: border-box;
+    display: inline-grid;
+    inline-size: var(--_mobile-icon-button-size);
+    block-size: var(--_mobile-icon-button-size);
+    place-items: center;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  .root[data-size="sm"] {
+    --_mobile-icon-button-size: 40px;
+    --_mobile-icon-size: 20px;
+  }
+
+  .root[data-appearance="plain"] {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .root[data-appearance="floating"] {
+    box-shadow: var(--openbitfun-shadow-base);
+  }
+
+  .root[data-selected="true"] {
+    border-color: var(--openbitfun-color-border-strong);
+    background: var(--openbitfun-color-action-neutral-surface);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      box-shadow: var(--openbitfun-shadow-sm);
+    }
+  }
+
+  .root:is(:active, [data-openbitfun-preview-state="active"]):not(:disabled) {
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
+    transform: scale(0.94);
+  }
+
+  .root:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
+  }
+
+  .root:disabled {
+    color: var(--openbitfun-color-action-neutral-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .icon,
+  .spinner {
+    position: absolute;
+    display: grid;
+    inline-size: var(--_mobile-icon-size);
+    block-size: var(--_mobile-icon-size);
+    place-items: center;
+  }
+
+  .icon > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .spinner {
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: var(--openbitfun-radius-pill);
+    opacity: 0;
+  }
+
+  .root[data-loading="true"] .icon {
+    opacity: 0;
+  }
+
+  .root[data-loading="true"] .spinner {
+    opacity: 1;
+    animation: openbitfun-mobile-icon-button-spin var(--openbitfun-motion-duration-loop) linear infinite;
+  }
+
+  @keyframes openbitfun-mobile-icon-button-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root { transition: none; }
+    .root[data-loading="true"] .spinner {
+      animation: none;
+      border-inline-end-color: currentColor;
+      opacity: var(--openbitfun-opacity-hover);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: ButtonText; }
+    .root:focus-visible { outline-color: Highlight; }
+  }
+}

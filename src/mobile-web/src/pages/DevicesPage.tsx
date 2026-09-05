@@ -9,11 +9,22 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  MobileBadge,
+  MobileBanner,
+  MobileButton,
+  MobileCard,
+  MobileIconButton,
+  MobileListRow,
+  MobilePageHeader,
+  MobileStatus,
+} from '@openbitfun/ui/mobile';
+import {
   RelayHttpClient,
   isDelegatedIdentityChangedError,
 } from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
+import { selectAccountDevice } from '../services/accountDeviceSelection';
 
 interface DeviceInfo {
   device_id: string;
@@ -28,6 +39,9 @@ const PAIRED_ROOM_DEVICE_ID = '__openbitfun_paired_room__';
 interface Props {
   client: RelayHttpClient;
   onBack: () => void;
+  onDeviceSelected?: () => void;
+  accountLanding?: boolean;
+  preferredDeviceId?: string;
 }
 
 const BackIcon = () => (
@@ -62,7 +76,7 @@ const NoIdentityIcon = () => (
   </svg>
 );
 
-const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
+const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBack, accountLanding = false, preferredDeviceId }) => {
   const { t, formatRelativeTime } = useI18n();
   const { connectionHealth, setControlTarget, resetForDeviceSwitch } = useMobileStore();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
@@ -75,6 +89,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const identityRequestRef = useRef(0);
   const devicesRequestRef = useRef(0);
   const switchRequestRef = useRef(0);
+  const automaticSelectionAttemptedRef = useRef(false);
   const sortedDevices = useMemo(() => {
     const listedDevices = devices.filter((device) => (
     device.device_id !== client.controllerDeviceId
@@ -99,14 +114,14 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
     const message = String((value as { message?: string })?.message || value);
     if (message.includes('HTTP 401') || message.includes('No delegated identity')) {
-      return t('devices.authorizationExpired');
+      return t(accountLanding ? 'pairing.accountSessionExpired' : 'devices.authorizationExpired');
     }
     if (message.includes('HTTP 404')) return t('devices.deviceUnavailable');
     if (message.includes('HTTP 503') || message.includes('HTTP 504')) {
       return t('devices.deviceUnavailable');
     }
     return t(fallbackKey);
-  }, [t]);
+  }, [accountLanding, t]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -172,17 +187,20 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   }, [client, friendlyError]);
 
   useEffect(() => {
+    let cancelled = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     const init = async () => {
       const granted = await ensureIdentity(false);
-      if (!granted || !mountedRef.current) return;
+      if (!granted || cancelled || !mountedRef.current) return;
       setLoading(true);
       await refreshDevices();
-      if (mountedRef.current) setLoading(false);
+      if (cancelled || !mountedRef.current) return;
+      setLoading(false);
       timer = setInterval(refreshDevices, 30_000);
     };
     void init();
     return () => {
+      cancelled = true;
       if (timer) clearInterval(timer);
     };
   }, [ensureIdentity, refreshDevices]);
@@ -197,7 +215,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     if (mountedRef.current) setLoading(false);
   }, [ensureIdentity, loading, refreshDevices, switchingId]);
 
-  const selectDevice = useCallback(async (d: DeviceInfo) => {
+  const selectDevice = useCallback(async (d: DeviceInfo, probe = true) => {
     if (!d.online || switchingId) return;
     if (client.pairedDeviceId === d.device_id) return;
     const requestId = ++switchRequestRef.current;
@@ -212,15 +230,19 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     setSwitchingId(d.device_id);
     setError(null);
     try {
-      // Probe the peer host before switching the mobile control target.
-      const ping = await client.sendDeviceRpc<{ resp?: string; ok?: boolean; error?: string }>(d.device_id, {
-        cmd: 'host_invoke',
-        command: 'peer_mode_ping',
-        args: {},
-      }, { retryable: true });
-      if (!isCurrent()) return;
-      if (ping.resp === 'host_invoke_result' && ping.ok === false) {
-        throw new Error(ping.error || t('devices.switchFailed'));
+      // Keep the existing probe for explicit device switches. Initial account
+      // selection historically needed only the directory's online flag; do not
+      // impose a new peer-mode command requirement on older desktops.
+      if (probe) {
+        const ping = await client.sendDeviceRpc<{ resp?: string; ok?: boolean; error?: string }>(d.device_id, {
+          cmd: 'host_invoke',
+          command: 'peer_mode_ping',
+          args: {},
+        }, { retryable: true });
+        if (!isCurrent()) return;
+        if (ping.resp === 'host_invoke_result' && ping.ok === false) {
+          throw new Error(ping.error || t('devices.switchFailed'));
+        }
       }
       client.setPairedDeviceId(d.device_id);
       expectedTargetEpoch = client.controlTargetEpoch;
@@ -230,7 +252,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         deviceName: d.device_name,
         isHome: d.device_id === client.homeDeviceId,
       });
-      onBack();
+      onDeviceSelected();
     } catch (e: unknown) {
       if (!isCurrent()) return;
       if (isDelegatedIdentityChangedError(e)) return;
@@ -246,7 +268,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         setSwitchingId(null);
       }
     }
-  }, [client, friendlyError, onBack, resetForDeviceSwitch, setControlTarget, switchingId, t]);
+  }, [client, friendlyError, onDeviceSelected, resetForDeviceSwitch, setControlTarget, switchingId, t]);
+
+  // Keep the online/scanned-device shortcut after account UI entry, without
+  // making discovery failures undo authentication or retry in a render loop.
+  useEffect(() => {
+    if (!accountLanding || !identityReady || identityChecking || loading
+      || switchingId || automaticSelectionAttemptedRef.current) return;
+    const target = selectAccountDevice(devices, client.controllerDeviceId, preferredDeviceId);
+    if (!target) return;
+    automaticSelectionAttemptedRef.current = true;
+    void selectDevice(target, false);
+  }, [accountLanding, client, devices, identityChecking, identityReady, loading, preferredDeviceId, selectDevice, switchingId]);
 
   const renderDeviceList = () => (
       <div className="devices-page__list">
@@ -256,9 +289,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           const isSwitching = switchingId === d.device_id;
           const clickable = !d.room_route && d.online && !isCurrent && !switchingId;
           return (
-            <button
+            <MobileListRow
               key={d.device_id}
-              type="button"
+              appearance="surface"
               className={[
                 'devices-page__device',
                 d.online ? 'is-online' : 'is-offline',
@@ -267,9 +300,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
               ].filter(Boolean).join(' ')}
               disabled={!clickable}
               onClick={() => clickable && selectDevice(d)}
-            >
-              <span className="devices-page__device-icon"><DeviceIcon /></span>
-              <span className="devices-page__device-copy">
+              leading={<span className="devices-page__device-icon"><DeviceIcon /></span>}
+              label={(
                 <span className="devices-page__device-name-row">
                   <span className="devices-page__device-name">
                     {d.room_route
@@ -277,16 +309,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                       : d.device_name || t('devices.unknownDevice')}
                   </span>
                   {isCurrent && (
-                    <span className="devices-page__badge devices-page__badge--current">
+                    <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
                       {t('devices.current')}
-                    </span>
+                    </MobileBadge>
                   )}
                   {isHome && !isCurrent && (
-                    <span className="devices-page__badge">
+                    <MobileBadge className="devices-page__badge">
                       {t('devices.pairedDesktop')}
-                    </span>
+                    </MobileBadge>
                   )}
                 </span>
+              )}
+              supportingText={(
                 <span className="devices-page__device-meta">
                   <span className={`devices-page__status-dot ${d.online ? 'is-online' : 'is-offline'}`} />
                   {d.online
@@ -298,8 +332,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                     <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
                   )}
                 </span>
-              </span>
-              {isSwitching ? (
+              )}
+              trailing={isSwitching ? (
                 <span className="devices-page__device-spinner spinner" />
               ) : (
                 clickable && (
@@ -308,7 +342,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
                   </svg>
                 )
               )}
-            </button>
+              selected={isCurrent}
+            />
           );
         })}
       </div>
@@ -319,10 +354,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       return (
         <>
           {sortedDevices.length > 0 && renderDeviceList()}
-          <div className="devices-page__loading">
-            <span className="spinner" />
-            {t('devices.loading')}
-          </div>
+          <MobileStatus className="devices-page__loading" loading title={t('devices.loading')} />
         </>
       );
     }
@@ -331,28 +363,27 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       return (
         <>
           {sortedDevices.length > 0 && renderDeviceList()}
-          <div className="devices-page__empty-card">
-            <span className="devices-page__empty-icon"><NoIdentityIcon /></span>
-            <p className="devices-page__empty-text">{t('devices.noDelegatedIdentity')}</p>
-            <button type="button" className="devices-page__retry-btn" onClick={handleManualRefresh}>
-              {t('devices.retry')}
-            </button>
-          </div>
+          <MobileCard appearance="elevated" className="devices-page__empty-card">
+            <MobileStatus
+              action={<MobileButton className="devices-page__retry-btn" onClick={handleManualRefresh}>{t('devices.retry')}</MobileButton>}
+              description={t('devices.noDelegatedIdentity')}
+              icon={<NoIdentityIcon />}
+            />
+          </MobileCard>
         </>
       );
     }
 
     if (loading && sortedDevices.length === 0) {
       return (
-        <div className="devices-page__loading">
-          <span className="spinner" />
-          {t('devices.loading')}
-        </div>
+        <MobileStatus className="devices-page__loading" loading title={t('devices.loading')} />
       );
     }
 
     if (sortedDevices.length === 0) {
-      return <div className="devices-page__empty">{t('devices.noDevices')}</div>;
+      // A failed directory request is not evidence that the account is empty.
+      if (error) return null;
+      return <MobileStatus className="devices-page__empty" description={t('devices.noDevices')} />;
     }
 
     return renderDeviceList();
@@ -360,24 +391,30 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   return (
     <div className="devices-page">
-      <div className="devices-page__header">
-        <button type="button" className="devices-page__back-btn" onClick={onBack} aria-label={t('common.back')}>
-          <BackIcon />
-        </button>
-        <h2 className="devices-page__title">{t('devices.title')}</h2>
-        <button
-          type="button"
-          className={`devices-page__refresh-btn ${loading || identityChecking ? 'is-loading' : ''}`}
+      <MobilePageHeader
+        className="devices-page__header"
+        leading={accountLanding ? <MobileButton appearance="plain" size="sm" onClick={onBack}>{t('sessions.disconnect')}</MobileButton> : <MobileIconButton
+          appearance="floating"
+          className="devices-page__back-btn"
+          icon={<BackIcon />}
+          onClick={onBack}
+          aria-label={t('common.back')}
+        />}
+        title={t('devices.title')}
+        actions={<MobileIconButton
+          appearance="floating"
+          className="devices-page__refresh-btn"
+          icon={<RefreshIcon />}
+          loading={loading || identityChecking}
           onClick={handleManualRefresh}
-          disabled={loading || identityChecking || !!switchingId}
+          disabled={!!switchingId}
           aria-label={t('devices.refresh')}
           title={t('devices.refresh')}
-        >
-          <RefreshIcon />
-        </button>
-      </div>
+        />}
+      />
 
-      {error && <div className="devices-page__error">{error}</div>}
+      {accountLanding && <MobileBanner>{t('devices.accountReady')}</MobileBanner>}
+      {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
 
       <div className="devices-page__body">
         {renderBody()}

@@ -1,0 +1,139 @@
+@layer openbitfun.components {
+  .overlay[data-openbitfun-component="mobile-sheet"] {
+    position: fixed;
+    inset: 0;
+    z-index: var(--openbitfun-layer-modal);
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    background: var(--openbitfun-color-overlay-scrim);
+    animation: openbitfun-mobile-sheet-overlay-enter var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-enter) both;
+  }
+
+  .root {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    inline-size: min(100%, 520px);
+    max-inline-size: 520px;
+    max-block-size: min(88dvh, 760px);
+    flex-direction: column;
+    overflow: hidden;
+    margin-inline: auto;
+    padding-block-end: env(safe-area-inset-bottom, 0px);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-start-start-radius: var(--openbitfun-radius-2xl);
+    border-start-end-radius: var(--openbitfun-radius-2xl);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-overlay);
+    animation: openbitfun-mobile-sheet-surface-enter var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-enter) both;
+  }
+
+  .handle {
+    inline-size: 36px;
+    block-size: 4px;
+    flex: 0 0 auto;
+    align-self: center;
+    margin-block-start: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-border-strong);
+  }
+
+  .header,
+  .body,
+  .footer {
+    box-sizing: border-box;
+    min-inline-size: 0;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--openbitfun-space-3);
+    flex: 0 0 auto;
+    padding: var(--openbitfun-space-3) var(--openbitfun-space-4) var(--openbitfun-space-2);
+    text-align: center;
+  }
+
+  .heading { min-inline-size: 0; flex: 1; }
+  .headerAction { flex: 0 0 auto; margin-block-start: calc(var(--openbitfun-space-1) * -1); }
+
+  .title {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-body-lg-font-family);
+    font-size: var(--openbitfun-type-body-lg-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-body-lg-line-height);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .description {
+    margin: 0;
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+  }
+
+  .body {
+    display: flex;
+    min-block-size: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--openbitfun-space-2);
+    overflow: auto;
+    padding: 0 var(--openbitfun-space-3) var(--openbitfun-space-2);
+    overscroll-behavior: contain;
+  }
+
+  .footer {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: var(--openbitfun-space-2);
+    padding: 0 var(--openbitfun-space-3) var(--openbitfun-space-3);
+  }
+
+  .overlay[data-state="exiting"] {
+    pointer-events: none;
+    animation: openbitfun-mobile-sheet-overlay-exit var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-exit) both;
+  }
+
+  .root[data-state="exiting"] {
+    animation: openbitfun-mobile-sheet-surface-exit var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-exit) both;
+  }
+
+  @keyframes openbitfun-mobile-sheet-overlay-enter { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes openbitfun-mobile-sheet-overlay-exit { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes openbitfun-mobile-sheet-surface-enter { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes openbitfun-mobile-sheet-surface-exit { from { transform: none; } to { transform: translateY(100%); } }
+
+  @media (min-width: 700px) {
+    .root {
+      margin-block-end: var(--openbitfun-space-4);
+      border-radius: var(--openbitfun-radius-2xl);
+    }
+  }
+
+  @media (max-width: 359px) {
+    .header { padding-inline: var(--openbitfun-space-3); }
+    .body,
+    .footer { padding-inline: var(--openbitfun-space-2); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .overlay,
+    .root { animation-duration: 1ms; }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: CanvasText; }
+  }
+}

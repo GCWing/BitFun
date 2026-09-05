@@ -1,8 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import {
+  deserializeCloudAccountSession,
+  loadMatchingCloudAccountSession,
+  saveCloudAccountSession,
+  serializeCloudAccountSession,
+} from '../../../../../mobile-web/src/services/CloudAccountSessionStore';
 
 const sessionListSource = readFileSync(
   new URL('../../../../../mobile-web/src/pages/SessionListPage.tsx', import.meta.url),
+  'utf8',
+);
+const sessionDashboardSource = readFileSync(
+  new URL('../../../../../mobile-web/src/components/SessionDashboardSections.tsx', import.meta.url),
   'utf8',
 );
 const chatSource = readFileSync(
@@ -41,11 +51,11 @@ describe('mobile control-target UI ownership contracts', () => {
       'if (creating || targetInitializingRef.current) return;',
     );
     expect(sessionListSource).toContain('disabled={creating || targetInitializing}');
-    expect(sessionListSource).toMatch(
-      /className="session-list__search-input"[\s\S]*?disabled=\{targetInitializing\}/,
+    expect(sessionDashboardSource).toMatch(
+      /inputClassName="session-list__search-input"[\s\S]*?disabled=\{targetInitializing\}/,
     );
-    expect(sessionListSource).not.toMatch(
-      /className="session-list__search-input"[\s\S]*?disabled=\{loading\}/,
+    expect(sessionDashboardSource).not.toMatch(
+      /inputClassName="session-list__search-input"[\s\S]*?disabled=\{loading\}/,
     );
     expect(sessionListSource).toContain('if (loading || loadingMore || !hasMore) return;');
 
@@ -106,5 +116,78 @@ describe('mobile control-target UI ownership contracts', () => {
     expect(pairingSource).not.toMatch(
       /setConnectionStatus\(shouldAutoReconnect \? 'pairing' : 'idle'\)/,
     );
+  });
+
+  it('reuses only a matching same-tab mobile account session', () => {
+    expect(pairingSource).toContain(
+      'const hasScannedAccountTarget = !!pairingTarget.targetDeviceId;',
+    );
+    expect(pairingSource).toContain(
+      'requiresAccountAuth && hasScannedAccountTarget',
+    );
+
+    const stored = {
+      relayUrl: 'https://relay.example.com',
+      username: 'alice',
+      controllerDeviceId: 'mobile-a',
+      session: {
+        token: 'token-a',
+        userId: 'account-a',
+        masterKey: new Uint8Array(32).fill(7),
+      },
+    };
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    };
+
+    saveCloudAccountSession(stored, storage);
+    const restored = loadMatchingCloudAccountSession(
+      'https://relay.example.com/',
+      'alice',
+      'mobile-a',
+      storage,
+    );
+    expect(restored?.session.token).toBe('token-a');
+    expect(restored?.session.masterKey).toEqual(stored.session.masterKey);
+    expect(loadMatchingCloudAccountSession(
+      'https://relay.example.com', 'bob', 'mobile-a', storage,
+    )).toBeNull();
+    expect(loadMatchingCloudAccountSession(
+      'https://other.example.com', 'alice', 'mobile-a', storage,
+    )).toBeNull();
+    expect(loadMatchingCloudAccountSession(
+      'https://relay.example.com', 'alice', 'mobile-b', storage,
+    )).toBeNull();
+  });
+
+  it('keeps the account-session record tolerant across persisted shapes', () => {
+    const current = {
+      relayUrl: 'https://relay.example.com',
+      username: 'alice',
+      controllerDeviceId: 'mobile-a',
+      session: {
+        token: 'token-a',
+        userId: 'account-a',
+        masterKey: new Uint8Array(32).fill(9),
+      },
+    };
+    const currentRoundTrip = deserializeCloudAccountSession(
+      serializeCloudAccountSession(current),
+    );
+    expect(currentRoundTrip?.session.masterKey).toEqual(current.session.masterKey);
+
+    const wire = JSON.parse(serializeCloudAccountSession(current));
+    const legacy = JSON.stringify({
+      relayUrl: wire.relay_url,
+      username: wire.username,
+      token: wire.token,
+      userId: wire.user_id,
+      masterKey: wire.master_key,
+      controllerDeviceId: wire.controller_device_id,
+    });
+    expect(deserializeCloudAccountSession(legacy)?.session.userId).toBe('account-a');
+    expect(deserializeCloudAccountSession(JSON.stringify({ ...wire, version: 99 }))).toBeNull();
   });
 });

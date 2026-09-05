@@ -18,6 +18,46 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Mobile controls
+
+Touch-first controls use the isolated mobile entry so compact and foldable
+surfaces do not inherit desktop component geometry or ship desktop component
+styles:
+
+```tsx
+import "@openbitfun/ui/mobile.css";
+import {
+  MobileActionSheet,
+  MobileBadge,
+  MobileBanner,
+  MobileButton,
+  MobileCard,
+  MobileChoiceSheet,
+  MobileConfirmSheet,
+  MobileComposer,
+  MobileDisclosure,
+  MobileFileButton,
+  MobileFloatingActions,
+  MobileIconButton,
+  MobileLink,
+  MobileListRow,
+  MobileMessage,
+  MobilePageHeader,
+  MobileScrim,
+  MobileSection,
+  MobileSegmentedControl,
+  MobileSheet,
+  MobileStatus,
+  MobileTextField,
+  MobileTextarea,
+} from "@openbitfun/ui/mobile";
+```
+
+These components own mobile touch targets, pressed/focus/disabled states,
+surface elevation, responsive inline sizing, composer geometry, transparent
+floating action layout, and sheet accessibility. Product state, localized copy,
+routing, and device or session operations stay in the consuming application.
+
 Use `OverflowText` for single-line labels that need a treatment only when their
 rendered content is actually clipped. Its default `fade` behavior softens the
 inline end. `behavior="marquee"` keeps that resting cue, then reveals the full

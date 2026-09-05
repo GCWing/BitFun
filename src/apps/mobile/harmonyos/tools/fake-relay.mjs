@@ -201,6 +201,9 @@ const PREVIEW_SOURCE = [
 const previewFiles = new Map([
   ['README.md', Buffer.from('# OpenBitFun Preview\n\nThis is a fake relay file download.\n', 'utf8')],
   ['/workspace/OpenBitFun/README.md', Buffer.from('# OpenBitFun Preview\n\nThis is a fake relay file download.\n', 'utf8')],
+  ['/workspace/OpenBitFun/IDENTITY.md', Buffer.from('# Identity\n\nOpenBitFun preview identity.\n', 'utf8')],
+  ['/workspace/OpenBitFun/USER.md', Buffer.from('# User\n\nOpenBitFun preview user.\n', 'utf8')],
+  ['/workspace/OpenBitFun/SOUL.md', Buffer.from('# Soul\n\nOpenBitFun preview soul.\n', 'utf8')],
   ['src/preview.rs', Buffer.from(PREVIEW_SOURCE, 'utf8')],
   ['/workspace/OpenBitFun/src/preview.rs', Buffer.from(PREVIEW_SOURCE, 'utf8')],
 ]);
@@ -210,6 +213,13 @@ function isScenario(name) {
 }
 
 function assistantResponseContent() {
+  if (isScenario('file-attachments')) {
+    return [
+      '附件应当保留为正文中的可读文件名，并在正文下方形成独立的纵向卡片列表：',
+      '',
+      '[IDENTITY.md](computer:///workspace/OpenBitFun/IDENTITY.md)、[USER.md](computer:///workspace/OpenBitFun/USER.md) 和 [SOUL.md](computer:///workspace/OpenBitFun/SOUL.md)。',
+    ].join('\n');
+  }
   if (isScenario('long-markdown')) {
     return [
       '## 鸿蒙端聊天回归验证',
@@ -913,6 +923,14 @@ function readBody(req) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    res.setHeader('access-control-allow-origin', '*');
+    res.setHeader('access-control-allow-headers', 'content-type');
+    res.setHeader('access-control-allow-methods', 'POST, OPTIONS');
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     if (req.method !== 'POST') {
       res.writeHead(404);
       res.end();

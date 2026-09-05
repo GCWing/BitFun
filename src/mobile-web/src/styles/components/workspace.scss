@@ -194,34 +194,12 @@
 }
 
 .workspace-page__recent-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  background: var(--openbitfun-color-surface-panel);
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  @include squircle(14px);
-  padding: 12px;
-  cursor: pointer;
-  text-align: left;
-  color: var(--openbitfun-color-content-primary);
-  box-shadow: var(--openbitfun-shadow-xs);
-  transition: all var(--motion-fast) var(--easing-standard);
   animation: slideUp 0.3s motion.$easing-decelerate both;
 
   @for $i from 1 through 20 {
     &:nth-child(#{$i}) {
       animation-delay: #{$i * 0.04}s;
     }
-  }
-
-  &:active {
-    transform: translateY(1px);
-    background: var(--openbitfun-color-surface-subtle);
-  }
-
-  &:disabled {
-    opacity: var(--openbitfun-opacity-disabled);
-    cursor: not-allowed;
   }
 }
 
@@ -265,7 +243,4 @@
     animation: none;
   }
 
-  .workspace-page__recent-item {
-    transition: none;
-  }
 }

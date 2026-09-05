@@ -1,0 +1,6 @@
+@layer openbitfun.components {
+  .root { position: fixed; inset: 0; box-sizing: border-box; margin: 0; padding: 0; border: 0; background: var(--openbitfun-color-overlay-scrim); cursor: default; touch-action: manipulation; transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard); }
+  .root[data-visible="false"] { pointer-events: none; opacity: 0; }
+  .root:focus-visible { outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring); outline-offset: calc(var(--openbitfun-focus-offset) * -1); }
+  @media (prefers-reduced-motion: reduce) { .root { transition: none; } }
+}

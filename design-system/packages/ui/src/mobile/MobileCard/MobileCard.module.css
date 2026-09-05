@@ -1,0 +1,10 @@
+@layer openbitfun.components {
+  .root { box-sizing: border-box; min-inline-size: 0; border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle); border-radius: var(--openbitfun-radius-xl); color: var(--openbitfun-color-content-primary); background: var(--openbitfun-color-surface-panel); }
+  .root[data-appearance="plain"] { border-color: transparent; background: transparent; }
+  .root[data-appearance="elevated"] { background: var(--openbitfun-color-surface-raised); box-shadow: var(--openbitfun-shadow-base); }
+  .root[data-padding="none"] { padding: 0; }
+  .root[data-padding="sm"] { padding: var(--openbitfun-space-3); }
+  .root[data-padding="md"] { padding: var(--openbitfun-space-4); }
+  .root[data-padding="lg"] { padding: var(--openbitfun-space-6); }
+  @media (forced-colors: active) { .root { border-color: CanvasText; } }
+}

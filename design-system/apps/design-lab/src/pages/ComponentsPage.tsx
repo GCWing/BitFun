@@ -63,6 +63,27 @@ import {
   type DensityMode,
   type TokenOverrides,
 } from "@openbitfun/ui";
+import {
+  MobileBadge,
+  MobileBanner,
+  MobileButton,
+  MobileCard,
+  MobileComposer,
+  MobileDisclosure,
+  MobileFileButton,
+  MobileFloatingActions,
+  MobileIconButton,
+  MobileLink,
+  MobileListRow,
+  MobileMessage,
+  MobilePageHeader,
+  MobileScrim,
+  MobileSection,
+  MobileSegmentedControl,
+  MobileStatus,
+  MobileTextField,
+  MobileTextarea,
+} from "@openbitfun/ui/mobile";
 import { componentRegistry, type ComponentMeta } from "@openbitfun/ui/registry";
 import { useI18n } from "../i18n";
 import {
@@ -103,6 +124,29 @@ const componentIcons = {
   Listbox: <List aria-hidden="true" size={19} />,
   LoadingState: <AppWindow aria-hidden="true" size={19} />,
   Menu: <List aria-hidden="true" size={19} />,
+  MobileActionSheet: <List aria-hidden="true" size={19} />,
+  MobileBadge: <CatalogIcon name="check-line" style={{ width: 19, height: 19 }} />,
+  MobileBanner: <AppWindow aria-hidden="true" size={19} />,
+  MobileButton: <MousePointerClick aria-hidden="true" size={19} />,
+  MobileCard: <Rows3 aria-hidden="true" size={19} />,
+  MobileChoiceSheet: <List aria-hidden="true" size={19} />,
+  MobileConfirmSheet: <AppWindow aria-hidden="true" size={19} />,
+  MobileComposer: <CatalogIcon name="arrow-up" style={{ width: 19, height: 19 }} />,
+  MobileDisclosure: <CatalogIcon name="chevron-right" style={{ width: 19, height: 19 }} />,
+  MobileFileButton: <CatalogIcon name="plus" style={{ width: 19, height: 19 }} />,
+  MobileFloatingActions: <PanelTop aria-hidden="true" size={19} />,
+  MobileIconButton: <MousePointerClick aria-hidden="true" size={19} />,
+  MobileLink: <CatalogIcon name="link" style={{ width: 19, height: 19 }} />,
+  MobileListRow: <Rows3 aria-hidden="true" size={19} />,
+  MobileMessage: <CatalogIcon name="session" style={{ width: 19, height: 19 }} />,
+  MobilePageHeader: <Heading aria-hidden="true" size={19} />,
+  MobileScrim: <AppWindow aria-hidden="true" size={19} />,
+  MobileSection: <Rows3 aria-hidden="true" size={19} />,
+  MobileSegmentedControl: <ToggleLeft aria-hidden="true" size={19} />,
+  MobileSheet: <AppWindow aria-hidden="true" size={19} />,
+  MobileStatus: <AppWindow aria-hidden="true" size={19} />,
+  MobileTextField: <CatalogIcon name="search" style={{ width: 19, height: 19 }} />,
+  MobileTextarea: <CatalogIcon name="arrow-up" style={{ width: 19, height: 19 }} />,
   Dialog: <AppWindow aria-hidden="true" size={19} />,
   Sheet: <AppWindow aria-hidden="true" size={19} />,
   MultiSelect: <List aria-hidden="true" size={19} />,
@@ -228,6 +272,80 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           />
         </Stack>
       );
+    case "MobileIconButton":
+      return (
+        <MobileIconButton
+          appearance="floating"
+          aria-label={t("components.preview.searchLabel")}
+          icon={<CatalogIcon name="search" aria-hidden="true" />}
+          tabIndex={-1}
+        />
+      );
+    case "MobileLink":
+      return <MobileLink href="#mobile" tabIndex={-1}>{t("nav.docs")}</MobileLink>;
+    case "MobileButton":
+      return <MobileButton size="sm" tabIndex={-1}>{t("components.preview.actionCardTitle")}</MobileButton>;
+    case "MobileCard":
+      return <MobileCard appearance="elevated">{t("components.preview.cardDescription")}</MobileCard>;
+    case "MobileBadge":
+      return <MobileBadge dot tone="success">{t("components.preview.notifications")}</MobileBadge>;
+    case "MobileBanner":
+      return <MobileBanner tone="info">{t("components.preview.fieldDescription")}</MobileBanner>;
+    case "MobileComposer":
+      return (
+        <MobileComposer
+          aria-label={t("components.preview.composerPlaceholder")}
+          endActions={<MobileIconButton appearance="plain" aria-label={t("components.preview.flowChat.askUserSubmit")} icon={<CatalogIcon name="arrow-up" aria-hidden="true" />} size="sm" tabIndex={-1} />}
+          leading={<MobileIconButton appearance="plain" aria-label={t("components.preview.add")} icon={<CatalogIcon name="plus" aria-hidden="true" />} size="sm" tabIndex={-1} />}
+        >
+          <span>{t("components.preview.composerPlaceholder")}</span>
+        </MobileComposer>
+      );
+    case "MobileDisclosure":
+      return <MobileDisclosure onToggle={() => undefined} open title={t("detail.loading")}>{t("components.preview.fieldDescription")}</MobileDisclosure>;
+    case "MobileFileButton":
+      return <MobileFileButton leading={<CatalogIcon name="plus" aria-hidden="true" />} tabIndex={-1}>{t("components.preview.add")}</MobileFileButton>;
+    case "MobileFloatingActions":
+      return (
+        <MobileFloatingActions
+          leading={<MobileIconButton appearance="floating" aria-label={t("components.preview.add")} icon={<CatalogIcon name="plus" aria-hidden="true" />} tabIndex={-1} />}
+          trailing={<MobileIconButton appearance="floating" aria-label={t("components.preview.settings")} icon={<CatalogIcon name="gear" aria-hidden="true" />} tabIndex={-1} />}
+        />
+      );
+    case "MobileTextField":
+      return (
+        <MobileTextField
+          aria-label={t("components.preview.searchLabel")}
+          leading={<CatalogIcon name="search" aria-hidden="true" />}
+          placeholder={t("components.preview.searchPlaceholder")}
+          tabIndex={-1}
+        />
+      );
+    case "MobileListRow":
+      return (
+        <MobileListRow
+          appearance="surface"
+          label={t("components.preview.session")}
+          leading={<CatalogIcon name="session" aria-hidden="true" />}
+          supportingText={t("components.preview.fieldDescription")}
+          tabIndex={-1}
+          trailing={<CatalogIcon name="chevron-right" aria-hidden="true" />}
+        />
+      );
+    case "MobileMessage":
+      return <MobileMessage roleType="user">{t("components.preview.cardDescription")}</MobileMessage>;
+    case "MobilePageHeader":
+      return <MobilePageHeader centered title={t("components.preview.session")} />;
+    case "MobileScrim":
+      return <MobileScrim aria-label={t("components.preview.close")} style={{ blockSize: 64, inlineSize: "100%", position: "relative" }} tabIndex={-1} />;
+    case "MobileSection":
+      return <MobileSection title={t("components.preview.appearance")}>{t("components.preview.fieldDescription")}</MobileSection>;
+    case "MobileSegmentedControl":
+      return <MobileSegmentedControl aria-label={t("components.preview.segmentedLabel")} onChange={() => undefined} options={[{ label: t("components.preview.segmentedChat"), value: "chat" }, { label: t("components.preview.segmentedAgent"), value: "agent" }]} value="chat" />;
+    case "MobileStatus":
+      return <MobileStatus description={t("components.preview.fieldDescription")} title={t("components.preview.cardTitle")} />;
+    case "MobileTextarea":
+      return <MobileTextarea aria-label={t("components.preview.composerPlaceholder")} placeholder={t("components.preview.composerPlaceholder")} readOnly />;
     case "Input":
       return (
         <Input
@@ -403,6 +521,10 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           </span>
         </Composer>
       );
+    case "MobileActionSheet":
+    case "MobileChoiceSheet":
+    case "MobileConfirmSheet":
+    case "MobileSheet":
     case "Dialog":
     case "Sheet":
       return (
@@ -596,10 +718,11 @@ export function ComponentsPage({
 }: ComponentsPageProps) {
   const { t } = useI18n();
   const isFlowChatCategory = category === "flow-chat";
+  const isMobileCategory = category === "mobile";
   const visibleComponents = componentRegistry.filter((component) =>
-    isFlowChatCategory
-      ? component.category === "flow-chat"
-      : component.category !== "flow-chat",
+    category
+      ? component.category === category
+      : component.category !== "flow-chat" && component.category !== "mobile",
   );
   const catalogComponents = isFlowChatCategory
     ? flowChatPreviewRegistry
@@ -608,18 +731,24 @@ export function ComponentsPage({
     : visibleComponents;
 
   return (
-    <main className="lab-page" id={isFlowChatCategory ? "flow-chat" : "components"}>
+    <main className="lab-page" id={isFlowChatCategory ? "flow-chat" : isMobileCategory ? "mobile" : "components"}>
       <header className="page-heading page-heading--split">
         <div>
           <span className="page-kicker">{t(isFlowChatCategory
             ? "components.flowChat.kicker"
-            : "components.kicker")}</span>
+            : isMobileCategory
+              ? "components.mobile.kicker"
+              : "components.kicker")}</span>
           <h1>{t(isFlowChatCategory
             ? "components.flowChat.title"
-            : "components.title")}</h1>
+            : isMobileCategory
+              ? "components.mobile.title"
+              : "components.title")}</h1>
           <p>{t(isFlowChatCategory
             ? "components.flowChat.description"
-            : "components.description")}</p>
+            : isMobileCategory
+              ? "components.mobile.description"
+              : "components.description")}</p>
         </div>
         <button className="lab-button" onClick={onInspectTokens} type="button">
           {t("components.inspectAllTokens")}

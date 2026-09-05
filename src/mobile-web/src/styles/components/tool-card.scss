@@ -20,6 +20,7 @@
   gap: var(--size-gap-2);
   padding: var(--size-gap-2) var(--size-gap-3);
   min-height: 32px;
+  min-block-size: 32px;
   cursor: pointer;
   transition: background var(--motion-fast) var(--easing-standard);
 
@@ -224,6 +225,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
+  min-block-size: 20px;
   padding: 0;
   border-radius: var(--size-radius-sm);
   border: none;
@@ -256,6 +258,36 @@
   line-height: var(--openbitfun-type-body-lg-line-height);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.chat-tool-approval {
+  margin: 0 10px 10px 28px;
+  padding-top: 8px;
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+}
+
+.chat-tool-approval__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-tool-approval__button {
+  min-block-size: 32px;
+  height: 32px;
+  padding-inline: 12px;
+  border-radius: 16px;
+}
+
+.chat-tool-approval__button--approve[data-appearance='primary'] {
+  border-color: var(--openbitfun-color-content-primary);
+  background: var(--openbitfun-color-content-primary);
+  color: var(--openbitfun-color-surface-panel);
+}
+
+.chat-task-card__step-wrap .chat-tool-approval {
+  margin-left: 18px;
 }
 
 // ─── Task card (subagent container) ────────────────────────────────────────
@@ -300,6 +332,7 @@
   padding: 4px var(--size-gap-3);
   border-top: 1px solid var(--openbitfun-color-border-subtle);
   min-height: 24px;
+  min-block-size: 24px;
   cursor: pointer;
   transition: background var(--motion-fast) var(--easing-standard);
 
@@ -613,7 +646,7 @@
 
 .chat-ask-card__custom-input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 0 10px;
   border-radius: var(--size-radius-base);
   border: 1px solid var(--openbitfun-color-border-default);
   background: var(--openbitfun-color-surface-scene);
@@ -621,13 +654,17 @@
   font-size: var(--openbitfun-type-body-sm-font-size);
   outline: none;
 
-  &:focus {
+  &:focus-within {
     border-color: var(--openbitfun-color-accent-default);
   }
 
-  &:disabled {
+  &[data-disabled='true'] {
     opacity: 0.5;
   }
+}
+
+.chat-ask-card__custom-input input {
+  font-size: inherit;
 }
 
 // ─── TodoWrite card ────────────────────────────────────────────────────────
@@ -647,6 +684,7 @@
   padding: var(--size-gap-2) var(--size-gap-3);
   cursor: pointer;
   min-height: 36px;
+  min-block-size: 36px;
   transition: background var(--motion-fast) var(--easing-standard);
 
   &:active {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { MobileButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { getMobileLanguageShortName } from '../i18n/localeRegistry';
 
@@ -11,15 +12,15 @@ const LanguageToggleButton: React.FC<LanguageToggleButtonProps> = ({ className }
   const buttonClassName = ['mobile-lang-btn', className].filter(Boolean).join(' ');
 
   return (
-    <button
-      type="button"
+    <MobileButton
+      appearance="plain"
       className={buttonClassName}
       onClick={toggleLanguage}
       aria-label={t('common.switchLanguage')}
       title={t('common.switchLanguage')}
     >
       {getMobileLanguageShortName(language)}
-    </button>
+    </MobileButton>
   );
 };
 

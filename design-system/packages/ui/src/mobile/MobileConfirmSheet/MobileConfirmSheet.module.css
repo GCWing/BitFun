@@ -1,0 +1,30 @@
+@layer openbitfun.components {
+  .content {
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--openbitfun-space-3);
+    text-align: center;
+  }
+
+  .icon {
+    display: grid;
+    inline-size: 52px;
+    block-size: 52px;
+    place-items: center;
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-secondary);
+    background: var(--openbitfun-color-surface-tertiary);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--openbitfun-space-2);
+  }
+
+  @media (max-width: 359px) {
+    .actions { grid-template-columns: 1fr; }
+  }
+}

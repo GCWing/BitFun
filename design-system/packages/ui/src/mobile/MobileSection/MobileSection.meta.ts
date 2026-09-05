@@ -1,0 +1,2 @@
+import type { ComponentMeta } from "../../registry.types";
+export const mobileSectionMeta = { category: "mobile", description: "A mobile content section with optional heading, description, and action.", maturity: "stable", name: "MobileSection", props: [{ name: "title", type: "ReactNode" }, { name: "description", type: "ReactNode" }, { name: "action", type: "ReactNode" }], states: ["content-only", "with-heading", "with-action"], tokens: ["color.content.primary", "color.content.muted", "space.1", "space.2", "space.3"] } as const satisfies ComponentMeta;

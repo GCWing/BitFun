@@ -1,0 +1,11 @@
+@layer openbitfun.components {
+  .root { display: inline-flex; box-sizing: border-box; min-block-size: 44px; align-items: center; justify-content: center; gap: var(--openbitfun-space-2); padding: 0 var(--openbitfun-space-4); border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-border); border-radius: var(--openbitfun-radius-pill); color: var(--openbitfun-color-action-neutral-content); background: var(--openbitfun-color-surface-panel); box-shadow: var(--openbitfun-shadow-xs); cursor: pointer; touch-action: manipulation; font-size: var(--openbitfun-type-label-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); }
+  .root:focus-within { outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring); outline-offset: var(--openbitfun-focus-offset); }
+  .root[aria-disabled="true"] { color: var(--openbitfun-color-action-neutral-content-disabled); cursor: not-allowed; box-shadow: none; }
+  .input { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .slot, .spinner { display: grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .slot > :where(svg, img) { inline-size: 100%; block-size: 100%; }
+  .spinner { border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: var(--openbitfun-radius-pill); animation: openbitfun-mobile-file-button-spin var(--openbitfun-motion-duration-loop) linear infinite; }
+  @keyframes openbitfun-mobile-file-button-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+}

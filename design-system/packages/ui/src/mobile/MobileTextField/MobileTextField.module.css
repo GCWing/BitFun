@@ -1,0 +1,89 @@
+@layer openbitfun.components {
+  .root {
+    display: flex;
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 44px;
+    align-items: center;
+    gap: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-4);
+    border: var(--openbitfun-border-width-default) solid transparent;
+    border-radius: var(--openbitfun-radius-md);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-tertiary);
+    transition:
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  .root[data-appearance="surface"] {
+    border-color: var(--openbitfun-color-field-border);
+    background: var(--openbitfun-color-field-background);
+    box-shadow: var(--openbitfun-shadow-xs);
+  }
+
+  .root:focus-within {
+    border-color: var(--openbitfun-color-field-border-focus);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
+  }
+
+  .root[data-invalid="true"] {
+    border-color: var(--openbitfun-color-status-danger-border);
+  }
+
+  .root[data-disabled="true"] {
+    color: var(--openbitfun-color-content-disabled);
+    cursor: not-allowed;
+  }
+
+  .input {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: 100%;
+    min-block-size: 42px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    color: inherit;
+    background: transparent;
+    caret-color: var(--openbitfun-color-accent-default);
+    font: inherit;
+    font-size: var(--openbitfun-type-body-md-font-size);
+  }
+
+  .input::placeholder {
+    color: var(--openbitfun-color-content-muted);
+    opacity: 1;
+  }
+
+  .input:disabled { cursor: not-allowed; }
+
+  .slot {
+    display: grid;
+    box-sizing: border-box;
+    inline-size: 20px;
+    block-size: 20px;
+    flex: 0 0 20px;
+    place-items: center;
+    color: var(--openbitfun-color-content-secondary);
+  }
+
+  .slot > :where(svg, img) {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root { transition: none; }
+  }
+
+  @media (forced-colors: active) {
+    .root { border-color: ButtonText; }
+    .root:focus-within { border-color: Highlight; }
+  }
+}

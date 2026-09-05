@@ -982,6 +982,15 @@
   color: var(--openbitfun-color-content-muted);
 }
 
+.session-list__search-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .session-list__search-input {
   flex: 1;
   border: none;
@@ -1019,112 +1028,6 @@
     background: var(--openbitfun-color-surface-subtle);
     color: var(--openbitfun-color-content-primary);
   }
-}
-
-// ── Context menu (bottom sheet) ────────────────────────────────────
-.session-list__menu-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--openbitfun-color-overlay-scrim);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn var(--motion-fast) var(--easing-standard);
-}
-
-.session-list__menu-sheet {
-  width: 100%;
-  max-width: 440px;
-  background: var(--openbitfun-color-surface-raised);
-  border-radius: 20px 20px 0 0;
-  padding: var(--size-gap-2) var(--size-gap-4) var(--size-gap-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-gap-3);
-  animation: slideUp var(--motion-base) motion.$easing-decelerate;
-}
-
-.session-list__menu-handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--openbitfun-color-border-subtle);
-  margin: 0 auto;
-}
-
-.session-list__menu-title {
-  text-align: center;
-  font-size: var(--openbitfun-type-body-md-font-size);
-  font-weight: var(--openbitfun-type-label-selected-font-weight);
-  color: var(--openbitfun-color-content-primary);
-  padding: var(--size-gap-1) 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-list__menu-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.session-list__menu-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  border: none;
-  @include squircle(16px);
-  background: var(--openbitfun-color-surface-panel);
-  color: var(--openbitfun-color-content-primary);
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-label-lg-font-weight);
-  cursor: pointer;
-  text-align: left;
-
-  svg {
-    flex-shrink: 0;
-  }
-
-  &:active {
-    background: var(--openbitfun-color-surface-subtle);
-    transform: scale(0.99);
-  }
-
-  &--danger {
-    color: var(--openbitfun-color-status-danger-content);
-    background: var(--openbitfun-color-status-danger-surface);
-
-    &:active {
-      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 12%, transparent);
-    }
-  }
-}
-
-.session-list__menu-cancel {
-  width: 100%;
-  padding: 14px;
-  border: none;
-  @include squircle(14px);
-  background: var(--openbitfun-color-surface-panel);
-  color: var(--openbitfun-color-content-secondary);
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-label-selected-font-weight);
-  cursor: pointer;
-
-  &:active {
-    background: var(--openbitfun-color-surface-subtle);
-  }
-}
-
-.harness-profile-picker__option {
-  min-height: 52px;
 }
 
 .harness-profile-picker__density {
@@ -1170,7 +1073,8 @@
 }
 
 .session-list__rename-input {
-  padding: 12px 14px;
+  min-height: 48px;
+  padding: 0 14px;
   border: 1px solid var(--openbitfun-color-border-subtle);
   @include squircle(12px);
   background: var(--openbitfun-color-surface-panel);
@@ -1178,10 +1082,14 @@
   font-size: var(--openbitfun-type-body-lg-font-size);
   outline: none;
 
-  &:focus {
+  &:focus-within {
     border-color: var(--openbitfun-color-accent-default);
     box-shadow: 0 0 0 3px var(--openbitfun-color-accent-surface);
   }
+}
+
+.session-list__rename-input input {
+  font-size: inherit;
 }
 
 .session-list__rename-actions {
@@ -1215,81 +1123,6 @@
 
   &--save {
     background: var(--openbitfun-color-accent-default);
-    color: var(--openbitfun-color-action-primary-content);
-
-    &:active:not(:disabled) {
-      opacity: 0.85;
-    }
-  }
-}
-
-// ── Delete confirmation ────────────────────────────────────────────
-.session-list__confirm-modal {
-  width: calc(100% - 32px);
-  max-width: 340px;
-  background: var(--openbitfun-color-surface-raised);
-  border-radius: 20px;
-  padding: var(--size-gap-6) var(--size-gap-5) var(--size-gap-5);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--size-gap-3);
-  text-align: center;
-  animation: slideUp var(--motion-base) motion.$easing-decelerate;
-}
-
-.session-list__confirm-icon {
-  color: var(--openbitfun-color-status-danger-content);
-  margin-bottom: var(--size-gap-1);
-}
-
-.session-list__confirm-title {
-  margin: 0;
-  font-size: var(--openbitfun-type-heading-navigation-font-size);
-  font-weight: var(--openbitfun-type-label-selected-font-weight);
-  color: var(--openbitfun-color-content-primary);
-}
-
-.session-list__confirm-desc {
-  margin: 0;
-  font-size: var(--openbitfun-type-body-md-font-size);
-  color: var(--openbitfun-color-content-secondary);
-  line-height: var(--openbitfun-type-body-md-line-height);
-}
-
-.session-list__confirm-actions {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-  margin-top: var(--size-gap-2);
-}
-
-.session-list__confirm-btn {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  @include squircle(14px);
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-label-selected-font-weight);
-  cursor: pointer;
-  transition: all var(--motion-fast) var(--easing-standard);
-
-  &:disabled {
-    opacity: var(--openbitfun-opacity-disabled);
-    cursor: not-allowed;
-  }
-
-  &--cancel {
-    background: var(--openbitfun-color-surface-panel);
-    color: var(--openbitfun-color-content-secondary);
-
-    &:active:not(:disabled) {
-      background: var(--openbitfun-color-surface-subtle);
-    }
-  }
-
-  &--danger {
-    background: var(--openbitfun-color-status-danger-content);
     color: var(--openbitfun-color-action-primary-content);
 
     &:active:not(:disabled) {

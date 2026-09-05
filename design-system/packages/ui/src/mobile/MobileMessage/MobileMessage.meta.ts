@@ -1,0 +1,2 @@
+import type { ComponentMeta } from "../../registry.types";
+export const mobileMessageMeta = { category: "mobile", description: "A responsive chat message shell for user, assistant, and system content.", maturity: "stable", name: "MobileMessage", props: [{ name: "roleType", type: '"user" | "assistant" | "system"' }, { name: "actions", type: "ReactNode" }], states: ["user", "assistant", "system"], tokens: ["color.action.neutral.surface", "color.content.primary", "color.content.muted", "radius.xl", "space.3", "space.4"] } as const satisfies ComponentMeta;

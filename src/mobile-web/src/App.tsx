@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useState, useCallback, useRef, useEffect } from 'react';
+import { MobileBanner, MobileButton, MobileScrim, MobileStatus } from '@openbitfun/ui/mobile';
 import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
@@ -55,8 +56,11 @@ const AppContent: React.FC = () => {
   const delegatedOwnerUnlistenRef = useRef<(() => void) | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
   const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
+  const [accountDirectoryOpen, setAccountDirectoryOpen] = useState(false);
+  const [preferredDeviceId, setPreferredDeviceId] = useState<string | undefined>();
 
-  useConnectionHealth(sessionMgr);
+  // An authenticated account without a selected desktop has nothing to ping.
+  useConnectionHealth(accountDirectoryOpen ? null : sessionMgr);
 
   const [navDir, setNavDir] = useState<NavDirection>(null);
   const [prevPage, setPrevPage] = useState<Page | null>(null);
@@ -121,7 +125,10 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handlePaired = useCallback(
-    (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => {
+    (client: RelayHttpClient, sessionMgr: RemoteSessionManager, preferredDeviceId?: string) => {
+      const needsDevice = client.hasDelegatedIdentity && !client.isPaired && !client.pairedDeviceId;
+      setAccountDirectoryOpen(needsDevice);
+      setPreferredDeviceId(preferredDeviceId);
       delegatedOwnerUnlistenRef.current?.();
       clientRef.current = client;
       delegatedOwnerUnlistenRef.current = client.onDelegatedAccountOwnerChange((change) => {
@@ -146,9 +153,10 @@ const AppContent: React.FC = () => {
       }, { emitCurrent: true });
       sessionMgrRef.current = sessionMgr;
       setSessionMgr(sessionMgr);
-      pageStackRef.current = ['pairing', 'sessions'];
-      history.pushState({ page: 'sessions' }, '');
-      setPage('sessions');
+      const landingPage = needsDevice ? 'devices' : 'sessions';
+      pageStackRef.current = ['pairing', landingPage];
+      history.pushState({ page: landingPage }, '');
+      setPage(landingPage);
       setCompactSidebarOpen(false);
     },
     [],
@@ -173,7 +181,7 @@ const AppContent: React.FC = () => {
       const stack = pageStackRef.current;
       const currentPage = stack[stack.length - 1];
 
-      if (currentPage === 'pairing' || currentPage === 'sessions') {
+      if (accountDirectoryOpen || currentPage === 'pairing' || currentPage === 'sessions') {
         // At the root-level pages: re-push a history entry so the user
         // can't accidentally close the app with another back gesture.
         history.pushState({ page: currentPage }, '');
@@ -196,7 +204,7 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [doPopFromChat, doPopFromWorkspace, doPopFromDevices]);
+  }, [accountDirectoryOpen, doPopFromChat, doPopFromWorkspace, doPopFromDevices]);
 
   const handleOpenWorkspace = useCallback(() => {
     navigateTo('workspace', 'push');
@@ -301,6 +309,7 @@ const AppContent: React.FC = () => {
   }, [navigateTo]);
 
   const handleControlTargetChanged = useCallback(() => {
+    setAccountDirectoryOpen(false);
     clearTimeout(timerRef.current);
     setActiveSessionId(null);
     setActiveSessionName('Session');
@@ -317,6 +326,8 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleDisconnect = useCallback(() => {
+    setAccountDirectoryOpen(false);
+    setPreferredDeviceId(undefined);
     delegatedOwnerUnlistenRef.current?.();
     delegatedOwnerUnlistenRef.current = null;
     clientRef.current?.resetConnectionIdentity();
@@ -403,16 +414,26 @@ const AppContent: React.FC = () => {
   return (
     <div className="mobile-app" data-layout={isWideLayout ? 'wide' : 'compact'}>
       {connectionHealth === 'unreachable' && page !== 'pairing' && (
-        <div className="mobile-reconnect-banner" role="alert">
+        <MobileBanner
+          action={<MobileButton appearance="plain" onClick={handleDisconnect} size="sm">{t('sessions.repair')}</MobileButton>}
+          className="mobile-reconnect-banner"
+          tone="danger"
+        >
           <span className="mobile-reconnect-spinner" />
           <span>{t('sessions.reconnecting')}</span>
-          <button type="button" onClick={handleDisconnect}>
-            {t('sessions.repair')}
-          </button>
-        </div>
+        </MobileBanner>
       )}
       {page === 'pairing' && <PairingPage onPaired={handlePaired} />}
-      {page !== 'pairing' && isWideLayout && sessionMgrRef.current && (
+      {accountDirectoryOpen && clientRef.current && (
+        <DevicesPage
+          client={clientRef.current}
+          accountLanding
+          preferredDeviceId={preferredDeviceId}
+          onBack={handleDisconnect}
+          onDeviceSelected={handleControlTargetChanged}
+        />
+      )}
+      {!accountDirectoryOpen && page !== 'pairing' && isWideLayout && sessionMgrRef.current && (
         <div className="remote-shell remote-shell--wide">
           <aside className="remote-shell__master" aria-label={t('sessions.sessionHistory')}>
             {renderSessionList()}
@@ -422,7 +443,7 @@ const AppContent: React.FC = () => {
           </section>
         </div>
       )}
-      {!isWideLayout && (
+      {!accountDirectoryOpen && !isWideLayout && (
         <>
           {shouldShow('workspace') && sessionMgrRef.current && (
             <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
@@ -460,15 +481,14 @@ const AppContent: React.FC = () => {
                   onControlTargetChanged={handleControlTargetChanged}
                 />
               </aside>
-              <button
-                type="button"
+              <MobileScrim
                 className="compact-remote-shell__scrim"
                 aria-label={t('common.close')}
                 onClick={() => setCompactSidebarOpen(false)}
               />
               <section className="compact-remote-shell__main">
                 {currentPage === 'chat' && activeSessionId ? (
-                  <Suspense fallback={<div className="spinner" aria-hidden="true" />}>
+                  <Suspense fallback={<MobileStatus loading title={t('workspace.loadingInfo')} />}>
                     <ChatPage
                       sessionMgr={sessionMgrRef.current}
                       sessionId={activeSessionId}
