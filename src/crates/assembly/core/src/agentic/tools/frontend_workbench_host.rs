@@ -15,6 +15,24 @@ use serde_json::Value;
 pub struct FrontendWorkbenchHostRequest {
     pub action: String,
     pub draft_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_workbench_request_round_trips_without_new_fields() {
+        let old = serde_json::json!({ "action": "prepare", "draftId": null });
+        let request: FrontendWorkbenchHostRequest = serde_json::from_value(old.clone()).unwrap();
+        assert!(request.command_id.is_none());
+        assert!(request.arguments.is_none());
+        assert_eq!(serde_json::to_value(request).unwrap(), old);
+    }
 }
 
 pub type FrontendWorkbenchFuture =

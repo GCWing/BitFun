@@ -1402,6 +1402,7 @@ pub async fn run() {
         .invoke_handler(tauri::generate_handler![
             appearance::show_main_window,
             frontend_workbench::frontend_update_candidate_ready,
+            frontend_workbench::frontend_update_candidate_failed,
             frontend_workbench::get_frontend_update_status,
             frontend_workbench::confirm_frontend_update,
             frontend_workbench::rollback_frontend_update,

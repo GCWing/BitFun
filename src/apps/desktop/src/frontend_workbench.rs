@@ -1,5 +1,7 @@
 //! Writable packaged-frontend revisions with crash-safe provisional activation.
 
+mod overrides;
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -238,8 +240,16 @@ impl FrontendWorkbenchManager {
             .as_deref()
             .is_some_and(|revision| self.revision_is_available(revision));
         if bundled_changed {
-            state.previous_revision = state.active_revision.filter(|_| active_is_valid);
-            state.active_revision = Some(bundled_revision.to_string());
+            // Override revisions contain no application bundle. They keep using
+            // the newly installed host and its compatible versioned UI API.
+            let active_is_overlay = state.active_revision.as_deref().is_some_and(|id| {
+                self.revision_root(id)
+                    .is_ok_and(|root| overrides::is_overlay(&root))
+            });
+            if !active_is_valid || !active_is_overlay {
+                state.previous_revision = state.active_revision.filter(|_| active_is_valid);
+                state.active_revision = Some(bundled_revision.to_string());
+            }
             state.bundled_revision = Some(bundled_revision.to_string());
         } else if !active_is_valid {
             state.active_revision = Some(bundled_revision.to_string());
@@ -344,6 +354,15 @@ impl FrontendWorkbenchManager {
         match request.action.as_str() {
             "prepare" => self.prepare(),
             "status" => self.status(),
+            "inspect" | "invoke" => {
+                let runtime = crate::openbitfun_control_host::dispatch_creation_runtime(
+                    &request.action,
+                    request.command_id,
+                    request.arguments,
+                )
+                .await?;
+                Ok(json!({ "frontend": self.status()?, "runtime": runtime }))
+            }
             "apply" => {
                 self.apply(
                     request
@@ -367,16 +386,47 @@ impl FrontendWorkbenchManager {
             .clone()
             .ok_or_else(|| "No active frontend revision is available".to_string())?;
         validate_revision_id(&active_revision)?;
-        let source = self.revision_root(&active_revision)?;
-        validate_frontend_tree(&source)?;
-
         let draft_id = Uuid::new_v4().to_string();
         let draft_path = self.drafts_dir().join(&draft_id);
-        copy_tree_transactional(&source, &draft_path)?;
+        fs::create_dir_all(&draft_path).map_err(io_error("create customization draft"))?;
+        for file in [overrides::CSS, overrides::JS] {
+            let source = self
+                .asset_root(&active_revision, Path::new(file))?
+                .join(file);
+            fs::copy(source, draft_path.join(file))
+                .map_err(io_error("copy customization entrypoint"))?;
+        }
+        let source_root = self.revision_root(&active_revision)?;
+        if source_root.join("creation-assets").is_dir() {
+            copy_asset_tree_transactional(
+                &source_root.join("creation-assets"),
+                &draft_path.join("creation-assets"),
+            )?;
+        }
+        let bundled = self
+            .bundled_source
+            .lock()
+            .map_err(lock_error)?
+            .clone()
+            .ok_or_else(|| "Packaged frontend is unavailable".to_string())?;
+        fs::copy(
+            bundled.root.join(overrides::API_DOC),
+            draft_path.join(overrides::API_DOC),
+        )
+        .map_err(io_error("copy customization API reference"))?;
+        // This base belongs to the host, outside the editable directory.
+        fs::write(
+            self.drafts_dir().join(format!("{draft_id}.json")),
+            serde_json::to_vec(&overrides::DraftBase {
+                base_revision: active_revision.clone(),
+            })
+            .map_err(|error| error.to_string())?,
+        )
+        .map_err(io_error("write customization draft base"))?;
         fs::write(
             draft_path.join("CREATION.md"),
             format!(
-                "# OpenBitFun frontend draft\n\nDraft id: `{draft_id}`\nBase revision: `{active_revision}`\n\nEdit only this directory. The packaged page already loads `openbitfun-creation.css` and `openbitfun-creation.js`; do not edit `index.html` merely to link them again. Prefer the CSS override for visual changes and keep JavaScript changes small and reversible. Apply with `FrontendWorkbench` and this exact draft id. OpenBitFun will load the candidate, wait for the interactive shell to become ready, and then give the user 15 seconds to keep or roll back the preview.\n"
+                "# OpenBitFun UI customization\n\nDraft id: `{draft_id}`\nBase revision: `{active_revision}`\n\nRead `openbitfun-creation-api.md`. Edit `openbitfun-creation.css` and `openbitfun-creation.js`; put optional modules/assets under `creation-assets/`. JavaScript exports a default activation function receiving the versioned UI API, and may return cleanup. The host loads it after the real shell is ready and loads CSS last. No repository, Node.js, package installation, build, or index.html edit is needed. Preserve existing customizations unless asked to replace them. Apply with `FrontendWorkbench` and this draft id. The host waits for activation, then provides 15 seconds to keep or roll back.\n"
             ),
         )
         .map_err(io_error("write draft instructions"))?;
@@ -386,6 +436,13 @@ impl FrontendWorkbenchManager {
             "draftId": draft_id,
             "draftPath": draft_path.to_string_lossy(),
             "baseRevision": active_revision,
+            "format": "overlay",
+            "apiVersion": 1,
+            "files": {
+                "css": draft_path.join(overrides::CSS).to_string_lossy(),
+                "javascript": draft_path.join(overrides::JS).to_string_lossy(),
+                "apiReference": draft_path.join(overrides::API_DOC).to_string_lossy(),
+            },
         }))
     }
 
@@ -409,7 +466,19 @@ impl FrontendWorkbenchManager {
     fn begin_apply(self: &Arc<Self>, draft_id: &str) -> Result<String, String> {
         validate_uuid(draft_id, "draft_id")?;
         let draft_path = self.drafts_dir().join(draft_id);
-        validate_frontend_tree(&draft_path)?;
+        let base_path = self.drafts_dir().join(format!("{draft_id}.json"));
+        let draft_base = if base_path.exists() {
+            let base: overrides::DraftBase = serde_json::from_slice(
+                &fs::read(base_path).map_err(io_error("read customization draft base"))?,
+            )
+            .map_err(|error| format!("Invalid customization draft base: {error}"))?;
+            overrides::validate(&draft_path)?;
+            Some(base)
+        } else {
+            // Legacy full-frontend drafts retain their original apply path.
+            validate_frontend_tree(&draft_path)?;
+            None
+        };
 
         if self.state.lock().map_err(lock_error)?.pending.is_some() {
             return Err(
@@ -419,7 +488,10 @@ impl FrontendWorkbenchManager {
         }
 
         let revision_id = format!("creative-{}", Uuid::new_v4());
-        copy_tree_transactional(&draft_path, &self.revision_dir(&revision_id))?;
+        copy_asset_tree_transactional(&draft_path, &self.revision_dir(&revision_id))?;
+        if draft_base.is_some() {
+            overrides::write_manifest(&self.revision_dir(&revision_id))?;
+        }
         let transaction_id = Uuid::new_v4().to_string();
         let candidate_ready_deadline_unix_ms =
             unix_ms().saturating_add(CANDIDATE_READY_TIMEOUT.as_millis() as u64);
@@ -437,6 +509,13 @@ impl FrontendWorkbenchManager {
                 .active_revision
                 .clone()
                 .ok_or_else(|| "No active frontend revision is available".to_string())?;
+            if draft_base
+                .as_ref()
+                .is_some_and(|base| base.base_revision != previous_revision)
+            {
+                let _ = fs::remove_dir_all(self.revision_dir(&revision_id));
+                return Err("The active frontend changed after this draft was prepared. Prepare a new draft and reapply your edits to avoid overwriting another customization".to_string());
+            }
             let mut next = state.clone();
             next.pending = Some(PendingFrontendRevision {
                 transaction_id: transaction_id.clone(),
@@ -607,6 +686,31 @@ impl FrontendWorkbenchManager {
             "expiresAtUnixMs": expires_at_unix_ms,
             "confirmationTimeoutSeconds": CONFIRM_TIMEOUT.as_secs(),
         }))
+    }
+
+    fn mark_candidate_failed(
+        &self,
+        transaction_id: &str,
+        document_url: &Url,
+        message: &str,
+    ) -> Result<Value, String> {
+        {
+            let state = self.state.lock().map_err(lock_error)?;
+            let pending = matching_pending(&state, transaction_id)?;
+            let expected = revision_frontend_url_value(&pending.revision_id, Some(transaction_id))?;
+            if pending.phase != FrontendUpdatePhase::LoadingCandidate
+                || !same_main_navigation_target(&expected, document_url)
+            {
+                return Err(
+                    "Frontend activation failure did not come from the loading candidate".into(),
+                );
+            }
+        }
+        let detail: String = message.chars().take(2000).collect();
+        self.rollback_pending(
+            transaction_id,
+            &format!("customization_activation_failed: {detail}"),
+        )
     }
 
     pub fn confirm_pending(&self, transaction_id: &str) -> Result<Value, String> {
@@ -952,7 +1056,7 @@ impl FrontendWorkbenchManager {
                 .ok_or_else(|| "Frontend workbench is not initialized".to_string())?
         };
         validate_revision_id(&served_revision)?;
-        let root = self.revision_root(&served_revision)?;
+        let root = self.asset_root(&served_revision, relative_path)?;
         let canonical_root = root
             .canonicalize()
             .map_err(|error| format!("Frontend root is unavailable: {error}"))?;
@@ -1090,8 +1194,26 @@ impl FrontendWorkbenchManager {
     }
 
     fn revision_is_available(&self, revision_id: &str) -> bool {
-        self.revision_root(revision_id)
-            .is_ok_and(|root| root.join("index.html").is_file())
+        self.revision_root(revision_id).is_ok_and(|root| {
+            root.join("index.html").is_file()
+                || (overrides::is_overlay(&root) && overrides::validate(&root).is_ok())
+        })
+    }
+
+    fn asset_root(&self, revision_id: &str, relative: &Path) -> Result<PathBuf, String> {
+        let root = self.revision_root(revision_id)?;
+        if overrides::is_overlay(&root) && !overrides::owns_asset(relative) {
+            return self
+                .bundled_source
+                .lock()
+                .map_err(lock_error)?
+                .as_ref()
+                .map(|source| source.root.clone())
+                .ok_or_else(|| {
+                    "Packaged frontend is unavailable for this customization".to_string()
+                });
+        }
+        Ok(root)
     }
 
     fn revision_root(&self, revision_id: &str) -> Result<PathBuf, String> {
@@ -1136,6 +1258,24 @@ pub async fn frontend_update_candidate_ready(
         .url()
         .map_err(|error| format!("Failed to inspect the main frontend URL: {error}"))?;
     state.mark_candidate_ready(&request.transaction_id, &document_url)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendUpdateFailureRequest {
+    transaction_id: String,
+    message: String,
+}
+
+#[tauri::command]
+pub async fn frontend_update_candidate_failed(
+    state: tauri::State<'_, Arc<FrontendWorkbenchManager>>,
+    webview: tauri::WebviewWindow,
+    request: FrontendUpdateFailureRequest,
+) -> Result<Value, String> {
+    require_main_window(&webview)?;
+    let url = webview.url().map_err(|error| error.to_string())?;
+    state.mark_candidate_failed(&request.transaction_id, &url, &request.message)
 }
 
 #[tauri::command]
@@ -1430,13 +1570,24 @@ fn validate_frontend_tree(root: &Path) -> Result<(), String> {
 }
 
 fn copy_tree_transactional(source: &Path, destination: &Path) -> Result<(), String> {
+    validate_frontend_tree(source)?;
+    copy_asset_tree_transactional(source, destination)
+}
+
+fn copy_asset_tree_transactional(source: &Path, destination: &Path) -> Result<(), String> {
     if destination.exists() {
         return Err(format!(
             "Frontend destination already exists: {}",
             destination.display()
         ));
     }
-    validate_frontend_tree(source)?;
+    if fs::symlink_metadata(source)
+        .map_err(io_error("inspect frontend source"))?
+        .file_type()
+        .is_symlink()
+    {
+        return Err("Frontend sources cannot be symbolic links".to_string());
+    }
     let parent = destination
         .parent()
         .ok_or_else(|| "Frontend destination has no parent".to_string())?;
@@ -1582,6 +1733,135 @@ fn lock_error<T>(error: std::sync::PoisonError<T>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn overlay_manager(root: &Path, label: &str) -> Arc<FrontendWorkbenchManager> {
+        let source = root.join("packaged");
+        write_frontend(&source, label);
+        fs::write(source.join(overrides::CSS), "/* original */").unwrap();
+        fs::write(source.join(overrides::JS), "export default function() {}").unwrap();
+        fs::write(source.join(overrides::API_DOC), "UI API v1").unwrap();
+        fs::create_dir_all(source.join("assets")).unwrap();
+        fs::write(source.join("assets/app.js"), label).unwrap();
+        let manager = Arc::new(FrontendWorkbenchManager::new(root));
+        let bundled = resolve_bundled_frontend_source(&source).unwrap();
+        let id = bundled.revision_id.clone();
+        *manager.bundled_source.lock().unwrap() = Some(bundled);
+        fs::create_dir_all(manager.drafts_dir()).unwrap();
+        *manager.state.lock().unwrap() = manager.load_reconcile_and_save_state(&id).unwrap();
+        manager
+    }
+
+    #[test]
+    fn creation_drafts_contain_editable_overrides_instead_of_a_build_tree() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = overlay_manager(root.path(), "installed product");
+        let draft = manager.prepare().unwrap();
+        let path = PathBuf::from(draft["draftPath"].as_str().unwrap());
+        assert!(path.join(overrides::CSS).is_file());
+        assert!(path.join(overrides::JS).is_file());
+        assert!(path.join(overrides::API_DOC).is_file());
+        assert!(!path.join("index.html").exists());
+        assert!(!path.join("assets").exists());
+        overrides::validate(&path).unwrap();
+        fs::write(path.join("index.html"), "replace application").unwrap();
+        assert!(overrides::validate(&path)
+            .unwrap_err()
+            .contains("Unsupported customization file"));
+    }
+
+    #[test]
+    fn confirmed_customization_survives_upgrade_while_using_the_new_product_bundle() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = overlay_manager(root.path(), "product v1");
+        let draft = manager.prepare().unwrap();
+        let draft_path = PathBuf::from(draft["draftPath"].as_str().unwrap());
+        fs::write(draft_path.join(overrides::CSS), "/* user design */").unwrap();
+        let revision = "creative-user-design";
+        copy_asset_tree_transactional(&draft_path, &manager.revision_dir(revision)).unwrap();
+        overrides::write_manifest(&manager.revision_dir(revision)).unwrap();
+        let mut state = manager.state.lock().unwrap().clone();
+        state.previous_revision = state.active_revision.clone();
+        state.active_revision = Some(revision.into());
+        manager.save_state(&state).unwrap();
+        drop(manager);
+
+        let upgraded = overlay_manager(root.path(), "product v2");
+        assert_eq!(
+            upgraded.state.lock().unwrap().active_revision.as_deref(),
+            Some(revision)
+        );
+        assert_eq!(
+            upgraded.read_protocol_asset("/assets/app.js").unwrap().0,
+            b"product v2"
+        );
+        assert_eq!(
+            upgraded
+                .read_protocol_asset("/openbitfun-creation.css")
+                .unwrap()
+                .0,
+            b"/* user design */"
+        );
+        assert!(upgraded.revision_dir(revision).is_dir());
+    }
+
+    #[test]
+    fn stale_draft_cannot_overwrite_a_new_confirmed_customization() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = overlay_manager(root.path(), "product");
+        let draft = manager.prepare().unwrap();
+        manager.state.lock().unwrap().active_revision = Some("creative-newer".into());
+        let error = manager
+            .begin_apply(draft["draftId"].as_str().unwrap())
+            .unwrap_err();
+        assert!(error.contains("changed after this draft"));
+        assert!(manager.state.lock().unwrap().pending.is_none());
+        assert_eq!(
+            manager.state.lock().unwrap().active_revision.as_deref(),
+            Some("creative-newer")
+        );
+    }
+
+    #[test]
+    fn activation_failure_returns_the_real_error_and_restores_the_confirmed_frontend() {
+        let root = tempfile::tempdir().unwrap();
+        let manager = overlay_manager(root.path(), "product");
+        let previous = manager
+            .state
+            .lock()
+            .unwrap()
+            .active_revision
+            .clone()
+            .unwrap();
+        manager.state.lock().unwrap().pending = Some(PendingFrontendRevision {
+            transaction_id: "transaction".into(),
+            revision_id: "creative-candidate".into(),
+            previous_revision: previous.clone(),
+            candidate_ready_deadline_unix_ms: unix_ms() + 10_000,
+            ..PendingFrontendRevision::default()
+        });
+        let old_url = revision_frontend_url_value(&previous, None).unwrap();
+        assert!(manager
+            .mark_candidate_failed("transaction", &old_url, "stale document")
+            .is_err());
+        assert!(manager.state.lock().unwrap().pending.is_some());
+        let candidate_url =
+            revision_frontend_url_value("creative-candidate", Some("transaction")).unwrap();
+        manager
+            .mark_candidate_failed(
+                "transaction",
+                &candidate_url,
+                "Unknown UI customization slot: missing",
+            )
+            .unwrap();
+        let result = manager.transaction_status("transaction").unwrap();
+        assert_eq!(result["status"], "rolled_back");
+        assert!(result["reason"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown UI customization slot"));
+        assert_eq!(result["activeRevision"], previous);
+        assert!(manager.state.lock().unwrap().pending.is_none());
+    }
 
     fn write_frontend(root: &Path, label: &str) {
         fs::create_dir_all(root.join("assets")).expect("asset directory");

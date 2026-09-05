@@ -1,4 +1,5 @@
-/*
- * Stable Creative-mode override surface for the packaged OpenBitFun frontend.
- * Keep side effects reversible and preserve the Tauri bridge and recovery UI.
- */
+// Loaded after the real application shell renders. See openbitfun-creation-api.md.
+export default function activate(ui) {
+  // Example: const root = ui.mount('sidebar-footer');
+  // Return a cleanup function for listeners/timers you create yourself.
+}

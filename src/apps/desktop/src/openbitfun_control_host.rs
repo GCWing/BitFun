@@ -49,6 +49,7 @@ type PendingResponse = oneshot::Sender<Result<Value, String>>;
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_STATE_REVISION: AtomicU64 = AtomicU64::new(1);
 static SURFACE_READY: AtomicBool = AtomicBool::new(false);
+static CREATION_API_VERSION: AtomicU64 = AtomicU64::new(0);
 static PENDING_RESPONSES: OnceLock<Mutex<HashMap<String, PendingResponse>>> = OnceLock::new();
 static PRODUCT_CONTROL_TRANSACTION: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
@@ -135,6 +136,24 @@ async fn dispatch_surface_request(request: OpenBitFunControlHostRequest) -> Resu
         serde_json::to_value(request).map_err(|error| error.to_string())?,
         OPENBITFUN_CONTROL_RESPONSE_TIMEOUT,
         "complete the presentation request",
+    )
+    .await
+}
+
+/// Creation owns its command registry; ProductControl only supplies correlated transport.
+pub(crate) async fn dispatch_creation_runtime(
+    action: &str,
+    command_id: Option<String>,
+    arguments: Option<Value>,
+) -> Result<Value, String> {
+    if CREATION_API_VERSION.load(Ordering::Acquire) != 1 {
+        return Err("The active frontend does not advertise Creation API v1. Restore the installed frontend before using runtime discovery or commands".into());
+    }
+    dispatch_surface_event(
+        "agentic://creation-runtime-request",
+        json!({ "action": action, "commandId": command_id, "arguments": arguments.unwrap_or_else(|| json!({})) }),
+        OPENBITFUN_CONTROL_RESPONSE_TIMEOUT,
+        "complete the Creation runtime request",
     )
     .await
 }
@@ -1082,14 +1101,29 @@ pub(crate) fn install(app: AppHandle) {
 
 /// Mark only the presentation adapter ready; direct product controls are
 /// installed during native setup and do not depend on the React listener.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub(crate) struct ProductControlSurfaceReadyRequest {
+    creation_api_version: Option<u64>,
+}
+
 #[tauri::command]
-pub(crate) fn mark_openbitfun_control_surface_ready() {
+pub(crate) fn mark_openbitfun_control_surface_ready(
+    request: Option<ProductControlSurfaceReadyRequest>,
+) {
+    CREATION_API_VERSION.store(
+        request
+            .and_then(|request| request.creation_api_version)
+            .unwrap_or(0),
+        Ordering::Release,
+    );
     SURFACE_READY.store(true, Ordering::Release);
 }
 
 #[tauri::command]
 pub(crate) fn mark_openbitfun_control_surface_unready() {
     SURFACE_READY.store(false, Ordering::Release);
+    CREATION_API_VERSION.store(0, Ordering::Release);
     let pending = std::mem::take(&mut *lock_pending_responses());
     for (_, sender) in pending {
         let _ = sender.send(Err(
@@ -1143,6 +1177,15 @@ pub(crate) async fn report_openbitfun_control_result(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_surface_readiness_does_not_claim_creation_support() {
+        let legacy: super::ProductControlSurfaceReadyRequest =
+            serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(legacy.creation_api_version, None);
+        let current: super::ProductControlSurfaceReadyRequest =
+            serde_json::from_value(serde_json::json!({"creationApiVersion": 1})).unwrap();
+        assert_eq!(current.creation_api_version, Some(1));
+    }
     use super::*;
 
     #[test]

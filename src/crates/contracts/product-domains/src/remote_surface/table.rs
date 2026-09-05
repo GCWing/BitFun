@@ -255,6 +255,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("export_session_transcript",                                  Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("fetch_mcp_app_resource",                                     Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("fork_session",                                               Routed,      Proxied,          CLI_NOT_IMPLEMENTED),
+    op("frontend_update_candidate_failed",                           LocalOnly,   ControllerLocal,  REFUSED),
     op("frontend_update_candidate_ready",                            LocalOnly,   ControllerLocal,  REFUSED),
     op("generate_commit_message",                                    Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("generate_insights",                                          Routed,      ControllerLocal,  REFUSED),

@@ -1,10 +1,12 @@
 import { appearanceService } from '@/infrastructure/appearance';
 import { configManager } from '@/infrastructure/config';
 import { i18nService } from '@/infrastructure/i18n';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyOpenBitFunControlEffect,
   executeOpenBitFunPresentationRequest,
+  initializeOpenBitFunControlBridge,
 } from './openBitFunControlBridge';
 
 const mocks = vi.hoisted(() => ({
@@ -23,6 +25,25 @@ describe('OpenBitFunControl presentation bridge', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
+  });
+
+  it('advertises Creation API after listener setup and cleans up a failed handshake', async () => {
+    const listeners = new Map<string, ReturnType<typeof vi.fn>>();
+    const listen = vi.spyOn(api, 'listen').mockImplementation(event => {
+      const unlisten = vi.fn();
+      listeners.set(event, unlisten);
+      return unlisten;
+    });
+    const invoke = vi.spyOn(api, 'invoke').mockRejectedValue(new Error('Host unavailable'));
+
+    await expect(initializeOpenBitFunControlBridge()).rejects.toThrow('Host unavailable');
+    expect(listeners.has('agentic://creation-runtime-request')).toBe(true);
+    expect(listeners.has('agentic://openbitfun-control-request')).toBe(true);
+    expect(Math.max(...listen.mock.invocationCallOrder)).toBeLessThan(invoke.mock.invocationCallOrder[0]);
+    expect(invoke).toHaveBeenCalledWith('mark_openbitfun_control_surface_ready', {
+      request: { creationApiVersion: 1 },
+    });
+    for (const unlisten of listeners.values()) expect(unlisten).toHaveBeenCalledOnce();
   });
 
   it('opens the exact documented item selected by the native executor', async () => {
