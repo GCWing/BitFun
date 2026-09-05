@@ -4,10 +4,9 @@
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--openbitfun-color-border-default);
-  border-radius: var(--openbitfun-radius-lg);
-  background: var(--openbitfun-color-surface-raised);
-  box-shadow: var(--openbitfun-shadow-xs);
+  border: 0;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -22,14 +21,12 @@
     box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    transform: translateY(-1px);
     border-color: var(--openbitfun-color-field-border-hover);
     background: var(--openbitfun-color-surface-subtle);
-    box-shadow: var(--openbitfun-shadow-sm);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--openbitfun-color-content-primary);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
     outline-offset: 2px;
   }
 }
@@ -44,24 +41,9 @@
   z-index: 1;
 }
 
+// Keep the appearance part available without decorative dot artwork.
 @mixin agent-icon-dot-field() {
-  position: absolute;
-  inset-block-start: 58px;
-  inset-inline-start: 50%;
-  width: 38px;
-  height: 68px;
-  background-image: radial-gradient(
-    circle,
-    var(--openbitfun-color-border-default) 0 1px,
-    transparent 1.25px
-  );
-  background-position: center top;
-  background-size: 7px 7px;
-  opacity: 0.72;
-  pointer-events: none;
-  transform: translateX(-50%);
-  mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);
+  display: none;
 }
 
 @keyframes agent-surface-card-in {

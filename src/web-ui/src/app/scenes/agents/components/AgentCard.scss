@@ -5,10 +5,9 @@
   width: 100%;
   min-width: 0;
   height: 148px;
-  border: 1px solid var(--openbitfun-color-border-default);
-  border-radius: var(--openbitfun-radius-lg);
-  background: var(--openbitfun-color-surface-raised);
-  box-shadow: var(--openbitfun-shadow-xs);
+  border: 0;
+  border-radius: var(--openbitfun-layout-field-group-radius);
+  background: var(--openbitfun-color-surface-tertiary);
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
   position: relative;
@@ -25,14 +24,12 @@
     box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    transform: translateY(-1px);
     border-color: var(--openbitfun-color-field-border-hover);
     background: var(--openbitfun-color-surface-subtle);
-    box-shadow: var(--openbitfun-shadow-sm);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--openbitfun-color-content-primary);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
     outline-offset: 2px;
   }
 
@@ -62,10 +59,9 @@
     justify-content: center;
     width: 38px;
     height: 38px;
-    border-radius: var(--openbitfun-radius-lg);
+    border-radius: var(--openbitfun-layout-field-group-radius);
     background: var(--openbitfun-color-surface-subtle);
-    box-shadow: var(--openbitfun-shadow-xs);
-    position: relative;
+      position: relative;
     z-index: 1;
   }
 
@@ -202,7 +198,7 @@
     place-items: center;
     flex: none;
     border-radius: 5px;
-    background: var(--openbitfun-color-surface-raised);
+    background: var(--openbitfun-color-surface-tertiary);
     color: var(--openbitfun-color-content-secondary);
   }
 
@@ -281,8 +277,8 @@
   &__config-panel {
     padding: 14px 16px;
     border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-lg);
-    background: var(--openbitfun-color-surface-raised);
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   &__configuration {
@@ -345,7 +341,7 @@
     padding: 1px 5px;
     border: 1px solid var(--openbitfun-color-border-subtle);
     border-radius: var(--openbitfun-radius-pill);
-    background: var(--openbitfun-color-surface-raised);
+    background: var(--openbitfun-color-surface-tertiary);
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-overline-sm-font-size);
     font-variant-numeric: tabular-nums;
@@ -500,8 +496,8 @@
     gap: var(--openbitfun-space-2);
     padding: 10px 12px;
     border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: var(--openbitfun-radius-lg);
-    background: var(--openbitfun-color-surface-raised);
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
 
     &--capabilities {
       background: var(--openbitfun-color-surface-subtle);
@@ -538,7 +534,7 @@
     padding: 1px 6px;
     border-radius: var(--openbitfun-radius-pill);
     min-width: 20px;
-    background: var(--openbitfun-color-surface-raised);
+    background: var(--openbitfun-color-surface-tertiary);
     font-size: var(--openbitfun-type-micro-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     color: var(--openbitfun-color-content-muted);
@@ -611,10 +607,9 @@
 
     &.is-active {
       border-color: var(--openbitfun-color-border-subtle);
-      background: var(--openbitfun-color-surface-raised);
+      background: var(--openbitfun-color-surface-tertiary);
       color: var(--openbitfun-color-content-primary);
-      box-shadow: var(--openbitfun-shadow-xs);
-    }
+        }
   }
 
   &__tab-count {

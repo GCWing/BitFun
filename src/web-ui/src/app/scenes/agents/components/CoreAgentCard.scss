@@ -34,10 +34,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--openbitfun-radius-lg);
+    border-radius: var(--openbitfun-layout-field-group-radius);
     background: var(--openbitfun-color-surface-subtle);
-    box-shadow: var(--openbitfun-shadow-xs);
-    color: var(--openbitfun-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
     position: relative;
     z-index: 1;
     transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate);
@@ -195,7 +194,7 @@
     place-items: center;
     flex: none;
     border-radius: 5px;
-    background: var(--openbitfun-color-surface-raised);
+    background: var(--openbitfun-color-surface-tertiary);
     color: var(--openbitfun-color-content-secondary);
   }
 
