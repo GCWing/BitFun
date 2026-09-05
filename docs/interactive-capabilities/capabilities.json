@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "c21d28e130de07890a2ebd6793cf78905c7749f577d8b8e547d9fe12a6e26a95",
+  "digest": "9973af8307e72206bb5c4af5dfb3249fef2def6a27925a13aca9a25ac62ef8a3",
   "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
@@ -24810,13 +24810,13 @@
         },
         {
           "id": "manual-update",
-          "titleZh": "手动检查、下载并安装可用更新，然后按需重启",
-          "titleEn": "Check for, download, and install an available update manually, then restart when needed",
+          "titleZh": "手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装",
+          "titleEn": "Check and download updates in the background, then confirm installation and restart or install later from About",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“手动检查、下载并安装可用更新，然后按需重启”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Check for, download, and install an available update manually, then restart when needed” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装”需要下载后由用户确认安装与重启；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Check and download updates in the background, then confirm installation and restart or install later from About” requires user confirmation after downloading, before installation and restart; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           }
         },
         {
@@ -25020,8 +25020,8 @@
         "Completion, permission, and startup-tip notifications",
         "启用或停用自动检查更新",
         "Enable or disable automatic update checks",
-        "手动检查、下载并安装可用更新，然后按需重启",
-        "Check for, download, and install an available update manually, then restart when needed",
+        "手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装",
+        "Check and download updates in the background, then confirm installation and restart or install later from About",
         "控制 OpenBitFun 是否在登录系统后自动启动",
         "Choose whether OpenBitFun launches automatically after system sign-in",
         "控制 OpenBitFun 运行期间是否阻止电脑自动睡眠",

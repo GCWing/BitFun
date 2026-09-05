@@ -67,6 +67,21 @@ describe('SystemAPI', () => {
     });
   });
 
+  it('allows a background download to outlive the default request timeout without replaying it', async () => {
+    invokeMock.mockResolvedValueOnce({ version: '2.0.0' });
+    await expect(systemAPI.downloadUpdate()).resolves.toEqual({ version: '2.0.0' });
+    expect(invokeMock).toHaveBeenCalledWith('download_update', { request: {} }, {
+      timeout: 3600000, retries: 0,
+    });
+  });
+
+  it('installs only the version the user confirmed and disables automatic mutation retries', async () => {
+    await systemAPI.installPendingUpdate('2.0.0');
+    expect(invokeMock).toHaveBeenCalledWith('install_pending_update', {
+      request: { version: '2.0.0' },
+    }, { timeout: 120000, retries: 0 });
+  });
+
   it('sends the requested app-wide state', async () => {
     invokeMock.mockResolvedValueOnce(undefined);
 

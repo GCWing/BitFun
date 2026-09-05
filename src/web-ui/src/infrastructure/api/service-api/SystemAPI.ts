@@ -19,6 +19,10 @@ export interface CheckForUpdatesResponse {
   releaseDate: string | null;
 }
 
+export interface PendingUpdateResponse {
+  version: string;
+}
+
 /** Matches `toggle_main_window_fullscreen` / desktop `ToggleMainWindowFullscreenResponse`. */
 export interface ToggleMainWindowFullscreenResponse {
   isFullscreen: boolean;
@@ -73,6 +77,37 @@ export class SystemAPI {
       });
     } catch (error) {
       throw createTauriCommandError('install_update', error);
+    }
+  }
+
+  /** Download and verify without starting the installer. */
+  async downloadUpdate(): Promise<PendingUpdateResponse> {
+    try {
+      return await api.invoke('download_update', { request: {} }, {
+        timeout: 60 * 60 * 1000,
+        retries: 0,
+      });
+    } catch (error) {
+      throw createTauriCommandError('download_update', error);
+    }
+  }
+
+  async getPendingUpdate(): Promise<PendingUpdateResponse | null> {
+    try {
+      return await api.invoke('get_pending_update', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('get_pending_update', error);
+    }
+  }
+
+  async installPendingUpdate(version: string): Promise<void> {
+    try {
+      await api.invoke('install_pending_update', { request: { version } }, {
+        timeout: 120000,
+        retries: 0,
+      });
+    } catch (error) {
+      throw createTauriCommandError('install_pending_update', error);
     }
   }
 

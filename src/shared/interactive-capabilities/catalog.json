@@ -182,6 +182,9 @@
     }
   ],
   "implementationOnlyCommands": {
+    "legacyUpdateCompatibility": [
+      "install_update"
+    ],
     "commandDiscovery": [
       "check_command_exists",
       "check_commands_exist"
@@ -217,6 +220,7 @@
     ],
     "platformWindowLifecycle": [
       "hide_main_window_after_close_request",
+      "restart_app",
       "set_macos_edit_menu_mode",
       "set_main_window_transient_geometry",
       "startup_window_control"
@@ -5192,18 +5196,19 @@
         },
         {
           "id": "manual-update",
-          "titleZh": "手动检查、下载并安装可用更新，然后按需重启",
-          "titleEn": "Check for, download, and install an available update manually, then restart when needed",
+          "titleZh": "手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装",
+          "titleEn": "Check and download updates in the background, then confirm installation and restart or install later from About",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“手动检查、下载并安装可用更新，然后按需重启”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Check for, download, and install an available update manually, then restart when needed” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装”需要下载后由用户确认安装与重启；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
+            "reasonEn": "“Check and download updates in the background, then confirm installation and restart or install later from About” requires user confirmation after downloading, before installation and restart; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
             "command:check_for_updates",
-            "command:install_update",
-            "command:restart_app",
+            "command:download_update",
+            "command:get_pending_update",
+            "command:install_pending_update",
             "command:get_app_version"
           ]
         },
@@ -9377,6 +9382,9 @@
       "capabilityId": "feature.detached-dispatch"
     },
     "system": {
+      "capabilityId": "setting.application.general"
+    },
+    "update": {
       "capabilityId": "setting.application.general"
     },
     "miniapp_market": {

@@ -22,20 +22,26 @@ export interface UpdateInstallProgressModalProps {
   isOpen: boolean;
   error: string | null;
   installed?: boolean;
+  installing?: boolean;
+  version?: string | null;
   progress: UpdateDownloadProgressPayload;
   onCloseError?: () => void;
   onCloseInstalled?: () => void;
   onRestart?: () => void;
+  onDownloadAgain?: () => void;
 }
 
 export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProps> = ({
   isOpen,
   error,
   installed,
+  installing,
+  version,
   progress,
   onCloseError,
   onCloseInstalled,
-  onRestart
+  onRestart,
+  onDownloadAgain
 }) => {
   const { t } = useI18n('common');
   const { downloaded, total } = progress;
@@ -47,21 +53,23 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
     [error, t]
   );
   let title = t('update.downloadingTitle');
-  if (error) {
+  if (error && !installed) {
     title = t('update.downloadFailedTitle');
   } else if (installed) {
     title = t('update.installedTitle');
   }
 
   let onClose = () => {};
-  if (error) {
-    onClose = onCloseError ?? (() => {});
+  if (installing) {
+    onClose = () => {};
   } else if (installed) {
     onClose = onCloseInstalled ?? (() => {});
+  } else if (error) {
+    onClose = onCloseError ?? (() => {});
   }
 
   let body: React.ReactNode = null;
-  if (errorMessage) {
+  if (errorMessage && !installed) {
     body = (
       <div data-openbitfun-component="update" data-openbitfun-part="alert">
         <Alert
@@ -78,17 +86,24 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
         <div data-openbitfun-component="update" data-openbitfun-part="alert">
           <Alert
             tone="success"
-            message={t('update.installedMessage')}
+            message={t('update.readyVersion', { version: version ?? '' })}
             showIcon
             className="openbitfun-update-progress__alert"
           />
         </div>
+        <p className="openbitfun-update-progress__restart">{t('update.installWarning')}</p>
+        {errorMessage ? <Alert tone="error" message={errorMessage} showIcon /> : null}
         <div className="openbitfun-update-progress__actions" data-openbitfun-component="update" data-openbitfun-part="actions">
-          <Button variant="outline" size="md" onClick={onCloseInstalled}>
+          {errorMessage && onDownloadAgain ? (
+            <Button variant="outline" size="md" disabled={installing} onClick={onDownloadAgain}>
+              {t('update.downloadAgain')}
+            </Button>
+          ) : null}
+          <Button variant="outline" size="md" disabled={installing} onClick={onCloseInstalled}>
             {t('update.restartLater')}
           </Button>
-          <Button variant="fill" size="md" onClick={onRestart}>
-            {t('update.restartNow')}
+          <Button variant="fill" size="md" disabled={installing} loading={installing} onClick={onRestart}>
+            {t(installing ? 'update.installing' : 'update.installAndRestart')}
           </Button>
         </div>
       </>
@@ -138,7 +153,7 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
         <DialogHeading>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeading>
-        {!!error || !!installed && <DialogClose />}
+        {!installing && (!!error || !!installed) && <DialogClose />}
       </DialogHeader>
       <DialogBody inset="none">
       <div

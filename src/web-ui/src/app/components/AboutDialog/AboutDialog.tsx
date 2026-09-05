@@ -60,6 +60,9 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const updateProgress = useUpdateInstallStore(state => state.progress);
   const updateError = useUpdateInstallStore(state => state.error);
   const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
+  const requestInstall = useUpdateInstallStore(state => state.requestInstall);
+  const updateVersion = useUpdateInstallStore(state => state.version);
+  const updateInitialized = useUpdateInstallStore(state => state.initialized);
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
@@ -101,6 +104,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
 
   useEffect(() => {
     if (!isOpen || !nativeRuntime) return;
+    if (canCheckForAppUpdates()) void useUpdateInstallStore.getState().initialize();
     let active = true;
     void systemAPI.getAppVersion()
       .then(currentVersion => {
@@ -155,14 +159,10 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     void startUpdateInstall();
   }, [startUpdateInstall]);
 
-  const onRestart = useCallback(async () => {
-    try {
-      await systemAPI.restartApp();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      useUpdateInstallStore.setState({ status: 'error', error: message });
-    }
-  }, []);
+  const onRestart = useCallback(() => {
+    onClose();
+    requestInstall();
+  }, [onClose, requestInstall]);
 
   const copyToClipboard = async (text: string, itemId: string) => {
     try {
@@ -175,7 +175,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   };
 
   const updateState = `${manualCheckBusy ? 'checking' : ''} ${manualCheckStatus} ${updateStatus}`.trim();
-  const updateBusy = manualCheckBusy || updateStatus === 'downloading' || updateStatus === 'installed';
+  const updateBusy = !updateInitialized || manualCheckBusy || updateStatus === 'downloading' || updateStatus === 'ready' || updateStatus === 'installing';
 
   return (
     <>
@@ -438,14 +438,14 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                           </p>
                         </div>
                       ) : null}
-                      {updateStatus === 'installed' ? (
+                      {updateStatus === 'ready' || updateStatus === 'installing' ? (
                         <div className="openbitfun-about-dialog__update-installed">
                           <div className="openbitfun-about-dialog__update-status openbitfun-about-dialog__update-status--success">
                             <Icon name="check-circle" size="sm" className="openbitfun-about-dialog__update-status-icon" aria-hidden="true" />
-                            <span>{t('update.installedMessage')}</span>
+                            <span>{t('update.readyVersion', { version: updateVersion ?? '' })}</span>
                           </div>
-                          <Button variant="fill" size="sm" onClick={onRestart}>
-                            {t('update.restartNow')}
+                          <Button variant="fill" size="sm" disabled={updateStatus === 'installing'} onClick={onRestart}>
+                            {t(updateStatus === 'installing' ? 'update.installing' : 'update.installAndRestart')}
                           </Button>
                         </div>
                       ) : null}

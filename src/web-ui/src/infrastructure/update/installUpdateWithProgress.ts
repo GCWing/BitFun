@@ -11,12 +11,11 @@ export interface UpdateDownloadProgressPayload {
 }
 
 /**
- * Subscribes to Rust-emitted download progress, then runs `install_update`.
- * Unsubscribes when the install promise settles.
+ * Downloads and verifies only. Installation requires a separate confirmation.
  */
 export async function installUpdateWithProgress(
   onProgress: (p: UpdateDownloadProgressPayload) => void
-): Promise<void> {
+): Promise<import('../api/service-api/SystemAPI').PendingUpdateResponse> {
   const { listen } = await import('@tauri-apps/api/event');
   const unlisten = await listen<UpdateDownloadProgressPayload>(
     UPDATE_PROGRESS_EVENT,
@@ -29,9 +28,9 @@ export async function installUpdateWithProgress(
     }
   );
   try {
-    await systemAPI.installUpdate();
+    return await systemAPI.downloadUpdate();
   } catch (error) {
-    log.error('install_update failed', error);
+    log.error('Update download failed', error);
     throw error;
   } finally {
     unlisten();

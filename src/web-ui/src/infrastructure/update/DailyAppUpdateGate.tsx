@@ -13,6 +13,8 @@ import {
 import { UpdateAvailableDialog } from './UpdateAvailableDialog';
 import { UpdateInstallProgressModal } from './UpdateInstallProgressModal';
 import { useUpdateInstallStore } from './updateInstallStore';
+import { useI18n } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
 
 const log = createLogger('DailyAppUpdate');
 
@@ -21,6 +23,7 @@ const log = createLogger('DailyAppUpdate');
  * Renders update dialogs; mount once near the app root (e.g. inside AppLayout).
  */
 export function DailyAppUpdateGate(): ReactElement | null {
+  const { t } = useI18n('common');
   const [dailyOpen, setDailyOpen] = useState(false);
   const [dailyData, setDailyData] = useState<CheckForUpdatesResponse | null>(null);
   const dailyCheckTimerRef = useRef<number | null>(null);
@@ -29,7 +32,10 @@ export function DailyAppUpdateGate(): ReactElement | null {
   const updateError = useUpdateInstallStore(state => state.error);
   const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
   const clearUpdateError = useUpdateInstallStore(state => state.clearError);
-  const clearUpdateInstalled = useUpdateInstallStore(state => state.clearInstalled);
+  const promptOpen = useUpdateInstallStore(state => state.promptOpen);
+  const updateVersion = useUpdateInstallStore(state => state.version);
+  const deferInstall = useUpdateInstallStore(state => state.deferInstall);
+  const confirmInstall = useUpdateInstallStore(state => state.confirmInstall);
 
   useEffect(() => {
     if (!canCheckForAppUpdates()) {
@@ -37,6 +43,8 @@ export function DailyAppUpdateGate(): ReactElement | null {
     }
     let cancelled = false;
     const runDailyCheck = async () => {
+      await useUpdateInstallStore.getState().initialize();
+      if (cancelled || useUpdateInstallStore.getState().status !== 'idle') return;
       let autoUpdate = true;
       try {
         const v = await configManager.getConfig<boolean>('app.auto_update');
@@ -57,7 +65,7 @@ export function DailyAppUpdateGate(): ReactElement | null {
               return;
             }
             const res = await systemAPI.checkForUpdates();
-            if (cancelled) {
+            if (cancelled || useUpdateInstallStore.getState().status !== 'idle') {
               return;
             }
             if (!res.updateAvailable || !res.latestVersion) {
@@ -130,17 +138,10 @@ export function DailyAppUpdateGate(): ReactElement | null {
   }, [clearUpdateError]);
 
   const onCloseInstalled = useCallback(() => {
-    clearUpdateInstalled();
-  }, [clearUpdateInstalled]);
-
-  const onRestart = useCallback(async () => {
-    try {
-      await systemAPI.restartApp();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      useUpdateInstallStore.setState({ status: 'error', error: msg });
-    }
-  }, []);
+    if (useUpdateInstallStore.getState().status !== 'ready') return;
+    deferInstall();
+    notificationService.info(t('update.deferredMessage'));
+  }, [deferInstall, t]);
 
   if (!isTauriRuntime()) {
     return null;
@@ -157,13 +158,16 @@ export function DailyAppUpdateGate(): ReactElement | null {
         onInstall={onInstall}
       />
       <UpdateInstallProgressModal
-        isOpen={updateStatus === 'error' || updateStatus === 'installed'}
+        isOpen={updateStatus === 'error' || promptOpen}
         error={updateError}
-        installed={updateStatus === 'installed'}
+        installed={updateStatus === 'ready' || updateStatus === 'installing'}
+        installing={updateStatus === 'installing'}
+        version={updateVersion}
         progress={updateProgress}
         onCloseError={onCloseProgressError}
         onCloseInstalled={onCloseInstalled}
-        onRestart={onRestart}
+        onRestart={() => void confirmInstall()}
+        onDownloadAgain={() => void startUpdateInstall(true)}
       />
     </>
   );

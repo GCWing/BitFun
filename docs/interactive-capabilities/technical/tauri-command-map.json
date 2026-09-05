@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "c21d28e130de07890a2ebd6793cf78905c7749f577d8b8e547d9fe12a6e26a95",
-  "commandCount": 662,
+  "catalogDigest": "9973af8307e72206bb5c4af5dfb3249fef2def6a27925a13aca9a25ac62ef8a3",
+  "commandCount": 665,
   "coverage": {
-    "commandCount": 662,
-    "documentedCommandCount": 631,
-    "implementationCommandCount": 31,
-    "implementationDigest": "859a3a3cb1e4e27ca38cd9003cef14e8758483ce85417a2c22c6ab92df9dd2c3"
+    "commandCount": 665,
+    "documentedCommandCount": 632,
+    "implementationCommandCount": 33,
+    "implementationDigest": "35539d9c1510287cb47f4a68fe35859b78f93bb06cd66b86e58d878a48d8c509"
   },
   "commands": [
     {
@@ -2291,6 +2291,22 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
+      "id": "download_update",
+      "moduleId": "update",
+      "capabilityId": "setting.application.general",
+      "capabilityIds": [
+        "setting.application.general"
+      ],
+      "documentedItemIds": [
+        "setting.application.general:manual-update"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::update_api::download_update",
+      "sourceFile": "src/apps/desktop/src/api/update_api.rs",
+      "signature": "fn download_update( app: AppHandle, request: PendingUpdateRequest, ) -> Result<PendingUpdateResponse, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
       "id": "editor_ai_cancel",
       "moduleId": "editor_ai",
       "capabilityId": "feature.ai-assistant",
@@ -3507,6 +3523,22 @@
       "rustPath": "api::announcement_api::get_pending_announcements",
       "sourceFile": "src/apps/desktop/src/api/announcement_api.rs",
       "signature": "fn get_pending_announcements( state: State<'_, AppState>, ) -> Result<Vec<AnnouncementCard>, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "get_pending_update",
+      "moduleId": "update",
+      "capabilityId": "setting.application.general",
+      "capabilityIds": [
+        "setting.application.general"
+      ],
+      "documentedItemIds": [
+        "setting.application.general:manual-update"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::update_api::get_pending_update",
+      "sourceFile": "src/apps/desktop/src/api/update_api.rs",
+      "signature": "fn get_pending_update( app: AppHandle, request: PendingUpdateRequest, ) -> Result<Option<PendingUpdateResponse>, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -4780,8 +4812,8 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "install_update",
-      "moduleId": "system",
+      "id": "install_pending_update",
+      "moduleId": "update",
       "capabilityId": "setting.application.general",
       "capabilityIds": [
         "setting.application.general"
@@ -4790,6 +4822,20 @@
         "setting.application.general:manual-update"
       ],
       "visibility": "documented",
+      "rustPath": "api::update_api::install_pending_update",
+      "sourceFile": "src/apps/desktop/src/api/update_api.rs",
+      "signature": "fn install_pending_update( app: AppHandle, request: InstallPendingUpdateRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "install_update",
+      "moduleId": "system",
+      "capabilityId": "setting.application.general",
+      "capabilityIds": [
+        "setting.application.general"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "install_update",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
       "signature": "fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Result<(), String>",
@@ -7790,10 +7836,8 @@
       "capabilityIds": [
         "setting.application.general"
       ],
-      "documentedItemIds": [
-        "setting.application.general:manual-update"
-      ],
-      "visibility": "documented",
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "restart_app",
       "sourceFile": "src/apps/desktop/src/api/system_api.rs",
       "signature": "fn restart_app(app: AppHandle, request: RestartAppRequest) -> Result<(), String>",

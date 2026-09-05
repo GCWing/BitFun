@@ -248,6 +248,7 @@ unic-langid = "0.9"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 aes-gcm = "0.10"
 sha2 = "0.10"
+minisign-verify = "0.2"
 sha1 = "0.10"
 argon2 = "0.5"
 rand = "0.8"
