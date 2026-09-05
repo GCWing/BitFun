@@ -134,6 +134,13 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 不要提交临时 AI prompt、本地绝对路径、生成的草稿文件、配对密钥、token、证书或无关产物。PR 应聚焦于本次产品或维护改动。
 
+Repository Object Sizes 检查会拒绝超过 5 MiB 的 Git 文件对象，包括在中间提交中加入、
+最终又删除的文件。构建产物应放在 Git 仓库之外。现有内置中文字体在
+`scripts/git-object-size-policy.json` 中按精确对象 ID 列出例外，修改例外需要审查。
+提交前可运行 `node scripts/check-git-object-sizes.mjs --base origin/main --head HEAD`，
+省略 `--base` 则检查全部可达历史。检查器的验证命令为
+`node --test scripts/check-git-object-sizes.test.mjs`。
+
 ### 分支管理
 
 **`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。

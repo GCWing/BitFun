@@ -144,6 +144,15 @@ If your work is AI-assisted, please note it in the PR and indicate testing level
 
 Do not commit transient AI prompts, local absolute paths, generated scratch files, pairing secrets, tokens, certificates, or unrelated artifacts. Keep the PR focused on the intended product or maintenance change.
 
+Git objects larger than 5 MiB are rejected by the Repository Object Sizes check,
+including files added in an intermediate commit and deleted before the PR's final
+commit. Keep build artifacts outside Git. Existing bundled Chinese fonts have
+exact-object exceptions in `scripts/git-object-size-policy.json`; changes to those
+exceptions require review. Check a proposed history with
+`node scripts/check-git-object-sizes.mjs --base origin/main --head HEAD`, or omit
+`--base` to check all reachable history. Verify the checker with
+`node --test scripts/check-git-object-sizes.test.mjs`.
+
 ### Branch management
 
 **The `main` branch is the default collaboration branch and accepts feature PRs.** Since this repo encourages product managers and developers to use AI-generated code for rapid validation or idea submission, **please open all PRs targeting the `main` branch**.

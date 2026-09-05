@@ -1,0 +1,20 @@
+{
+  "maxBlobBytes": 5242880,
+  "allowedBlobs": [
+    {
+      "oid": "5c925d1fb1f1eccc85a1c7c78cc71a50ef9cc2db",
+      "path": "src/web-ui/src/assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Bold.ttf",
+      "reason": "Existing offline Simplified Chinese font, verified by scripts/web-font-profile.mjs. Any replacement requires explicit review."
+    },
+    {
+      "oid": "350f6a004d0fed6abf0cbb99bee2b5c027b7f7d5",
+      "path": "src/web-ui/src/assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Medium.ttf",
+      "reason": "Existing offline Simplified Chinese font, verified by scripts/web-font-profile.mjs. Any replacement requires explicit review."
+    },
+    {
+      "oid": "aff150a137831c29d4d3cba994ac1b8e3a9940fa",
+      "path": "src/web-ui/src/assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Regular.ttf",
+      "reason": "Existing offline Simplified Chinese font, verified by scripts/web-font-profile.mjs. Any replacement requires explicit review."
+    }
+  ]
+}

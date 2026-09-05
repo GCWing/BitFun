@@ -1,0 +1,51 @@
+name: Repository Object Sizes
+
+on:
+  pull_request:
+    branches: [main, 1.0.0-explore]
+  push:
+    branches: [main, 1.0.0-explore]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-object-sizes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Repository Object Sizes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          filter: blob:none
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Test Git object checks
+        run: node --test scripts/check-git-object-sizes.test.mjs
+
+      - name: Reject oversized objects throughout introduced commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          FORCED_PUSH: ${{ github.event.forced }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--head "$HEAD_SHA")
+          # A rewritten or newly created history has no usable previous base.
+          # Check its complete history, including only the exact approved fonts.
+          if [[ "$FORCED_PUSH" != "true" && -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]]; then
+            args+=(--base "$BASE_SHA")
+          fi
+          node scripts/check-git-object-sizes.mjs "${args[@]}"
