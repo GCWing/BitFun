@@ -307,7 +307,6 @@ struct Phase2Provider {
     steers: Mutex<Vec<ports::AgentDialogSteerRequest>>,
     shell_commands: Mutex<Vec<ports::AgentUserShellCommandRequest>>,
     answers: Mutex<Vec<ports::AgentUserAnswersRequest>>,
-    local_commands: Mutex<Vec<ports::AgentLocalCommandTurnRecordRequest>>,
     compactions: Mutex<Vec<ports::AgentSessionCompactionRequest>>,
     settlements: Mutex<Vec<ports::AgentTurnSettlementRequest>>,
     reloads: Mutex<Vec<ports::AgentContextReloadRequest>>,
@@ -474,7 +473,6 @@ impl ports::AgentLocalCommandTurnPort for Phase2Provider {
         &self,
         request: ports::AgentLocalCommandTurnRecordRequest,
     ) -> PortResult<ports::AgentLocalCommandTurnRecordResult> {
-        self.local_commands.lock().unwrap().push(request.clone());
         Ok(ports::AgentLocalCommandTurnRecordResult {
             turn_id: request
                 .turn_id
@@ -661,6 +659,11 @@ fn revert_result(session_id: String, text: &str) -> ports::AgentSessionRevertRes
         retired_turn_ids: vec!["turn-active".to_string()],
         changed: true,
         hidden_turn_count: 1,
+        boundary_storage_turn_index: None,
+        target_turn_id: None,
+        restored_files: Vec::new(),
+        reload_required: false,
+        reload_reason: None,
     }
 }
 
@@ -844,6 +847,8 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                         turn_id: "turn-active".to_string(),
                         content: "keep going".to_string(),
                         display_content: None,
+                        attachments: Vec::new(),
+                        metadata: serde_json::Map::new(),
                     },
                 ))
                 .await
@@ -869,20 +874,6 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 })
                 .await
                 .expect("submit user answers");
-            let local_turn = client
-                .record_local_command_turn(protocol_session::RecordLocalCommandTurnRequest(
-                    ports::AgentLocalCommandTurnRecordRequest {
-                        session_id: "session-1".to_string(),
-                        content: "usage: 12 tokens".to_string(),
-                        turn_id: Some("local-turn".to_string()),
-                        timestamp_ms: Some(100),
-                        metadata: serde_json::Map::new(),
-                    },
-                ))
-                .await
-                .expect("record local command turn");
-            assert_eq!(local_turn.0.turn_id, "local-turn");
-
             client
                 .compact_session(protocol_session::CompactSessionRequest(
                     ports::AgentSessionCompactionRequest {
@@ -931,7 +922,6 @@ async fn phase2_mutations_route_through_runtime_owner_ports() {
                 "cargo test"
             );
             assert_eq!(provider.answers.lock().unwrap().len(), 1);
-            assert_eq!(provider.local_commands.lock().unwrap().len(), 1);
             assert_eq!(provider.compactions.lock().unwrap().len(), 1);
             assert_eq!(provider.reloads.lock().unwrap().len(), 1);
             client.shutdown().await;
@@ -1075,7 +1065,8 @@ async fn lightweight_client_negotiates_with_the_production_server() {
     local
         .run_until(async {
             let (server_transport, client_transport) = transport::in_memory_channel_pair();
-            spawn_server(build_app_runtime(), server_transport);
+            let (runtime, provider) = build_phase2_app_runtime();
+            spawn_server(runtime, server_transport);
 
             let client = openbitfun_app_server_client::connect(client_transport)
                 .await
@@ -1125,6 +1116,21 @@ async fn lightweight_client_negotiates_with_the_production_server() {
                 );
             }
 
+            let reload_request = ports::AgentContextReloadRequest {
+                session_id: "session-1".to_string(),
+                target: ports::AgentContextReloadTarget::All,
+            };
+            client
+                .reload_context(protocol_session::ReloadContextRequest(
+                    reload_request.clone(),
+                ))
+                .await
+                .expect("advertised context reload should reach its provider");
+            assert_eq!(
+                provider.reloads.lock().unwrap().as_slice(),
+                &[reload_request]
+            );
+
             let health = client.health().await.expect("health should round trip");
             assert_eq!(health.status, HealthStatus::Ready);
             assert_eq!(health.protocol_version, PROTOCOL_VERSION);
@@ -1165,6 +1171,49 @@ async fn lightweight_client_negotiates_with_the_production_server() {
             assert!(!data.retryable);
             assert!(!data.outcome_unknown);
             assert_eq!(data.capability.as_deref(), Some("app.initialize"));
+            client.shutdown().await;
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn lightweight_client_does_not_negotiate_context_reload_without_provider() {
+    let local = LocalSet::new();
+    local
+        .run_until(async {
+            let (server_transport, client_transport) = transport::in_memory_channel_pair();
+            spawn_server(build_app_runtime(), server_transport);
+
+            let client = openbitfun_app_server_client::connect(client_transport)
+                .await
+                .expect("lightweight client should connect");
+            let initialized = client
+                .initialize(InitializeRequest {
+                    protocol_version: PROTOCOL_VERSION,
+                    client: ClientInfo {
+                        name: "openbitfun-tui-test".to_string(),
+                        version: env!("CARGO_PKG_VERSION").to_string(),
+                    },
+                })
+                .await
+                .expect("initialize should succeed without a context reload provider");
+            let session = initialized
+                .capabilities
+                .iter()
+                .find(|capability| capability.id == "session")
+                .expect("session capability should remain available");
+            assert!(session
+                .methods
+                .iter()
+                .any(|method| method == "session/sync"));
+            assert!(
+                !initialized
+                    .capabilities
+                    .iter()
+                    .flat_map(|capability| &capability.methods)
+                    .any(|method| method == "session/reloadContext"),
+                "context reload must not be advertised without its provider"
+            );
             client.shutdown().await;
         })
         .await;
@@ -1702,6 +1751,7 @@ async fn client_connect_keeps_connection_alive_after_return() {
                 .create_session(CreateSessionMessage(AgentSessionCreateRequest {
                     session_name: "post-connect session".to_string(),
                     agent_type: "agentic".to_string(),
+                    agent_route_key: None,
                     workspace_path: None,
                     project_workspace_path: None,
                     execution_target: None,

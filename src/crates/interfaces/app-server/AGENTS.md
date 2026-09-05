@@ -82,6 +82,7 @@ failures use helpers such as `OpenBitFunAppRuntime::runtime_error` and
 ```bash
 cargo check --locked -p openbitfun-app-server --offline
 cargo test --locked -p openbitfun-app-server --offline --lib server::wire::tests
+cargo test --locked -p openbitfun-app-server --offline --test agent_kernel
 cargo test --locked -p openbitfun-app-server-protocol --offline --test legacy_wire_contracts
 pnpm run check:core-boundaries
 ```
