@@ -31,6 +31,8 @@ pub enum PeerHostCapability {
     TokenUsageStatistics,
     /// `miniapp_agent_run` accepts non-empty `contextFiles`.
     MiniappAgentContextFilesV1,
+    /// WSL profiles and discovery are understood; availability is probed on the host.
+    WslWorkspacesV1,
     /// `product_control_invoke` is implemented (shared config contract).
     ProductControlV1,
     /// ProductControl definitions that need a host-native provider run here.
@@ -52,6 +54,7 @@ impl PeerHostCapability {
         Self::TargetedSessionRollback,
         Self::TokenUsageStatistics,
         Self::MiniappAgentContextFilesV1,
+        Self::WslWorkspacesV1,
         Self::ProductControlV1,
         Self::ProductControlNativeV1,
         Self::ProductControlPresentationV1,
@@ -67,6 +70,7 @@ impl PeerHostCapability {
             Self::TargetedSessionRollback => "targeted_session_rollback",
             Self::TokenUsageStatistics => "token_usage_statistics",
             Self::MiniappAgentContextFilesV1 => "miniapp_agent_context_files_v1",
+            Self::WslWorkspacesV1 => "wsl_workspaces_v1",
             Self::ProductControlV1 => "product_control_v1",
             Self::ProductControlNativeV1 => "product_control_native_v1",
             Self::ProductControlPresentationV1 => "product_control_presentation_v1",
@@ -84,8 +88,8 @@ impl PeerHostCapability {
 
 const DESKTOP_CAPABILITIES: &[PeerHostCapability] = PeerHostCapability::ALL;
 
-/// The CLI peer host has no MiniApp runtime, no host-native ProductControl
-/// providers, and no presentation surface; everything else it shares.
+/// The CLI peer host has no MiniApp runtime, WSL connection setup, host-native
+/// ProductControl providers, or presentation surface.
 const CLI_CAPABILITIES: &[PeerHostCapability] = &[
     PeerHostCapability::IdempotentDialogSubmit,
     PeerHostCapability::TargetedSessionRollback,

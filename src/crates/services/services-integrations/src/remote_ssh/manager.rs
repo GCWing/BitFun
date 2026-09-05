@@ -545,7 +545,7 @@ pub struct KnownHostEntry {
 
 /// Active SSH connection
 struct ActiveConnection {
-    /// Absent only for a local Docker container workspace.
+    /// Absent for local process transports (Docker and WSL).
     handle: Option<Arc<Handle<SSHHandler>>>,
     /// Keep every preceding hop alive while the final transport is using its
     /// direct-tcpip channel as the underlying stream.
@@ -1616,12 +1616,16 @@ fn supervised_container_command(
     container: &ContainerWorkspaceConfig,
     command: &str,
 ) -> (String, String) {
+    supervised_workspace_command(&container.shell, command)
+}
+
+fn supervised_workspace_command(shell: &str, command: &str) -> (String, String) {
     let pid_file = format!(
         "/tmp/{}-exec-{}.pid",
         hidden_data_directory(),
         uuid::Uuid::new_v4()
     );
-    let wrapped = supervised_container_command_with_pid_file(container, command, &pid_file);
+    let wrapped = supervised_workspace_command_with_pid_file(shell, command, &pid_file);
     (wrapped, pid_file)
 }
 
@@ -1637,14 +1641,23 @@ fn supervised_container_command(
 /// The supervisor must also duplicate stdin before starting the asynchronous
 /// child. POSIX non-interactive shells attach `/dev/null` to an asynchronous
 /// list's fd 0, so `<&0` inside that list cannot preserve streamed input.
+#[cfg(test)]
 fn supervised_container_command_with_pid_file(
     container: &ContainerWorkspaceConfig,
     command: &str,
     pid_file: &str,
 ) -> String {
+    supervised_workspace_command_with_pid_file(&container.shell, command, pid_file)
+}
+
+fn supervised_workspace_command_with_pid_file(
+    shell: &str,
+    command: &str,
+    pid_file: &str,
+) -> String {
     let quoted_pid_file = crate::remote_ssh::shell::quote_arg(pid_file);
     let quoted_command = crate::remote_ssh::shell::quote_arg(command);
-    let quoted_shell = crate::remote_ssh::shell::quote_arg(&container.shell);
+    let quoted_shell = crate::remote_ssh::shell::quote_arg(shell);
     let sweep = stale_pid_file_sweep();
     format!(
         "{sweep}\
@@ -2554,7 +2567,14 @@ impl SSHConnectionManager {
     /// suitable for the connection dialog.
     pub async fn test_connection(&self, config: &SSHConnectionConfig) -> ConnectionTestReport {
         let mut stages = Vec::new();
-        if config.uses_local_docker() {
+        if let Some(wsl) = &config.wsl {
+            stages.push(ConnectionTestStage {
+                id: "wsl".into(),
+                label: wsl.distribution.clone(),
+                success: false,
+                error: None,
+            });
+        } else if config.uses_local_docker() {
             stages.push(ConnectionTestStage {
                 id: "docker-host".to_string(),
                 label: "local".to_string(),
@@ -2742,10 +2762,11 @@ impl SSHConnectionManager {
             if !matches!(
                 conn.auth_type,
                 crate::remote_ssh::types::SavedAuthType::Password
-            ) || conn
-                .container
-                .as_ref()
-                .is_some_and(|container| container.local)
+            ) || conn.wsl.is_some()
+                || conn
+                    .container
+                    .as_ref()
+                    .is_some_and(|container| container.local)
             {
                 continue;
             }
@@ -2782,7 +2803,7 @@ impl SSHConnectionManager {
 
     /// Save a connection configuration
     pub async fn save_connection(&self, config: &SSHConnectionConfig) -> anyhow::Result<()> {
-        match (&config.auth, config.uses_local_docker()) {
+        match (&config.auth, config.uses_local_process()) {
             (_, true) => {
                 self.password_vault.remove(&config.id).await?;
             }
@@ -2816,7 +2837,8 @@ impl SSHConnectionManager {
             c.id != config.id
                 && !(c.host == config.host
                     && c.username == config.username
-                    && c.container == config.container)
+                    && c.container == config.container
+                    && c.wsl == config.wsl)
         });
 
         // Add new entry
@@ -2851,6 +2873,7 @@ impl SSHConnectionManager {
             last_connected: Some(chrono::Utc::now().timestamp() as u64),
             proxy_jump: config.proxy_jump.clone(),
             container: config.container.clone(),
+            wsl: config.wsl.clone(),
             options: config.options.clone(),
         });
 
@@ -3004,6 +3027,25 @@ impl SSHConnectionManager {
         config: &SSHConnectionConfig,
         timeout_secs: u64,
     ) -> anyhow::Result<EstablishedSession> {
+        if let Some(wsl) = &config.wsl {
+            if config.container.is_some()
+                || config
+                    .proxy_jump
+                    .as_deref()
+                    .is_some_and(|jump| !jump.trim().is_empty())
+            {
+                anyhow::bail!("WSL cannot be combined with Docker or SSH jump hosts");
+            }
+            let server_info = super::wsl::probe(wsl, Duration::from_secs(timeout_secs)).await?;
+            return Ok(EstablishedSession {
+                handle: None,
+                jump_handles: Vec::new(),
+                alive: Arc::new(AtomicBool::new(true)),
+                server_info: Some(server_info),
+                effective_config: config.clone(),
+                unpublished: UnpublishedSshSession::default(),
+            });
+        }
         if config.uses_local_docker() {
             if config
                 .container
@@ -3461,6 +3503,7 @@ impl SSHConnectionManager {
                 default_workspace: None,
                 proxy_jump: None,
                 container: None,
+                wsl: None,
                 options: config.options.clone(),
             });
         }
@@ -4194,6 +4237,9 @@ impl SSHConnectionManager {
         if !alive {
             return false;
         }
+        if let Some(wsl) = &config.wsl {
+            return super::wsl::is_running(wsl).await;
+        }
         if !config.uses_local_docker() {
             return true;
         }
@@ -4226,13 +4272,14 @@ impl SSHConnectionManager {
             return Ok(None);
         };
 
-        let local_docker = saved
-            .container
-            .as_ref()
-            .is_some_and(|container| container.local);
+        let local_process = saved.wsl.is_some()
+            || saved
+                .container
+                .as_ref()
+                .is_some_and(|container| container.local);
         let auth = match saved.auth_type {
             crate::remote_ssh::types::SavedAuthType::Password => {
-                let password = if local_docker {
+                let password = if local_process {
                     String::new()
                 } else {
                     self.password_vault.load(connection_id).await?.ok_or_else(|| {
@@ -4276,6 +4323,7 @@ impl SSHConnectionManager {
             default_workspace: saved.default_workspace,
             proxy_jump: saved.proxy_jump,
             container: saved.container,
+            wsl: saved.wsl,
             options: saved.options,
         }))
     }
@@ -4388,7 +4436,7 @@ impl SSHConnectionManager {
         // Refresh the password from the encrypted vault if password auth was
         // configured but the in-memory copy is empty (defensive — covers cases
         // where callers cleared it intentionally).
-        if !config.uses_local_docker() {
+        if !config.uses_local_process() {
             if let SSHAuthMethod::Password { ref password } = config.auth {
                 if password.is_empty() {
                     match self.password_vault.load(connection_id).await {
@@ -4544,7 +4592,7 @@ impl SSHConnectionManager {
             )
         };
 
-        if config.uses_docker_exec() {
+        if config.uses_shell_filesystem() {
             let mut setup_options = self.workspace_setup_options(connection_id).await;
             setup_options.timeout_ms = match (setup_options.timeout_ms, options.timeout_ms) {
                 (Some(setup), Some(command)) => Some(setup.min(command)),
@@ -4586,8 +4634,8 @@ impl SSHConnectionManager {
                     connection.effective_config.clone(),
                 )
             };
-            if config.uses_local_docker() {
-                anyhow::bail!("Local Docker execution does not use an SSH channel");
+            if config.uses_local_process() {
+                anyhow::bail!("Local Docker and WSL execution do not use an SSH channel");
             }
             let handle =
                 handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
@@ -4646,8 +4694,8 @@ impl SSHConnectionManager {
                 connection.effective_config.clone(),
             )
         };
-        if config.uses_local_docker() {
-            anyhow::bail!("A local Docker workspace has no SSH transport to forward over");
+        if config.uses_local_process() {
+            anyhow::bail!("Local Docker and WSL workspaces have no SSH transport to forward over");
         }
         let handle =
             handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
@@ -4746,6 +4794,23 @@ impl SSHConnectionManager {
                 connection.effective_config.clone(),
             )
         };
+        if let Some(wsl) = config.wsl {
+            super::wsl::ensure_supported()?;
+            super::wsl::validate(&wsl)?;
+            let (supervised_command, pid_file) = supervised_workspace_command("/bin/sh", command);
+            let signal_config = wsl.clone();
+            let signal_hook: crate::remote_ssh::transport::WorkspaceSignalHook =
+                Arc::new(move |signal| {
+                    let config = signal_config.clone();
+                    let command = container_signal_command(&pid_file, signal);
+                    Box::pin(async move { super::wsl::signal(&config, &command).await })
+                });
+            return crate::remote_ssh::WorkspaceStdio::spawn_local_process_with_signal_hook(
+                super::wsl::EXECUTABLE,
+                &super::wsl::exec_args(&wsl, &supervised_command),
+                Some(signal_hook),
+            );
+        }
         if config.uses_docker_exec() {
             let container = config
                 .container
@@ -4811,8 +4876,8 @@ impl SSHConnectionManager {
                 connection.effective_config.clone(),
             )
         };
-        if config.uses_local_docker() {
-            anyhow::bail!("Local Docker execution does not use an SSH channel");
+        if config.uses_local_process() {
+            anyhow::bail!("Local Docker and WSL execution do not use an SSH channel");
         }
         let handle =
             handle.ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
@@ -4899,27 +4964,36 @@ impl SSHConnectionManager {
             .map(|connection| connection.effective_config.clone())
     }
 
-    pub async fn is_local_container_connection(&self, connection_id: &str) -> bool {
+    pub async fn is_local_process_connection(&self, connection_id: &str) -> bool {
         self.get_effective_connection_config(connection_id)
             .await
-            .is_some_and(|config| config.uses_local_docker())
+            .is_some_and(|config| config.uses_local_process())
     }
 
-    pub async fn is_container_workspace(&self, connection_id: &str) -> bool {
+    pub async fn is_shell_workspace(&self, connection_id: &str) -> bool {
         self.get_effective_connection_config(connection_id)
             .await
-            .is_some_and(|config| config.uses_docker_exec())
+            .is_some_and(|config| config.uses_shell_filesystem())
     }
 
-    pub async fn local_container_exec_spec(
+    pub async fn local_process_exec_spec(
         &self,
         connection_id: &str,
         command: &str,
         tty: bool,
     ) -> anyhow::Result<Option<(String, Vec<String>)>> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
         let Some(config) = self.get_effective_connection_config(connection_id).await else {
             anyhow::bail!("Connection {} not found", connection_id);
         };
+        if let Some(wsl) = &config.wsl {
+            super::wsl::ensure_supported()?;
+            super::wsl::validate(wsl)?;
+            return Ok(Some((
+                super::wsl::EXECUTABLE.into(),
+                super::wsl::exec_args(wsl, command),
+            )));
+        }
         if !config.uses_local_docker() {
             return Ok(None);
         }
@@ -4934,14 +5008,24 @@ impl SSHConnectionManager {
         )))
     }
 
-    pub async fn local_container_shell_spec(
+    pub async fn local_process_shell_spec(
         &self,
         connection_id: &str,
         cwd: Option<&str>,
     ) -> anyhow::Result<Option<(String, Vec<String>)>> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
         let Some(config) = self.get_effective_connection_config(connection_id).await else {
             anyhow::bail!("Connection {} not found", connection_id);
         };
+        if let Some(wsl) = &config.wsl {
+            super::wsl::ensure_supported()?;
+            super::wsl::validate(wsl)?;
+            super::wsl::validate_cwd(cwd)?;
+            return Ok(Some((
+                super::wsl::EXECUTABLE.into(),
+                super::wsl::shell_args(wsl, cwd),
+            )));
+        }
         if !config.uses_local_docker() {
             return Ok(None);
         }
@@ -5012,7 +5096,7 @@ impl SSHConnectionManager {
         path: &str,
     ) -> anyhow::Result<openbitfun_runtime_ports::WorkspaceReader> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
-        if self.is_container_workspace(connection_id).await {
+        if self.is_shell_workspace(connection_id).await {
             let command = format!(
                 "[ -f {0} ] || {{ echo 'Workspace path is not a readable regular file' >&2; exit 1; }}; cat -- {0}",
                 crate::remote_ssh::shell::quote_arg(&path)
@@ -5039,7 +5123,7 @@ impl SSHConnectionManager {
         permissions: u32,
     ) -> anyhow::Result<()> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
-        if self.is_container_workspace(connection_id).await {
+        if self.is_shell_workspace(connection_id).await {
             let command = format!(
                 "chmod {:o} -- {}",
                 permissions & 0o7777,
@@ -5071,7 +5155,7 @@ impl SSHConnectionManager {
             .context("Remote file modification time is before the Unix epoch")?
             .as_secs();
         let path = self.resolve_sftp_path(connection_id, path).await?;
-        if self.is_container_workspace(connection_id).await {
+        if self.is_shell_workspace(connection_id).await {
             let command = format!(
                 "touch -m -d @{} -- {}",
                 seconds,
@@ -5176,7 +5260,7 @@ impl SSHConnectionManager {
         content: &[u8],
     ) -> anyhow::Result<()> {
         use tokio::io::AsyncWriteExt;
-        if !self.is_container_workspace(connection_id).await {
+        if !self.is_shell_workspace(connection_id).await {
             return self.sftp_write(connection_id, path, content).await;
         }
         let path = self.resolve_sftp_path(connection_id, path).await?;
@@ -6627,6 +6711,7 @@ mod tests {
                 default_workspace: None,
                 proxy_jump: None,
                 container: None,
+                wsl: None,
                 options: Default::default(),
             },
             requested,
@@ -7134,6 +7219,7 @@ mod tests {
                     user: None,
                     interactive: true,
                 }),
+                wsl: None,
                 options: Default::default(),
             };
             manager.connections.write().await.insert(
@@ -7381,6 +7467,7 @@ mod tests {
                 user: None,
                 interactive: true,
             }),
+            wsl: None,
             options: Default::default(),
         };
         let manager = SSHConnectionManager::new(root.join("manager-data"));
@@ -7766,6 +7853,7 @@ mod tests {
             default_workspace: Some("/srv/project".to_string()),
             proxy_jump: None,
             container: None,
+            wsl: None,
             options: Default::default(),
         };
         let alive = Arc::new(AtomicBool::new(true));
@@ -8149,6 +8237,7 @@ mod tests {
                     user: None,
                     interactive: true,
                 }),
+                wsl: None,
                 options: Default::default(),
             })
             .await
@@ -8397,6 +8486,7 @@ mod tests {
                 default_workspace: None,
                 proxy_jump: None,
                 container: None,
+                wsl: None,
                 options: Default::default(),
             })
             .await;
@@ -8425,6 +8515,7 @@ mod tests {
                 default_workspace: Some("/root/project".to_string()),
                 proxy_jump: Some("jump-a,jump-b".to_string()),
                 container: None,
+                wsl: None,
                 options: Default::default(),
             })
             .await
@@ -8514,6 +8605,7 @@ mod tests {
                 default_workspace: Some("/workspace".to_string()),
                 proxy_jump: Some("jump.example.com".to_string()),
                 container: None,
+                wsl: None,
                 options: Default::default(),
             })
             .await
@@ -8558,6 +8650,7 @@ mod tests {
                 default_workspace: None,
                 proxy_jump: None,
                 container: None,
+                wsl: None,
                 options: Default::default(),
             })
             .await

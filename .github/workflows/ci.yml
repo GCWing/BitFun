@@ -346,6 +346,7 @@ jobs:
           exit $testExitCode
 
       - name: Run product-control domain and delivery-profile contracts
+        shell: bash
         run: |
           cargo test --locked -p openbitfun-product-domains --no-default-features product_control
           cargo test --locked -p openbitfun-product-domains --no-default-features remote_surface

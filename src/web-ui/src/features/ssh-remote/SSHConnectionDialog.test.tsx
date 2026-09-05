@@ -12,6 +12,7 @@ const sshApiMock = vi.hoisted(() => ({
   listSavedConnections: vi.fn(),
   listSSHConfigHosts: vi.fn(),
   getSSHConfig: vi.fn(),
+  listWslDistributions: vi.fn(),
 }));
 
 const remoteContextMock = vi.hoisted(() => ({
@@ -24,11 +25,10 @@ const authFilePickerMock = vi.hoisted(() => ({
   pickSshCertificatePath: vi.fn(),
 }));
 
-vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
+vi.mock('@/infrastructure/i18n', () => {
+  const t = (key: string) => key;
+  return { useI18n: () => ({ t }) };
+});
 
 vi.mock('./SSHRemoteContext', () => ({
   useSSHRemoteContext: () => ({
@@ -113,7 +113,7 @@ vi.mock('@openbitfun/ui', () => ({
     </select>
   ),
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  ScrollArea: ({ children, scrollbarVisibility, ...props }: React.HTMLAttributes<HTMLDivElement> & { scrollbarVisibility?: string }) => <div data-scrollbar-visibility={scrollbarVisibility} {...props}>{children}</div>,
   FormSection: ({
     children,
     title,
@@ -164,6 +164,7 @@ describe('SSHConnectionDialog', () => {
     sshApiMock.listSavedConnections.mockResolvedValue([]);
     sshApiMock.listSSHConfigHosts.mockResolvedValue([]);
     sshApiMock.getSSHConfig.mockResolvedValue({ found: false });
+    sshApiMock.listWslDistributions.mockResolvedValue({ supported: true, distributions: ['Ubuntu', 'Debian'] });
     authFilePickerMock.pickSshPrivateKeyPath.mockResolvedValue(null);
     authFilePickerMock.pickSshCertificatePath.mockResolvedValue(null);
   });
@@ -402,4 +403,79 @@ describe('SSHConnectionDialog', () => {
       );
     },
   );
+  async function selectWsl(): Promise<void> {
+    setSelectValue(findTargetSelect(), 'wsl');
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  it('connects to an installed WSL distribution without SSH or Docker credentials', async () => {
+    remoteContextMock.connect.mockResolvedValue(undefined);
+    await renderDialog();
+    await selectWsl();
+    expect(container.querySelector('input[aria-label="ssh.remote.host"]')).toBeNull();
+    expect(container.querySelector('input[aria-label="ssh.remote.password"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="ssh.remote.containerNamePlaceholder"]')).toBeNull();
+    setInputValue('ssh.remote.wslUser', 'dev');
+    await act(async () => { findConnectButton()?.click(); });
+    expect(remoteContextMock.connect).toHaveBeenCalledWith(
+      'wsl-Ubuntu@dev',
+      expect.objectContaining({ wsl: { distribution: 'Ubuntu', user: 'dev' }, host: 'wsl.invalid', port: 0 }),
+      { browseAfterConnect: true },
+    );
+    expect(remoteContextMock.connect.mock.calls[0]?.[1].container).toBeUndefined();
+  });
+
+  it('keeps distinct distribution and user pairs from sharing a connection identity', async () => {
+    sshApiMock.listWslDistributions.mockResolvedValue({ supported: true, distributions: ['Ubuntu-dev', 'Ubuntu'] });
+    remoteContextMock.connect.mockResolvedValue(undefined);
+    await renderDialog();
+    await selectWsl();
+    setInputValue('ssh.remote.wslUser', 'ops');
+    await act(async () => { findConnectButton()?.click(); });
+    const distribution = Array.from(container.querySelectorAll<HTMLSelectElement>('select'))
+      .find(select => select.querySelector('option[value="Ubuntu"]')) ?? null;
+    setSelectValue(distribution, 'Ubuntu');
+    setInputValue('ssh.remote.wslUser', 'dev-ops');
+    await act(async () => { findConnectButton()?.click(); });
+    expect(remoteContextMock.connect.mock.calls[0]?.[0]).not.toBe(remoteContextMock.connect.mock.calls[1]?.[0]);
+  });
+
+  it.each([
+    [{ supported: false, distributions: [] }, 'ssh.remote.wslUnsupported'],
+    [{ supported: true, distributions: [] }, 'ssh.remote.wslNoDistributions'],
+  ])('gates WSL when discovery returns %j', async (result, hint) => {
+    sshApiMock.listWslDistributions.mockResolvedValue(result);
+    await renderDialog();
+    await selectWsl();
+    expect(container.textContent).toContain(hint);
+    expect(findConnectButton()?.disabled).toBe(true);
+    expect(remoteContextMock.connect).not.toHaveBeenCalled();
+  });
+
+  it('shows a failed discovery and lets the user retry', async () => {
+    sshApiMock.listWslDistributions.mockRejectedValueOnce(new Error('wsl.exe unavailable'));
+    await renderDialog();
+    await selectWsl();
+    expect(container.textContent).toContain('wsl.exe unavailable');
+    expect(findConnectButton()?.disabled).toBe(true);
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('ssh.remote.wslRefresh'));
+    await act(async () => { refresh?.click(); });
+    expect(findConnectButton()?.disabled).toBe(false);
+  });
+
+  it('retains WSL target and Linux user when editing and quick connecting a saved profile', async () => {
+    const wsl = { distribution: 'Debian', user: 'dev' };
+    sshApiMock.listSavedConnections.mockResolvedValue([{
+      id: 'wsl-Debian@dev', name: 'WSL · Debian · dev', host: 'wsl.invalid', port: 0,
+      username: 'dev', authType: { type: 'PrivateKey', keyPath: '' }, wsl,
+    }]);
+    remoteContextMock.connect.mockResolvedValue(undefined);
+    await renderDialog();
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[title="actions.edit"]')?.click(); });
+    expect(findTargetSelect()?.value).toBe('wsl');
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="ssh.remote.wslUser"]')?.value).toBe('dev');
+    await act(async () => { container.querySelector<HTMLButtonElement>('button[title="ssh.remote.connect"]')?.click(); });
+    expect(remoteContextMock.connect).toHaveBeenCalledWith('wsl-Debian@dev', expect.objectContaining({ wsl }), { browseAfterConnect: true });
+  });
+
 });

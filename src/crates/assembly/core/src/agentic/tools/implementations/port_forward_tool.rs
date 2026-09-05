@@ -236,6 +236,7 @@ impl PortForwardTool {
                 default_workspace: None,
                 proxy_jump: config_entry.and_then(|entry| entry.proxy_jump),
                 container: None,
+                wsl: None,
                 options: SSHConnectionOptions::default(),
             })
             .await

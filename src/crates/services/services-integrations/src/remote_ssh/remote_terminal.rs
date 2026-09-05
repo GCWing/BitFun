@@ -96,7 +96,8 @@ impl RemoteTerminalManager {
         let session_id = session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let name = name.unwrap_or_else(|| format!("Remote Terminal {}", &session_id[..8]));
 
-        if manager.is_local_container_connection(connection_id).await {
+        manager.ensure_connected(connection_id).await?;
+        if manager.is_local_process_connection(connection_id).await {
             let cwd = if let Some(dir) = initial_cwd {
                 dir.to_string()
             } else {
@@ -113,12 +114,12 @@ impl RemoteTerminalManager {
                 }
             };
             let spec = manager
-                .local_container_shell_spec(connection_id, (cwd != "~").then_some(cwd.as_str()))
+                .local_process_shell_spec(connection_id, (cwd != "~").then_some(cwd.as_str()))
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("Local container shell is unavailable"))?;
+                .ok_or_else(|| anyhow::anyhow!("Local workspace shell is unavailable"))?;
             drop(ssh_guard);
             return self
-                .create_local_container_session(
+                .create_local_workspace_session(
                     session_id,
                     name,
                     connection_id,
@@ -311,7 +312,7 @@ impl RemoteTerminalManager {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn create_local_container_session(
+    async fn create_local_workspace_session(
         &self,
         session_id: String,
         name: String,
@@ -322,6 +323,14 @@ impl RemoteTerminalManager {
         source: SessionSource,
         (executable, args): (String, Vec<String>),
     ) -> anyhow::Result<CreateSessionResult> {
+        let shell_type = ShellType::Custom(
+            if executable == super::wsl::EXECUTABLE {
+                "WSL"
+            } else {
+                "Docker"
+            }
+            .to_string(),
+        );
         let shell_config = ShellConfig {
             executable,
             args,
@@ -334,14 +343,10 @@ impl RemoteTerminalManager {
                 .try_into()
                 .expect("UUID prefix is four bytes"),
         );
-        let spawned = spawn_pty(
-            process_id,
-            &shell_config,
-            ShellType::Custom("Docker".to_string()),
-            cols,
-            rows,
-        )
-        .map_err(|error| anyhow::anyhow!("Failed to start local Docker terminal: {}", error))?;
+        let spawned =
+            spawn_pty(process_id, &shell_config, shell_type, cols, rows).map_err(|error| {
+                anyhow::anyhow!("Failed to start local workspace terminal: {}", error)
+            })?;
 
         let (output_tx, output_rx) = broadcast::channel::<Vec<u8>>(1000);
         let (cmd_tx, mut cmd_rx) = mpsc::channel::<PtyCommand>(100);

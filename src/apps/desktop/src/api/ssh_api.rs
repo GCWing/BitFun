@@ -32,7 +32,7 @@ async fn hydrate_stored_password(
     // Local Docker Exec/Auto profiles do not require SSH credentials. Older
     // saved profiles may therefore legitimately contain an empty Password
     // auth placeholder with no vault entry.
-    if config.uses_local_docker() {
+    if config.uses_local_process() {
         return Ok(());
     }
     if let SSHAuthMethod::Password { ref password } = config.auth {
@@ -52,6 +52,14 @@ async fn hydrate_stored_password(
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn ssh_list_wsl_distributions(
+) -> Result<openbitfun_core::service::remote_ssh::WslDistributions, String> {
+    openbitfun_services_integrations::remote_ssh::wsl::list_distributions()
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1242,6 +1250,7 @@ mod tests {
                 user: None,
                 interactive: true,
             }),
+            wsl: None,
             options: Default::default(),
         };
 

@@ -55,6 +55,9 @@ pub struct SSHConnectionConfig {
     /// Optional Docker container that becomes the effective workspace target.
     #[serde(default)]
     pub container: Option<ContainerWorkspaceConfig>,
+    /// A Linux distribution owned by the Windows host running OpenBitFun.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wsl: Option<WslWorkspaceConfig>,
     /// Connection and authentication timeout/retry policy.
     #[serde(default)]
     pub options: SSHConnectionOptions,
@@ -72,6 +75,7 @@ impl SSHConnectionConfig {
             && self.auth.connection_params_equal(&other.auth)
             && self.proxy_jump == other.proxy_jump
             && self.container == other.container
+            && self.wsl == other.wsl
             && self.options == other.options
     }
 
@@ -79,6 +83,14 @@ impl SSHConnectionConfig {
         self.container
             .as_ref()
             .is_some_and(|container| container.local)
+    }
+
+    pub fn uses_local_process(&self) -> bool {
+        self.wsl.is_some() || self.uses_local_docker()
+    }
+
+    pub fn uses_shell_filesystem(&self) -> bool {
+        self.wsl.is_some() || self.uses_docker_exec()
     }
 
     pub fn uses_docker_exec(&self) -> bool {
@@ -168,6 +180,23 @@ impl Default for SSHConnectionOptions {
 
 fn default_docker_path() -> String {
     "docker".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WslWorkspaceConfig {
+    pub distribution: String,
+    /// Omitted means the distribution's configured default Linux user.
+    #[serde(default)]
+    pub user: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WslDistributions {
+    /// Describes the executing host, never the controller's operating system.
+    pub supported: bool,
+    pub distributions: Vec<String>,
 }
 
 fn default_container_shell() -> String {
@@ -334,6 +363,8 @@ pub struct SavedConnection {
     pub proxy_jump: Option<String>,
     #[serde(default)]
     pub container: Option<ContainerWorkspaceConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wsl: Option<WslWorkspaceConfig>,
     #[serde(default)]
     pub options: SSHConnectionOptions,
 }

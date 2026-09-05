@@ -15,6 +15,8 @@ pub mod workspace_registry;
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;
 mod workspace_services;
+#[cfg(feature = "remote-ssh-concrete")]
+pub mod wsl;
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 mod disabled;

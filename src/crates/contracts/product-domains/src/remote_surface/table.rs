@@ -698,6 +698,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("ssh_list_port_forwards",                                     Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
     op("ssh_list_remote_listening_ports",                            Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
     op("ssh_list_saved_connections",                                 Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
+    op("ssh_list_wsl_distributions",                                 Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
     op("ssh_save_connection",                                        Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
     op("ssh_start_port_forward",                                     Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),
     op("ssh_stop_port_forward",                                      Agnostic,    Proxied,          CLI_NO_DESKTOP_IDE_SURFACE),

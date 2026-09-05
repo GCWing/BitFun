@@ -2020,6 +2020,7 @@ pub async fn run() {
             api::ssh_api::ssh_connect,
             api::ssh_api::ssh_test_connection,
             api::ssh_api::ssh_list_docker_containers,
+            api::ssh_api::ssh_list_wsl_distributions,
             api::ssh_api::ssh_disconnect,
             api::ssh_api::ssh_disconnect_all,
             api::ssh_api::ssh_is_connected,

@@ -255,10 +255,10 @@ impl PortForwardManager {
         // first request: a local Docker workspace is reached by `docker exec`
         // and has no SSH session to carry a channel. Discovering that after
         // opening a browser would be a worse way to learn it.
-        if manager.is_local_container_connection(connection_id).await {
+        if manager.is_local_process_connection(connection_id).await {
             anyhow::bail!(
-                "A local Docker workspace has no SSH transport to forward over. \
-                 Publish the container port with `docker run -p` instead."
+                "Local Docker and WSL workspaces do not support SSH port forwarding. \
+                 Use the target's published ports or Windows WSL networking instead."
             );
         }
 

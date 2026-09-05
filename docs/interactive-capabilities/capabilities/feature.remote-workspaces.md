@@ -23,6 +23,8 @@ Open projects over SSH or in containers so files, search, terminal, and agents a
   - Connect with passwords, private keys, certificates, SSH config hosts, and jump hosts
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现远程 Docker 容器并把容器作为工作环境
   - Discover remote Docker containers and use a container as the work environment
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择 Windows 主机上的 WSL 发行版作为工作区
+  - Choose a WSL distribution on the Windows host as a workspace
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 打开、关闭和移除远程工作区，并读取服务器信息
   - Open, close, and remove remote workspaces, and inspect server information
 - **由专用 Agent 工具控制 / Delegated Agent tool** · `LS` / `Read` / `Write` / `Edit` / `Delete` / `Glob` / `Grep` / `ExecCommand` · 浏览、读取、写入、创建、重命名和删除远程文件与目录

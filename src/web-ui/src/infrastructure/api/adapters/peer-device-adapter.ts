@@ -302,6 +302,7 @@ export interface PeerDeviceTransportHooks {
   supportsTokenUsageStatistics?: boolean;
   /** Enables MiniApp Agent runs with immutable virtual context files. */
   supportsMiniAppAgentContextFilesV1?: boolean;
+  supportsWslWorkspacesV1?: boolean;
   /** Enables the versioned typed ProductControl HostInvoke contract. */
   supportsProductControlV1?: boolean;
 }
@@ -436,6 +437,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       | 'supportsTargetedSessionRollback'
       | 'supportsTokenUsageStatistics'
       | 'supportsMiniAppAgentContextFilesV1'
+      | 'supportsWslWorkspacesV1'
       | 'supportsProductControlV1'
     >,
   ): void {
@@ -514,6 +516,16 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     ) {
       throw new PeerProductCommandError(
         'token_usage_statistics_unsupported: The connected Peer host does not support usage statistics',
+      );
+    }
+
+    const wslConfig = (params as { config?: { wsl?: unknown } } | undefined)?.config?.wsl;
+    if (
+      (action === 'ssh_list_wsl_distributions' || (action.startsWith('ssh_') && wslConfig != null)) &&
+      this.hooks.supportsWslWorkspacesV1 !== true
+    ) {
+      throw new PeerProductCommandError(
+        'wsl_workspaces_v1_unsupported: The connected Peer host does not support native WSL workspaces',
       );
     }
 

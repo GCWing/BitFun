@@ -1,4 +1,4 @@
-# Remote SSH and container workspaces
+# Remote SSH, container, and WSL workspaces
 
 OpenBitFun remote workspaces use one saved target for the file explorer, terminal,
 Agent commands, and workspace tools. The target can be:
@@ -7,13 +7,21 @@ Agent commands, and workspace tools. The target can be:
 - an SSH host reached through one or more jump hosts;
 - a Docker container on an SSH host;
 - a Docker container on the local machine; or
-- an sshd endpoint running inside a container.
+- an sshd endpoint running inside a container; or
+- a WSL Linux distribution on the Windows OpenBitFun host.
 
 The local client behavior is supported on macOS, Windows, and Linux. Remote
 workspace paths are always interpreted with POSIX `/` separators, independent
 of the client OS. Docker workspace commands require a POSIX-compatible
 container shell; selecting a Windows container does not silently reinterpret
 paths or commands with Windows semantics.
+
+## Windows WSL
+
+Choose **Windows WSL** as its own workspace target. OpenBitFun discovers installed
+distributions on the executing Windows host and connects through `wsl.exe`.
+See [Desktop WSL setup](../../src/apps/desktop/README.md#windows-wsl-workspaces)
+for prerequisites, user selection, and remote-surface support.
 
 ## Jump hosts
 

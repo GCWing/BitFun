@@ -35,6 +35,9 @@ src/apps/mobile/**/*.ets text eol=lf
 src/apps/mobile/**/*.kt text eol=lf
 src/apps/mobile/**/*.swift text eol=lf
 
+# The Product Operation Registry embeds and compares this generated JSON byte for byte.
+src/crates/contracts/product-domains/src/generated/remote-surface-registry.json text eol=lf
+
 # models.dev provenance hashes exact redistributed bytes. Keep these assets
 # stable across checkout platforms so the offline release check is reproducible.
 src/crates/services/services-integrations/assets/models-dev.json text eol=lf
