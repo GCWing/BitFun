@@ -802,7 +802,8 @@ const ModelSettingsPage: React.FC = () => {
         return createModelDraft(modelName, draftBaseConfig, {
           configId: pinnedRowId,
           contextWindow: catalogModel?.limits?.context,
-          category: catalogModel?.capabilities.attachment ? 'multimodal' : undefined,
+          // New selections start as multimodal; existing model edits retain their category.
+          category: pinnedRowId ? (baseConfig?.category ?? 'general_chat') : 'multimodal',
         });
       })
     );
@@ -1102,8 +1103,8 @@ const ModelSettingsPage: React.FC = () => {
         model_name: '',
         enabled: true,
         context_window: 200000,
-        category: 'general_chat',
-        capabilities: ['text_chat', 'function_calling'],
+        category: 'multimodal',
+        capabilities: getCapabilitiesByCategory('multimodal'),
         recommended_for: [],
         metadata: {},
         inline_think_in_text: true,
