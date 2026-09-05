@@ -1,6 +1,13 @@
 @use './motion' as motion;
 
 :root {
+  // App geometry contract: measured composer and visual viewport in CSS pixels.
+  // These runtime values are separate from theme spacing and layout breakpoints.
+  --chat-composer-height: 56px;
+  --mobile-viewport-height: 100dvh;
+  --mobile-viewport-top: 0px;
+  --mobile-viewport-bottom: 0px;
+  --openbitfun-type-support-font-size: var(--openbitfun-font-size-xs);
   --size-radius-sm: 6px;
   --size-radius-base: 8px;
   --size-radius-lg: 12px;
@@ -245,4 +252,10 @@ html.theme-switching {
 
 @keyframes reconnect-spin {
   to { transform: rotate(360deg); }
+}
+
+// Portaled sheets follow the same visible area as the conversation composer.
+[data-openbitfun-component='mobile-sheet'][data-openbitfun-part='overlay'] {
+  inset-block-start: var(--mobile-viewport-top);
+  inset-block-end: var(--mobile-viewport-bottom);
 }

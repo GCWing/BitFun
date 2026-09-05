@@ -88,8 +88,8 @@ test('account UI entry precedes discovery and mounts no remote workspace surface
   assert.doesNotMatch(direct, /listDevices\(|sendDeviceRpc\(|\.online|throw new Error/);
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /useConnectionHealth\(accountDirectoryOpen \? null : sessionMgr\)/);
-  assert.match(app, /!accountDirectoryOpen && page !== 'pairing' && isWideLayout/);
-  assert.match(app, /!accountDirectoryOpen && !isWideLayout/);
+  assert.match(app, /!accountDirectoryOpen && page !== 'pairing' && sessionMgrRef\.current/);
+  assert.equal((app.match(/\{renderDetailPage\(\)\}/g) || []).length, 1, 'one gated detail tree must preserve chat state across layout changes');
   const devices = await readFile(new URL('../src/pages/DevicesPage.tsx', import.meta.url), 'utf8');
   assert.match(devices, /if \(!d.online \|\| switchingId\) return/);
   assert.match(devices, /automaticSelectionAttemptedRef\.current = true/);

@@ -1,19 +1,13 @@
 import React from 'react';
-import { MobileButton, MobileIconButton } from '@openbitfun/ui/mobile';
+import { MobileIconButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 
 interface RemoteHomePanelProps {
   onOpenSidebar?: () => void;
-  onOpenWorkspace?: () => void;
-  onStartConversation?: () => void;
-  conversationStarting?: boolean;
 }
 
 const RemoteHomePanel: React.FC<RemoteHomePanelProps> = ({
   onOpenSidebar,
-  onOpenWorkspace,
-  onStartConversation,
-  conversationStarting = false,
 }) => {
   const { t } = useI18n();
   const openNavigation = onOpenSidebar;
@@ -43,19 +37,6 @@ const RemoteHomePanel: React.FC<RemoteHomePanelProps> = ({
       </header>
       <div className="remote-home__content">
         <p className="remote-home__message">{t('shell.selectConversation')}</p>
-      </div>
-      <div className="remote-home__composer-wrap">
-        <MobileButton
-          appearance="secondary"
-          block
-          className="remote-home__composer"
-          onClick={onStartConversation ?? onOpenWorkspace ?? openNavigation}
-          disabled={conversationStarting}
-          loading={conversationStarting}
-          leading={<svg className="remote-home__composer-plus" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>}
-        >
-          <span>{t('shell.askOpenBitFun')}</span>
-        </MobileButton>
       </div>
     </main>
   );

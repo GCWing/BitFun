@@ -1,3 +1,4 @@
+import ChatToolDetails from './ChatToolDetails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MobileButton, MobileCard, MobileDisclosure, MobileMessage } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
@@ -235,7 +236,6 @@ export const TaskToolCard: React.FC<{
 }> = ({ tool, now, subItems = [], onCancelTool, onApproveTool, onRejectTool }) => {
   const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(0);
   const [stepsExpanded, setStepsExpanded] = useState(false);
   const isRunning = tool.status === 'running';
   const isCompleted = tool.status === 'completed';
@@ -260,15 +260,9 @@ export const TaskToolCard: React.FC<{
     if (hasPendingSubtoolApproval) setStepsExpanded(true);
   }, [hasPendingSubtoolApproval]);
 
-  useEffect(() => {
-    if (stepsExpanded && subItems.length > prevCountRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-    prevCountRef.current = subItems.length;
-  }, [subItems.length, stepsExpanded]);
 
   return (
-    <MobileCard padding="none" className={`chat-task-card chat-task-card--${statusClass}`}>
+    <MobileCard padding="none" className={`chat-task-card chat-task-card--${statusClass}`} data-prominent={isError || isToolAwaitingApproval(tool) || hasPendingSubtoolApproval}>
       <div className="chat-task-card__header">
         <span className="chat-tool-card__icon">
           {isRunning ? (
@@ -285,9 +279,9 @@ export const TaskToolCard: React.FC<{
             <span className="chat-tool-card__spinner" />
           )}
         </span>
-        <span className="chat-tool-card__name">
+        <ChatToolDetails tool={tool} label={<span className="chat-tool-card__name">
           {taskInfo?.description || t('chat.task')}
-        </span>
+        </span>} />
         {taskInfo?.agentType && (
           <span className="chat-tool-card__type">{taskInfo.agentType}</span>
         )}
@@ -312,7 +306,7 @@ export const TaskToolCard: React.FC<{
 
       {subItems.length > 0 && (
         <>
-          <MobileButton appearance="plain" block className="chat-task-card__summary" onClick={() => setStepsExpanded(e => !e)}>
+          <MobileButton appearance="plain" block className="chat-task-card__summary" aria-expanded={stepsExpanded} onClick={() => setStepsExpanded(e => !e)}>
             <span className="chat-task-card__stat">
               {t('chat.toolCalls', { count: subTools.length, suffix: getEnglishPluralSuffix(language, subTools.length) })}
             </span>
@@ -358,6 +352,7 @@ export const TaskToolCard: React.FC<{
                         <span className="chat-task-card__step-duration">{formatDuration(t.duration_ms)}</span>
                       )}
                       </div>
+                      <ChatToolDetails tool={t} />
                       <ChatToolApprovalActions tool={t} onApprove={onApproveTool} onReject={onRejectTool} />
                     </div>
                   );
@@ -443,7 +438,7 @@ const ToolCard: React.FC<{
   const { t } = useI18n();
   const toolKey = tool.name.toLowerCase().replace(/[\s-]/g, '_');
   const typeLabelKey = TOOL_TYPE_MAP[toolKey] || TOOL_TYPE_MAP[tool.name];
-  const typeLabel = typeLabelKey ? t(typeLabelKey) : 'Tool';
+  const typeLabel = typeLabelKey ? t(typeLabelKey) : '';
   const isRunning = tool.status === 'running';
   const isCompleted = tool.status === 'completed';
   const isError = tool.status === 'failed' || tool.status === 'error';
@@ -459,7 +454,7 @@ const ToolCard: React.FC<{
   const statusClass = isRunning ? 'running' : isCompleted ? 'done' : isError ? 'error' : 'pending';
 
   return (
-    <MobileCard padding="none" className={`chat-tool-card chat-tool-card--${statusClass}`}>
+    <MobileCard padding="none" className={`chat-tool-card chat-tool-card--${statusClass}`} data-prominent={isError || isToolAwaitingApproval(tool)}>
       <div className="chat-tool-card__row">
         <span className="chat-tool-card__icon">
           {isRunning ? (
@@ -476,11 +471,11 @@ const ToolCard: React.FC<{
             <span className="chat-tool-card__spinner" />
           )}
         </span>
-        <span className="chat-tool-card__name">
+        <ChatToolDetails tool={tool} label={<span className="chat-tool-card__name">
           {tool.name}
           {preview && <span className="chat-tool-card__preview"> {preview}</span>}
-        </span>
-        <span className="chat-tool-card__type">{typeLabel}</span>
+        </span>} />
+        {typeLabel && <span className="chat-tool-card__type">{typeLabel}</span>}
         {durationLabel && (
           <span className="chat-tool-card__duration">{durationLabel}</span>
         )}
@@ -551,21 +546,15 @@ const ReadFilesToggle: React.FC<{ tools: RemoteToolStatus[] }> = ({ tools }) => 
 
   return (
     <MobileDisclosure className={`chat-thinking ${allDone ? '' : 'chat-thinking--streaming'}`} onToggle={() => setOpen(o => !o)} open={open} title={label}>
-        <div className="chat-thinking__content-wrapper at-top at-bottom">
-          <div className="chat-thinking__content">
-            {tools.map(t => {
-              const preview = t.input_preview || '';
-              return (
-                <div key={t.id} style={{
-                  fontSize: 'var(--openbitfun-type-body-xs-font-size)',
-                  padding: '2px 0',
-                  opacity: 0.8,
-                }}>
-                  {t.status === 'completed' ? '✓' : '⋯'} {t.name} {preview}
-                </div>
-              );
-            })}
-          </div>
+        <div className="chat-read-tools">
+          {tools.map(tool => (
+            <ChatToolDetails key={tool.id} tool={tool} label={
+              <span className="chat-tool-card__name">
+                {tool.status === 'completed' ? '✓' : '⋯'} {tool.name}
+                <span className="chat-tool-card__preview"> {getToolPreview(tool)}</span>
+              </span>
+            } />
+          ))}
         </div>
     </MobileDisclosure>
   );
@@ -582,19 +571,13 @@ export const ToolList: React.FC<{
 }> = ({ tools, now, onCancelTool, onApproveTool, onRejectTool }) => {
   const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(0);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
-    if (expanded && tools.length > prevCountRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-    prevCountRef.current = tools.length;
-  }, [tools.length, expanded]);
 
   if (!tools || tools.length === 0) return null;
 
-  if (tools.length <= TOOL_LIST_COLLAPSE_THRESHOLD) {
+  // Decisions and failures must remain visible outside collapsed process groups.
+  if (tools.length <= TOOL_LIST_COLLAPSE_THRESHOLD || tools.some(tool => isToolAwaitingApproval(tool) || ['failed', 'error'].includes(tool.status))) {
     return (
       <div className="chat-tool-list">
         {tools.map((tc) => (
@@ -609,7 +592,7 @@ export const ToolList: React.FC<{
 
   return (
     <MobileCard padding="none" className="chat-tool-list chat-tool-list--collapsed">
-      <MobileButton appearance="plain" block className="chat-tool-list__header" onClick={() => setExpanded(e => !e)}>
+      <MobileButton appearance="plain" block className="chat-tool-list__header" aria-expanded={expanded} onClick={() => setExpanded(e => !e)}>
         <span className="chat-tool-list__count">{t('chat.toolCalls', { count: tools.length, suffix: getEnglishPluralSuffix(language, tools.length) })}</span>
         <span className="chat-tool-list__stats">
           {doneCount > 0 && <span className="chat-tool-list__stat chat-tool-list__stat--done">{t('chat.done', { count: doneCount })}</span>}
@@ -881,7 +864,7 @@ function renderStandardGroups(
         } else if (entry.tool?.name === 'TodoWrite') {
           flushAll();
           rendered.push(<TodoCard key={`${keyPrefix}-todo-${gi}-${rendered.length}`} tool={entry.tool!} />);
-        } else if (entry.tool && READ_LIKE_TOOLS.has(entry.tool.name)) {
+        } else if (entry.tool && READ_LIKE_TOOLS.has(entry.tool.name) && !['failed', 'error'].includes(entry.tool.status)) {
           flushRegular();
           readBuf.push(entry.tool);
         } else if (entry.tool) {

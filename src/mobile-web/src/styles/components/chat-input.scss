@@ -1,21 +1,21 @@
-// ── Chat input — matches desktop ChatInput visual language ───────────────────
+// ── Chat input — shared visual language with touch-sized controls ───────────────────
 
 .chat-page__input-wrap {
   position: fixed;
-  bottom: 16px;
+  bottom: calc(var(--mobile-viewport-bottom) + max(12px, env(safe-area-inset-bottom, 0px)));
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 700px;
+  max-width: 520px;
   z-index: 20;
   display: flex;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 16px;
   transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:not(.is-expanded) {
-    max-width: 480px;
+    max-width: 520px;
 
     .chat-page__input-area {
       flex: 1 1 auto;
@@ -26,9 +26,9 @@
     .chat-page__action-btn { display: none; }
 
     .chat-page__send-btn {
-      width: 24px;
-      height: 24px;
-      opacity: 0.35;
+      opacity: 1;
+      background: transparent;
+      color: var(--openbitfun-color-content-primary);
     }
   }
 }
@@ -52,10 +52,10 @@
   color: var(--openbitfun-color-content-primary);
   font-size: var(--openbitfun-type-body-md-font-size);
   padding: 0;
-  padding-right: 28px;
+
   resize: none;
   min-height: 36px;
-  max-height: 120px;
+  max-height: 144px;
   outline: none;
   font-family: var(--openbitfun-type-body-md-font-family);
   line-height: var(--openbitfun-type-body-md-line-height);
@@ -77,21 +77,23 @@
   text-overflow: ellipsis;
 }
 
-// ── Mode pill button (desktop style) ─────────────────────────────────────────
+// ── Model and reasoning controls ─────────────────────────────────────────
 
 .chat-model-selector {
   position: relative;
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .chat-model-selector__trigger {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
   min-width: 0;
-  height: 32px;
-  min-block-size: 32px;
-  padding: 0 4px;
+  height: 48px;
+  min-block-size: 48px;
+  padding: 0 8px;
   border: none;
   border-radius: 16px;
   background: transparent;
@@ -151,8 +153,8 @@
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 180px;
-  max-width: 180px;
+  width: 330px;
+  max-width: calc(100vw - 32px);
   max-height: min(345px, calc(100vh - 160px));
   display: flex;
   flex-direction: column;
@@ -168,10 +170,9 @@
 
 .chat-model-selector__header {
   padding: 10px 12px 8px;
-  font-size: var(--openbitfun-type-micro-font-size);
+  font-size: var(--openbitfun-type-body-sm-font-size);
   font-weight: var(--openbitfun-type-label-selected-font-weight);
-  letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
-  text-transform: uppercase;
+  letter-spacing: normal;
   color: var(--openbitfun-color-content-muted);
   border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 }
@@ -231,7 +232,7 @@
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  font-size: var(--openbitfun-type-support-font-size);
+  font-size: var(--openbitfun-type-body-lg-font-size);
   font-weight: var(--openbitfun-type-label-lg-font-weight);
   color: var(--openbitfun-color-content-primary);
 }
@@ -255,8 +256,8 @@
   display: block;
   min-width: 0;
   max-width: 100%;
-  font-size: var(--openbitfun-type-overline-sm-font-size);
-  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  color: var(--openbitfun-color-content-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -287,16 +288,33 @@
 }
 
 .chat-reasoning-selector__dropdown {
-  width: 160px;
-  max-width: min(160px, calc(100vw - 32px));
+  width: 260px;
+  max-width: calc(100vw - 32px);
+}
+
+// Menus use a portal so their lifetime and placement are independent of the toolbar.
+.chat-composer-popover {
+  position: fixed;
+  z-index: 1300;
+  max-height: 345px;
+}
+
+.chat-composer-popover > .chat-model-selector__dropdown {
+  display: block;
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 // ── Action buttons (image, etc.) — desktop circle style ──────────────────────
 
 .chat-page__action-btn {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: var(--openbitfun-space-12);
+  height: var(--openbitfun-space-12);
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -319,8 +337,8 @@
 
 .chat-page__send-btn {
   position: relative;
-  width: 24px;
-  height: 24px;
+  width: var(--openbitfun-space-12);
+  height: var(--openbitfun-space-12);
   border-radius: 50%;
   border: 1px solid var(--openbitfun-color-border-subtle);
   background: var(--openbitfun-color-action-neutral-surface);
@@ -410,8 +428,8 @@
 
 .chat-page__image-thumb {
   position: relative;
-  width: 46px;
-  height: 46px;
+  width: 72px;
+  height: 72px;
   border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
@@ -421,14 +439,14 @@
 }
 
 .chat-page__image-remove {
-  --_mobile-icon-button-size: 16px;
+  --_mobile-icon-button-size: 44px;
   --_mobile-icon-size: 12px;
 
   position: absolute;
   top: 2px;
   right: 2px;
-  width: 16px;
-  height: 16px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--openbitfun-color-overlay-scrim);
   color: var(--openbitfun-color-content-on-dark);
@@ -461,4 +479,166 @@
     &:nth-child(2) { animation-delay: 0.15s; }
     &:nth-child(3) { animation-delay: 0.3s; }
   }
+}
+
+// Both presentations share the same options and selected-state semantics.
+.chat-model-selector__option[aria-pressed]::after {
+  content: '';
+  flex: 0 0 8px;
+  width: 8px;
+  height: 14px;
+  margin: 0 4px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  visibility: hidden;
+}
+
+.chat-model-selector__option[aria-pressed='true']::after {
+  visibility: visible;
+}
+
+.chat-composer-sheet {
+  max-block-size: min(calc(var(--mobile-viewport-height) - 16px), 680px);
+}
+
+.chat-composer-sheet__close {
+  width: 48px;
+  height: 48px;
+}
+
+.chat-composer-sheet > [data-openbitfun-part='header'] {
+  align-items: center;
+  text-align: left;
+}
+
+.chat-composer-sheet .chat-model-selector__dropdown {
+  position: static;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.chat-composer-sheet .chat-model-selector__header {
+  display: none;
+}
+
+.chat-composer-sheet .chat-model-selector__list {
+  flex: none;
+  overflow: visible;
+}
+
+.chat-composer-sheet .chat-model-selector__option {
+  min-block-size: 56px;
+  padding: 12px;
+}
+
+.chat-composer-sheet .chat-model-selector__option-name-text,
+.chat-composer-sheet .chat-model-selector__option-meta,
+.chat-composer-sheet .chat-model-selector__option-meta-line {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.chat-model-selector__group-title {
+  padding: 12px;
+  margin: 0;
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+}
+.chat-model-selector__search { margin: 12px; inline-size: calc(100% - 24px); }
+.chat-model-selector__empty, .chat-reasoning-options > p { padding: 12px; }
+.chat-reasoning-options { border-top: 1px solid var(--openbitfun-color-border-subtle); }
+
+// Conversation composer layout and skin. Shared geometry belongs to MobileComposer.
+.chat-page__composer {
+  padding: 0 8px;
+  border-color: var(--openbitfun-color-border-subtle);
+  border-radius: 28px;
+  background: var(--openbitfun-color-surface-panel);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--openbitfun-color-content-primary) 9%, transparent);
+}
+
+.chat-page__composer[data-expanded='true'] {
+  height: auto;
+  max-height: none;
+  padding: 8px;
+  border-radius: 18px;
+}
+
+.chat-page__composer[data-expanded='true'] [data-openbitfun-part='editor'] {
+  min-height: 60px;
+}
+
+.chat-page__composer-leading {
+  display: grid;
+  place-items: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--openbitfun-color-content-primary);
+}
+
+.chat-page__input-wrap.is-expanded .chat-page__composer-leading {
+  display: none;
+}
+
+.chat-page__input-wrap.is-expanded .chat-page__input-area {
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 60px;
+}
+
+.chat-page__input-wrap.is-expanded .chat-page__input {
+  min-height: 58px;
+  max-height: 144px;
+  padding: 8px;
+}
+
+.chat-page__input:focus,
+.chat-page__input:focus-visible {
+  outline: 0;
+  outline-offset: 0;
+}
+
+.chat-page__input-wrap.is-expanded .chat-page__action-btn {
+  width: 48px;
+  height: 48px;
+  color: var(--openbitfun-color-content-primary);
+}
+
+.chat-page__input-placeholder {
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-flow-title-font-size);
+  opacity: 1;
+}
+
+.chat-page__send-btn { border-radius: 20px; }
+
+.chat-page__send-btn.is-stop:focus-visible {
+  outline: 2px solid var(--openbitfun-color-focus-ring);
+  outline-offset: 2px;
+}
+
+.chat-page__scroll-to-bottom {
+  bottom: calc(var(--mobile-viewport-bottom) + var(--chat-composer-height) + max(12px, env(safe-area-inset-bottom, 0px)) + 12px);
+  background: var(--openbitfun-color-surface-panel);
+}
+
+
+.chat-reasoning-options .chat-model-selector__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 4px;
+  padding: 0 12px 12px;
 }

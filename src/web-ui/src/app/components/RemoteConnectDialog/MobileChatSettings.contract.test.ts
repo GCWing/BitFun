@@ -11,22 +11,26 @@ const modelControlsSource = readFileSync(
 );
 
 describe('mobile chat settings interaction contracts', () => {
-  it('dismisses model and reasoning menus before starting a remote write', () => {
-    const modelSelector = modelControlsSource.slice(
-      modelControlsSource.indexOf('export const ModelSelectorPill'),
-      modelControlsSource.indexOf('export const ReasoningPresetPill'),
-    );
-    const reasoningSelector = modelControlsSource.slice(
-      modelControlsSource.indexOf('export const ReasoningPresetPill'),
-    );
-
-    for (const selector of [modelSelector, reasoningSelector]) {
-      const handler = selector.slice(selector.indexOf('const handleSelect'));
+  it('dismisses the combined model panel before either remote selection write', () => {
+    for (const [handlerName, remoteCallback] of [
+      ['handleSelect', 'onSelect'],
+      ['handleSelectReasoning', 'onSelectReasoning'],
+    ]) {
+      const handlerStart = modelControlsSource.indexOf(`const ${handlerName} =`);
+      expect(handlerStart).toBeGreaterThanOrEqual(0);
+      const handler = modelControlsSource.slice(
+        handlerStart,
+        modelControlsSource.indexOf('\n  };', handlerStart),
+      );
       expect(handler.indexOf('setOpen(false);')).toBeGreaterThanOrEqual(0);
       expect(handler.indexOf('setOpen(false);')).toBeLessThan(
-        handler.indexOf('void onSelect('),
+        handler.indexOf(`void ${remoteCallback}(`),
       );
     }
+
+    expect(modelControlsSource).toMatch(
+      /<ReasoningPresetOptions\b[^>]*onSelect=\{handleSelectReasoning\}/,
+    );
   });
 
   it('optimistically updates a reasoning choice and rolls it back on failure', () => {

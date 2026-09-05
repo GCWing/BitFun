@@ -1652,7 +1652,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                   <MobileStatus className="harmony-sidebar__empty" loading title={t('common.loading')} />
                 )}
                 {!compactDirectoryLoading && compactWorkspaces.length === 0 && (
-                  <MobileStatus className="harmony-sidebar__empty" description={t('sessions.noWorkspaces')} />
+                  <MobileStatus className="harmony-sidebar__empty" description={connectionHealth === 'unreachable' ? t('sessions.connectionUnreachable') : t('sessions.noWorkspaces')} />
                 )}
                 {compactWorkspaces.slice(0, compactVisibleWorkspaceCount).map((workspace) => {
                   const key = compactWorkspaceKey(workspace);
@@ -1735,7 +1735,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
               <h2>{t('shell.recentConversations')}</h2>
             </div>
             {visibleSessions.length === 0 ? (
-              <MobileStatus className="harmony-sidebar__empty" description={hasSearchQuery ? t('sessions.emptySearch') : t('sessions.noSessions')} />
+              <MobileStatus className="harmony-sidebar__empty" description={connectionHealth === 'unreachable' ? t('sessions.connectionUnreachable') : hasSearchQuery ? t('sessions.emptySearch') : t('sessions.noSessions')} />
             ) : (
               <div className="harmony-sidebar__rows">
                 {visibleSessions.slice(0, compactRecentVisibleCount).map((session) => (

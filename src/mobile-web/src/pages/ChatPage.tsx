@@ -20,7 +20,6 @@ import {
   ModelSelectorPill,
   normalizeSelectedModelId,
   persistLastSelectedModelId,
-  ReasoningPresetPill,
   resolvePreferredModelSelection,
 } from '../components/ChatModelControls';
 import ChatMessageActions from '../components/ChatMessageActions';
@@ -83,6 +82,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     currentWorkspace,
     authenticatedUserId,
     controlTarget,
+    connectionHealth,
     updateSessionName,
   } = useMobileStore();
 
@@ -102,6 +102,30 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputBarRef = useRef<HTMLDivElement>(null);
+  const [composerHeight, setComposerHeight] = useState(56);
+
+  useLayoutEffect(() => {
+    const bar = inputBarRef.current;
+    if (!bar) return;
+    const measure = () => setComposerHeight(Math.ceil(bar.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const editor = inputRef.current;
+    if (!editor) return;
+    const resize = () => {
+      editor.style.height = 'auto';
+      editor.style.height = `${editor.scrollHeight}px`;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [input, inputExpanded, wideLayout]);
+
   const pollerRef = useRef<SessionPoller | null>(null);
   const messagesRequestSeqRef = useRef(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -250,7 +274,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
       if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
       pollerRef.current?.nudge();
     } catch (err) {
-      reportRemoteSessionError(err, setError);
       throw err;
     }
   }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError]);
@@ -263,7 +286,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
       if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
       pollerRef.current?.nudge();
     } catch (err) {
-      reportRemoteSessionError(err, setError);
       throw err;
     }
   }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, setError, t]);
@@ -823,6 +845,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   }, [isStreaming]);
 
   const handleSend = useCallback(async () => {
+    if (useMobileStore.getState().connectionHealth === 'unreachable') return;
     const text = input.trim();
     const imgs = pendingImages;
     if ((!text && imgs.length === 0) || imageAnalyzing) return;
@@ -931,6 +954,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
   useEffect(() => {
     if (!inputExpanded) return;
     const handleClickOutside = (e: MouseEvent) => {
+      // Portaled composer menus are logically inside the input bar. Collapsing
+      // here would unmount their options before the subsequent click arrives.
+      if (e.target instanceof Element && e.target.closest('[data-composer-popover]')) return;
       if (inputBarRef.current && !inputBarRef.current.contains(e.target as Node)) {
         if (!input.trim() && pendingImages.length === 0) {
           setInputExpanded(false);
@@ -982,7 +1008,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const displayName = liveTitle || sessionName || t('chat.session');
 
   return (
-    <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`}>
+    <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${composerHeight}px` } as React.CSSProperties}>
       <ChatHeader
         deviceName={controlTarget && !controlTarget.isHome ? controlTarget.deviceName || undefined : undefined}
         displayName={displayName}
@@ -1058,7 +1084,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         onResend={() => void handleResendMessage()}
       />
 
-      {/* Floating Input Bar — two-stage (matches desktop ChatInput) */}
+      {/* Floating composer with compact and expanded touch layouts. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -1074,10 +1100,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
         imageAnalyzing={imageAnalyzing}
         input={input}
         inputRef={inputRef}
+        remoteUnavailable={connectionHealth === 'unreachable'}
         modelControls={(
           <>
-            <ModelSelectorPill catalog={modelCatalog} selectedModelId={selectedModelId} disabled={imageAnalyzing || isStreaming || modelUpdating} onSelect={handleSelectModel} />
-            <ReasoningPresetPill catalog={modelCatalog} selectedModelId={selectedModelId} disabled={imageAnalyzing || isStreaming || modelUpdating} onSelect={handleSelectReasoningPreset} />
+            <ModelSelectorPill catalog={modelCatalog} selectedModelId={selectedModelId} disabled={connectionHealth === 'unreachable' || imageAnalyzing || isStreaming || modelUpdating} onSelect={handleSelectModel} onSelectReasoning={handleSelectReasoningPreset} />
           </>
         )}
         onActivate={expandInput}

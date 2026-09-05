@@ -19,8 +19,8 @@
   align-items: center;
   gap: var(--size-gap-2);
   padding: var(--size-gap-2) var(--size-gap-3);
-  min-height: 32px;
-  min-block-size: 32px;
+  min-height: 48px;
+  min-block-size: 48px;
   cursor: pointer;
   transition: background var(--motion-fast) var(--easing-standard);
 
@@ -71,46 +71,7 @@
   flex-direction: column;
   gap: var(--size-gap-1);
   padding: var(--size-gap-2);
-  max-height: 140px;
   border-top: 1px solid var(--openbitfun-color-border-subtle);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-
-  // Prevent cards from shrinking inside the flex scroll container
-  .chat-tool-card {
-    flex-shrink: 0;
-  }
-
-  // Fade at top edge to hint more content
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0px,
-    currentColor 16px,
-    currentColor 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0px,
-    currentColor 16px,
-    currentColor 100%
-  );
-
-  // Thin scrollbar
-  &::-webkit-scrollbar {
-    width: 3px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--openbitfun-color-content-muted);
-    border-radius: 2px;
-    opacity: 0.4;
-  }
 }
 
 .chat-tool-card {
@@ -143,7 +104,7 @@
   gap: var(--size-gap-2);
   padding: var(--size-gap-2) var(--size-gap-3);
   cursor: pointer;
-  min-height: 36px;
+  min-height: var(--openbitfun-space-12);
 }
 
 .chat-tool-card__icon {
@@ -206,8 +167,8 @@
   border-radius: var(--size-radius-sm);
   font-size: var(--openbitfun-type-support-font-size);
   font-weight: var(--openbitfun-type-label-lg-font-weight);
-  background: var(--openbitfun-color-accent-surface);
-  color: var(--openbitfun-color-accent-default);
+  background: transparent;
+  color: var(--openbitfun-color-content-secondary);
   flex-shrink: 0;
 }
 
@@ -223,27 +184,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  min-block-size: 20px;
+  width: 48px;
+  height: 48px;
+  min-block-size: 48px;
   padding: 0;
-  border-radius: var(--size-radius-sm);
+  border-radius: var(--size-radius-base);
   border: none;
-  background: var(--openbitfun-color-status-danger-content);
-  color: var(--openbitfun-color-action-primary-content);
-  cursor: pointer;
+  background: transparent;
+  color: var(--openbitfun-color-status-danger-content);
   flex-shrink: 0;
-  transition: all var(--motion-fast) var(--easing-standard);
   margin-left: auto;
-  box-shadow: 0 1px 4px var(--openbitfun-color-status-danger-border);
-
-  &:active {
-    transform: scale(0.9);
-  }
-
-  svg {
-    flex-shrink: 0;
-  }
 }
 
 // Expanded content area
@@ -274,9 +224,9 @@
 }
 
 .chat-tool-approval__button {
-  min-block-size: 32px;
-  height: 32px;
-  padding-inline: 12px;
+  min-block-size: 48px;
+  height: auto;
+  padding: 10px 12px;
   border-radius: 16px;
 }
 
@@ -322,7 +272,7 @@
   align-items: center;
   gap: var(--size-gap-2);
   padding: var(--size-gap-2) var(--size-gap-3);
-  min-height: 36px;
+  min-height: var(--openbitfun-space-12);
 }
 
 .chat-task-card__summary {
@@ -331,8 +281,8 @@
   gap: var(--size-gap-2);
   padding: 4px var(--size-gap-3);
   border-top: 1px solid var(--openbitfun-color-border-subtle);
-  min-height: 24px;
-  min-block-size: 24px;
+  min-height: 48px;
+  min-block-size: 48px;
   cursor: pointer;
   transition: background var(--motion-fast) var(--easing-standard);
 
@@ -379,29 +329,7 @@
 
 .chat-task-card__steps {
   border-top: 1px solid var(--openbitfun-color-border-subtle);
-  max-height: 140px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
   padding: var(--size-gap-1) var(--size-gap-3);
-
-  mask-image: linear-gradient(to bottom, transparent 0px, currentColor 8px, currentColor 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, currentColor 8px, currentColor 100%);
-
-  &::-webkit-scrollbar {
-    width: 3px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--openbitfun-color-content-muted);
-    border-radius: 2px;
-    opacity: 0.4;
-  }
 }
 
 .chat-task-card__step {
@@ -562,8 +490,8 @@
   border-radius: var(--size-radius-sm);
   font-size: var(--openbitfun-type-support-font-size);
   font-weight: var(--openbitfun-type-label-lg-font-weight);
-  background: var(--openbitfun-color-accent-surface);
-  color: var(--openbitfun-color-accent-default);
+  background: transparent;
+  color: var(--openbitfun-color-content-secondary);
   flex-shrink: 0;
 }
 
@@ -683,8 +611,8 @@
   gap: var(--size-gap-2);
   padding: var(--size-gap-2) var(--size-gap-3);
   cursor: pointer;
-  min-height: 36px;
-  min-block-size: 36px;
+  min-height: var(--openbitfun-space-12);
+  min-block-size: var(--openbitfun-space-12);
   transition: background var(--motion-fast) var(--easing-standard);
 
   &:active {
@@ -817,4 +745,52 @@
     color: var(--openbitfun-color-accent-default);
     font-weight: var(--openbitfun-type-label-lg-font-weight);
   }
+}
+
+// Routine work stays quiet; decisions and failures retain a visible container.
+.chat-tool-card:not([data-prominent='true']),
+.chat-task-card:not([data-prominent='true']),
+.chat-tool-list--collapsed {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.chat-tool-card[data-prominent='true'],
+.chat-task-card[data-prominent='true'] {
+  border-radius: 16px;
+  background: var(--openbitfun-color-surface-panel);
+}
+
+.chat-tool-approval__label { font-weight: var(--openbitfun-type-label-lg-font-weight); }
+.chat-tool-approval__error { color: var(--openbitfun-color-status-danger-content); }
+.chat-tool-approval p { margin: 0 0 12px; }
+.chat-tool-details__trigger { min-block-size: 48px; margin-inline: 12px; }
+.chat-read-tools { display: grid; gap: 4px; padding-inline: 12px; }
+.chat-tool-details { max-block-size: calc(var(--mobile-viewport-height) - 16px); }
+.chat-tool-details__payload {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  line-height: var(--openbitfun-line-height-reading);
+}
+
+.chat-tool-details__trigger--inline {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.chat-tool-approval__request {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  line-height: var(--openbitfun-line-height-reading);
 }

@@ -60,10 +60,10 @@ export default function ChatHeader({
   const subtitle = deviceName || workspaceName;
 
   return (
-    <div className="chat-page__header">
+    <div className="chat-page__header" data-has-context={Boolean(subtitle)}>
       <div className="chat-page__header-row">
         <MobileIconButton
-          appearance="floating"
+          appearance="plain"
           aria-hidden={wideLayout || undefined}
           aria-label={t('common.back')}
           className="chat-page__back"
@@ -96,7 +96,7 @@ export default function ChatHeader({
         </div>
         <div className="chat-page__header-right" ref={menuRef}>
           <MobileIconButton
-            appearance="floating"
+            appearance="plain"
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-label={t('common.more')}
