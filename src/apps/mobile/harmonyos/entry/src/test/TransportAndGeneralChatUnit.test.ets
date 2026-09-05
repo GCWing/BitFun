@@ -881,7 +881,7 @@ export default function transportAndGeneralChatUnitTest() {
 
       expect(policy.shouldPromptForAccount(descriptor)).assertTrue();
       expect(policy.shouldPromptForAccount(descriptor, true, 'alice', descriptor.relayUrl)).assertFalse();
-      expect(policy.shouldPromptForAccount(descriptor, true, 'bob', descriptor.relayUrl)).assertTrue();
+      expect(policy.shouldPromptForAccount(descriptor, true, 'bob', descriptor.relayUrl)).assertFalse();
     });
   });
 

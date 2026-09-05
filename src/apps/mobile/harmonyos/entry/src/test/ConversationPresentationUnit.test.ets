@@ -775,9 +775,17 @@ export default function conversationPresentationUnitTest() {
       )).assertEqual(DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD);
     });
 
-    it('still asks for a password when the QR belongs to a different account', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'bob', 'desktop-1'))
-        .assertEqual(DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD);
+    it('uses the authenticated device directory instead of display-name equality', 0, () => {
+      expect(ConnectScanDecisionPolicy.decide(
+        true, true, 'alice', 'bob', 'desktop-1',
+        'https://relay.example.com', 'wss://relay.example.com/ws'
+      ))
+        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
+      expect(ConnectScanDecisionPolicy.decide(
+        true, true, '', 'renamed-account', 'desktop-1',
+        'https://relay.example.com', 'https://relay.example.com/'
+      ))
+        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
     });
   });
 
