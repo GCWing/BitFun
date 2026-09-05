@@ -93,6 +93,11 @@ The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When
 cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
 
+For staged application-update cache and signature behavior, use
+`cargo test -p openbitfun-desktop --lib api::update_api::tests`.
+After changing updater command registration, also run
+`cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
+
 If the change affects startup, WebDriver, browser/computer-use, or packaged behavior, also run:
 
 ```bash

@@ -205,7 +205,9 @@ async fn probe_endpoint_throughput(client: &reqwest::Client, url: &str) -> u64 {
 
 /// Build an updater whose endpoints are ordered by measured throughput.
 /// Falls back to the bundled configuration if the builder rejects them.
-async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+pub(super) async fn ranked_updater(
+    app: &AppHandle,
+) -> Result<tauri_plugin_updater::Updater, String> {
     let endpoints = updater_endpoints_by_policy().await;
     let builder = app.updater_builder();
     let builder = match builder.endpoints(endpoints) {
@@ -218,7 +220,9 @@ async fn ranked_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater
             app.updater_builder()
         }
     };
-    builder.build().map_err(|error| error.to_string())
+    crate::api::update_api::with_update_exit_cleanup(builder, app)
+        .build()
+        .map_err(|error| error.to_string())
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -319,8 +323,8 @@ pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Re
     let progress = Arc::new(Mutex::new((0u64, None::<u64>)));
     let progress_chunk = Arc::clone(&progress);
     let app_chunk = app_handle.clone();
-    update
-        .download_and_install(
+    let bytes = update
+        .download(
             move |chunk_len, content_len| {
                 let (downloaded, total) = {
                     let mut g = progress_chunk
@@ -353,7 +357,10 @@ pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Re
             },
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || update.install(bytes).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[derive(Debug, Deserialize)]

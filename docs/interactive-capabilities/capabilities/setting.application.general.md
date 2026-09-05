@@ -19,8 +19,8 @@ Manage app-level preferences for startup, updates, close behavior, notifications
 
 - **Agent 可直接控制 / Direct Agent control** · 启用或停用自动检查更新
   - Enable or disable automatic update checks
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 手动检查、下载并安装可用更新，然后按需重启
-  - Check for, download, and install an available update manually, then restart when needed
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 手动检查并后台下载更新，确认后安装并重启，或稍后从关于页面安装
+  - Check and download updates in the background, then confirm installation and restart or install later from About
 - **Agent 可直接控制 / Direct Agent control** · 控制 OpenBitFun 是否在登录系统后自动启动
   - Choose whether OpenBitFun launches automatically after system sign-in
 - **Agent 可直接控制 / Direct Agent control** · 控制 OpenBitFun 运行期间是否阻止电脑自动睡眠
