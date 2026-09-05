@@ -333,38 +333,29 @@ describeWithJsdom('AgentsScene', () => {
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
   });
 
-  it('shows Harness as a three-stop rail with a separate creative direction', async () => {
+  it('presents four Harness strategies as descriptive content between task and result', async () => {
     const { default: AgentsScene } = await import('./AgentsScene');
 
     await act(async () => {
       root.render(<AgentsScene />);
     });
 
-    const minimal = container.querySelector<HTMLElement>('[data-testid="agents-harness-minimal"]');
-    const balanced = container.querySelector<HTMLElement>('[data-testid="agents-harness-balanced"]');
-    const ultimate = container.querySelector<HTMLElement>('[data-testid="agents-harness-ultimate"]');
-    const creative = container.querySelector<HTMLElement>('[data-testid="agents-harness-creative"]');
-    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-profile')).toHaveLength(3);
-    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-rail-node')).toHaveLength(3);
-    expect(container.querySelectorAll('.openbitfun-agents-scene__harness-rail-node.is-default')).toHaveLength(1);
-    expect(container.querySelector('.openbitfun-agents-scene__harness-presentation')).toBeTruthy();
-    expect(container.querySelector('.openbitfun-agents-scene__harness-track')).toBeTruthy();
-    expect(container.querySelector('.openbitfun-agents-scene__harness-creative')).toBe(creative);
-    expect(container.querySelector('.openbitfun-agents-scene__harness-step')).toBeNull();
-    expect(container.querySelector('.openbitfun-agents-scene__harness-card')).toBeNull();
-    expect(minimal).toBeTruthy();
-    expect(minimal?.tagName).toBe('DIV');
-    expect(container.querySelector('.openbitfun-agents-scene__harness-step-status')).toBeNull();
-    expect(minimal?.dataset.openbitfunState).toBeUndefined();
-    expect(ultimate?.dataset.openbitfunState).toBeUndefined();
-    expect(minimal?.dataset.harnessGear).toBe('1');
-    expect(balanced?.dataset.harnessGear).toBe('2');
-    expect(ultimate?.dataset.harnessGear).toBe('3');
-    expect(creative?.dataset.harnessGear).toBe('creative');
-    expect(minimal?.textContent).toContain('harnessZone.profiles.minimal.purpose');
-    expect(minimal?.textContent).not.toContain('harnessZone.connected');
-    expect(ultimate?.textContent).not.toContain('harnessZone.comingSoon');
-    expect(creative?.querySelector('[data-openbitfun-name="creative"]')).toBeTruthy();
+    const presentation = container.querySelector('.openbitfun-agents-scene__harness-presentation');
+    expect(presentation?.getAttribute('aria-label')).toBe('harnessZone.flowCaption');
+    expect(presentation?.querySelectorAll('[data-openbitfun-component="harness-profile-step"]')).toHaveLength(4);
+    expect(Array.from(presentation?.querySelectorAll('.openbitfun-agents-scene__harness-endpoint') ?? [])
+      .map(node => node.textContent)).toEqual(['harnessZone.task', 'harnessZone.result']);
+
+    for (const id of ['minimal', 'balanced', 'ultimate', 'creative']) {
+      const profile = container.querySelector<HTMLElement>(`[data-testid="agents-harness-${id}"]`);
+      expect(profile?.dataset.openbitfunProfile).toBe(id);
+      expect(profile?.textContent).toContain(`harnessZone.profiles.${id}.name`);
+      expect(profile?.textContent).toContain(`harnessZone.profiles.${id}.purpose`);
+      expect(profile?.tagName).toBe('DIV');
+      expect(profile?.dataset.openbitfunState).toBeUndefined();
+    }
+    expect(presentation?.querySelector('button, [role="button"], [tabindex]')).toBeNull();
+    expect(presentation?.textContent).not.toMatch(/harnessZone\.(connected|comingSoon)/);
 
     expect(notificationInfoMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();

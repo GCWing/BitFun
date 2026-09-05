@@ -9,17 +9,36 @@ const service = vi.hoisted(() => ({
   toggleCenter: vi.fn(),
   markAllAsRead: vi.fn(),
   clearHistory: vi.fn(),
+  deleteFromHistory: vi.fn(),
+  markAsRead: vi.fn(),
+}));
+
+const notificationState = vi.hoisted(() => ({
+  centerOpen: true,
+  notificationHistory: [{
+    id: 'history-1',
+    type: 'info' as const,
+    variant: 'toast' as const,
+    title: 'Notice',
+    message: 'Notification message',
+    timestamp: Date.now(),
+    read: false,
+  }],
+  activeNotifications: [],
+  unreadCount: 1,
+  config: {},
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({
+    t: (key: string) => key,
+    formatDate: () => '12:00',
+    formatNumber: (value: number) => String(value),
+  }),
 }));
 
 vi.mock('../hooks/useNotificationState', () => ({
-  useCenterOpen: () => true,
-  useNotificationHistory: () => [],
-  useAllProgressNotifications: () => [],
-  useAllLoadingNotifications: () => [],
+  useNotificationState: () => notificationState,
 }));
 
 vi.mock('../services/NotificationService', () => ({ notificationService: service }));

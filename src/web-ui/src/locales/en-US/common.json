@@ -1047,6 +1047,7 @@
     "copy": "Copy",
     "copyCommit": "Copy commit hash",
     "dialogTitle": "About OpenBitFun",
+    "brandStatement": "AGENTS\nFOR A MORE\nOPEN WORLD",
     "tagline": "Agent Runtime · Built for intelligent agents",
     "details": "Version and build information",
     "version": "Version {{version}}",
@@ -1062,8 +1063,8 @@
     "nightlyBuild": "Nightly",
     "copyright": "© 2025 OpenBitFun. All rights reserved.",
     "allRightsReserved": "All rights reserved.",
-    "githubStarTitle": "Finding OpenBitFun useful? Give it a Star on GitHub",
-    "githubStarDescription": "Your support helps more people discover OpenBitFun and keeps us improving it.",
+    "githubStarTitle": "Enjoying OpenBitFun?",
+    "githubStarDescription": "Star us on GitHub to help more people discover it.",
     "githubStarAction": "Star on GitHub",
     "updateSectionTitle": "App updates",
     "updateSectionHint": "Keep OpenBitFun up to date for the latest fixes and features."

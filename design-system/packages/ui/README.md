@@ -37,6 +37,12 @@ matching component slot, just as for SVG icons. These slots constrain catalog
 icons to the component's size; a standalone `Icon` retains its explicit size
 (24px by default). Do not shrink the catalog globally to correct a slot mismatch.
 
+`IconButton` defaults to `quiet`: its resting surface is transparent, hover and
+pressed states use shared action feedback, and keyboard focus keeps a visible
+focus ring. Use it for toolbar, dialog, and row utilities. `fill` and `primary`
+keep an opaque backing surface for persistent emphasis. Disabled quiet actions
+remain transparent and do not show hover or pressed feedback.
+
 The catalog uses exported vectors, including their view boxes and per-path
 opacity. Theme colors remain caller-owned through `currentColor`. Asset
 fingerprints are reviewed with intentional resource updates so replacing a

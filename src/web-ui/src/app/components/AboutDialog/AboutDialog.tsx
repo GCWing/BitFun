@@ -7,19 +7,19 @@
 import {
   Alert,
   Button,
+  FieldGroup,
+  FieldRow,
   Icon,
-  ScrollArea,
+  IconButton,
+  StatusPill,
   Tooltip,
   Dialog,
   DialogBody,
   DialogClose,
-  DialogHeader,
-  DialogHeading,
   DialogTitle,
 } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { CalendarDays, Code2, ShieldCheck, Tag } from 'lucide-react';
 import {
   formatBuildDate,
   formatDisplayedVersion,
@@ -36,19 +36,6 @@ import './AboutDialog.scss';
 
 const log = createLogger('AboutDialog');
 const GITHUB_REPOSITORY_URL = 'https://github.com/GCWing/OpenBitFun';
-const ABOUT_DOT_MATRIX_COLUMNS = 13;
-const ABOUT_DOT_MATRIX_ROWS = 7;
-const ABOUT_DOT_MATRIX = Array.from(
-  { length: ABOUT_DOT_MATRIX_COLUMNS * ABOUT_DOT_MATRIX_ROWS },
-  (_, index) => {
-    const column = index % ABOUT_DOT_MATRIX_COLUMNS;
-    const row = Math.floor(index / ABOUT_DOT_MATRIX_COLUMNS);
-    return {
-      id: index,
-      opacity: Math.max(0.12, 0.44 - column * 0.017 - row * 0.022),
-    };
-  },
-);
 
 interface AboutDialogProps {
   /** Whether visible */
@@ -195,51 +182,175 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
       <Dialog
         open={isOpen}
         onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
-        size="2xl"
+        size="xl"
+        className="openbitfun-about-dialog"
+        aria-label={t('about.dialogTitle')}
         data-testid="about-dialog-modal"
       >
-        <DialogHeader>
-          <DialogHeading>
-            <DialogTitle>{t('about.dialogTitle')}</DialogTitle>
-          </DialogHeading>
-          <DialogClose />
-        </DialogHeader>
+        <DialogClose className="openbitfun-about-dialog__close" />
         <DialogBody className="openbitfun-about-dialog__modal-content" inset="none">
-        <div
-          className="openbitfun-about-dialog__content"
-          data-openbitfun-component="about-dialog"
-          data-openbitfun-part="root"
-        >
-          <div className="openbitfun-about-dialog__body">
-            <ScrollArea
-              className="openbitfun-about-dialog__brand"
-              data-openbitfun-component="about-dialog"
-              data-openbitfun-part="hero"
-              aria-labelledby="openbitfun-about-product-name"
-            >
-              <div className="openbitfun-about-dialog__brand-copy">
-                <h1
-                  id="openbitfun-about-product-name"
-                  className="openbitfun-about-dialog__title"
-                  data-openbitfun-component="about-dialog"
-                  data-openbitfun-part="title"
-                >
-                  {version.name}
-                </h1>
-                <p className="openbitfun-about-dialog__tagline">{t('about.tagline')}</p>
+          <div
+            className="openbitfun-about-dialog__content"
+            data-openbitfun-component="about-dialog"
+            data-openbitfun-part="root"
+          >
+            <div className="openbitfun-about-dialog__body">
+              <div
+                className="openbitfun-about-dialog__brand"
+                data-openbitfun-component="about-dialog"
+                data-openbitfun-part="hero"
+                aria-hidden="true"
+              >
+                <div className="openbitfun-about-dialog__artwork">
+                  <img
+                    className="openbitfun-about-dialog__brand-mark openbitfun-about-dialog__brand-mark--dark"
+                    src="/brand/openbitfun-mark-dark.png"
+                    alt=""
+                    width={512}
+                    height={512}
+                    draggable={false}
+                  />
+                  <img
+                    className="openbitfun-about-dialog__brand-mark openbitfun-about-dialog__brand-mark--light"
+                    src="/brand/openbitfun-mark-light.png"
+                    alt=""
+                    width={512}
+                    height={512}
+                    draggable={false}
+                  />
+                </div>
+                <p className="openbitfun-about-dialog__brand-statement">
+                  {t('about.brandStatement')}
+                </p>
               </div>
 
-              <div className="openbitfun-about-dialog__release">
-                <div className="openbitfun-about-dialog__release-summary">
-                  <span className="openbitfun-about-dialog__release-version">{displayedVersion}</span>
-                  <span
-                    className="openbitfun-about-dialog__channel-badge"
+              <section
+                className="openbitfun-about-dialog__metadata"
+                data-openbitfun-component="about-dialog"
+                data-openbitfun-part="content"
+                aria-label={t('about.details')}
+              >
+                <header className="openbitfun-about-dialog__brand-copy">
+                  <DialogTitle
+                    className="openbitfun-about-dialog__title"
                     data-openbitfun-component="about-dialog"
-                    data-openbitfun-part="channelBadge"
+                    data-openbitfun-part="title"
                   >
-                    {releaseLabel}
-                  </span>
-                </div>
+                    {version.name}
+                  </DialogTitle>
+                  <p className="openbitfun-about-dialog__tagline">{t('about.tagline')}</p>
+                </header>
+
+                <FieldGroup className="openbitfun-about-dialog__details" appearance="plain" dividers={false}>
+                  <FieldRow padding="none">
+                    <dl className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
+                      <dt className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
+                        <span>{t('about.versionLabel')}</span>
+                      </dt>
+                      <dd className="openbitfun-about-dialog__info-value-group">
+                        <span
+                          className="openbitfun-about-dialog__info-value"
+                          data-openbitfun-component="about-dialog"
+                          data-openbitfun-part="infoValue"
+                          data-testid="about-version-value"
+                        >
+                          {displayedVersion}
+                        </span>
+                        <span
+                          className="openbitfun-about-dialog__channel-badge"
+                          data-openbitfun-component="about-dialog"
+                          data-openbitfun-part="channelBadge"
+                        >
+                          <StatusPill tone="neutral">{releaseLabel}</StatusPill>
+                        </span>
+                      </dd>
+                    </dl>
+                  </FieldRow>
+
+                  <FieldRow padding="none">
+                    <dl className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
+                      <dt className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
+                        <span>{t('about.buildDate')}</span>
+                      </dt>
+                      <dd className="openbitfun-about-dialog__info-value-group">
+                        <span className="openbitfun-about-dialog__info-value" data-openbitfun-component="about-dialog" data-openbitfun-part="infoValue">
+                          {formatBuildDate(version.buildDate)}
+                        </span>
+                      </dd>
+                    </dl>
+                  </FieldRow>
+
+                  <FieldRow padding="none">
+                    <dl className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
+                      <dt className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
+                        <span>{t('about.commit')}</span>
+                      </dt>
+                      <dd className="openbitfun-about-dialog__info-value-group">
+                        <span
+                          className="openbitfun-about-dialog__info-value openbitfun-about-dialog__info-value--mono"
+                          data-openbitfun-component="about-dialog"
+                          data-openbitfun-part="infoValue"
+                        >
+                          {version.gitCommit ?? t('about.notAvailable')}
+                        </span>
+                        {version.gitCommit ? (
+                          <span
+                            className="openbitfun-about-dialog__copy-action"
+                            data-openbitfun-component="about-dialog"
+                            data-openbitfun-part="copyButton"
+                          >
+                            <Tooltip content={t('about.copy')}>
+                              <IconButton
+                                size="xs"
+                                variant="quiet"
+                                icon={<Icon name={copiedItem === 'commit' ? 'check-line' : 'duplicate'} size="sm" />}
+                                onClick={() => void copyToClipboard(version.gitCommit ?? '', 'commit')}
+                                aria-label={t('about.copyCommit')}
+                              />
+                            </Tooltip>
+                          </span>
+                        ) : null}
+                      </dd>
+                    </dl>
+                  </FieldRow>
+
+                  <FieldRow padding="none">
+                    <dl className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
+                      <dt className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
+                        <span>{t('about.branch')}</span>
+                      </dt>
+                      <dd className="openbitfun-about-dialog__info-value-group">
+                        <span
+                          className="openbitfun-about-dialog__info-value"
+                          data-openbitfun-component="about-dialog"
+                          data-openbitfun-part="infoValue"
+                          data-testid="about-branch-value"
+                          title={version.gitBranch}
+                        >
+                          {version.gitBranch ?? t('about.notAvailable')}
+                        </span>
+                      </dd>
+                    </dl>
+                  </FieldRow>
+
+                  <FieldRow padding="none">
+                    <dl className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
+                      <dt className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
+                        <span>{t('about.license')}</span>
+                      </dt>
+                      <dd className="openbitfun-about-dialog__info-value-group">
+                        <span
+                          className="openbitfun-about-dialog__info-value"
+                          data-openbitfun-component="about-dialog"
+                          data-openbitfun-part="license"
+                          data-testid="about-license-value"
+                        >
+                          {licenseName}
+                        </span>
+                      </dd>
+                    </dl>
+                  </FieldRow>
+                </FieldGroup>
 
                 {updateChecksAvailable ? (
                   <div
@@ -330,7 +441,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                       {updateStatus === 'installed' ? (
                         <div className="openbitfun-about-dialog__update-installed">
                           <div className="openbitfun-about-dialog__update-status openbitfun-about-dialog__update-status--success">
-                            <Icon name="check-circle" size="sm" aria-hidden="true" />
+                            <Icon name="check-circle" size="sm" className="openbitfun-about-dialog__update-status-icon" aria-hidden="true" />
                             <span>{t('update.installedMessage')}</span>
                           </div>
                           <Button variant="fill" size="sm" onClick={onRestart}>
@@ -349,152 +460,49 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                     </div>
                   </div>
                 ) : null}
-              </div>
-
-              <div
-                className="openbitfun-about-dialog__dot-matrix"
-                aria-hidden="true"
-                data-testid="about-dot-matrix"
-              >
-                {ABOUT_DOT_MATRIX.map(dot => (
-                  <span key={dot.id} style={{ opacity: dot.opacity }} />
-                ))}
-              </div>
-            </ScrollArea>
-
-            <ScrollArea
-              className="openbitfun-about-dialog__metadata"
-              data-openbitfun-component="about-dialog"
-              data-openbitfun-part="content"
-              aria-label={t('about.details')}
-            >
-              <div className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
-                <div className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
-                  <Tag size={21} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{t('about.versionLabel')}</span>
-                </div>
-                <span
-                  className="openbitfun-about-dialog__info-value openbitfun-about-dialog__info-value--version"
-                  data-openbitfun-component="about-dialog"
-                  data-openbitfun-part="infoValue"
-                  data-testid="about-version-value"
-                >
-                  {displayedVersion}
-                </span>
-              </div>
-
-              <div className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
-                <div className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
-                  <CalendarDays size={21} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{t('about.buildDate')}</span>
-                </div>
-                <span className="openbitfun-about-dialog__info-value" data-openbitfun-component="about-dialog" data-openbitfun-part="infoValue">
-                  {formatBuildDate(version.buildDate)}
-                </span>
-              </div>
-
-              <div className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
-                <div className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
-                  <Code2 size={21} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{t('about.commit')}</span>
-                </div>
-                <div className="openbitfun-about-dialog__info-value-group">
-                  <span
-                    className="openbitfun-about-dialog__info-value openbitfun-about-dialog__info-value--mono"
-                    data-openbitfun-component="about-dialog"
-                    data-openbitfun-part="infoValue"
-                  >
-                    {version.gitCommit ?? t('about.notAvailable')}
-                  </span>
-                  {version.gitCommit ? (
-                    <Tooltip content={t('about.copy')}>
-                      <button
-                        type="button"
-                        className="openbitfun-about-dialog__copy-btn"
-                        data-openbitfun-component="about-dialog"
-                        data-openbitfun-part="copyButton"
-                        onClick={() => void copyToClipboard(version.gitCommit ?? '', 'commit')}
-                        aria-label={t('about.copyCommit')}
-                      >
-                        {copiedItem === 'commit' ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
-                      </button>
-                    </Tooltip>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
-                <div className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
-                  <Icon name="git" size="lg" aria-hidden="true" />
-                  <span>{t('about.branch')}</span>
-                </div>
-                <span
-                  className="openbitfun-about-dialog__info-value openbitfun-about-dialog__info-value--branch"
-                  data-openbitfun-component="about-dialog"
-                  data-openbitfun-part="infoValue"
-                  data-testid="about-branch-value"
-                  title={version.gitBranch}
-                >
-                  {version.gitBranch ?? t('about.notAvailable')}
-                </span>
-              </div>
-
-              <div className="openbitfun-about-dialog__info-row" data-openbitfun-component="about-dialog" data-openbitfun-part="infoRow">
-                <div className="openbitfun-about-dialog__info-label" data-openbitfun-component="about-dialog" data-openbitfun-part="infoLabel">
-                  <ShieldCheck size={21} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{t('about.license')}</span>
-                </div>
-                <span
-                  className="openbitfun-about-dialog__info-value"
-                  data-openbitfun-component="about-dialog"
-                  data-openbitfun-part="license"
-                  data-testid="about-license-value"
-                >
-                  {licenseName}
-                </span>
-              </div>
-            </ScrollArea>
-          </div>
-
-          <section
-            className="openbitfun-about-dialog__star-callout"
-            data-openbitfun-component="about-dialog"
-            data-openbitfun-part="starCallout"
-            aria-labelledby="openbitfun-about-star-title"
-          >
-            <span
-              className="openbitfun-about-dialog__star-rule openbitfun-about-dialog__star-rule--leading"
-              aria-hidden="true"
-            />
-            <Icon name="star" size="lg" className="openbitfun-about-dialog__star-icon" aria-hidden="true" />
-            <div className="openbitfun-about-dialog__star-copy">
-              <h2 id="openbitfun-about-star-title" className="openbitfun-about-dialog__star-title">
-                <span>{t('about.githubStarTitle')}</span>
-                <Icon name="spark" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />
-              </h2>
-              <p className="openbitfun-about-dialog__star-description">
-                {t('about.githubStarDescription')}
-              </p>
+              </section>
             </div>
-            <span className="openbitfun-about-dialog__star-rule" aria-hidden="true" />
-            <Button
-              variant="fill"
-              size="md"
-              className="openbitfun-about-dialog__star-button"
-              trailingIcon={<Icon name="arrow-right" size="lg" aria-hidden="true" />}
-              onClick={handleGithubStar}
-              data-testid="about-github-star"
-            >
-              {t('about.githubStarAction')}
-            </Button>
-          </section>
 
-          <footer className="openbitfun-about-dialog__footer" data-openbitfun-component="about-dialog" data-openbitfun-part="footer">
-            <p className="openbitfun-about-dialog__copyright" data-openbitfun-component="about-dialog" data-openbitfun-part="copyright">
-              {legalCopyright}
-            </p>
-          </footer>
-        </div>
+            <footer
+              className="openbitfun-about-dialog__footer"
+              data-openbitfun-component="about-dialog"
+              data-openbitfun-part="footer"
+            >
+              <div
+                className="openbitfun-about-dialog__star-callout"
+                data-openbitfun-component="about-dialog"
+                data-openbitfun-part="starCallout"
+                role="group"
+                aria-labelledby="openbitfun-about-star-title"
+              >
+                <div className="openbitfun-about-dialog__star-copy">
+                  <h3 id="openbitfun-about-star-title" className="openbitfun-about-dialog__star-title">
+                    {t('about.githubStarTitle')}
+                  </h3>
+                  <p className="openbitfun-about-dialog__star-description">
+                    {t('about.githubStarDescription')}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="openbitfun-about-dialog__star-button"
+                  leadingIcon={<Icon name="star" size="sm" aria-hidden="true" />}
+                  onClick={handleGithubStar}
+                  data-testid="about-github-star"
+                >
+                  {t('about.githubStarAction')}
+                </Button>
+              </div>
+              <p
+                className="openbitfun-about-dialog__copyright"
+                data-openbitfun-component="about-dialog"
+                data-openbitfun-part="copyright"
+              >
+                {legalCopyright}
+              </p>
+            </footer>
+          </div>
         </DialogBody>
       </Dialog>
 

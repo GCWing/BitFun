@@ -15,6 +15,7 @@ import {
   GalleryZone,
 } from '@/app/components';
 import AgentCard from './components/AgentCard';
+import AgentHarnessOverview from './components/AgentHarnessOverview';
 import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
 import {
@@ -62,14 +63,6 @@ import {
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
 
 const DEFAULT_SUBAGENT_MODEL_OVERRIDE_VALUE = '__default_subagent_model__';
-
-const HARNESS_GEAR_PROFILES = [
-  { id: 'minimal', gear: 1 },
-  { id: 'balanced', gear: 2 },
-  { id: 'ultimate', gear: 3 },
-] as const;
-
-const HARNESS_DEFAULT_PROFILE_ID = 'balanced';
 
 type CapabilityTab = 'model' | 'tools' | 'skills' | 'subagents';
 type AgentDetailSection = 'basic' | 'behavior' | CapabilityTab;
@@ -693,71 +686,7 @@ const AgentsHomeView: React.FC = () => {
       />
 
       <div className="gallery-zones" data-openbitfun-scene="agents" data-openbitfun-part="zones" data-testid="agent-list">
-        <GalleryZone
-          id="harness-zone"
-          className="openbitfun-agents-scene__harness-zone"
-          data-testid="agents-harness-zone"
-          title={t('harnessZone.title')}
-          subtitle={t('harnessZone.subtitle')}
-        >
-          <div
-            className="openbitfun-agents-scene__harness-presentation"
-            role="group"
-            aria-label={t('harnessZone.title')}
-            data-openbitfun-scene="agents"
-            data-openbitfun-part="harnessPresentation"
-          >
-            <div className="openbitfun-agents-scene__harness-track">
-              <div className="openbitfun-agents-scene__harness-rail" aria-hidden>
-                <span className="openbitfun-agents-scene__harness-rail-line" />
-                {HARNESS_GEAR_PROFILES.map(({ id }) => (
-                  <Icon name="unselected" size="2xs" key={id} className={[
-                      'openbitfun-agents-scene__harness-rail-node',
-                      id === HARNESS_DEFAULT_PROFILE_ID && 'is-default',
-                    ].filter(Boolean).join(' ')} />
-                ))}
-              </div>
-              <div className="openbitfun-agents-scene__harness-profile-grid">
-                {HARNESS_GEAR_PROFILES.map(({ id, gear }) => (
-                  <div
-                    key={id}
-                    className="openbitfun-agents-scene__harness-profile"
-                    data-openbitfun-component="harness-profile-step"
-                    data-openbitfun-part="root"
-                    data-openbitfun-profile={id}
-                    data-harness-gear={gear}
-                    data-testid={`agents-harness-${id}`}
-                  >
-                    <strong>{t(`harnessZone.profiles.${id}.name`)}</strong>
-                    <span>{t(`harnessZone.profiles.${id}.purpose`)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div
-              className="openbitfun-agents-scene__harness-creative"
-              data-openbitfun-component="harness-profile-step"
-              data-openbitfun-part="root"
-              data-openbitfun-profile="creative"
-              data-harness-gear="creative"
-              data-testid="agents-harness-creative"
-            >
-              <span className="openbitfun-agents-scene__harness-creative-icon" aria-hidden>
-                <Icon name="creative" size="lg" style={{ width: 28, height: 28 }} />
-              </span>
-              <span className="openbitfun-agents-scene__harness-creative-copy">
-                <span className="openbitfun-agents-scene__harness-creative-heading">
-                  <span>{t('harnessZone.creativeTrack')}</span>
-                  <strong>{t('harnessZone.profiles.creative.name')}</strong>
-                </span>
-                <span className="openbitfun-agents-scene__harness-creative-purpose">
-                  {t('harnessZone.profiles.creative.purpose')}
-                </span>
-              </span>
-            </div>
-          </div>
-        </GalleryZone>
+        <AgentHarnessOverview />
 
         <GalleryZone
           id="agents-zone"
