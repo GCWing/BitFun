@@ -117,7 +117,7 @@ function App() {
 
   workspaceLoadingRef.current = workspaceLoading;
 
-  const releaseInteractiveShellReadyIfReady = useCallback((reason: string) => {
+  const releaseInteractiveShellReadyIfReady = useCallback((reason: string, afterPaint = true) => {
     const latestWorkspaceLoading = workspaceLoadingRef.current;
     const latestAppLayoutReady = appLayoutReadyRef.current;
     startupTrace.markPhase('interactive_shell_ready_gate_check', {
@@ -125,13 +125,17 @@ function App() {
       appLayoutReady: latestAppLayoutReady,
       alreadyReady: interactiveShellReadyRef.current,
       reason,
-      afterPaint: true,
+      afterPaint,
     });
     if (latestWorkspaceLoading || !latestAppLayoutReady || interactiveShellReadyRef.current) {
       return;
     }
+    if (interactiveShellReadyFrameRef.current !== null) {
+      window.cancelAnimationFrame(interactiveShellReadyFrameRef.current);
+      interactiveShellReadyFrameRef.current = null;
+    }
     interactiveShellReadyRef.current = true;
-    startupTrace.markPhase('interactive_shell_ready', { reason });
+    startupTrace.markPhase('interactive_shell_ready', { reason, afterPaint });
     window.dispatchEvent(new CustomEvent('openbitfun:interactive-shell-ready', {
       detail: { reason },
     }));
@@ -268,6 +272,10 @@ function App() {
         if (!cancelled) {
           setStartupOverlayVisible(false);
           startupTrace.markPhase('startup_overlay_hidden');
+          // WebKit can suspend animation frames in an occluded/reloaded window.
+          // The completed handoff still proves the layout and workspace mounted;
+          // do not leave product control and customization waiting for a paint.
+          releaseInteractiveShellReadyIfReady('startup-overlay-hidden', false);
           window.dispatchEvent(new CustomEvent(STARTUP_OVERLAY_HIDDEN_EVENT));
         }
       });
@@ -276,7 +284,7 @@ function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [workspaceLoading, appLayoutReady]);
+  }, [workspaceLoading, appLayoutReady, releaseInteractiveShellReadyIfReady]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
