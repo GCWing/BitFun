@@ -2,7 +2,6 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -38,7 +37,7 @@ import {
   InlineAiPreviewExtension,
 } from '../extensions/InlineAiPreviewExtension';
 import { inlineAiPreviewPluginKey } from '../extensions/InlineAiPreviewPluginKey';
-import { Frontmatter, RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
+import { Frontmatter, InlineMath, RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
 import { getBlockIndexForLine } from '../utils/markdownBlocks';
 import {
   buildInlineContinuePrompt,
@@ -48,7 +47,8 @@ import {
 } from '../utils/inlineAi';
 import { getCachedLocalImageDataUrl, loadLocalImages } from '../utils/loadLocalImages';
 import { isLocalPath, resolveImagePath } from '../utils/rehype-local-images';
-import { markdownToTiptapDoc, tiptapDocToMarkdown, tiptapDocToTopLevelMarkdownBlocks } from '../utils/tiptapMarkdown';
+import { markdownToEditableTiptapDoc, tiptapDocToMarkdown, tiptapDocToTopLevelMarkdownBlocks } from '../utils/tiptapMarkdown';
+import '@/infrastructure/markdown/Markdown.scss';
 import './TiptapEditor.scss';
 
 const log = createLogger('TiptapEditor');
@@ -106,54 +106,6 @@ function getTopLevelBlockIds(doc: JSONContent | null | undefined): string[] {
   return (doc?.content ?? [])
     .map((node: JSONContent) => (typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : null))
     .filter((value: string | null): value is string => typeof value === 'string');
-}
-
-function syncInlineAiHints(
-  instance: TiptapEditorInstance,
-  root: HTMLDivElement | null,
-  hintText: string
-): void {
-  if (!root) {
-    return;
-  }
-
-  root.querySelectorAll<HTMLElement>('[data-inline-ai-hint]').forEach(element => {
-    element.removeAttribute('data-inline-ai-hint');
-  });
-  root.querySelectorAll<HTMLElement>('[data-inline-ai-active]').forEach(element => {
-    element.removeAttribute('data-inline-ai-active');
-  });
-
-  const { selection } = instance.state;
-  const activeBlockId =
-    selection.empty &&
-    selection.$from.depth === 1 &&
-    selection.$from.parent.type.name === 'paragraph' &&
-    selection.$from.parent.textContent.trim().length === 0 &&
-    typeof selection.$from.parent.attrs?.blockId === 'string'
-      ? selection.$from.parent.attrs.blockId
-      : null;
-
-  instance.state.doc.forEach((node) => {
-    if (node.type.name !== 'paragraph' || node.textContent.trim().length > 0) {
-      return;
-    }
-
-    const blockId = typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : null;
-    if (!blockId) {
-      return;
-    }
-
-    const element = root.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`);
-    if (!element) {
-      return;
-    }
-
-    element.setAttribute('data-inline-ai-hint', hintText);
-    if (blockId === activeBlockId) {
-      element.setAttribute('data-inline-ai-active', 'true');
-    }
-  });
 }
 
 async function resolveEditorLocalImages(
@@ -424,10 +376,15 @@ function replaceEditorContentWithoutHistory(
   instance
     .chain()
     .setMeta('addToHistory', false)
-    .setContent(markdownToTiptapDoc(markdown), {
+    .setContent(markdownToEditableTiptapDoc(markdown), {
       emitUpdate: false,
     })
     .run();
+}
+
+function getSourceDocumentKey(doc: JSONContent): string {
+  // Generated block identities are editor bookkeeping, not Markdown content.
+  return JSON.stringify(doc, (key, value) => key === 'blockId' ? undefined : value);
 }
 
 export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorProps>(({
@@ -451,15 +408,16 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
   const editorRef = useRef<TiptapEditorInstance | null>(null);
   const savedContentRef = useRef(value);
   const currentMarkdownRef = useRef(value);
+  const lastReceivedValueRef = useRef(value);
+  const sourceSnapshotRef = useRef<{ source: string; documentKey: string } | null>(null);
   const preserveTrailingNewlineRef = useRef(value.endsWith('\n'));
-  const applyingExternalValueRef = useRef(false);
   const highlightTimerRef = useRef<number | null>(null);
   const targetIdRef = useRef(`markdown-ir-tiptap-${Math.random().toString(36).slice(2, 10)}`);
   const inlineAiInputRef = useRef<HTMLInputElement | null>(null);
   const inlineAiInputComposingRef = useRef(false);
   const [inlineAiState, setInlineAiState] = useState<InlineAiState | null>(null);
 
-  const initialContent = useMemo(() => markdownToTiptapDoc(value), [value]);
+  const [initialContent] = useState(() => markdownToEditableTiptapDoc(value));
   const inlineAiTriggerHint = t('editor.meditor.inlineAi.triggerHint');
 
   useEffect(() => {
@@ -487,11 +445,22 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
     readonlyRef.current = readonly;
   }, [readonly]);
 
-  const serializeEditorMarkdown = useCallback((instance: TiptapEditorInstance): string => (
-    tiptapDocToMarkdown(instance.getJSON(), {
+  const rememberSource = useCallback((instance: TiptapEditorInstance, source: string) => {
+    sourceSnapshotRef.current = { source, documentKey: getSourceDocumentKey(instance.getJSON()) };
+  }, []);
+
+  const serializeEditorMarkdown = useCallback((instance: TiptapEditorInstance): string => {
+    const doc = instance.getJSON();
+    const snapshot = sourceSnapshotRef.current;
+    // Undo restores document nodes, not Markdown spelling. Recover the exact
+    // imported source at that state, including whitespace and list delimiters.
+    // This snapshot may itself be unsaved (for example after a source-mode edit);
+    // the document owner still compares the returned bytes with its saved value.
+    if (snapshot && getSourceDocumentKey(doc) === snapshot.documentKey) return snapshot.source;
+    return tiptapDocToMarkdown(doc, {
       preserveTrailingNewline: preserveTrailingNewlineRef.current,
-    })
-  ), []);
+    });
+  }, []);
 
   const closeInlineAi = useCallback((options?: { cancelRequest?: boolean; focusEditor?: boolean }) => {
     const shouldCancel = options?.cancelRequest ?? false;
@@ -548,7 +517,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       return false;
     }
 
-    const content = markdownToTiptapDoc(normalized).content ?? [];
+    const content = markdownToEditableTiptapDoc(normalized).content ?? [];
     if (content.length === 0) {
       return false;
     }
@@ -572,6 +541,8 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
     editable: !readonly,
     extensions: [
       StarterKit.configure({
+        link: false,
+        code: { HTMLAttributes: { class: 'inline-code' } },
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
@@ -583,6 +554,8 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       Link.configure({
         openOnClick: false,
       }),
+      // Placeholder decorations keep hints outside the document mutation path.
+      // Direct paragraph DOM changes can reparse and destroy active embed editors.
       Placeholder.configure({
         placeholder: ({ node, hasAnchor }) => {
           if (!hasAnchor || node.type.name !== 'paragraph') {
@@ -595,6 +568,11 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       MarkdownAlignmentExtension,
       BlockIdExtension,
       MarkdownImage.configure({
+        editLabel: t('editor.markdownEditor.editImage'),
+        doneLabel: t('editor.markdownEditor.finishBlockEdit'),
+        srcLabel: t('editor.markdownEditor.imageAddress'),
+        altLabel: t('editor.markdownEditor.imageAltText'),
+        titleLabel: t('editor.markdownEditor.imageTitle'),
         basePath,
       }),
       Details.configure({
@@ -603,13 +581,35 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       DetailsSummary,
       DetailsContent,
       Frontmatter.configure({
+        editLabel: t('editor.markdownEditor.editBlockSource'),
+        doneLabel: t('editor.markdownEditor.finishBlockEdit'),
         label: t('editor.meditor.frontmatter.label'),
+      }),
+      InlineMath.configure({
+        label: t('editor.markdownEditor.blockTypes.math'),
+        editLabel: t('editor.markdownEditor.editBlockSource'),
+        doneLabel: t('editor.markdownEditor.finishBlockEdit'),
       }),
       // Keep raw/render-only fallbacks for HTML we still can't round-trip safely.
       RenderOnlyBlock.configure({
+        typeLabels: {
+          math: t('editor.markdownEditor.blockTypes.math'),
+          mermaid: 'Mermaid',
+          code: t('editor.markdownEditor.blockTypes.code'),
+          markdown: 'Markdown',
+          paragraph: 'Markdown',
+          html: 'HTML',
+          definition: t('editor.markdownEditor.blockTypes.reference'),
+          footnoteDefinition: t('editor.markdownEditor.blockTypes.footnote'),
+        },
+        editLabel: t('editor.markdownEditor.editBlockSource'),
+        doneLabel: t('editor.markdownEditor.finishBlockEdit'),
         basePath,
       }),
       RawHtmlBlock.configure({
+        label: 'HTML',
+        editLabel: t('editor.markdownEditor.editBlockSource'),
+        doneLabel: t('editor.markdownEditor.finishBlockEdit'),
         basePath,
       }),
       RawHtmlInline.configure({
@@ -622,6 +622,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       InlineAiPreviewExtension,
     ],
     editorProps: {
+      attributes: { class: 'markdown-renderer' },
       handleKeyDown: (_view, event) => {
         if (readonlyRef.current || inlineAiStateRef.current?.isOpen) {
           return false;
@@ -661,19 +662,16 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
     onCreate: ({ editor: instance }: { editor: TiptapEditorInstance }) => {
       editorRef.current = instance;
       preserveTrailingNewlineRef.current = value.endsWith('\n');
-      const markdown = serializeEditorMarkdown(instance);
-      currentMarkdownRef.current = markdown;
-      savedContentRef.current = markdown;
-      syncInlineAiHints(instance, rootRef.current, inlineAiTriggerHint);
+      rememberSource(instance, value);
+      currentMarkdownRef.current = value;
+      savedContentRef.current = value;
       onDirtyChange?.(false);
     },
-    onFocus: ({ editor: instance }: { editor: TiptapEditorInstance }) => {
+    onFocus: () => {
       activeEditTargetService.setActiveTarget(targetIdRef.current);
-      syncInlineAiHints(instance, rootRef.current, inlineAiTriggerHint);
       onFocus?.();
     },
-    onBlur: ({ editor: instance }: { editor: TiptapEditorInstance }) => {
-      syncInlineAiHints(instance, rootRef.current, inlineAiTriggerHint);
+    onBlur: () => {
       window.setTimeout(() => {
         const root = rootRef.current;
         const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
@@ -685,18 +683,10 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       }, 0);
       onBlur?.();
     },
-    onSelectionUpdate: ({ editor: instance }: { editor: TiptapEditorInstance }) => {
-      syncInlineAiHints(instance, rootRef.current, inlineAiTriggerHint);
-    },
-    onUpdate: ({ editor: instance }: { editor: TiptapEditorInstance }) => {
+    onUpdate: ({ editor: instance, transaction }) => {
+      if (!transaction.docChanged) return;
       const markdown = serializeEditorMarkdown(instance);
       currentMarkdownRef.current = markdown;
-      syncInlineAiHints(instance, rootRef.current, inlineAiTriggerHint);
-
-      if (applyingExternalValueRef.current) {
-        applyingExternalValueRef.current = false;
-        return;
-      }
 
       onChange(markdown);
       onDirtyChange?.(markdown !== savedContentRef.current);
@@ -711,14 +701,6 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
     editorRef.current = editor;
     editor.setEditable(!readonly);
   }, [editor, readonly]);
-
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    syncInlineAiHints(editor, rootRef.current, inlineAiTriggerHint);
-  }, [editor, inlineAiTriggerHint]);
 
   useEffect(() => {
     if (!editor) {
@@ -784,17 +766,18 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
   }, [basePath, editor, value]);
 
   useEffect(() => {
-    if (!editor || value === currentMarkdownRef.current) {
-      return;
-    }
+    if (!editor || value === lastReceivedValueRef.current) return;
+    lastReceivedValueRef.current = value;
+    // Tiptap can render a transaction before React delivers the parent's new
+    // value. Reapplying that unchanged, older prop destroys active NodeViews.
+    if (value === currentMarkdownRef.current) return;
 
-    applyingExternalValueRef.current = true;
     preserveTrailingNewlineRef.current = value.endsWith('\n');
     currentMarkdownRef.current = value;
     replaceEditorContentWithoutHistory(editor, value);
-    syncInlineAiHints(editor, rootRef.current, inlineAiTriggerHint);
+    rememberSource(editor, value);
     onDirtyChange?.(value !== savedContentRef.current);
-  }, [editor, inlineAiTriggerHint, value, onDirtyChange]);
+  }, [editor, inlineAiTriggerHint, value, onDirtyChange, rememberSource]);
 
   useEffect(() => {
     if (!editor) {
@@ -1192,14 +1175,14 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
         return;
       }
 
-      applyingExternalValueRef.current = true;
       replaceEditorContentWithoutHistory(editor, content);
+      rememberSource(editor, content);
       onDirtyChange?.(false);
     },
     get isDirty() {
       return currentMarkdownRef.current !== savedContentRef.current;
     },
-  }), [editor, focusBlockByIndex, onDirtyChange]);
+  }), [editor, focusBlockByIndex, onDirtyChange, rememberSource]);
 
   const isInlineBusy =
     inlineAiState?.status === 'submitting' || inlineAiState?.status === 'streaming';

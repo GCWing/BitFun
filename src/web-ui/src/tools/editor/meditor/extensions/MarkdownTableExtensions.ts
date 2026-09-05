@@ -44,7 +44,8 @@ export const MarkdownTable = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['table', mergeAttributes(HTMLAttributes, { 'data-type': 'markdown-table' }), ['tbody', 0]];
+    return ['div', { class: 'table-wrapper' },
+      ['table', mergeAttributes(HTMLAttributes, { 'data-type': 'markdown-table' }), ['tbody', 0]]];
   },
 });
 

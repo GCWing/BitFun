@@ -68,6 +68,19 @@
       "switchToSideBySide": "切換到並排視圖"
     },
     "markdownEditor": {
+      "blockTypes": {
+        "math": "公式",
+        "code": "程式碼區塊",
+        "reference": "連結參照",
+        "footnote": "註腳"
+      },
+      "finishBlockEdit": "完成編輯",
+      "editImage": "編輯圖片",
+      "imageAddress": "圖片位址",
+      "imageAltText": "替代文字",
+      "imageTitle": "圖片標題",
+      "richText": "文件",
+      "editBlockSource": "編輯此區塊原始碼",
       "loadingFile": "正在載入檔案...",
       "placeholder": "開始編寫 Markdown 內容...",
       "source": "源碼",
@@ -75,9 +88,9 @@
       "preview": "預覽",
       "copyMarkdown": "複製 Markdown",
       "copiedMarkdown": "已複製 Markdown",
-      "viewModeLabel": "Markdown 與預覽模式",
+      "viewModeLabel": "文件與源碼模式",
       "notice": {
-        "sourcePreviewFallback": "該文檔包含無法在可視化模式中安全編輯的語法。請在源碼模式中編輯，或切換到預覽模式查看。"
+        "sourcePreviewFallback": "富文字載入失敗，你可以繼續編輯 Markdown 原始碼。"
       }
     },
     "planViewer": {

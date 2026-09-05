@@ -68,6 +68,19 @@
       "switchToSideBySide": "Switch to side-by-side view"
     },
     "markdownEditor": {
+      "blockTypes": {
+        "math": "Equation",
+        "code": "Code block",
+        "reference": "Link reference",
+        "footnote": "Footnote"
+      },
+      "finishBlockEdit": "Done editing",
+      "editImage": "Edit image",
+      "imageAddress": "Image address",
+      "imageAltText": "Alternative text",
+      "imageTitle": "Image title",
+      "richText": "Document",
+      "editBlockSource": "Edit block source",
       "loadingFile": "Loading file...",
       "placeholder": "Start writing Markdown...",
       "source": "Source",
@@ -75,9 +88,9 @@
       "preview": "Preview",
       "copyMarkdown": "Copy Markdown",
       "copiedMarkdown": "Copied Markdown",
-      "viewModeLabel": "Markdown and preview mode",
+      "viewModeLabel": "Document and source mode",
       "notice": {
-        "sourcePreviewFallback": "This document contains syntax that is not safely editable in visual mode. Edit in source mode or switch to preview."
+        "sourcePreviewFallback": "Rich text could not load. You can continue editing the Markdown source."
       }
     },
     "planViewer": {

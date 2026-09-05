@@ -1,6 +1,7 @@
 import { unified } from 'unified';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
+import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import type { JSONContent } from '@tiptap/core';
@@ -10,8 +11,10 @@ import { serializeMarkdownFrontmatter, splitMarkdownFrontmatter } from './markdo
 type MdastNode = {
   type?: string;
   value?: string;
+  source?: string;
   depth?: number;
   lang?: string | null;
+  meta?: string | null;
   url?: string;
   alt?: string | null;
   title?: string | null;
@@ -23,6 +26,7 @@ type MdastNode = {
   position?: {
     start?: {
       offset?: number;
+      column?: number;
     };
     end?: {
       offset?: number;
@@ -97,6 +101,14 @@ type HastNode = {
   properties?: Record<string, unknown>;
   children?: HastNode[];
 };
+
+// Unsupported syntax stays in the smallest containing Markdown block, rather
+// than disabling rich text for the whole document or dropping unknown nodes.
+const NATIVE_MARKDOWN_TYPES = new Set([
+  'paragraph', 'heading', 'text', 'html', 'inlineCode', 'image', 'strong',
+  'emphasis', 'delete', 'link', 'break', 'blockquote', 'list', 'listItem',
+  'table', 'tableRow', 'tableCell', 'code', 'thematicBreak', 'inlineMath',
+]);
 
 const TOP_LEVEL_BLOCK_TYPES = new Set([
   'paragraph',
@@ -528,6 +540,10 @@ function convertInlineNodes(nodes: MdastNode[], marks: Mark[] = []): JSONContent
         activeMarks = htmlFragment.activeMarks;
         return;
       }
+      case 'inlineMath':
+        content.push({ type: 'inlineMath', attrs: { markdown: node.source ?? `$${node.value ?? ''}$`, kind: 'inlineMath' },
+          ...(activeMarks.length ? { marks: activeMarks } : {}) });
+        return;
       case 'inlineCode':
         content.push(...createTextNode(node.value ?? '', [...activeMarks, { type: 'code' }]));
         return;
@@ -629,6 +645,10 @@ function convertTable(node: MdastNode): JSONContent[] {
 }
 
 function convertBlock(node: MdastNode): JSONContent[] {
+  if (node.source && (node.type === 'math' || (node.type === 'code' &&
+      (node.lang?.toLowerCase() === 'mermaid' || node.meta)))) {
+    return [createRenderOnlyBlock(node.source, node.type)];
+  }
   switch (node.type) {
     case 'paragraph': {
       const inline = convertInlineNodes(node.children ?? []);
@@ -743,10 +763,20 @@ function walkMdast(node: MdastNode | null | undefined, visit: (current: MdastNod
 }
 
 function parseMarkdownTree(markdown: string): MdastNode {
-  return unified()
+  const tree = unified()
     .use(remarkParse)
     .use(remarkGfm)
+    .use(remarkMath)
     .parse(markdown) as MdastNode;
+  walkMdast(tree, node => {
+    if (node.type === 'inlineMath' || node.type === 'math' || node.type === 'code') {
+      const raw = markdown.slice(node.position?.start?.offset, node.position?.end?.offset);
+      const indent = Math.max(0, (node.position?.start?.column ?? 1) - 1);
+      node.source = raw.split('\n').map((line, index) => index === 0 ? line
+        : line.replace(new RegExp(`^[ \t>]{0,${indent}}`), '')).join('\n');
+    }
+  });
+  return tree;
 }
 
 function normalizeComparableJson(
@@ -1261,15 +1291,6 @@ export function analyzeMarkdownEditability(markdown: string): MarkdownEditabilit
     softIssues.add('multipleTrailingBlankLines');
   }
 
-  const frontmatter = splitMarkdownFrontmatter(markdown);
-  const tree = parseMarkdownTree(frontmatter?.body ?? markdown);
-
-  walkMdast(tree, (node) => {
-    if (node.type === 'footnoteDefinition' || node.type === 'footnoteReference') {
-      hardIssues.add('footnote');
-    }
-  });
-
   if (!textEqual) {
     softIssues.add('roundTripMismatch');
   }
@@ -1373,6 +1394,11 @@ function renderInline(content: JSONContent[] = []): string {
 
     if (node.type === 'hardBreak') {
       result += '  \n';
+      return;
+    }
+
+    if (node.type === 'inlineMath') {
+      result += applyLinkMarks(String(node.attrs?.markdown ?? ''), marks);
       return;
     }
 
@@ -1514,7 +1540,40 @@ function convertRootMarkdownChildren(children: MdastNode[], markdown: string): J
       }
     }
 
-    const nextNodes = convertBlock(child).map(node => withBlockAttrs(
+    let needsSourceBlock = false;
+    walkMdast(child, node => {
+      // Container children can host their own source-backed blocks.
+      if ((child.type === 'list' || child.type === 'blockquote') &&
+          (node.type === 'math' || node.type === 'code')) return;
+      if (!NATIVE_MARKDOWN_TYPES.has(node.type ?? '') ||
+          (node.type === 'code' && (node.lang?.toLowerCase() === 'mermaid' || node.meta))) {
+        needsSourceBlock = true;
+      }
+    });
+    if (needsSourceBlock) {
+      const start = getNodeStartOffset(child);
+      const end = getNodeEndOffset(child);
+      if (start !== null && end !== null) {
+        content.push(withBlockAttrs(
+          createRenderOnlyBlock(markdown.slice(start, end), child.type ?? 'markdown'),
+          alignmentState.activeAlign,
+          alignmentState.activeGroupId,
+        ));
+        continue;
+      }
+    }
+
+    const converted = convertBlock(child);
+    let containsRawInline = false;
+    converted.forEach(node => walkTiptapDoc(node, descendant => {
+      if (descendant.type === 'rawHtmlInline') containsRawInline = true;
+    }));
+    const start = getNodeStartOffset(child);
+    const end = getNodeEndOffset(child);
+    const editableNodes = containsRawInline && start !== null && end !== null
+      ? [createRenderOnlyBlock(markdown.slice(start, end), 'html')]
+      : converted;
+    const nextNodes = editableNodes.map(node => withBlockAttrs(
       node,
       alignmentState.activeAlign,
       alignmentState.activeGroupId,
@@ -1724,6 +1783,18 @@ export function markdownToTiptapDoc(markdown: string): JSONContent {
     type: 'doc',
     content: content.length > 0 ? content : [createParagraph()],
   };
+}
+
+/** Last-resort source-backed block for documents whose structure cannot round-trip.
+ * Rendered blocks remain editable; never feed lossy conversion into the editor.
+ */
+export function markdownToEditableTiptapDoc(markdown: string): JSONContent {
+  if (analyzeMarkdownEditability(markdown).mode === 'unsafe') {
+    return { type: 'doc', content: withTopLevelBlockIds([
+      createRenderOnlyBlock(markdown, 'markdown'),
+    ]) };
+  }
+  return markdownToTiptapDoc(markdown);
 }
 
 export function tiptapDocToMarkdown(

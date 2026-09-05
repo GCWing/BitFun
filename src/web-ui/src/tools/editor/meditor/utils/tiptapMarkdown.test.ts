@@ -4,6 +4,7 @@ import {
   canRoundTripMarkdownWithTiptap,
   getUnsupportedTiptapMarkdownFeatures,
   markdownToTiptapDoc,
+  markdownToEditableTiptapDoc,
   tiptapDocToMarkdown,
   tiptapDocToTopLevelMarkdownBlocks,
 } from './tiptapMarkdown';
@@ -288,7 +289,7 @@ describe('tiptap markdown compatibility', () => {
     expect(analysis.containsRawHtmlBlocks).toBe(false);
   });
 
-  it('preserves inline raw html fragments inside markdown paragraphs', () => {
+  it('preserves paragraphs with raw inline HTML as editable embedded blocks', () => {
     const markdown = 'Mix <span data-x="1">inline</span> HTML into markdown.';
 
     const doc = markdownToTiptapDoc(markdown);
@@ -297,7 +298,8 @@ describe('tiptap markdown compatibility', () => {
 
     expect(serialized).toBe(markdown);
     expect(analysis.mode).toBe('lossless');
-    expect(analysis.containsRawHtmlInlines).toBe(true);
+    expect(analysis.containsRawHtmlInlines).toBe(false);
+    expect(analysis.containsRenderOnlyBlocks).toBe(true);
     expect(analysis.containsRawHtmlBlocks).toBe(false);
   });
 
@@ -398,5 +400,45 @@ describe('tiptap markdown compatibility', () => {
     expect(analysis.mode).toBe('lossless');
     expect(analysis.containsRawHtmlBlocks).toBe(true);
     expect(doc.content?.[0]?.type).toBe('rawHtmlBlock');
+  });
+});
+
+
+describe('editable embedded Markdown blocks', () => {
+  it.each([
+    '```mermaid\ngraph TD\n  A-->B\n```',
+    '~~~mermaid\ngraph TD\n  A-->B\n~~~',
+    '<div data-custom="yes">HTML</div>',
+    'Text <span data-x="1">inline</span>.',
+    'Footnote[^a].\n\n[^a]: Definition',
+    '[Link][ref]\n\n[ref]: https://example.com',
+    '$$\nx^2\n$$',
+    '```js title="example"\nconst x = 1;\n```',
+  ])('keeps the original embedded source on a round trip: %s', block => {
+    const markdown = '# Before\n\n' + block + '\n\nAfter';
+    const doc = markdownToEditableTiptapDoc(markdown);
+    expect(doc.content?.[0].type).toBe('heading');
+    expect(doc.content?.at(-1)?.type).toBe('paragraph');
+    expect(tiptapDocToMarkdown(doc)).toBe(markdown);
+    const embedded = doc.content?.find(node => node.type === 'renderOnlyBlock' || node.type === 'rawHtmlBlock');
+    expect(embedded).toBeDefined();
+  });
+});
+
+describe('inline and nested special content', () => {
+  it.each(['Before $x^2$ after.', '**Before $x$ after.**', 'Before $$x + y$$ after.'])('keeps inline formulas inside editable paragraphs: %s', markdown => {
+    const doc = markdownToEditableTiptapDoc(markdown);
+    expect(doc.content?.[0].type).toBe('paragraph');
+    expect(doc.content?.[0].content?.some(node => node.type === 'inlineMath')).toBe(true);
+    expect(tiptapDocToMarkdown(doc)).toBe(markdown);
+  });
+  it('preserves native list text around nested Mermaid', () => {
+    const markdown = '- Editable item\n  \n  ```mermaid\n  graph TD\n    A-->B\n  ```';
+    const doc = markdownToEditableTiptapDoc(markdown);
+    expect(doc.content?.[0].type).toBe('bulletList');
+    expect(doc.content?.[0].content?.[0].content?.map(node => node.type)).toEqual(['paragraph', 'renderOnlyBlock']);
+    const serialized = tiptapDocToMarkdown(doc);
+    expect(serialized).toContain('  ```mermaid\n  graph TD\n    A-->B\n  ```');
+    expect(markdownToEditableTiptapDoc(serialized).content?.[0].type).toBe('bulletList');
   });
 });
