@@ -37,3 +37,18 @@ pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.
 ## Verification
 
 Prefer the narrowest relevant spec first, then broaden only if needed.
+
+Markdown editor browser interaction tests (no desktop binary required):
+
+```bash
+pnpm --dir tests/e2e exec wdio run ./config/wdio.markdown-browser.ts
+```
+
+This focused runner mounts the production file editor with temporary file IO
+through a test adapter; it does not replace desktop or remote transport coverage.
+See `src/web-ui/src/tools/editor/AGENTS.md` for scope and output locations.
+
+For the real desktop Markdown workflow, build the desktop and current frontend,
+then run `pnpm --dir tests/e2e exec wdio run ./config/wdio.markdown-native.ts`
+from the repository root. This focused runner uses packaged frontend assets and
+a fresh temporary application profile; it does not use another checkout's dev server.

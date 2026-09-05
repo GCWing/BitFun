@@ -9,6 +9,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import type { Options as RehypeSanitizeOptions } from 'rehype-sanitize';
 import type { Pluggable } from 'unified';
 import 'katex/dist/katex.min.css';
+import { rehypeSourceRange, type MarkdownSourceRange } from './rehypeSourceRange';
 
 interface MarkdownMathRendererProps {
   markdownContent: string;
@@ -16,6 +17,7 @@ interface MarkdownMathRendererProps {
   sanitizeSchema: RehypeSanitizeOptions;
   remarkAutolinkComputerFileLinks: Pluggable;
   urlTransform: (value: string) => string;
+  sourceRange?: MarkdownSourceRange;
 }
 
 export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
@@ -24,11 +26,12 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
   sanitizeSchema,
   remarkAutolinkComputerFileLinks,
   urlTransform,
+  sourceRange,
 }) => (
   <div data-openbitfun-component="markdown" data-openbitfun-part="math">
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], [rehypeSourceRange, sourceRange], rehypeKatex]}
       urlTransform={urlTransform}
       components={components}
     >

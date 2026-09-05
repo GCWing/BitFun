@@ -1,7 +1,5 @@
 @use '@/shared/styles/surface-recipes' as surfaces;
 @use '@/infrastructure/markdown/code' as markdownCode;
-@use '@/infrastructure/markdown/table' as markdownTable;
-@use '../../styles/markdown-editor-layout' as markdownLayout;
 
 .m-editor-tiptap {
   position: relative;
@@ -19,442 +17,27 @@
     box-shadow: none !important;
   }
 
+  // Share the existing MarkdownRenderer appearance; only editing behavior is local.
   .ProseMirror {
     min-height: 100%;
     outline: none;
-    color: var(--openbitfun-color-content-secondary);
-    font-size: var(--openbitfun-type-label-md-font-size);
-    line-height: var(--openbitfun-type-body-lg-line-height);
-
-    /* blockId lives on <hr> itself — do not use paragraph chrome (padding + radius + hover fill) on hr */
-    > [data-block-id]:not(hr) {
-      margin-bottom: var(--openbitfun-space-2);
-      padding: var(--openbitfun-space-2);
-      border-radius: 0;
-      transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
-
-      &:hover {
-        background: var(--openbitfun-color-surface-subtle);
-      }
-
-      &.m-editor-tiptap-block-highlighted {
-        background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
-      }
+    .m-editor-tiptap-block-highlighted {
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
     }
-
-    > p.is-empty {
-      position: relative;
-      min-height: calc(var(--openbitfun-type-label-md-font-size) * var(--openbitfun-type-body-lg-line-height));
-    }
-
+    > .m-editor-frontmatter + * { margin-top: 0; }
+    > p.is-empty { position: relative; }
     > p.is-empty::before {
       content: attr(data-placeholder);
       color: var(--openbitfun-color-content-disabled);
       float: left;
       height: 0;
-      font-size: var(--openbitfun-type-label-md-font-size);
-      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
-      white-space: nowrap;
-      opacity: 0;
       pointer-events: none;
-      transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     }
+    [data-align='center'] { text-align: center; }
+    [data-align='right'] { text-align: right; }
+    li[data-checked] > div,
+    li[data-checked] > div > p:first-child { display: inline; }
 
-    > p.is-empty::before {
-      opacity: 1;
-    }
-
-    > p.is-editor-empty:first-child.is-empty::before {
-      white-space: normal;
-    }
-
-    p {
-      margin: 0;
-    }
-
-    [data-align='center'] {
-      text-align: center;
-    }
-
-    [data-align='right'] {
-      text-align: right;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      margin: 0;
-      color: var(--openbitfun-color-content-primary);
-      font-weight: var(--openbitfun-type-label-selected-font-weight);
-    }
-
-    h1 {
-      font-size: var(--openbitfun-type-heading-dialog-font-size);
-      color: var(--openbitfun-color-content-primary);
-      text-align: center;
-    }
-
-    h2 {
-      font-size: var(--openbitfun-type-flow-section-title-font-size);
-    }
-
-    h3 {
-      font-size: var(--openbitfun-type-flow-title-font-size);
-    }
-
-    h4 {
-      font-size: var(--openbitfun-type-body-lg-font-size);
-    }
-
-    h5 {
-      font-size: var(--openbitfun-type-body-md-font-size);
-    }
-
-    h6 {
-      font-size: var(--openbitfun-type-label-md-font-size);
-      letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
-      text-transform: uppercase;
-    }
-
-    blockquote {
-      margin: markdownCode.$bq-margin;
-      padding: markdownCode.$bq-padding;
-      font-style: italic;
-      color: markdownCode.$bq-fg;
-      background: markdownCode.$bq-bg;
-      border-left: 3px solid markdownCode.$bq-border;
-      border-radius: markdownCode.$bq-radius;
-    }
-
-    pre {
-      margin: 0.25rem 0.3rem;
-      padding: markdownCode.$pre-padding;
-      overflow-x: auto;
-      font-size: var(--openbitfun-type-flow-code-font-size);
-      line-height: var(--openbitfun-type-body-sm-line-height);
-      font-family:var(--openbitfun-type-code-md-font-family);
-      color: markdownCode.$pre-code-fg;
-      background: markdownCode.$pre-bg;
-      border: 1px dashed markdownCode.$pre-border;
-      border-radius: var(--openbitfun-control-flow-chat-card-radius);
-      box-shadow: markdownCode.$pre-shadow;
-      transition:
-        border-color 0.3s ease,
-        box-shadow 0.3s ease;
-
-      &:hover {
-        border-style: solid;
-        border-color: markdownCode.$pre-hover-border;
-        box-shadow: markdownCode.$pre-hover-shadow;
-      }
-    }
-
-    code {
-      padding: 0.1em 0.4em;
-      margin: 0 0.05em;
-      font-size: var(--openbitfun-type-label-md-font-size);
-      font-weight: var(--openbitfun-type-label-sm-font-weight);
-      line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
-      vertical-align: baseline;
-      white-space: nowrap;
-      font-family:var(--openbitfun-type-code-md-font-family);
-      color: markdownCode.$inline-code-fg;
-      background: markdownCode.$inline-code-bg;
-      border: 1px solid markdownCode.$inline-code-border;
-      border-radius: 4px;
-      transition:
-        background-color 0.15s ease,
-        border-color 0.15s ease,
-        color 0.15s ease;
-      box-decoration-break: clone;
-      -webkit-box-decoration-break: clone;
-
-      &:hover {
-        background: markdownCode.$inline-code-hover-bg;
-        border-color: markdownCode.$inline-code-hover-border;
-        color: markdownCode.$inline-code-hover-fg;
-      }
-    }
-
-    pre code {
-      display: block;
-      padding: 0;
-      margin: 0;
-      font-size: var(--openbitfun-type-flow-code-font-size);
-      font-weight: inherit;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: inherit;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      box-shadow: none;
-
-      &:hover {
-        background: transparent !important;
-        border: none !important;
-        color: inherit !important;
-      }
-    }
-
-    hr {
-      display: block;
-      height: 0;
-      margin: var(--openbitfun-space-4) 0;
-      padding: 0;
-      border: 0;
-      border-top: 1px solid var(--openbitfun-color-border-subtle);
-      background: none;
-      background-color: transparent;
-      overflow: visible;
-      box-shadow: none;
-      border-radius: 0;
-
-      &[data-block-id] {
-        margin-bottom: var(--openbitfun-space-2);
-      }
-
-      &[data-block-id].m-editor-tiptap-block-highlighted {
-        border-top-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 55%, transparent);
-      }
-    }
-
-    /* Same palette as flow chat `.markdown-renderer .table-wrapper` (see flowchat-markdown-table-vars.scss) */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      border-spacing: 0;
-      margin: var(--openbitfun-space-4) 0;
-      table-layout: fixed;
-      font-size: var(--openbitfun-type-body-md-font-size);
-      border: 1px solid markdownTable.$border;
-      border-radius: var(--openbitfun-control-flow-chat-card-radius);
-      background: markdownTable.$surface;
-      box-shadow: markdownTable.$shadow;
-      overflow: hidden;
-    }
-
-    th,
-    td {
-      padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
-      border: none;
-      border-bottom: 1px solid markdownTable.$cell-border;
-      vertical-align: top;
-      min-width: 5rem;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      text-align: left;
-      background: transparent;
-      transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-    }
-
-    th {
-      font-weight: var(--openbitfun-type-label-selected-font-weight);
-      background: markdownTable.$th-bg;
-      color: markdownTable.$th-fg;
-    }
-
-    td {
-      color: var(--openbitfun-color-content-primary);
-    }
-
-    th + th,
-    td + td,
-    th + td {
-      border-left: 1px solid markdownTable.$col-divider;
-    }
-
-    tbody tr:last-child td,
-    tbody tr:last-child th {
-      border-bottom: none;
-    }
-
-    tbody tr {
-      background: markdownTable.$row-base;
-    }
-
-    tbody tr:nth-child(2n) {
-      background: markdownTable.$row-stripe;
-    }
-
-    tbody tr:hover {
-      background: markdownTable.$hover;
-    }
-
-    thead tr:hover {
-      background: markdownTable.$hover;
-    }
-
-    thead tr:hover th,
-    tbody tr:hover th,
-    tbody tr:hover td {
-      background: transparent;
-    }
-
-    tbody tr:first-child th:first-child,
-    thead th:first-child {
-      border-top-left-radius: var(--openbitfun-control-flow-chat-card-radius);
-    }
-
-    tbody tr:first-child th:last-child,
-    thead th:last-child {
-      border-top-right-radius: var(--openbitfun-control-flow-chat-card-radius);
-    }
-
-    tbody tr:last-child td:first-child,
-    tbody tr:last-child th:first-child {
-      border-bottom-left-radius: var(--openbitfun-control-flow-chat-card-radius);
-    }
-
-    tbody tr:last-child td:last-child,
-    tbody tr:last-child th:last-child {
-      border-bottom-right-radius: var(--openbitfun-control-flow-chat-card-radius);
-    }
-
-    tbody tr:first-child th:only-child {
-      border-radius: var(--openbitfun-control-flow-chat-card-radius) var(--openbitfun-control-flow-chat-card-radius) 0 0;
-    }
-
-    tbody tr:last-child td:only-child {
-      border-radius: 0 0 var(--openbitfun-control-flow-chat-card-radius) var(--openbitfun-control-flow-chat-card-radius);
-    }
-
-    th code,
-    td code {
-      white-space: normal;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      max-width: 100%;
-    }
-
-    th pre code,
-    td pre code {
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-width: 100%;
-    }
-
-    > ul:not([data-type='taskList']),
-    > ol:not([data-type='taskList']) {
-      margin: 0;
-      padding-left: 0;
-    }
-
-    > ul:not([data-type='taskList']) > li,
-    > ol:not([data-type='taskList']) > li {
-      list-style: none;
-      position: relative;
-      margin-bottom: var(--openbitfun-space-1);
-      padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
-    }
-
-    > ul:not([data-type='taskList']) > li::before,
-    > ol:not([data-type='taskList']) > li::before {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: markdownLayout.$list-marker-width;
-      color: var(--openbitfun-color-content-primary);
-      font-weight: var(--openbitfun-type-label-sm-font-weight);
-    }
-
-    > ul:not([data-type='taskList']) > li::before {
-      content: '•';
-      text-align: center;
-    }
-
-    > ol:not([data-type='taskList']) {
-      counter-reset: m-editor-ordered-list;
-    }
-
-    > ol:not([data-type='taskList']) > li {
-      counter-increment: m-editor-ordered-list;
-    }
-
-    > ol:not([data-type='taskList']) > li::before {
-      content: counter(m-editor-ordered-list) '.';
-      text-align: left;
-    }
-
-    li > ul:not([data-type='taskList']),
-    li > ol:not([data-type='taskList']) {
-      margin-top: var(--openbitfun-space-1);
-      margin-bottom: 0;
-      padding-left: markdownLayout.$list-indent;
-    }
-
-    > ul[data-type='taskList'] {
-      margin: 0;
-      padding-left: 0;
-      list-style: none;
-    }
-
-    > ul[data-type='taskList'] > li {
-      display: grid;
-      grid-template-columns: markdownLayout.$list-marker-width 1fr;
-      column-gap: markdownLayout.$list-gap;
-      align-items: start;
-      margin-bottom: var(--openbitfun-space-1);
-    }
-
-    > ul[data-type='taskList'] > li > label {
-      width: markdownLayout.$list-marker-width;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding-top: 0.15rem;
-    }
-
-    > ul[data-type='taskList'] > li > label > input[type='checkbox'] {
-      margin: 0;
-      width: markdownLayout.$task-checkbox-size;
-      height: markdownLayout.$task-checkbox-size;
-    }
-
-    > ul[data-type='taskList'] > li > label > span {
-      display: none;
-    }
-
-    > ul[data-type='taskList'] > li > div {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    ul[data-type='taskList'] li > ul,
-    ul[data-type='taskList'] li > ol {
-      margin-top: var(--openbitfun-space-1);
-      margin-bottom: 0;
-      padding-left: markdownLayout.$list-indent;
-    }
-
-    li > p {
-      margin: 0;
-      display: block;
-    }
-
-    li > p + p {
-      margin-top: var(--openbitfun-space-2);
-    }
-
-    a {
-      color: var(--openbitfun-color-accent-default);
-      text-decoration: none;
-
-      &:hover {
-        text-decoration: underline;
-      }
-    }
-
-    img {
-      max-width: 100%;
-      box-sizing: content-box;
-      background-color: transparent;
-      border-radius: var(--openbitfun-radius-base);
-      vertical-align: middle;
-    }
   }
 
   .m-editor-inline-ai {
@@ -765,6 +348,108 @@
     font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
+  .m-editor-image { display: inline-block; max-width: 100%; }
+
+  .m-editor-image-fields {
+    display: grid;
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+
+    &[hidden] { display: none; }
+    label { display: grid; gap: var(--openbitfun-space-1); }
+    input {
+      min-width: 0;
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-surface-scene);
+      border: 1px solid var(--openbitfun-color-border-default);
+      border-radius: var(--openbitfun-radius-base);
+      padding: var(--openbitfun-space-1);
+      font: inherit;
+    }
+  }
+
+  .m-editor-source-block-action {
+    display: block;
+    margin: 0;
+    padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-content-secondary);
+    background: var(--openbitfun-color-surface-scene);
+    font: inherit;
+    cursor: pointer;
+
+    &[hidden] { display: none; }
+  }
+
+  .m-editor-embed-toolbar {
+    &[hidden] { display: none; }
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-label-sm-line-height);
+    user-select: none;
+  }
+
+  .m-editor-embed-label {
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
+  }
+
+  .m-editor-source-block-action:hover,
+  .m-editor-source-block-action:focus-visible {
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-primary);
+    outline: 1px solid var(--openbitfun-color-border-default);
+  }
+
+  .m-editor-inline-math {
+    display: inline-block;
+    position: relative;
+    vertical-align: baseline;
+    cursor: pointer;
+
+    &__pane--preview,
+    &__preview,
+    &__preview .markdown-body,
+    &__preview [data-openbitfun-part='math'],
+    &__preview p { display: inline; margin: 0; }
+
+    &__pane--editor {
+      position: absolute;
+      z-index: 10;
+      top: 100%;
+      left: 0;
+      display: block;
+      width: min(26rem, calc(100vw - 40px));
+      border: 1px solid var(--openbitfun-color-border-default);
+      border-radius: var(--openbitfun-radius-base);
+      background: var(--openbitfun-color-surface-scene);
+    }
+
+    &[data-editing='false'] .m-editor-inline-math__pane--editor { display: none; }
+    &__textarea {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 64px;
+      padding: var(--openbitfun-space-3);
+      border: 0;
+      border-top: 1px solid var(--openbitfun-color-border-default);
+      color: var(--openbitfun-color-content-primary);
+      background: transparent;
+      font-family: var(--openbitfun-type-code-md-font-family);
+      font-size: var(--openbitfun-type-code-md-font-size);
+      resize: vertical;
+    }
+    &__source-fallback { display: none; }
+    &[data-preview-empty='true'] .m-editor-inline-math__source-fallback { display: inline; }
+  }
+
   .m-editor-render-only-block,
   .m-editor-raw-html-block,
   .m-editor-frontmatter {
@@ -774,6 +459,26 @@
     border-radius: var(--openbitfun-radius-base);
     background: var(--openbitfun-color-action-quiet-hover);
     color: var(--openbitfun-color-content-secondary);
+  }
+
+  // Embedded content has document appearance until its local editor is open.
+  .m-editor-render-only-block[data-editing='false'],
+  .m-editor-raw-html-block[data-editing='false'] {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+    margin: 0;
+  }
+
+  .m-editor-frontmatter {
+    margin: 0 0 var(--openbitfun-space-4);
+    .m-editor-embed-toolbar { border-bottom: 1px solid var(--openbitfun-color-border-default); }
+    .m-editor-embed-label {
+      font-family: inherit;
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-secondary);
+    }
   }
 
   .m-editor-frontmatter__header {
@@ -812,6 +517,10 @@
   }
 
   .m-editor-raw-html-inline__source {
+    max-width: 100%;
+    color: inherit;
+    background: transparent;
+    border: 0;
     margin: 0;
     font-family:var(--openbitfun-type-code-md-font-family);
     font-size: var(--openbitfun-type-label-sm-font-size);
@@ -841,8 +550,6 @@
     padding: 0;
   }
 
-  .m-editor-render-only-block[data-editing='true'] .m-editor-render-only-block__pane--preview,
-  .m-editor-raw-html-block[data-editing='true'] .m-editor-raw-html-block__pane--preview,
   .m-editor-frontmatter[data-editing='true'] .m-editor-frontmatter__pane--preview {
     display: none;
   }
@@ -861,7 +568,7 @@
     font-size: var(--openbitfun-type-label-md-font-size);
     display: block;
     width: 100%;
-    min-height: 180px;
+    min-height: 100px;
     resize: vertical;
     border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 12%, transparent);
     border-radius: var(--openbitfun-radius-base);
@@ -884,7 +591,7 @@
   .m-editor-render-only-block__preview,
   .m-editor-raw-html-block__preview,
   .m-editor-frontmatter__preview {
-    min-height: 180px;
+    min-height: 0;
     cursor: text;
     user-select: text;
     -webkit-user-select: text;
@@ -1021,11 +728,6 @@
     grid-template-columns: 20px minmax(0, 1fr);
     align-items: start;
     gap: var(--openbitfun-space-2);
-    margin: var(--openbitfun-space-3) 0;
-    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
-    border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
-    border-radius: var(--openbitfun-radius-base);
-    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 88%, var(--openbitfun-color-content-on-dark));
   }
 
   [data-type='details'] > button {
@@ -1056,19 +758,12 @@
   [data-type='details'] summary {
     display: block;
     list-style: none;
-    color: var(--openbitfun-color-content-primary);
-    font-size: var(--openbitfun-type-label-md-font-size);
-    font-weight: var(--openbitfun-type-label-sm-font-weight);
     outline: none;
   }
 
   [data-type='details'] summary::marker,
   [data-type='details'] summary::-webkit-details-marker {
     display: none;
-  }
-
-  [data-type='details'] [data-type='detailsContent'] {
-    padding-top: var(--openbitfun-space-3);
   }
 
   [data-type='details'] [data-type='detailsContent'] > :first-child {
@@ -1140,79 +835,7 @@
 :root[data-openbitfun-appearance-mode="light"] .m-editor-tiptap,
 [data-openbitfun-appearance-mode="light"] .m-editor-tiptap,
 .light .m-editor-tiptap {
-  .ProseMirror {
-    blockquote {
-      color: markdownCode.$bq-fg-light;
-      background: markdownCode.$bq-bg-light;
-      border-left-color: markdownCode.$bq-border-light;
-    }
 
-    pre {
-      color: markdownCode.$pre-code-fg-light;
-      background: markdownCode.$pre-bg-light;
-      border-color: markdownCode.$pre-border-light;
-      box-shadow: markdownCode.$pre-shadow-light;
-
-      &:hover {
-        border-color: markdownCode.$pre-hover-border-light;
-        box-shadow: markdownCode.$pre-hover-shadow-light;
-      }
-    }
-
-    code {
-      color: markdownCode.$inline-code-fg-light;
-      background: markdownCode.$inline-code-bg-light;
-      border-color: markdownCode.$inline-code-border-light;
-
-      &:hover {
-        background: markdownCode.$inline-code-hover-bg-light;
-        border-color: markdownCode.$inline-code-hover-border-light;
-        color: markdownCode.$inline-code-hover-fg-light;
-      }
-    }
-
-    pre code,
-    pre code:hover {
-      color: inherit;
-      background: transparent !important;
-      border: none !important;
-    }
-
-    table {
-      border-color: markdownTable.$border-light;
-      background: markdownTable.$surface-light;
-      box-shadow: markdownTable.$shadow-light;
-    }
-
-    th,
-    td {
-      border-bottom-color: markdownTable.$cell-border-light;
-    }
-
-    th {
-      background: markdownTable.$th-bg-light;
-      color: markdownTable.$th-fg-light;
-    }
-
-    th + th,
-    td + td,
-    th + td {
-      border-left-color: markdownTable.$col-divider-light;
-    }
-
-    tbody tr {
-      background: markdownTable.$row-base-light;
-    }
-
-    tbody tr:nth-child(2n) {
-      background: markdownTable.$row-stripe-light;
-    }
-
-    tbody tr:hover,
-    thead tr:hover {
-      background: markdownTable.$hover-light;
-    }
-  }
 
   .m-editor-inline-ai-rendered__content.markdown-body blockquote {
     color: markdownCode.$bq-fg-light;

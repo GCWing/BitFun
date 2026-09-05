@@ -129,19 +129,22 @@ describe('MarkdownEditor', () => {
     expect(html).toContain('data-component="icon-button"');
   });
 
-  it('uses preview mode for markdown rendering', () => {
+  it('opens Mermaid documents in rich text mode', () => {
     const html = renderToStaticMarkup(
       <MarkdownEditor initialContent="```mermaid\ngraph TD\n  A-->B\n```" />,
     );
 
-    expect(html).toContain('data-mode="preview"');
+    expect(html).toContain('data-mode="ir"');
   });
 
-  it('does not show the IR fallback warning in the preview/source file UI', () => {
+  it('offers only rich text and source modes', () => {
     const html = renderToStaticMarkup(
       <MarkdownEditor initialContent="# Ordinary Markdown" />,
     );
 
-    expect(html).not.toContain('IR fallback warning');
+    expect(html).toContain('editor.markdownEditor.richText');
+    expect(html).toContain('editor.markdownEditor.source');
+    expect(html).not.toContain('editor.markdownEditor.preview');
+    expect(html.match(/role="radio"/g)).toHaveLength(2);
   });
 });

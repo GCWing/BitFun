@@ -77,8 +77,11 @@ export async function loadLocalImages(container: HTMLElement): Promise<void> {
     
     try {
       const dataUrl = await getLocalImageDataUrl(localPath);
+      // The same image element may now point at another source.
+      if (img.getAttribute('data-local-path') !== localPath) return;
       markLocalImageLoaded(img, dataUrl);
     } catch (error) {
+      if (img.getAttribute('data-local-path') !== localPath) return;
       log.error('Failed to load local image', { path: localPath, error });
       
       img.classList.remove('local-image-loading');

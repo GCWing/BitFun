@@ -68,6 +68,19 @@
       "switchToSideBySide": "切换到并排视图"
     },
     "markdownEditor": {
+      "blockTypes": {
+        "math": "公式",
+        "code": "代码块",
+        "reference": "链接引用",
+        "footnote": "脚注"
+      },
+      "finishBlockEdit": "完成编辑",
+      "editImage": "编辑图片",
+      "imageAddress": "图片地址",
+      "imageAltText": "替代文本",
+      "imageTitle": "图片标题",
+      "richText": "文档",
+      "editBlockSource": "编辑此块源码",
       "loadingFile": "正在加载文件...",
       "placeholder": "开始编写 Markdown 内容...",
       "source": "源码",
@@ -75,9 +88,9 @@
       "preview": "预览",
       "copyMarkdown": "复制 Markdown",
       "copiedMarkdown": "已复制 Markdown",
-      "viewModeLabel": "Markdown 与预览模式",
+      "viewModeLabel": "文档与源码模式",
       "notice": {
-        "sourcePreviewFallback": "该文档包含无法在可视化模式中安全编辑的语法。请在源码模式中编辑，或切换到预览模式查看。"
+        "sourcePreviewFallback": "富文本加载失败，你可以继续编辑 Markdown 源码。"
       }
     },
     "planViewer": {

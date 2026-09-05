@@ -4,7 +4,6 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type ErrorInfo,
@@ -19,8 +18,6 @@ import { TiptapEditor, TiptapEditorHandle } from './TiptapEditor'
 import { Preview } from './Preview'
 import type { EditorOptions, EditorInstance } from '../types'
 import { useI18n } from '@/infrastructure/i18n'
-import { analyzeMarkdownEditability } from '../utils/tiptapMarkdown'
-import { AlertCircle } from 'lucide-react'
 import './MEditor.scss'
 
 const log = createLogger('MEditor')
@@ -51,6 +48,7 @@ function executeTextareaAction(
 }
 
 const MEditorSourceFallback = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
+  const { t } = useI18n('tools')
   const {
     value: controlledValue,
     defaultValue = '',
@@ -147,6 +145,9 @@ const MEditorSourceFallback = forwardRef<EditorInstance, MEditorProps>((props, r
         }
       }}
     >
+      <div className="m-editor-notice" data-openbitfun-component="m-editor" data-openbitfun-part="notice" role="status">
+        {t('editor.markdownEditor.notice.sourcePreviewFallback')}
+      </div>
       <textarea
         ref={textareaRef}
         className="m-editor-source-fallback"
@@ -257,18 +258,10 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
     setMode,
     textareaRef,
     editorInstance
-  } = useEditor(controlledValue ?? defaultValue, onChange)
+  } = useEditor(controlledValue ?? defaultValue, onChange, initialMode)
 
   const tiptapEditorRef = useRef<TiptapEditorHandle>(null)
-  const editability = useMemo(() => analyzeMarkdownEditability(value), [value])
-  const irNeedsSourceFallback = mode === 'ir' && (
-    editability.mode === 'unsafe' ||
-    editability.containsRenderOnlyBlocks ||
-    editability.containsRawHtmlInlines
-  )
-  const effectiveMode = irNeedsSourceFallback
-    ? (readonly ? 'preview' : 'split')
-    : mode
+  const effectiveMode = mode
 
   useEffect(() => {
     currentValueRef.current = value
@@ -372,10 +365,6 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
     setInitialContent: (content: string) => {
       if (effectiveMode === 'ir' && tiptapEditorRef.current) {
         tiptapEditorRef.current.setInitialContent(content)
-        currentValueRef.current = content
-        savedValueRef.current = content
-        onDirtyChange?.(false)
-        return
       }
       currentValueRef.current = content
       savedValueRef.current = content
@@ -383,9 +372,6 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
       onDirtyChange?.(false)
     },
     get isDirty() {
-      if (effectiveMode === 'ir' && tiptapEditorRef.current) {
-        return tiptapEditorRef.current.isDirty
-      }
       return currentValueRef.current !== savedValueRef.current
     }
   }), [editorInstance, effectiveMode, onDirtyChange, textareaRef])
@@ -394,9 +380,9 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault()
       e.stopPropagation()  // Prevent event bubbling; avoids other listeners handling it.
-      onSave?.(value)
+      onSave?.(currentValueRef.current)
     }
-  }, [value, onSave])
+  }, [onSave])
 
   const handleFocusCapture = useCallback(() => {
     if (effectiveMode === 'ir' || effectiveMode === 'preview') {
@@ -443,12 +429,6 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
       tabIndex={-1}
     >
       {toolbar && <div data-openbitfun-component="m-editor" data-openbitfun-part="toolbar" className="m-editor-toolbar">{t('editor.meditor.toolbarPlaceholder')}</div>}
-      {irNeedsSourceFallback && (
-        <div className="m-editor-notice" data-openbitfun-component="m-editor" data-openbitfun-part="notice">
-          <AlertCircle className="m-editor-notice__icon" />
-          <span>{t('editor.markdownEditor.notice.sourcePreviewFallback')}</span>
-        </div>
-      )}
       
       <div data-openbitfun-component="m-editor" data-openbitfun-part="content" className="m-editor-content">
         {effectiveMode === 'preview' && (
@@ -498,7 +478,6 @@ const MEditorInner = forwardRef<EditorInstance, MEditorProps>((props, ref) => {
               onChange={handleEditorChange}
               onFocus={onFocus}
               onBlur={onBlur}
-              onDirtyChange={onDirtyChange}
               placeholder={placeholder}
               readonly={readonly}
               autofocus={autofocus}

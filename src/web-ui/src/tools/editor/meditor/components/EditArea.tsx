@@ -24,7 +24,7 @@ export const EditArea = forwardRef<HTMLTextAreaElement, EditAreaProps>(
     }
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Tab') {
+      if (!readonly && e.key === 'Tab') {
         e.preventDefault()
         const textarea = e.currentTarget
         const start = textarea.selectionStart

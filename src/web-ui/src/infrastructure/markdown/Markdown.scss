@@ -402,7 +402,8 @@
   margin-bottom: 0;
 }
 
-.markdown-renderer details {
+.markdown-renderer details,
+.markdown-renderer [data-type='details'] {
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   padding: 0.62rem 0.72rem;
   border: 1px solid var(--openbitfun-color-border-subtle);
@@ -419,6 +420,10 @@
 
 .markdown-renderer details[open] > summary {
   margin-bottom: var(--markdown-block-gap);
+}
+
+.markdown-renderer [data-type='details'] [data-type='detailsContent'] {
+  padding-top: var(--markdown-block-gap);
 }
 
 .markdown-renderer hr {
@@ -540,6 +545,19 @@
 }
 
 .markdown-renderer .table-wrapper tbody tr:hover {
+  background: var(--markdown-table-row-hover);
+}
+
+// Tiptap keeps the header in tbody; offset striping to match rendered data rows.
+.markdown-renderer.ProseMirror table[data-type='markdown-table'] tbody tr:nth-child(2n) {
+  background: var(--markdown-table-row-base);
+}
+
+.markdown-renderer.ProseMirror table[data-type='markdown-table'] tbody tr:nth-child(2n + 3) {
+  background: var(--markdown-table-row-stripe);
+}
+
+.markdown-renderer.ProseMirror table[data-type='markdown-table'] tbody tr:hover {
   background: var(--markdown-table-row-hover);
 }
 

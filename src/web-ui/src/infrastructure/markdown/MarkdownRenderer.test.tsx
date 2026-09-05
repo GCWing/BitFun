@@ -138,6 +138,24 @@ describe('Markdown file links', () => {
     expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 
+  it('renders separate footnote regions and follows their shared anchors', async () => {
+    const reference = 'Text[^a].';
+    const definition = '[^a]: Definition';
+    const content = `${reference}\n\n${definition}`;
+    await act(async () => root.render(<>
+      <MarkdownRenderer content={content} sourceRange={{ start: 0, end: reference.length, idPrefix: 'test-editor-' }} />
+      <MarkdownRenderer content={content} sourceRange={{ start: reference.length + 2, end: content.length, idPrefix: 'test-editor-' }} />
+    </>));
+    const link = container.querySelector<HTMLAnchorElement>('[data-footnote-ref]')!;
+    const target = document.getElementById(link.hash.slice(1))!;
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+    expect(container.querySelectorAll('section[data-footnotes] li')).toHaveLength(1);
+    expect(target.textContent).toContain('Definition');
+    act(() => link.click());
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+  });
+
   it.each([
     '[Open Canvas](openbitfun-canvas://session/session_1/canvas/canvas_1)',
     'openbitfun-canvas://session/session_1/canvas/canvas_1',

@@ -1,12 +1,19 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Node } from '@tiptap/core';
+import { Selection, TextSelection } from '@tiptap/pm/state';
+import { closeHistory } from '@tiptap/pm/history';
+import { embeddedSource } from '../utils/embeddedSource';
+import { sourceBlockPreview } from '../utils/sourceBlockPreview';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
 type SourceBackedBlockOptions = {
   basePath?: string;
   label?: string;
+  editLabel?: string;
+  doneLabel?: string;
+  typeLabels?: Record<string, string>;
 };
 
 type RawHtmlInlineOptions = {
@@ -14,6 +21,8 @@ type RawHtmlInlineOptions = {
 };
 
 let sourceBackedBlockTextareaTargetCounter = 0;
+let referencePreviewCounter = 0;
+const referencePreviewPrefixes = new WeakMap<object, string>();
 
 function createRawHtmlInlinePreviewNode(
   html: string,
@@ -209,10 +218,12 @@ function createSourceBackedBlock(
   valueAttr: 'html' | 'markdown' | 'yaml',
   className: string,
   metadataAttrs: readonly string[] = [],
+  inline = false,
 ) {
   return Node.create<SourceBackedBlockOptions>({
     name,
-    group: 'block',
+    group: inline ? 'inline' : 'block',
+    inline,
     atom: true,
     isolating: true,
     selectable: true,
@@ -240,7 +251,7 @@ function createSourceBackedBlock(
 
     parseHTML() {
       return [{
-        tag: `div[data-type="${name}"]`,
+        tag: `${inline ? 'span' : 'div'}[data-type="${name}"]`,
         getAttrs: element => ({
           [valueAttr]: element.getAttribute(`data-${valueAttr}`) ?? '',
           ...Object.fromEntries(metadataAttrs.map(attr => [
@@ -259,7 +270,7 @@ function createSourceBackedBlock(
         : null;
 
       return [
-        'div',
+        inline ? 'span' : 'div',
         {
           'data-type': name,
           [`data-${valueAttr}`]: value,
@@ -274,31 +285,42 @@ function createSourceBackedBlock(
 
     addNodeView() {
       return ({ editor, node, getPos }) => {
+        if (!referencePreviewPrefixes.has(editor)) {
+          referencePreviewPrefixes.set(editor, `md-reference-${++referencePreviewCounter}-`);
+        }
+        const referencePrefix = referencePreviewPrefixes.get(editor)!;
         let currentNode = node;
         let isEditing = false;
         let lastSyncedValue: string | null = null;
         let lastEditableState = editor.isEditable;
+        let lastReferenceContent: string | undefined;
+        let lastReferenceStart: number | undefined;
         let previewRoot: Root | null = null;
         let previewCheckTimer: number | null = null;
         let frontmatterEditingMinHeight = 0;
         const textareaTargetId = `${name}-textarea-${++sourceBackedBlockTextareaTargetCounter}`;
         let unbindEditTarget: (() => void) | null = null;
 
-        const dom = document.createElement('div');
+        const tag = inline ? 'span' : 'div';
+        const dom: HTMLElement = document.createElement(tag);
         dom.className = className;
+        dom.contentEditable = 'false';
+        dom.dataset.testid = inline ? 'md-inline-math' : 'md-embed-block';
         dom.draggable = false;
         dom.setAttribute('draggable', 'false');
 
-        const body = document.createElement('div');
+        const body = document.createElement(tag);
         body.className = `${className}__body`;
         body.draggable = false;
         body.setAttribute('draggable', 'false');
 
-        const editorPane = document.createElement('div');
+        const editorPane = document.createElement(tag);
         editorPane.className = `${className}__pane ${className}__pane--editor`;
 
         const textarea = document.createElement('textarea');
         textarea.className = `${className}__textarea`;
+        textarea.dataset.testid = 'md-embed-source';
+        textarea.id = textareaTargetId;
         textarea.spellcheck = false;
         textarea.wrap = 'off';
         textarea.draggable = false;
@@ -315,14 +337,15 @@ function createSourceBackedBlock(
 
         editorPane.append(textarea);
 
-        const previewPane = document.createElement('div');
+        const previewPane = document.createElement(tag);
         previewPane.className = `${className}__pane ${className}__pane--preview`;
 
-        const preview = document.createElement('div');
+        const preview: HTMLElement = document.createElement(tag);
         preview.className = `${className}__preview markdown-body`;
         preview.draggable = false;
         preview.setAttribute('draggable', 'false');
         preview.tabIndex = 0;
+        preview.dataset.testid = 'md-embed-preview';
         previewRoot = createRoot(preview);
 
         const sourceFallback = document.createElement('pre');
@@ -331,19 +354,31 @@ function createSourceBackedBlock(
         previewPane.append(preview, sourceFallback);
         body.append(editorPane, previewPane);
 
-        if (this.options.label) {
-          const header = document.createElement('div');
-          header.className = `${className}__header`;
+        const header = document.createElement(tag);
+        header.className = 'm-editor-embed-toolbar';
+        const label = document.createElement('span');
+        label.className = 'm-editor-embed-label';
+        header.append(label);
 
-          const label = document.createElement('span');
-          label.className = `${className}__label`;
-          label.textContent = this.options.label;
-
-          header.append(label);
-          dom.append(header);
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'm-editor-source-block-action';
+        editButton.contentEditable = 'false';
+        textarea.setAttribute('aria-label', this.options.editLabel ?? this.options.label ?? name);
+        editButton.dataset.testid = 'md-embed-edit';
+        editButton.setAttribute('aria-controls', textareaTargetId);
+        header.append(editButton);
+        if (inline) {
+          editorPane.prepend(header);
+          dom.append(body);
+        } else {
+          dom.append(header, body);
         }
 
-        dom.append(body);
+        const sourceModel = () => embeddedSource(
+          String(currentNode.attrs[valueAttr] ?? ''),
+          inline ? 'inlineMath' : name === 'rawHtmlBlock' ? 'html' : currentNode.attrs.kind,
+        );
 
         const applyAttrs = (attrs: Record<string, unknown>) => {
           const pos = typeof getPos === 'function' ? getPos() : null;
@@ -361,7 +396,15 @@ function createSourceBackedBlock(
 
         const syncEditingState = () => {
           dom.setAttribute('data-editing', isEditing ? 'true' : 'false');
-          preview.tabIndex = editor.isEditable ? -1 : 0;
+          header.hidden = !isEditing && name !== 'frontmatter';
+          preview.tabIndex = 0;
+          const language = name === 'frontmatter' ? 'yaml' : sourceModel().language;
+          dom.dataset.language = language;
+          label.textContent = this.options.label ?? this.options.typeLabels?.[language] ?? language;
+          preview.setAttribute('aria-label', label.textContent);
+          editButton.hidden = !editor.isEditable || (name === 'frontmatter' && !isEditing);
+          editButton.textContent = isEditing ? this.options.doneLabel ?? 'Done' : this.options.editLabel ?? 'Edit';
+          editButton.setAttribute('aria-expanded', String(isEditing));
         };
 
         const setEditing = (nextEditing: boolean, options?: { focus?: boolean }) => {
@@ -377,6 +420,8 @@ function createSourceBackedBlock(
             frontmatterEditingMinHeight = previewPane.getBoundingClientRect().height;
           }
 
+          // Separate two block-edit sessions in document undo history.
+          editor.view.dispatch(closeHistory(editor.state.tr));
           isEditing = resolvedEditing;
           syncEditingState();
 
@@ -394,11 +439,40 @@ function createSourceBackedBlock(
           }
         };
 
-        const exitEditing = () => {
+        const exitEditing = (focus = true) => {
           setEditing(false);
+          activeEditTargetService.clearActiveTarget(textareaTargetId);
+          if (focus) preview.focus();
         };
 
+        const moveOutside = (direction: -1 | 1) => {
+          const pos = getPos();
+          if (typeof pos !== 'number') return;
+          exitEditing(false);
+          const edge = pos + (direction === 1 ? currentNode.nodeSize : 0);
+          const state = editor.state;
+          if (inline) {
+            editor.view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, edge)));
+          } else {
+            const boundary = state.doc.resolve(edge);
+            const adjacent = direction === 1 ? boundary.nodeAfter : boundary.nodeBefore;
+            const selection = adjacent?.isTextblock ? Selection.findFrom(boundary, direction, true) : null;
+            if (selection) editor.view.dispatch(state.tr.setSelection(selection));
+            else {
+              if (!editor.isEditable) return;
+              const tr = state.tr.insert(edge, state.schema.nodes.paragraph.create());
+              editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, edge + 1)));
+            }
+          }
+          editor.view.focus();
+        };
+
+
         const renderPreview = (markdown: string) => {
+          const pos = getPos();
+          const referencePreview = name === 'renderOnlyBlock' || name === 'rawHtmlBlock'
+            ? typeof pos === 'number' ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined
+            : undefined;
           if (name === 'frontmatter') {
             previewRoot?.render(
               React.createElement(
@@ -414,14 +488,7 @@ function createSourceBackedBlock(
 
           const kind = typeof currentNode.attrs.kind === 'string' ? currentNode.attrs.kind : null;
           const detailsSource = kind === 'details' ? parseDetailsSource(markdown) : null;
-          const shouldCheckPreviewVisibility = name === 'rawHtmlBlock' || kind === 'details';
-
           const syncPreviewVisibility = (fallbackToMarkdownRenderer = false) => {
-            if (!shouldCheckPreviewVisibility) {
-              dom.setAttribute('data-preview-empty', 'false');
-              return;
-            }
-
             if (previewCheckTimer !== null) {
               window.clearTimeout(previewCheckTimer);
             }
@@ -495,6 +562,7 @@ function createSourceBackedBlock(
           previewRoot?.render(
             React.createElement(MarkdownRenderer, {
               content: markdown,
+              ...referencePreview,
               basePath: this.options.basePath,
               className: `${className}__markdown`,
             }),
@@ -510,11 +578,17 @@ function createSourceBackedBlock(
           const editable = editor.isEditable;
           const valueChanged = lastSyncedValue !== value;
           const editableChanged = lastEditableState !== editable;
+          const pos = getPos();
+          const referencePreview = (name === 'renderOnlyBlock' || name === 'rawHtmlBlock') && typeof pos === 'number'
+            ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined;
+          const referencesChanged = lastReferenceContent !== referencePreview?.content ||
+            lastReferenceStart !== referencePreview?.sourceRange.start;
 
           dom.setAttribute('data-readonly', editable ? 'false' : 'true');
 
-          if (valueChanged && textarea.value !== value) {
-            textarea.value = value;
+          const payload = sourceModel().source;
+          if (valueChanged && textarea.value !== payload) {
+            textarea.value = payload;
           }
 
           syncFrontmatterTextareaHeight();
@@ -525,12 +599,14 @@ function createSourceBackedBlock(
           }
           syncEditingState();
 
-          if (valueChanged || editableChanged) {
+          if (valueChanged || editableChanged || referencesChanged) {
             renderPreview(value);
           }
 
           lastSyncedValue = value;
           lastEditableState = editable;
+          lastReferenceContent = referencePreview?.content;
+          lastReferenceStart = referencePreview?.sourceRange.start;
         };
 
         const enterEditing = () => {
@@ -545,15 +621,39 @@ function createSourceBackedBlock(
         };
 
         const handleTextareaKeyDown = (event: KeyboardEvent) => {
-          if (isSelectAllShortcut(event)) {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+            return; // Let the document owner save, including this block's changes.
+          }
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+            event.preventDefault();
+            if (event.shiftKey) editor.commands.redo();
+            else editor.commands.undo();
+          } else if (isSelectAllShortcut(event)) {
             event.preventDefault();
             textarea.select();
+          } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+            event.preventDefault();
+            moveOutside(1);
+          } else if (event.key === 'Escape' && !event.isComposing) {
+            event.preventDefault();
+            exitEditing();
           }
-
           event.stopPropagation();
         };
 
         const handlePreviewKeyDown = (event: KeyboardEvent) => {
+          if (event.target !== preview) return;
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') return;
+          if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            moveOutside(1);
+          } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            moveOutside(-1);
+          } else if (editor.isEditable && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            enterEditing();
+          }
           if (isSelectAllShortcut(event)) {
             event.preventDefault();
             selectElementContent(preview);
@@ -573,7 +673,7 @@ function createSourceBackedBlock(
           }
         };
 
-        const handlePreviewMouseDown = (event: MouseEvent) => {
+        const handlePreviewMouseDown = (event: Event) => {
           if (!editor.isEditable) {
             focusElementWithoutScroll(preview);
           }
@@ -581,13 +681,13 @@ function createSourceBackedBlock(
           event.stopPropagation();
         };
 
-        const handlePreviewDoubleClick = (event: MouseEvent) => {
+        const handlePreviewEdit = (event: Event) => {
           const target = event.target;
-          if (!(target instanceof HTMLElement)) {
+          if (!(target instanceof Element)) {
             return;
           }
 
-          if (target.closest('a, summary')) {
+          if (target.closest('a, summary, button, input, video, audio, select, textarea')) {
             event.stopPropagation();
             return;
           }
@@ -621,13 +721,19 @@ function createSourceBackedBlock(
         textarea.addEventListener('click', stopPropagation);
         textarea.addEventListener('keydown', handleTextareaKeyDown);
         textarea.addEventListener('focus', handleTextareaFocus);
-        textarea.addEventListener('blur', exitEditing);
         textarea.addEventListener('blur', handleTextareaBlur);
 
         preview.addEventListener('mousedown', handlePreviewMouseDown);
         preview.addEventListener('click', handlePreviewClickCapture, true);
         preview.addEventListener('click', stopPropagation);
-        preview.addEventListener('dblclick', handlePreviewDoubleClick);
+        preview.addEventListener('click', handlePreviewEdit);
+        sourceFallback.addEventListener('click', handlePreviewEdit);
+        editButton.addEventListener('mousedown', event => event.preventDefault());
+        editButton.addEventListener('click', event => {
+          event.stopPropagation();
+          if (isEditing) exitEditing();
+          else enterEditing();
+        });
         preview.addEventListener('keydown', handlePreviewKeyDown);
 
         [dom, body, textarea, preview].forEach((element) => {
@@ -635,7 +741,8 @@ function createSourceBackedBlock(
         });
 
         textarea.addEventListener('input', () => {
-          const nextValue = textarea.value;
+          if (!editor.isEditable) return;
+          const nextValue = sourceModel().wrap(textarea.value);
           lastSyncedValue = nextValue;
           syncFrontmatterTextareaHeight();
           applyAttrs({ [valueAttr]: nextValue });
@@ -652,8 +759,8 @@ function createSourceBackedBlock(
             const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
             return activeElement === textarea;
           },
-          undo: () => executeTextareaAction(textarea, 'undo'),
-          redo: () => executeTextareaAction(textarea, 'redo'),
+          undo: () => editor.commands.undo(),
+          redo: () => editor.commands.redo(),
           cut: () => executeTextareaAction(textarea, 'cut'),
           copy: () => executeTextareaAction(textarea, 'copy'),
           paste: () => executeTextareaAction(textarea, 'paste'),
@@ -661,7 +768,20 @@ function createSourceBackedBlock(
           containsElement: (element) => element === textarea,
         });
 
+        const finishOutside = (event: Event) => {
+          if (isEditing && event.target instanceof globalThis.Node && !dom.contains(event.target)) {
+            exitEditing(false);
+          }
+        };
+        document.addEventListener('click', finishOutside, true);
+        dom.addEventListener('keydown', event => {
+          if (event.key === 'Tab') window.setTimeout(() => {
+            if (dom.isConnected && !dom.contains(document.activeElement)) exitEditing(false);
+          }, 0);
+        }, true);
         sync();
+        editor.on('update', sync);
+        editor.on('transaction', sync);
 
         return {
           dom,
@@ -681,7 +801,7 @@ function createSourceBackedBlock(
 
             const target = event.target;
             return target instanceof HTMLElement && dom.contains(target) && (
-              !!target.closest('textarea') ||
+              !!target.closest('textarea, button') ||
               !!target.closest(`.${className}__preview`)
             );
           },
@@ -690,6 +810,9 @@ function createSourceBackedBlock(
             return target instanceof globalThis.Node && dom.contains(target);
           },
           destroy: () => {
+            editor.off('update', sync);
+            editor.off('transaction', sync);
+            document.removeEventListener('click', finishOutside, true);
             activeEditTargetService.clearActiveTarget(textareaTargetId);
             unbindEditTarget?.();
             unbindEditTarget = null;
@@ -697,14 +820,18 @@ function createSourceBackedBlock(
               window.clearTimeout(previewCheckTimer);
               previewCheckTimer = null;
             }
-            previewRoot?.unmount();
+            const root = previewRoot;
             previewRoot = null;
+            // NodeViews can be destroyed during the parent React commit.
+            queueMicrotask(() => root?.unmount());
           },
         };
       };
     },
   });
 }
+
+export const InlineMath = createSourceBackedBlock('inlineMath', 'markdown', 'm-editor-inline-math', [], true);
 
 export const RenderOnlyBlock = createSourceBackedBlock(
   'renderOnlyBlock',
@@ -773,11 +900,49 @@ export const RawHtmlInline = Node.create<RawHtmlInlineOptions>({
   },
 
   addNodeView() {
-    return ({ node }) => ({
-      dom: createRawHtmlInlinePreviewNode(
-        String(node.attrs.html ?? ''),
-        this.options.label,
-      ),
-    });
+    return ({ editor, node, getPos }) => {
+      let currentNode = node;
+      const dom = createRawHtmlInlinePreviewNode(String(node.attrs.html ?? ''), this.options.label);
+      const source = dom.querySelector('code')!;
+      const input = document.createElement('input');
+      input.className = 'm-editor-raw-html-inline__source';
+      input.setAttribute('aria-label', this.options.label);
+      const sync = () => {
+        input.value = String(currentNode.attrs.html ?? '');
+        input.readOnly = !editor.isEditable;
+        input.size = Math.max(1, Math.min(input.value.length, 50));
+      };
+      source.replaceWith(input);
+      input.addEventListener('input', () => {
+        const pos = getPos();
+        if (!editor.isEditable || typeof pos !== 'number') return;
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...currentNode.attrs, html: input.value,
+        }));
+      });
+      input.addEventListener('keydown', event => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+          event.preventDefault();
+          if (event.shiftKey) editor.commands.redo();
+          else editor.commands.undo();
+        }
+        event.stopPropagation();
+      });
+      sync();
+      editor.on('update', sync);
+      return {
+        dom,
+        update: updatedNode => {
+          if (updatedNode.type !== currentNode.type) return false;
+          currentNode = updatedNode;
+          sync();
+          return true;
+        },
+        stopEvent: event => event.target === input,
+        ignoreMutation: () => true,
+        destroy: () => { editor.off('update', sync); },
+      };
+    };
   },
 });
