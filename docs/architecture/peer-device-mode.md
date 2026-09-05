@@ -239,6 +239,23 @@ FS) and must not be mixed with Peer Device Mode.
 
 ## Transport
 
+- The shared `services-integrations::remote_connect::relay_client` owns one
+  cancellable connection task. Its read and write futures remain full-duplex,
+  while heartbeat, dial, write deadlines and reconnect belong to that same
+  lifetime. Disconnect joins cancellation; replacing or dropping the client
+  retires the old socket and its reconnect attempts. A generation fence prevents
+  an old connection from publishing state into its replacement. Initial dial
+  failure returns to `Disconnected`. Reconnect restores room/account context,
+  including a server-assigned room id, before admitting new outgoing commands.
+  The outgoing queue holds at most 64 messages and reports saturation explicitly;
+  its failed-socket contents are never replayed. Dial/write deadlines are 15s,
+  heartbeat cadence is 30s, with due heartbeats taking priority over queued
+  commands, and inbound idle detection is 75s. These transport
+  facts do not imply authentication success or application-level acceptance.
+- Mobile delegated-auth recovery retries only a real Relay HTTP 401. An
+  authenticated, encrypted host error mentioning `Unauthorized` or an upstream
+  `HTTP 401` is an application result and must not cause a second mutation.
+  Account-generation fences still apply before and after credential refresh.
 - Controller: `PeerDeviceTransportAdapter` wraps product `invoke` as
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
 - HostInvoke on the controller is **priority-queued** with four requests in
