@@ -164,11 +164,52 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
 
   async restoreIdentity(): Promise<void> {
-    if (this.remotePageState.controlTargetType === 'account_device') {
+    // Always restore the install identity first. Account-device startup used to
+    // return before this happened, so the phone presented a new random device
+    // id on every launch and could not reliably exclude itself from the list.
+    await this.remoteConnectionController.restoreWithoutReconnect(this.host.context());
+    const controlTargetPreference = this.remoteConnectionController.controlTargetPreference();
+    let preferredTarget = this.settingsController.preferredCloudTarget();
+
+    if (controlTargetPreference === 'room') {
+      await this.remoteConnectionController.reconnectRestoredPairing();
+      if ((this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected) {
+        return;
+      }
+      // A rotated room may fall back only to the same physical desktop through
+      // the account path. Never jump to an unrelated remembered account device.
+      if (preferredTarget?.deviceId !== this.remotePageState.desktopId) {
+        preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
+          this.remotePageState.remoteUrl,
+          this.remotePageState.desktopId,
+          this.remotePageState.desktopName
+        );
+      }
+      if (preferredTarget?.deviceId === this.remotePageState.desktopId) {
+        await this.restoreAccountDeviceTarget(false);
+      }
+      return;
+    }
+
+    if (!preferredTarget && this.settingsController.hasCloudAccountSession()) {
+      preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
+        this.remotePageState.remoteUrl,
+        this.remotePageState.desktopId,
+        this.remotePageState.desktopName
+      );
+    }
+    if (preferredTarget) {
       await this.restoreAccountDeviceTarget(false);
       return;
     }
-    await this.remoteConnectionController.restore(this.host.context());
+    if (this.settingsController.hasCloudAccountSession()) {
+      // Legacy records have no explicit control-target preference. With no
+      // stable same-device target, leave the user on the hydrated directory
+      // instead of guessing whether an old QR should supersede the account.
+      RemoteLogger.info('account session restored without a target preference; skipped ambiguous QR reconnect');
+      return;
+    }
+    await this.remoteConnectionController.reconnectRestoredPairing();
   }
 
   /**
@@ -182,7 +223,8 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
    * the device lookup is still in flight.
    */
   private async restoreAccountDeviceTarget(navigateHome: boolean): Promise<void> {
-    const deviceId = this.remotePageState.controlTargetDeviceId.trim();
+    const preferredTarget = this.settingsController.preferredCloudTarget();
+    const deviceId = preferredTarget?.deviceId || this.remotePageState.controlTargetDeviceId.trim();
     if (deviceId.length === 0) {
       return;
     }
@@ -190,18 +232,24 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.remotePageState.setStatusText(RemoteI18n.t('status.restoringConnection'));
     await this.settingsController.restoreCloudTarget(
       deviceId,
-      this.remotePageState.controlTargetDeviceName,
+      preferredTarget?.deviceName || this.remotePageState.controlTargetDeviceName,
       navigateHome
     );
   }
 
   async connect(autoReconnect: boolean = false, accountPassword: string = ''): Promise<void> {
     await this.remoteConnectionController.connect(autoReconnect, accountPassword);
-    await this.settingsController.persistDelegatedAccountSession();
+    if ((this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Connected) {
+      return;
+    }
+    await this.settingsController.persistDelegatedAccountSession(
+      this.remotePageState.desktopId,
+      this.remotePageState.desktopName
+    );
   }
 
   async reconnect(): Promise<void> {
-    if (this.remotePageState.controlTargetType === 'account_device') {
+    if (this.settingsController.preferredCloudTarget()) {
       await this.restoreAccountDeviceTarget(true);
       return;
     }
@@ -645,11 +693,12 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   async reconnectActiveRemote(): Promise<void> {
-    if (this.remotePageState.controlTargetType !== 'account_device') {
+    const preferredTarget = this.settingsController.preferredCloudTarget();
+    if (!preferredTarget) {
       await this.connect(true);
       return;
     }
-    const targetId = this.remotePageState.controlTargetDeviceId;
+    const targetId = preferredTarget.deviceId;
     const device = (await this.settingsController.listCloudAccountDevices())
       .find((item: CloudAccountDevice): boolean => item.deviceId === targetId);
     if (!device) {

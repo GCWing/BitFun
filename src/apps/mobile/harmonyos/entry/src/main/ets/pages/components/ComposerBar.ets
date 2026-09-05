@@ -16,7 +16,6 @@ import {
   LINE,
   MEDIA_SCRIM,
   MUTED,
-  SCRIM,
   SHADOW_SUBTLE,
   SOFT,
   STATUS_SUCCESS,
@@ -77,9 +76,11 @@ export struct ComposerBar {
     default_models: {}
   };
   @Param selectedModelId: string = '';
-  @Local showModelSelectorSheet: boolean = false;
   @Local showModelSelectorPopover: boolean = false;
   @Local isPreparingModelSelectorPopover: boolean = false;
+  @Local keepExpandedForModelSelection: boolean = false;
+  private restoreInputFocusAfterModelSelection: boolean = false;
+  private restoreInputFocusTimerId: number = -1;
   @Event onPickImages: () => void = () => {};
   @Event onRemoveImage: (imageId: string) => void = (_imageId: string) => {};
   @Event onSend: () => void = () => {};
@@ -96,6 +97,10 @@ export struct ComposerBar {
     if (this.sendTransitionTimerId >= 0) {
       clearTimeout(this.sendTransitionTimerId);
       this.sendTransitionTimerId = -1;
+    }
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+      this.restoreInputFocusTimerId = -1;
     }
   }
 
@@ -125,7 +130,6 @@ export struct ComposerBar {
       bottom: this.presentation === ComposerPresentation.Floating ? 16 : 12
     })
     .backgroundColor(TRANSPARENT)
-    .bindSheet($$this.showModelSelectorSheet, this.ModelSelector(true), this.modelSelectorSheetOptions())
   }
 
   @Builder
@@ -168,6 +172,9 @@ export struct ComposerBar {
             this.ModelControl()
           }
           Blank()
+          if (this.shouldShowSupplementalVoice()) {
+            this.SupplementalVoiceButton()
+          }
           this.PrimaryActionButton()
         }
         .width('100%')
@@ -225,7 +232,7 @@ export struct ComposerBar {
     .accessibilityText(`${RemoteI18n.t('chat.selectModel')} · ${this.displaySelectedModel()}`)
     .bindPopup(this.showModelSelectorPopover, {
       builder: () => {
-        this.ModelSelector(false)
+        this.ModelSelector()
       },
       placement: Placement.Top,
       popupColor: TRANSPARENT,
@@ -236,43 +243,25 @@ export struct ComposerBar {
       onStateChange: (event) => {
         if (!event.isVisible) {
           this.showModelSelectorPopover = false;
+          this.restoreComposerFocusAfterModelSelection();
         }
       }
     })
-    .onClick(() => {
-      if (this.presentation === ComposerPresentation.Floating) {
-        this.toggleModelSelectorPopover();
-      } else {
-        this.showModelSelectorSheet = true;
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        // Capture focus before the sheet/popover moves it away. Choosing a
+        // model is part of the current edit, not the end of that edit.
+        this.beginModelSelectionFromComposer();
       }
+    })
+    .onClick(() => {
+      this.toggleModelSelectorPopover();
     })
   }
 
   @Builder
-  ModelSelector(asSheet: boolean) {
+  ModelSelector() {
     Column({ space: 10 }) {
-      if (asSheet) {
-        Row() {
-          Text(RemoteI18n.t('chat.selectModel'))
-            .fontSize(MobileDesignTypography.bodySmall.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(MUTED)
-          Blank()
-          Stack({ alignContent: Alignment.Center }) {
-            SymbolGlyph($r('sys.symbol.xmark'))
-              .fontSize(15)
-              .fontColor([MUTED])
-          }
-          .width(32)
-          .height(32)
-          .accessibilityText(RemoteI18n.t('common.close'))
-          .onClick(() => {
-            this.closeModelSelector();
-          })
-        }
-        .width('100%')
-      }
-
       List({ space: MobileDesignGeometry.composerModelSelectorRowGap }) {
         ForEach(this.selectorModels(), (model: ConversationUiModel) => {
           ListItem() {
@@ -286,16 +275,15 @@ export struct ComposerBar {
       .edgeEffect(EdgeEffect.Spring)
       .divider(null)
     }
-    .width(asSheet ? '100%' : MobileDesignGeometry.composerModelSelectorWidth)
+    .width(MobileDesignGeometry.composerModelSelectorWidth)
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
     .backgroundColor(CARD)
-    .borderRadius(asSheet ? { topLeft: 20, topRight: 20 } :
-      MobileDesignGeometry.composerModelSelectorRadius)
-    .border({ width: asSheet ? 0 : 0.5, color: asSheet ? TRANSPARENT : LINE })
+    .borderRadius(MobileDesignGeometry.composerModelSelectorRadius)
+    .border({ width: 0.5, color: LINE })
     .shadow({
-      radius: asSheet ? 0 : 18,
-      color: asSheet ? TRANSPARENT : SHADOW_SUBTLE,
-      offsetY: asSheet ? 0 : 7
+      radius: 18,
+      color: SHADOW_SUBTLE,
+      offsetY: 7
     })
   }
 
@@ -334,7 +322,7 @@ export struct ComposerBar {
     .backgroundColor(this.isSelectedModel(model) ? SOFT : TRANSPARENT)
     .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
-      this.closeModelSelector();
+      this.closeModelSelector(true);
       this.onSelectModel(model.id);
     })
   }
@@ -384,6 +372,7 @@ export struct ComposerBar {
         .defaultFocus(false)
         .onFocus(() => {
           this.inputFocused = true;
+          this.cancelModelSelectionEditingContinuation();
         })
         .onBlur(() => {
           this.inputFocused = false;
@@ -397,6 +386,9 @@ export struct ComposerBar {
           this.inputText = value;
           this.onChatInputChange(value);
         })
+      if (this.shouldShowSupplementalVoice() && !this.isComposerExpanded()) {
+        this.SupplementalVoiceButton()
+      }
     }
     .layoutWeight(1)
     .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
@@ -484,7 +476,7 @@ export struct ComposerBar {
         return;
       }
       if (action === ComposerPrimaryAction.Voice) {
-        this.onVoiceInput();
+        void this.startVoiceInput();
       }
     })
   }
@@ -502,6 +494,24 @@ export struct ComposerBar {
     SymbolGlyph($r('sys.symbol.mic'))
       .fontSize(22)
       .fontColor([this.primaryActionForegroundColor()])
+  }
+
+  @Builder
+  SupplementalVoiceButton() {
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph($r('sys.symbol.mic'))
+        .fontSize(20)
+        .fontColor([INK])
+    }
+    .width(COMPOSER_ACTION_SIZE)
+    .height(COMPOSER_ACTION_SIZE)
+    .opacity(this.canUseSupplementalVoice() ? 0.72 : 0.32)
+    .accessibilityText(RemoteI18n.t('chat.voiceInput'))
+    .onClick(() => {
+      if (this.canUseSupplementalVoice()) {
+        void this.startVoiceInput();
+      }
+    })
   }
 
   @Builder
@@ -585,6 +595,19 @@ export struct ComposerBar {
       ChatComposerPolicy.canUseVoice(this.inputText, this.selectedImages.length, this.isBusy);
   }
 
+  private shouldShowSupplementalVoice(): boolean {
+    return ChatComposerPolicy.shouldShowSupplementalVoice(
+      this.inputText,
+      this.selectedImages.length,
+      this.isVoiceListening,
+      this.capabilities.showVoiceInput
+    );
+  }
+
+  private canUseSupplementalVoice(): boolean {
+    return ChatComposerPolicy.canUseSupplementalVoice(this.isBusy);
+  }
+
   // Dictation runs inside this app rather than in a system dialog, so listening
   // outranks the draft here in a way a running turn does not.
   private primaryAction(): ComposerPrimaryAction {
@@ -631,12 +654,13 @@ export struct ComposerBar {
     return ChatComposerPolicy.isExpanded(
       this.inputText,
       this.inputFocused,
-      this.isModelSelectorExpanded()
+      this.isModelSelectorExpanded(),
+      this.keepExpandedForModelSelection
     );
   }
 
   private isModelSelectorExpanded(): boolean {
-    return this.showModelSelectorSheet || this.showModelSelectorPopover || this.isPreparingModelSelectorPopover;
+    return this.showModelSelectorPopover || this.isPreparingModelSelectorPopover;
   }
 
   private shouldShowModelControl(): boolean {
@@ -663,7 +687,10 @@ export struct ComposerBar {
   }
 
   private modelListHeight(): number {
-    const visibleRows = Math.min(this.enabledModels().length, 7);
+    // Five rows fit comfortably above the compact composer while the keyboard
+    // remains visible. Larger catalogs scroll inside the anchored menu.
+    const maxVisibleRows = this.presentation === ComposerPresentation.Compact ? 5 : 7;
+    const visibleRows = Math.min(this.enabledModels().length, maxVisibleRows);
     return visibleRows * MobileDesignGeometry.composerModelSelectorRowHeight +
       Math.max(0, visibleRows - 1) * MobileDesignGeometry.composerModelSelectorRowGap;
   }
@@ -677,18 +704,30 @@ export struct ComposerBar {
     return [selected, ...models.filter((model: ConversationUiModel) => model.id !== selected.id)];
   }
 
-  private closeModelSelector(): void {
-    this.showModelSelectorSheet = false;
+  private closeModelSelector(restoreInputFocus: boolean = false): void {
+    const shouldRestore = restoreInputFocus && this.restoreInputFocusAfterModelSelection;
     this.showModelSelectorPopover = false;
     this.isPreparingModelSelectorPopover = false;
+    if (shouldRestore) {
+      this.restoreComposerFocusAfterModelSelection();
+    } else if (!restoreInputFocus) {
+      this.cancelModelSelectionEditingContinuation();
+    }
   }
 
   private async toggleModelSelectorPopover(): Promise<void> {
     if (this.showModelSelectorPopover) {
-      this.closeModelSelector();
+      this.closeModelSelector(true);
       return;
     }
     if (this.isPreparingModelSelectorPopover) {
+      return;
+    }
+
+    if (this.presentation === ComposerPresentation.Compact) {
+      // On a phone this is an in-place upward menu, not a modal sheet. Keep the
+      // IME visible so model switching does not interrupt prompt composition.
+      this.showModelSelectorPopover = true;
       return;
     }
 
@@ -696,7 +735,7 @@ export struct ComposerBar {
     // IME releases the window. Opening the popup before this completes makes its
     // viewport and hit-testing inherit the keyboard-constrained layout.
     this.isPreparingModelSelectorPopover = true;
-    await this.releaseKeyboardForModelSelector();
+    await this.releaseComposerKeyboard();
 
     if (!this.isPreparingModelSelectorPopover || this.presentation !== ComposerPresentation.Floating) {
       return;
@@ -705,7 +744,7 @@ export struct ComposerBar {
     this.isPreparingModelSelectorPopover = false;
   }
 
-  private async releaseKeyboardForModelSelector(): Promise<void> {
+  private async releaseComposerKeyboard(): Promise<void> {
     const hostContext = this.getUIContext().getHostContext();
     if (!hostContext) {
       this.getUIContext().getFocusController().clearFocus();
@@ -721,14 +760,47 @@ export struct ComposerBar {
     this.getUIContext().getFocusController().clearFocus();
   }
 
-  private modelSelectorSheetOptions(): SheetOptions {
-    return {
-      height: Math.min(480, 86 + this.modelListHeight()),
-      backgroundColor: TRANSPARENT,
-      maskColor: SCRIM,
-      showClose: false,
-      dragBar: true
-    };
+  private beginModelSelectionFromComposer(): void {
+    if (!this.inputFocused) {
+      return;
+    }
+    this.keepExpandedForModelSelection = true;
+    this.restoreInputFocusAfterModelSelection = true;
+  }
+
+  private restoreComposerFocusAfterModelSelection(): void {
+    if (!this.restoreInputFocusAfterModelSelection || this.showModelSelectorPopover ||
+      this.isPreparingModelSelectorPopover) {
+      return;
+    }
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+    }
+    // Let the selector release its focus scope first. Retaining the expanded
+    // layout during this handoff removes the collapse/re-expand jump.
+    this.restoreInputFocusTimerId = setTimeout(() => {
+      this.restoreInputFocusTimerId = -1;
+      try {
+        this.getUIContext().getFocusController().requestFocus(this.inputId);
+      } catch (_error) {
+        // If the route disappeared during dismissal, component teardown owns
+        // the continuation and clears its timer.
+      }
+    }, MobileDesignMotion.structure);
+  }
+
+  private cancelModelSelectionEditingContinuation(): void {
+    if (this.restoreInputFocusTimerId >= 0) {
+      clearTimeout(this.restoreInputFocusTimerId);
+      this.restoreInputFocusTimerId = -1;
+    }
+    this.restoreInputFocusAfterModelSelection = false;
+    this.keepExpandedForModelSelection = false;
+  }
+
+  private async startVoiceInput(): Promise<void> {
+    await this.releaseComposerKeyboard();
+    this.onVoiceInput();
   }
 
   private inputPlaceholder(): string {

@@ -2,10 +2,11 @@ import { relationalStore } from '@kit.ArkData';
 import { RecentWorkspaceEntry, RemoteSession } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { OhosError } from './OhosError';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { RemoteSessionListSlice, RemoteSessionListStore } from './RemoteSessionListCache';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
-  name: 'openbitfun_remote_sessions.db',
+  name: HarmonyUpgradeIdentityContract.REMOTE_SESSIONS_DATABASE,
   // Session titles are as revealing as the transcripts themselves, so this
   // matches the level the transcript store uses.
   securityLevel: relationalStore.SecurityLevel.S2

@@ -13,14 +13,17 @@ export struct AccountProfilePanel {
   @Param accountUserId: string = '';
   @Param fallbackUserId: string = '';
   @Param deviceId: string = '';
+  @Param controlTargetType: string = 'none';
   @Param controlTargetDeviceId: string = '';
   @Param connectionState: string = 'idle';
   @Param showNavigationHeader: boolean = false;
   @Param embeddedInSettings: boolean = false;
   @BuilderParam preferences: () => void = this.EmptyBuilder;
+  @BuilderParam connection: () => void = this.EmptyBuilder;
   @BuilderParam about: () => void = this.EmptyBuilder;
   @Event onBack: () => void = () => {};
   @Event onLoggedOut: () => void = () => {};
+  @Event onOpenAccount: () => void = () => {};
   @Event onReconnect: () => void = () => {};
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> =
@@ -43,6 +46,7 @@ export struct AccountProfilePanel {
     Column({ space: 0 }) {
       if (this.embeddedInSettings) {
         this.CompactIdentityCard()
+        this.connection()
         this.preferences()
         this.DeviceManagementSection()
         this.about()
@@ -71,7 +75,8 @@ export struct AccountProfilePanel {
     Row({ space: 14 }) {
       DefaultAccountAvatar({ avatarSize: 46 })
       Column({ space: 4 }) {
-        Text(RemoteI18n.t('settings.account.current'))
+        Text(this.isAccountAuthenticated() ? RemoteI18n.t('settings.account.current') :
+          RemoteI18n.t('settings.account.currentIdentity'))
           .fontSize(MobileDesignTypography.bodyLarge.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
@@ -87,11 +92,17 @@ export struct AccountProfilePanel {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.accountSignedIn') :
-        RemoteI18n.t('remote.settings.accountNotSignedIn'))
-        .fontSize(MobileDesignTypography.bodySmall.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.isAccountAuthenticated() ? STATUS_SUCCESS : MUTED)
+      Row({ space: 6 }) {
+        Text(this.compactAccountStatus())
+          .fontSize(MobileDesignTypography.bodySmall.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.isAccountAuthenticated() ? STATUS_SUCCESS : MUTED)
+        if (!this.isAccountAuthenticated()) {
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(13)
+            .fontColor([MUTED])
+        }
+      }
     }
     .width('100%')
     .constraintSize({ minHeight: 72 })
@@ -100,6 +111,11 @@ export struct AccountProfilePanel {
     .backgroundColor(CARD)
     .borderRadius(MobileDesignGeometry.settingsCardRadius)
     .margin({ bottom: 24 })
+    .onClick(() => {
+      if (!this.isAccountAuthenticated()) {
+        this.onOpenAccount();
+      }
+    })
   }
 
   @Builder
@@ -440,6 +456,16 @@ export struct AccountProfilePanel {
     const identifier = this.profileIdentifier();
     if (identifier.length <= 22) return identifier;
     return `${identifier.slice(0, 18)}…`;
+  }
+
+  private compactAccountStatus(): string {
+    if (this.isAccountAuthenticated()) {
+      return RemoteI18n.t('remote.settings.accountSignedIn');
+    }
+    if (this.controlTargetType === 'room') {
+      return RemoteI18n.t('remote.settings.accountTemporary');
+    }
+    return RemoteI18n.t('remote.settings.accountNotSignedIn');
   }
 
   private accountStatusBody(): string {

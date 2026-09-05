@@ -2,10 +2,11 @@ import { preferences } from '@kit.ArkData';
 import { i18n } from '@kit.LocalizationKit';
 import { AppLocale } from '../i18n/AppLocale';
 import { RemoteI18n } from '../i18n/RemoteI18n';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { OhosError } from './OhosError';
 import { RemoteLogger } from './RemoteLogger';
 
-const STORE_NAME = 'openbitfun_app_locale';
+const STORE_NAME = HarmonyUpgradeIdentityContract.APP_LOCALE_STORE;
 const LANGUAGE_KEY = 'language';
 
 export interface LocaleSystemHost {

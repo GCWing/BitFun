@@ -74,9 +74,9 @@ xcrun simctl launch booted com.openbitfun.mobile.ios \
   --design-preview connected-conversation
 
 # HarmonyOS emulator (after installing a locally signed debug HAP)
-hdc -t <emulator-tcp-target> shell aa force-stop com.openbitfun.app
+hdc -t <emulator-tcp-target> shell aa force-stop <harmony-bundle-id>
 hdc -t <emulator-tcp-target> shell aa start \
-  -a EntryAbility -b com.openbitfun.app \
+  -a EntryAbility -b <harmony-bundle-id> \
   --ps openbitfunDesignPreview connected-conversation
 ```
 

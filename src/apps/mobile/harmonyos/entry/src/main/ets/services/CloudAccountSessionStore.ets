@@ -1,12 +1,13 @@
 import { huks } from '@kit.UniversalKeystoreKit';
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { OhosError } from './OhosError';
 
-const STORE_NAME: string = 'openbitfun_cloud_account';
+const STORE_NAME: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_STORE;
 const CIPHER_KEY: string = 'session_cipher';
 const IV_KEY: string = 'session_iv';
-const HUKS_ALIAS: string = 'openbitfun_cloud_account_session';
+const HUKS_ALIAS: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_HUKS_ALIAS;
 
 export interface PersistedCloudAccountSession {
   relayUrl: string;

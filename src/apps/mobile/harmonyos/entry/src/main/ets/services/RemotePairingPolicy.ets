@@ -79,14 +79,17 @@ export class RemotePairingPolicy {
   shouldPromptForAccount(
     descriptor: RemoteDescriptor,
     hasCloudAccountSession: boolean = false,
-    cloudUsername: string = ''
+    cloudUsername: string = '',
+    cloudRelayUrl: string = ''
   ): boolean {
     return ConnectScanDecisionPolicy.decide(
       descriptor.accountAuth,
       hasCloudAccountSession,
       cloudUsername,
       descriptor.accountUsername,
-      ''
+      '',
+      cloudRelayUrl,
+      descriptor.relayUrl
     ) === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD;
   }
 

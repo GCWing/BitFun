@@ -78,6 +78,7 @@ export interface SettingsPresentationActions {
   readonly close: () => void;
   readonly addConnection: () => void;
   readonly disconnect: () => void;
+  readonly clearPairing: () => void;
   readonly reconnect: () => void;
   readonly openAccount: () => void;
   readonly cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string>;
@@ -130,7 +131,8 @@ export function emptyAppRootPresentationActions(): AppRootPresentationActions {
       openSession: () => {}, archive: () => {}, exportSession: () => {}, deleteSession: () => {}
     },
     onSettings: {
-      close: () => {}, addConnection: () => {}, disconnect: () => {}, reconnect: () => {}, openAccount: () => {},
+      close: () => {}, addConnection: () => {}, disconnect: () => {}, clearPairing: () => {},
+      reconnect: () => {}, openAccount: () => {},
       cloudLogin: async () => '', cloudLogout: async () => {},
       cloudListDevices: async () => [], cloudSelectDevice: async () => {},
       getPermissionMode: async () => 'ask',

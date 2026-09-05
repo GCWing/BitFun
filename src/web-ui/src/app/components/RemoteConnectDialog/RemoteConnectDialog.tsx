@@ -473,12 +473,25 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         } else if (payload && !payload.logged_in) {
           setCustomUrl('');
         }
+        // Account changes rotate an unpaired QR invitation, but an established
+        // room is an independent control channel and stays connected. Refresh
+        // first, then clear only UI state that the backend actually retired.
+        void remoteConnectAPI.getStatus().then((nextStatus) => {
+          if (!isOpenRef.current) return;
+          applyStatus(nextStatus);
+          if (remotePairingStateName(nextStatus.pairing_state) !== 'connected') {
+            pendingOwnerRef.current = null;
+            connectionOwnerRef.current = null;
+            setConnectionOwner(null);
+            setConnectionResult(null);
+          }
+        }).catch(() => undefined);
       },
     );
     return () => {
       unlisten();
     };
-  }, []);
+  }, [applyStatus]);
 
   // The account status and pairing status intentionally expose opaque UUIDs
   // for identity checks. Resolve the persisted, non-secret login hint for the

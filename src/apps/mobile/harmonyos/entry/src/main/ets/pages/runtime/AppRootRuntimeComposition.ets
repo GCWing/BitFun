@@ -800,6 +800,9 @@ export abstract class AppRootRuntimeComposition {
           loadRecentWorkspaces: async (): Promise<void> => {
             await this.remoteWorkspaceViewModel.loadRecentWorkspacesInBackground();
           },
+          saveControlTargetType: async (controlTargetType: string): Promise<void> => {
+            await this.remoteConnectionController.rememberControlTargetType(controlTargetType);
+          },
           onAccountDevices: (devices: CloudAccountDevice[]): void => {
             this.deviceDirectoryViewModel.syncDevices(devices);
           },
@@ -999,6 +1002,10 @@ export abstract class AppRootRuntimeComposition {
       close: (): void => this.appShellState.leaveSettings(),
       addConnection: (): void => this.openAddConnectionFromSettings(),
       disconnect: (): void => { this.disconnect(false); },
+      clearPairing: (): void => {
+        this.appShellState.setSettingsVisible(false);
+        this.disconnect(true);
+      },
       reconnect: (): void => { this.reconnect(); },
       openAccount: (): void => { this.appShellState.openSettings('account'); },
       cloudLogin: (relayUrl: string, username: string, password: string): Promise<string> =>
@@ -1138,7 +1145,8 @@ export abstract class AppRootRuntimeComposition {
     const result = this.remoteConnectionController.handleDetectedUrl(
       url,
       this.settingsController.hasCloudAccountSession(),
-      this.remotePageState.accountUsername
+      this.remotePageState.accountUsername,
+      this.settingsController.cloudRelayEndpoint()
     );
     if (result.action === DetectedUrlAction.USE_CLOUD_DEVICE) {
       void this.settingsController.restoreCloudTarget(

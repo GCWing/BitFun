@@ -57,11 +57,14 @@ const LEGACY_APPLICATION_ASSETS = [
   'src/apps/mobile/harmonyos/AppScope/resources/base/media/background.png',
   'src/apps/mobile/harmonyos/AppScope/resources/base/media/foreground.png',
   'src/apps/mobile/harmonyos/AppScope/resources/base/media/layered_image.json',
+  'src/apps/mobile/harmonyos/AppScope/resources/base/media/openbitfun-app-icon.png',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/openbitfun_icon.png',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/background.png',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/foreground.png',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/layered_image.json',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/startIcon.png',
+  'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/openbitfun-app-icon.png',
+  'src/apps/mobile/harmonyos/entry/src/main/resources/base/media/openbitfun-start-window.png',
   'src/apps/mobile/ios/OpenBitFun/Resources.xcassets/AppIcon.appiconset/openbitfun_icon.png',
   'src/apps/mobile/ios/OpenBitFun/Resources.xcassets/OpenBitFunLogo.imageset',
   'src/apps/relay-server/static/assets/Logo-ICON-BOaKcXgO.png',
@@ -258,15 +261,15 @@ async function generateBrandAssets() {
   );
 
   await writePng(
-    outputPath('src', 'apps', 'mobile', 'harmonyos', 'AppScope', 'resources', 'base', 'media', 'openbitfun-app-icon.png'),
+    outputPath('src', 'apps', 'mobile', 'harmonyos', 'AppScope', 'resources', 'base', 'media', 'openbitfun_app_icon.png'),
     applicationIconLarge,
   );
   await writePng(
-    outputPath('src', 'apps', 'mobile', 'harmonyos', 'entry', 'src', 'main', 'resources', 'base', 'media', 'openbitfun-app-icon.png'),
+    outputPath('src', 'apps', 'mobile', 'harmonyos', 'entry', 'src', 'main', 'resources', 'base', 'media', 'openbitfun_app_icon.png'),
     applicationIconLarge,
   );
   await writePng(
-    outputPath('src', 'apps', 'mobile', 'harmonyos', 'entry', 'src', 'main', 'resources', 'base', 'media', 'openbitfun-start-window.png'),
+    outputPath('src', 'apps', 'mobile', 'harmonyos', 'entry', 'src', 'main', 'resources', 'base', 'media', 'openbitfun_start_window.png'),
     await resizePng(lightMark, 144),
   );
 

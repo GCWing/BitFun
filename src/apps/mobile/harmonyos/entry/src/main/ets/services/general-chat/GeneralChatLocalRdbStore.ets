@@ -2,10 +2,11 @@ import { relationalStore } from '@kit.ArkData';
 import { ChatMessage, RemoteSession } from '../../model/RemoteModels';
 import { Encoding } from '../Encoding';
 import { OhosError } from '../OhosError';
+import { HarmonyUpgradeIdentityContract } from '../HarmonyUpgradeIdentityContract';
 import { GeneralChatLocalStore } from './GeneralChatPort';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
-  name: 'openbitfun_general_chat.db',
+  name: HarmonyUpgradeIdentityContract.GENERAL_CHAT_DATABASE,
   securityLevel: relationalStore.SecurityLevel.S1
 };
 

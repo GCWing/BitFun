@@ -2,6 +2,7 @@ import distributedKVStore from '@ohos.data.distributedKVStore';
 import { common } from '@kit.AbilityKit';
 import { distributedDeviceManager } from '@kit.DistributedServiceKit';
 import { OhosError } from './OhosError';
+import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { RemoteLogger } from './RemoteLogger';
 import {
   WATCH_PROVISION_REQUEST_KEY,
@@ -11,11 +12,11 @@ import {
 /**
  * Versioned because a store's `securityLevel` is fixed at creation: it can only
  * ever be raised, and for a store that syncs across devices it cannot be changed
- * at all. `openbitfun_harmony_handoff` was created S2 on both devices and had to be
+ * at all. The pre-release S2 handoff store had to be
  * abandoned rather than relabelled — see the S1 note on `securityLevel` below.
  * Must stay identical to the watch's `DistributedHandoffStore`.
  */
-const STORE_ID: string = 'openbitfun_harmony_handoff_s1';
+const STORE_ID: string = HarmonyUpgradeIdentityContract.WATCH_HANDOFF_STORE;
 
 export type WatchProvisionRequestHandler = (payload: string) => void;
 
@@ -24,8 +25,8 @@ export type WatchProvisionRequestHandler = (payload: string) => void;
  *
  * `distributedKVStore` isolates stores by bundle name *and* store id and only
  * replicates between installs of the same app on the same account, which is
- * why the phone carries the watch's bundle name (`com.openbitfun.app`) rather than
- * a store id of its own.
+ * why the phone and watch retain one stable compatibility bundle id rather
+ * than using platform-specific ids.
  *
  * The isolation key is really bundle name + **AppID**, and AppID is derived from
  * the signing certificate — so this project and the watch's must also be built

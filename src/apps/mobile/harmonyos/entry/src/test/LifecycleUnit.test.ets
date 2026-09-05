@@ -615,6 +615,37 @@ export default function lifecycleUnitTest() {
       expect(service.cancelRequests).assertEqual(1);
       expect(clearAllCount).assertEqual(1);
     });
+
+    it('continues an existing draft by voice without duplicating partial results', 0, async () => {
+      const service = new FakeVoiceInputLifecycleService();
+      let inputText = 'Review this';
+      const inputEvents: string[] = [];
+      const controller = new VoiceInputLifecycleController(service, {
+        currentInputText: (): string => inputText,
+        currentStatusText: (): string => '',
+        onInputText: (_routeId: string, text: string): void => {
+          inputText = text;
+          inputEvents.push(text);
+        },
+        onListening: (_routeId: string, _isListening: boolean): void => {},
+        onStatusText: (_statusText: string): void => {},
+        onError: (_message: string): void => {}
+      });
+
+      expect(await controller.toggle({} as Context, {
+        routeId: 'GeneralChat',
+        isListening: false,
+        isBusy: false,
+        inputText,
+        selectedImageCount: 1
+      })).assertTrue();
+
+      service.emitText('implementation', false);
+      service.emitText('implementation carefully', true);
+
+      expect(inputEvents[0]).assertEqual('Review this implementation');
+      expect(inputEvents[1]).assertEqual('Review this implementation carefully');
+    });
   });
 
   describe('GeneralChatDraftController', () => {

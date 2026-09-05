@@ -1,8 +1,9 @@
 import { Want } from '@kit.AbilityKit';
 import { Driver, ON, abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
+import { HarmonyUpgradeIdentityContract } from '../../../main/ets/services/HarmonyUpgradeIdentityContract';
 
-const APP_BUNDLE: string = 'com.openbitfun.app';
+const APP_BUNDLE: string = HarmonyUpgradeIdentityContract.APP_BUNDLE;
 const APP_ABILITY: string = 'EntryAbility';
 
 export default function deviceSmokeTest() {
