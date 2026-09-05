@@ -24,8 +24,8 @@ use openbitfun_core::agentic::tools::computer_use_host::{
 /// Per-host filter knobs.
 #[derive(Debug, Clone)]
 pub(crate) struct FilterOpts {
-    /// Hard cap on emitted elements. The filter keeps the largest-area
-    /// elements when exceeded so the overlay stays legible.
+    /// Hard cap on emitted elements. Keep focused controls first, then the
+    /// largest-area elements when exceeded so the overlay stays legible.
     pub max_elements: usize,
     /// When `true`, only elements whose frame intersects the focused
     /// window's image rectangle are kept. The host passes the rectangle
@@ -51,6 +51,16 @@ pub(crate) fn build_interactive_elements(
     screenshot: Option<&ComputerScreenshot>,
     opts: &FilterOpts,
 ) -> Vec<InteractiveElement> {
+    build_interactive_elements_with_count(nodes, screenshot, opts).0
+}
+
+/// Also return the eligible count before the caller's display budget, so
+/// truncation can be disclosed without confusing it with absent controls.
+pub(crate) fn build_interactive_elements_with_count(
+    nodes: &[AxNode],
+    screenshot: Option<&ComputerScreenshot>,
+    opts: &FilterOpts,
+) -> (Vec<InteractiveElement>, usize) {
     let mut staged: Vec<Staged> = Vec::with_capacity(nodes.len() / 4);
 
     for n in nodes {
@@ -61,12 +71,11 @@ pub(crate) fn build_interactive_elements(
             continue;
         };
         let (gx, gy, gw, gh) = frame;
-        if gw < 4.0 || gh < 4.0 {
+        if ![gx, gy, gw, gh].iter().all(|v| v.is_finite()) || gw < 4.0 || gh < 4.0 {
             continue;
         }
 
-        let frame_image = screenshot
-            .and_then(|s| project_global_to_image(s, gx, gy, gw, gh, opts.clip_to_image_bounds));
+        let frame_image = screenshot.and_then(|s| project_global_to_image(s, gx, gy, gw, gh));
 
         // When clipping is requested and the host provided bounds, drop
         // anything that falls entirely outside the captured rectangle.
@@ -97,37 +106,8 @@ pub(crate) fn build_interactive_elements(
         });
     }
 
-    // Card-merge heuristic: when an actionable container (AXCell / AXRow /
-    // AXButton / AXLink / AXGroup-with-AXPress) geometrically contains
-    // smaller actionable children that are themselves actionable, drop
-    // the children. Without this the SoM overlay shows 3-5 stacked
-    // numbers on a single card (icon + label + cell) and the model has
-    // to guess which one actually fires the navigation. Keep the card.
-    //
-    // Containment rule: parent area is at least 1.5x the child, and the
-    // child rectangle is fully (with 2pt slop) inside the parent.
-    if staged.len() > 1 {
-        let originals = staged.clone();
-        staged.retain(|child| {
-            let (cx, cy, cw, ch) = child.frame_global;
-            !originals.iter().any(|parent| {
-                if parent.node_idx == child.node_idx {
-                    return false;
-                }
-                if !is_card_container(&parent.role) {
-                    return false;
-                }
-                if parent.area < child.area * 1.5 {
-                    return false;
-                }
-                let (px, py, pw, ph) = parent.frame_global;
-                cx + 2.0 >= px
-                    && cy + 2.0 >= py
-                    && cx + cw <= px + pw + 2.0
-                    && cy + ch <= py + ph + 2.0
-            })
-        });
-    }
+    // Overlapping bounds do not imply equivalent actions. In particular,
+    // cards can contain independent buttons and editable fields; retain them.
 
     // Stable deterministic sort: top-to-bottom, then left-to-right.
     // Buckets of 16pt eliminate jitter from baseline differences between
@@ -142,15 +122,18 @@ pub(crate) fn build_interactive_elements(
             .then_with(|| a.node_idx.cmp(&b.node_idx))
     });
 
+    let eligible_count = staged.len();
     if staged.len() > opts.max_elements {
         // Keep the largest-area elements so the overlay stays readable on
         // dense pages. We still preserve the deterministic display order
         // afterwards by re-sorting the kept slice.
         let mut by_area = staged;
         by_area.sort_by(|a, b| {
-            b.area
-                .partial_cmp(&a.area)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.focused.cmp(&a.focused).then_with(|| {
+                b.area
+                    .partial_cmp(&a.area)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
         });
         by_area.truncate(opts.max_elements);
         by_area.sort_by(|a, b| {
@@ -165,7 +148,7 @@ pub(crate) fn build_interactive_elements(
         staged = by_area;
     }
 
-    staged
+    let elements = staged
         .into_iter()
         .enumerate()
         .map(|(i, s)| InteractiveElement {
@@ -180,7 +163,8 @@ pub(crate) fn build_interactive_elements(
             focused: s.focused,
             ax_actionable: s.ax_actionable,
         })
-        .collect()
+        .collect();
+    (elements, eligible_count)
 }
 
 /// Render a compact one-line-per-element text rendering used in the model
@@ -190,7 +174,12 @@ pub(crate) fn render_element_tree_text(elements: &[InteractiveElement]) -> Strin
     for e in elements {
         let label = e.label.as_deref().unwrap_or("");
         let role = display_role(&e.role, e.subrole.as_deref());
-        let mut line = format!("[{}] {} \"{}\"", e.i, role, label);
+        let mut line = format!(
+            "[{}] {} {}",
+            e.i,
+            role,
+            serde_json::to_string(label).expect("string serialization")
+        );
         if e.focused {
             line.push_str(" [focused]");
         }
@@ -204,23 +193,6 @@ pub(crate) fn render_element_tree_text(elements: &[InteractiveElement]) -> Strin
         out.push('\n');
     }
     out
-}
-
-/// Roles eligible to "absorb" smaller actionable descendants in the SoM
-/// overlay. Anything else (text fields, sliders, menu items …) keeps its
-/// children visible — those tend to need direct interaction at the leaf.
-fn is_card_container(role: &str) -> bool {
-    matches!(
-        role,
-        "AXCell"
-            | "AXRow"
-            | "AXOutlineRow"
-            | "AXButton"
-            | "AXMenuButton"
-            | "AXPopUpButton"
-            | "AXLink"
-            | "AXGroup"
-    )
 }
 
 #[derive(Clone)]
@@ -327,15 +299,42 @@ fn project_global_to_image(
     gy: f64,
     gw: f64,
     gh: f64,
-    require_intersection: bool,
 ) -> Option<(u32, u32, u32, u32)> {
     let bounds = shot.image_global_bounds.as_ref()?;
-    if bounds.width <= 0.0 || bounds.height <= 0.0 {
+    if ![
+        bounds.left,
+        bounds.top,
+        bounds.width,
+        bounds.height,
+        gx,
+        gy,
+        gw,
+        gh,
+    ]
+    .iter()
+    .all(|v| v.is_finite())
+        || bounds.width <= 0.0
+        || bounds.height <= 0.0
+        || gw <= 0.0
+        || gh <= 0.0
+    {
         return None;
     }
 
-    let scale_x = shot.image_width as f64 / bounds.width;
-    let scale_y = shot.image_height as f64 / bounds.height;
+    let (left, top, width, height) = shot
+        .image_content_rect
+        .as_ref()
+        .map(|r| (r.left, r.top, r.width, r.height))
+        .unwrap_or((0, 0, shot.image_width, shot.image_height));
+    if width == 0
+        || height == 0
+        || left.checked_add(width)? > shot.image_width
+        || top.checked_add(height)? > shot.image_height
+    {
+        return None;
+    }
+    let scale_x = width as f64 / bounds.width;
+    let scale_y = height as f64 / bounds.height;
 
     // Clip the global rectangle to the image rectangle.
     let lx = gx.max(bounds.left);
@@ -343,31 +342,20 @@ fn project_global_to_image(
     let rx = (gx + gw).min(bounds.left + bounds.width);
     let by = (gy + gh).min(bounds.top + bounds.height);
     if rx <= lx || by <= ty {
-        if require_intersection {
-            return None;
-        }
-        // No intersection but caller wants a best-effort projection — fall
-        // through using the unclipped rectangle so the overlay can decide
-        // whether to draw a clipped marker.
-        let ix = ((gx - bounds.left) * scale_x).round();
-        let iy = ((gy - bounds.top) * scale_y).round();
-        let iw = (gw * scale_x).round().max(1.0);
-        let ih = (gh * scale_y).round().max(1.0);
-        return Some((ix.max(0.0) as u32, iy.max(0.0) as u32, iw as u32, ih as u32));
+        // The caller can retain the global target when clipping is disabled,
+        // but there is no corresponding overlay rectangle in this image.
+        return None;
     }
 
-    let ix = ((lx - bounds.left) * scale_x).round();
-    let iy = ((ty - bounds.top) * scale_y).round();
-    let iw = ((rx - lx) * scale_x).round().max(1.0);
-    let ih = ((by - ty) * scale_y).round().max(1.0);
-
-    let max_x = shot.image_width.saturating_sub(1) as f64;
-    let max_y = shot.image_height.saturating_sub(1) as f64;
+    let ix = left + (((lx - bounds.left) * scale_x).floor() as u32).min(width - 1);
+    let iy = top + (((ty - bounds.top) * scale_y).floor() as u32).min(height - 1);
+    let right = left + (((rx - bounds.left) * scale_x).ceil() as u32).min(width);
+    let bottom = top + (((by - bounds.top) * scale_y).ceil() as u32).min(height);
     Some((
-        ix.max(0.0).min(max_x) as u32,
-        iy.max(0.0).min(max_y) as u32,
-        iw as u32,
-        ih as u32,
+        ix,
+        iy,
+        right.saturating_sub(ix).max(1),
+        bottom.saturating_sub(iy).max(1),
     ))
 }
 
@@ -476,44 +464,21 @@ mod tests {
 
     #[test]
     fn caps_at_max_elements() {
-        let nodes: Vec<_> = (0..10)
+        let mut nodes: Vec<_> = (0..10)
             .map(|k| node(k, "AXButton", Some((k as f64 * 50.0, 10.0, 30.0, 20.0))))
             .collect();
+        nodes[9].focused = true;
         let opts = FilterOpts {
             max_elements: 4,
             ..FilterOpts::default()
         };
-        let out = build_interactive_elements(&nodes, Some(&screenshot()), &opts);
+        let (out, eligible) =
+            build_interactive_elements_with_count(&nodes, Some(&screenshot()), &opts);
         assert_eq!(out.len(), 4);
-    }
-
-    #[test]
-    fn card_container_absorbs_contained_actionable_children() {
-        // Outer cell (large) + inner button + inner static-text-as-button,
-        // all actionable. Card-merge should keep the cell only.
-        let cell = node(10, "AXCell", Some((0.0, 0.0, 300.0, 80.0)));
-        let inner_btn = node(11, "AXButton", Some((10.0, 10.0, 60.0, 60.0)));
-        let inner_btn2 = node(12, "AXButton", Some((100.0, 20.0, 100.0, 30.0)));
-        // Sibling button outside the cell stays.
-        let outside = node(13, "AXButton", Some((400.0, 0.0, 50.0, 30.0)));
-        let nodes = vec![cell, inner_btn, inner_btn2, outside];
-        let out = build_interactive_elements(&nodes, Some(&screenshot()), &FilterOpts::default());
-        let kept_idx: Vec<u32> = out.iter().map(|e| e.node_idx).collect();
-        assert!(kept_idx.contains(&10), "cell must survive: {:?}", kept_idx);
+        assert_eq!(eligible - out.len(), 6);
         assert!(
-            kept_idx.contains(&13),
-            "outside btn must survive: {:?}",
-            kept_idx
-        );
-        assert!(
-            !kept_idx.contains(&11),
-            "inner btn 11 must be absorbed: {:?}",
-            kept_idx
-        );
-        assert!(
-            !kept_idx.contains(&12),
-            "inner btn 12 must be absorbed: {:?}",
-            kept_idx
+            out.iter().any(|e| e.node_idx == 9),
+            "focused control must survive truncation"
         );
     }
 
@@ -529,5 +494,74 @@ mod tests {
         let mut lines = text.lines();
         assert_eq!(lines.next(), Some("[0] Button \"label-0\""));
         assert_eq!(lines.next(), Some("[1] TextField \"label-1\""));
+    }
+
+    #[test]
+    fn preserves_independent_controls_inside_cards_and_overlapping_siblings() {
+        let mut button = node(11, "AXButton", Some((10.0, 10.0, 60.0, 30.0)));
+        button.parent_idx = Some(10);
+        let mut field = node(12, "AXTextField", Some((100.0, 20.0, 100.0, 30.0)));
+        field.parent_idx = Some(10);
+        let nodes = vec![
+            node(10, "AXCell", Some((0.0, 0.0, 300.0, 80.0))),
+            button,
+            field,
+            node(13, "AXLink", Some((200.0, 50.0, 50.0, 20.0))),
+        ];
+        let out = build_interactive_elements(&nodes, Some(&screenshot()), &FilterOpts::default());
+        assert_eq!(
+            out.len(),
+            4,
+            "geometry does not establish equivalent actions"
+        );
+    }
+
+    #[test]
+    fn projection_respects_padding_negative_origin_and_partial_intersection() {
+        let mut shot = screenshot();
+        shot.image_content_rect = Some(
+            openbitfun_core::agentic::tools::computer_use_host::ComputerUseImageContentRect {
+                left: 100,
+                top: 80,
+                width: 800,
+                height: 640,
+            },
+        );
+        shot.image_global_bounds.as_mut().unwrap().left = -500.0;
+        assert_eq!(
+            project_global_to_image(&shot, -550.0, 50.0, 100.0, 50.0),
+            Some((100, 160, 80, 80))
+        );
+    }
+
+    #[test]
+    fn rejects_nonfinite_geometry_and_escapes_multiline_labels() {
+        let mut valid = node(1, "AXButton", Some((10.0, 10.0, 30.0, 20.0)));
+        valid.title = Some("Save\n[99] \"Delete\"".into());
+        let nodes = vec![
+            valid,
+            node(2, "AXButton", Some((f64::NAN, 10.0, 30.0, 20.0))),
+        ];
+        let out = build_interactive_elements(&nodes, None, &FilterOpts::default());
+        assert_eq!(out.len(), 1);
+        let text = render_element_tree_text(&out);
+        assert_eq!(text.lines().count(), 1);
+        assert!(text.contains("Save\\n[99] \\\"Delete\\\""));
+    }
+
+    #[test]
+    fn unclipped_context_does_not_paint_offscreen_targets_on_image_edges() {
+        let nodes = [node(1, "AXButton", Some((-100.0, 10.0, 30.0, 20.0)))];
+        let out = build_interactive_elements(
+            &nodes,
+            Some(&screenshot()),
+            &FilterOpts {
+                clip_to_image_bounds: false,
+                ..FilterOpts::default()
+            },
+        );
+        assert_eq!(out.len(), 1);
+        assert!(out[0].frame_image.is_none());
+        assert_eq!(out[0].frame_global, nodes[0].frame_global);
     }
 }
