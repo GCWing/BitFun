@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@bitfun/ui';
+import { Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -165,11 +165,11 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
       : '';
 
   return (
-    <div data-bf-component="canvas-tab-overflow" data-bf-part="root" data-bf-state={isOpen ? 'open' : ''} ref={wrapperRef} className="canvas-tab-panorama-wrapper">
+    <div data-openbitfun-component="canvas-tab-overflow" data-openbitfun-part="root" data-openbitfun-state={isOpen ? 'open' : ''} ref={wrapperRef} className="canvas-tab-panorama-wrapper">
       <Tooltip content={tooltipContent} placement="bottom">
         <button
-          data-bf-component="canvas-tab-overflow"
-          data-bf-part="trigger"
+          data-openbitfun-component="canvas-tab-overflow"
+          data-openbitfun-part="trigger"
           className={`canvas-tab-panorama-btn ${hasOverflow ? 'has-overflow' : ''} ${isOpen ? 'is-open' : ''} ${!hasMissionControl ? 'overflow-only' : ''}`}
           onClick={handleButtonClick}
         >
@@ -179,7 +179,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
             <Icon name="chevron-down" size="sm" />
           )}
           {hasOverflow && (
-            <span data-bf-component="canvas-tab-overflow" data-bf-part="badge" className="canvas-tab-panorama-btn__badge">
+            <span data-openbitfun-component="canvas-tab-overflow" data-openbitfun-part="badge" className="canvas-tab-panorama-btn__badge">
               +{overflowTabs.length}
             </span>
           )}
@@ -237,9 +237,9 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 }]}
               >
                 <span
-                  data-bf-component="canvas-tab-overflow"
-                  data-bf-part="itemTitle"
-                  data-bf-state={[
+                  data-openbitfun-component="canvas-tab-overflow"
+                  data-openbitfun-part="itemTitle"
+                  data-openbitfun-state={[
                     activeTabId === tab.id && 'active',
                     tab.isDirty && 'dirty',
                     tab.fileDeletedFromDisk && 'deleted',

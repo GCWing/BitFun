@@ -13,10 +13,10 @@ test("ConfirmDialog composes semantic content and actions on Dialog", async () =
   assert.match(source, /<DialogTitle>\{title\}<\/DialogTitle>/);
   assert.match(source, /<DialogBody>/);
   assert.match(source, /<DialogFooter>/);
-  assert.match(source, /data-bf-component="confirm-dialog" data-bf-part="content"/);
-  assert.match(source, /data-bf-part="messageRow"/);
-  assert.match(source, /data-bf-part="preview"/);
-  assert.match(source, /data-bf-status=\{type === "error" \? "danger" : type\}/);
+  assert.match(source, /data-openbitfun-component="confirm-dialog" data-openbitfun-part="content"/);
+  assert.match(source, /data-openbitfun-part="messageRow"/);
+  assert.match(source, /data-openbitfun-part="preview"/);
+  assert.match(source, /data-openbitfun-status=\{type === "error" \? "danger" : type\}/);
   assert.match(source, /tone=\{confirmDanger \|\| type === "error" \? "danger" : "neutral"\}/);
 });
 
@@ -47,11 +47,11 @@ test("ConfirmDialog owns async pending and dismissal guards", async () => {
 test("ConfirmDialog styles use public status, layout, and typography tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-layout-confirm-dialog-content-gap/);
-  assert.match(styles, /--bf-layout-confirm-dialog-icon-size/);
-  assert.match(styles, /--bf-layout-confirm-dialog-preview-max-block-size/);
-  assert.match(styles, /--bf-layout-confirm-dialog-preview-padding-inline/);
-  assert.match(styles, /--bf-color-status-warning-content/);
-  assert.match(styles, /--bf-color-status-danger-surface/);
-  assert.match(styles, /--bf-type-code-sm-font-family/);
+  assert.match(styles, /--openbitfun-layout-confirm-dialog-content-gap/);
+  assert.match(styles, /--openbitfun-layout-confirm-dialog-icon-size/);
+  assert.match(styles, /--openbitfun-layout-confirm-dialog-preview-max-block-size/);
+  assert.match(styles, /--openbitfun-layout-confirm-dialog-preview-padding-inline/);
+  assert.match(styles, /--openbitfun-color-status-warning-content/);
+  assert.match(styles, /--openbitfun-color-status-danger-surface/);
+  assert.match(styles, /--openbitfun-type-code-sm-font-family/);
 });

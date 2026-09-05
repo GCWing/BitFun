@@ -18,7 +18,7 @@
   &--embedded &__body {
     height: auto;
     max-height: none;
-    padding: 0 var(--bf-space-1);
+    padding: 0 var(--openbitfun-space-1);
     overflow-y: visible;
     scrollbar-gutter: auto;
   }
@@ -40,7 +40,7 @@
   &--embedded &__node-copy {
     flex-direction: row;
     align-items: baseline;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     white-space: nowrap;
   }
 
@@ -59,16 +59,16 @@
 
     &:not(:disabled):hover,
     &--active {
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 82%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 82%, transparent);
     }
 
     &--has-activity {
-      color: color-mix(in srgb, var(--bf-color-status-success-content) 86%, var(--bf-color-content-primary));
+      color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 86%, var(--openbitfun-color-content-primary));
 
       &:not(:disabled):hover,
       &.session-tree-popover__trigger--active {
-        color: var(--bf-color-status-success-content);
-        background: color-mix(in srgb, var(--bf-color-status-success-content) 12%, transparent);
+        color: var(--openbitfun-color-status-success-content);
+        background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
       }
     }
   }
@@ -87,8 +87,8 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-status-success-content) 92%, var(--bf-color-content-on-dark) 8%);
-    box-shadow: 0 0 0 1px var(--bf-color-surface-raised);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 92%, var(--openbitfun-color-content-on-dark) 8%);
+    box-shadow: 0 0 0 1px var(--openbitfun-color-surface-raised);
   }
 
   &__panel {
@@ -102,9 +102,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: var(--bf-layer-popover);
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-body-sm-font-family);
+    z-index: var(--openbitfun-layer-popover);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-sm-font-family);
     transform-origin: center top;
     transition:
       opacity 100ms ease,
@@ -117,7 +117,7 @@
       }
     }
 
-    &[data-bf-placement='top'] {
+    &[data-openbitfun-placement='top'] {
       --session-tree-popover-offset: 4px;
       transform-origin: center bottom;
     }
@@ -137,17 +137,17 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-default);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
   }
 
   &__body {
     min-height: 42px;
     max-height: min(390px, calc(100vh - 64px));
-    padding: var(--bf-space-1);
+    padding: var(--openbitfun-space-1);
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
@@ -156,14 +156,14 @@
     display: flex;
     align-items: center;
     min-height: 34px;
-    border-radius: var(--bf-radius-base);
+    border-radius: var(--openbitfun-radius-base);
 
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 88%, transparent);
     }
 
     &--root {
-      font-weight: var(--bf-type-label-sm-font-weight);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
 
     &--subagent {
@@ -189,11 +189,11 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
 
     &:hover {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
@@ -203,18 +203,18 @@
     flex: 1;
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: 3px var(--bf-space-2) 3px 0;
+    gap: var(--openbitfun-space-2);
+    padding: 3px var(--openbitfun-space-2) 3px 0;
     border: 0;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     text-align: left;
     cursor: pointer;
 
     > svg,
-    > [data-bf-component='icon'] {
+    > [data-openbitfun-component='icon'] {
       flex: 0 0 auto;
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     > .subagent-avatar {
@@ -227,7 +227,7 @@
     margin-right: 2px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   &__node:hover &__node-actions,
@@ -238,11 +238,11 @@
 
   &__action-menu-button {
     flex: 0 0 auto;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
 
     &:not(:disabled):hover {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 88%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 88%, transparent);
     }
   }
 
@@ -269,13 +269,13 @@
   }
 
   &__node-title {
-    font-size: var(--bf-type-flow-control-font-size);
+    font-size: var(--openbitfun-type-flow-control-font-size);
   }
 
   &__node-meta {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
   }
 
   &__status {
@@ -283,24 +283,24 @@
     height: 7px;
     flex: 0 0 7px;
     border-radius: 50%;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
 
     &--running,
     &--finishing {
-      background: var(--bf-color-status-success-content);
+      background: var(--openbitfun-color-status-success-content);
     }
 
     &--waiting {
-      background: var(--bf-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-content);
     }
 
     &--error,
     &--cancelled {
-      background: var(--bf-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-content);
     }
 
     &--completed {
-      background: var(--bf-color-status-info-content);
+      background: var(--openbitfun-color-status-info-content);
     }
   }
 
@@ -309,13 +309,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-3);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
 
     &--error {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 }

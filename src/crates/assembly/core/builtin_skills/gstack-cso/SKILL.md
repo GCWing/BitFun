@@ -18,9 +18,9 @@ The real attack surface isn't your code — it's your dependencies. Most teams a
 
 You do NOT make code changes. You produce a **Security Posture Report** with concrete findings, severity ratings, and remediation plans.
 
-## BitFun Dispatch
+## OpenBitFun Dispatch
 
-When this skill is invoked by BitFun, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main session.
+When this skill is invoked by OpenBitFun, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main session.
 
 - Do not assume a CSO sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer a matching custom security sub-agent if available; otherwise use one `CodeReview` task with an exact security lens for diff-focused review and `Explore` for broader code/config mapping and security-sensitive files.
@@ -54,7 +54,7 @@ When the user types `/cso`, run this skill.
 
 ## Important: Use the Grep tool for all code searches
 
-The bash blocks throughout this skill show WHAT patterns to search for, not HOW to run them. Use BitFun's Grep tool (which handles permissions and access correctly) rather than raw bash grep. The bash blocks are illustrative examples — do NOT copy-paste them into a terminal. Do NOT use `| head` to truncate results.
+The bash blocks throughout this skill show WHAT patterns to search for, not HOW to run them. Use OpenBitFun's Grep tool (which handles permissions and access correctly) rather than raw bash grep. The bash blocks are illustrative examples — do NOT copy-paste them into a terminal. Do NOT use `| head` to truncate results.
 
 ## Instructions
 
@@ -102,7 +102,7 @@ This is NOT a checklist — it's a reasoning phase. The output is understanding,
 
 ## Prior Learnings
 
-Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
+Use only OpenBitFun in-session memory, project docs, `.openbitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior OpenBitFun context applied: <source>`.
 
 ### Phase 1: Attack Surface Census
 
@@ -266,7 +266,7 @@ Use Grep to search for these patterns:
 
 ### Phase 8: Skill Supply Chain
 
-Scan installed BitFun skills for malicious patterns. 36% of published skills have security flaws, 13.4% are outright malicious (Snyk ToxicSkills research).
+Scan installed OpenBitFun skills for malicious patterns. 36% of published skills have security flaws, 13.4% are outright malicious (Snyk ToxicSkills research).
 
 **Tier 1 — repo-local (automatic):** Scan the repo's local skills directory for suspicious patterns:
 
@@ -537,7 +537,7 @@ For each finding:
 5. **Audit exposure window** — when committed? When removed? Was repo public?
 6. **Check for abuse** — review provider's audit logs
 
-**Trend Tracking:** If prior reports exist in `.bitfun/team/security-reports/`:
+**Trend Tracking:** If prior reports exist in `.openbitfun/team/security-reports/`:
 ```
 SECURITY POSTURE TREND
 ══════════════════════
@@ -565,10 +565,10 @@ Match findings across reports using the `fingerprint` field (sha256 of category 
 ### Phase 14: Save Report
 
 ```bash
-mkdir -p .bitfun/team/security-reports
+mkdir -p .openbitfun/team/security-reports
 ```
 
-Write findings to `.bitfun/team/security-reports/{date}-{HHMMSS}.json` using this schema:
+Write findings to `.openbitfun/team/security-reports/{date}-{HHMMSS}.json` using this schema:
 
 ```json
 {
@@ -621,7 +621,7 @@ Write findings to `.bitfun/team/security-reports/{date}-{HHMMSS}.json` using thi
 }
 ```
 
-If `.bitfun/team/` is not in `.gitignore`, note it in findings — security reports should stay local.
+If `.openbitfun/team/` is not in `.gitignore`, note it in findings — security reports should stay local.
 
 ## Capture Learnings
 
@@ -629,7 +629,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun has no external telemetry helper
+true # OpenBitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -637,7 +637,7 @@ true # BitFun has no external telemetry helper
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
+`inferred` (AI deduction), `cross-model` (both OpenBitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

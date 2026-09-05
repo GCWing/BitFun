@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FolderOpen, FileText, Loader2 } from 'lucide-react';
-import { Icon, Input } from '@bitfun/ui';
+import { Icon, Input } from '@openbitfun/ui';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
@@ -21,7 +21,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const input = document.querySelector('.bitfun-file-explorer__rename-input-wrapper input') as HTMLInputElement | null;
+      const input = document.querySelector('.openbitfun-file-explorer__rename-input-wrapper input') as HTMLInputElement | null;
       if (!input) {
         return;
       }
@@ -73,9 +73,9 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
   };
 
   return (
-    <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
+    <div className="openbitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
       <Input
-        className="bitfun-file-explorer__rename-input"
+        className="openbitfun-file-explorer__rename-input"
         type="text"
         size="sm"
         value={value}
@@ -158,8 +158,8 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     dragImage.style.position = 'absolute';
     dragImage.style.top = '-1000px';
     dragImage.style.padding = '8px';
-    dragImage.style.background = 'color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent)';
-    dragImage.style.color = 'var(--bf-color-content-on-dark)';
+    dragImage.style.background = 'color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent)';
+    dragImage.style.color = 'var(--openbitfun-color-content-on-dark)';
     dragImage.style.borderRadius = '4px';
     document.body.appendChild(dragImage);
     dragImageRef.current = dragImage;
@@ -183,7 +183,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
 
   return (
     <div 
-      className={`bitfun-file-explorer__node-content ${isSelected ? 'bitfun-file-explorer__node-content--selected' : ''} ${node.isDirectory ? 'bitfun-file-explorer__node-content--directory' : ''} ${isCompressed ? 'bitfun-file-explorer__node-content--compressed' : ''} ${className}`}
+      className={`openbitfun-file-explorer__node-content ${isSelected ? 'openbitfun-file-explorer__node-content--selected' : ''} ${node.isDirectory ? 'openbitfun-file-explorer__node-content--directory' : ''} ${isCompressed ? 'openbitfun-file-explorer__node-content--compressed' : ''} ${className}`}
       style={{ paddingLeft: `${indentPx}px` }}
       onClick={handleClick}
       title={tooltip}
@@ -199,9 +199,9 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
       aria-selected={isSelected}
     >
       {node.isDirectory ? (
-        <span className={`bitfun-file-explorer__expand-icon ${isExpanded ? 'bitfun-file-explorer__expand-icon--expanded' : ''}`} onClick={handleExpandClick}>
+        <span className={`openbitfun-file-explorer__expand-icon ${isExpanded ? 'openbitfun-file-explorer__expand-icon--expanded' : ''}`} onClick={handleExpandClick}>
           {isLoading ? (
-            <Loader2 size={16} className="bitfun-file-explorer__loading-icon" />
+            <Loader2 size={16} className="openbitfun-file-explorer__loading-icon" />
           ) : (
             <Icon name="chevron-right" size="md" />
           )}
@@ -221,13 +221,13 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
       ) : renderContent ? (
         renderContent(node, level)
       ) : (
-        <span className={`bitfun-file-explorer__node-name ${isCompressed ? 'bitfun-file-explorer__compressed-path' : ''}`}>
+        <span className={`openbitfun-file-explorer__node-name ${isCompressed ? 'openbitfun-file-explorer__compressed-path' : ''}`}>
           {node.name}
         </span>
       )}
 
       {renderActions ? (
-        <div className="bitfun-file-explorer__node-actions" onClick={(event) => event.stopPropagation()}>
+        <div className="openbitfun-file-explorer__node-actions" onClick={(event) => event.stopPropagation()}>
           {renderActions(node)}
         </div>
       ) : null}

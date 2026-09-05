@@ -1,10 +1,10 @@
-.bitfun-remote-connect-dialog {
-  block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)));
-  min-block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)));
-  max-block-size: min(620px, calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter)));
+.openbitfun-remote-connect-dialog {
+  block-size: min(620px, calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
+  min-block-size: min(620px, calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
+  max-block-size: min(620px, calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
 }
 
-.bitfun-remote-connect-dialog__header {
+.openbitfun-remote-connect-dialog__header {
   position: absolute;
   inset-block-start: 20px;
   inset-inline-end: 20px;
@@ -14,7 +14,7 @@
   border-block-end: 0;
 }
 
-.bitfun-remote-connect-dialog__body {
+.openbitfun-remote-connect-dialog__body {
   position: absolute;
   inset: 0;
   display: flex;
@@ -23,32 +23,32 @@
   overflow: hidden !important;
 }
 
-.bitfun-remote-connect {
+.openbitfun-remote-connect {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
   flex: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;
-  color: var(--bf-color-content-secondary);
+  color: var(--openbitfun-color-content-secondary);
 }
 
 // ==================== Persistent context column ====================
 
-.bitfun-remote-connect__sidebar {
+.openbitfun-remote-connect__sidebar {
   position: relative;
   min-width: 0;
   overflow: hidden;
   padding: 60px 30px 32px;
-  border-right: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-right: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   background: color-mix(
     in srgb,
-    var(--bf-color-surface-subtle) 78%,
-    var(--bf-color-surface-panel)
+    var(--openbitfun-color-surface-subtle) 78%,
+    var(--openbitfun-color-surface-panel)
   );
 }
 
-.bitfun-remote-connect__sidebar-brand {
+.openbitfun-remote-connect__sidebar-brand {
   position: relative;
   z-index: 1;
   display: flex;
@@ -56,51 +56,51 @@
   align-items: flex-start;
 }
 
-.bitfun-remote-connect__sidebar-icon {
+.openbitfun-remote-connect__sidebar-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 46px;
   height: 46px;
   margin-bottom: 16px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-remote-connect__sidebar-title {
+.openbitfun-remote-connect__sidebar-title {
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-heading-display-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  letter-spacing: var(--bf-type-heading-dialog-letter-spacing);
-  line-height: var(--bf-type-label-md-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-heading-display-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
+  line-height: var(--openbitfun-type-label-md-line-height);
 }
 
-.bitfun-remote-connect__title-extra {
+.openbitfun-remote-connect__title-extra {
   display: inline-flex;
   align-items: center;
   margin-top: 10px;
 }
 
-.bitfun-remote-connect__sidebar-divider {
+.openbitfun-remote-connect__sidebar-divider {
   width: 34px;
   height: 1px;
   margin: 22px 0 18px;
-  background: var(--bf-color-border-default);
+  background: var(--openbitfun-color-border-default);
 }
 
-.bitfun-remote-connect__sidebar-description {
+.openbitfun-remote-connect__sidebar-description {
   max-width: 172px;
   margin: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
 }
 
-.bitfun-remote-connect__sidebar-decoration {
+.openbitfun-remote-connect__sidebar-decoration {
   position: absolute;
   left: -148px;
   bottom: -138px;
-  color: var(--bf-color-border-default);
+  color: var(--openbitfun-color-border-default);
   opacity: 0.48;
   pointer-events: none;
   transform: scale(0.84);
@@ -109,18 +109,18 @@
 
 // ==================== Main work surface ====================
 
-.bitfun-remote-connect__main {
+.openbitfun-remote-connect__main {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--bf-color-surface-panel);
+  background: var(--openbitfun-color-surface-panel);
 }
 
 // ==================== Overview ====================
 
-.bitfun-remote-connect__overview {
+.openbitfun-remote-connect__overview {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -129,58 +129,58 @@
   padding: 64px 40px 36px;
 }
 
-.bitfun-remote-connect__overview-section {
+.openbitfun-remote-connect__overview-section {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.bitfun-remote-connect__overview-section-heading {
+.openbitfun-remote-connect__overview-section-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 20px;
 }
 
-.bitfun-remote-connect__overview-section-title {
+.openbitfun-remote-connect__overview-section-title {
   display: inline-flex;
   align-items: center;
   gap: 12px;
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-section-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 }
 
-.bitfun-remote-connect__section-marker {
+.openbitfun-remote-connect__section-marker {
   width: 8px;
   height: 8px;
   flex-shrink: 0;
-  border-radius: var(--bf-radius-pill);
-  background: var(--bf-color-content-muted);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-content-muted);
 
   &--account {
-    background: var(--bf-color-status-success-content);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bf-color-status-success-content) 10%, transparent);
+    background: var(--openbitfun-color-status-success-content);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-success-content) 10%, transparent);
   }
 }
 
-.bitfun-remote-connect__overview-section-description {
+.openbitfun-remote-connect__overview-section-description {
   margin: 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
 }
 
-.bitfun-remote-connect__overview-actions {
+.openbitfun-remote-connect__overview-actions {
   overflow: hidden;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-panel);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-panel);
 }
 
-.bitfun-remote-connect__overview-action {
+.openbitfun-remote-connect__overview-action {
   width: 100%;
   min-height: 88px;
   display: grid;
@@ -194,70 +194,70 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   & + & {
-    border-top: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-top: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   &:hover:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface);
 
-    .bitfun-remote-connect__overview-action-chevron {
-      color: var(--bf-color-content-primary);
+    .openbitfun-remote-connect__overview-action-chevron {
+      color: var(--openbitfun-color-content-primary);
     }
   }
 
   &:active:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   &:focus-visible {
     position: relative;
     z-index: 1;
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: calc(0px - var(--bf-focus-width));
-    border-radius: var(--bf-radius-lg);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: calc(0px - var(--openbitfun-focus-width));
+    border-radius: var(--openbitfun-radius-lg);
   }
 
   &:disabled {
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
-  &[data-bf-group='account'] {
+  &[data-openbitfun-group='account'] {
     min-height: 100px;
   }
 }
 
-.bitfun-remote-connect__overview-action-icon {
+.openbitfun-remote-connect__overview-action-icon {
   width: 46px;
   height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--bf-radius-pill);
-  background: var(--bf-color-action-neutral-surface);
-  color: var(--bf-color-content-primary);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-action-neutral-surface);
+  color: var(--openbitfun-color-content-primary);
 }
 
-[data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='bot'] {
+[data-openbitfun-component='remote-connect-dialog'][data-openbitfun-part='overviewAction'][data-openbitfun-group='bot'] {
   grid-template-columns: 70px minmax(0, 1fr) minmax(112px, auto) 16px;
 
-  .bitfun-remote-connect__overview-action-icon {
+  .openbitfun-remote-connect__overview-action-icon {
     width: 70px;
     background: transparent;
   }
 }
 
-.bitfun-remote-connect__chat-brand-group {
+.openbitfun-remote-connect__chat-brand-group {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 2px;
 }
 
-.bitfun-remote-connect__chat-brand-item {
+.openbitfun-remote-connect__chat-brand-item {
   width: 22px;
   height: 22px;
   display: inline-flex;
@@ -265,48 +265,48 @@
   justify-content: center;
   border: 0;
   background: transparent;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
-[data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='account'] {
-  .bitfun-remote-connect__overview-action-icon {
+[data-openbitfun-component='remote-connect-dialog'][data-openbitfun-part='overviewAction'][data-openbitfun-group='account'] {
+  .openbitfun-remote-connect__overview-action-icon {
     background: color-mix(
       in srgb,
-      var(--bf-color-accent-default) 10%,
-      var(--bf-color-surface-panel)
+      var(--openbitfun-color-accent-default) 10%,
+      var(--openbitfun-color-surface-panel)
     );
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
   }
 
-  .bitfun-remote-connect__overview-action-status {
+  .openbitfun-remote-connect__overview-action-status {
     min-width: 146px;
     padding-left: 20px;
-    border-left: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-left: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 }
 
-.bitfun-remote-connect__overview-action-copy {
+.openbitfun-remote-connect__overview-action-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.bitfun-remote-connect__overview-action-title {
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-body-lg-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-meta-line-height);
+.openbitfun-remote-connect__overview-action-title {
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-body-lg-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-meta-line-height);
 }
 
-.bitfun-remote-connect__overview-action-description {
+.openbitfun-remote-connect__overview-action-description {
   max-width: 410px;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-support-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-support-line-height);
 }
 
-.bitfun-remote-connect__overview-action-status {
+.openbitfun-remote-connect__overview-action-status {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -314,23 +314,23 @@
   gap: 10px;
 }
 
-.bitfun-remote-connect__overview-action-status-detail {
+.openbitfun-remote-connect__overview-action-status-detail {
   max-width: 150px;
   overflow: hidden;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bitfun-remote-connect__overview-action-chevron {
-  color: var(--bf-color-content-muted);
-  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+.openbitfun-remote-connect__overview-action-chevron {
+  color: var(--openbitfun-color-content-muted);
+  transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 }
 
 // ==================== Detail heading ====================
 
-.bitfun-remote-connect__view-header {
+.openbitfun-remote-connect__view-header {
   display: flex;
   flex-shrink: 0;
   flex-direction: column;
@@ -338,50 +338,50 @@
   padding: 36px 40px 0;
 }
 
-.bitfun-remote-connect__back {
+.openbitfun-remote-connect__back {
   align-self: flex-start;
 }
 
-.bitfun-remote-connect__view-page-header {
+.openbitfun-remote-connect__view-page-header {
   max-width: 560px;
 }
 
 // ==================== Method / provider selectors ====================
 
-.bitfun-remote-connect__subtabs {
+.openbitfun-remote-connect__subtabs {
   flex-shrink: 0;
   margin: 16px 40px 0;
   overflow-x: auto;
   padding-bottom: 2px;
 }
 
-.bitfun-remote-connect__tab-group {
+.openbitfun-remote-connect__tab-group {
   max-width: 100%;
 }
 
-.bitfun-remote-connect__tab-label {
+.openbitfun-remote-connect__tab-label {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: var(--bf-space-1);
+  gap: var(--openbitfun-space-1);
 }
 
-.bitfun-remote-connect__tab-brand {
+.openbitfun-remote-connect__tab-brand {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
   color: currentColor;
 }
 
-.bitfun-remote-connect__dot-sm {
+.openbitfun-remote-connect__dot-sm {
   width: 5px;
   height: 5px;
   flex-shrink: 0;
-  border-radius: var(--bf-radius-pill);
-  background: var(--bf-color-status-success-content);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-status-success-content);
 }
 
-.bitfun-remote-connect__visually-hidden {
+.openbitfun-remote-connect__visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -393,18 +393,18 @@
 
 // ==================== Detail panels ====================
 
-.bitfun-remote-connect [data-bf-part='panel'] {
+.openbitfun-remote-connect [data-openbitfun-part='panel'] {
   flex: 1;
   min-height: 0;
 }
 
-.bitfun-remote-connect [data-bf-part='panel'] > [role='tabpanel'] {
+.openbitfun-remote-connect [data-openbitfun-part='panel'] > [role='tabpanel'] {
   display: flex;
   min-height: 100%;
   flex-direction: column;
 }
 
-.bitfun-remote-connect__body {
+.openbitfun-remote-connect__body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -412,59 +412,59 @@
   padding: 22px 40px 32px;
 }
 
-.bitfun-remote-connect__body--network .bitfun-remote-connect__info-card {
+.openbitfun-remote-connect__body--network .openbitfun-remote-connect__info-card {
   max-width: none;
   min-height: 112px;
   padding: 18px 20px;
   border-style: solid;
-  border-radius: var(--bf-radius-lg);
+  border-radius: var(--openbitfun-radius-lg);
   background: color-mix(
     in srgb,
-    var(--bf-color-surface-subtle) 62%,
-    var(--bf-color-surface-panel)
+    var(--openbitfun-color-surface-subtle) 62%,
+    var(--openbitfun-color-surface-panel)
   );
 }
 
-.bitfun-remote-connect__primary-action {
+.openbitfun-remote-connect__primary-action {
   min-width: 160px;
   align-self: flex-end;
 }
 
 // ==================== QR / pairing ====================
 
-.bitfun-remote-connect__body--pairing {
+.openbitfun-remote-connect__body--pairing {
   gap: 14px;
 }
 
-.bitfun-remote-connect__pairing-card {
+.openbitfun-remote-connect__pairing-card {
   display: grid;
   grid-template-columns: 206px minmax(0, 1fr);
   overflow: hidden;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-panel);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-panel);
 
   &--compact {
     grid-template-columns: 1fr;
   }
 }
 
-.bitfun-remote-connect__pairing-visual {
+.openbitfun-remote-connect__pairing-visual {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 11px;
   padding: 22px;
-  border-right: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-right: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   background: color-mix(
     in srgb,
-    var(--bf-color-surface-subtle) 60%,
-    var(--bf-color-surface-panel)
+    var(--openbitfun-color-surface-subtle) 60%,
+    var(--openbitfun-color-surface-panel)
   );
 }
 
-.bitfun-remote-connect__qr-box {
+.openbitfun-remote-connect__qr-box {
   appearance: none;
   width: 170px;
   height: 170px;
@@ -472,17 +472,17 @@
   align-items: center;
   justify-content: center;
   padding: 6px;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-content-on-dark);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-content-on-dark);
   cursor: pointer;
-  transition: border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard), transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
     border-color: color-mix(
       in srgb,
-      var(--bf-color-accent-default) 40%,
-      var(--bf-color-border-subtle)
+      var(--openbitfun-color-accent-default) 40%,
+      var(--openbitfun-color-border-subtle)
     );
   }
 
@@ -491,7 +491,7 @@
   }
 
   &:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
     outline-offset: 3px;
   }
 
@@ -501,7 +501,7 @@
   }
 }
 
-.bitfun-remote-connect__pairing-details {
+.openbitfun-remote-connect__pairing-details {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -509,14 +509,14 @@
   padding: 26px 28px;
 }
 
-.bitfun-remote-connect__pairing-label {
+.openbitfun-remote-connect__pairing-label {
   margin-bottom: 7px;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 }
 
-.bitfun-remote-connect__pairing-url-row {
+.openbitfun-remote-connect__pairing-url-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -526,23 +526,23 @@
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
 
-.bitfun-remote-connect__pairing-instruction {
+.openbitfun-remote-connect__pairing-instruction {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
   gap: 10px;
   padding: 14px 0;
-  border-top: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  color: var(--bf-color-content-muted);
+  border-top: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  color: var(--openbitfun-color-content-muted);
 
   svg {
     margin-top: 1px;
@@ -550,225 +550,225 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
   }
 }
 
-.bitfun-remote-connect__pairing-actions {
+.openbitfun-remote-connect__pairing-actions {
   display: flex;
   justify-content: flex-end;
 }
 
-.bitfun-remote-connect__pairing-code-box {
+.openbitfun-remote-connect__pairing-code-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
 
-.bitfun-remote-connect__pairing-code {
+.openbitfun-remote-connect__pairing-code {
   padding: 14px 18px;
-  border: var(--bf-border-width-default) dashed var(--bf-color-border-default);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-panel);
-  color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-code-md-font-family);
-  font-size: var(--bf-type-heading-display-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-expanded-letter-spacing);
+  border: var(--openbitfun-border-width-default) dashed var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-panel);
+  color: var(--openbitfun-color-content-primary);
+  font-family:var(--openbitfun-type-code-md-font-family);
+  font-size: var(--openbitfun-type-heading-display-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-expanded-letter-spacing);
   user-select: all;
 }
 
 // ==================== Bot setup card ====================
 
-.bitfun-remote-connect__body--bot {
+.openbitfun-remote-connect__body--bot {
   padding-top: 18px;
 }
 
-.bitfun-remote-connect__bot-card {
+.openbitfun-remote-connect__bot-card {
   display: grid;
   grid-template-columns: 204px minmax(0, 1fr);
   overflow: hidden;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
-  background: var(--bf-color-surface-panel);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-panel);
 }
 
-.bitfun-remote-connect__bot-identity {
+.openbitfun-remote-connect__bot-identity {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 30px 24px;
-  border-right: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-right: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   text-align: center;
 }
 
-.bitfun-remote-connect__bot-identity-icon {
+.openbitfun-remote-connect__bot-identity-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 60px;
   height: 60px;
   margin-bottom: 16px;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-remote-connect__bot-identity-title {
+.openbitfun-remote-connect__bot-identity-title {
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-section-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 }
 
-.bitfun-remote-connect__bot-identity-description {
+.openbitfun-remote-connect__bot-identity-description {
   margin: 9px 0 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
 }
 
-.bitfun-remote-connect__bot-setup {
+.openbitfun-remote-connect__bot-setup {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 14px;
   padding: 26px 28px;
 
-  > .bitfun-remote-connect__primary-action {
+  > .openbitfun-remote-connect__primary-action {
     width: 100%;
     align-self: stretch;
   }
 }
 
-.bitfun-remote-connect__bot-guide {
+.openbitfun-remote-connect__bot-guide {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 14px;
 
-  .bitfun-remote-connect__info-card {
+  .openbitfun-remote-connect__info-card {
     max-width: none;
     padding: 0;
     border: 0;
     background: transparent;
   }
 
-  .bitfun-remote-connect__field {
+  .openbitfun-remote-connect__field {
     max-width: none;
   }
 
-  > .bitfun-remote-connect__primary-action {
+  > .openbitfun-remote-connect__primary-action {
     width: 100%;
     align-self: stretch;
   }
 }
 
-.bitfun-remote-connect__steps {
+.openbitfun-remote-connect__steps {
   display: flex;
   width: 100%;
   flex-direction: column;
   gap: 12px;
 }
 
-.bitfun-remote-connect__step {
+.openbitfun-remote-connect__step {
   display: grid;
   width: 100%;
   grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
   gap: 12px;
   margin: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
   text-align: left;
 }
 
-.bitfun-remote-connect__step-index {
+.openbitfun-remote-connect__step-index {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: var(--bf-radius-pill);
-  background: var(--bf-color-status-success-content);
-  color: var(--bf-color-content-inverse);
-  font-size: var(--bf-type-micro-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-status-success-content);
+  color: var(--openbitfun-color-content-inverse);
+  font-size: var(--openbitfun-type-micro-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
 }
 
 // ==================== Shared detail primitives ====================
 
-.bitfun-remote-connect__info-card {
+.openbitfun-remote-connect__info-card {
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
   padding: 14px 16px;
   box-sizing: border-box;
-  border: var(--bf-border-width-default) dashed var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-action-neutral-surface);
+  border: var(--openbitfun-border-width-default) dashed var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-base);
+  background: var(--openbitfun-color-action-neutral-surface);
 }
 
-.bitfun-remote-connect__info-text,
-.bitfun-remote-connect__info-meta {
+.openbitfun-remote-connect__info-text,
+.openbitfun-remote-connect__info-meta {
   margin: 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
   text-align: left;
 }
 
-.bitfun-remote-connect__info-meta-group {
+.openbitfun-remote-connect__info-meta-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-bottom: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-remote-connect__lan-ip-select {
+.openbitfun-remote-connect__lan-ip-select {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.bitfun-remote-connect__info-meta-label {
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
+.openbitfun-remote-connect__info-meta-label {
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   white-space: nowrap;
 }
 
-.bitfun-remote-connect__lan-ip-dropdown {
+.openbitfun-remote-connect__lan-ip-dropdown {
   flex: 1;
   min-width: 0;
 }
 
-.bitfun-remote-connect__description-link,
-.bitfun-remote-connect__step-link {
-  color: var(--bf-color-content-secondary);
+.openbitfun-remote-connect__description-link,
+.openbitfun-remote-connect__step-link {
+  color: var(--openbitfun-color-content-secondary);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
-  transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
     outline-offset: 2px;
-    border-radius: var(--bf-radius-xs);
+    border-radius: var(--openbitfun-radius-xs);
   }
 }
 
-.bitfun-remote-connect__field {
+.openbitfun-remote-connect__field {
   width: 100%;
   max-width: 360px;
 
@@ -777,95 +777,95 @@
   }
 }
 
-.bitfun-remote-connect__input {
+.openbitfun-remote-connect__input {
   width: 100%;
 }
 
-.bitfun-remote-connect__status {
+.openbitfun-remote-connect__status {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.bitfun-remote-connect__peer-username {
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-sm-font-size);
+.openbitfun-remote-connect__peer-username {
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-sm-font-size);
 }
 
-.bitfun-remote-connect__connected {
+.openbitfun-remote-connect__connected {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
   margin: 22px 40px 32px;
   padding: 36px;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
   background: color-mix(
     in srgb,
-    var(--bf-color-accent-default) 4%,
-    var(--bf-color-surface-panel)
+    var(--openbitfun-color-accent-default) 4%,
+    var(--openbitfun-color-surface-panel)
   );
 }
 
-.bitfun-remote-connect__connected--bot {
+.openbitfun-remote-connect__connected--bot {
   align-items: stretch;
   gap: 0;
   overflow: hidden;
   padding: 0;
-  background: var(--bf-color-surface-panel);
+  background: var(--openbitfun-color-surface-panel);
 }
 
-.bitfun-remote-connect__connected-app {
+.openbitfun-remote-connect__connected-app {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 20px;
-  border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+  border-bottom: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-remote-connect__connected-app-icon {
+.openbitfun-remote-connect__connected-app-icon {
   width: 46px;
   height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-remote-connect__connected-app-copy {
+.openbitfun-remote-connect__connected-app-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
 
   strong {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-ui-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   }
 
   > span {
     max-width: 470px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-sm-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 }
 
-.bitfun-remote-connect__connected-notice {
+.openbitfun-remote-connect__connected-notice {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
   margin: 16px 20px 0;
   padding: 13px 14px;
-  border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-surface-subtle);
-  color: var(--bf-color-content-muted);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-base);
+  background: var(--openbitfun-color-surface-subtle);
+  color: var(--openbitfun-color-content-muted);
 
   svg {
     margin-top: 2px;
@@ -873,91 +873,91 @@
 
   p {
     margin: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
   }
 }
 
-.bitfun-remote-connect__connected-setting {
+.openbitfun-remote-connect__connected-setting {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
   margin: 16px 20px 0;
   padding: 12px 14px;
-  border-radius: var(--bf-radius-base);
+  border-radius: var(--openbitfun-radius-base);
   background: color-mix(
     in srgb,
-    var(--bf-color-surface-subtle) 72%,
-    var(--bf-color-surface-panel)
+    var(--openbitfun-color-surface-subtle) 72%,
+    var(--openbitfun-color-surface-panel)
   );
 }
 
-.bitfun-remote-connect__connected-actions {
+.openbitfun-remote-connect__connected-actions {
   display: flex;
   justify-content: flex-end;
   padding: 14px 20px 20px;
 }
 
-.bitfun-remote-connect__hint,
-.bitfun-remote-connect__description {
+.openbitfun-remote-connect__hint,
+.openbitfun-remote-connect__description {
   width: 100%;
   max-width: 480px;
   margin: 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
 }
 
-.bitfun-remote-connect__hint {
+.openbitfun-remote-connect__hint {
   text-align: center;
 }
 
-.bitfun-remote-connect__description {
+.openbitfun-remote-connect__description {
   text-align: left;
 }
 
-.bitfun-remote-connect__ngrok-usage-link {
+.openbitfun-remote-connect__ngrok-usage-link {
   margin: 0;
   padding: 14px 40px 0;
-  font-size: var(--bf-type-label-sm-font-size);
+  font-size: var(--openbitfun-type-label-sm-font-size);
   text-align: right;
 }
 
-.bitfun-remote-connect__error {
+.openbitfun-remote-connect__error {
   margin: 0;
-  color: var(--bf-color-status-danger-content);
-  font-size: var(--bf-type-label-sm-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  color: var(--openbitfun-color-status-danger-content);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
   text-align: center;
 }
 
-.bitfun-remote-connect__error-group {
+.openbitfun-remote-connect__error-group {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
 
-.bitfun-remote-connect__mode-setting {
+.openbitfun-remote-connect__mode-setting {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-2);
-  color: var(--bf-color-content-muted);
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-label-sm-font-size);
+  gap: var(--openbitfun-space-2);
+  color: var(--openbitfun-color-content-muted);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
 
   > span[data-active='true'] {
-    color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 }
 
-.bitfun-remote-connect__mode-divider {
-  color: var(--bf-color-border-default);
+.openbitfun-remote-connect__mode-divider {
+  color: var(--openbitfun-color-border-default);
 }
 
-.bitfun-remote-connect__weixin-qr {
+.openbitfun-remote-connect__weixin-qr {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -966,7 +966,7 @@
   text-align: center;
 }
 
-.bitfun-remote-connect__weixin-verify {
+.openbitfun-remote-connect__weixin-verify {
   display: flex;
   width: 100%;
   flex-direction: column;
@@ -974,20 +974,20 @@
   gap: 10px;
 }
 
-.bitfun-remote-connect__weixin-qr-img {
+.openbitfun-remote-connect__weixin-qr-img {
   display: block;
   max-width: 180px;
   height: auto;
   margin: 0 auto;
-  border-radius: var(--bf-radius-base);
+  border-radius: var(--openbitfun-radius-base);
 }
 
-.bitfun-remote-connect__weixin-qr-svg-wrap {
+.openbitfun-remote-connect__weixin-qr-svg-wrap {
   display: inline-block;
   margin: 0 auto;
   padding: 8px;
-  border-radius: var(--bf-radius-base);
-  background: var(--bf-color-content-on-dark);
+  border-radius: var(--openbitfun-radius-base);
+  background: var(--openbitfun-color-content-on-dark);
   box-sizing: border-box;
 
   svg {
@@ -999,196 +999,196 @@
 // ==================== Responsive containment ====================
 
 @media (max-width: 920px) {
-  .bitfun-remote-connect {
+  .openbitfun-remote-connect {
     grid-template-columns: 206px minmax(0, 1fr);
   }
 
-  .bitfun-remote-connect__sidebar {
+  .openbitfun-remote-connect__sidebar {
     padding: 52px 24px 28px;
   }
 
-  .bitfun-remote-connect__overview {
+  .openbitfun-remote-connect__overview {
     padding: 60px 28px 34px;
   }
 
-  .bitfun-remote-connect__view-header {
+  .openbitfun-remote-connect__view-header {
     padding-inline: 28px;
   }
 
-  .bitfun-remote-connect__subtabs {
+  .openbitfun-remote-connect__subtabs {
     margin-inline: 28px;
   }
 
-  .bitfun-remote-connect__body {
+  .openbitfun-remote-connect__body {
     padding-inline: 28px;
   }
 
-  .bitfun-remote-connect__bot-card {
+  .openbitfun-remote-connect__bot-card {
     grid-template-columns: 184px minmax(0, 1fr);
   }
 
-  .bitfun-remote-connect__bot-setup {
+  .openbitfun-remote-connect__bot-setup {
     padding: 24px;
   }
 }
 
 @media (max-width: 760px) {
-  .bitfun-remote-connect-dialog {
-    block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
-    min-block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
-    max-block-size: calc(100vh - 2 * var(--bf-overlay-dialog-viewport-gutter));
+  .openbitfun-remote-connect-dialog {
+    block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
+    min-block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
+    max-block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
   }
 
-  .bitfun-remote-connect-dialog__header {
+  .openbitfun-remote-connect-dialog__header {
     inset-block-start: 18px;
     inset-inline-end: 18px;
   }
 
-  .bitfun-remote-connect {
+  .openbitfun-remote-connect {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .bitfun-remote-connect__sidebar {
+  .openbitfun-remote-connect__sidebar {
     padding: 20px 56px 18px 22px;
     border-right: 0;
-    border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-bottom: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
-  .bitfun-remote-connect__sidebar-brand {
+  .openbitfun-remote-connect__sidebar-brand {
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr);
     column-gap: 12px;
     align-items: center;
   }
 
-  .bitfun-remote-connect__sidebar-icon {
+  .openbitfun-remote-connect__sidebar-icon {
     width: 38px;
     height: 38px;
     grid-row: 1 / 3;
     margin: 0;
   }
 
-  .bitfun-remote-connect__sidebar-title {
-    font-size: var(--bf-type-flow-section-title-font-size);
+  .openbitfun-remote-connect__sidebar-title {
+    font-size: var(--openbitfun-type-flow-section-title-font-size);
   }
 
-  .bitfun-remote-connect__title-extra {
+  .openbitfun-remote-connect__title-extra {
     margin-top: 2px;
   }
 
-  .bitfun-remote-connect__sidebar-divider,
-  .bitfun-remote-connect__sidebar-description,
-  .bitfun-remote-connect__sidebar-decoration {
+  .openbitfun-remote-connect__sidebar-divider,
+  .openbitfun-remote-connect__sidebar-description,
+  .openbitfun-remote-connect__sidebar-decoration {
     display: none;
   }
 
-  .bitfun-remote-connect__overview {
+  .openbitfun-remote-connect__overview {
     gap: 32px;
     padding: 32px 24px;
   }
 
-  .bitfun-remote-connect__overview-action {
+  .openbitfun-remote-connect__overview-action {
     grid-template-columns: 48px minmax(0, 1fr) 16px;
     gap: 14px;
     padding: 18px;
   }
 
-  .bitfun-remote-connect__overview-action-icon {
+  .openbitfun-remote-connect__overview-action-icon {
     width: 48px;
     height: 48px;
   }
 
-  [data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='bot'] {
+  [data-openbitfun-component='remote-connect-dialog'][data-openbitfun-part='overviewAction'][data-openbitfun-group='bot'] {
     grid-template-columns: 70px minmax(0, 1fr) 16px;
 
-    .bitfun-remote-connect__overview-action-icon {
+    .openbitfun-remote-connect__overview-action-icon {
       width: 70px;
     }
   }
 
-  .bitfun-remote-connect__overview-action-status {
+  .openbitfun-remote-connect__overview-action-status {
     grid-column: 2;
     justify-content: flex-start;
   }
 
-  .bitfun-remote-connect__overview-action-chevron {
+  .openbitfun-remote-connect__overview-action-chevron {
     grid-column: 3;
     grid-row: 1 / 3;
   }
 
-  [data-bf-component='remote-connect-dialog'][data-bf-part='overviewAction'][data-bf-group='account'] {
-    .bitfun-remote-connect__overview-action-status {
+  [data-openbitfun-component='remote-connect-dialog'][data-openbitfun-part='overviewAction'][data-openbitfun-group='account'] {
+    .openbitfun-remote-connect__overview-action-status {
       min-width: 0;
       padding-left: 0;
       border-left: 0;
     }
   }
 
-  .bitfun-remote-connect__view-header {
+  .openbitfun-remote-connect__view-header {
     padding: 28px 24px 0;
   }
 
-  .bitfun-remote-connect__subtabs {
+  .openbitfun-remote-connect__subtabs {
     margin-inline: 24px;
   }
 
-  .bitfun-remote-connect__body {
+  .openbitfun-remote-connect__body {
     padding: 24px;
   }
 
-  .bitfun-remote-connect__pairing-card,
-  .bitfun-remote-connect__bot-card {
+  .openbitfun-remote-connect__pairing-card,
+  .openbitfun-remote-connect__bot-card {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .bitfun-remote-connect__pairing-visual,
-  .bitfun-remote-connect__bot-identity {
+  .openbitfun-remote-connect__pairing-visual,
+  .openbitfun-remote-connect__bot-identity {
     border-right: 0;
-    border-bottom: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    border-bottom: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
-  .bitfun-remote-connect__bot-identity {
+  .openbitfun-remote-connect__bot-identity {
     padding: 28px;
   }
 
-  .bitfun-remote-connect__bot-identity-description {
+  .openbitfun-remote-connect__bot-identity-description {
     max-width: 360px;
   }
 
-  .bitfun-remote-connect__connected--bot {
+  .openbitfun-remote-connect__connected--bot {
     margin: 20px 24px 24px;
   }
 
-  .bitfun-remote-connect__connected-app {
+  .openbitfun-remote-connect__connected-app {
     grid-template-columns: 42px minmax(0, 1fr);
     padding: 18px;
   }
 
-  .bitfun-remote-connect__connected-app-icon {
+  .openbitfun-remote-connect__connected-app-icon {
     width: 42px;
     height: 42px;
   }
 
-  .bitfun-remote-connect__connected-app .bitfun-remote-connect__status {
+  .openbitfun-remote-connect__connected-app .openbitfun-remote-connect__status {
     grid-column: 2;
     justify-self: start;
   }
 
-  .bitfun-remote-connect__connected-notice,
-  .bitfun-remote-connect__connected-setting {
+  .openbitfun-remote-connect__connected-notice,
+  .openbitfun-remote-connect__connected-setting {
     margin-inline: 18px;
   }
 
-  .bitfun-remote-connect__connected-actions {
+  .openbitfun-remote-connect__connected-actions {
     padding-inline: 18px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-remote-connect__overview-action,
-  .bitfun-remote-connect__overview-action-chevron,
-  .bitfun-remote-connect__qr-box {
+  .openbitfun-remote-connect__overview-action,
+  .openbitfun-remote-connect__overview-action-chevron,
+  .openbitfun-remote-connect__qr-box {
     transition: none;
   }
 }

@@ -7,8 +7,8 @@
 //! requiring a fresh password entry while keeping copied session ciphertext
 //! unusable without the separate install key.
 //!
-//! File location: `<BITFUN_HOME>/account_session.enc` when configured,
-//! otherwise `~/.bitfun/account_session.enc`.
+//! File location: `<OPENBITFUN_HOME>/account_session.enc` when configured,
+//! otherwise `~/.openbitfun/account_session.enc`.
 //! Format: base64(nonce || ciphertext) where the plaintext is a JSON
 //! payload `{ token, user_id, master_key_b64, relay_url }`.
 
@@ -49,7 +49,7 @@ fn session_store_directory() -> Result<PathBuf> {
         return Ok(path.clone());
     }
     drop(override_path);
-    super::bitfun_home_dir().ok_or_else(|| anyhow!("cannot determine BitFun home directory"))
+    super::product_home_dir().ok_or_else(|| anyhow!("cannot determine OpenBitFun home directory"))
 }
 
 /// The on-disk JSON payload (plaintext before encryption).
@@ -77,8 +77,7 @@ fn session_key_file_path() -> Result<PathBuf> {
 
 /// Atomically replace a secret-bearing file and restrict it to the current
 /// OS user where Unix permission bits are available. The parent is also made
-/// private because older releases may have created `~/.bitfun` under a broad
-/// process umask.
+/// private so a permissive process umask cannot expose account material.
 fn write_private_file(path: &std::path::Path, contents: &[u8]) -> Result<()> {
     let parent = path
         .parent()
@@ -143,7 +142,7 @@ fn write_private_file(path: &std::path::Path, contents: &[u8]) -> Result<()> {
 /// Combines hostname, OS username, OS type, and platform constant into
 /// SHA-256 to produce a 32-byte key.  The file is useless on a different
 /// machine (different hostname / username combination).
-fn derive_legacy_machine_key() -> [u8; 32] {
+fn derive_machine_key(local_secret: &[u8; 32]) -> [u8; 32] {
     let mut hasher = Sha256::new();
 
     // Hostname / machine name
@@ -162,19 +161,10 @@ fn derive_legacy_machine_key() -> [u8; 32] {
     hasher.update(std::env::consts::OS.as_bytes());
     hasher.update(b"|");
 
-    // Application-specific constant to domain-separate the key
-    hasher.update(b"BitFun::session_store::v1");
-
-    let result = hasher.finalize();
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&result);
-    key
-}
-
-fn derive_machine_key(local_secret: &[u8; 32]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(derive_legacy_machine_key());
-    hasher.update(b"|BitFun::session_store::v2|");
+    // Product-specific domain separation prevents credentials from crossing
+    // product data namespaces even when they share the same machine account.
+    hasher.update(super::product_id().as_bytes());
+    hasher.update(b"::session_store::v1|");
     hasher.update(local_secret);
     let result = hasher.finalize();
     let mut key = [0u8; 32];
@@ -374,21 +364,9 @@ pub fn load_session_detailed() -> Result<Option<LoadedSession>> {
     let local_secret = load_or_create_local_session_secret()?;
     let key = derive_machine_key(&local_secret);
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| anyhow!("cipher init: {e}"))?;
-    let (plaintext, used_legacy_key) =
-        match cipher.decrypt(Nonce::from_slice(&nonce_arr), ciphertext) {
-            Ok(plaintext) => (plaintext, false),
-            Err(_) => {
-                // Compatibility with v1 sessions. Successful legacy loads are
-                // immediately re-encrypted with the per-install random secret.
-                let legacy_key = derive_legacy_machine_key();
-                let legacy_cipher = Aes256Gcm::new_from_slice(&legacy_key)
-                    .map_err(|e| anyhow!("legacy cipher init: {e}"))?;
-                let plaintext = legacy_cipher
-                    .decrypt(Nonce::from_slice(&nonce_arr), ciphertext)
-                    .map_err(|e| anyhow!("decrypt session: {e}"))?;
-                (plaintext, true)
-            }
-        };
+    let plaintext = cipher
+        .decrypt(Nonce::from_slice(&nonce_arr), ciphertext)
+        .map_err(|e| anyhow!("decrypt session: {e}"))?;
 
     let payload: SessionPayload =
         serde_json::from_slice(&plaintext).context("deserialize session payload")?;
@@ -402,25 +380,13 @@ pub fn load_session_detailed() -> Result<Option<LoadedSession>> {
     }
     master_key.copy_from_slice(&master_key_bytes);
 
-    let loaded = LoadedSession {
+    Ok(Some(LoadedSession {
         token: payload.token,
         user_id: payload.user_id,
         master_key,
         relay_url: payload.relay_url,
         device_id: payload.device_id,
-    };
-    if used_legacy_key {
-        if let Err(error) = save_session_with_device(
-            &loaded.token,
-            &loaded.user_id,
-            &loaded.master_key,
-            &loaded.relay_url,
-            loaded.device_id.as_deref(),
-        ) {
-            log::warn!("Failed to migrate legacy account session encryption: {error}");
-        }
-    }
-    Ok(Some(loaded))
+    }))
 }
 
 /// Remove the persisted session file (called on logout).

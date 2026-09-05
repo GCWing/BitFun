@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useState } from 'react';
 import { FolderOpen, FileText, Code } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -203,17 +203,17 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody inset="none">
-      <ScrollArea className="workspace-manager" data-bf-component="workspace-tool" data-bf-part="root">
+      <ScrollArea className="workspace-manager" data-openbitfun-component="workspace-tool" data-openbitfun-part="root">
         {error && (
-          <div className="error-message" data-bf-component="workspace-tool" data-bf-part="error">
+          <div className="error-message" data-openbitfun-component="workspace-tool" data-openbitfun-part="error">
             <span>Error: {error}</span>
           </div>
         )}
 
-        <div className="current-workspace-section" data-bf-component="workspace-tool" data-bf-part="currentSection">
+        <div className="current-workspace-section" data-openbitfun-component="workspace-tool" data-openbitfun-part="currentSection">
           <h3>Current Workspace</h3>
           {currentWorkspace ? (
-            <div className="workspace-card current" data-bf-component="workspace-tool" data-bf-part="currentCard">
+            <div className="workspace-card current" data-openbitfun-component="workspace-tool" data-openbitfun-part="currentCard">
               <div className="workspace-header">
                 <div className={`workspace-icon${currentWorkspace.workspaceKind === WorkspaceKind.Assistant ? ' is-assistant' : ''}`}>
                   {getWorkspaceIcon(currentWorkspace)}
@@ -276,14 +276,14 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
               )}
             </div>
           ) : (
-            <div className="no-workspace" data-bf-component="workspace-tool" data-bf-part="empty">
+            <div className="no-workspace" data-openbitfun-component="workspace-tool" data-openbitfun-part="empty">
               <FolderOpen size={48} />
               <p>No workspace is currently open</p>
             </div>
           )}
         </div>
 
-        <div className="recent-workspaces-section" data-bf-component="workspace-tool" data-bf-part="recentSection">
+        <div className="recent-workspaces-section" data-openbitfun-component="workspace-tool" data-openbitfun-part="recentSection">
           <h3>Recent Workspaces</h3>
           {recentWorkspaces.length > 0 ? (
             <div className="workspace-list">
@@ -296,7 +296,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   aria-label={getWorkspaceDisplayName(workspace)}
                   onClick={() => void handleWorkspaceSelect(workspace)}
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
-                 data-bf-component="workspace-tool" data-bf-part="recentCard">
+                 data-openbitfun-component="workspace-tool" data-openbitfun-part="recentCard">
                   <div className="workspace-header">
                     <div className={`workspace-icon${workspace.workspaceKind === WorkspaceKind.Assistant ? ' is-assistant' : ''}`}>
                       {getWorkspaceIcon(workspace)}
@@ -339,7 +339,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
           )}
         </div>
 
-        <div className="recent-workspaces-section" data-bf-component="workspace-tool" data-bf-part="recentSection">
+        <div className="recent-workspaces-section" data-openbitfun-component="workspace-tool" data-openbitfun-part="recentSection">
           <h3>Personal Assistants</h3>
           {otherAssistantWorkspaces.length > 0 ? (
             <div className="workspace-list">
@@ -352,7 +352,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   aria-label={getWorkspaceDisplayName(workspace)}
                   onClick={() => void handleWorkspaceSelect(workspace)}
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
-                 data-bf-component="workspace-tool" data-bf-part="assistantCard">
+                 data-openbitfun-component="workspace-tool" data-openbitfun-part="assistantCard">
                   <div className="workspace-header">
                     <div className="workspace-icon is-assistant">
                       {getWorkspaceIcon(workspace)}

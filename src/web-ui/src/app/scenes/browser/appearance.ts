@@ -3,5 +3,5 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance/ty
 export const browserAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'browser',
   parts: [{ id: 'root' }, { id: 'toolbar' }, { id: 'error' }, { id: 'content' }],
-  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } }],
+  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } }],
 };

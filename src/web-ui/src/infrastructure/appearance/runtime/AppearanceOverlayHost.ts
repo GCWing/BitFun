@@ -9,7 +9,7 @@
 
 import './AppearanceOverlayHost.scss';
 
-const OVERLAY_HOST_ID = 'bitfun-appearance-overlay-host';
+const OVERLAY_HOST_ID = 'openbitfun-appearance-overlay-host';
 
 export function getAppearanceOverlayHost(): HTMLDivElement {
   const existing = document.getElementById(OVERLAY_HOST_ID);
@@ -18,7 +18,7 @@ export function getAppearanceOverlayHost(): HTMLDivElement {
 
   const host = document.createElement('div');
   host.id = OVERLAY_HOST_ID;
-  host.setAttribute('data-bf-overlay-host', 'true');
+  host.setAttribute('data-openbitfun-overlay-host', 'true');
   document.body.appendChild(host);
   return host;
 }

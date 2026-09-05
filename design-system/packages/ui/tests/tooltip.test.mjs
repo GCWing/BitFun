@@ -59,11 +59,11 @@ test("Tooltip styling uses only public surface, geometry, and elevation tokens",
     "utf8",
   );
 
-  assert.match(styles, /--bf-overlay-tooltip-max-inline-size/);
-  assert.match(styles, /--bf-overlay-tooltip-arrow-size/);
-  assert.match(styles, /--bf-color-surface-raised/);
-  assert.match(styles, /--bf-color-border-subtle/);
-  assert.match(styles, /--bf-shadow-sm/);
-  assert.match(styles, /--bf-layer-tooltip/);
+  assert.match(styles, /--openbitfun-overlay-tooltip-max-inline-size/);
+  assert.match(styles, /--openbitfun-overlay-tooltip-arrow-size/);
+  assert.match(styles, /--openbitfun-color-surface-raised/);
+  assert.match(styles, /--openbitfun-color-border-subtle/);
+  assert.match(styles, /--openbitfun-shadow-sm/);
+  assert.match(styles, /--openbitfun-layer-tooltip/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

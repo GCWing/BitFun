@@ -2,7 +2,7 @@
 
 Scope: this guide applies to `src/crates/execution/tool-provider-groups`.
 
-`bitfun-tool-packs` owns tool feature-group metadata, the stable tool-to-feature
+`openbitfun-tool-packs` owns tool feature-group metadata, the stable tool-to-feature
 mapping, the product tool provider group plan, and provider-group plan selection
 by id. Concrete implementations and runtime materialization remain in Core.
 
@@ -11,7 +11,7 @@ by id. Concrete implementations and runtime materialization remain in Core.
 - Keep `default = []`; `product-full` may aggregate feature groups but must not
   silently enable new runtime behavior. Adding a built-in tool requires one
   exact feature-group owner and boundary coverage for the full group list.
-- Do not depend on `bitfun-core`, concrete service crates, app crates, Tauri,
+- Do not depend on `openbitfun-core`, concrete service crates, app crates, Tauri,
   Git, MCP, network clients, or CLI UI dependencies unless a reviewed tool
   runtime owner move explicitly changes this boundary.
 - Do not own manifest/exposure contracts, concrete runtime manifest assembly,
@@ -33,7 +33,7 @@ by id. Concrete implementations and runtime materialization remain in Core.
 ## Verification
 
 ```bash
-cargo test -p bitfun-tool-packs --features basic
-cargo check -p bitfun-tool-packs --features product-full
+cargo test -p openbitfun-tool-packs --features basic
+cargo check -p openbitfun-tool-packs --features product-full
 node scripts/check-core-boundaries.mjs
 ```

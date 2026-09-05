@@ -1,11 +1,11 @@
 /**
- * Product-level overlay geometry that sits on top of public @bitfun/ui
+ * Product-level overlay geometry that sits on top of public @openbitfun/ui
  * anatomy. This recipe changes only responsive sizing; Menu, Listbox, and
  * other primitives continue to own their surface and interaction styles.
  */
 
 @mixin anchored-picker-inline-size($inline-size: 280px) {
-  --bf-overlay-menu-inline-size: min(#{$inline-size}, calc(100vw - 16px));
+  --openbitfun-overlay-menu-inline-size: min(#{$inline-size}, calc(100vw - 16px));
 
   inline-size: min(#{$inline-size}, calc(100vw - 16px));
 }

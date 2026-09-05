@@ -1,4 +1,4 @@
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pause, Play, SkipForward } from 'lucide-react';
@@ -33,15 +33,15 @@ const CAPACITY_QUEUE_REASON_DETAIL_KEYS: Record<DeepReviewCapacityQueueReason, {
 }> = {
   provider_rate_limit: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.providerRateLimit',
-    defaultValue: 'The model provider is rate-limiting requests. BitFun will wait briefly and continue when capacity returns.',
+    defaultValue: 'The model provider is rate-limiting requests. OpenBitFun will wait briefly and continue when capacity returns.',
   },
   provider_concurrency_limit: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.providerConcurrencyLimit',
-    defaultValue: 'The model provider rejected another concurrent review request. BitFun will retry after capacity opens.',
+    defaultValue: 'The model provider rejected another concurrent review request. OpenBitFun will retry after capacity opens.',
   },
   retry_after: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.retryAfter',
-    defaultValue: 'The model provider asked BitFun to retry later. Waiting here avoids spending Review work while the provider cools down.',
+    defaultValue: 'The model provider asked OpenBitFun to retry later. Waiting here avoids spending Review work while the provider cools down.',
   },
   local_concurrency_cap: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.localConcurrencyCap',
@@ -53,7 +53,7 @@ const CAPACITY_QUEUE_REASON_DETAIL_KEYS: Record<DeepReviewCapacityQueueReason, {
   },
   temporary_overload: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.temporaryOverload',
-    defaultValue: 'The model provider reported temporary overload. BitFun will wait briefly and then continue or reduce coverage.',
+    defaultValue: 'The model provider reported temporary overload. OpenBitFun will wait briefly and then continue or reduce coverage.',
   },
 };
 

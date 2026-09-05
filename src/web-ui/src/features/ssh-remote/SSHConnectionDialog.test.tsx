@@ -51,7 +51,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
   SSHAuthPromptDialog: () => null,
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Alert: () => null,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Dialog: ({

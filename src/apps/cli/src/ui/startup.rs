@@ -30,8 +30,8 @@ use crate::config::CliConfig;
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
 use anyhow::{anyhow, Result};
-use bitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use openbitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -51,7 +51,7 @@ use crate::agent::runtime_client::{CliAgentMode as TuiAgentMode, CliAgentRuntime
 use crate::model_selection::{
     model_catalog_projection, model_edit_projection, model_from_mutation, model_list_projection,
 };
-use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
+use openbitfun_core::service::remote_connect::account_runtime::AccountRuntime;
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -1046,7 +1046,7 @@ impl StartupPage {
             ActionHandler::AddModel => {
                 let catalog = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
-                        let catalog = bitfun_core::get_ai_model_catalog()
+                        let catalog = openbitfun_core::get_ai_model_catalog()
                             .await
                             .map_err(anyhow::Error::msg)?;
                         Ok::<_, anyhow::Error>(model_catalog_projection(catalog))
@@ -1406,7 +1406,7 @@ impl StartupPage {
 
     fn open_account_panel(
         &mut self,
-        snapshot: bitfun_product_domains::account::AccountSnapshotProjection,
+        snapshot: openbitfun_product_domains::account::AccountSnapshotProjection,
     ) {
         let Some(info) = snapshot.info else {
             self.login_form.show();
@@ -1436,8 +1436,8 @@ impl StartupPage {
         // Refresh devices occasionally while syncing / after done.
         let devices = if matches!(
             progress.status,
-            bitfun_product_domains::account::SettingsSyncStatus::Syncing
-                | bitfun_product_domains::account::SettingsSyncStatus::Done
+            openbitfun_product_domains::account::SettingsSyncStatus::Syncing
+                | openbitfun_product_domains::account::SettingsSyncStatus::Done
         ) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
@@ -1513,7 +1513,7 @@ impl StartupPage {
                             })?;
                         let status_message = account_login_status_message(&result);
                         Ok::<_, anyhow::Error>(
-                            bitfun_product_domains::account::AccountLoginProjection {
+                            openbitfun_product_domains::account::AccountLoginProjection {
                                 user_id: result.user_id,
                                 relay_url: result.relay_url,
                                 has_cloud_settings: result.has_cloud_settings,
@@ -1764,7 +1764,7 @@ impl StartupPage {
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = bitfun_core::service::config::get_global_config_service()
+                let config_service = openbitfun_core::service::config::get_global_config_service()
                     .await
                     .ok()?;
                 let models = config_service.get_ai_models().await.ok()?;
@@ -1814,7 +1814,7 @@ impl StartupPage {
                     return true;
                 }
                 let config_service =
-                    match bitfun_core::service::config::get_global_config_service().await {
+                    match openbitfun_core::service::config::get_global_config_service().await {
                         Ok(service) => service,
                         Err(error) => {
                             tracing::error!("Failed to load model configuration: {error}");
@@ -1889,7 +1889,7 @@ impl StartupPage {
             tokio::runtime::Handle::current()
                 .block_on(async {
                     let config_service =
-                        bitfun_core::service::config::get_global_config_service().await?;
+                        openbitfun_core::service::config::get_global_config_service().await?;
                     let model = model_from_mutation(mutation, None)?;
                     config_service
                         .add_ai_model(model)
@@ -1925,7 +1925,7 @@ impl StartupPage {
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service =
-                    bitfun_core::service::config::get_global_config_service().await?;
+                    openbitfun_core::service::config::get_global_config_service().await?;
                 let model = config_service
                     .get_ai_models()
                     .await
@@ -1966,7 +1966,7 @@ impl StartupPage {
                         anyhow::bail!("Model update identity does not match the request target")
                     }
                     let config_service =
-                        bitfun_core::service::config::get_global_config_service().await?;
+                        openbitfun_core::service::config::get_global_config_service().await?;
                     let existing = config_service
                         .get_ai_models()
                         .await
@@ -2176,7 +2176,7 @@ impl StartupPage {
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 let values =
-                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry()
+                    openbitfun_core::agentic::tools::implementations::skills::get_skill_registry()
                         .get_user_invocable_skills_for_workspace(
                             Some(&workspace),
                             Some(&self.agent_type),
@@ -2227,7 +2227,7 @@ impl StartupPage {
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 let values =
-                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry()
+                    openbitfun_core::agentic::tools::implementations::skills::get_skill_registry()
                         .get_mode_skill_infos_for_workspace(Some(&workspace), &self.agent_type)
                         .await;
                 Ok::<_, anyhow::Error>(
@@ -2286,12 +2286,12 @@ impl StartupPage {
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 match skill.level.as_str() {
                     "user" => {
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(&mode_id, &skill.key, enabled, skill.default_enabled).await.map_err(anyhow::Error::msg)?;
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(&mode_id, &skill.key, enabled, skill.default_enabled).await.map_err(anyhow::Error::msg)?;
                     }
                     "project" => {
-                        let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace).await.map_err(anyhow::Error::msg)?;
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(&mut document, &mode_id, &skill.key, !enabled).map_err(anyhow::Error::msg)?;
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(&workspace, &document).await.map_err(anyhow::Error::msg)?;
+                        let mut document = openbitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace).await.map_err(anyhow::Error::msg)?;
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(&mut document, &mode_id, &skill.key, !enabled).map_err(anyhow::Error::msg)?;
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(&workspace, &document).await.map_err(anyhow::Error::msg)?;
                     }
                     level => anyhow::bail!("Unsupported skill level '{level}'"),
                 }
@@ -2339,14 +2339,17 @@ impl StartupPage {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                let values = bitfun_core::agentic::agents::get_agent_registry()
-                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
-                        parent_agent_type: Some(&self.agent_type),
-                        workspace_root: Some(&workspace),
-                        list_scope: bitfun_core::agentic::agents::SubagentListScope::TaskVisible,
-                        include_disabled: false,
-                        external_sources_supported: true,
-                    })
+                let values = openbitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(
+                        &openbitfun_core::agentic::agents::SubagentQueryContext {
+                            parent_agent_type: Some(&self.agent_type),
+                            workspace_root: Some(&workspace),
+                            list_scope:
+                                openbitfun_core::agentic::agents::SubagentListScope::TaskVisible,
+                            include_disabled: false,
+                            external_sources_supported: true,
+                        },
+                    )
                     .await;
                 Ok::<_, anyhow::Error>(
                     values
@@ -2392,26 +2395,26 @@ impl StartupPage {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                let values = bitfun_core::agentic::agents::get_agent_registry()
-                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                let values = openbitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&openbitfun_core::agentic::agents::SubagentQueryContext {
                         parent_agent_type: Some(&self.agent_type),
                         workspace_root: Some(&workspace),
                         list_scope:
-                            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
+                            openbitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
                         include_disabled: true,
                         external_sources_supported: true,
                     })
                     .await;
                 let has_external = values.iter().any(|info| {
                     info.subagent_source
-                        == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                        == Some(openbitfun_core::agentic::agents::SubAgentSource::External)
                 });
                 Ok::<_, anyhow::Error>((
                     values
                         .into_iter()
                         .filter(|info| {
                             info.subagent_source
-                                != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                                != Some(openbitfun_core::agentic::agents::SubAgentSource::External)
                         })
                         .map(startup_subagent_summary)
                         .collect::<Vec<_>>(),
@@ -2467,7 +2470,7 @@ impl StartupPage {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                bitfun_core::agentic::agents::get_agent_registry()
+                openbitfun_core::agentic::agents::get_agent_registry()
                     .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace))
                     .await
                     .map_err(anyhow::Error::msg)
@@ -2599,7 +2602,7 @@ impl StartupPage {
         let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let config_service = bitfun_core::service::config::get_global_config_service()
+                let config_service = openbitfun_core::service::config::get_global_config_service()
                     .await
                     .ok()?;
                 let models = config_service.get_ai_models().await.ok()?;
@@ -2633,7 +2636,7 @@ impl StartupPage {
 }
 
 fn startup_skill_summary(
-    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::SkillInfo,
 ) -> SkillSummary {
     SkillSummary {
         key: info.key,
@@ -2652,7 +2655,7 @@ fn startup_skill_summary(
 }
 
 fn startup_mode_skill_summary(
-    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
 ) -> SkillSummary {
     let skill = info.skill;
     SkillSummary {
@@ -2671,7 +2674,7 @@ fn startup_mode_skill_summary(
     }
 }
 
-fn startup_subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+fn startup_subagent_summary(info: openbitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
     SubagentSummary {
         key: info.key,
         id: info.id,
@@ -2680,12 +2683,12 @@ fn startup_subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> Su
         source: format!(
             "{:?}",
             info.subagent_source
-                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+                .unwrap_or(openbitfun_core::agentic::agents::SubAgentSource::Builtin)
         )
         .to_ascii_lowercase(),
         enabled: info.effective_enabled,
         is_external: info.subagent_source
-            == Some(bitfun_core::agentic::agents::SubAgentSource::External),
+            == Some(openbitfun_core::agentic::agents::SubAgentSource::External),
         supports_follow_up: info.supports_follow_up,
     }
 }

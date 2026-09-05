@@ -7,13 +7,22 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY patches/ patches/
+COPY design-system/LICENSE design-system/LICENSE
+COPY design-system/tooling/token-engine/package.json design-system/tooling/token-engine/package.json
+COPY design-system/packages/design-tokens/package.json design-system/packages/design-tokens/package.json
+COPY design-system/packages/theme-openbitfun/package.json design-system/packages/theme-openbitfun/package.json
 COPY src/skin-market-web/package.json src/skin-market-web/package.json
-RUN --mount=type=cache,id=bitfun-skin-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-skin-market-web
+RUN --mount=type=cache,id=openbitfun-skin-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --ignore-scripts --filter openbitfun-skin-market-web...
 
+COPY design-system/tooling/token-engine/ design-system/tooling/token-engine/
+COPY design-system/packages/design-tokens/ design-system/packages/design-tokens/
+COPY design-system/packages/theme-openbitfun/ design-system/packages/theme-openbitfun/
 COPY src/skin-market-web/ src/skin-market-web/
 COPY src/shared/appearance-market-contract-fixtures/ src/shared/appearance-market-contract-fixtures/
-RUN pnpm --dir src/skin-market-web build
+RUN pnpm --dir design-system/packages/design-tokens build \
+    && pnpm --dir design-system/packages/theme-openbitfun build \
+    && pnpm --dir src/skin-market-web build
 
 FROM rust:1.96-bookworm AS rust-builder
 
@@ -34,18 +43,18 @@ RUN apt-get update \
 COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
 
-RUN --mount=type=cache,id=bitfun-skin-market-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,id=bitfun-skin-market-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=bitfun-skin-market-target,target=/build/target,sharing=locked \
+RUN --mount=type=cache,id=openbitfun-skin-market-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=openbitfun-skin-market-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=openbitfun-skin-market-target,target=/build/target,sharing=locked \
     { [ -n "${CARGO_BUILD_JOBS:-}" ] || unset CARGO_BUILD_JOBS; } \
-    && cargo build --locked --release -p bitfun-skin-market-server \
-    && cp target/release/bitfun-skin-market-server /tmp/bitfun-skin-market-server \
-    && strip /tmp/bitfun-skin-market-server
+    && cargo build --locked --release -p openbitfun-skin-market-server \
+    && cp target/release/openbitfun-skin-market-server /tmp/openbitfun-skin-market-server \
+    && strip /tmp/openbitfun-skin-market-server
 
 FROM debian:bookworm-slim AS runtime
 
 ARG MARKET_GIT_COMMIT=unknown
-LABEL org.opencontainers.image.title="BitFun Skin Market" \
+LABEL org.opencontainers.image.title="OpenBitFun Skin Market" \
       org.opencontainers.image.revision="${MARKET_GIT_COMMIT}"
 
 RUN apt-get update \
@@ -55,7 +64,7 @@ RUN apt-get update \
     && useradd --uid 10002 --gid 10002 --no-create-home --shell /usr/sbin/nologin market
 
 WORKDIR /app
-COPY --from=rust-builder /tmp/bitfun-skin-market-server /app/bitfun-skin-market-server
+COPY --from=rust-builder /tmp/openbitfun-skin-market-server /app/openbitfun-skin-market-server
 COPY --from=web-builder /build/src/skin-market-web/dist/ /app/web/
 
 RUN mkdir -p /app/data /app/artifacts \
@@ -73,4 +82,4 @@ EXPOSE 9720
 HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=5 \
   CMD curl -fsS http://127.0.0.1:9720/skin/api/v1/health || exit 1
 
-ENTRYPOINT ["/app/bitfun-skin-market-server"]
+ENTRYPOINT ["/app/openbitfun-skin-market-server"]

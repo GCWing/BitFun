@@ -3,11 +3,11 @@
  * Modal owns the outer surface; this file owns the product, metadata, and CTA layout.
  */
 
-.bitfun-about-dialog__modal-content {
+.openbitfun-about-dialog__modal-content {
   overflow: hidden;
 }
 
-.bitfun-about-dialog__content {
+.openbitfun-about-dialog__content {
   display: flex;
   flex-direction: column;
   height: min(590px, calc(100vh - 112px));
@@ -15,14 +15,14 @@
   overflow: hidden;
 }
 
-.bitfun-about-dialog__body {
+.openbitfun-about-dialog__body {
   display: grid;
   grid-template-columns: minmax(330px, 0.38fr) minmax(0, 0.62fr);
   flex: 1;
   min-height: 0;
 }
 
-.bitfun-about-dialog__brand {
+.openbitfun-about-dialog__brand {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -37,105 +37,105 @@
     right: 0;
     bottom: 36px;
     width: 1px;
-    background: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-border-subtle);
     content: '';
   }
 }
 
-.bitfun-about-dialog__brand-copy {
+.openbitfun-about-dialog__brand-copy {
   min-width: 0;
 }
 
-.bitfun-about-dialog__title {
+.openbitfun-about-dialog__title {
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-display-xl-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
-  letter-spacing: var(--bf-type-modifier-tracking-tighter-letter-spacing);
+  color: var(--openbitfun-color-content-primary);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-display-xl-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-tighter-letter-spacing);
 }
 
-.bitfun-about-dialog__tagline {
+.openbitfun-about-dialog__tagline {
   margin: 16px 0 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-body-md-font-size);
-  line-height: var(--bf-type-support-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  line-height: var(--openbitfun-type-support-line-height);
 }
 
-.bitfun-about-dialog__release {
+.openbitfun-about-dialog__release {
   width: 100%;
   margin-top: 34px;
 }
 
-.bitfun-about-dialog__release-summary {
+.openbitfun-about-dialog__release-summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
 
-.bitfun-about-dialog__release-version {
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-title-font-size);
+.openbitfun-about-dialog__release-version {
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-title-font-size);
   font-variant-numeric: tabular-nums;
-  line-height: var(--bf-type-label-md-line-height);
+  line-height: var(--openbitfun-type-label-md-line-height);
 }
 
-.bitfun-about-dialog__channel-badge {
+.openbitfun-about-dialog__channel-badge {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
   padding: 2px 10px;
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-sm);
-  background: var(--bf-color-surface-subtle);
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-modifier-leading-none-line-height);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-sm);
+  background: var(--openbitfun-color-surface-subtle);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   white-space: nowrap;
 }
 
-.bitfun-about-dialog__update-card {
+.openbitfun-about-dialog__update-card {
   width: 100%;
   margin-top: 20px;
 }
 
-.bitfun-about-dialog__update-card-actions {
+.openbitfun-about-dialog__update-card-actions {
   display: flex;
   align-items: center;
 }
 
-.bitfun-about-dialog__update-feedback {
+.openbitfun-about-dialog__update-feedback {
   width: 100%;
   margin-top: 10px;
 }
 
-.bitfun-about-dialog__update-alert {
+.openbitfun-about-dialog__update-alert {
   width: 100%;
   text-align: left;
 }
 
-.bitfun-about-dialog__download-status {
+.openbitfun-about-dialog__download-status {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.bitfun-about-dialog__download-bar {
+.openbitfun-about-dialog__download-bar {
   position: relative;
   width: 100%;
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--bf-color-surface-subtle);
+  background: var(--openbitfun-color-surface-subtle);
 }
 
-.bitfun-about-dialog__download-fill {
+.openbitfun-about-dialog__download-fill {
   height: 100%;
   border-radius: inherit;
-  background: var(--bf-color-accent-default);
-  transition: width var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+  background: var(--openbitfun-color-accent-default);
+  transition: width var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &--indeterminate {
     width: 38%;
@@ -153,37 +153,37 @@
   }
 }
 
-.bitfun-about-dialog__download-meta {
+.openbitfun-about-dialog__download-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 }
 
-.bitfun-about-dialog__download-hint {
+.openbitfun-about-dialog__download-hint {
   margin: 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
-.bitfun-about-dialog__update-installed {
+.openbitfun-about-dialog__update-installed {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
 
-.bitfun-about-dialog__update-status {
+.openbitfun-about-dialog__update-status {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 
   svg {
     flex-shrink: 0;
@@ -191,11 +191,11 @@
   }
 
   &--success svg {
-    color: var(--bf-color-status-success-content);
+    color: var(--openbitfun-color-status-success-content);
   }
 }
 
-.bitfun-about-dialog__dot-matrix {
+.openbitfun-about-dialog__dot-matrix {
   position: absolute;
   bottom: 20px;
   left: 14px;
@@ -210,11 +210,11 @@
     width: 2px;
     height: 2px;
     border-radius: 50%;
-    background: var(--bf-color-content-muted);
+    background: var(--openbitfun-color-content-muted);
   }
 }
 
-.bitfun-about-dialog__metadata {
+.openbitfun-about-dialog__metadata {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -224,7 +224,7 @@
   overscroll-behavior: contain;
 }
 
-.bitfun-about-dialog__info-row {
+.openbitfun-about-dialog__info-row {
   display: grid;
   grid-template-columns: 120px minmax(0, 1fr);
   align-items: center;
@@ -232,54 +232,54 @@
   min-width: 0;
   min-height: 70px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 
   &:last-child {
     border-bottom: 0;
   }
 }
 
-.bitfun-about-dialog__info-label {
+.openbitfun-about-dialog__info-label {
   display: flex;
   align-items: center;
   gap: 13px;
   min-width: 0;
-  color: var(--bf-color-content-secondary);
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 
   svg {
     flex-shrink: 0;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 }
 
-.bitfun-about-dialog__info-value {
+.openbitfun-about-dialog__info-value {
   min-width: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-body-lg-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-body-lg-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
   text-align: right;
   overflow-wrap: anywhere;
 
   &--version {
-    font-size: var(--bf-type-flow-title-font-size);
+    font-size: var(--openbitfun-type-flow-title-font-size);
     font-variant-numeric: tabular-nums;
   }
 
   &--mono {
-    font-family:var(--bf-type-code-md-font-family);
+    font-family:var(--openbitfun-type-code-md-font-family);
     font-variant-numeric: tabular-nums;
   }
 
   &--branch {
-    font-size: var(--bf-type-body-md-font-size);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 }
 
-.bitfun-about-dialog__info-value-group {
+.openbitfun-about-dialog__info-value-group {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -287,7 +287,7 @@
   min-width: 0;
 }
 
-.bitfun-about-dialog__copy-btn {
+.openbitfun-about-dialog__copy-btn {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -296,21 +296,21 @@
   height: 30px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--bf-radius-sm);
+  border-radius: var(--openbitfun-radius-sm);
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   outline: none;
   transition:
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
-    border-color: var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-primary);
+    border-color: var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-primary);
   }
 
   &:active {
@@ -318,12 +318,12 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
+    outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: 1px;
   }
 }
 
-.bitfun-about-dialog__star-callout {
+.openbitfun-about-dialog__star-callout {
   display: grid;
   grid-template-columns: minmax(32px, 48px) 40px minmax(0, max-content) minmax(72px, 1fr) auto;
   flex: 0 0 auto;
@@ -333,179 +333,179 @@
   padding: 20px 42px 18px;
 }
 
-.bitfun-about-dialog__star-icon {
-  color: var(--bf-color-content-primary);
+.openbitfun-about-dialog__star-icon {
+  color: var(--openbitfun-color-content-primary);
 }
 
-.bitfun-about-dialog__star-copy {
+.openbitfun-about-dialog__star-copy {
   min-width: 0;
 }
 
-.bitfun-about-dialog__star-title {
+.openbitfun-about-dialog__star-title {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 
   svg,
-  [data-bf-component='icon'] {
+  [data-openbitfun-component='icon'] {
     flex: 0 0 auto;
   }
 }
 
-.bitfun-about-dialog__star-description {
+.openbitfun-about-dialog__star-description {
   margin: 4px 0 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
-.bitfun-about-dialog__star-rule {
+.openbitfun-about-dialog__star-rule {
   display: block;
   width: 100%;
   height: 1px;
-  background: var(--bf-color-border-strong);
+  background: var(--openbitfun-color-border-strong);
 }
 
-.bitfun-about-dialog__star-button {
+.openbitfun-about-dialog__star-button {
   min-width: 132px;
 }
 
-.bitfun-about-dialog__footer {
+.openbitfun-about-dialog__footer {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   min-height: 58px;
   padding: 14px 42px;
-  border-top: 1px solid var(--bf-color-border-subtle);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
 }
 
-.bitfun-about-dialog__copyright {
+.openbitfun-about-dialog__copyright {
   margin: 0;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-label-md-font-size);
-  line-height: var(--bf-type-body-sm-line-height);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
 }
 
 @media (max-width: 900px) {
-  .bitfun-about-dialog__body {
+  .openbitfun-about-dialog__body {
     grid-template-columns: minmax(300px, 0.37fr) minmax(0, 0.63fr);
   }
 
-  .bitfun-about-dialog__brand {
+  .openbitfun-about-dialog__brand {
     padding-right: 34px;
     padding-left: 44px;
   }
 
-  .bitfun-about-dialog__metadata {
+  .openbitfun-about-dialog__metadata {
     padding-inline: 32px;
   }
 
-  .bitfun-about-dialog__star-callout {
+  .openbitfun-about-dialog__star-callout {
     grid-template-columns: minmax(28px, 44px) 36px minmax(0, max-content) minmax(52px, 1fr) auto;
     padding-inline: 34px;
   }
 }
 
 @media (max-width: 760px) {
-  .bitfun-about-dialog__modal-content {
+  .openbitfun-about-dialog__modal-content {
     overflow-y: auto;
   }
 
-  .bitfun-about-dialog__content {
+  .openbitfun-about-dialog__content {
     height: auto;
     min-height: 0;
     overflow: visible;
   }
 
-  .bitfun-about-dialog__body {
+  .openbitfun-about-dialog__body {
     display: flex;
     flex-direction: column;
   }
 
-  .bitfun-about-dialog__brand {
+  .openbitfun-about-dialog__brand {
     justify-content: flex-start;
     padding: 30px 28px;
     overflow: visible;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
 
     &::after {
       display: none;
     }
   }
 
-  .bitfun-about-dialog__dot-matrix {
+  .openbitfun-about-dialog__dot-matrix {
     display: none;
   }
 
-  .bitfun-about-dialog__title {
-    font-size: var(--bf-type-display-lg-font-size);
+  .openbitfun-about-dialog__title {
+    font-size: var(--openbitfun-type-display-lg-font-size);
   }
 
-  .bitfun-about-dialog__release {
+  .openbitfun-about-dialog__release {
     margin-top: 26px;
   }
 
-  .bitfun-about-dialog__metadata {
+  .openbitfun-about-dialog__metadata {
     justify-content: flex-start;
     padding: 8px 28px 18px;
     overflow: visible;
   }
 
-  .bitfun-about-dialog__info-row {
+  .openbitfun-about-dialog__info-row {
     min-height: 66px;
   }
 
-  .bitfun-about-dialog__star-callout {
+  .openbitfun-about-dialog__star-callout {
     grid-template-columns: 34px minmax(0, 1fr) auto;
     min-height: 120px;
     padding: 18px 28px;
   }
 
-  .bitfun-about-dialog__star-rule,
-  .bitfun-about-dialog__star-rule--leading {
+  .openbitfun-about-dialog__star-rule,
+  .openbitfun-about-dialog__star-rule--leading {
     display: none;
   }
 
-  .bitfun-about-dialog__star-button {
+  .openbitfun-about-dialog__star-button {
     min-width: 132px;
   }
 
-  .bitfun-about-dialog__footer {
+  .openbitfun-about-dialog__footer {
     padding-inline: 28px;
   }
 }
 
 @media (max-width: 520px) {
-  .bitfun-about-dialog__brand {
+  .openbitfun-about-dialog__brand {
     padding: 26px 20px;
   }
 
-  .bitfun-about-dialog__title {
-    font-size: var(--bf-type-display-md-font-size);
+  .openbitfun-about-dialog__title {
+    font-size: var(--openbitfun-type-display-md-font-size);
   }
 
-  .bitfun-about-dialog__tagline {
+  .openbitfun-about-dialog__tagline {
     margin-top: 10px;
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 
-  .bitfun-about-dialog__metadata {
+  .openbitfun-about-dialog__metadata {
     padding-inline: 20px;
   }
 
-  .bitfun-about-dialog__info-row {
+  .openbitfun-about-dialog__info-row {
     grid-template-columns: 100px minmax(0, 1fr);
     gap: 10px;
   }
 
-  .bitfun-about-dialog__info-label {
+  .openbitfun-about-dialog__info-label {
     gap: 8px;
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
 
     svg {
       width: 18px;
@@ -513,82 +513,82 @@
     }
   }
 
-  .bitfun-about-dialog__info-value {
-    font-size: var(--bf-type-body-md-font-size);
+  .openbitfun-about-dialog__info-value {
+    font-size: var(--openbitfun-type-body-md-font-size);
 
     &--version {
-      font-size: var(--bf-type-body-lg-font-size);
+      font-size: var(--openbitfun-type-body-lg-font-size);
     }
 
     &--branch {
-      font-size: var(--bf-type-label-md-font-size);
+      font-size: var(--openbitfun-type-label-md-font-size);
     }
   }
 
-  .bitfun-about-dialog__star-callout {
+  .openbitfun-about-dialog__star-callout {
     grid-template-columns: 1fr;
     gap: 14px;
     padding: 22px 20px;
   }
 
-  .bitfun-about-dialog__star-icon {
+  .openbitfun-about-dialog__star-icon {
     display: none;
   }
 
-  .bitfun-about-dialog__star-button {
+  .openbitfun-about-dialog__star-button {
     width: 100%;
   }
 
-  .bitfun-about-dialog__footer {
+  .openbitfun-about-dialog__footer {
     padding-inline: 20px;
   }
 }
 
 @media (max-height: 700px) and (min-width: 761px) {
-  .bitfun-about-dialog__content {
+  .openbitfun-about-dialog__content {
     height: min(540px, calc(100vh - 96px));
     min-height: min(500px, calc(100vh - 96px));
   }
 
-  .bitfun-about-dialog__brand {
+  .openbitfun-about-dialog__brand {
     padding-block: 28px;
   }
 
-  .bitfun-about-dialog__title {
-    font-size: var(--bf-type-display-lg-font-size);
+  .openbitfun-about-dialog__title {
+    font-size: var(--openbitfun-type-display-lg-font-size);
   }
 
-  .bitfun-about-dialog__release {
+  .openbitfun-about-dialog__release {
     margin-top: 24px;
   }
 
-  .bitfun-about-dialog__metadata {
+  .openbitfun-about-dialog__metadata {
     padding-block: 14px;
   }
 
-  .bitfun-about-dialog__info-row {
+  .openbitfun-about-dialog__info-row {
     min-height: 62px;
     padding-block: 9px;
   }
 
-  .bitfun-about-dialog__star-callout {
+  .openbitfun-about-dialog__star-callout {
     min-height: 104px;
     padding-block: 14px;
   }
 
-  .bitfun-about-dialog__footer {
+  .openbitfun-about-dialog__footer {
     min-height: 52px;
     padding-block: 10px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-about-dialog__download-fill--indeterminate {
+  .openbitfun-about-dialog__download-fill--indeterminate {
     animation: none;
     transform: none;
   }
 
-  .bitfun-about-dialog__copy-btn:active {
+  .openbitfun-about-dialog__copy-btn:active {
     transform: none;
   }
 }

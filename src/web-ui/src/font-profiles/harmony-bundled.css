@@ -1,5 +1,5 @@
 @font-face {
-  font-family: "BitFun HarmonyOS Sans";
+  font-family: "OpenBitFun HarmonyOS Sans";
   src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Regular.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
@@ -7,7 +7,7 @@
 }
 
 @font-face {
-  font-family: "BitFun HarmonyOS Sans";
+  font-family: "OpenBitFun HarmonyOS Sans";
   src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Medium.ttf") format("truetype");
   font-style: normal;
   font-weight: 500;
@@ -15,7 +15,7 @@
 }
 
 @font-face {
-  font-family: "BitFun HarmonyOS Sans";
+  font-family: "OpenBitFun HarmonyOS Sans";
   src: url("../assets/fonts/harmonyos-sans/base/HarmonyOS_Sans_Bold.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
@@ -23,7 +23,7 @@
 }
 
 @font-face {
-  font-family: "BitFun HarmonyOS Sans SC";
+  font-family: "OpenBitFun HarmonyOS Sans SC";
   src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
@@ -31,7 +31,7 @@
 }
 
 @font-face {
-  font-family: "BitFun HarmonyOS Sans SC";
+  font-family: "OpenBitFun HarmonyOS Sans SC";
   src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
   font-style: normal;
   font-weight: 500;
@@ -39,7 +39,7 @@
 }
 
 @font-face {
-  font-family: "BitFun HarmonyOS Sans SC";
+  font-family: "OpenBitFun HarmonyOS Sans SC";
   src: url("../assets/fonts/harmonyos-sans/sc/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
@@ -78,20 +78,20 @@
   font-display: swap;
 }
 
-@layer bf.tokens.system {
-  :where([data-bf-design-system-root]) {
-    --bf-font-family-sans: "BitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
-    --bf-font-family-control: "BitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
+@layer openbitfun.tokens.system {
+  :where([data-openbitfun-design-system-root]) {
+    --openbitfun-font-family-sans: "OpenBitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
+    --openbitfun-font-family-control: "OpenBitFun HarmonyOS Sans", system-ui, "Segoe UI", Arial, sans-serif;
   }
 
-  :where([data-bf-design-system-root]):lang(zh-CN) {
-    --bf-font-family-sans: "BitFun HarmonyOS Sans SC", "BitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
-    --bf-font-family-control: "BitFun HarmonyOS Sans SC", "BitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
+  :where([data-openbitfun-design-system-root]):lang(zh-CN) {
+    --openbitfun-font-family-sans: "OpenBitFun HarmonyOS Sans SC", "OpenBitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
+    --openbitfun-font-family-control: "OpenBitFun HarmonyOS Sans SC", "OpenBitFun HarmonyOS Sans", system-ui, "Microsoft YaHei UI", sans-serif;
   }
 
   /* Traditional Chinese deliberately follows the platform's localized face. */
-  :where([data-bf-design-system-root]):lang(zh-TW) {
-    --bf-font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --bf-font-family-control: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  :where([data-openbitfun-design-system-root]):lang(zh-TW) {
+    --openbitfun-font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --openbitfun-font-family-control: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 }

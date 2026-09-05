@@ -2,13 +2,13 @@
 //!
 //! Product-domain crates own prompt, parser, and facade policy. This module
 //! owns concrete Git snapshots for function agents without depending on
-//! `bitfun-core`.
+//! `openbitfun-core`.
 
 use std::path::PathBuf;
 
-use bitfun_product_domains::function_agents::common::{AgentError, AgentResult};
-use bitfun_product_domains::function_agents::git_func_agent::ContextAnalyzer;
-use bitfun_product_domains::function_agents::ports::GitCommitSnapshot;
+use openbitfun_product_domains::function_agents::common::{AgentError, AgentResult};
+use openbitfun_product_domains::function_agents::git_func_agent::ContextAnalyzer;
+use openbitfun_product_domains::function_agents::ports::GitCommitSnapshot;
 
 use crate::git::{GitDiffParams, GitService};
 

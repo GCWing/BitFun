@@ -1,6 +1,6 @@
 //! First-party product assembly for local Agent Runtime ownership.
 //!
-//! The reusable lock primitive lives in `bitfun-services-core`. This owner
+//! The reusable lock primitive lives in `openbitfun-services-core`. This owner
 //! selects one deployment for the process, retains acquired workspace leases,
 //! and keeps that deployment fact out of Agent Runtime SDK and wire contracts.
 
@@ -8,15 +8,14 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-pub use bitfun_services_core::runtime_ownership::RuntimeDeployment;
-use bitfun_services_core::runtime_ownership::{
+use log::{info, warn};
+use openbitfun_services_core::product_identity::product_id;
+pub use openbitfun_services_core::runtime_ownership::RuntimeDeployment;
+use openbitfun_services_core::runtime_ownership::{
     RuntimeOwnershipError, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
 };
-use log::{info, warn};
 
 use crate::infrastructure::PathManager;
-
-const DEFAULT_PRODUCT_IDENTITY: &str = "bitfun";
 
 enum CoreRuntimeOwnershipDeployment {
     Embedded {
@@ -66,7 +65,7 @@ impl CoreRuntimeOwnership {
     pub fn embedded(path_manager: &PathManager, entrypoint: &'static str) -> Self {
         Self::embedded_with_facts(
             path_manager.agent_runtime_ownership_dir(),
-            product_identity().to_string(),
+            product_id().to_string(),
             entrypoint,
         )
     }
@@ -80,7 +79,7 @@ impl CoreRuntimeOwnership {
     ) -> Result<Self, CoreRuntimeOwnershipError> {
         Self::shared_with_facts(
             path_manager.agent_runtime_ownership_dir(),
-            product_identity().to_string(),
+            product_id().to_string(),
             entrypoint,
             workspace,
         )
@@ -219,7 +218,7 @@ impl CoreRuntimeOwnership {
         path_manager: &PathManager,
         workspace: &Path,
     ) -> Result<bool, CoreRuntimeOwnershipError> {
-        let key = RuntimeOwnershipKey::for_workspace(workspace, product_identity())?;
+        let key = RuntimeOwnershipKey::for_workspace(workspace, product_id())?;
         match WorkspaceRuntimeOwnership::try_acquire(
             &path_manager.agent_runtime_ownership_dir(),
             &key,
@@ -237,7 +236,7 @@ impl CoreRuntimeOwnership {
         path_manager: &PathManager,
         workspace: &Path,
     ) -> Result<bool, CoreRuntimeOwnershipError> {
-        let key = RuntimeOwnershipKey::for_workspace(workspace, product_identity())?;
+        let key = RuntimeOwnershipKey::for_workspace(workspace, product_id())?;
         let ownership_root = path_manager.agent_runtime_ownership_dir();
         match WorkspaceRuntimeOwnership::try_acquire(
             &ownership_root,
@@ -262,7 +261,7 @@ impl CoreRuntimeOwnership {
 
     /// Product-wide identity used by ownership and private first-party IPC.
     pub fn distribution_identity() -> &'static str {
-        product_identity()
+        product_id()
     }
 
     pub fn error_message(&self, error: &CoreRuntimeOwnershipError) -> String {
@@ -305,9 +304,9 @@ impl CoreRuntimeOwnershipError {
             return prefix;
         }
         let guidance = match deployment {
-            RuntimeDeployment::Embedded if entrypoint == "cli-interactive" => "A Shared TUI Runtime owns this workspace; use `bitfun chat --shared`, or close its clients and wait up to 30 seconds",
+            RuntimeDeployment::Embedded if entrypoint == "cli-interactive" => "A Shared TUI Runtime owns this workspace; use `openbitfun chat --shared`, or close its clients and wait up to 30 seconds",
             RuntimeDeployment::Embedded => "A Shared TUI Runtime owns this workspace; close its clients and wait up to 30 seconds before retrying this application",
-            RuntimeDeployment::Shared => "An Embedded BitFun process owns this workspace; close it before using `--shared`",
+            RuntimeDeployment::Shared => "An Embedded OpenBitFun process owns this workspace; close it before using `--shared`",
         };
         format!("{prefix}. {guidance}")
     }
@@ -349,10 +348,6 @@ fn remote_scope_matches(
             .ssh_host
             .as_ref()
             .is_none_or(|host| known.ssh_host.as_ref() == Some(host))
-}
-
-fn product_identity() -> &'static str {
-    option_env!("BITFUN_PRODUCT_BINARY_NAME").unwrap_or(DEFAULT_PRODUCT_IDENTITY)
 }
 
 fn log_acquired(entrypoint: &str, deployment: RuntimeDeployment, key: &RuntimeOwnershipKey) {

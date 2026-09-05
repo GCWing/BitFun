@@ -21,11 +21,11 @@ export function getApplicationPath(): string {
   let appName: string;
   
   if (isWindows) {
-    appName = 'bitfun-desktop.exe';
+    appName = 'openbitfun-desktop.exe';
   } else if (isMac) {
-    appName = 'BitFun.app/Contents/MacOS/BitFun';
+    appName = 'OpenBitFun.app/Contents/MacOS/OpenBitFun';
   } else {
-    appName = 'bitfun-desktop';
+    appName = 'openbitfun-desktop';
   }
   
   return path.resolve(__dirname, '..', '..', '..', 'target', 'debug', appName);

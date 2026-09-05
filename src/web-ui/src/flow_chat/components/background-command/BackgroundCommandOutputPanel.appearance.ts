@@ -9,7 +9,7 @@ export const backgroundCommandOutputPanelAppearanceDescriptor: AppearanceSurface
     { id: 'inputOptions' }, { id: 'inputActions' },
   ],
   states: [
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
   ],
 };

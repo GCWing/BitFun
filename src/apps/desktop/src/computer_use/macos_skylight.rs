@@ -17,7 +17,7 @@
 //! fall back to the public `CGEvent::post_to_pid`.
 //!
 //! Ported from cua-driver-rs `platform-macos/src/input/skylight.rs` (v0.6.8),
-//! adapted to BitFun's error types and logging conventions.
+//! adapted to OpenBitFun's error types and logging conventions.
 
 #![allow(dead_code)]
 
@@ -25,7 +25,7 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::{c_char, c_int, c_uint};
 use std::sync::OnceLock;
 
-use bitfun_core::util::errors::BitFunResult;
+use openbitfun_core::util::errors::OpenBitFunResult;
 
 // ── Function-pointer typedefs ──────────────────────────────────────────────
 
@@ -421,8 +421,8 @@ pub(super) fn get_process_psn_for_window(window_id: u32, pid: i32, out_psn: &mut
 pub(super) fn with_menu_shortcut_activation(
     target_pid: i32,
     target_wid: u32,
-    action: impl FnOnce() -> BitFunResult<()>,
-) -> BitFunResult<bool> {
+    action: impl FnOnce() -> OpenBitFunResult<()>,
+) -> OpenBitFunResult<bool> {
     let set_front = match set_front_process_fn() {
         Some(f) => f,
         None => {

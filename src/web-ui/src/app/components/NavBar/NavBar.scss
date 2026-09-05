@@ -4,15 +4,15 @@
  */
 @use '../../styles/workspace-shell-surfaces' as shell-surfaces;
 
-.bitfun-nav-bar {
+.openbitfun-nav-bar {
   @include shell-surfaces.sidebar-background;
 
   display: flex;
   align-items: center;
-  height: var(--bf-layout-toolbar-md-height);
+  height: var(--openbitfun-layout-toolbar-md-height);
   flex-shrink: 0;
-  padding: 0 var(--bf-space-2);
-  gap: var(--bf-space-1);
+  padding: 0 var(--openbitfun-space-2);
+  gap: var(--openbitfun-space-1);
   user-select: none;
 
   &--collapsed {
@@ -43,17 +43,17 @@
     flex-shrink: 0;
     padding: 0;
     border: none;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     background: transparent;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(.is-inactive) {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &.is-inactive {
@@ -63,11 +63,11 @@
 
     &:active:not(.is-inactive) {
       transform: scale(0.96);
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
+      outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: -1px;
     }
   }
@@ -82,18 +82,18 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
-    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+                background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover {
-      color: var(--bf-color-content-primary);
-      background: var(--bf-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-primary);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
+      outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: -1px;
     }
   }
@@ -104,8 +104,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-nav-bar__btn,
-  .bitfun-nav-bar__panel-toggle {
+  .openbitfun-nav-bar__btn,
+  .openbitfun-nav-bar__panel-toggle {
     transition: none;
     transform: none;
   }

@@ -1,13 +1,13 @@
 [package]
-name = "bitfun-runtime-ports"
+name = "openbitfun-runtime-ports"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Thin runtime ports for BitFun core decomposition"
+description = "Thin runtime ports for OpenBitFun core decomposition"
 autotests = false
 
 [lib]
-name = "bitfun_runtime_ports"
+name = "openbitfun_runtime_ports"
 crate-type = ["rlib"]
 
 [[test]]
@@ -38,8 +38,8 @@ required-features = ["workspace-ports"]
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true }
-bitfun-product-domains = { path = "../product-domains", optional = true }
-bitfun-core-types = { path = "../core-types", optional = true }
+openbitfun-product-domains = { path = "../product-domains", optional = true }
+openbitfun-core-types = { path = "../core-types", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
@@ -48,7 +48,7 @@ ts-rs = { workspace = true, optional = true }
 
 [features]
 default = []
-agent-api = ["dep:bitfun-core-types"]
+agent-api = ["dep:openbitfun-core-types"]
 plugin-runtime = []
 hook-function-runtime = []
 script-tool-runtime = []
@@ -64,21 +64,21 @@ tool-runtime-handles = [
 remote-workspace-ports = []
 git-port = []
 runtime-event-port = []
-permission = ["dep:bitfun-product-domains"]
-product-search = ["dep:bitfun-product-domains"]
+permission = ["dep:openbitfun-product-domains"]
+product-search = ["dep:openbitfun-product-domains"]
 # Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
 # export TypeScript bindings. The `permission` feature gates the product
 # types; enabling `ts` requires `permission` so all TS-derivable types are in
-# scope. `bitfun-product-domains?/ts` is a weak feature reference: it adds the
-# TS derive to the product-domain types only when `bitfun-product-domains` is
+# scope. `openbitfun-product-domains?/ts` is a weak feature reference: it adds the
+# TS derive to the product-domain types only when `openbitfun-product-domains` is
 # already enabled (always true here via `permission`), so `ts` cannot become an
 # undeclared owner of the optional product-domain dependency.
 ts = [
     "dep:ts-rs",
     "agent-api",
     "permission",
-    "bitfun-core-types/ts",
-    "bitfun-product-domains?/ts",
+    "openbitfun-core-types/ts",
+    "openbitfun-product-domains?/ts",
 ]
 
 [dev-dependencies]

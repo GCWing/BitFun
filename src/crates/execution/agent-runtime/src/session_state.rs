@@ -1,6 +1,6 @@
 //! Provider-neutral session state facts.
 
-use bitfun_runtime_ports::DialogSessionStateFact;
+use openbitfun_runtime_ports::DialogSessionStateFact;
 use serde::{Deserialize, Serialize};
 
 /// Session state shared by runtime coordination and product event projection.

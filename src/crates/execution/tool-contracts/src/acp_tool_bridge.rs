@@ -108,7 +108,7 @@ pub fn acp_external_agent_tool_input_schema() -> Value {
             },
             "workspace_path": {
                 "type": "string",
-                "description": "Optional absolute workspace path. Defaults to the current BitFun workspace."
+                "description": "Optional absolute workspace path. Defaults to the current OpenBitFun workspace."
             },
             "timeout_seconds": {
                 "type": "integer",

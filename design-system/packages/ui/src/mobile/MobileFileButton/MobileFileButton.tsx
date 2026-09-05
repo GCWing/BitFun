@@ -28,7 +28,7 @@ export const MobileFileButton = forwardRef<HTMLInputElement, MobileFileButtonPro
       <label
         aria-disabled={disabled || loading || undefined}
         className={classNames(styles.root, className)}
-        data-bf-component="mobile-file-button"
+        data-openbitfun-component="mobile-file-button"
         data-loading={loading ? "true" : "false"}
       >
         {loading

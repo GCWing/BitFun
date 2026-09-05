@@ -11,7 +11,7 @@
 //! insertion via the accessibility channel.
 //!
 //! This module mirrors cua-driver-rs's terminal-detection contract
-//! (`platform-macos/src/terminal.rs`) and BitFun's existing macOS pid-based
+//! (`platform-macos/src/terminal.rs`) and OpenBitFun's existing macOS pid-based
 //! lookup (`macos_bg_input::is_terminal_emulator`): a small, explicit list of
 //! known terminal identifiers per platform. When the target matches, callers
 //! should skip the AX/UIA text path and route to key-event synthesis instead
@@ -60,21 +60,21 @@ const MACOS_TERMINAL_NAME_KEYWORDS: &[&str] = &[
 /// Bundle identifiers of macOS terminal emulators where the AX value-set is
 /// known to be silently dropped. Stored lowercased and compared (exact) against
 /// the lowercased bundle id, so callers that already lower-case the id still
-/// match. Union of the cua-driver-rs list and BitFun's existing
+/// match. Union of the cua-driver-rs list and OpenBitFun's existing
 /// `macos_bg_input::TERMINAL_BUNDLE_IDS`.
 const MACOS_TERMINAL_BUNDLE_IDS: &[&str] = &[
     "co.zeit.hyper",                 // Hyper
     "com.apple.terminal",            // Apple Terminal.app
     "com.github.wez.wezterm",        // WezTerm (cua id)
     "com.googlecode.iterm2",         // iTerm2
-    "com.kitty",                     // kitty (BitFun id)
+    "com.kitty",                     // kitty (OpenBitFun id)
     "com.mitchellh.ghostty",         // Ghostty
     "com.neovide.neovide",           // Neovide
     "com.todesktop.230313mzl4w4u92", // Warp (ToDesktop build)
     "dev.warp.warp-stable",          // Warp (cua id)
     "dev.zed.zed.helper",            // Zed embedded terminal helper
     "io.alacritty",                  // Alacritty (newer id)
-    "io.wez.wezterm",                // WezTerm (BitFun id)
+    "io.wez.wezterm",                // WezTerm (OpenBitFun id)
     "net.kovidgoyal.kitty",          // kitty (cua id)
     "org.alacritty",                 // Alacritty (older id)
 ];

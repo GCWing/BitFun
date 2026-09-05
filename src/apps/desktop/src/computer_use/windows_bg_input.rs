@@ -45,7 +45,7 @@ use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use windows::core::BOOL;
 use windows::Win32::Foundation::{FALSE, HWND, LPARAM, POINT, TRUE, WPARAM};
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CLOAK};
@@ -344,11 +344,17 @@ fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
 /// The click is invisible: no `SetForegroundWindow`, no cursor movement. For
 /// multi-click (`click_count > 1`) the down/up cycle repeats with a short gap
 /// between clicks. `button` is `"left"`, `"right"`, or `"middle"` (any other
-/// value defaults to left). Surfaces a `BitFunError::Service` on
+/// value defaults to left). Surfaces a `OpenBitFunError::Service` on
 /// `PostMessageW` failure or a UIPI block.
-fn post_click(root: HWND, x: i32, y: i32, button: &str, click_count: usize) -> BitFunResult<()> {
+fn post_click(
+    root: HWND,
+    x: i32,
+    y: i32,
+    button: &str,
+    click_count: usize,
+) -> OpenBitFunResult<()> {
     if root.is_invalid() {
-        return Err(BitFunError::service("post_click: invalid HWND"));
+        return Err(OpenBitFunError::service("post_click: invalid HWND"));
     }
 
     let (down_msg, up_msg, mk_flag) = match button {
@@ -369,7 +375,7 @@ fn post_click(root: HWND, x: i32, y: i32, button: &str, click_count: usize) -> B
     // UIPI check — a Medium-IL sender posting to a High-IL target is silently
     // dropped by the target's message pump (PostMessageW still returns OK).
     if let Some(uipi) = post_message_blocked_by_uipi(target, down_msg) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
 
     // screen → target-local client coordinates for the LPARAM.
@@ -402,12 +408,12 @@ fn post_click(root: HWND, x: i32, y: i32, button: &str, click_count: usize) -> B
 /// `MapVirtualKeyW(vk, MAPVK_VK_TO_VSC)`). The LPARAM encodes the repeat count,
 /// scan code, previous key state, and transition state per the Win32
 /// `WM_KEYDOWN` / `WM_KEYUP` specification.
-fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
+fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> OpenBitFunResult<()> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service("post_key: invalid HWND"));
+        return Err(OpenBitFunError::service("post_key: invalid HWND"));
     }
     if let Some(uipi) = post_message_blocked_by_uipi(hwnd, WM_KEYDOWN) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
     let lparam = make_key_lparam(scan, down);
     let msg = if down { WM_KEYDOWN } else { WM_KEYUP };
@@ -421,12 +427,12 @@ fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
 /// controls; richer XAML / WinUI3 / UWP targets may reject posted `WM_CHAR`
 /// (their CoreInput dispatcher only consumes system-queue events) — use
 /// [`inject_text_cloaked`] for those.
-fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
+fn post_char(hwnd: HWND, ch: char) -> OpenBitFunResult<()> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service("post_char: invalid HWND"));
+        return Err(OpenBitFunError::service("post_char: invalid HWND"));
     }
     if let Some(uipi) = post_message_blocked_by_uipi(hwnd, WM_CHAR) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
     let code = ch as u32 as usize;
     post_msg(hwnd, WM_CHAR, WPARAM(code), LPARAM(1))
@@ -492,12 +498,14 @@ unsafe fn force_foreground_attached(target: HWND) -> bool {
 /// (best-effort; may miss GetKeyState-gated handlers, but never drops the
 /// action). The caller should focus the field first (a prior background click)
 /// so the keystrokes land in the right control.
-pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
+pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> OpenBitFunResult<()> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service("inject_text_cloaked: invalid HWND"));
+        return Err(OpenBitFunError::service(
+            "inject_text_cloaked: invalid HWND",
+        ));
     }
     if let Some(uipi) = post_message_blocked_by_uipi(hwnd, WM_CHAR) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
 
     let _serial = fg_serialize(); // one cloaked-foreground op at a time (1s ceiling)
@@ -511,7 +519,7 @@ pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
         unsafe { send_unicode(text) }
     } else {
         // Couldn't focus the target — deliver best-effort via PostMessage.
-        let mut last: BitFunResult<()> = Ok(());
+        let mut last: OpenBitFunResult<()> = Ok(());
         for ch in text.chars() {
             if let Err(e) = post_char(hwnd, ch) {
                 last = Err(e);
@@ -541,12 +549,16 @@ pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
 /// Modifiers are pressed before the key and released (in reverse order) after.
 /// Falls back to `PostMessage(WM_KEYDOWN/WM_KEYUP)` if foreground can't be
 /// obtained. See [`inject_text_cloaked`] for the cloaking rationale.
-pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+pub(super) fn inject_key_cloaked(
+    hwnd: HWND,
+    keycode: u16,
+    modifiers: &[u16],
+) -> OpenBitFunResult<()> {
     if hwnd.is_invalid() {
-        return Err(BitFunError::service("inject_key_cloaked: invalid HWND"));
+        return Err(OpenBitFunError::service("inject_key_cloaked: invalid HWND"));
     }
     if let Some(uipi) = post_message_blocked_by_uipi(hwnd, WM_KEYDOWN) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
 
     let _serial = fg_serialize();
@@ -818,14 +830,14 @@ fn owning_exe_basename(hwnd: HWND) -> Option<String> {
 // ── internals ───────────────────────────────────────────────────────────────
 
 /// Post a window message, converting the `windows` crate's `Error` into a
-/// `BitFunError`. Logged at `error` on failure.
-fn post_msg(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> BitFunResult<()> {
+/// `OpenBitFunError`. Logged at `error` on failure.
+fn post_msg(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> OpenBitFunResult<()> {
     unsafe {
         match PostMessageW(Some(hwnd), msg, wparam, lparam) {
             Ok(()) => Ok(()),
             Err(e) => {
                 let name = message_name(msg);
-                let err = BitFunError::service(format!(
+                let err = OpenBitFunError::service(format!(
                     "PostMessageW({name}, hwnd=0x{:x}) failed: {e}",
                     hwnd.0 as usize
                 ));
@@ -903,7 +915,7 @@ fn vk_event(vk: u16, scan: u32, up: bool) -> Input {
 /// # Safety
 /// `SendInput` reads `ev.len()` `INPUT` records from `ev.as_ptr()`; every
 /// record is fully initialized above. `cbSize` is the true `size_of::<INPUT>`.
-unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
+unsafe fn send_unicode(text: &str) -> OpenBitFunResult<()> {
     let mut ev: Vec<Input> = Vec::with_capacity(text.len() * 2);
     for u in text.encode_utf16() {
         ev.push(unicode_event(u, false));
@@ -920,7 +932,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
         )
     };
     if sent as usize != ev.len() {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "SendInput typed only {sent} of {} key events",
             ev.len()
         )));
@@ -933,7 +945,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
 ///
 /// # Safety
 /// `SendInput` reads a fully-initialized `INPUT` array; `cbSize` is correct.
-unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> OpenBitFunResult<()> {
     let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
         // SAFETY: `MapVirtualKeyW` accepts every virtual-key value and has no
@@ -959,7 +971,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
         )
     };
     if sent as usize != ev.len() {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "SendInput sent only {sent} of {} key events",
             ev.len()
         )));
@@ -970,7 +982,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
 /// Fallback for [`inject_key_cloaked`] when foreground can't be obtained: post
 /// `WM_KEYDOWN` / `WM_KEYUP` to the window's queue (best-effort; may miss
 /// `GetKeyState`-gated accelerators, but never drops the action).
-fn send_key_combo_posted(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+fn send_key_combo_posted(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> OpenBitFunResult<()> {
     for &m in modifiers {
         let scan = unsafe { MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC) };
         post_key(hwnd, m, scan, true)?;
@@ -1019,9 +1031,9 @@ pub(super) fn post_click_screen(
     button: &str,
     click_count: usize,
     modifier_keys: &[String],
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     if root.is_invalid() {
-        return Err(BitFunError::service("post_click_screen: invalid HWND"));
+        return Err(OpenBitFunError::service("post_click_screen: invalid HWND"));
     }
     let target = deepest_child(root, sx, sy);
     let (down_msg, up_msg, mk_flag) = match button {
@@ -1030,7 +1042,7 @@ pub(super) fn post_click_screen(
         _ => (WM_LBUTTONDOWN, WM_LBUTTONUP, MK_LBUTTON),
     };
     if let Some(uipi) = post_message_blocked_by_uipi(target, down_msg) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
     let (mk_mods, unsupported) = mk_flags_for_modifiers(modifier_keys);
     if !unsupported.is_empty() {
@@ -1090,13 +1102,13 @@ pub(super) fn post_scroll_screen(
     sy: i32,
     dx: i32,
     dy: i32,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     if root.is_invalid() {
-        return Err(BitFunError::service("post_scroll_screen: invalid HWND"));
+        return Err(OpenBitFunError::service("post_scroll_screen: invalid HWND"));
     }
     let target = deepest_child(root, sx, sy);
     if let Some(uipi) = post_message_blocked_by_uipi(target, WM_VSCROLL) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
 
     if dy != 0 {
@@ -1136,13 +1148,13 @@ pub(super) fn post_drag_screen(
     duration_ms: u64,
     steps: usize,
     button: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     if root.is_invalid() {
-        return Err(BitFunError::service("post_drag_screen: invalid HWND"));
+        return Err(OpenBitFunError::service("post_drag_screen: invalid HWND"));
     }
     let target = deepest_child(root, sx_from, sy_from);
     if let Some(uipi) = post_message_blocked_by_uipi(target, WM_LBUTTONDOWN) {
-        return Err(BitFunError::service(uipi));
+        return Err(OpenBitFunError::service(uipi));
     }
     let mut c_from = POINT {
         x: sx_from,
@@ -1208,7 +1220,7 @@ fn vk_for_modifier(name: &str) -> Option<u16> {
 /// Map a key name (named keys like `enter`, `tab`, arrows, `f1..f12`, or a
 /// single printable character) to a virtual-key code. Mirrors cua-driver-rs
 /// `key_name_to_vk`; single characters go through `VkKeyScanW`.
-fn vk_for_key(key: &str) -> BitFunResult<u16> {
+fn vk_for_key(key: &str) -> OpenBitFunResult<u16> {
     let vk: u16 = match key.to_lowercase().as_str() {
         "enter" | "return" => 0x0D,
         "tab" => 0x09,
@@ -1248,10 +1260,10 @@ fn vk_for_key(key: &str) -> BitFunResult<u16> {
             let ch = key
                 .chars()
                 .next()
-                .ok_or_else(|| BitFunError::tool("empty key name".to_string()))?;
+                .ok_or_else(|| OpenBitFunError::tool("empty key name".to_string()))?;
             let scan = unsafe { VkKeyScanW(ch as u16) };
             if scan == -1 {
-                return Err(BitFunError::tool(format!("unknown key: {key}")));
+                return Err(OpenBitFunError::tool(format!("unknown key: {key}")));
             }
             (scan & 0xFF) as u16
         }
@@ -1264,9 +1276,9 @@ fn vk_for_key(key: &str) -> BitFunResult<u16> {
 /// names are collected as modifiers; the first non-modifier (or, if every entry
 /// is a modifier, the last one) becomes the main key. Mirrors the macOS
 /// `parse_key_sequence` contract.
-pub(super) fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
+pub(super) fn parse_key_chord(keys: &[String]) -> OpenBitFunResult<(Vec<u16>, u16)> {
     if keys.is_empty() {
-        return Err(BitFunError::tool("empty key chord".to_string()));
+        return Err(OpenBitFunError::tool("empty key chord".to_string()));
     }
     let mut modifiers: Vec<u16> = Vec::new();
     let mut main_key: Option<u16> = None;

@@ -54,12 +54,12 @@ export interface WorkspaceContextValue extends WorkspaceState {
 }
 
 const workspaceContextGlobal = globalThis as typeof globalThis & {
-  __BITFUN_WORKSPACE_CONTEXT__?: ReturnType<typeof createContext<WorkspaceContextValue | null>>;
+  __OPENBITFUN_WORKSPACE_CONTEXT__?: ReturnType<typeof createContext<WorkspaceContextValue | null>>;
 };
 
 const WorkspaceContext =
-  workspaceContextGlobal.__BITFUN_WORKSPACE_CONTEXT__ ?? createContext<WorkspaceContextValue | null>(null);
-workspaceContextGlobal.__BITFUN_WORKSPACE_CONTEXT__ = WorkspaceContext;
+  workspaceContextGlobal.__OPENBITFUN_WORKSPACE_CONTEXT__ ?? createContext<WorkspaceContextValue | null>(null);
+workspaceContextGlobal.__OPENBITFUN_WORKSPACE_CONTEXT__ = WorkspaceContext;
 
 export const useWorkspaceContext = (): WorkspaceContextValue => {
   const context = useContext(WorkspaceContext);

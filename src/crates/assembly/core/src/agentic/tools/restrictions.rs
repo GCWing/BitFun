@@ -1,5 +1,5 @@
-use crate::util::errors::{BitFunError, BitFunResult};
-pub use bitfun_agent_tools::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+pub use openbitfun_agent_tools::{
     is_miniapp_headless_agent_run, is_miniapp_market_strict_agent_run,
     is_remote_posix_path_within_root, miniapp_agent_run_tool_restrictions,
     miniapp_headless_agent_tool_restrictions, miniapp_market_strict_agent_tool_restrictions,
@@ -8,22 +8,22 @@ pub use bitfun_agent_tools::{
 };
 use std::path::{Path, PathBuf};
 
-impl From<ToolRestrictionError> for BitFunError {
+impl From<ToolRestrictionError> for OpenBitFunError {
     fn from(error: ToolRestrictionError) -> Self {
-        BitFunError::tool(error.to_string())
+        OpenBitFunError::tool(error.to_string())
     }
 }
 
-pub fn is_local_path_within_root(path: &Path, root: &Path) -> BitFunResult<bool> {
+pub fn is_local_path_within_root(path: &Path, root: &Path) -> OpenBitFunResult<bool> {
     let canonical_path = canonicalize_local_path_best_effort(path)?;
     let canonical_root = canonicalize_local_path_best_effort(root)?;
     Ok(canonical_path == canonical_root || canonical_path.starts_with(&canonical_root))
 }
 
-pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<PathBuf> {
+pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> OpenBitFunResult<PathBuf> {
     if path.exists() {
         return dunce::canonicalize(path).map_err(|err| {
-            BitFunError::validation(format!(
+            OpenBitFunError::validation(format!(
                 "Failed to canonicalize path '{}': {}",
                 path.display(),
                 err
@@ -37,7 +37,7 @@ pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<P
     loop {
         if current.exists() {
             let mut canonical = dunce::canonicalize(current).map_err(|err| {
-                BitFunError::validation(format!(
+                OpenBitFunError::validation(format!(
                     "Failed to canonicalize path '{}': {}",
                     current.display(),
                     err
@@ -52,7 +52,7 @@ pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<P
         }
 
         let file_name = current.file_name().ok_or_else(|| {
-            BitFunError::validation(format!(
+            OpenBitFunError::validation(format!(
                 "Path '{}' cannot be normalized for restriction checks",
                 path.display()
             ))
@@ -60,7 +60,7 @@ pub(crate) fn canonicalize_local_path_best_effort(path: &Path) -> BitFunResult<P
         missing_tail.push(PathBuf::from(file_name));
 
         current = current.parent().ok_or_else(|| {
-            BitFunError::validation(format!(
+            OpenBitFunError::validation(format!(
                 "Path '{}' cannot be normalized for restriction checks",
                 path.display()
             ))
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn tool_restriction_errors_map_to_tool_errors() {
-        let error: BitFunError = ToolRestrictionError::Denied {
+        let error: OpenBitFunError = ToolRestrictionError::Denied {
             tool_name: "Task".to_string(),
             message: Some(
                 "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
@@ -83,7 +83,7 @@ mod tests {
         .into();
 
         match error {
-            BitFunError::Tool(message) => {
+            OpenBitFunError::Tool(message) => {
                 assert_eq!(
                     message,
                     "Recursive subagent delegation is blocked. Use direct tools instead."
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn local_path_containment_handles_missing_children() {
         let root =
-            std::env::temp_dir().join(format!("bitfun-restrictions-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("openbitfun-restrictions-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("allowed")).expect("create temp root");
 
         let allowed_child = root.join("allowed").join("nested").join("file.txt");

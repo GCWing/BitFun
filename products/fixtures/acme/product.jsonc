@@ -1,6 +1,8 @@
 {
   "$schema": "../../schemas/product-definition.schema.json",
   "schemaVersion": 1,
+  "productId": "acme",
+  "dataNamespace": "acme",
   "localeRoot": "./locales",
   "members": {
     "desktop": {

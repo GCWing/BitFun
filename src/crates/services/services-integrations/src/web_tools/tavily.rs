@@ -3,7 +3,7 @@ use super::{
     validate_search_request,
 };
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     WebSearchError, WebSearchErrorKind, WebSearchProvider, WebSearchProviderId, WebSearchRequest,
     WebSearchResponse, WebSearchResult,
 };

@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton } from '@openbitfun/ui';
 import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Notification } from '../types';
@@ -54,15 +54,15 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
   return (
     <div
       className={`progress-notification progress-notification--${status || 'active'} ${mode === 'text-only' ? 'progress-notification--text-only' : ''}`}
-      data-bf-component="notification"
-      data-bf-part="progressItem"
-      data-bf-state={status || undefined}
+      data-openbitfun-component="notification"
+      data-openbitfun-part="progressItem"
+      data-openbitfun-state={status || undefined}
     >
       
       <div
         className="progress-notification__icon"
-        data-bf-component="notification"
-        data-bf-part="progressIcon"
+        data-openbitfun-component="notification"
+        data-openbitfun-part="progressIcon"
       >
         {getStatusIcon()}
       </div>
@@ -83,11 +83,11 @@ export const ProgressNotification: React.FC<ProgressNotificationProps> = ({ noti
 
         
         {shouldShowProgressBar && (
-          <div className="progress-notification__progress-bar" data-bf-component="notification" data-bf-part="progressBar">
+          <div className="progress-notification__progress-bar" data-openbitfun-component="notification" data-openbitfun-part="progressBar">
             <div
               className="progress-notification__progress-fill"
-              data-bf-component="notification"
-              data-bf-part="progressFill"
+              data-openbitfun-component="notification"
+              data-openbitfun-part="progressFill"
               style={{ transform: `scaleX(${Math.max(0, Math.min(100, progress)) / 100})` }}
             />
           </div>

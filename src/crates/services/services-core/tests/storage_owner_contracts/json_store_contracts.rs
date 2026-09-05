@@ -1,4 +1,4 @@
-use bitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
+use openbitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -50,7 +50,7 @@ impl TestTempDir {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("bitfun-json-store-{name}-{nonce}"));
+        let path = std::env::temp_dir().join(format!("openbitfun-json-store-{name}-{nonce}"));
         std::fs::create_dir_all(&path).expect("create temp dir");
         Self { path }
     }

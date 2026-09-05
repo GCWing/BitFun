@@ -121,7 +121,7 @@ enum InstructionIo<'a> {
     Local(&'a Path),
     #[cfg(feature = "workspace-runtime")]
     Port {
-        fs: &'a dyn bitfun_runtime_ports::WorkspaceFileSystem,
+        fs: &'a dyn openbitfun_runtime_ports::WorkspaceFileSystem,
         root: &'a str,
     },
 }
@@ -680,7 +680,7 @@ pub async fn read_workspace_conditional_instruction_sources(
 
 #[cfg(feature = "workspace-runtime")]
 pub async fn read_workspace_instruction_files_with_fs(
-    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    fs: &dyn openbitfun_runtime_ports::WorkspaceFileSystem,
     workspace_root: &str,
 ) -> Result<Vec<WorkspaceInstructionFile>, String> {
     Ok(
@@ -694,7 +694,7 @@ pub async fn read_workspace_instruction_files_with_fs(
 
 #[cfg(feature = "workspace-runtime")]
 pub async fn read_workspace_instruction_sources_with_fs(
-    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    fs: &dyn openbitfun_runtime_ports::WorkspaceFileSystem,
     workspace_root: &str,
 ) -> Result<Vec<WorkspaceInstructionFile>, String> {
     WorkspaceInstructionResolver::new(InstructionIo::Port {
@@ -707,7 +707,7 @@ pub async fn read_workspace_instruction_sources_with_fs(
 
 #[cfg(feature = "workspace-runtime")]
 pub async fn read_workspace_conditional_instruction_sources_with_fs(
-    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    fs: &dyn openbitfun_runtime_ports::WorkspaceFileSystem,
     workspace_root: &str,
 ) -> Result<Vec<WorkspaceInstructionFile>, String> {
     WorkspaceInstructionResolver::new(InstructionIo::Port {
@@ -830,11 +830,11 @@ fn port_entry_relative_path(root: &str, parent: &str, entry_path: &str) -> Optio
 
 #[cfg(feature = "workspace-runtime")]
 async fn port_entry_kind(
-    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    fs: &dyn openbitfun_runtime_ports::WorkspaceFileSystem,
     root: String,
     relative_path: String,
 ) -> Result<Option<InstructionEntryKind>, String> {
-    use bitfun_runtime_ports::WorkspacePathKind;
+    use openbitfun_runtime_ports::WorkspacePathKind;
 
     let mut current = String::new();
     let components: Vec<String> = relative_path

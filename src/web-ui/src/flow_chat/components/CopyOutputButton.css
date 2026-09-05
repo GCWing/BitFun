@@ -18,7 +18,7 @@
 /* Show buttons when parent is hovered */
 .copy-button-area:hover .copy-output-button-group,
 .flow-chat-dialog-turn:hover .copy-output-button-group,
-.copy-output-button-group[data-bf-state='copied'] {
+.copy-output-button-group[data-openbitfun-state='copied'] {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;

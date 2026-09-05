@@ -57,7 +57,7 @@ interface AboutLayoutEvidence {
 
 async function ensureLightAppearance(): Promise<void> {
   const isLight = await browser.execute(() => (
-    document.documentElement.getAttribute('data-bf-appearance') === 'bitfun-light'
+    document.documentElement.getAttribute('data-openbitfun-appearance') === 'openbitfun-light'
   ));
   if (isLight) return;
 
@@ -71,13 +71,13 @@ async function ensureLightAppearance(): Promise<void> {
   await picker.waitForDisplayed({ timeout: 10_000 });
   await picker.click();
   const lightOption = await $(
-    '[data-testid="appearance-palette-option"][data-appearance-id="bitfun-light"]',
+    '[data-testid="appearance-palette-option"][data-appearance-id="openbitfun-light"]',
   );
   await lightOption.waitForDisplayed({ timeout: 10_000 });
   await lightOption.click();
 
   await browser.waitUntil(async () => browser.execute(() => (
-    document.documentElement.getAttribute('data-bf-appearance') === 'bitfun-light'
+    document.documentElement.getAttribute('data-openbitfun-appearance') === 'openbitfun-light'
   )), {
     timeout: 10_000,
     timeoutMsg: 'The native app did not switch to the light Appearance',
@@ -139,14 +139,14 @@ async function readAboutLayoutEvidence(): Promise<AboutLayoutEvidence> {
   const evidence = await browser.execute(() => {
     const modal = document.querySelector<HTMLElement>('[data-testid="about-dialog-modal"]');
     const root = document.querySelector<HTMLElement>(
-      '[data-bf-component="about-dialog"][data-bf-part="root"]',
+      '[data-openbitfun-component="about-dialog"][data-openbitfun-part="root"]',
     );
-    const brand = document.querySelector<HTMLElement>('.bitfun-about-dialog__brand');
-    const metadata = document.querySelector<HTMLElement>('.bitfun-about-dialog__metadata');
+    const brand = document.querySelector<HTMLElement>('.openbitfun-about-dialog__brand');
+    const metadata = document.querySelector<HTMLElement>('.openbitfun-about-dialog__metadata');
     const header = modal?.querySelector<HTMLElement>('.modal__header-shell');
     const headerTitle = modal?.querySelector<HTMLElement>('.modal__title');
-    const closeButton = modal?.querySelector<HTMLElement>('[data-bf-role="popup-close"]');
-    const title = document.querySelector<HTMLElement>('.bitfun-about-dialog__title');
+    const closeButton = modal?.querySelector<HTMLElement>('[data-openbitfun-role="popup-close"]');
+    const title = document.querySelector<HTMLElement>('.openbitfun-about-dialog__title');
     const branch = document.querySelector<HTMLElement>('[data-testid="about-branch-value"]');
     const dotMatrix = document.querySelector<HTMLElement>('[data-testid="about-dot-matrix"]');
     const starButton = document.querySelector<HTMLElement>('[data-testid="about-github-star"]');
@@ -235,7 +235,7 @@ describe('L0 Popup Surface Consistency', () => {
     expect(await readBackgroundAlpha('[data-testid="about-dialog-modal"]')).toBe(255);
 
     const contentChrome = await readPopupChrome(
-      '[data-bf-component="about-dialog"][data-bf-part="root"]',
+      '[data-openbitfun-component="about-dialog"][data-openbitfun-part="root"]',
     );
     expect(contentChrome.backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(contentChrome.borderTopWidth).toBe('0px');
@@ -244,7 +244,7 @@ describe('L0 Popup Surface Consistency', () => {
 
     const aboutLayout = await readAboutLayoutEvidence();
     expect(aboutLayout.headerLogoCount).toBe(0);
-    expect(aboutLayout.headerTitle).toContain('BitFun');
+    expect(aboutLayout.headerTitle).toContain('OpenBitFun');
     expect(aboutLayout.headerHeight).toBeGreaterThanOrEqual(44);
     expect(aboutLayout.headerHeight).toBeLessThanOrEqual(49);
     expect(aboutLayout.headerCloseCenterOffset).toBeLessThanOrEqual(1);

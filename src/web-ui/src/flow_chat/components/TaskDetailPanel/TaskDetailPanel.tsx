@@ -3,7 +3,7 @@
  * Minimal layout to match the FlowChat background.
  */
 
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -14,7 +14,7 @@ import {
 import type { FlowToolItem, FlowItem, FlowChatState } from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { ToolTimeoutIndicator } from '../../tool-cards/ToolTimeoutIndicator';
-import { Spinner } from '@bitfun/ui';
+import { Spinner } from '@openbitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
@@ -483,13 +483,13 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
 
   if (!toolItem) {
     return (
-      <div data-bf-component="task-detail-panel" data-bf-part="root" data-bf-state="empty" className="task-detail-panel task-detail-panel--empty">
-        <div className="task-detail-panel__header" data-bf-component="task-detail-panel" data-bf-part="header">
+      <div data-openbitfun-component="task-detail-panel" data-openbitfun-part="root" data-openbitfun-state="empty" className="task-detail-panel task-detail-panel--empty">
+        <div className="task-detail-panel__header" data-openbitfun-component="task-detail-panel" data-openbitfun-part="header">
           <span className="task-detail-panel__header-title">
             {t('toolCards.taskDetailPanel.untitled')}
           </span>
         </div>
-        <div className="task-detail-panel__empty-content" data-bf-component="task-detail-panel" data-bf-part="empty">
+        <div className="task-detail-panel__empty-content" data-openbitfun-component="task-detail-panel" data-openbitfun-part="empty">
           {t('toolCards.taskDetailPanel.noData')}
         </div>
       </div>
@@ -499,8 +499,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
 
   return (
-    <div data-bf-component="task-detail-panel" data-bf-part="root" className="task-detail-panel">
-      <div className="task-detail-panel__header" data-bf-component="task-detail-panel" data-bf-part="header">
+    <div data-openbitfun-component="task-detail-panel" data-openbitfun-part="root" className="task-detail-panel">
+      <div className="task-detail-panel__header" data-openbitfun-component="task-detail-panel" data-openbitfun-part="header">
         <Split size={14} className="task-detail-panel__header-icon" />
         <span className="task-detail-panel__header-title">
           {taskInput?.description || t('toolCards.taskDetailPanel.untitled')}
@@ -539,7 +539,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       </div>
 
       {isFailed && (
-        <div className="task-detail-panel__error-banner" data-bf-component="task-detail-panel" data-bf-part="errorBanner" data-bf-state="error">
+        <div className="task-detail-panel__error-banner" data-openbitfun-component="task-detail-panel" data-openbitfun-part="errorBanner" data-openbitfun-state="error">
           <AlertCircle size={14} className="task-detail-panel__error-banner-icon" />
           <span className="task-detail-panel__error-banner-text">{getErrorMessage()}</span>
         </div>
@@ -548,11 +548,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       <div
         ref={contentRef}
         className="task-detail-panel__content"
-        data-bf-component="task-detail-panel"
-        data-bf-part="content"
+        data-openbitfun-component="task-detail-panel"
+        data-openbitfun-part="content"
       >
         {rc ? (
-          <details className="task-detail-panel__reviewer-section" open data-bf-component="task-detail-panel" data-bf-part="reviewer">
+          <details className="task-detail-panel__reviewer-section" open data-openbitfun-component="task-detail-panel" data-openbitfun-part="reviewer">
             <summary>{t('toolCards.taskDetailPanel.reviewerContextLabel')}</summary>
             <div className="task-detail-panel__reviewer-context">
               <div className="task-detail-panel__reviewer-role" style={{ color: rc.accentColor }}>
@@ -577,14 +577,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
             </div>
           </details>
         ) : taskInput?.prompt && taskInput.prompt !== 'Not provided' && (
-          <details className="task-detail-panel__prompt-section" data-bf-component="task-detail-panel" data-bf-part="prompt">
+          <details className="task-detail-panel__prompt-section" data-openbitfun-component="task-detail-panel" data-openbitfun-part="prompt">
             <summary>{t('toolCards.taskDetailPanel.promptLabel')}</summary>
             <pre className="task-detail-panel__prompt-content">{taskInput.prompt}</pre>
           </details>
         )}
 
         {canStopSubagent && (
-          <div className="task-detail-panel__actions" data-bf-component="task-detail-panel" data-bf-part="actions">
+          <div className="task-detail-panel__actions" data-openbitfun-component="task-detail-panel" data-openbitfun-part="actions">
             <Button
               variant="outline"
               size="sm"
@@ -607,14 +607,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         )}
 
         {stopError && (
-          <div className="task-detail-panel__error" data-bf-component="task-detail-panel" data-bf-part="error" data-bf-state="error">
+          <div className="task-detail-panel__error" data-openbitfun-component="task-detail-panel" data-openbitfun-part="error" data-openbitfun-state="error">
             <AlertCircle size={14} />
             <span>{stopError}</span>
           </div>
         )}
 
         {subagentItems.length > 0 && (
-          <div className="task-detail-panel__execution" data-bf-component="task-detail-panel" data-bf-part="execution">
+          <div className="task-detail-panel__execution" data-openbitfun-component="task-detail-panel" data-openbitfun-part="execution">
             {subagentSessionId && (
               <SubagentProjectionView
                 parentTaskToolId={toolItem.id}
@@ -629,7 +629,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         )}
 
         {hasPendingSubagentRender && (
-          <div className="task-detail-panel__loading task-detail-panel__loading--inline" data-bf-component="task-detail-panel" data-bf-part="loading" data-bf-state="loading">
+          <div className="task-detail-panel__loading task-detail-panel__loading--inline" data-openbitfun-component="task-detail-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">
             <Spinner size="sm" />
             <span>
               {t('toolCards.taskDetailPanel.loadingMore')}
@@ -638,7 +638,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         )}
 
         {((isRunning || !isSnapshotHydrated) && subagentItems.length === 0) && (
-          <div className="task-detail-panel__loading" data-bf-component="task-detail-panel" data-bf-part="loading" data-bf-state="loading">
+          <div className="task-detail-panel__loading" data-openbitfun-component="task-detail-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">
             <Spinner size="md" />
             <span>
               {isSnapshotHydrated

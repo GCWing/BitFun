@@ -2,14 +2,14 @@
 # post-install script: install multi-size icons to hicolor theme
 # Tauri only installs 1024x1024; this adds smaller sizes for taskbar/dock/alt-tab
 
-ICON_SRC="/usr/lib/BitFun/share/icons"
+ICON_SRC="/usr/lib/OpenBitFun/share/icons"
 ICON_DST_BASE="/usr/share/icons/hicolor"
 
 # Try multiple possible source locations
 for src_dir in \
-  "/usr/lib/BitFun/share/icons" \
-  "/opt/bitfun/share/icons" \
-  "/usr/share/bitfun/icons"; do
+  "/usr/lib/OpenBitFun/share/icons" \
+  "/opt/openbitfun/share/icons" \
+  "/usr/share/openbitfun/icons"; do
   if [ -d "$src_dir/hicolor" ]; then
     ICON_SRC="$src_dir/hicolor"
     break

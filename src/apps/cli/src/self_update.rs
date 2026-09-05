@@ -1,21 +1,23 @@
 use anyhow::{anyhow, Context, Result};
+#[cfg(unix)]
 use flate2::read::GzDecoder;
 use futures_util::StreamExt;
 use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
+#[cfg(unix)]
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
+#[cfg(unix)]
 use tar::Archive;
 
 const GITHUB_MANIFEST: &str =
-    "https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json";
+    "https://github.com/GCWing/OpenBitFun/releases/latest/download/linux-binaries.json";
 const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
-const DEPRECATION_WARNING: &str = "Warning: `bitfun-cli` is deprecated; use `bitfun` instead.";
 
 /// Source-selection tuning. Mirrors the relay deploy path in
 /// `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`,
@@ -103,15 +105,18 @@ pub(crate) async fn run_manual(check_only: bool) -> Result<UpdateOutcome> {
     let outcome = result?;
     match outcome {
         UpdateOutcome::Current => {
-            println!("BitFun CLI is up to date ({}).", env!("CARGO_PKG_VERSION"))
+            println!(
+                "OpenBitFun CLI is up to date ({}).",
+                env!("CARGO_PKG_VERSION")
+            )
         }
         // `try_source` already printed the available version and its source.
-        UpdateOutcome::Available => println!("Run `bitfun update` to install it."),
+        UpdateOutcome::Available => println!("Run `openbitfun update` to install it."),
         UpdateOutcome::Updated => println!(
-            "BitFun CLI was updated successfully. Restart this command to use the new version."
+            "OpenBitFun CLI was updated successfully. Restart this command to use the new version."
         ),
         UpdateOutcome::Unsupported => println!(
-            "BitFun CLI self-update supports official Linux x86_64/ARM64 archive installations."
+            "OpenBitFun CLI self-update supports official Linux x86_64/ARM64 archive installations."
         ),
     }
     Ok(outcome)
@@ -162,20 +167,20 @@ pub(crate) async fn maybe_run_automatic() {
 
     match spawn_detached_install() {
         Ok(true) => eprintln!(
-            "BitFun CLI {newest} is downloading in the background; it will be used next launch."
+            "OpenBitFun CLI {newest} is downloading in the background; it will be used next launch."
         ),
         Ok(false) => tracing::debug!("A CLI update is already in progress; skipping."),
         Err(error) => tracing::debug!("Could not start background CLI update: {error}"),
     }
 }
 
-/// Run `bitfun update` detached so it outlives this process. Returns false when
+/// Run `openbitfun update` detached so it outlives this process. Returns false when
 /// another install already holds the lock.
 fn spawn_detached_install() -> Result<bool> {
     if InstallLock::is_held() {
         return Ok(false);
     }
-    let exe = std::env::current_exe().context("resolve current BitFun CLI executable")?;
+    let exe = std::env::current_exe().context("resolve current OpenBitFun CLI executable")?;
     Command::new(exe)
         .arg("update")
         .env(BACKGROUND_INSTALL_ENV, "1")
@@ -189,7 +194,7 @@ fn spawn_detached_install() -> Result<bool> {
 
 /// Marks the detached child so it knows to leave a failure behind for the next
 /// interactive launch to report.
-const BACKGROUND_INSTALL_ENV: &str = "BITFUN_CLI_BACKGROUND_UPDATE";
+const BACKGROUND_INSTALL_ENV: &str = "OPENBITFUN_CLI_BACKGROUND_UPDATE";
 
 fn is_background_install() -> bool {
     std::env::var_os(BACKGROUND_INSTALL_ENV).is_some()
@@ -230,11 +235,11 @@ fn report_background_failure() {
     if message.is_empty() {
         return;
     }
-    eprintln!("The last background BitFun CLI update failed: {message}");
-    eprintln!("Run `bitfun update` to retry.");
+    eprintln!("The last background OpenBitFun CLI update failed: {message}");
+    eprintln!("Run `openbitfun update` to retry.");
 }
 
-/// Guards against two `bitfun update` runs swapping the binaries at once.
+/// Guards against two `openbitfun update` runs swapping the binary at once.
 struct InstallLock {
     path: PathBuf,
 }
@@ -268,7 +273,7 @@ impl InstallLock {
             let _ = fs::create_dir_all(parent);
         }
         // `create_new` is the whole point: a check-then-write leaves a window in
-        // which two `bitfun update` processes both see no lock, and interleaving
+        // which two `openbitfun update` processes both see no lock, and interleaving
         // their backup/stage/swap renames can leave no working binary at all.
         // Only a stale lock is cleared, and only then is the create retried.
         match fs::OpenOptions::new()
@@ -284,7 +289,7 @@ impl InstallLock {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if Self::is_held() {
                     return Err(anyhow!(
-                        "another BitFun CLI update is already running ({})",
+                        "another OpenBitFun CLI update is already running ({})",
                         path.display()
                     ));
                 }
@@ -314,7 +319,8 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
     let Some(platform_key) = current_platform_key() else {
         return Ok(UpdateOutcome::Unsupported);
     };
-    let current_exe = std::env::current_exe().context("resolve current BitFun CLI executable")?;
+    let current_exe =
+        std::env::current_exe().context("resolve current OpenBitFun CLI executable")?;
     if is_development_binary(&current_exe) {
         return Ok(UpdateOutcome::Unsupported);
     }
@@ -340,7 +346,7 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
             .collect::<Vec<_>>()
             .join(", ");
         println!(
-            "BitFun CLI {} is available from {} (current {}).",
+            "OpenBitFun CLI {} is available from {} (current {}).",
             newest,
             from,
             env!("CARGO_PKG_VERSION")
@@ -419,7 +425,7 @@ async fn update_from_configured_sources(check_only: bool) -> Result<UpdateOutcom
     let mut buffer = staging.resume();
     if !buffer.is_empty() {
         eprintln!(
-            "Resuming a previous BitFun CLI download at {} MB.",
+            "Resuming a previous OpenBitFun CLI download at {} MB.",
             buffer.len() / (1024 * 1024)
         );
     }
@@ -671,7 +677,7 @@ fn platform_asset<'a>(
 }
 
 fn build_client() -> Result<Client> {
-    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
+    openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     Client::builder()
         .connect_timeout(Duration::from_secs(8))
         // Deliberately no `.timeout()`: a whole-request ceiling turns "slow" into
@@ -882,9 +888,9 @@ async fn download_text(client: &Client, url: &str) -> Result<String> {
 /// build time from the same `TAURI_UPDATER_PUBKEY` the Desktop updater trusts.
 ///
 /// Forks that publish their own releases override this with their own key.
-const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
+const RELEASE_PUBKEY: Option<&str> = option_env!("OPENBITFUN_RELEASE_PUBKEY");
 
-/// The official BitFun release public key (minisign key ID `50F47CBE6CC0A376`),
+/// The official OpenBitFun release public key (minisign key ID `50F47CBE6CC0A376`),
 /// base64-wrapped the way Tauri wraps `minisign.pub`. Public data — each
 /// release ships it as the `minisign.pub` asset — and the update source above
 /// is pinned to the official repository, so local and fork builds verifying
@@ -952,33 +958,29 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
     let install_dir = current_exe
         .parent()
         .ok_or_else(|| anyhow!("current executable has no parent directory"))?;
-    if current_exe.file_name().and_then(|name| name.to_str()) != Some("bitfun") {
+    if current_exe.file_name().and_then(|name| name.to_str()) != Some("openbitfun") {
         return Err(anyhow!(
-            "self-update requires the official executable name `bitfun`"
+            "self-update requires the official executable name `openbitfun`"
         ));
     }
-    let legacy_target = install_dir.join("bitfun-cli");
     let plugin_host_target = install_dir.join("resources").join("ext-host");
-    if !legacy_target.is_file() {
-        return Err(anyhow!(
-            "official bitfun-cli companion was not found beside {}",
-            current_exe.display()
-        ));
-    }
 
     let extract_dir = tempfile::tempdir().context("create CLI update extraction directory")?;
     Archive::new(GzDecoder::new(Cursor::new(archive)))
         .unpack(extract_dir.path())
         .context("extract CLI update archive")?;
     let package_dir = find_package_dir(extract_dir.path())?;
-    let new_primary = package_dir.join("bitfun");
-    let new_legacy = package_dir.join("bitfun-cli");
+    let new_primary = package_dir.join("openbitfun");
     let new_plugin_host = package_dir.join("resources").join("ext-host");
-    validate_entrypoint_pair(&new_primary, &new_legacy)?;
+    validate_entrypoint(&new_primary)?;
     validate_plugin_host_resources(&new_plugin_host)?;
 
+    let update_prefix = format!(
+        "{}-update.",
+        openbitfun_core_types::product_identity::hidden_data_directory()
+    );
     let stage = tempfile::Builder::new()
-        .prefix(".bitfun-update.")
+        .prefix(&update_prefix)
         .tempdir_in(install_dir)
         .with_context(|| {
             format!(
@@ -986,25 +988,21 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
                 install_dir.display()
             )
         })?;
-    let staged_primary = stage.path().join("bitfun");
-    let staged_legacy = stage.path().join("bitfun-cli");
+    let staged_primary = stage.path().join("openbitfun");
     let staged_plugin_host = stage.path().join("ext-host");
-    fs::copy(&new_primary, &staged_primary).context("stage bitfun")?;
-    fs::copy(&new_legacy, &staged_legacy).context("stage bitfun-cli")?;
+    fs::copy(&new_primary, &staged_primary).context("stage openbitfun")?;
     copy_plugin_host_resources(&new_plugin_host, &staged_plugin_host)?;
     fs::set_permissions(&staged_primary, fs::Permissions::from_mode(0o755))?;
-    fs::set_permissions(&staged_legacy, fs::Permissions::from_mode(0o755))?;
-    validate_entrypoint_pair(&staged_primary, &staged_legacy)?;
+    validate_entrypoint(&staged_primary)?;
     validate_plugin_host_resources(&staged_plugin_host)?;
 
-    let primary_backup = stage.path().join("previous-bitfun");
-    let legacy_backup = stage.path().join("previous-bitfun-cli");
+    let primary_backup = stage.path().join("previous-openbitfun");
     let plugin_host_backup = stage.path().join("previous-ext-host");
     let plugin_host_existed = plugin_host_target.is_dir();
 
     // Rollback runs while something has already gone wrong, so its own failures
     // are the ones that matter most: they are the difference between "the update
-    // did not apply" and "there is no working `bitfun` on this machine any
+    // did not apply" and "there is no working `openbitfun` on this machine any
     // more". Swallowing them leaves the user with a broken install and no clue.
     let mut rollback_failures: Vec<String> = Vec::new();
     let restore = |from: &Path, to: &Path, rollback_failures: &mut Vec<String>| {
@@ -1018,23 +1016,14 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
             return base;
         }
         base.context(format!(
-            "the previous CLI could NOT be put back ({}); reinstall BitFun manually",
+            "the previous CLI could NOT be put back ({}); reinstall OpenBitFun manually",
             failures.join("; ")
         ))
     };
 
-    fs::rename(current_exe, &primary_backup).context("back up current bitfun")?;
-    if let Err(error) = fs::rename(&legacy_target, &legacy_backup) {
-        restore(&primary_backup, current_exe, &mut rollback_failures);
-        return Err(rollback_error(
-            error,
-            "back up current bitfun-cli",
-            rollback_failures,
-        ));
-    }
+    fs::rename(current_exe, &primary_backup).context("back up current openbitfun")?;
     if plugin_host_existed {
         if let Err(error) = fs::rename(&plugin_host_target, &plugin_host_backup) {
-            restore(&legacy_backup, &legacy_target, &mut rollback_failures);
             restore(&primary_backup, current_exe, &mut rollback_failures);
             return Err(rollback_error(
                 error,
@@ -1051,15 +1040,18 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
                 &mut rollback_failures,
             );
         }
-        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         return Err(rollback_error(
             error,
-            "install updated bitfun",
+            "install updated openbitfun",
             rollback_failures,
         ));
     }
-    if let Err(error) = fs::rename(&staged_legacy, &legacy_target) {
+    if let Err(error) = fs::create_dir_all(
+        plugin_host_target
+            .parent()
+            .expect("plugin Host resource directory has a parent"),
+    ) {
         if let Err(remove_error) = fs::remove_file(current_exe) {
             rollback_failures.push(format!("remove {}: {remove_error}", current_exe.display()));
         }
@@ -1070,32 +1062,6 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
                 &mut rollback_failures,
             );
         }
-        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
-        restore(&primary_backup, current_exe, &mut rollback_failures);
-        return Err(rollback_error(
-            error,
-            "install updated bitfun-cli",
-            rollback_failures,
-        ));
-    }
-    if let Err(error) = fs::create_dir_all(
-        plugin_host_target
-            .parent()
-            .expect("plugin Host resource directory has a parent"),
-    ) {
-        for path in [current_exe, legacy_target.as_path()] {
-            if let Err(remove_error) = fs::remove_file(path) {
-                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
-            }
-        }
-        if plugin_host_existed {
-            restore(
-                &plugin_host_backup,
-                &plugin_host_target,
-                &mut rollback_failures,
-            );
-        }
-        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         return Err(rollback_error(
             error,
@@ -1104,10 +1070,8 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
         ));
     }
     if let Err(error) = fs::rename(&staged_plugin_host, &plugin_host_target) {
-        for path in [current_exe, legacy_target.as_path()] {
-            if let Err(remove_error) = fs::remove_file(path) {
-                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
-            }
+        if let Err(remove_error) = fs::remove_file(current_exe) {
+            rollback_failures.push(format!("remove {}: {remove_error}", current_exe.display()));
         }
         if plugin_host_existed {
             restore(
@@ -1116,7 +1080,6 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
                 &mut rollback_failures,
             );
         }
-        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         return Err(rollback_error(
             error,
@@ -1124,13 +1087,11 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
             rollback_failures,
         ));
     }
-    let validation = validate_entrypoint_pair(current_exe, &legacy_target)
+    let validation = validate_entrypoint(current_exe)
         .and_then(|_| validate_plugin_host_resources(&plugin_host_target));
     if let Err(error) = validation {
-        for path in [current_exe, legacy_target.as_path()] {
-            if let Err(remove_error) = fs::remove_file(path) {
-                rollback_failures.push(format!("remove {}: {remove_error}", path.display()));
-            }
+        if let Err(remove_error) = fs::remove_file(current_exe) {
+            rollback_failures.push(format!("remove {}: {remove_error}", current_exe.display()));
         }
         if let Err(remove_error) = fs::remove_dir_all(&plugin_host_target) {
             rollback_failures.push(format!(
@@ -1145,14 +1106,13 @@ fn install_archive(archive: &[u8], current_exe: &Path) -> Result<()> {
                 &mut rollback_failures,
             );
         }
-        restore(&legacy_backup, &legacy_target, &mut rollback_failures);
         restore(&primary_backup, current_exe, &mut rollback_failures);
         let failed = error.context("validate installed CLI update");
         if rollback_failures.is_empty() {
             return Err(failed);
         }
         return Err(failed.context(format!(
-            "the previous CLI could NOT be put back ({}); reinstall BitFun manually",
+            "the previous CLI could NOT be put back ({}); reinstall OpenBitFun manually",
             rollback_failures.join("; ")
         )));
     }
@@ -1167,34 +1127,22 @@ fn install_archive(_archive: &[u8], _current_exe: &Path) -> Result<()> {
 fn find_package_dir(root: &Path) -> Result<PathBuf> {
     for entry in fs::read_dir(root).context("inspect CLI update archive")? {
         let path = entry?.path();
-        if path.is_dir() && path.join("bitfun").is_file() && path.join("bitfun-cli").is_file() {
+        if path.is_dir() && path.join("openbitfun").is_file() {
             return Ok(path);
         }
     }
-    Err(anyhow!(
-        "CLI update archive does not contain the official entrypoint pair"
-    ))
+    Err(anyhow!("CLI update archive does not contain openbitfun"))
 }
 
-fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
-    let primary_status = Command::new(primary)
+fn validate_entrypoint(executable: &Path) -> Result<()> {
+    let status = Command::new(executable)
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .with_context(|| format!("run {}", primary.display()))?;
-    if !primary_status.success() {
-        return Err(anyhow!("{} --version failed", primary.display()));
-    }
-    let legacy_output = Command::new(legacy)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .output()
-        .with_context(|| format!("run {}", legacy.display()))?;
-    if !legacy_output.status.success()
-        || String::from_utf8_lossy(&legacy_output.stderr).trim() != DEPRECATION_WARNING
-    {
-        return Err(anyhow!("deprecated bitfun-cli entrypoint contract failed"));
+        .with_context(|| format!("run {}", executable.display()))?;
+    if !status.success() {
+        return Err(anyhow!("{} --version failed", executable.display()));
     }
     Ok(())
 }
@@ -1243,20 +1191,21 @@ fn is_development_binary(executable: &Path) -> bool {
         .any(|component| component.as_os_str() == "target")
 }
 
+fn release_core(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.split(['-', '+']).next()?.split('.');
+    Some((
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    ))
+}
+
 fn is_newer_version(candidate: &str, current: &str) -> bool {
-    fn core(version: &str) -> Option<(u64, u64, u64)> {
-        let mut parts = version.split(['-', '+']).next()?.split('.');
-        Some((
-            parts.next()?.parse().ok()?,
-            parts.next()?.parse().ok()?,
-            parts.next()?.parse().ok()?,
-        ))
-    }
-    matches!((core(candidate), core(current)), (Some(next), Some(now)) if next > now)
+    matches!((release_core(candidate), release_core(current)), (Some(next), Some(now)) if next > now)
 }
 
 fn automatic_update_is_eligible() -> bool {
-    if std::env::var_os("BITFUN_CLI_DISABLE_AUTO_UPDATE").is_some()
+    if std::env::var_os("OPENBITFUN_CLI_DISABLE_AUTO_UPDATE").is_some()
         || !release_version_allows_automatic_update(env!("CARGO_PKG_VERSION"))
     {
         return false;
@@ -1267,7 +1216,9 @@ fn automatic_update_is_eligible() -> bool {
 }
 
 fn release_version_allows_automatic_update(version: &str) -> bool {
-    !version.contains("-nightly.") && !version.contains("-beta.")
+    matches!(release_core(version), Some((major, _, _)) if major >= 1)
+        && !version.contains("-nightly.")
+        && !version.contains("-beta.")
 }
 
 /// Share the CLI's own config directory so a relocated profile (E2E storage
@@ -1313,13 +1264,13 @@ fn restart_managed_daemon() {
         dirs::config_dir(),
         dirs::home_dir().map(|it| it.join(".config")),
     ];
-    let installed = candidates
-        .iter()
-        .flatten()
-        .any(|dir| dir.join("systemd/user/bitfun-cli-daemon.service").is_file());
+    let installed = candidates.iter().flatten().any(|dir| {
+        dir.join("systemd/user/openbitfun-cli-daemon.service")
+            .is_file()
+    });
     if installed {
         let _ = Command::new("systemctl")
-            .args(["--user", "try-restart", "bitfun-cli-daemon.service"])
+            .args(["--user", "try-restart", "openbitfun-cli-daemon.service"])
             .status();
     }
 }
@@ -1527,21 +1478,21 @@ mod tests {
         let stage =
             |version: &str, filename: &str| PartialDownload::open_in(dir.path(), version, filename);
 
-        let first = stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz");
+        let first = stage("1.0.0", "openbitfun-cli-1.0.0-x86_64.tar.gz");
         assert!(first.resume().is_empty(), "nothing staged yet");
         first.save(b"partial-bytes");
         assert_eq!(
-            stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz").resume(),
+            stage("1.0.0", "openbitfun-cli-1.0.0-x86_64.tar.gz").resume(),
             b"partial-bytes",
             "same version and asset must resume"
         );
 
         // Opening a different version evicts the stale partial rather than
         // resuming a mismatched archive into the new one.
-        let newer = stage("0.2.15", "bitfun-cli-0.2.15-x86_64.tar.gz");
+        let newer = stage("1.0.1", "openbitfun-cli-1.0.1-x86_64.tar.gz");
         assert!(newer.resume().is_empty());
         assert!(
-            stage("0.2.14", "bitfun-cli-0.2.14-x86_64.tar.gz")
+            stage("1.0.0", "openbitfun-cli-1.0.0-x86_64.tar.gz")
                 .resume()
                 .is_empty(),
             "the superseded partial must be gone"
@@ -1561,40 +1512,40 @@ mod tests {
         };
         // Mirror lags GitHub during its sync window; the newer one must win.
         let manifests = vec![
-            ("GitHub", manifest("0.2.14")),
-            ("openbitfun.com", manifest("0.2.13")),
+            ("GitHub", manifest("1.0.1")),
+            ("openbitfun.com", manifest("1.0.0")),
         ];
-        assert_eq!(newest_version(&manifests), "0.2.14");
+        assert_eq!(newest_version(&manifests), "1.0.1");
 
         let reversed = vec![
-            ("GitHub", manifest("0.2.13")),
-            ("openbitfun.com", manifest("0.2.14")),
+            ("GitHub", manifest("1.0.0")),
+            ("openbitfun.com", manifest("1.0.1")),
         ];
-        assert_eq!(newest_version(&reversed), "0.2.14");
+        assert_eq!(newest_version(&reversed), "1.0.1");
     }
 
     #[test]
     fn version_comparison_ignores_release_metadata() {
-        assert!(is_newer_version("0.2.14", "0.2.13"));
-        assert!(!is_newer_version("0.2.13", "0.2.13-nightly.1+abc"));
-        assert!(!is_newer_version("0.2.12", "0.2.13"));
+        assert!(is_newer_version("1.0.1", "1.0.0"));
+        assert!(!is_newer_version("1.0.0", "1.0.0-nightly.1+abc"));
+        assert!(!is_newer_version("1.0.0", "1.0.1"));
     }
 
     #[test]
     fn prerelease_cli_builds_do_not_use_the_stable_auto_update_feed() {
-        assert!(release_version_allows_automatic_update("0.2.14"));
-        assert!(!release_version_allows_automatic_update("0.2.14-beta.1"));
+        assert!(release_version_allows_automatic_update("1.0.0"));
+        assert!(!release_version_allows_automatic_update("0.2.14"));
+        assert!(!release_version_allows_automatic_update("1.0.0-beta.1"));
         assert!(!release_version_allows_automatic_update(
-            "0.2.14-nightly.20260811"
+            "1.0.0-nightly.20260811"
         ));
     }
 
-    /// Fixture produced with the real `minisign` CLI, then wrapped the way
-    /// Tauri wraps keys and signatures (base64 of the whole file), so this pins
-    /// the exact on-disk format CI must emit.
-    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
-    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
-    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+    /// Fixture produced with the Tauri signer CLI in its base64-wrapped
+    /// minisign wire format, pinning the exact on-disk format CI must emit.
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERENTQzQUM5RUY0NTIzRTMKUldUakkwWHZ5VHBVM1NOMXJWMHhLVlljSDBOY2x4YlpxVHA2clN1NEJPMWcyY2Qvd2U4VUR2b3AK";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUakkwWHZ5VHBVM2RVVFdoR3FNZDltSWNUeEQ1K2ZnNWRUSnYxWk5lUkZzd0h0MkdzSUhUSlV6a0haUTdNZm1aemM5QVBQWW50UWgvaWpFcEp1Zkp4SERWdnhIc1g2YUFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NDg2NTU4CWZpbGU6Lm9wZW5iaXRmdW4tbWluaXNpZ24tZml4dHVyZS50eHQKa1QxdDQ3bWtLVlhaZUdFSjR4R0V5R1Z3REVnUlI0RGJqbHFoZkVHdkdLSlFyTGJ5Z05JRTI5V3dwdXRkSFpZckUrK0RaUVVJYUJod1dzcmVydHZnQXc9PQo=";
+    const FIXTURE_DATA: &[u8] = b"hello-openbitfun\n";
 
     #[test]
     fn release_signature_accepts_the_tauri_wire_format() {
@@ -1614,14 +1565,14 @@ mod tests {
     fn release_signature_rejects_tampered_bytes() {
         // The whole point: a mirror that alters the archive cannot also forge
         // this, unlike the checksum it serves alongside it.
-        let tampered = b"hello-bitfun-tampered\n";
+        let tampered = b"hello-openbitfun-tampered\n";
         assert!(verify_signature(tampered, FIXTURE_SIGNATURE, FIXTURE_PUBKEY).is_err());
         assert!(verify_signature(FIXTURE_DATA, "bm90LWEtc2lnbmF0dXJl", FIXTURE_PUBKEY).is_err());
     }
 
     #[test]
     fn checksum_contract_accepts_standard_sha_file() {
-        let data = b"bitfun";
+        let data = b"openbitfun";
         let digest = format!("{:x}", Sha256::digest(data));
         verify_sha256(
             data,

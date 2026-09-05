@@ -457,7 +457,7 @@ pub(crate) fn test_report() -> SessionUsageReport {
     report.report_id = "usage-session-1-1778347200000".to_string();
     report.workspace = UsageWorkspace {
         kind: UsageWorkspaceKind::Local,
-        path_label: Some("D:/workspace/bitfun".to_string()),
+        path_label: Some("D:/workspace/openbitfun".to_string()),
         workspace_id: Some("workspace-1".to_string()),
         remote_connection_id: None,
         remote_ssh_host: None,

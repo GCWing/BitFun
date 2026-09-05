@@ -1,4 +1,4 @@
-export const APPEARANCE_SCHEMA = 'bitfun.appearance' as const;
+export const APPEARANCE_SCHEMA = 'openbitfun.appearance' as const;
 export const APPEARANCE_SCHEMA_VERSION = 2 as const;
 export const SYSTEM_APPEARANCE_ID = 'system' as const;
 
@@ -384,15 +384,15 @@ export type AppearanceRendererId =
   | 'xterm'
   | 'mermaid'
   | 'generative-widget'
-  | 'bitfun-canvas';
+  | 'openbitfun-canvas';
 
 export type AppearanceThemeTokenName =
-  | `--bf-color-${string}`
-  | `--bf-shadow-${string}`
-  | `--bf-effect-${string}`
-  | `--bf-opacity-${string}`
-  | `--bf-domain-${string}`
-  | `--bf-component-${string}`;
+  | `--openbitfun-color-${string}`
+  | `--openbitfun-shadow-${string}`
+  | `--openbitfun-effect-${string}`
+  | `--openbitfun-opacity-${string}`
+  | `--openbitfun-domain-${string}`
+  | `--openbitfun-component-${string}`;
 
 export type AppearanceThemeScopeId = 'chrome';
 
@@ -509,7 +509,7 @@ export interface AppearanceRendererSettingsMap {
   xterm: XtermAppearanceSettings;
   mermaid: MermaidAppearanceSettings;
   'generative-widget': WidgetAppearanceSettings;
-  'bitfun-canvas': CanvasAppearanceSettings;
+  'openbitfun-canvas': CanvasAppearanceSettings;
 }
 
 export type AppearanceRendererSettings = AppearanceRendererSettingsMap[AppearanceRendererId];
@@ -577,7 +577,7 @@ export interface AppearancePartDescriptor {
 
 export interface AppearanceFacetDescriptor {
   id: string;
-  attribute: `data-bf-${string}`;
+  attribute: `data-openbitfun-${string}`;
   values: readonly string[];
 }
 
@@ -590,7 +590,7 @@ export interface AppearanceStateDescriptor {
 
 export interface AppearanceSurfaceDescriptor {
   id: string;
-  componentAttribute?: 'data-bf-component' | 'data-bf-product-component';
+  componentAttribute?: 'data-openbitfun-component' | 'data-openbitfun-product-component';
   parts: readonly AppearancePartDescriptor[];
   facets?: readonly AppearanceFacetDescriptor[];
   states?: readonly AppearanceStateDescriptor[];

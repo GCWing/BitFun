@@ -1,7 +1,7 @@
 use crate::common::stream_test_harness::{
     run_stream_fixture_with_options, StreamFixtureProvider, StreamFixtureRunOptions,
 };
-use bitfun_events::AgenticEvent;
+use openbitfun_events::AgenticEvent;
 use serde_json::json;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

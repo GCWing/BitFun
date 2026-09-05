@@ -2,7 +2,10 @@
 //!
 //! Provides comprehensive configuration management functionality.
 
-use super::manager::{ConfigImportSource, ConfigManager, ConfigManagerSettings, ConfigStatistics};
+use super::manager::{
+    validate_current_config_value, validate_openbitfun_product_version, ConfigManager,
+    ConfigManagerSettings, ConfigStatistics,
+};
 use super::types::*;
 use crate::util::errors::*;
 use log::{info, warn};
@@ -19,11 +22,70 @@ pub struct ConfigService {
 }
 
 /// Configuration import/export format.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ConfigExport {
+    pub product_id: String,
+    pub format_version: u32,
     pub config: GlobalConfig,
     pub export_timestamp: String,
     pub version: String,
+}
+
+pub const CURRENT_CONFIG_EXPORT_FORMAT_VERSION: u32 = 1;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConfigExportWire {
+    product_id: String,
+    format_version: u32,
+    config: serde_json::Value,
+    export_timestamp: String,
+    version: String,
+}
+
+impl<'de> Deserialize<'de> for ConfigExport {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = ConfigExportWire::deserialize(deserializer)?;
+        validate_current_config_value(&wire.config, "Configuration export payload")
+            .map_err(serde::de::Error::custom)?;
+        let config = serde_json::from_value(wire.config).map_err(serde::de::Error::custom)?;
+        let export = Self {
+            product_id: wire.product_id,
+            format_version: wire.format_version,
+            config,
+            export_timestamp: wire.export_timestamp,
+            version: wire.version,
+        };
+        validate_config_export(&export).map_err(serde::de::Error::custom)?;
+        Ok(export)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ConfigImportSource {
+    Explicit,
+    AccountSync,
+}
+
+fn validate_config_export(export: &ConfigExport) -> OpenBitFunResult<()> {
+    validate_openbitfun_product_version(
+        &export.product_id,
+        &export.version,
+        "Configuration export",
+    )?;
+    if export.format_version != CURRENT_CONFIG_EXPORT_FORMAT_VERSION {
+        return Err(OpenBitFunError::validation(format!(
+            "Configuration export format_version must be {CURRENT_CONFIG_EXPORT_FORMAT_VERSION}, found {}",
+            export.format_version
+        )));
+    }
+    validate_current_config_value(
+        &serde_json::to_value(&export.config)?,
+        "Configuration export payload",
+    )
 }
 
 /// Configuration import result.
@@ -47,41 +109,24 @@ pub struct ConfigHealthStatus {
 
 impl ConfigService {
     /// Creates a new configuration service.
-    pub async fn new() -> BitFunResult<Self> {
+    pub async fn new() -> OpenBitFunResult<Self> {
         let settings = ConfigManagerSettings::default();
         Self::with_settings(settings).await
     }
 
     /// Creates a configuration service with custom settings.
-    ///
-    /// Runs an initial [`Self::reconcile_models`] pass so any pre-existing
-    /// persisted config that points at a now-disabled / missing model (e.g.
-    /// from before this guard was introduced) is cleaned up on startup.
-    pub async fn with_settings(settings: ConfigManagerSettings) -> BitFunResult<Self> {
+    pub async fn with_settings(settings: ConfigManagerSettings) -> OpenBitFunResult<Self> {
         let manager = ConfigManager::new(settings).await?;
 
-        let service = Self {
+        Ok(Self {
             manager: Arc::new(RwLock::new(manager)),
             runtime_ai_models: Arc::new(RwLock::new(BTreeMap::new())),
             local_changes: watch::channel(()).0,
-        };
-
-        let recovered_with_defaults = service
-            .load_diagnostics()
-            .await
-            .iter()
-            .any(|diagnostic| diagnostic.code == "CONFIG_DEFAULT_RECOVERY");
-        if !recovered_with_defaults {
-            if let Err(e) = service.reconcile_models("startup").await {
-                warn!("Model reconcile at startup failed: {}", e);
-            }
-        }
-
-        Ok(service)
+        })
     }
 
     /// Gets a configuration value (supports dot-paths).
-    pub async fn get_config<T>(&self, path: Option<&str>) -> BitFunResult<T>
+    pub async fn get_config<T>(&self, path: Option<&str>) -> OpenBitFunResult<T>
     where
         T: serde::de::DeserializeOwned,
     {
@@ -92,13 +137,13 @@ impl ConfigService {
         } else {
             let config = manager.get_config();
             serde_json::from_value(serde_json::to_value(config)?)
-                .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))
+                .map_err(|e| OpenBitFunError::config(format!("Failed to serialize config: {}", e)))
         }
     }
 
-    pub async fn install_runtime_ai_model(&self, model: AIModelConfig) -> BitFunResult<()> {
+    pub async fn install_runtime_ai_model(&self, model: AIModelConfig) -> OpenBitFunResult<()> {
         if model.id.trim().is_empty() {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Runtime model id is required".to_string(),
             ));
         }
@@ -113,7 +158,7 @@ impl ConfigService {
         self.runtime_ai_models.read().await.get(model_id).cloned()
     }
 
-    pub async fn get_effective_ai_config(&self) -> BitFunResult<AIConfig> {
+    pub async fn get_effective_ai_config(&self) -> OpenBitFunResult<AIConfig> {
         let mut ai: AIConfig = self.get_config(Some("ai")).await?;
         for runtime_model in self.runtime_ai_models.read().await.values() {
             if let Some(model) = ai
@@ -145,7 +190,7 @@ impl ConfigService {
     /// When the path touches AI models / default model slots / agent-model
     /// mappings, runs [`Self::reconcile_models`] afterwards so the config can
     /// never end up referencing a disabled or deleted model.
-    pub async fn set_config<T>(&self, path: &str, value: T) -> BitFunResult<()>
+    pub async fn set_config<T>(&self, path: &str, value: T) -> OpenBitFunResult<()>
     where
         T: serde::Serialize,
     {
@@ -164,8 +209,8 @@ impl ConfigService {
     pub async fn update_config<T, R>(
         &self,
         path: &str,
-        update: impl FnOnce(&mut T) -> BitFunResult<R>,
-    ) -> BitFunResult<R>
+        update: impl FnOnce(&mut T) -> OpenBitFunResult<R>,
+    ) -> OpenBitFunResult<R>
     where
         T: serde::Serialize + serde::de::DeserializeOwned,
     {
@@ -229,11 +274,11 @@ impl ConfigService {
         path: &str,
         expected: Option<serde_json::Value>,
         replacement: serde_json::Value,
-    ) -> BitFunResult<bool> {
+    ) -> OpenBitFunResult<bool> {
         let mut manager = self.manager.write().await;
         let current = match manager.get::<serde_json::Value>(path) {
             Ok(value) => Some(value),
-            Err(BitFunError::NotFound(_)) => None,
+            Err(OpenBitFunError::NotFound(_)) => None,
             Err(error) => return Err(error),
         };
         if current != expected {
@@ -263,7 +308,7 @@ impl ConfigService {
     /// When the reset target touches AI models (or is a global reset),
     /// triggers [`Self::reconcile_models`] so default-slot / agent-model
     /// references can never linger pointing at a now-missing model.
-    pub async fn reset_config(&self, path: Option<&str>) -> BitFunResult<()> {
+    pub async fn reset_config(&self, path: Option<&str>) -> OpenBitFunResult<()> {
         {
             let mut manager = self.manager.write().await;
             manager.reset(path).await?;
@@ -297,7 +342,7 @@ impl ConfigService {
     }
 
     /// Validates configuration.
-    pub async fn validate_config(&self) -> BitFunResult<ConfigValidationResult> {
+    pub async fn validate_config(&self) -> OpenBitFunResult<ConfigValidationResult> {
         let manager = self.manager.read().await;
         let mut result = manager.validate_config().await?;
         result
@@ -311,47 +356,35 @@ impl ConfigService {
     }
 
     /// Exports configuration.
-    pub async fn export_config(&self) -> BitFunResult<ConfigExport> {
+    pub async fn export_config(&self) -> OpenBitFunResult<ConfigExport> {
         let manager = self.manager.read().await;
         let config_value = manager.export_config()?;
         let config: GlobalConfig = serde_json::from_value(config_value)?;
 
         Ok(ConfigExport {
+            product_id: openbitfun_core_types::product_identity::product_id().to_string(),
+            format_version: CURRENT_CONFIG_EXPORT_FORMAT_VERSION,
             config,
             export_timestamp: chrono::Utc::now().to_rfc3339(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         })
     }
 
-    /// Imports configuration. Triggers a model reconcile pass on success so an
-    /// imported config that references missing / disabled models is brought
-    /// back into a self-consistent state.
-    pub async fn import_config(&self, export: ConfigExport) -> BitFunResult<ConfigImportResult> {
-        self.import_config_data(serde_json::to_value(export.config)?)
-            .await
-    }
-
-    /// Imports raw configuration JSON. Keeping this boundary raw preserves
-    /// legacy fields that are intentionally normalized before deserialization.
-    /// Missing realtime voice fields retain their local values; explicit empty
-    /// credentials in a user-imported backup are still authoritative.
-    pub async fn import_config_data(
+    /// Imports a complete current-format OpenBitFun configuration export.
+    pub async fn import_config(
         &self,
-        config_data: serde_json::Value,
-    ) -> BitFunResult<ConfigImportResult> {
-        self.import_config_data_from_source(config_data, ConfigImportSource::Explicit, None)
+        export: ConfigExport,
+    ) -> OpenBitFunResult<ConfigImportResult> {
+        self.import_config_from_source(export, ConfigImportSource::Explicit, None)
             .await
     }
 
-    /// Applies account settings without treating an unconfigured host's empty
-    /// realtime voice key as a deletion of this controller's saved credential.
-    /// Non-empty synced keys still update normally; explicit imports and local
-    /// set/reset operations retain their credential-clearing semantics.
+    /// Applies a complete current-format OpenBitFun account settings export.
     pub async fn import_account_settings(
         &self,
-        config_data: serde_json::Value,
-    ) -> BitFunResult<ConfigImportResult> {
-        self.import_config_data_from_source(config_data, ConfigImportSource::AccountSync, None)
+        export: ConfigExport,
+    ) -> OpenBitFunResult<ConfigImportResult> {
+        self.import_config_from_source(export, ConfigImportSource::AccountSync, None)
             .await
     }
 
@@ -360,23 +393,31 @@ impl ConfigService {
     /// the comparison and import protected by the same manager write lock.
     pub async fn import_account_settings_if_unchanged(
         &self,
-        config_data: serde_json::Value,
+        export: ConfigExport,
         expected_local_config: serde_json::Value,
-    ) -> BitFunResult<ConfigImportResult> {
-        self.import_config_data_from_source(
-            config_data,
+    ) -> OpenBitFunResult<ConfigImportResult> {
+        self.import_config_from_source(
+            export,
             ConfigImportSource::AccountSync,
             Some(expected_local_config),
         )
         .await
     }
 
-    async fn import_config_data_from_source(
+    async fn import_config_from_source(
         &self,
-        config_data: serde_json::Value,
+        export: ConfigExport,
         source: ConfigImportSource,
         expected_local_config: Option<serde_json::Value>,
-    ) -> BitFunResult<ConfigImportResult> {
+    ) -> OpenBitFunResult<ConfigImportResult> {
+        if let Err(error) = validate_config_export(&export) {
+            return Ok(ConfigImportResult {
+                success: false,
+                errors: vec![error.to_string()],
+                warnings: Vec::new(),
+            });
+        }
+        let config_data = serde_json::to_value(export.config)?;
         let import_result = {
             let mut manager = self.manager.write().await;
             if let Some(expected) = expected_local_config {
@@ -388,14 +429,11 @@ impl ConfigService {
                     });
                 }
             }
-            manager.import_config_from_source(config_data, source).await
+            manager.import_config(config_data).await
         };
 
         match import_result {
             Ok(_) => {
-                if let Err(e) = self.reconcile_models("import_config").await {
-                    warn!("Model reconcile after import_config failed: {}", e);
-                }
                 super::global::GlobalConfigManager::broadcast_update(
                     super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
                 )
@@ -426,7 +464,7 @@ impl ConfigService {
     }
 
     /// Runs a health check.
-    pub async fn health_check(&self) -> BitFunResult<ConfigHealthStatus> {
+    pub async fn health_check(&self) -> OpenBitFunResult<ConfigHealthStatus> {
         let manager = self.manager.read().await;
         let stats = manager.get_statistics();
         let validation_result = manager.validate_config().await?;
@@ -474,7 +512,7 @@ impl ConfigService {
     }
 
     /// Reloads configuration.
-    pub async fn reload(&self) -> BitFunResult<()> {
+    pub async fn reload(&self) -> OpenBitFunResult<()> {
         {
             let mut manager = self.manager.write().await;
             manager.reload().await?;
@@ -482,9 +520,6 @@ impl ConfigService {
 
         info!("Configuration reloaded");
 
-        if let Err(e) = self.reconcile_models("reload").await {
-            warn!("Model reconcile after reload failed: {}", e);
-        }
         super::global::GlobalConfigManager::broadcast_update(
             super::global::ConfigUpdateEvent::ModelConfigurationUpdated,
         )
@@ -495,7 +530,7 @@ impl ConfigService {
     }
 
     /// Creates a configuration backup.
-    pub async fn create_backup(&self) -> BitFunResult<std::path::PathBuf> {
+    pub async fn create_backup(&self) -> OpenBitFunResult<std::path::PathBuf> {
         let manager = self.manager.read().await;
         manager.create_backup().await
     }
@@ -507,13 +542,13 @@ impl ConfigService {
     }
 
     /// Returns all AI model configurations.
-    pub async fn get_ai_models(&self) -> BitFunResult<Vec<AIModelConfig>> {
+    pub async fn get_ai_models(&self) -> OpenBitFunResult<Vec<AIModelConfig>> {
         let config: GlobalConfig = self.get_config(None).await?;
         Ok(config.ai.models)
     }
 
     /// Adds an AI model configuration.
-    pub async fn add_ai_model(&self, model: AIModelConfig) -> BitFunResult<()> {
+    pub async fn add_ai_model(&self, model: AIModelConfig) -> OpenBitFunResult<()> {
         self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
             models.push(model);
             Ok(())
@@ -522,12 +557,18 @@ impl ConfigService {
     }
 
     /// Updates an AI model configuration.
-    pub async fn update_ai_model(&self, model_id: &str, model: AIModelConfig) -> BitFunResult<()> {
+    pub async fn update_ai_model(
+        &self,
+        model_id: &str,
+        model: AIModelConfig,
+    ) -> OpenBitFunResult<()> {
         self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
             let existing = models
                 .iter_mut()
                 .find(|m| m.id == model_id)
-                .ok_or_else(|| BitFunError::config(format!("AI model '{}' not found", model_id)))?;
+                .ok_or_else(|| {
+                    OpenBitFunError::config(format!("AI model '{}' not found", model_id))
+                })?;
             *existing = model;
             Ok(())
         })
@@ -535,12 +576,12 @@ impl ConfigService {
     }
 
     /// Deletes an AI model configuration.
-    pub async fn delete_ai_model(&self, model_id: &str) -> BitFunResult<()> {
+    pub async fn delete_ai_model(&self, model_id: &str) -> OpenBitFunResult<()> {
         self.update_config("ai.models", |models: &mut Vec<AIModelConfig>| {
             let original_len = models.len();
             models.retain(|m| m.id != model_id);
             if models.len() == original_len {
-                return Err(BitFunError::config(format!(
+                return Err(OpenBitFunError::config(format!(
                     "AI model '{}' not found",
                     model_id
                 )));
@@ -555,18 +596,18 @@ impl ConfigService {
     pub async fn save_cloud_speech_config(
         &self,
         request: SaveCloudSpeechConfigRequest,
-    ) -> BitFunResult<SaveCloudSpeechConfigResult> {
+    ) -> OpenBitFunResult<SaveCloudSpeechConfigResult> {
         let name = request.name.trim();
         let base_url = request.base_url.trim().trim_end_matches('/');
         let model_name = request.model_name.trim();
         let api_key = request.api_key.trim();
         if name.is_empty() || base_url.is_empty() || model_name.is_empty() || api_key.is_empty() {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Cloud speech name, base URL, model name, and API key are required".to_string(),
             ));
         }
         if !base_url.starts_with("http://") && !base_url.starts_with("https://") {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Cloud speech base URL must use http or https".to_string(),
             ));
         }
@@ -585,7 +626,7 @@ impl ConfigService {
                 }
             });
         if !request_url.starts_with("http://") && !request_url.starts_with("https://") {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Cloud speech request URL must use http or https".to_string(),
             ));
         }
@@ -675,7 +716,7 @@ impl ConfigService {
     ///   and the AI client cache can react in lockstep.
     ///
     /// `caller` is logged for diagnostics (e.g. `set_config`, `update_ai_model`).
-    pub async fn reconcile_models(&self, caller: &str) -> BitFunResult<ReconcileModelsReport> {
+    pub async fn reconcile_models(&self, caller: &str) -> OpenBitFunResult<ReconcileModelsReport> {
         let reconciliation = {
             // Reconciliation writes a full config snapshot. Keep its read and
             // write under one lock so unrelated saves (such as voice keys)
@@ -722,17 +763,17 @@ impl ConfigService {
 }
 
 #[async_trait::async_trait]
-impl bitfun_runtime_ports::ConfigReadPort for ConfigService {
+impl openbitfun_runtime_ports::ConfigReadPort for ConfigService {
     async fn get_config_value(
         &self,
         key: &str,
-    ) -> bitfun_runtime_ports::PortResult<Option<serde_json::Value>> {
+    ) -> openbitfun_runtime_ports::PortResult<Option<serde_json::Value>> {
         self.get_config::<serde_json::Value>(Some(key))
             .await
             .map(Some)
             .map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
+                openbitfun_runtime_ports::PortError::new(
+                    openbitfun_runtime_ports::PortErrorKind::Backend,
                     error.to_string(),
                 )
             })
@@ -839,6 +880,16 @@ mod tests {
         })
         .await
         .expect("restart config service")
+    }
+
+    fn current_export(config: GlobalConfig) -> ConfigExport {
+        ConfigExport {
+            product_id: openbitfun_core_types::product_identity::product_id().to_string(),
+            format_version: CURRENT_CONFIG_EXPORT_FORMAT_VERSION,
+            config,
+            export_timestamp: "2026-09-04T00:00:00Z".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        }
     }
 
     async fn race_config_operations<A: std::future::Future, B: std::future::Future>(
@@ -993,69 +1044,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn legacy_import_preserves_missing_settings_beyond_realtime_voice() {
+    async fn pre_1_0_exports_are_rejected_without_changing_current_config() {
         for account_sync in [false, true] {
-            let name = "legacy-missing-settings";
-            let (service, dir) = test_service(name).await;
+            let (service, _dir) = test_service("pre-1-export-rejected").await;
             let mut local = GlobalConfig::default();
             local.app.hooks.enabled = false;
-            local.app.notifications.permission_request_notify = false;
-            local.app.logging.include_sensitive_diagnostics = false;
-            local.app.ai_experience.voice_input.provider = "cloud".to_string();
-            local.app.ai_experience.voice_input.microphone_device_id =
-                "fixture-microphone".to_string();
-            local.ai.proxy.enabled = true;
-            local.ai.proxy.url = "http://127.0.0.1:12345".to_string();
-            local.ai.proxy.password = Some("fixture-proxy-password".to_string());
-            local.editor.minimap.enabled = false;
-            local.terminal.terminal_panel_position = "bottom".to_string();
-            local.memories.use_memories = true;
             service.set_config("", &local).await.unwrap();
+            let before: serde_json::Value = service.get_config(None).await.unwrap();
 
-            let mut legacy = serde_json::to_value(GlobalConfig::default()).unwrap();
-            legacy["version"] = serde_json::json!("0.2.18");
-            for (parent, key) in [
-                ("/app", "hooks"),
-                ("/app/notifications", "permission_request_notify"),
-                ("/app/logging", "include_sensitive_diagnostics"),
-                ("/app/ai_experience", "voice_input"),
-                ("/ai", "proxy"),
-                ("/editor", "minimap"),
-                ("/terminal", "terminal_panel_position"),
-            ] {
-                legacy
-                    .pointer_mut(parent)
-                    .unwrap()
-                    .as_object_mut()
-                    .unwrap()
-                    .remove(key);
-            }
-            if account_sync {
-                legacy.as_object_mut().unwrap().remove("memories");
-            }
+            let mut export = current_export(GlobalConfig::default());
+            export.version = "0.2.18".to_string();
             let imported = if account_sync {
-                service.import_account_settings(legacy).await.unwrap()
+                service.import_account_settings(export).await.unwrap()
             } else {
-                service.import_config_data(legacy).await.unwrap()
+                service.import_config(export).await.unwrap()
             };
-            assert!(imported.success, "{:?}", imported.errors);
-            let restarted = restart_test_service(&dir, name).await;
-            let saved: GlobalConfig = restarted.get_config(None).await.unwrap();
-            assert!(!saved.app.hooks.enabled);
-            assert!(!saved.app.notifications.permission_request_notify);
-            assert!(!saved.app.logging.include_sensitive_diagnostics);
-            assert_eq!(saved.app.ai_experience.voice_input.provider, "cloud");
-            assert_eq!(
-                saved.app.ai_experience.voice_input.microphone_device_id,
-                "fixture-microphone"
-            );
-            assert_eq!(
-                saved.ai.proxy.password.as_deref(),
-                Some("fixture-proxy-password")
-            );
-            assert!(!saved.editor.minimap.enabled);
-            assert_eq!(saved.terminal.terminal_panel_position, "bottom");
-            assert_eq!(saved.memories.use_memories, account_sync);
+            assert!(!imported.success);
+            assert!(imported.errors[0].contains("predates OpenBitFun 1.0.0"));
+            let after: serde_json::Value = service.get_config(None).await.unwrap();
+            assert_eq!(after, before);
         }
     }
 
@@ -1098,10 +1105,11 @@ mod tests {
             incoming["ai"]["review_teams"] = serde_json::json!({});
             incoming["ai"]["agent_model_defaults"]["subagents"]["builtin"] = serde_json::json!({});
             incoming["workspace"]["exclude_patterns"] = serde_json::json!([]);
+            let export = current_export(serde_json::from_value(incoming).unwrap());
             let result = if account_sync {
-                service.import_account_settings(incoming).await.unwrap()
+                service.import_account_settings(export).await.unwrap()
             } else {
-                service.import_config_data(incoming).await.unwrap()
+                service.import_config(export).await.unwrap()
             };
             assert!(result.success, "{:?}", result.errors);
             let saved: GlobalConfig = service.get_config(None).await.unwrap();
@@ -1159,7 +1167,9 @@ mod tests {
         let snapshot: serde_json::Value = service.get_config(None).await.unwrap();
         assert!(
             service
-                .import_account_settings(snapshot.clone())
+                .import_account_settings(current_export(
+                    serde_json::from_value(snapshot.clone()).unwrap(),
+                ))
                 .await
                 .unwrap()
                 .success
@@ -1170,7 +1180,13 @@ mod tests {
             "Cloud imports must not start an upload feedback loop"
         );
 
-        assert!(service.import_config_data(snapshot).await.unwrap().success);
+        assert!(
+            service
+                .import_config(current_export(serde_json::from_value(snapshot).unwrap()))
+                .await
+                .unwrap()
+                .success
+        );
         assert!(changes.has_changed().unwrap());
         changes.borrow_and_update();
 
@@ -1208,7 +1224,10 @@ mod tests {
         let (saved, imported) = race_config_operations(
             &service,
             service.set_config("app.voice_call.api_key", "new-local-fixture-key"),
-            service.import_account_settings_if_unchanged(cloud.clone(), before_fetch),
+            service.import_account_settings_if_unchanged(
+                current_export(serde_json::from_value(cloud.clone()).unwrap()),
+                before_fetch,
+            ),
         )
         .await;
         saved.unwrap();
@@ -1228,7 +1247,10 @@ mod tests {
         let current = service.get_config(None).await.unwrap();
         assert!(
             service
-                .import_account_settings_if_unchanged(cloud, current)
+                .import_account_settings_if_unchanged(
+                    current_export(serde_json::from_value(cloud).unwrap()),
+                    current,
+                )
                 .await
                 .unwrap()
                 .success
@@ -1243,29 +1265,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn realtime_voice_survives_legacy_config_import_and_restart() {
-        let name = "realtime-voice-legacy-import";
-        let (service, dir) = test_service(name).await;
+    async fn wrong_product_export_is_rejected_without_changing_config() {
+        let (service, _dir) = test_service("wrong-product-export").await;
         let voice = realtime_voice_fixture();
         service.set_config("app.voice_call", &voice).await.unwrap();
+        let before: serde_json::Value = service.get_config(None).await.unwrap();
 
-        // A pre-voice cloud payload still carries the user's model keys.
-        let mut legacy = serde_json::to_value(GlobalConfig::default()).unwrap();
-        legacy["version"] = serde_json::json!("0.2.18");
-        legacy["app"].as_object_mut().unwrap().remove("voice_call");
-        legacy["ai"]["models"] =
-            serde_json::json!([runtime_model("synced-model", "fixture-synced-model-key")]);
-        let imported = service.import_config_data(legacy).await.unwrap();
-        assert!(imported.success, "{:?}", imported.errors);
+        let mut export = current_export(GlobalConfig::default());
+        export.product_id = "another-product".to_string();
+        let imported = service.import_config(export).await.unwrap();
+        assert!(!imported.success);
+        assert!(imported.errors[0].contains("product_id"));
 
-        drop(service);
-        let restarted = restart_test_service(&dir, name).await;
-        let config: GlobalConfig = restarted.get_config(None).await.unwrap();
-        assert_eq!(config.ai.models[0].api_key, "fixture-synced-model-key");
-        assert_eq!(
-            serde_json::to_value(config.app.voice_call).unwrap(),
-            serde_json::to_value(voice).unwrap()
-        );
+        let after: serde_json::Value = service.get_config(None).await.unwrap();
+        assert_eq!(after, before);
     }
 
     #[tokio::test]
@@ -1277,8 +1290,9 @@ mod tests {
         let (service, dir) = test_service(name).await;
         let voice = realtime_voice_fixture();
         let mut manager = service.manager.write().await;
-        // Leave the default slots unreconciled, just as a model-list mutation
-        // does before its follow-up reconciliation acquires the manager.
+        // Model-list writes reconcile in the same manager transaction. Race a
+        // subsequent explicit reconciliation with an unrelated credential save
+        // to prove even a no-op full snapshot cannot lose that save.
         manager
             .set(
                 "ai.models",
@@ -1289,9 +1303,8 @@ mod tests {
 
         let mut reconcile = std::pin::pin!(service.reconcile_models("realtime-voice-test"));
         let mut save = std::pin::pin!(service.set_config("app.voice_call", &voice));
-        // Queue reconciliation before the save. A read-then-write reconcile
-        // releases its snapshot lock and writes after the queued save, losing
-        // the key. A single write-locked transaction cannot do that.
+        // Queue reconciliation before the save. Both operations must retain the
+        // same manager lock through any persistence they perform.
         poll_fn(|cx| {
             assert!(reconcile.as_mut().poll(cx).is_pending());
             assert!(save.as_mut().poll(cx).is_pending());
@@ -1300,7 +1313,7 @@ mod tests {
         .await;
         drop(manager);
         let (reconciled, saved) = tokio::join!(reconcile, save);
-        assert!(!reconciled.unwrap().is_noop());
+        assert!(reconciled.unwrap().is_noop());
         saved.unwrap();
 
         let restarted = restart_test_service(&dir, name).await;
@@ -1313,52 +1326,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn realtime_voice_account_sync_preserves_keys_from_missing_or_empty_payloads() {
-        for incoming_voice in [
-            None,
-            Some(serde_json::to_value(VoiceCallConfig::default()).unwrap()),
-            Some(serde_json::json!({ "api_key": " \n\t", "enabled": false })),
-        ] {
-            let name = "realtime-voice-account-compatibility";
-            let (service, dir) = test_service(name).await;
-            let voice = realtime_voice_fixture();
-            service
-                .add_ai_model(runtime_model(
-                    "obsolete-model",
-                    "fixture-obsolete-model-key",
-                ))
-                .await
-                .unwrap();
-            service.set_config("app.voice_call", &voice).await.unwrap();
-            let mut incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
-            let app = incoming["app"].as_object_mut().unwrap();
-            match incoming_voice {
-                Some(voice) => {
-                    app.insert("voice_call".to_string(), voice);
-                }
-                None => {
-                    app.remove("voice_call");
-                }
-            }
-            incoming["ai"]["models"] =
-                serde_json::json!([runtime_model("cloud-model", "fixture-cloud-model-key")]);
-            let expected_enabled = incoming["app"]["voice_call"]["enabled"]
-                .as_bool()
-                .unwrap_or(voice.enabled);
-            let imported = service.import_account_settings(incoming).await.unwrap();
-            assert!(imported.success, "{:?}", imported.errors);
-            // This is the reload performed after an account settings apply.
-            service.reload().await.unwrap();
+    async fn current_account_export_is_an_authoritative_replacement() {
+        let name = "current-account-export";
+        let (service, dir) = test_service(name).await;
+        service
+            .set_config("app.voice_call", realtime_voice_fixture())
+            .await
+            .unwrap();
 
-            drop(service);
-            let restarted = restart_test_service(&dir, name).await;
-            let config: GlobalConfig = restarted.get_config(None).await.unwrap();
-            assert_eq!(config.app.voice_call.api_key, voice.api_key);
-            assert_eq!(config.app.voice_call.enabled, expected_enabled);
-            assert_eq!(config.ai.models.len(), 1);
-            assert_eq!(config.ai.models[0].id, "cloud-model");
-            assert_eq!(config.ai.models[0].api_key, "fixture-cloud-model-key");
-        }
+        let mut incoming = GlobalConfig::default();
+        incoming.ai.models = vec![runtime_model("cloud-model", "fixture-cloud-model-key")];
+        let imported = service
+            .import_account_settings(current_export(incoming))
+            .await
+            .unwrap();
+        assert!(imported.success, "{:?}", imported.errors);
+
+        drop(service);
+        let config: GlobalConfig = restart_test_service(&dir, name)
+            .await
+            .get_config(None)
+            .await
+            .unwrap();
+        assert!(config.app.voice_call.api_key.is_empty());
+        assert_eq!(config.ai.models.len(), 1);
+        assert_eq!(config.ai.models[0].id, "cloud-model");
+        assert_eq!(config.ai.models[0].api_key, "fixture-cloud-model-key");
     }
 
     #[tokio::test]
@@ -1374,12 +1367,16 @@ mod tests {
             .await
             .unwrap();
 
-        let mut incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
-        incoming["app"]["voice_call"] = serde_json::json!({
-            "api_key": "fixture-updated-voice-key",
-            "voice": "fixture-updated-voice"
-        });
-        let imported = service.import_account_settings(incoming).await.unwrap();
+        let mut incoming = GlobalConfig::default();
+        incoming.app.voice_call = VoiceCallConfig {
+            api_key: "fixture-updated-voice-key".to_string(),
+            voice: "fixture-updated-voice".to_string(),
+            ..Default::default()
+        };
+        let imported = service
+            .import_account_settings(current_export(incoming))
+            .await
+            .unwrap();
         assert!(imported.success, "{:?}", imported.errors);
 
         let backup = std::fs::read_dir(config_dir.join("backups"))
@@ -1397,11 +1394,11 @@ mod tests {
         let voice: VoiceCallConfig = restarted.get_config(Some("app.voice_call")).await.unwrap();
         assert_eq!(voice.api_key, "fixture-updated-voice-key");
         assert_eq!(voice.voice, "fixture-updated-voice");
-        assert_eq!(voice.microphone_device_id, "fixture-controller-microphone");
+        assert!(voice.microphone_device_id.is_empty());
     }
 
     #[tokio::test]
-    async fn realtime_voice_export_and_backup_restore_preserve_credentials() {
+    async fn realtime_voice_export_and_backup_preserve_credentials() {
         let name = "realtime-voice-backup-restore";
         let (service, dir) = test_service(name).await;
         let voice = realtime_voice_fixture();
@@ -1424,9 +1421,6 @@ mod tests {
             service.get_config(Some("app.voice_call")).await.unwrap();
         assert_eq!(restored_voice.api_key, voice.api_key);
 
-        service.reset_config(Some("app.voice_call")).await.unwrap();
-        let restored = service.import_config_data(backup).await.unwrap();
-        assert!(restored.success, "{:?}", restored.errors);
         drop(service);
         let restarted = restart_test_service(&dir, name).await;
         let config: GlobalConfig = restarted.get_config(None).await.unwrap();
@@ -1448,8 +1442,10 @@ mod tests {
                 .unwrap();
             match operation {
                 "import" => {
-                    let incoming = serde_json::to_value(GlobalConfig::default()).unwrap();
-                    let imported = service.import_config_data(incoming).await.unwrap();
+                    let imported = service
+                        .import_config(current_export(GlobalConfig::default()))
+                        .await
+                        .unwrap();
                     assert!(imported.success, "{:?}", imported.errors);
                 }
                 "save" => {
@@ -1474,8 +1470,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn realtime_voice_survives_model_mutations_and_application_upgrade() {
-        let name = "realtime-voice-upgrade";
+    async fn identity_metadata_is_protected_during_normal_mutations() {
+        let name = "protected-config-metadata";
         let (service, dir) = test_service(name).await;
         let voice = realtime_voice_fixture();
         service.set_config("app.voice_call", &voice).await.unwrap();
@@ -1492,7 +1488,15 @@ mod tests {
             .await
             .unwrap();
         service.delete_ai_model("remove").await.unwrap();
-        service.set_config("version", "0.2.18").await.unwrap();
+        for (path, value) in [
+            ("product_id", serde_json::json!("another-product")),
+            ("schema_version", serde_json::json!(2)),
+            ("version", serde_json::json!("0.2.18")),
+            ("last_modified", serde_json::json!(0)),
+        ] {
+            let error = service.set_config(path, value).await.unwrap_err();
+            assert!(error.to_string().contains("managed by OpenBitFun"));
+        }
 
         drop(service);
         let restarted = restart_test_service(&dir, name).await;
@@ -1544,10 +1548,11 @@ mod tests {
         let before = tokio::fs::read_to_string(config_dir.join("app.json"))
             .await
             .unwrap();
-        let mut invalid = serde_json::to_value(GlobalConfig::default()).unwrap();
-        invalid["app"]["voice_call"]["api_key"] = serde_json::Value::Null;
-        let imported = service.import_account_settings(invalid).await.unwrap();
-        assert!(!imported.success);
+        let mut invalid = serde_json::to_value(current_export(GlobalConfig::default())).unwrap();
+        invalid["config"]["app"]["voice_call"]["api_key"] = serde_json::Value::Null;
+        let error = serde_json::from_value::<ConfigExport>(invalid)
+            .expect_err("malformed current exports must be rejected before import");
+        assert!(error.to_string().contains("expected a string"));
         assert_eq!(
             tokio::fs::read_to_string(config_dir.join("app.json"))
                 .await
@@ -1775,7 +1780,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn startup_downgrades_structured_telemetry_without_losing_models() {
+    async fn startup_rejects_structured_telemetry_without_mutating_the_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("structured-telemetry-compatibility");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -1800,62 +1805,28 @@ mod tests {
             .await
             .expect("seed config");
 
-        let service = ConfigService::with_settings(ConfigManagerSettings {
+        let error = match ConfigService::with_settings(ConfigManagerSettings {
             path_manager: Some(path_manager.clone()),
             auto_save: true,
             backup_count: 5,
         })
         .await
-        .expect("config service should recover the telemetry field");
-
-        let loaded: GlobalConfig = service.get_config(None).await.expect("loaded config");
-        assert!(loaded
-            .ai
-            .models
-            .iter()
-            .any(|configured| configured.id == "configured-model"));
-
-        let diagnostics = service.load_diagnostics().await;
-        assert!(!diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "CONFIG_DEFAULT_RECOVERY"));
-        let telemetry_diagnostic = diagnostics
-            .iter()
-            .find(|diagnostic| diagnostic.code == "CONFIG_TELEMETRY_DOWNGRADED")
-            .expect("telemetry compatibility diagnostic");
-        assert_eq!(telemetry_diagnostic.path, "app.telemetry");
+        {
+            Ok(_) => panic!("structured telemetry is not a current OpenBitFun config"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("expected a boolean"), "{error}");
         assert_eq!(
-            telemetry_diagnostic.recoverability,
-            ConfigDiagnosticRecoverability::AutoFix
-        );
-
-        let persisted: serde_json::Value = serde_json::from_str(
-            &tokio::fs::read_to_string(path_manager.app_config_file())
+            tokio::fs::read_to_string(path_manager.app_config_file())
                 .await
-                .expect("persisted config"),
-        )
-        .expect("valid persisted config");
-        assert_eq!(persisted["app"]["telemetry"], serde_json::json!(false));
-
-        let backups = std::fs::read_dir(path_manager.user_config_dir().join("backups"))
-            .expect("backup directory")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("backup entries");
-        assert_eq!(backups.len(), 1);
-        assert!(backups[0]
-            .file_name()
-            .to_string_lossy()
-            .contains("startup-normalization"));
-        assert_eq!(
-            tokio::fs::read_to_string(backups[0].path())
-                .await
-                .expect("backup content"),
+                .expect("original config"),
             original
         );
+        assert!(!path_manager.user_config_dir().join("backups").exists());
     }
 
     #[tokio::test]
-    async fn startup_repairs_speech_sentinels_and_creates_a_backup() {
+    async fn startup_rejects_speech_generation_fields_without_mutating_the_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("speech-startup-repair");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -1879,48 +1850,33 @@ mod tests {
             ..Default::default()
         });
         config.ai.default_models.speech_recognition = Some("speech".to_string());
-        tokio::fs::write(
-            path_manager.app_config_file(),
-            serde_json::to_vec_pretty(&config).expect("serialize config"),
-        )
+        let original = serde_json::to_string_pretty(&config).expect("serialize config");
+        tokio::fs::write(path_manager.app_config_file(), &original)
         .await
         .expect("seed config");
 
-        let service = ConfigService::with_settings(ConfigManagerSettings {
+        let error = match ConfigService::with_settings(ConfigManagerSettings {
             path_manager: Some(path_manager.clone()),
             auto_save: true,
             backup_count: 5,
         })
         .await
-        .expect("config service should recover");
-
-        let repaired: GlobalConfig = service.get_config(None).await.expect("repaired config");
-        let speech = repaired
-            .ai
-            .models
-            .iter()
-            .find(|model| model.id == "speech")
-            .expect("speech model");
-        assert_eq!(speech.context_window, None);
-        assert_eq!(speech.max_tokens, None);
+        {
+            Ok(_) => panic!("inapplicable speech model fields must fail startup"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("context_window"), "{error}");
         assert_eq!(
-            repaired.ai.default_models.speech_recognition.as_deref(),
-            Some("speech")
+            tokio::fs::read_to_string(path_manager.app_config_file())
+                .await
+                .expect("original config"),
+            original
         );
-        assert!(service
-            .load_diagnostics()
-            .await
-            .iter()
-            .any(|diagnostic| diagnostic.code == "MODEL_FIELD_NOT_APPLICABLE"));
-        let backups = std::fs::read_dir(path_manager.user_config_dir().join("backups"))
-            .expect("backup directory")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("backup entries");
-        assert_eq!(backups.len(), 1);
+        assert!(!path_manager.user_config_dir().join("backups").exists());
     }
 
     #[tokio::test]
-    async fn malformed_json_uses_in_memory_defaults_and_preserves_the_original() {
+    async fn malformed_json_fails_startup_and_preserves_the_original() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("invalid-json-recovery");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -1933,13 +1889,17 @@ mod tests {
             .await
             .expect("seed broken config");
 
-        let service = ConfigService::with_settings(ConfigManagerSettings {
+        let error = match ConfigService::with_settings(ConfigManagerSettings {
             path_manager: Some(path_manager.clone()),
             auto_save: true,
             backup_count: 5,
         })
         .await
-        .expect("startup should use defaults");
+        {
+            Ok(_) => panic!("malformed JSON must fail startup"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("Failed to parse config file"));
 
         assert_eq!(
             tokio::fs::read_to_string(path_manager.app_config_file())
@@ -1947,25 +1907,7 @@ mod tests {
                 .expect("original config"),
             broken
         );
-        let diagnostic = service
-            .load_diagnostics()
-            .await
-            .into_iter()
-            .find(|diagnostic| diagnostic.code == "CONFIG_DEFAULT_RECOVERY")
-            .expect("recovery diagnostic");
-        assert!(!diagnostic.message.contains("api_key"));
-        let backup = std::fs::read_dir(path_manager.user_config_dir().join("backups"))
-            .expect("backup directory")
-            .next()
-            .expect("backup entry")
-            .expect("backup path")
-            .path();
-        assert_eq!(
-            tokio::fs::read_to_string(backup)
-                .await
-                .expect("backup content"),
-            broken
-        );
+        assert!(!path_manager.user_config_dir().join("backups").exists());
     }
 
     #[tokio::test]
@@ -2118,10 +2060,10 @@ mod tests {
             .expect("valid models should save");
 
         let invalid_models = vec![AIModelConfig {
-            reasoning: Some(bitfun_core_types::ReasoningConfig {
-                presets: vec![bitfun_core_types::ReasoningPreset {
+            reasoning: Some(openbitfun_core_types::ReasoningConfig {
+                presets: vec![openbitfun_core_types::ReasoningPreset {
                     id: "bad-budget".to_string(),
-                    actions: vec![bitfun_core_types::ReasoningPresetAction::BudgetTokens {
+                    actions: vec![openbitfun_core_types::ReasoningPresetAction::BudgetTokens {
                         value: 0,
                     }],
                     ..Default::default()
@@ -2152,18 +2094,18 @@ mod tests {
         let (service, _dir) = test_service("invalid-reasoning-import").await;
         let mut config = GlobalConfig::default();
         config.ai.models.push(AIModelConfig {
-            reasoning: Some(bitfun_core_types::ReasoningConfig {
+            reasoning: Some(openbitfun_core_types::ReasoningConfig {
                 presets: vec![
-                    bitfun_core_types::ReasoningPreset {
+                    openbitfun_core_types::ReasoningPreset {
                         id: "same".to_string(),
-                        actions: vec![bitfun_core_types::ReasoningPresetAction::Toggle {
+                        actions: vec![openbitfun_core_types::ReasoningPresetAction::Toggle {
                             enabled: true,
                         }],
                         ..Default::default()
                     },
-                    bitfun_core_types::ReasoningPreset {
+                    openbitfun_core_types::ReasoningPreset {
                         id: "same".to_string(),
-                        actions: vec![bitfun_core_types::ReasoningPresetAction::Toggle {
+                        actions: vec![openbitfun_core_types::ReasoningPresetAction::Toggle {
                             enabled: false,
                         }],
                         ..Default::default()
@@ -2175,7 +2117,7 @@ mod tests {
         });
 
         let result = service
-            .import_config_data(serde_json::to_value(config).expect("serialize config"))
+            .import_config(current_export(config))
             .await
             .expect("import should return a structured result");
 
@@ -2283,7 +2225,7 @@ mod tests {
         let (service, _dir) = test_service("appearance-selection").await;
 
         service
-            .set_config("appearance.selection", "bitfun-dark")
+            .set_config("appearance.selection", "openbitfun-dark")
             .await
             .expect("appearance selection should save");
 
@@ -2291,28 +2233,30 @@ mod tests {
             .get_config(Some("appearance.selection"))
             .await
             .expect("appearance selection should load");
-        assert_eq!(selection, "bitfun-dark");
+        assert_eq!(selection, "openbitfun-dark");
 
         let export: GlobalConfig = service
             .get_config(None)
             .await
             .expect("full config should load");
         let serialized = serde_json::to_value(export).expect("config should serialize");
-        assert_eq!(serialized["appearance"]["selection"], "bitfun-dark");
+        assert_eq!(serialized["appearance"]["selection"], "openbitfun-dark");
         assert!(serialized.get("theme").is_none());
         assert!(serialized.get("themes").is_none());
     }
 
     #[tokio::test]
-    async fn raw_import_migrates_legacy_skip_confirmation_and_removes_it_from_disk() {
-        let test_name = "legacy-skip-confirmation-raw-import";
-        let (service, dir) = test_service(test_name).await;
-        let mut raw_config =
-            serde_json::to_value(GlobalConfig::default()).expect("default config should serialize");
-        let raw_object = raw_config
+    async fn raw_import_rejects_retired_skip_confirmation_without_mutating_disk() {
+        let (service, _dir) = test_service("retired-skip-confirmation-raw-import").await;
+        let config_dir = service.get_statistics().await.config_directory;
+        let before = tokio::fs::read_to_string(config_dir.join("app.json"))
+            .await
+            .expect("current config");
+        let mut raw_export = serde_json::to_value(current_export(GlobalConfig::default()))
+            .expect("default export should serialize");
+        let raw_object = raw_export["config"]
             .as_object_mut()
             .expect("default config should serialize as an object");
-        raw_object.remove("tool_permissions");
         raw_object
             .get_mut("ai")
             .and_then(serde_json::Value::as_object_mut)
@@ -2322,34 +2266,23 @@ mod tests {
                 serde_json::Value::Bool(true),
             );
 
-        service
-            .import_config_data(raw_config)
-            .await
-            .expect("legacy confirmation preference should import");
-
-        let permissions: serde_json::Value = service
-            .get_config(Some("tool_permissions"))
-            .await
-            .expect("migrated tool permissions should be readable");
-        assert_eq!(permissions["policy"]["preset"], "ask");
-        assert_eq!(permissions["interaction"]["auto_approve_ask"], true);
-
-        let path_manager = PathManager::with_user_root_for_tests(dir.path().join(test_name));
-        let persisted: serde_json::Value = serde_json::from_str(
-            &tokio::fs::read_to_string(path_manager.app_config_file())
-                .await
-                .expect("migrated config should be persisted"),
-        )
-        .expect("persisted config should be valid JSON");
-        assert!(persisted["ai"].get("skip_tool_confirmation").is_none());
-        assert_eq!(
-            persisted["tool_permissions"]["interaction"]["auto_approve_ask"],
-            true
+        let error = serde_json::from_value::<ConfigExport>(raw_export)
+            .expect_err("retired fields must be rejected before typed import");
+        assert!(
+            error.to_string().contains("ai.skip_tool_confirmation"),
+            "{error}"
         );
+        assert_eq!(
+            tokio::fs::read_to_string(config_dir.join("app.json"))
+                .await
+                .expect("current config"),
+            before
+        );
+        assert!(!config_dir.join("backups").exists());
     }
 
     #[tokio::test]
-    async fn startup_discards_removed_model_reasoning_fields_without_creating_a_preset() {
+    async fn startup_rejects_removed_model_reasoning_fields_without_mutating_disk() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("legacy-model-reasoning-startup");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -2378,30 +2311,27 @@ mod tests {
             "reasoning_mode": "enabled",
             "reasoning_effort": "high"
         }]);
-        tokio::fs::write(
-            path_manager.app_config_file(),
-            serde_json::to_string_pretty(&raw_config).expect("legacy config should serialize"),
-        )
+        let original =
+            serde_json::to_string_pretty(&raw_config).expect("retired config should serialize");
+        tokio::fs::write(path_manager.app_config_file(), &original)
         .await
-        .expect("legacy config should be written");
+        .expect("retired config should be written");
 
-        let migrated_service = ConfigService::with_settings(settings())
-            .await
-            .expect("legacy config should reload");
-        drop(migrated_service);
-
-        let persisted: serde_json::Value = serde_json::from_str(
-            &tokio::fs::read_to_string(path_manager.app_config_file())
+        let error = match ConfigService::with_settings(settings()).await {
+            Ok(_) => panic!("retired reasoning fields must fail startup"),
+            Err(error) => error,
+        };
+        assert!(
+            error.to_string().contains("ai.models[0].reasoning_mode"),
+            "{error}"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(path_manager.app_config_file())
                 .await
-                .expect("migrated config should be persisted"),
-        )
-        .expect("persisted config should be valid JSON");
-        let model = &persisted["ai"]["models"][0];
-        assert!(model.get("reasoning").is_none());
-        assert!(model.get("reasoning_mode").is_none());
-        assert!(model.get("reasoning_effort").is_none());
-        assert!(model.get("thinking_budget_tokens").is_none());
-        assert!(model.get("enable_thinking_process").is_none());
+                .expect("retired config should remain"),
+            original
+        );
+        assert!(!path_manager.user_config_dir().join("backups").exists());
     }
 
     #[tokio::test]

@@ -45,8 +45,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@bitfun/ui', async importOriginal => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   // Keep the hover copy inspectable: descriptions live only in the tooltip now.
   Tooltip: ({ children, content }: { children: React.ReactNode; content?: React.ReactNode }) => (
     <span data-tooltip={typeof content === 'string' ? content : undefined}>{children}</span>

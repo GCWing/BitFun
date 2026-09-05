@@ -5,7 +5,7 @@
  * (deepseek-harness/packages/acp/acp/src/codec.ts, MIT).
  * Copyright (c) DeepSeek. See ../NOTICE.md.
  *
- * @module @bitfun/dsh-acp/codec
+ * @module @openbitfun/dsh-acp/codec
  */
 
 import type { ContentBlock as AcpContentBlock, StopReason } from '@agentclientprotocol/sdk'

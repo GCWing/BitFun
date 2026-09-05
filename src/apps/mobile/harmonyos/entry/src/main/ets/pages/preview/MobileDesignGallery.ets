@@ -115,7 +115,7 @@ struct MobileDesignGallery {
 }
 
 @Preview({
-  title: 'BitFun Mobile · Compact',
+  title: 'OpenBitFun Mobile · Compact',
   width: 390,
   height: 844
 })
@@ -127,7 +127,7 @@ struct MobileDesignCompactPreview {
 }
 
 @Preview({
-  title: 'BitFun Mobile · Dark',
+  title: 'OpenBitFun Mobile · Dark',
   width: 390,
   height: 844
 })
@@ -139,7 +139,7 @@ struct MobileDesignStreamingDarkPreview {
 }
 
 @Preview({
-  title: 'BitFun Mobile · Wide',
+  title: 'OpenBitFun Mobile · Wide',
   width: 1024,
   height: 768
 })

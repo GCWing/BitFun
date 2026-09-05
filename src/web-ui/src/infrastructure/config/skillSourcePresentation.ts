@@ -1,8 +1,8 @@
 import type { ModeSkillInfo, SkillInfo } from './types';
 
 const SOURCE_LABEL_BY_ID: Record<string, string> = {
-  bitfun: 'BitFun',
-  'bitfun-system': 'BitFun',
+  openbitfun: 'OpenBitFun',
+  'openbitfun-system': 'OpenBitFun',
   'claude-code': 'Claude Code',
   claude: 'Claude Code',
   codex: 'Codex',
@@ -51,10 +51,10 @@ export function canDeleteSkill(skill: SkillInfo): boolean {
 
   const sourceId = skill.sourceId?.trim().toLowerCase();
   if (sourceId) {
-    return sourceId === 'bitfun' || sourceId === 'bitfun-system';
+    return sourceId === 'openbitfun' || sourceId === 'openbitfun-system';
   }
 
-  return skill.sourceSlot?.trim().toLowerCase().startsWith('bitfun') ?? false;
+  return skill.sourceSlot?.trim().toLowerCase().startsWith('openbitfun') ?? false;
 }
 
 export interface SkillOriginLabels {

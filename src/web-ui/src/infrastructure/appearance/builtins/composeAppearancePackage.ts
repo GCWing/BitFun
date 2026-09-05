@@ -13,7 +13,7 @@ import {
   getBuiltinAppearance,
 } from './catalog';
 
-const COMPOSITION_LAYERS = Symbol('bitfun.appearance.composition-layers');
+const COMPOSITION_LAYERS = Symbol('openbitfun.appearance.composition-layers');
 
 interface AppearanceCompositionLayers {
   base: AppearancePackage;
@@ -174,10 +174,10 @@ function mergeRenderers(
         },
       },
     } : base?.['generative-widget'],
-    'bitfun-canvas': override?.['bitfun-canvas'] ? {
+    'openbitfun-canvas': override?.['openbitfun-canvas'] ? {
       version: 1,
-      settings: { ...base?.['bitfun-canvas']?.settings, ...override['bitfun-canvas'].settings },
-    } : base?.['bitfun-canvas'],
+      settings: { ...base?.['openbitfun-canvas']?.settings, ...override['openbitfun-canvas'].settings },
+    } : base?.['openbitfun-canvas'],
   };
 }
 

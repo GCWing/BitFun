@@ -10,31 +10,31 @@ const MAX_PROJECT_SLUG_LEN = 120;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function defaultBitfunHome() {
-  if (process.env.BITFUN_E2E_HOME) {
-    return process.env.BITFUN_E2E_HOME;
+function defaultOpenBitFunHome() {
+  if (process.env.OPENBITFUN_E2E_HOME) {
+    return process.env.OPENBITFUN_E2E_HOME;
   }
-  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
-    return process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun');
+  if (process.env.OPENBITFUN_E2E_USE_REAL_PROFILE === '1') {
+    return process.env.OPENBITFUN_HOME || path.join(os.homedir(), '.openbitfun');
   }
-  return path.resolve(__dirname, '..', '.bitfun', 'runtime', 'home');
+  return path.resolve(__dirname, '..', '.openbitfun', 'runtime', 'home');
 }
 
-function defaultBitfunUserRoot() {
-  if (process.env.BITFUN_E2E_USER_ROOT) {
-    return process.env.BITFUN_E2E_USER_ROOT;
+function defaultOpenBitFunUserRoot() {
+  if (process.env.OPENBITFUN_E2E_USER_ROOT) {
+    return process.env.OPENBITFUN_E2E_USER_ROOT;
   }
-  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
+  if (process.env.OPENBITFUN_E2E_USE_REAL_PROFILE === '1') {
     return null;
   }
-  return path.resolve(__dirname, '..', '.bitfun', 'runtime', 'user-root');
+  return path.resolve(__dirname, '..', '.openbitfun', 'runtime', 'user-root');
 }
 
 function parseArgs(argv) {
   const options = {
     workspace: undefined,
-    bitfunHome: defaultBitfunHome(),
-    bitfunUserRoot: defaultBitfunUserRoot(),
+    openbitfunHome: defaultOpenBitFunHome(),
+    openbitfunUserRoot: defaultOpenBitFunUserRoot(),
     sessionPrefix: 'perf-long-session',
     scenario: 'mixed-visible',
     sessionCount: 80,
@@ -64,11 +64,11 @@ function parseArgs(argv) {
       case '--workspace':
         options.workspace = next();
         break;
-      case '--bitfun-home':
-        options.bitfunHome = next();
+      case '--openbitfun-home':
+        options.openbitfunHome = next();
         break;
-      case '--bitfun-user-root':
-        options.bitfunUserRoot = next();
+      case '--openbitfun-user-root':
+        options.openbitfunUserRoot = next();
         break;
       case '--session-prefix':
         options.sessionPrefix = next();
@@ -148,7 +148,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Generate BitFun long-session performance fixtures.
+  console.log(`Generate OpenBitFun long-session performance fixtures.
 
 Usage:
   node tests/e2e/scripts/generate-long-session-fixture.mjs --workspace <path> [options]
@@ -166,8 +166,8 @@ Options:
   --last-active-step-ms <n> lastActiveAt decrement per session index. Default: 1000
   --session-prefix <text>   Session id prefix. Default: perf-long-session
   --scenario <name>         Fixture shape: mixed-visible, dense-visible, explore-only, or user-only-latest. Default: mixed-visible
-  --bitfun-home <path>      BitFun home root. Default: BITFUN_E2E_HOME or isolated tests/e2e/.bitfun/runtime/home; BITFUN_HOME is used only with BITFUN_E2E_USE_REAL_PROFILE=1
-  --bitfun-user-root <path> BitFun user config root for seeding active workspace. Default: BITFUN_E2E_USER_ROOT or isolated tests/e2e/.bitfun/runtime/user-root; skipped for real profile unless provided
+  --openbitfun-home <path>      OpenBitFun home root. Default: OPENBITFUN_E2E_HOME or isolated tests/e2e/.openbitfun/runtime/home; OPENBITFUN_HOME is used only with OPENBITFUN_E2E_USE_REAL_PROFILE=1
+  --openbitfun-user-root <path> OpenBitFun user config root for seeding active workspace. Default: OPENBITFUN_E2E_USER_ROOT or isolated tests/e2e/.openbitfun/runtime/user-root; skipped for real profile unless provided
   --cleanup                 Remove generated sessions for the prefix.
 `);
 }
@@ -594,11 +594,11 @@ async function readJsonOptional(filePath) {
 }
 
 async function seedWorkspaceState(options, workspacePath) {
-  if (!options.bitfunUserRoot) {
+  if (!options.openbitfunUserRoot) {
     return null;
   }
 
-  const userRoot = path.resolve(options.bitfunUserRoot);
+  const userRoot = path.resolve(options.openbitfunUserRoot);
   const workspaceDataPath = path.join(userRoot, 'data', 'workspace_data.json');
   const existing = await readJsonOptional(workspaceDataPath);
   const workspaces = existing?.workspaces && typeof existing.workspaces === 'object'
@@ -701,7 +701,7 @@ async function writeIndex(sessionsRoot, generatedMetadata, sessionPrefix) {
 async function generate(options) {
   const workspacePath = fsSync.realpathSync(options.workspace);
   const slug = projectRuntimeSlug(workspacePath);
-  const sessionsRoot = path.join(options.bitfunHome, 'projects', slug, 'sessions');
+  const sessionsRoot = path.join(options.openbitfunHome, 'projects', slug, 'sessions');
 
   await fs.mkdir(sessionsRoot, { recursive: true });
   await removeGeneratedSessions(sessionsRoot, options.sessionPrefix);
@@ -774,8 +774,8 @@ async function generate(options) {
   return {
     action: 'generate',
     workspacePath,
-    bitfunHome: options.bitfunHome,
-    bitfunUserRoot: options.bitfunUserRoot,
+    openbitfunHome: options.openbitfunHome,
+    openbitfunUserRoot: options.openbitfunUserRoot,
     sessionsRoot,
     sessionPrefix: options.sessionPrefix,
     workspaceStateSeeded: Boolean(seededWorkspaceState),

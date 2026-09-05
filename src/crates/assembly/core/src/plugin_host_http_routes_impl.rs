@@ -1,6 +1,6 @@
 use crate::service::session::ToolItemIdentityExt;
-use bitfun_runtime_ports::{GitPort, WorkspaceDiffFileStatus};
-use bitfun_services_core::filesystem::{FileSearchOptions, FileSearchResult, FileTreeNode};
+use openbitfun_runtime_ports::{GitPort, WorkspaceDiffFileStatus};
+use openbitfun_services_core::filesystem::{FileSearchOptions, FileSearchResult, FileTreeNode};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -67,7 +67,7 @@ async fn session_metadata(
     context: &PluginHostInstance,
     session_id: &str,
 ) -> Result<crate::service::session::SessionMetadata, Failure> {
-    bitfun_core_types::validate_session_id(session_id)
+    openbitfun_core_types::validate_session_id(session_id)
         .map_err(|error| Failure::bad_request(error.to_string()))?;
     let coordinator = coordinator()?;
     coordinator
@@ -113,7 +113,7 @@ async fn session_create(context: &PluginHostInstance, body: &[u8]) -> RouteResul
     let coordinator = coordinator()?;
     if input.parent_id.is_some() {
         return Err(Failure::bad_request(
-            "parentID session creation is not supported by the BitFun session owner",
+            "parentID session creation is not supported by the OpenBitFun session owner",
         ));
     }
     let session = coordinator
@@ -320,7 +320,7 @@ struct MessageProjectionContext<'a> {
     instance: &'a PluginHostInstance,
     session: &'a crate::service::session::SessionMetadata,
     models: &'a [crate::service::config::AIModelConfig],
-    catalog: &'a bitfun_core_types::ProviderCatalog,
+    catalog: &'a openbitfun_core_types::ProviderCatalog,
 }
 
 fn message_model_identity<'a>(
@@ -677,7 +677,7 @@ async fn pty_create(context: &PluginHostInstance, body: &[u8]) -> RouteResult {
     let input: PtyCreateBody = body_as(body)?;
     if input.args.as_ref().is_some_and(|args| !args.is_empty()) {
         return Err(Failure::bad_request(
-            "BitFun terminal sessions do not support arbitrary PTY arguments",
+            "OpenBitFun terminal sessions do not support arbitrary PTY arguments",
         ));
     }
     let cwd = input
@@ -712,7 +712,7 @@ fn parse_pty_shell(command: &str) -> Result<ShellType, Failure> {
     let shell = ShellType::from_executable(command.trim());
     if matches!(shell, ShellType::Custom(_)) {
         return Err(Failure::bad_request(
-            "PTY command must select a supported BitFun shell",
+            "PTY command must select a supported OpenBitFun shell",
         ));
     }
     Ok(shell)
@@ -774,7 +774,7 @@ async fn pty_update(context: &PluginHostInstance, pty_id: &str, body: &[u8]) -> 
     pty_get(context, pty_id).await?;
     if input.title.is_some() {
         return Err(Failure::bad_request(
-            "PTY title updates are not supported by the BitFun terminal owner",
+            "PTY title updates are not supported by the OpenBitFun terminal owner",
         ));
     }
     if let Some(size) = input.size {
@@ -959,7 +959,7 @@ async fn file_read(
 }
 
 async fn file_status(context: &PluginHostInstance) -> RouteResult {
-    let snapshot = bitfun_services_integrations::git::GitWorkspaceDiffPort::new(&context.directory)
+    let snapshot = openbitfun_services_integrations::git::GitWorkspaceDiffPort::new(&context.directory)
         .workspace_diff()
         .await
         .map_err(|error| Failure::backend(error.to_string()))?;

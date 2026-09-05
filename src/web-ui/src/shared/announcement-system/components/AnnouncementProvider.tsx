@@ -78,7 +78,7 @@ const AnnouncementProvider: React.FC = () => {
     const cancelStartupSchedule = scheduleAfterStartupSignal(() => {
       void load();
     }, {
-      signalName: 'bitfun:interactive-shell-ready',
+      signalName: 'openbitfun:interactive-shell-ready',
       fallbackTimeoutMs: 10000,
       frameCount: 1,
       onError: error => {

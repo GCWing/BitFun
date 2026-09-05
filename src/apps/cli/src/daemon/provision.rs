@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use bitfun_core::service::remote_connect::{
+use openbitfun_core::service::remote_connect::{
     session_store, validate_relay_base_url, DeviceIdentity,
 };
-use bitfun_services_core::dispatch_contract::{
+use openbitfun_services_core::dispatch_contract::{
     DispatchAccountDaemonIdentity, DispatchAccountDaemonProvisionRequest,
     DispatchAccountDaemonProvisionResponse, DISPATCH_ACCOUNT_DAEMON_PROVISIONING_SCHEMA_VERSION,
 };
@@ -71,7 +71,7 @@ pub(crate) fn provision(request_path: PathBuf) -> Result<()> {
     if let Err(error) = super::service::install_service_for_provisioning() {
         let _ = super::service::uninstall_service_for_provisioning();
         session_store::clear_session();
-        return Err(error).context("install persistent BitFun daemon service");
+        return Err(error).context("install persistent OpenBitFun daemon service");
     }
 
     let response = DispatchAccountDaemonProvisionResponse {
@@ -100,7 +100,7 @@ pub(crate) fn deprovision(device_id: String, user_id: String) -> Result<()> {
 
     let uninstall_result = super::service::uninstall_service_for_provisioning();
     session_store::clear_session();
-    uninstall_result.context("remove persistent BitFun daemon service")?;
+    uninstall_result.context("remove persistent OpenBitFun daemon service")?;
     println!("{{\"removed\":true}}");
     Ok(())
 }
@@ -179,6 +179,7 @@ fn ensure_private_request_file(path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::*;
 
     #[test]

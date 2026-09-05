@@ -48,7 +48,7 @@
     "refreshFailed": "重新整理失敗：{{error}}",
     "loginSuccess": "登入成功",
     "loginFailed": "登入失敗：{{error}}",
-    "peerLoginRequiresLocalDevice": "Antigravity 登入必須在執行 BitFun 的裝置上完成，請切換到該裝置後再登入。",
+    "peerLoginRequiresLocalDevice": "Antigravity 登入必須在執行 OpenBitFun 的裝置上完成，請切換到該裝置後再登入。",
     "logoutSuccess": "已登出",
     "logoutCleanupPending": "已登出，憑據清理仍在等待中，稍後會自動重試。",
     "logoutFailed": "登出失敗：{{error}}",
@@ -91,7 +91,7 @@
     "vaultUnavailable": "憑據儲存暫時無法使用，請重試；你的登入資訊並未被移除",
     "retryVault": "重試憑據庫",
     "loginPending": "正在進行登入授權",
-    "browserInstructions": "請在 BitFun 開啟的瀏覽器頁面中完成登入，並保持此頁面開啟；授權後會自動完成。",
+    "browserInstructions": "請在 OpenBitFun 開啟的瀏覽器頁面中完成登入，並保持此頁面開啟；授權後會自動完成。",
     "deviceInstructions": "請在任意裝置開啟授權頁面，輸入下方驗證碼，然後返回此處。",
     "loginCancelling": "正在取消登入並關閉授權工作階段",
     "loginCompletedBeforeCancel": "授權已在取消前完成，因此該帳號仍保持登入狀態",
@@ -151,7 +151,7 @@
   },
   "providers": {
     "openbitfun": {
-      "name": "OpenBitFun",
+      "name": "OpenBitFun 服務",
       "description": "OpenBitFun 大模型平臺",
       "urlOptions": {
         "default": "Anthropic格式-默認",
@@ -399,7 +399,7 @@
   },
   "proxy": {
     "enable": "啟用代理",
-    "enableHint": "啟用後所有 AI 請求將透過代理傳送（需重新啟動 BitFun 生效）",
+    "enableHint": "啟用後所有 AI 請求將透過代理傳送（需重新啟動 OpenBitFun 生效）",
     "url": "代理地址",
     "urlPlaceholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
     "urlHint": "支持 HTTP/HTTPS/SOCKS5 代理，格式：協議://地址:端口",
@@ -408,7 +408,7 @@
     "password": "密碼（可選）",
     "passwordPlaceholder": "代理認證密碼",
     "save": "儲存代理設定",
-    "saveSuccess": "代理設定已儲存，重新啟動 BitFun 後生效"
+    "saveSuccess": "代理設定已儲存，重新啟動 OpenBitFun 後生效"
   },
   "streamIdleTimeout": {
     "title": "流式超時",
@@ -554,7 +554,7 @@
     "reveal": "在資料夾中顯示",
     "revealFailed": "無法開啟快取所在資料夾",
     "offlineTitle": "無法連線時如何更新",
-    "offlineDescription": "在可連線的裝置上下載 models.dev 原始檔案，將其命名為 catalog.json 並放入上方快取目錄。替換後重新啟動 BitFun 即可生效；點擊立即更新可能會覆蓋該檔案。",
+    "offlineDescription": "在可連線的裝置上下載 models.dev 原始檔案，將其命名為 catalog.json 並放入上方快取目錄。替換後重新啟動 OpenBitFun 即可生效；點擊立即更新可能會覆蓋該檔案。",
     "downloadOriginal": "下載原始目錄",
     "openCacheDirectory": "開啟快取目錄"
   },

@@ -5,7 +5,7 @@
 //! Pairing, encryption, QR generation, relay websocket lifecycle primitives,
 //! wire command routing, and provider-neutral IM bot support live here. Product
 //! assembly, concrete runtime hosts, and IM bot command routing that still needs
-//! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
+//! session/runtime hosts stay in `openbitfun-core` until their ports are explicit.
 
 pub mod account;
 pub mod bot;
@@ -23,19 +23,6 @@ mod relay_http;
 pub mod session_store;
 pub mod sync_state;
 
-use bitfun_core_types::{ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection};
-use bitfun_events::AgenticEvent;
-use bitfun_runtime_ports::{
-    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
-    RemoteControlStateSnapshot,
-};
-pub use bitfun_runtime_ports::{
-    RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
-    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
-    RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
-};
 pub use chat_projection::{
     agent_input_attachment_from_remote_image_context, project_remote_chat_user,
     RemoteChatUserProjection,
@@ -51,6 +38,22 @@ pub use mobile_web_upload::upload_mobile_web_to_relay;
 pub use ngrok::{
     cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
 };
+use openbitfun_core_types::{
+    ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection,
+};
+use openbitfun_events::AgenticEvent;
+use openbitfun_runtime_ports::{
+    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
+    RemoteControlStateSnapshot,
+};
+pub use openbitfun_runtime_ports::{
+    RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+};
+use openbitfun_services_core::product_identity::{hidden_data_directory, product_id};
 pub use page_upload::{
     create_page_open_link_on_relay, delete_page_from_relay, delete_page_version_on_relay,
     deploy_page_version_on_relay, join_relay_url, list_page_versions_from_relay,
@@ -79,12 +82,12 @@ where
     Option::<T>::deserialize(deserializer).map(Some)
 }
 
-pub(crate) fn bitfun_home_dir() -> Option<PathBuf> {
-    std::env::var_os("BITFUN_HOME")
-        .or_else(|| std::env::var_os("BITFUN_E2E_HOME"))
+pub(crate) fn product_home_dir() -> Option<PathBuf> {
+    std::env::var_os("OPENBITFUN_HOME")
+        .or_else(|| std::env::var_os("OPENBITFUN_E2E_HOME"))
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
-        .or_else(|| dirs::home_dir().map(|home| home.join(".bitfun")))
+        .or_else(|| dirs::home_dir().map(|home| home.join(hidden_data_directory())))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -3379,7 +3382,7 @@ impl RemoteSessionStateTracker {
     }
 
     pub fn handle_agentic_event(&self, event: &AgenticEvent) {
-        use bitfun_events::AgenticEvent as AE;
+        use openbitfun_events::AgenticEvent as AE;
 
         if let AE::SubagentSessionLinked {
             session_id,
@@ -3488,15 +3491,20 @@ impl RemoteSessionStateTracker {
                 let tool_id = tool_event.tool_id().to_string();
                 let tool_name = tool_event.effective_tool_name().to_string();
                 let effective_params = match tool_event {
-                    bitfun_events::ToolEventData::Started {
+                    openbitfun_events::ToolEventData::Started {
                         identity, params, ..
                     }
-                    | bitfun_events::ToolEventData::ConfirmationNeeded {
-                        identity, params, ..
+                    | openbitfun_events::ToolEventData::ConfirmationNeeded {
+                        identity,
+                        params,
+                        ..
                     } => Some(
-                        bitfun_agent_tools::effective_tool_invocation(&identity.tool_name, params)
-                            .1
-                            .clone(),
+                        openbitfun_agent_tools::effective_tool_invocation(
+                            &identity.tool_name,
+                            params,
+                        )
+                        .1
+                        .clone(),
                     ),
                     _ => None,
                 };
@@ -4498,7 +4506,7 @@ mod tests {
         };
         let host = FakePollHost {
             tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
-            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            storage_dir: Some(PathBuf::from("/workspace/project/.openbitfun/sessions")),
             messages: vec![message.clone()],
             history_read_count: Arc::new(AtomicUsize::new(0)),
         };
@@ -4546,7 +4554,7 @@ mod tests {
         let history_read_count = Arc::new(AtomicUsize::new(0));
         let host = FakePollHost {
             tracker: tracker.clone(),
-            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            storage_dir: Some(PathBuf::from("/workspace/project/.openbitfun/sessions")),
             messages: vec![ChatMessage {
                 id: "message-visible".to_string(),
                 role: "user".to_string(),
@@ -4653,7 +4661,7 @@ mod tests {
         );
         let host = FakePollHost {
             tracker: tracker.clone(),
-            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            storage_dir: Some(PathBuf::from("/workspace/project/.openbitfun/sessions")),
             messages: vec![assistant.clone()],
             history_read_count: Arc::new(AtomicUsize::new(0)),
         };
@@ -4720,7 +4728,7 @@ mod tests {
         );
         let first_host = FakePollHost {
             tracker: tracker.clone(),
-            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            storage_dir: Some(PathBuf::from("/workspace/project/.openbitfun/sessions")),
             messages: vec![older_assistant.clone()],
             history_read_count: Arc::new(AtomicUsize::new(0)),
         };
@@ -4752,7 +4760,7 @@ mod tests {
         );
         let retry_host = FakePollHost {
             tracker: tracker.clone(),
-            storage_dir: Some(PathBuf::from("/workspace/project/.bitfun/sessions")),
+            storage_dir: Some(PathBuf::from("/workspace/project/.openbitfun/sessions")),
             messages: vec![older_assistant, current_assistant],
             history_read_count: Arc::new(AtomicUsize::new(0)),
         };

@@ -4,7 +4,7 @@ import {
   NumberInput,
   SegmentedControl,
   type SegmentedControlOption,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
@@ -68,8 +68,8 @@ export function FontPreferencePanel() {
   return (
     <div
       data-testid="appearance-font-section"
-      data-bf-component="font-preference"
-      data-bf-part="root"
+      data-openbitfun-component="font-preference"
+      data-openbitfun-part="root"
     >
       <ConfigPageSection
         bodySurface={false}
@@ -111,8 +111,8 @@ export function FontPreferencePanel() {
                     role="group"
                     aria-label={t('appearance.fontSize.customPxLabel')}
                     data-testid="appearance-ui-font-custom-controls"
-                    data-bf-component="font-preference"
-                    data-bf-part="customControls"
+                    data-openbitfun-component="font-preference"
+                    data-openbitfun-part="customControls"
                   >
                     <NumberInput
                       className="font-pref-panel__custom-number-input"
@@ -136,8 +136,8 @@ export function FontPreferencePanel() {
               {/* Editable live preview */}
               <div
                 className="font-pref-panel__preview"
-                data-bf-component="font-preference"
-                data-bf-part="preview"
+                data-openbitfun-component="font-preference"
+                data-openbitfun-part="preview"
               >
                 <Input
                   className="font-pref-panel__preview-input"

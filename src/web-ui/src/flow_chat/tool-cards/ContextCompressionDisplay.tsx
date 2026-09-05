@@ -5,7 +5,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FlowToolItem } from '../types/flow-chat';
-import { ContextCompressionToolCard } from '@bitfun/ui/flow-chat';
+import { ContextCompressionToolCard } from '@openbitfun/ui/flow-chat';
 import { i18nService } from '@/infrastructure/i18n';
 
 interface ContextCompressionDisplayProps {

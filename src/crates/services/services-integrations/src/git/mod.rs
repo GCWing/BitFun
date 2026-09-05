@@ -1,6 +1,6 @@
 //! Git service contracts.
 //!
-//! `bitfun-core::service::git` remains as the compatibility facade for the
+//! `openbitfun-core::service::git` remains as the compatibility facade for the
 //! legacy public path.
 
 pub mod args;

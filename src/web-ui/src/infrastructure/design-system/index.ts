@@ -1,2 +1,2 @@
-export { BitFunDesignSystemProvider } from './BitFunDesignSystemProvider';
+export { OpenBitFunDesignSystemProvider } from './OpenBitFunDesignSystemProvider';
 export * from './typographyRuntime';

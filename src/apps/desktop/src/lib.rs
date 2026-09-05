@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 #![allow(non_snake_case)]
-//! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
+//! OpenBitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
 //!
 //! The reqwest HTTP/2 and MCP transport type graph exceeds rustc's default
 //! trait-evaluation recursion budget when desktop tasks require `Send`.
@@ -22,7 +22,6 @@
 
 pub mod api;
 pub mod appearance;
-mod bitfun_control_host;
 mod builtin_browser_host;
 pub mod computer_use;
 pub mod crash_diagnostics;
@@ -30,6 +29,7 @@ mod embedded_relay_host;
 pub mod frontend_workbench;
 pub mod logging;
 pub mod macos_menubar;
+mod openbitfun_control_host;
 pub mod runtime;
 pub mod sleep_prevention;
 pub mod startup_trace;
@@ -37,18 +37,18 @@ pub mod tray;
 mod webview_recovery;
 mod window_state_support;
 
-use bitfun_agent_runtime::sdk::{attach_session_event_cursor, SessionEventJournal};
-use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
-use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
-use bitfun_core::infrastructure::ai::AIClientFactory;
-use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
-use bitfun_core::service::search::get_global_workspace_search_service;
-use bitfun_core::service::session_projection_store::{
+use openbitfun_agent_runtime::sdk::{attach_session_event_cursor, SessionEventJournal};
+use openbitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
+use openbitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
+use openbitfun_core::infrastructure::ai::AIClientFactory;
+use openbitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
+use openbitfun_core::service::search::get_global_workspace_search_service;
+use openbitfun_core::service::session_projection_store::{
     runtime_event_log_dir, FileSessionProjectionStore,
 };
-use bitfun_core::util::{elapsed_ms, TimingCollector};
-use bitfun_events::AgenticEvent;
-use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
+use openbitfun_core::util::{elapsed_ms, TimingCollector};
+use openbitfun_events::AgenticEvent;
+use openbitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{
@@ -92,23 +92,23 @@ use api::system_api::*;
 use api::tool_api::*;
 use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 
-pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
+pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: openbitfun_core::plugin_host::PluginHostLaunchPolicy =
+    openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
 
 pub(crate) fn ensure_rustls_crypto_provider() {
-    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+    openbitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
 }
 
 /// Agentic Coordinator state
 #[derive(Clone)]
 pub struct CoordinatorState {
-    pub coordinator: Arc<bitfun_core::agentic::coordination::ConversationCoordinator>,
+    pub coordinator: Arc<openbitfun_core::agentic::coordination::ConversationCoordinator>,
 }
 
 /// Dialog scheduler state (primary entry point for user messages)
 #[derive(Clone)]
 pub struct SchedulerState {
-    pub scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>,
+    pub scheduler: Arc<openbitfun_core::agentic::coordination::DialogScheduler>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,7 +123,7 @@ static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "macos")]
 static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
-const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "openbitfun_main_window_close_requested";
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT: &str = "browser-webview-page-load";
 
 #[cfg(target_os = "windows")]
@@ -131,7 +131,7 @@ fn show_fatal_startup_error(message: &str) {
     use windows::core::PCWSTR;
     use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
 
-    let title = "BitFun startup error"
+    let title = "OpenBitFun startup error"
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
@@ -151,7 +151,7 @@ fn show_fatal_startup_error(message: &str) {
 
 #[cfg(not(target_os = "windows"))]
 fn show_fatal_startup_error(message: &str) {
-    eprintln!("BitFun startup error: {message}");
+    eprintln!("OpenBitFun startup error: {message}");
 }
 const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 pub(crate) const MAIN_WINDOW_DEFAULT_WIDTH: f64 = 1200.0;
@@ -324,7 +324,7 @@ fn handle_secondary_launch(app: &tauri::AppHandle) {
 }
 
 pub(crate) fn e2e_storage_guard_enabled() -> bool {
-    std::env::var("BITFUN_E2E_STORAGE_GUARD")
+    std::env::var("OPENBITFUN_E2E_STORAGE_GUARD")
         .ok()
         .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
 }
@@ -546,7 +546,7 @@ mod main_window_geometry_tests {
 #[tauri::command]
 async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
     log::debug!("webdriver_bridge_result command invoked");
-    bitfun_webdriver::handle_bridge_result(request.payload)
+    openbitfun_webdriver::handle_bridge_result(request.payload)
 }
 
 #[tauri::command]
@@ -596,27 +596,28 @@ pub async fn run() {
     // reuse the same provider instead of each attempting their own install_default().
     ensure_rustls_crypto_provider();
 
-    eprintln!("=== BitFun Desktop Starting ===");
+    eprintln!("=== OpenBitFun Desktop Starting ===");
 
-    if let Err(error) = bitfun_core::agentic::system::select_agentic_system_profile(
-        bitfun_core::agentic::system::DeliveryProfile::Desktop,
+    if let Err(error) = openbitfun_core::agentic::system::select_agentic_system_profile(
+        openbitfun_core::agentic::system::DeliveryProfile::Desktop,
     ) {
         log::error!("Failed to select Desktop agent profile: {}", error);
         show_fatal_startup_error(&format!(
-            "BitFun could not select its Desktop agent profile and cannot continue.\n\n{error}\n\nSee early-startup.log for details."
+            "OpenBitFun could not select its Desktop agent profile and cannot continue.\n\n{error}\n\nSee early-startup.log for details."
         ));
         return;
     }
 
     let step_started = Instant::now();
-    if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
+    if let Err(e) = openbitfun_core::service::config::initialize_global_config().await {
         log::error!("Failed to initialize global config service: {}", e);
         show_fatal_startup_error(&format!(
-            "BitFun could not initialize its configuration and cannot continue.\n\n{e}\n\nSee early-startup.log for details."
+            "OpenBitFun could not initialize its configuration and cannot continue.\n\n{e}\n\nSee early-startup.log for details."
         ));
         return;
     }
-    if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await {
+    if let Ok(config_service) = openbitfun_core::service::config::get_global_config_service().await
+    {
         for diagnostic in config_service.load_diagnostics().await {
             log::warn!(
                 "Startup configuration diagnostic: code={}, path={}, recoverability={:?}",
@@ -630,17 +631,17 @@ pub async fn run() {
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
 
     let step_started = Instant::now();
-    match bitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
+    match openbitfun_core::plugin_host::initialize_configured_plugin_host_with_log_file(
         PLUGIN_HOST_LAUNCH_POLICY,
         Some(session_log_dir.join("plugin-host.log")),
     )
     .await
     {
-        Ok(bitfun_core::plugin_host::PluginHostStartup::Disabled) => {}
+        Ok(openbitfun_core::plugin_host::PluginHostStartup::Disabled) => {}
         Ok(status) => log::info!("Plugin host initialization completed: {:?}", status),
         Err(error) => {
             log::error!("Failed to initialize configured plugin host: {}", error);
-            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+            openbitfun_core::plugin_host::report_configured_plugin_activation_failure(
                 "Desktop startup",
                 None,
                 error,
@@ -661,8 +662,8 @@ pub async fn run() {
         (startup_log_level, log_level_duration_ms),
         (ai_factory_result, ai_factory_duration_ms),
     ) = {
-        use bitfun_core::service::config::get_global_config_service;
-        use bitfun_core::service::i18n::initialize_global_i18n_service;
+        use openbitfun_core::service::config::get_global_config_service;
+        use openbitfun_core::service::i18n::initialize_global_i18n_service;
 
         // Initialize global I18nService so bot/remote-connect language is always in sync.
         let i18n_task = async {
@@ -745,7 +746,7 @@ pub async fn run() {
 
     let step_started = Instant::now();
     let workspace_search_enabled =
-        bitfun_core::service::search::workspace_search_feature_enabled().await;
+        openbitfun_core::service::search::workspace_search_feature_enabled().await;
     startup_trace.record_elapsed_step(
         "native_pre_tauri",
         "workspace_search_feature_enabled",
@@ -831,13 +832,13 @@ pub async fn run() {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
         // The isolated embedded-WebDriver app must be able to run alongside a
-        // developer's normal BitFun instance. Its storage root and automation
+        // developer's normal OpenBitFun instance. Its storage root and automation
         // port are already test-scoped, so joining the product single-instance
         // group would make the E2E child exit before WebDriver can attach.
         if !logging::is_embedded_webdriver_mode() {
             builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
                 log::info!(
-                    "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
+                    "Existing OpenBitFun Desktop instance received launch request: args_count={}, cwd={}",
                     args.len(),
                     cwd
                 );
@@ -854,7 +855,7 @@ pub async fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(
             tauri_plugin_autostart::Builder::new()
-                .app_name("BitFun")
+                .app_name("OpenBitFun")
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
@@ -892,7 +893,7 @@ pub async fn run() {
                 };
                 let url = payload.url().to_string();
                 api::browser_api::update_browser_target_url(label, &url);
-                bitfun_core::agentic::tools::browser_control::builtin_browser::publish_builtin_browser_page_load(
+                openbitfun_core::agentic::tools::browser_control::builtin_browser::publish_builtin_browser_page_load(
                     label,
                     event,
                     &url,
@@ -979,7 +980,7 @@ pub async fn run() {
                             match std::process::Command::new("reg")
                                 .args([
                                     "query",
-                                    r"HKCU\Software\BitFun Team\BitFun",
+                                    r"HKCU\Software\OpenBitFun Team\OpenBitFun",
                                     "/ve",
                                 ])
                                 .creation_flags(CREATE_NO_WINDOW)
@@ -995,7 +996,7 @@ pub async fn run() {
                             let _ = std::process::Command::new("reg")
                                 .args([
                                     "add",
-                                    r"HKCU\Software\BitFun Team\BitFun",
+                                    r"HKCU\Software\OpenBitFun Team\OpenBitFun",
                                     "/ve",
                                     "/d",
                                     &dir_str,
@@ -1028,7 +1029,7 @@ pub async fn run() {
                 let step_started = Instant::now();
                 let flashgrep_path = startup_flashgrep_path.clone().or_else(|| {
                     let binary_names =
-                        bitfun_core::service::search::workspace_search_daemon_binary_names();
+                        openbitfun_core::service::search::workspace_search_daemon_binary_names();
                     for binary_name in binary_names {
                         let primary = format!("flashgrep/{}", binary_name);
                         if let Ok(path) = app
@@ -1066,7 +1067,7 @@ pub async fn run() {
                 } else {
                     log::warn!(
                         "Workspace search daemon startup check failed: {}",
-                        bitfun_core::service::search::workspace_search_daemon_missing_hint()
+                        openbitfun_core::service::search::workspace_search_daemon_missing_hint()
                     );
                 }
                 startup_trace.record_elapsed_step(
@@ -1190,9 +1191,9 @@ pub async fn run() {
                 window_duration_ms
             );
             let webdriver_started = Instant::now();
-            bitfun_webdriver::maybe_start(app_handle.clone());
+            openbitfun_webdriver::maybe_start(app_handle.clone());
             builtin_browser_host::install(app_handle.clone());
-            bitfun_control_host::install(app_handle.clone());
+            openbitfun_control_host::install(app_handle.clone());
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "maybe_start_webdriver",
@@ -1271,7 +1272,7 @@ pub async fn run() {
             );
 
             // Reattach to a browser that is already running with remote
-            // debugging on, so a BitFun restart does not drop the connection.
+            // debugging on, so a OpenBitFun restart does not drop the connection.
             let step_started = Instant::now();
             api::browser_control_api::init_on_startup();
             startup_trace.record_elapsed_step(
@@ -1333,7 +1334,7 @@ pub async fn run() {
                 setup_duration_ms,
                 since_process_start_ms
             );
-            log::info!("BitFun Desktop started successfully");
+            log::info!("OpenBitFun Desktop started successfully");
             Ok(())
         })
         .on_window_event({
@@ -1504,10 +1505,10 @@ pub async fn run() {
             initialize_workspace_startup_state,
             get_available_tools,
             report_ide_control_result,
-            bitfun_control_host::mark_bitfun_control_surface_ready,
-            bitfun_control_host::mark_bitfun_control_surface_unready,
-            bitfun_control_host::product_control_invoke,
-            bitfun_control_host::report_bitfun_control_result,
+            openbitfun_control_host::mark_openbitfun_control_surface_ready,
+            openbitfun_control_host::mark_openbitfun_control_surface_unready,
+            openbitfun_control_host::product_control_invoke,
+            openbitfun_control_host::report_openbitfun_control_result,
             get_health_status,
             get_statistics,
             test_ai_connection,
@@ -1883,7 +1884,7 @@ pub async fn run() {
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
             api::remote_connect_api::account_delegate_to_paired,
-            // BitFun Page API
+            // OpenBitFun Page API
             api::pages_api::page_publish,
             api::pages_api::page_save_version,
             api::pages_api::page_list,
@@ -2112,14 +2113,14 @@ pub async fn run() {
 }
 
 async fn init_agentic_system() -> anyhow::Result<(
-    Arc<bitfun_core::agentic::coordination::ConversationCoordinator>,
-    Arc<bitfun_core::agentic::coordination::DialogScheduler>,
-    Arc<bitfun_core::agentic::events::EventQueue>,
-    Arc<bitfun_core::agentic::events::EventRouter>,
+    Arc<openbitfun_core::agentic::coordination::ConversationCoordinator>,
+    Arc<openbitfun_core::agentic::coordination::DialogScheduler>,
+    Arc<openbitfun_core::agentic::events::EventQueue>,
+    Arc<openbitfun_core::agentic::events::EventRouter>,
     Arc<AIClientFactory>,
-    Arc<bitfun_core::service::token_usage::TokenUsageService>,
+    Arc<openbitfun_core::service::token_usage::TokenUsageService>,
 )> {
-    use bitfun_core::agentic::*;
+    use openbitfun_core::agentic::*;
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 
@@ -2141,7 +2142,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     let tool_registry = tools::registry::get_global_tool_registry();
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
     let permission_request_manager =
-        bitfun_core::product_runtime::core_permission_request_manager()
+        openbitfun_core::product_runtime::core_permission_request_manager()
             .map_err(anyhow::Error::msg)?;
 
     let computer_use_host: ComputerUseHostRef =
@@ -2175,7 +2176,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     ));
 
     let runtime_ownership = Arc::new(
-        bitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(
+        openbitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(
             path_manager.as_ref(),
             "desktop",
         ),
@@ -2189,35 +2190,37 @@ async fn init_agentic_system() -> anyhow::Result<(
         runtime_ownership,
     ));
     coordinator.set_terminal_port(
-        bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
+        openbitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
     );
     coordinator.set_remote_exec_port(
-        bitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
+        openbitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
     );
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
 
     // Initialize token usage service and register subscriber
     let token_usage_service = Arc::new(
-        bitfun_core::service::token_usage::TokenUsageService::new(path_manager.clone())
+        openbitfun_core::service::token_usage::TokenUsageService::new(path_manager.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to initialize token usage service: {}", e))?,
     );
     let token_usage_subscriber = Arc::new(
-        bitfun_core::service::token_usage::TokenUsageSubscriber::new(token_usage_service.clone()),
+        openbitfun_core::service::token_usage::TokenUsageSubscriber::new(
+            token_usage_service.clone(),
+        ),
     );
     event_router.subscribe_internal("token_usage".to_string(), token_usage_subscriber);
     event_router.subscribe_internal(
         "session_context_usage".to_string(),
         Arc::new(
-            bitfun_core::agentic::session::SessionContextUsageSubscriber::new(
+            openbitfun_core::agentic::session::SessionContextUsageSubscriber::new(
                 session_manager.clone(),
             ),
         ),
     );
     event_router.subscribe_internal(
         "thread_goal_tokens".to_string(),
-        Arc::new(bitfun_core::agentic::goal_mode::ThreadGoalTokenSubscriber),
+        Arc::new(openbitfun_core::agentic::goal_mode::ThreadGoalTokenSubscriber),
     );
 
     log::info!("Token usage service initialized and subscriber registered");
@@ -2230,15 +2233,15 @@ async fn init_agentic_system() -> anyhow::Result<(
     coordination::set_global_scheduler(scheduler.clone());
     api::remote_connect_api::set_dialog_scheduler(scheduler.clone());
 
-    let cron_service = bitfun_core::service::cron::CronService::new(
+    let cron_service = openbitfun_core::service::cron::CronService::new(
         path_manager.clone(),
         coordinator.clone(),
         scheduler.clone(),
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to initialize cron service: {}", e))?;
-    bitfun_core::service::cron::set_global_cron_service(cron_service.clone());
-    let cron_subscriber = Arc::new(bitfun_core::service::cron::CronEventSubscriber::new(
+    openbitfun_core::service::cron::set_global_cron_service(cron_service.clone());
+    let cron_subscriber = Arc::new(openbitfun_core::service::cron::CronEventSubscriber::new(
         cron_service.clone(),
     ));
     event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
@@ -2270,7 +2273,7 @@ async fn init_agentic_system() -> anyhow::Result<(
 }
 
 async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow::Result<()> {
-    let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
+    let _ = openbitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
         ai_client_factory.clone(),
     );
 
@@ -2387,7 +2390,7 @@ pub(crate) async fn perform_process_exit_cleanup() -> bool {
     }
 
     log::info!("Desktop process graceful shutdown started");
-    match bitfun_core::plugin_host::shutdown_configured_plugin_host().await {
+    match openbitfun_core::plugin_host::shutdown_configured_plugin_host().await {
         Ok(Some(report)) => log::info!(
             "Desktop plugin host shutdown completed: generation={}, disposition={:?}, rpc_completed={}, exit_code={:?}, duration_ms={}",
             report.generation,
@@ -2402,7 +2405,7 @@ pub(crate) async fn perform_process_exit_cleanup() -> bool {
     if let Some(search_service) = get_global_workspace_search_service() {
         search_service.shutdown_blocking();
     }
-    bitfun_core::util::process_manager::cleanup_all_processes();
+    openbitfun_core::util::process_manager::cleanup_all_processes();
     api::remote_connect_api::cleanup_on_exit();
     PROCESS_EXIT_CLEANUP_COMPLETE.store(true, Ordering::Release);
     notify.notify_waiters();
@@ -2436,13 +2439,13 @@ pub(crate) fn perform_process_exit_cleanup_emergency() -> bool {
     if let Some(search_service) = get_global_workspace_search_service() {
         search_service.shutdown_blocking();
     }
-    bitfun_core::util::process_manager::cleanup_all_processes();
+    openbitfun_core::util::process_manager::cleanup_all_processes();
     api::remote_connect_api::cleanup_on_exit();
     true
 }
 
 fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
-    let path = bitfun_core::service::search::resolve_workspace_search_daemon_program_path();
+    let path = openbitfun_core::service::search::resolve_workspace_search_daemon_program_path();
     if let Some(path) = path.as_ref() {
         std::env::set_var("FLASHGREP_DAEMON_BIN", path);
     }
@@ -2469,7 +2472,7 @@ async fn deliver_event_to_webview(
         api::remote_connect_api::notify_session_changed(session_id, "");
     }
     let cursor = session_event_journal.record(&event);
-    let Some(mut projected) = bitfun_events::project_agentic_frontend_event(event) else {
+    let Some(mut projected) = openbitfun_events::project_agentic_frontend_event(event) else {
         log::warn!("Unhandled AgenticEvent type in desktop delivery");
         return;
     };
@@ -2541,8 +2544,8 @@ async fn flush_coalesced<D, F>(
 ///   flushed in place before processing continues. Text therefore waits at
 ///   most one window regardless of queue pressure.
 async fn event_loop_driver<D, F>(
-    event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
-    event_router: Arc<bitfun_core::agentic::events::EventRouter>,
+    event_queue: Arc<openbitfun_core::agentic::events::EventQueue>,
+    event_router: Arc<openbitfun_core::agentic::events::EventRouter>,
     mut deliver: D,
 ) where
     D: FnMut(AgenticEvent) -> F,
@@ -2681,8 +2684,8 @@ async fn event_loop_driver<D, F>(
 }
 
 fn start_event_loop_with_transport(
-    event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
-    event_router: Arc<bitfun_core::agentic::events::EventRouter>,
+    event_queue: Arc<openbitfun_core::agentic::events::EventQueue>,
+    event_router: Arc<openbitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
     session_event_journal: Arc<SessionEventJournal>,
 ) {
@@ -2699,7 +2702,7 @@ fn start_event_loop_with_transport(
 }
 
 fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilter) {
-    use bitfun_core::{infrastructure, service};
+    use openbitfun_core::{infrastructure, service};
 
     spawn_runtime_log_level_listener(default_log_level);
     spawn_workspace_search_feature_listener(app_handle.clone());
@@ -2714,7 +2717,7 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
 
         service::snapshot::initialize_snapshot_event_emitter(emitter.clone());
 
-        bitfun_core::service::initialize_file_watch_service(emitter.clone());
+        openbitfun_core::service::initialize_file_watch_service(emitter.clone());
 
         if let Err(e) = workspace_identity_watch_service
             .set_event_emitter(emitter.clone())
@@ -2732,7 +2735,7 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
 }
 
 async fn resolve_runtime_log_level(default_level: log::LevelFilter) -> log::LevelFilter {
-    use bitfun_core::service::config::get_global_config_service;
+    use openbitfun_core::service::config::get_global_config_service;
 
     if let Ok(config_service) = get_global_config_service().await {
         if let Ok(config_level) = config_service
@@ -2754,7 +2757,7 @@ async fn resolve_runtime_log_level(default_level: log::LevelFilter) -> log::Leve
 }
 
 fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
-    use bitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+    use openbitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 
     tokio::spawn(async move {
         if let Some(mut receiver) = subscribe_config_updates() {
@@ -2764,7 +2767,7 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
                         if let Some(level) = logging::parse_log_level(&new_level) {
                             logging::apply_runtime_log_level(level, "config_update_event");
                             if let Err(error) =
-                                bitfun_core::plugin_host::set_configured_plugin_host_log_level(
+                                openbitfun_core::plugin_host::set_configured_plugin_host_log_level(
                                     logging::level_to_str(level),
                                 )
                                 .await
@@ -2782,7 +2785,7 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
                         let level = resolve_runtime_log_level(default_level).await;
                         logging::apply_runtime_log_level(level, "config_reloaded");
                         if let Err(error) =
-                            bitfun_core::plugin_host::set_configured_plugin_host_log_level(
+                            openbitfun_core::plugin_host::set_configured_plugin_host_log_level(
                                 logging::level_to_str(level),
                             )
                             .await
@@ -2808,16 +2811,16 @@ fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
 
 fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
-) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
-    use bitfun_transport::TransportEmitter;
-    let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
+) -> Arc<dyn openbitfun_core::infrastructure::events::EventEmitter> {
+    use openbitfun_transport::TransportEmitter;
+    let inner: Arc<dyn openbitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
     let inner = api::remote_connect_api::wrap_peer_aware_emitter(inner);
     api::miniapp_agent_api::wrap_miniapp_agent_context_cleanup_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
-    use bitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+    use openbitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 
     let app_state: tauri::State<'_, api::AppState> = app_handle.state();
     let workspace_search_service = app_state.workspace_search_service.clone();
@@ -2825,7 +2828,7 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
 
     tokio::spawn(async move {
         let mut feature_enabled =
-            bitfun_core::service::search::workspace_search_feature_enabled().await;
+            openbitfun_core::service::search::workspace_search_feature_enabled().await;
 
         let Some(mut receiver) = subscribe_config_updates() else {
             log::warn!("Config update subscription unavailable for workspace search listener");
@@ -2836,7 +2839,7 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
             match receiver.recv().await {
                 Ok(ConfigUpdateEvent::AppUpdated) | Ok(ConfigUpdateEvent::ConfigReloaded) => {
                     let next_enabled =
-                        bitfun_core::service::search::workspace_search_feature_enabled().await;
+                        openbitfun_core::service::search::workspace_search_feature_enabled().await;
 
                     if next_enabled == feature_enabled {
                         continue;
@@ -2852,11 +2855,11 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                     }
 
                     let resolved_path = configure_workspace_search_daemon_env();
-                    if !bitfun_core::service::search::workspace_search_daemon_available() {
+                    if !openbitfun_core::service::search::workspace_search_daemon_available() {
                         log::warn!(
                             "Workspace search feature enabled but daemon is unavailable: path={:?}, hint={}",
                             resolved_path.as_ref().map(|path| path.display().to_string()),
-                            bitfun_core::service::search::workspace_search_daemon_missing_hint()
+                            openbitfun_core::service::search::workspace_search_daemon_missing_hint()
                         );
                         feature_enabled = true;
                         continue;
@@ -2865,7 +2868,7 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                     let current_workspace = workspace_path.read().await.clone();
                     if let Some(current_workspace) = current_workspace {
                         let workspace_str = current_workspace.to_string_lossy().to_string();
-                        if !bitfun_core::service::remote_ssh::workspace_state::is_remote_path(
+                        if !openbitfun_core::service::remote_ssh::workspace_state::is_remote_path(
                             workspace_str.trim(),
                         )
                         .await
@@ -2874,7 +2877,7 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                                 Ok(_) => {
                                     workspace_search_service.schedule_auto_index(
                                         &current_workspace,
-                                        bitfun_core::service::search::WorkspaceSearchAutoIndexPriority::Focused,
+                                        openbitfun_core::service::search::WorkspaceSearchAutoIndexPriority::Focused,
                                     ).await;
                                     log::info!(
                                         "Workspace search feature enabled; warmed current workspace: path={}",
@@ -2912,7 +2915,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(test)]
 mod event_loop_driver_tests {
     use super::*;
-    use bitfun_core::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
+    use openbitfun_core::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
 
     fn text_chunk(text: &str) -> AgenticEvent {
         AgenticEvent::TextChunk {

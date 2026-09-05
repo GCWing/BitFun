@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Shared helpers for BitFun relay-server deploy/start/stop/restart scripts.
+# Shared helpers for OpenBitFun Relay Server deploy/start/stop/restart scripts.
 # Sourced by the other *.sh files in this directory (not executed directly).
 
-CONTAINER_NAME="${CONTAINER_NAME:-bitfun-relay}"
-RELAY_ADMIN_DB="${RELAY_ADMIN_DB:-/app/data/bitfun_relay.db}"
+CONTAINER_NAME="${CONTAINER_NAME:-openbitfun-relay}"
+RELAY_ADMIN_DB="${RELAY_ADMIN_DB:-/app/data/openbitfun_relay.db}"
 RELAY_PORT="${RELAY_PORT:-9700}"
 RELAY_HEALTH_URL="${RELAY_HEALTH_URL:-http://127.0.0.1:${RELAY_PORT}/health}"
 COMPOSE=()
@@ -48,7 +48,7 @@ compose() {
   if [ "${#COMPOSE[@]}" -eq 0 ]; then
     resolve_compose
   fi
-  case "${BITFUN_DOCKER_MODE:-direct}" in
+  case "${OPENBITFUN_DOCKER_MODE:-direct}" in
     sudo)
       # Prefer Compose V2 via sudo docker when the daemon needs root.
       if sudo docker compose version >/dev/null 2>&1; then
@@ -67,16 +67,16 @@ compose() {
 }
 
 # Resolve how to talk to the Docker daemon for the current shell.
-# Sets BITFUN_DOCKER_MODE to: direct | sg | sudo
+# Sets OPENBITFUN_DOCKER_MODE to: direct | sg | sudo
 # Make DOCKER_CONFIG usable by the current user.
 #
 # A root-run Docker install (or an earlier `sudo -E docker`) can leave
-# ~/.bitfun/docker-config and its config.json owned by root, and every later
+# ~/.openbitfun/docker-config and its config.json owned by root, and every later
 # unprivileged docker call then reports
 #   WARNING: Error loading config file: .../config.json: permission denied
 # before misbehaving. Repair it, or fall back to a per-uid dir we can read.
 fix_docker_config() {
-  export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.bitfun/docker-config}"
+  export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.openbitfun/docker-config}"
   mkdir -p "$DOCKER_CONFIG" 2>/dev/null || true
   docker_config_usable() {
     [ -r "$DOCKER_CONFIG" ] && [ -w "$DOCKER_CONFIG" ] &&
@@ -92,7 +92,7 @@ fix_docker_config() {
       sudo chown -R "$(id -un):$(id -gn)" "$DOCKER_CONFIG" 2>/dev/null || true
   fi
   if ! docker_config_usable; then
-    DOCKER_CONFIG="$HOME/.bitfun/docker-config-$(id -u)"
+    DOCKER_CONFIG="$HOME/.openbitfun/docker-config-$(id -u)"
     export DOCKER_CONFIG
     mkdir -p "$DOCKER_CONFIG"
     echo "         Using DOCKER_CONFIG=$DOCKER_CONFIG instead."
@@ -120,19 +120,19 @@ resolve_docker_access() {
   fi
 
   if docker info >/dev/null 2>&1; then
-    BITFUN_DOCKER_MODE=direct
+    OPENBITFUN_DOCKER_MODE=direct
     return 0
   fi
   if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker \
     || getent group docker 2>/dev/null | grep -qE "(^|:|,)$(id -un)(,|$)"; then
     if sg docker -c 'docker info' >/dev/null 2>&1; then
-      BITFUN_DOCKER_MODE=sg
+      OPENBITFUN_DOCKER_MODE=sg
       echo "Note: using 'sg docker' (group membership not active in this session)."
       return 0
     fi
   fi
   if sudo -n docker info >/dev/null 2>&1 || sudo docker info >/dev/null 2>&1; then
-    BITFUN_DOCKER_MODE=sudo
+    OPENBITFUN_DOCKER_MODE=sudo
     echo "Note: using sudo for Docker access."
     return 0
   fi
@@ -143,7 +143,7 @@ resolve_docker_access() {
 }
 
 docker_cmd() {
-  case "${BITFUN_DOCKER_MODE:-direct}" in
+  case "${OPENBITFUN_DOCKER_MODE:-direct}" in
     sg) sg docker -c "$(shell_join docker "$@")" ;;
     sudo) sudo docker "$@" ;;
     *) docker "$@" ;;

@@ -5,7 +5,7 @@
 //! when these providers are used.
 
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
     WorkspaceMetadata, WorkspacePathKind, WorkspaceReader, WorkspaceServices, WorkspaceShell,
 };
@@ -354,7 +354,7 @@ pub fn local_workspace_services(workspace_root: String) -> WorkspaceServices {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_runtime_ports::WorkspaceFileSystem;
+    use openbitfun_runtime_ports::WorkspaceFileSystem;
 
     #[cfg(windows)]
     #[tokio::test]

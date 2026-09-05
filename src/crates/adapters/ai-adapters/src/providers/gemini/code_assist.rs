@@ -13,8 +13,8 @@ use crate::stream::handle_gemini_stream;
 use crate::trace::ModelExchangeTraceConfig;
 use crate::types::{Message, RemoteModelInfo, ToolDefinition};
 use anyhow::{anyhow, Result};
-use bitfun_core_types::errors::AiProviderError;
 use log::{debug, warn};
+use openbitfun_core_types::errors::AiProviderError;
 use reqwest::RequestBuilder;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> Reque
         if has_custom_user_agent {
             builder
         } else {
-            builder.header("User-Agent", "BitFun-CodeAssist/1.0")
+            builder.header("User-Agent", "OpenBitFun-CodeAssist/1.0")
         }
     })
 }
@@ -143,7 +143,7 @@ fn strip_thinking_tier(model: &str) -> (&str, Option<&str>) {
 }
 
 /// Resolves current Antigravity wire ids and keeps old Gemini CLI preview ids
-/// working for model configurations persisted by earlier BitFun releases.
+/// working for model configurations persisted by earlier OpenBitFun releases.
 fn resolve_antigravity_model(
     configured_model: &str,
     request: &serde_json::Value,

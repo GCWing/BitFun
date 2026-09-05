@@ -1,35 +1,37 @@
 use serde::{Deserialize, Serialize};
 
 use crate::agentic::core::message::{MemoryCitation, MemoryCitationEntry};
-use bitfun_agent_stream::{HiddenTextStreamParser, HiddenTextTag};
+use openbitfun_agent_stream::{HiddenTextStreamParser, HiddenTextTag};
 
-const BITFUN_MEMORY_CITATION_OPEN: &str = "<bitfun-mem-citation>";
-const BITFUN_MEMORY_CITATION_CLOSE: &str = "</bitfun-mem-citation>";
+const OPENBITFUN_MEMORY_CITATION_OPEN: &str = "<openbitfun-mem-citation>";
+const OPENBITFUN_MEMORY_CITATION_CLOSE: &str = "</openbitfun-mem-citation>";
 const CITATION_ENTRIES_OPEN: &str = "<citation_entries>";
 const CITATION_ENTRIES_CLOSE: &str = "</citation_entries>";
 const ROLLOUT_IDS_OPEN: &str = "<rollout_ids>";
 const ROLLOUT_IDS_CLOSE: &str = "</rollout_ids>";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BitFunMemoryCitation {
-    pub entries: Vec<BitFunMemoryCitationEntry>,
+pub struct OpenBitFunMemoryCitation {
+    pub entries: Vec<OpenBitFunMemoryCitationEntry>,
     pub rollout_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BitFunMemoryCitationEntry {
+pub struct OpenBitFunMemoryCitationEntry {
     pub path: String,
     pub line_start: u32,
     pub line_end: u32,
     pub note: Option<String>,
 }
 
-pub fn parse_bitfun_memory_citation(text: &str) -> Option<BitFunMemoryCitation> {
-    let (_, payloads) = strip_bitfun_memory_citations(text);
-    parse_bitfun_memory_citation_payloads(payloads)
+pub fn parse_openbitfun_memory_citation(text: &str) -> Option<OpenBitFunMemoryCitation> {
+    let (_, payloads) = strip_openbitfun_memory_citations(text);
+    parse_openbitfun_memory_citation_payloads(payloads)
 }
 
-pub fn parse_bitfun_memory_citation_payloads<I, S>(payloads: I) -> Option<BitFunMemoryCitation>
+pub fn parse_openbitfun_memory_citation_payloads<I, S>(
+    payloads: I,
+) -> Option<OpenBitFunMemoryCitation>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
@@ -52,18 +54,18 @@ where
     if entries.is_empty() && rollout_ids.is_empty() {
         None
     } else {
-        Some(BitFunMemoryCitation {
+        Some(OpenBitFunMemoryCitation {
             entries,
             rollout_ids,
         })
     }
 }
 
-pub fn strip_bitfun_memory_citations(text: &str) -> (String, Vec<String>) {
+pub fn strip_openbitfun_memory_citations(text: &str) -> (String, Vec<String>) {
     let mut parser = HiddenTextStreamParser::new(vec![HiddenTextTag::new(
         "memory_citation",
-        BITFUN_MEMORY_CITATION_OPEN,
-        BITFUN_MEMORY_CITATION_CLOSE,
+        OPENBITFUN_MEMORY_CITATION_OPEN,
+        OPENBITFUN_MEMORY_CITATION_CLOSE,
     )]);
     let mut parsed = parser.push_str(text);
     let tail = parser.finish();
@@ -77,8 +79,8 @@ pub fn strip_bitfun_memory_citations(text: &str) -> (String, Vec<String>) {
     (parsed.visible_text, payloads)
 }
 
-impl From<BitFunMemoryCitation> for MemoryCitation {
-    fn from(value: BitFunMemoryCitation) -> Self {
+impl From<OpenBitFunMemoryCitation> for MemoryCitation {
+    fn from(value: OpenBitFunMemoryCitation) -> Self {
         Self {
             entries: value
                 .entries
@@ -95,7 +97,7 @@ impl From<BitFunMemoryCitation> for MemoryCitation {
     }
 }
 
-fn parse_citation_entries(body: &str) -> Vec<BitFunMemoryCitationEntry> {
+fn parse_citation_entries(body: &str) -> Vec<OpenBitFunMemoryCitationEntry> {
     body.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
@@ -104,7 +106,7 @@ fn parse_citation_entries(body: &str) -> Vec<BitFunMemoryCitationEntry> {
             let note = note_part.strip_suffix(']')?.trim();
             let (path_with_range, line_range) = path_part.rsplit_once(':')?;
             let (line_start, line_end) = line_range.split_once('-')?;
-            Some(BitFunMemoryCitationEntry {
+            Some(OpenBitFunMemoryCitationEntry {
                 path: path_with_range.trim().to_string(),
                 line_start: line_start.trim().parse().ok()?,
                 line_end: line_end.trim().parse().ok()?,
@@ -137,9 +139,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_bitfun_memory_citation_extracts_entries_and_rollout_ids() {
-        let parsed = parse_bitfun_memory_citation(
-            "hello<bitfun-mem-citation><citation_entries>\nMEMORY.md:1-2|note=[x]\nrollout_summaries/foo.md:3-4|note=[y]\n</citation_entries>\n<rollout_ids>\nrollout-1\nrollout-2\nrollout-1\n</rollout_ids></bitfun-mem-citation>world",
+    fn parse_openbitfun_memory_citation_extracts_entries_and_rollout_ids() {
+        let parsed = parse_openbitfun_memory_citation(
+            "hello<openbitfun-mem-citation><citation_entries>\nMEMORY.md:1-2|note=[x]\nrollout_summaries/foo.md:3-4|note=[y]\n</citation_entries>\n<rollout_ids>\nrollout-1\nrollout-2\nrollout-1\n</rollout_ids></openbitfun-mem-citation>world",
         )
         .expect("citation should parse");
 
@@ -152,17 +154,18 @@ mod tests {
     }
 
     #[test]
-    fn strip_bitfun_memory_citations_removes_citation_blocks() {
-        let (visible, payloads) =
-            strip_bitfun_memory_citations("a<bitfun-mem-citation>one</bitfun-mem-citation>b");
+    fn strip_openbitfun_memory_citations_removes_citation_blocks() {
+        let (visible, payloads) = strip_openbitfun_memory_citations(
+            "a<openbitfun-mem-citation>one</openbitfun-mem-citation>b",
+        );
 
         assert_eq!(visible, "ab");
         assert_eq!(payloads, vec!["one".to_string()]);
     }
 
     #[test]
-    fn parse_bitfun_memory_citation_payloads_merges_blocks() {
-        let parsed = parse_bitfun_memory_citation_payloads(vec![
+    fn parse_openbitfun_memory_citation_payloads_merges_blocks() {
+        let parsed = parse_openbitfun_memory_citation_payloads(vec![
             "<citation_entries>\nMEMORY.md:1-2|note=[x]\n</citation_entries>\n<rollout_ids>\na\n</rollout_ids>",
             "<citation_entries>\nrollout_summaries/foo.md:3-4|note=[y]\n</citation_entries>\n<rollout_ids>\na\nb\n</rollout_ids>",
         ])
@@ -174,8 +177,9 @@ mod tests {
     }
 
     #[test]
-    fn strip_bitfun_memory_citations_auto_closes_unterminated_block() {
-        let (visible, payloads) = strip_bitfun_memory_citations("a<bitfun-mem-citation>one");
+    fn strip_openbitfun_memory_citations_auto_closes_unterminated_block() {
+        let (visible, payloads) =
+            strip_openbitfun_memory_citations("a<openbitfun-mem-citation>one");
 
         assert_eq!(visible, "a");
         assert_eq!(payloads, vec!["one".to_string()]);

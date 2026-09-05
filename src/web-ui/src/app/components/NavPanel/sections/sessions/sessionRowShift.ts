@@ -15,7 +15,7 @@ export const SESSION_ROW_SHIFT_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 /** Sub-pixel jumps are invisible; animating them only costs a paint. */
 const MIN_SHIFT_PX = 0.5;
 /** Selector for a top-level or child session row inside the inline list. */
-const SESSION_ROW_SELECTOR = '.bitfun-nav-panel__inline-item[data-session-id]';
+const SESSION_ROW_SELECTOR = '.openbitfun-nav-panel__inline-item[data-session-id]';
 
 export interface SessionRowShift {
   sessionId: string;

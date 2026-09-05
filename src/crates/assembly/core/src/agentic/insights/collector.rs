@@ -12,10 +12,10 @@ use crate::service::session_usage::{
     build_session_usage_report_from_turns, SessionUsageReportRequest,
 };
 use crate::service::snapshot::get_snapshot_manager_for_workspace;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_tools::ResolvedToolInvocation;
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use chrono::{DateTime, Local, Utc};
 use log::{debug, warn};
+use openbitfun_agent_tools::ResolvedToolInvocation;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -44,11 +44,11 @@ pub struct InsightsCollector;
 
 impl InsightsCollector {
     /// Stage 1: Collect session data from PersistenceManager across all workspaces
-    pub async fn collect(days: u32) -> BitFunResult<(BaseStats, Vec<SessionTranscript>)> {
+    pub async fn collect(days: u32) -> OpenBitFunResult<(BaseStats, Vec<SessionTranscript>)> {
         let path_manager = get_path_manager_arc();
         let pm = PersistenceManager::new(path_manager)?;
         let coordinator = get_global_coordinator().ok_or_else(|| {
-            BitFunError::service("Core coordinator is unavailable for Insights history reads")
+            OpenBitFunError::service("Core coordinator is unavailable for Insights history reads")
         })?;
         let now = SystemTime::now();
         let now_ms = system_time_to_unix_ms(now);

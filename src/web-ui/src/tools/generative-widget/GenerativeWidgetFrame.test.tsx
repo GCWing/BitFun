@@ -34,7 +34,7 @@ describe('GenerativeWidgetFrame shell', () => {
   });
 
   it('keeps iframe-local small text aligned with the host default token', () => {
-    const values = [...GENERATIVE_WIDGET_SHELL_HTML.matchAll(/--bf-font-size-sm:\s*([^;]+);/g)].map(
+    const values = [...GENERATIVE_WIDGET_SHELL_HTML.matchAll(/--openbitfun-font-size-sm:\s*([^;]+);/g)].map(
       (match) => match[1]?.trim()
     );
 
@@ -61,6 +61,6 @@ describe('GenerativeWidgetFrame shell', () => {
     expect(iframe.getAttribute('src')).toBe('about:blank');
     expect(iframe.getAttribute('srcdoc')).toBeNull();
     expect(iframe.getAttribute('sandbox')).toContain('allow-same-origin');
-    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('bitfun-widget');
+    expect(iframe.contentDocument?.documentElement.outerHTML).toContain('openbitfun-widget');
   });
 });

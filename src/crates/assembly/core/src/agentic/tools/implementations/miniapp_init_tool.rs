@@ -6,12 +6,12 @@ use crate::miniapp::try_get_global_miniapp_manager;
 use crate::miniapp::types::{
     FsPermissions, MiniAppPermissions, MiniAppSource, NetPermissions, ShellPermissions,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
 const SKELETON_HTML: &str = r#"<!DOCTYPE html>
-<html data-bf-appearance-mode="dark">
+<html data-openbitfun-appearance-mode="dark">
 <head><meta charset="utf-8"></head>
 <body>
   <div id="app"></div>
@@ -30,13 +30,13 @@ const SKELETON_WORKER_JS: &str = r#"// Node.js Worker — export methods callabl
 // };
 "#;
 
-const SKELETON_CSS: &str = r#"/* MiniApp skeleton — uses host theme via --bitfun-* variables */
+const SKELETON_CSS: &str = r#"/* MiniApp skeleton — uses host theme via --openbitfun-* variables */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  font-family: var(--openbitfun-font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif);
   font-size: 13px;
-  color: var(--bitfun-text, #e8e8e8);
-  background: var(--bitfun-bg, #121214);
+  color: var(--openbitfun-text, #e8e8e8);
+  background: var(--openbitfun-bg, #121214);
   min-height: 100vh;
 }
 #app { min-height: 100vh; }
@@ -62,7 +62,7 @@ impl Tool for InitMiniAppTool {
         "InitMiniApp"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(r#"Create a new MiniApp skeleton in the Toolbox. After creation, use Read/Write/Edit file tools to modify the source files directly.
 
 Input: name, description, icon, category. The tool creates the app directory and skeleton files:
@@ -111,7 +111,7 @@ Returns app_id and the app root directory. Use the root directory and file names
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let name = input
             .get("name")
             .and_then(Value::as_str)
@@ -127,14 +127,14 @@ Returns app_id and the app root directory. Use the root directory and file names
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let manager = try_get_global_miniapp_manager()
-            .ok_or_else(|| BitFunError::tool("MiniAppManager not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("MiniAppManager not initialized".to_string()))?;
 
         let name = input
             .get("name")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::validation("Missing required field: name"))?
+            .ok_or_else(|| OpenBitFunError::validation("Missing required field: name"))?
             .to_string();
         let description = input
             .get("description")
@@ -190,7 +190,7 @@ Returns app_id and the app root directory. Use the root directory and file names
                 context.workspace_root(),
             )
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to create MiniApp: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("Failed to create MiniApp: {}", e)))?;
 
         let path_manager = manager.path_manager();
         let app_dir = path_manager.miniapp_dir(&app.id);

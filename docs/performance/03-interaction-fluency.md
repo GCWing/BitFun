@@ -1,4 +1,4 @@
-# BitFun web-ui 交互流畅度(UI 响应性)审阅报告
+# OpenBitFun web-ui 交互流畅度(UI 响应性)审阅报告
 
 - 审阅范围:`src/web-ui`(React 18 + Vite + zustand v5 + Monaco + xterm + react-virtuoso)
 - 审阅方式:架构走读(入口/状态管理/场景) → 反模式全量 Grep 扫描(渲染、事件、CSS 三条线)→ 关键交互组件精读(聊天流式管线、输入框、终端、文件树、Monaco、Markdown 渲染)。**所有条目均已打开源码核对上下文**,文中行号以当前 main 分支(48a003b73)为准。
@@ -118,7 +118,7 @@
 
 ### F7(中)输入框 backdrop-filter 与布局属性 transition 叠加
 
-`ChatInput.scss:632-640`:`.bitfun-chat-input__box` 同时有 `backdrop-filter: blur(16px) saturate(1.2)` 和对 `padding/min-height/max-height/box-shadow` 的 0.32s transition。胶囊↔多行切换(由 F3 的测量高频驱动)期间每帧:重排(布局属性)+ 16px 背景重采样 + box-shadow 重绘。嵌套层另有 blur(8/12/20px)(`:659,668,689,1137`)。
+`ChatInput.scss:632-640`:`.openbitfun-chat-input__box` 同时有 `backdrop-filter: blur(16px) saturate(1.2)` 和对 `padding/min-height/max-height/box-shadow` 的 0.32s transition。胶囊↔多行切换(由 F3 的测量高频驱动)期间每帧:重排(布局属性)+ 16px 背景重采样 + box-shadow 重绘。嵌套层另有 blur(8/12/20px)(`:659,668,689,1137`)。
 
 **优化方案**:transition 收窄为 `border-radius, border-color, box-shadow`;高度变化改用容器 `grid-template-rows`/transform 方案或接受瞬时切换;评估把模糊降级为半透明底色(至少在低端机/省电模式)。
 

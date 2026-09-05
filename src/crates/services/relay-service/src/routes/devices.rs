@@ -470,9 +470,16 @@ mod tests {
     #[tokio::test]
     async fn device_list_hides_mobile_devices_and_keeps_unlabeled_rows() {
         let ctx = setup_app().await;
-        DeviceRow::upsert(&ctx.db, "phone", "owner", "HarmonyOS Phone", Some("mobile"), None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &ctx.db,
+            "phone",
+            "owner",
+            "HarmonyOS Phone",
+            Some("mobile"),
+            None,
+        )
+        .await
+        .unwrap();
         DeviceRow::upsert(&ctx.db, "mac", "owner", "MacBook", Some("desktop"), None)
             .await
             .unwrap();
@@ -490,9 +497,16 @@ mod tests {
     #[tokio::test]
     async fn a_login_without_a_kind_does_not_erase_a_known_one() {
         let ctx = setup_app().await;
-        DeviceRow::upsert(&ctx.db, "phone", "owner", "HarmonyOS Phone", Some("mobile"), None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &ctx.db,
+            "phone",
+            "owner",
+            "HarmonyOS Phone",
+            Some("mobile"),
+            None,
+        )
+        .await
+        .unwrap();
 
         // An older client build logs in again and reports no kind.
         DeviceRow::upsert(&ctx.db, "phone", "owner", "HarmonyOS Phone", None, None)

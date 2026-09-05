@@ -17,7 +17,7 @@
 use crate::workspace_search::line_hydration::{
     plan_wanted_lines, push_line_results, MAX_HYDRATED_LINE_COLUMNS,
 };
-use bitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchResult};
+use openbitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchResult};
 
 /// Ceiling on lines hydrated in one remote content search, applied on top of any
 /// caller limit.
@@ -48,7 +48,7 @@ const _: () = assert!(MAX_REMOTE_LINE_BYTES > MAX_HYDRATED_LINE_COLUMNS * 4);
 /// common one.
 const MAX_MANIFEST_COMMAND_BYTES: usize = 8 * 1024;
 
-const MANIFEST_HEREDOC_DELIMITER: &str = "__BITFUN_LINE_MANIFEST_EOF__";
+const MANIFEST_HEREDOC_DELIMITER: &str = "__OPENBITFUN_LINE_MANIFEST_EOF__";
 
 /// Reads the matched lines for one file, positionally aligned with its wanted
 /// line numbers.

@@ -1,15 +1,15 @@
 /**
  * Token usage indicator styles.
  */
-.bitfun-token-usage {
+.openbitfun-token-usage {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border-radius: 8px;
-  font-size: var(--bf-type-flow-micro-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-size: var(--openbitfun-type-flow-micro-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
   transition: opacity 140ms ease;
   cursor: default;
   white-space: nowrap;
@@ -20,7 +20,7 @@
   pointer-events: none;
 
   // Show on input focus
-  .bitfun-chat-input__box:focus-within & {
+  .openbitfun-chat-input__box:focus-within & {
     opacity: 1;
     pointer-events: auto;
   }
@@ -33,7 +33,7 @@
     right: 0;
     height: 6px;
     transform: translateY(-50%);
-    background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
     border-radius: 8px;
     overflow: hidden;
     transition:
@@ -70,25 +70,25 @@
   }
 
   &__percentage {
-    line-height: var(--bf-type-flow-meta-line-height);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    font-size: var(--bf-type-flow-micro-font-size);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
   }
 
   // Normal state (0-69%)
   &--normal {
-    color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
 
-    .bitfun-token-usage__progress-track {
-      background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 25%, transparent);
+    .openbitfun-token-usage__progress-track {
+      background: color-mix(in srgb, var(--openbitfun-color-accent-hover) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 25%, transparent);
     }
 
-    .bitfun-token-usage__progress-fill {
+    .openbitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bf-color-accent-hover) 30%, transparent),
-        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent)
+        color-mix(in srgb, var(--openbitfun-color-accent-hover) 30%, transparent),
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent)
       );
     }
 
@@ -96,51 +96,51 @@
 
   // Warning state (70-89%)
   &--warning {
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
 
-    .bitfun-token-usage__progress-track {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent);
+    .openbitfun-token-usage__progress-track {
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent);
     }
 
-    .bitfun-token-usage__progress-fill {
+    .openbitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent),
-        color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent)
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent),
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 50%, transparent)
       );
     }
   }
 
   &--critical {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
 
-    .bitfun-token-usage__progress-track {
-      background: color-mix(in srgb, var(--bf-color-status-danger-content) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-status-danger-content) 30%, transparent);
+    .openbitfun-token-usage__progress-track {
+      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 30%, transparent);
     }
 
-    .bitfun-token-usage__progress-fill {
+    .openbitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bf-color-status-danger-content) 45%, transparent),
-        color-mix(in srgb, var(--bf-color-status-danger-content) 75%, transparent)
+        color-mix(in srgb, var(--openbitfun-color-status-danger-content) 45%, transparent),
+        color-mix(in srgb, var(--openbitfun-color-status-danger-content) 75%, transparent)
       );
     }
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-token-usage:hover .bitfun-token-usage__hover-content {
+  .openbitfun-token-usage:hover .openbitfun-token-usage__hover-content {
     opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-token-usage,
-  .bitfun-token-usage__progress-track,
-  .bitfun-token-usage__progress-fill,
-  .bitfun-token-usage__hover-content {
+  .openbitfun-token-usage,
+  .openbitfun-token-usage__progress-track,
+  .openbitfun-token-usage__progress-fill,
+  .openbitfun-token-usage__hover-content {
     transition: none;
   }
 }

@@ -27,7 +27,7 @@
   },
   "transformation": {
     "kind": "builtin_provider_catalog_fallback",
-    "description": "Select every models.dev provider bound by the BitFun built-in provider overlay plus explicitly declared supplemental reasoning providers, retain the provider/model fields consumed by the provider and reasoning catalogs, normalize reasoning_options to arrays, and serialize deterministic pretty-printed JSON.",
+    "description": "Select every models.dev provider bound by the OpenBitFun built-in provider overlay plus explicitly declared supplemental reasoning providers, retain the provider/model fields consumed by the provider and reasoning catalogs, normalize reasoning_options to arrays, and serialize deterministic pretty-printed JSON.",
     "provider_overlay_path": "src/shared/ai-provider-catalog/providers.json",
     "supplemental_reasoning_provider_ids": [
       "openai"

@@ -636,11 +636,7 @@ pub const DEVICE_KIND_DESKTOP: &str = "desktop";
 pub const DEVICE_KIND_MOBILE: &str = "mobile";
 pub const DEVICE_KIND_WATCH: &str = "watch";
 
-pub const DEVICE_KINDS: [&str; 3] = [
-    DEVICE_KIND_DESKTOP,
-    DEVICE_KIND_MOBILE,
-    DEVICE_KIND_WATCH,
-];
+pub const DEVICE_KINDS: [&str; 3] = [DEVICE_KIND_DESKTOP, DEVICE_KIND_MOBILE, DEVICE_KIND_WATCH];
 
 pub fn is_valid_device_kind(kind: &str) -> bool {
     DEVICE_KINDS.contains(&kind)
@@ -1300,7 +1296,7 @@ impl SyncSettingsRow {
 
 // ── Pages (published static sites) ──────────────────────────────────────
 
-/// Visibility levels for a published BitFun Page.
+/// Visibility levels for a published OpenBitFun Page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PageVisibility {
     /// Only the page owner (with their token) can access.
@@ -2609,7 +2605,7 @@ mod tests {
     #[tokio::test]
     async fn legacy_global_device_schema_is_migrated_without_ambiguous_tokens() {
         let db_path = std::env::temp_dir().join(format!(
-            "bitfun-relay-device-migration-{}-{}.db",
+            "openbitfun-relay-device-migration-{}-{}.db",
             std::process::id(),
             rand::random::<u64>()
         ));
@@ -2700,9 +2696,16 @@ mod tests {
             .await
             .unwrap()
             .is_none());
-        DeviceRow::upsert(&migrated, "shared-install", "u1", "Alice laptop", None, None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &migrated,
+            "shared-install",
+            "u1",
+            "Alice laptop",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             DeviceRow::list_by_user(&migrated, "u1")
                 .await
@@ -2724,7 +2727,7 @@ mod tests {
     #[tokio::test]
     async fn reopening_a_database_keeps_the_device_kind_column_and_its_values() {
         let db_path = std::env::temp_dir().join(format!(
-            "bitfun-relay-device-kind-migration-{}-{}.db",
+            "openbitfun-relay-device-kind-migration-{}-{}.db",
             std::process::id(),
             rand::random::<u64>()
         ));
@@ -2734,9 +2737,16 @@ mod tests {
         UserRow::create(&first, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
             .await
             .unwrap();
-        DeviceRow::upsert(&first, "phone", "u1", "Phone", Some(DEVICE_KIND_MOBILE), None)
-            .await
-            .unwrap();
+        DeviceRow::upsert(
+            &first,
+            "phone",
+            "u1",
+            "Phone",
+            Some(DEVICE_KIND_MOBILE),
+            None,
+        )
+        .await
+        .unwrap();
         first.close().await;
 
         // The ALTER runs on every startup and must tolerate the column already
@@ -2752,7 +2762,7 @@ mod tests {
     #[tokio::test]
     async fn legacy_pages_receive_nonempty_authorization_generations() {
         let db_path = std::env::temp_dir().join(format!(
-            "bitfun-relay-page-generation-migration-{}-{}.db",
+            "openbitfun-relay-page-generation-migration-{}-{}.db",
             std::process::id(),
             rand::random::<u64>()
         ));

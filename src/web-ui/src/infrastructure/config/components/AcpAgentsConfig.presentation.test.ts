@@ -36,14 +36,14 @@ describe('ACP Agent settings presentation', () => {
     expect(source).toContain('function CapabilityStatusPill');
     expect(source).toContain('function AgentStatusPill');
     expect(source.match(/<CapabilityStatusPill/g)).toHaveLength(2);
-    expect(source).toContain('bitfun-acp-agents__registry-row--remote');
+    expect(source).toContain('openbitfun-acp-agents__registry-row--remote');
     expect(source).toContain('<Spinner size="xs" />');
     expect(source).not.toContain('LoaderCircle');
     expect(stylesheet).not.toContain('&__capability {');
     expect(stylesheet).not.toContain('&__status {');
     expect(stylesheet).not.toContain('&__summary-pill {');
     expect(stylesheet).not.toContain('border-radius: 999px;');
-    expect(stylesheet).not.toContain('@keyframes bitfun-acp-spin');
+    expect(stylesheet).not.toContain('@keyframes openbitfun-acp-spin');
   });
 
   it('separates local, SSH, and advanced JSON views with scoped draft guards', () => {
@@ -95,7 +95,7 @@ describe('ACP Agent settings presentation', () => {
     expect(remoteServer).not.toContain('border: 1px solid');
     expect(remoteServer).not.toContain('border-radius:');
     expect(remoteServer).toContain(
-      'border-top: 1px solid var(--bf-component-config-page-divider);',
+      'border-top: 1px solid var(--openbitfun-component-config-page-divider);',
     );
     expect(remoteAgentList).not.toContain('gap:');
     expect(remoteAgentList).not.toContain('padding:');

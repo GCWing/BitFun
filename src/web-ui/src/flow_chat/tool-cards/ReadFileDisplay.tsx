@@ -5,7 +5,7 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ReadFileToolCard } from '@bitfun/ui/flow-chat';
+import { ReadFileToolCard } from '@openbitfun/ui/flow-chat';
 import { isSessionViewPreviewText } from '../utils/sessionViewPreview';
 
 export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({

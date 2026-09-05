@@ -1,8 +1,8 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExecutionDomainId, ExternalSourceAssetKind, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceRecord, ExternalSourceScope, ProviderId, SourceKey,
 };
-use bitfun_product_domains::workspace_references::{
+use openbitfun_product_domains::workspace_references::{
     ExternalWorkspaceReferenceDefinition, ExternalWorkspaceReferenceProviderIdentity,
     ExternalWorkspaceReferenceProviderSnapshot,
 };

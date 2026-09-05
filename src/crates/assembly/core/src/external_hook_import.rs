@@ -3,23 +3,23 @@
 use crate::external_hooks::service_for;
 use crate::external_sources::normalize_workspace_root;
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
-use bitfun_product_domains::external_hook_import::{
+use futures::future::join_all;
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyOutcomeV1, ExternalHookImportApplyRequestV1,
     ExternalHookImportApplyResultV1, ExternalHookImportDispositionV1, ExternalHookImportHandlerV1,
     ExternalHookImportMutationRequestV1, ExternalHookImportMutationV1, ExternalHookImportPlanV1,
     ExternalHookImportSkippedV1, ExternalHookImportSnapshotV1, ImportedHookSourceSnapshotV1,
     ImportedHookSourceStateV1, PreparedExternalHookImport, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     ExternalSourceAssetKind, ExternalSourceDiagnostic, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourceProviderError,
     ExternalSourceScope, SourceKey,
 };
-use bitfun_services_integrations::hook_import::{
+use openbitfun_services_integrations::hook_import::{
     HookImportApply, HookImportRecord, HookImportStore, HookImportStoreError,
     HookImportStoreSnapshot, HookImportWrite,
 };
-use futures::future::join_all;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -319,8 +319,9 @@ pub(crate) async fn imported_hook_generation(
 
 pub(crate) async fn enabled_imported_hook_layers(
     workspace: Option<&Path>,
-) -> ExternalSourceOperationResult<Vec<bitfun_agent_runtime::native_hooks::AgentHookSettingsLayer>>
-{
+) -> ExternalSourceOperationResult<
+    Vec<openbitfun_agent_runtime::native_hooks::AgentHookSettingsLayer>,
+> {
     let stores = stores_for(workspace).await?;
     let mut layers = stores
         .user
@@ -520,7 +521,7 @@ fn hash_part(hasher: &mut Sha256, value: &[u8]) {
 
 async fn import_state(
     record: &HookImportRecord,
-    catalog_sources: &[bitfun_product_domains::external_hook_catalog::ExternalHookSource],
+    catalog_sources: &[openbitfun_product_domains::external_hook_catalog::ExternalHookSource],
     catalog_service: &Arc<crate::external_hooks::WorkspaceExternalHookCatalogService>,
     refresh_updates: bool,
 ) -> ImportedHookSourceStateV1 {
@@ -653,10 +654,10 @@ fn not_found(detail: &str) -> ExternalSourceOperationError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_agent_runtime::native_hooks::{
+    use openbitfun_agent_runtime::native_hooks::{
         AgentHookEvent, AgentHookScope, AgentHookSettings, AgentHookSettingsLayer,
     };
-    use bitfun_product_domains::external_hook_import::{
+    use openbitfun_product_domains::external_hook_import::{
         ExternalHookImportHandlerV1, ExternalHookImportSkippedV1,
     };
 

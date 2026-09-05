@@ -1,10 +1,10 @@
 //! MiniApp export engine — export to Electron or Tauri standalone app (skeleton).
 
-pub use bitfun_product_domains::miniapp::exporter::{
+pub use openbitfun_product_domains::miniapp::exporter::{
     build_export_check_result, ExportCheckResult, ExportOptions, ExportResult, ExportTarget,
 };
 
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ impl MiniAppExporter {
     }
 
     /// Check if export is possible (runtime, electron-builder, etc.).
-    pub async fn check(&self, _app_id: &str) -> BitFunResult<ExportCheckResult> {
+    pub async fn check(&self, _app_id: &str) -> OpenBitFunResult<ExportCheckResult> {
         let runtime = crate::miniapp::runtime_detect::detect_runtime();
         Ok(build_export_check_result(
             runtime.as_ref().map(|runtime| &runtime.kind),
@@ -40,8 +40,8 @@ impl MiniAppExporter {
         &self,
         _app_id: &str,
         _options: ExportOptions,
-    ) -> BitFunResult<ExportResult> {
-        Err(BitFunError::validation(
+    ) -> OpenBitFunResult<ExportResult> {
+        Err(OpenBitFunError::validation(
             "Export not yet implemented (skeleton)".to_string(),
         ))
     }

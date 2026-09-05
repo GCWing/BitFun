@@ -1,10 +1,10 @@
 use crate::session_state::SessionState;
-pub use bitfun_core_types::SessionKind;
-pub use bitfun_core_types::{
+pub use openbitfun_core_types::SessionKind;
+pub use openbitfun_core_types::{
     SessionAgentRouteOwner, SessionContinuationPolicy, SessionExecutionTarget,
     SessionModelBindingPolicy,
 };
-pub use bitfun_runtime_ports::PermissionMode;
+pub use openbitfun_runtime_ports::PermissionMode;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -149,7 +149,7 @@ impl Session {
     }
 }
 
-impl From<Session> for bitfun_runtime_ports::AgentSessionCreateResult {
+impl From<Session> for openbitfun_runtime_ports::AgentSessionCreateResult {
     fn from(session: Session) -> Self {
         let mut result = Self::new(session.session_id, session.session_name, session.agent_type);
         result.model_id = session.config.model_id;
@@ -202,7 +202,7 @@ pub struct SessionConfig {
     /// `workspace_path` on different hosts (e.g. two `/` roots).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
-    /// SSH config `host` for locating `~/.bitfun/remote_ssh/{host}/.../sessions` when disconnected.
+    /// SSH config `host` for locating `~/.openbitfun/remote_ssh/{host}/.../sessions` when disconnected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
     /// Model config ID used by this session (for token usage tracking)
@@ -220,7 +220,7 @@ pub struct SessionConfig {
     /// persisted session state. See `deserialize_optional_permission_mode`.
     #[serde(
         default,
-        deserialize_with = "bitfun_runtime_ports::deserialize_optional_permission_mode",
+        deserialize_with = "openbitfun_runtime_ports::deserialize_optional_permission_mode",
         skip_serializing_if = "Option::is_none"
     )]
     pub permission_mode: Option<PermissionMode>,
@@ -449,10 +449,10 @@ mod tests {
             Some("root-session")
         );
     }
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
-    use bitfun_runtime_ports::AgentSessionCreateResult;
+    use openbitfun_runtime_ports::AgentSessionCreateResult;
     use serde_json::json;
 
     #[test]
@@ -567,7 +567,7 @@ mod tests {
             root_path: "/worktrees/session_1".to_string(),
             base_ref: Some("main".to_string()),
             base_commit: Some("0123456789abcdef".to_string()),
-            branch: Some("bitfun/session_1".to_string()),
+            branch: Some("openbitfun/session_1".to_string()),
             lifecycle: Some(WorktreeLifecycle::Managed),
         };
         let session = Session::new_with_id(

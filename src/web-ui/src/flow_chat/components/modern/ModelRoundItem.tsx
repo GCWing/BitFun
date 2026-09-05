@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
+import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
@@ -182,9 +182,9 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
       <button
         type="button"
         className="model-round-item__attempt-diagnostic-copy"
-        data-bf-component="model-round-item"
-        data-bf-part="action"
-        data-bf-state={copiedValue === valueKey ? 'copied' : undefined}
+        data-openbitfun-component="model-round-item"
+        data-openbitfun-part="action"
+        data-openbitfun-state={copiedValue === valueKey ? 'copied' : undefined}
         onClick={() => void copyValue(value, valueKey)}
         aria-label={t('modelRound.attemptDiagnostics.copy')}
       >
@@ -201,9 +201,9 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
         <button
           type="button"
           className="model-round-item__attempt-diagnostic-toggle"
-          data-bf-component="model-round-item"
-          data-bf-part="diagnosticToggle"
-          data-bf-state={isOpen ? 'expanded' : undefined}
+          data-openbitfun-component="model-round-item"
+          data-openbitfun-part="diagnosticToggle"
+          data-openbitfun-state={isOpen ? 'expanded' : undefined}
           onClick={() => setIsOpen(current => !current)}
           aria-expanded={isOpen}
           aria-controls={detailsId}
@@ -217,19 +217,19 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
         <div
           id={detailsId}
           className="model-round-item__attempt-diagnostic-details"
-          data-bf-component="model-round-item"
-          data-bf-part="diagnosticDetails"
+          data-openbitfun-component="model-round-item"
+          data-openbitfun-part="diagnosticDetails"
         >
           <div
             className="model-round-item__attempt-diagnostic-category"
-            data-bf-component="model-round-item"
-            data-bf-part="diagnosticSection"
+            data-openbitfun-component="model-round-item"
+            data-openbitfun-part="diagnosticSection"
           >
             {attemptDiagnosticCategoryLabel(diagnostic, t)}
           </div>
 
           {diagnostic.rawError && (
-            <div className="model-round-item__attempt-diagnostic-section" data-bf-component="model-round-item" data-bf-part="diagnosticSection">
+            <div className="model-round-item__attempt-diagnostic-section" data-openbitfun-component="model-round-item" data-openbitfun-part="diagnosticSection">
               <div className="model-round-item__attempt-diagnostic-section-header">
                 <span>{t('modelRound.attemptDiagnostics.providerError')}</span>
                 {renderCopyButton(diagnostic.rawError, 'raw-error')}
@@ -244,8 +244,8 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
               <div
                 key={`${toolCall.toolId ?? toolCall.toolName ?? 'tool'}:${index}`}
                 className="model-round-item__attempt-diagnostic-section"
-                data-bf-component="model-round-item"
-                data-bf-part="diagnosticSection"
+                data-openbitfun-component="model-round-item"
+                data-openbitfun-part="diagnosticSection"
               >
                 <div className="model-round-item__attempt-diagnostic-tool-title">
                   {t('modelRound.attemptDiagnostics.toolArguments', { name: toolLabel })}
@@ -332,9 +332,9 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   return (
     <div
       className={className}
-      data-bf-component="model-round-item"
-      data-bf-part="subagent"
-      data-bf-state={!isCollapsed ? 'expanded' : undefined}
+      data-openbitfun-component="model-round-item"
+      data-openbitfun-part="subagent"
+      data-openbitfun-state={!isCollapsed ? 'expanded' : undefined}
     >
       <FlowItemRenderer
         item={taskItem}
@@ -593,10 +593,10 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         className={getModelRoundItemClassName({
           isVisuallyStreaming,
         })}
-        data-bf-component="model-round-item"
-        data-bf-part="root"
-        data-bf-status={round.status}
-        data-bf-state={isVisuallyStreaming ? 'streaming' : undefined}
+        data-openbitfun-component="model-round-item"
+        data-openbitfun-part="root"
+        data-openbitfun-status={round.status}
+        data-openbitfun-state={isVisuallyStreaming ? 'streaming' : undefined}
         data-testid="chat-assistant-message"
         data-turn-id={turnId}
         data-round-id={round.id}
@@ -617,13 +617,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         )}
 
         {historyRounds.length > 0 && (
-          <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
+          <div className="model-round-item__retry-history" data-openbitfun-component="model-round-item" data-openbitfun-part="retryHistory">
             <button
               type="button"
               className="model-round-item__retry-toggle"
-              data-bf-component="model-round-item"
-              data-bf-part="retryToggle"
-              data-bf-state={showRoundHistory ? 'expanded' : undefined}
+              data-openbitfun-component="model-round-item"
+              data-openbitfun-part="retryToggle"
+              data-openbitfun-state={showRoundHistory ? 'expanded' : undefined}
               onClick={() => setShowRoundHistory(current => !current)}
             >
               {showRoundHistory
@@ -648,18 +648,18 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               });
 
               return (
-                <div key={historyRound.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
-                  <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
+                <div key={historyRound.id} className="model-round-item__retry-attempt" data-openbitfun-component="model-round-item" data-openbitfun-part="retryAttempt">
+                  <div className="model-round-item__retry-attempt-label" data-openbitfun-component="model-round-item" data-openbitfun-part="attemptLabel">
                     {t('modelRound.roundRetryLabel', { index: historyIndex + 1 })}
                   </div>
                   {historyOlderAttempts.length > 0 && (
-                    <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
+                    <div className="model-round-item__retry-history" data-openbitfun-component="model-round-item" data-openbitfun-part="retryHistory">
                       <button
                         type="button"
                         className="model-round-item__retry-toggle"
-                        data-bf-component="model-round-item"
-                        data-bf-part="retryToggle"
-                        data-bf-state={showHistoryRoundAttempts ? 'expanded' : undefined}
+                        data-openbitfun-component="model-round-item"
+                        data-openbitfun-part="retryToggle"
+                        data-openbitfun-state={showHistoryRoundAttempts ? 'expanded' : undefined}
                         onClick={() => toggleHistoryRoundAttempts(historyRound.id)}
                       >
                         {showHistoryRoundAttempts
@@ -676,8 +676,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                         });
 
                         return (
-                          <div key={attempt.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
-                            <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
+                          <div key={attempt.id} className="model-round-item__retry-attempt" data-openbitfun-component="model-round-item" data-openbitfun-part="retryAttempt">
+                            <div className="model-round-item__retry-attempt-label" data-openbitfun-component="model-round-item" data-openbitfun-part="attemptLabel">
                               <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
                               {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                             </div>
@@ -703,13 +703,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         )}
 
         {historicalAttempts.length > 0 && (
-          <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
+          <div className="model-round-item__retry-history" data-openbitfun-component="model-round-item" data-openbitfun-part="retryHistory">
             <button
               type="button"
               className="model-round-item__retry-toggle"
-              data-bf-component="model-round-item"
-              data-bf-part="retryToggle"
-              data-bf-state={showRetryHistory ? 'expanded' : undefined}
+              data-openbitfun-component="model-round-item"
+              data-openbitfun-part="retryToggle"
+              data-openbitfun-state={showRetryHistory ? 'expanded' : undefined}
               onClick={() => setShowRetryHistory(current => !current)}
             >
               {showRetryHistory
@@ -726,8 +726,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               });
 
               return (
-                <div key={attempt.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
-                  <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
+                <div key={attempt.id} className="model-round-item__retry-attempt" data-openbitfun-component="model-round-item" data-openbitfun-part="retryAttempt">
+                  <div className="model-round-item__retry-attempt-label" data-openbitfun-component="model-round-item" data-openbitfun-part="attemptLabel">
                     <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
                     {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                   </div>
@@ -751,8 +751,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         {canvasArtifactItems.length > 0 && (
           <div
             className="model-round-item__canvas-attachments"
-            data-bf-component="model-round-item"
-            data-bf-part="canvasAttachments"
+            data-openbitfun-component="model-round-item"
+            data-openbitfun-part="canvasAttachments"
           >
             {canvasArtifactItems.map((item, index) => (
               <FlowItemRenderer
@@ -770,24 +770,24 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         {shouldReserveFooter && (
           <div
             className={`model-round-item__footer${shouldRevealFooter ? '' : ' model-round-item__footer--pending'}`}
-            data-bf-component="model-round-item"
-            data-bf-part="footer"
-            data-bf-state={shouldRevealFooter ? undefined : 'pending'}
+            data-openbitfun-component="model-round-item"
+            data-openbitfun-part="footer"
+            data-openbitfun-state={shouldRevealFooter ? undefined : 'pending'}
             aria-hidden={!shouldRevealFooter}
           >
             {completionMetaItems.length > 0 && (
               <div
                 className="model-round-item__meta"
-                data-bf-component="model-round-item"
-                data-bf-part="meta"
+                data-openbitfun-component="model-round-item"
+                data-openbitfun-part="meta"
                 aria-label={t('modelRound.meta.label')}
               >
                 {completionMetaItems.map(item => (
                   <span
                     key={item.key}
                     className="model-round-item__meta-item"
-                    data-bf-component="model-round-item"
-                    data-bf-part="metaItem"
+                    data-openbitfun-component="model-round-item"
+                    data-openbitfun-part="metaItem"
                     aria-label={`${item.label}: ${item.value}`}
                   >
                     {item.value}
@@ -810,7 +810,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   aria-expanded={isCopyMenuOpen}
                   aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
                   data-testid="model-round-copy-btn"
-                 data-bf-component="model-round-item" data-bf-part="action" data-bf-state={copied ? 'copied' : undefined}>
+                 data-openbitfun-component="model-round-item" data-openbitfun-part="action" data-openbitfun-state={copied ? 'copied' : undefined}>
                   <Icon name={copied ? 'check-line' : 'duplicate'} size="sm" />
                 </button>
               </Tooltip>
@@ -820,7 +820,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   ref={copyMenuRef}
                   className="model-round-item__copy-menu"
                   data-testid="model-round-copy-menu"
-                  data-bf-placement={copyMenuLayout?.placement ?? 'top'}
+                  data-openbitfun-placement={copyMenuLayout?.placement ?? 'top'}
                   style={{
                     top: `${copyMenuLayout?.top ?? 0}px`,
                     left: `${copyMenuLayout?.left ?? 0}px`,
@@ -939,7 +939,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
       const toolItem = item as FlowToolItem;
 
       return (
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool" data-bf-component="model-round-item" data-bf-part="toolItem">
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool" data-openbitfun-component="model-round-item" data-openbitfun-part="toolItem">
           <FlowToolCard
             toolItem={toolItem}
             isLastItem={isLastItem}

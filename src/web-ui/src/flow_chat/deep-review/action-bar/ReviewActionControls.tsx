@@ -1,8 +1,8 @@
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Play, RotateCcw } from 'lucide-react';
-import { Tooltip, Icon } from '@bitfun/ui';
+import { Tooltip, Icon } from '@openbitfun/ui';
 import type { ReviewActionPhase } from '../../store/deepReviewActionBarStore';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 

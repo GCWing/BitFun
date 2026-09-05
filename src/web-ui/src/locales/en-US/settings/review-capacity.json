@@ -2,7 +2,7 @@
   "loading": "Loading Review capacity...",
   "desktopOnly": {
     "title": "Desktop only",
-    "description": "Review capacity settings are available in the BitFun desktop app. Review is not available on this surface."
+    "description": "Review capacity settings are available in the OpenBitFun desktop app. Review is not available on this surface."
   },
   "error": {
     "title": "Review capacity unavailable",

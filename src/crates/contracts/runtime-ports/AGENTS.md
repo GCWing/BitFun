@@ -2,12 +2,12 @@
 
 Scope: this guide applies to `src/crates/contracts/runtime-ports`.
 
-`bitfun-runtime-ports` owns stable runtime-facing ports, DTOs, and capability
+`openbitfun-runtime-ports` owns stable runtime-facing ports, DTOs, and capability
 facts. It is an interface crate, not a runtime implementation crate.
 
 ## Guardrails
 
-- Do not depend on `bitfun-core`, app crates, Tauri, concrete service crates,
+- Do not depend on `openbitfun-core`, app crates, Tauri, concrete service crates,
   AI adapters, transport adapters, or tool implementations.
 - Keep ports narrow and typed. Avoid untyped service locators, global registries,
   or catch-all context structs.
@@ -52,10 +52,10 @@ facts. It is an interface crate, not a runtime implementation crate.
 ## Verification
 
 ```bash
-cargo check --locked -p bitfun-runtime-ports --no-default-features
-cargo test --locked -p bitfun-runtime-ports --no-default-features --features agent-api --lib
-cargo test --locked -p bitfun-runtime-ports --no-default-features --features workspace-ports --test session_store_contracts
-cargo test --locked -p bitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts
+cargo check --locked -p openbitfun-runtime-ports --no-default-features
+cargo test --locked -p openbitfun-runtime-ports --no-default-features --features agent-api --lib
+cargo test --locked -p openbitfun-runtime-ports --no-default-features --features workspace-ports --test session_store_contracts
+cargo test --locked -p openbitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts
 node scripts/check-core-boundaries.mjs
 ```
 

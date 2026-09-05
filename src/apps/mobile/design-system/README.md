@@ -1,4 +1,4 @@
-# BitFun Mobile Design System
+# OpenBitFun Mobile Design System
 
 This directory is the source-neutral visual contract for the native HarmonyOS,
 Android, and iOS applications. It owns stable visual facts and deterministic
@@ -63,21 +63,21 @@ The native galleries can be launched without changing the normal app path:
 
 ```bash
 # Android (after installing the debug APK)
-adb shell am force-stop com.bitfun.mobile.debug
+adb shell am force-stop com.openbitfun.mobile.debug
 adb shell am start \
-  -n com.bitfun.mobile.debug/com.bitfun.mobile.app.MainActivity \
-  --ez bitfun.design_preview true \
-  --es bitfun.design_scenario connected-conversation
+  -n com.openbitfun.mobile.debug/com.openbitfun.mobile.app.MainActivity \
+  --ez openbitfun.design_preview true \
+  --es openbitfun.design_scenario connected-conversation
 
 # iOS Simulator (after installing the simulator app)
-xcrun simctl launch booted com.bitfun.mobile.ios \
+xcrun simctl launch booted com.openbitfun.mobile.ios \
   --design-preview connected-conversation
 
 # HarmonyOS emulator (after installing a locally signed debug HAP)
-hdc -t <emulator-tcp-target> shell aa force-stop com.bitfun.app
+hdc -t <emulator-tcp-target> shell aa force-stop com.openbitfun.app
 hdc -t <emulator-tcp-target> shell aa start \
-  -a EntryAbility -b com.bitfun.app \
-  --ps bitfunDesignPreview connected-conversation
+  -a EntryAbility -b com.openbitfun.app \
+  --ps openbitfunDesignPreview connected-conversation
 ```
 
 Valid scenario ids come from `scenarios/mobile-preview-scenarios.json`. Save

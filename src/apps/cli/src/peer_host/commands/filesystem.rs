@@ -5,7 +5,9 @@ use serde_json::{json, Value};
 use crate::peer_host::args::{get_string, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
 
-fn directory_nodes_to_json(nodes: Vec<bitfun_core::infrastructure::FileTreeNode>) -> Vec<Value> {
+fn directory_nodes_to_json(
+    nodes: Vec<openbitfun_core::infrastructure::FileTreeNode>,
+) -> Vec<Value> {
     nodes
         .into_iter()
         .map(|node| {

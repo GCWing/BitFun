@@ -2,11 +2,11 @@ import { Want } from '@kit.AbilityKit';
 import { Driver, ON, abilityDelegatorRegistry } from '@kit.TestKit';
 import { describe, it, expect } from '@ohos/hypium';
 
-const APP_BUNDLE: string = 'com.bitfun.app';
+const APP_BUNDLE: string = 'com.openbitfun.app';
 const APP_ABILITY: string = 'EntryAbility';
 
 export default function deviceSmokeTest() {
-  describe('BitFunDeviceSmoke', () => {
+  describe('OpenBitFunDeviceSmoke', () => {
     it('opens the home surface and remote conversation entry', 0, async () => {
       const want: Want = {
         bundleName: APP_BUNDLE,
@@ -16,7 +16,7 @@ export default function deviceSmokeTest() {
       const driver = Driver.create();
       await driver.delayMs(800);
 
-      const homeTitle = await driver.findComponent(ON.text('BitFun'));
+      const homeTitle = await driver.findComponent(ON.text('OpenBitFun'));
       expect(homeTitle !== undefined).assertTrue();
 
       await driver.click(130, 180);

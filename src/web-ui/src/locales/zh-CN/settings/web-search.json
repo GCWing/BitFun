@@ -5,7 +5,7 @@
     "exaMcpFree": "Exa MCP（免费，无需 API Key）",
     "exaSearchApi": "Exa Search API",
     "tavily": "Tavily Search API",
-    "bitfunSearchHttp": "BitFun Search HTTP Protocol"
+    "openbitfunSearchHttp": "OpenBitFun Search HTTP Protocol"
   },
   "auth": {
     "none": "无需认证",
@@ -17,8 +17,8 @@
       "title": "搜索服务"
     },
     "http": {
-      "title": "BitFun Search HTTP Protocol v1",
-      "description": "连接实现固定 BitFun 协议的自建或企业内部端点。"
+      "title": "OpenBitFun Search HTTP Protocol v1",
+      "description": "连接实现固定 OpenBitFun 协议的自建或企业内部端点。"
     },
     "protocol": {
       "title": "协议说明",
@@ -70,12 +70,12 @@
     },
     "error": {
       "title": "错误响应",
-      "description": "非 2xx 响应可以返回以下结构；即使没有该结构，BitFun 也会按 HTTP 状态码识别常见错误。",
+      "description": "非 2xx 响应可以返回以下结构；即使没有该结构，OpenBitFun 也会按 HTTP 状态码识别常见错误。",
       "codes": "支持的 code："
     },
     "notes": {
-      "resultHandling": "服务可以返回少于 maxResults 的结果；BitFun 会校验、去重并截断结果，响应根的未知字段会被忽略。",
-      "transportLimits": "BitFun 不跟随重定向，请求超时为 60 秒，读取响应的上限为 1 MiB。"
+      "resultHandling": "服务可以返回少于 maxResults 的结果；OpenBitFun 会校验、去重并截断结果，响应根的未知字段会被忽略。",
+      "transportLimits": "OpenBitFun 不跟随重定向，请求超时为 60 秒，读取响应的上限为 1 MiB。"
     }
   },
   "actions": {

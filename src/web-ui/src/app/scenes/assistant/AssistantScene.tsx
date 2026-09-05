@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useMemo, useEffect } from 'react';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { WorkspaceKind } from '@/shared/types';
-import { Spinner } from '@bitfun/ui';
+import { Spinner } from '@openbitfun/ui';
 import { useMyAgentStore } from '../my-agent/myAgentStore';
 import './AssistantScene.scss';
 
@@ -68,13 +68,13 @@ const AssistantScene: React.FC = () => {
   ]);
 
   return (
-    <div className="bitfun-assistant-scene" data-bf-scene="assistant" data-bf-part="root">
+    <div className="openbitfun-assistant-scene" data-openbitfun-scene="assistant" data-openbitfun-part="root">
       <Suspense
         fallback={(
           <div
-            className="bitfun-assistant-scene__loading"
-            data-bf-scene="assistant"
-            data-bf-part="loading"
+            className="openbitfun-assistant-scene__loading"
+            data-openbitfun-scene="assistant"
+            data-openbitfun-part="loading"
             role="status"
             aria-busy="true"
             aria-label={t('loading.scenes')}

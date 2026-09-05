@@ -1,7 +1,9 @@
 //! DTO Module
 
-use bitfun_core::service::remote_ssh::{normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST};
-use bitfun_core::service::workspace::manager::WorkspaceKind;
+use openbitfun_core::service::remote_ssh::{
+    normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
+};
+use openbitfun_core::service::workspace::manager::WorkspaceKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -90,7 +92,7 @@ pub struct WorkspaceInfoDto {
 
 impl WorkspaceInfoDto {
     pub fn from_workspace_info(
-        info: &bitfun_core::service::workspace::manager::WorkspaceInfo,
+        info: &openbitfun_core::service::workspace::manager::WorkspaceInfo,
     ) -> Self {
         let connection_id = info
             .metadata
@@ -159,7 +161,7 @@ impl WorkspaceInfoDto {
 
 impl WorkspaceIdentityDto {
     pub fn from_workspace_identity(
-        identity: &bitfun_core::service::workspace::manager::WorkspaceIdentity,
+        identity: &openbitfun_core::service::workspace::manager::WorkspaceIdentity,
     ) -> Self {
         Self {
             name: identity.name.clone(),
@@ -173,7 +175,7 @@ impl WorkspaceIdentityDto {
 
 impl WorkspaceWorktreeInfoDto {
     pub fn from_workspace_worktree_info(
-        info: &bitfun_core::service::workspace::manager::WorkspaceWorktreeInfo,
+        info: &openbitfun_core::service::workspace::manager::WorkspaceWorktreeInfo,
     ) -> Self {
         Self {
             path: info.path.clone(),
@@ -185,7 +187,7 @@ impl WorkspaceWorktreeInfoDto {
 }
 
 impl RelatedPathDto {
-    pub fn from_related_path(path: &bitfun_core::service::workspace::RelatedPath) -> Self {
+    pub fn from_related_path(path: &openbitfun_core::service::workspace::RelatedPath) -> Self {
         Self {
             path: path.path.clone(),
             description: path.description.clone(),
@@ -195,9 +197,9 @@ impl RelatedPathDto {
 
 impl WorkspaceTypeDto {
     pub fn from_workspace_type(
-        workspace_type: &bitfun_core::service::workspace::manager::WorkspaceType,
+        workspace_type: &openbitfun_core::service::workspace::manager::WorkspaceType,
     ) -> Self {
-        use bitfun_core::service::workspace::manager::WorkspaceType;
+        use openbitfun_core::service::workspace::manager::WorkspaceType;
         match workspace_type {
             WorkspaceType::RustProject
             | WorkspaceType::NodeProject
@@ -213,9 +215,9 @@ impl WorkspaceTypeDto {
 
 impl WorkspaceKindDto {
     pub fn from_workspace_kind(
-        workspace_kind: &bitfun_core::service::workspace::manager::WorkspaceKind,
+        workspace_kind: &openbitfun_core::service::workspace::manager::WorkspaceKind,
     ) -> Self {
-        use bitfun_core::service::workspace::manager::WorkspaceKind;
+        use openbitfun_core::service::workspace::manager::WorkspaceKind;
         match workspace_kind {
             WorkspaceKind::Normal => WorkspaceKindDto::Normal,
             WorkspaceKind::Assistant => WorkspaceKindDto::Assistant,
@@ -226,7 +228,7 @@ impl WorkspaceKindDto {
 
 impl ProjectStatisticsDto {
     pub fn from_workspace_statistics(
-        stats: &bitfun_core::service::workspace::manager::WorkspaceStatistics,
+        stats: &openbitfun_core::service::workspace::manager::WorkspaceStatistics,
     ) -> Self {
         Self {
             total_files: stats.total_files,

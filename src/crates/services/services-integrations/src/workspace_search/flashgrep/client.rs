@@ -9,7 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use bitfun_services_core::{process_manager, process_tree::ProcessTreeChild};
+use openbitfun_services_core::{process_manager, process_tree::ProcessTreeChild};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
     process::{ChildStderr, ChildStdin, ChildStdout},
@@ -33,7 +33,7 @@ use super::{
     FLASHGREP_LOG_TARGET,
 };
 
-const CLIENT_NAME: &str = "bitfun-workspace-search";
+const CLIENT_NAME: &str = "openbitfun-workspace-search";
 const REPO_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);

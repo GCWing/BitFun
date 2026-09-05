@@ -1,14 +1,14 @@
 //! Managed runtime service compatibility adapter.
 //!
 //! Command resolution and PATH merge rules are owned by
-//! `bitfun-services-core`; core only supplies the product-managed runtime root.
+//! `openbitfun-services-core`; core only supplies the product-managed runtime root.
 
 use crate::infrastructure::get_path_manager_arc;
-use crate::util::errors::BitFunResult;
-use bitfun_services_core::managed_runtime::ManagedRuntimeResolver;
+use crate::util::errors::OpenBitFunResult;
+use openbitfun_services_core::managed_runtime::ManagedRuntimeResolver;
 use std::path::{Path, PathBuf};
 
-pub use bitfun_services_core::managed_runtime::{
+pub use openbitfun_services_core::managed_runtime::{
     ResolvedCommand, RuntimeCommandCapability, RuntimeSource,
 };
 
@@ -18,7 +18,7 @@ pub struct RuntimeManager {
 }
 
 impl RuntimeManager {
-    pub fn new() -> BitFunResult<Self> {
+    pub fn new() -> OpenBitFunResult<Self> {
         let pm = get_path_manager_arc();
         Ok(Self {
             inner: ManagedRuntimeResolver::new(pm.managed_runtimes_dir()),
@@ -76,7 +76,7 @@ mod tests {
     fn temp_runtime_root() -> PathBuf {
         let mut p = std::env::temp_dir();
         let id = format!(
-            "bitfun-core-runtime-adapter-test-{}-{}",
+            "openbitfun-core-runtime-adapter-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

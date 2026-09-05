@@ -17,7 +17,7 @@ Server**。因此，Rich Client 这一产品分类不再意味着所有部署都
 wire。
 
 - Embedded Host 直接持有产品组装得到的 `AgentRuntime` 和必要的 owner/service，
-  通过 Rust 类型调用 Runtime 方法；不创建 `BitfunAppServer`、
+  通过 Rust 类型调用 Runtime 方法；不创建 `OpenBitFunAppServer`、
   `AppServerClient` 或 in-memory transport。
 - Embedded TUI 仍只依赖 app-local composition。TUI controller 不直接依赖
   Runtime 实现或私有 IPC operation；`CliAgentRuntimeClient` 承载
@@ -67,8 +67,8 @@ Embedded 已选择 B/C 的受限组合，A 不再是 Embedded 默认方案。Sha
 | Embedded TUI | 已使用 `CliAgentRuntimeClient` 通过 Rust Runtime SDK typed facade 调用同进程 `AgentRuntime`；其他能力由 controller 直接调用已有 owner/service API | 保持 direct-runtime 为 Embedded 默认，不恢复 App Server client/server、in-memory transport、wire handshake、catch-all TUI client、surface service 或统一 TUI management 模块 |
 | Shared TUI | 仍通过私有 Runtime IPC v17 连接独立 Runtime Host | 保留 v17；是否迁入 Shared App Server 由可靠性、安全、性能和回滚证据决定 |
 | Desktop GUI | 主要仍使用 Tauri command 和桌面事件投影 | Embedded 时使用 direct Runtime adapter；需要连接边界时使用 App Server，Tauri 保留平台能力 |
-| Web Host | 当前 Server 已组装 Embedded Runtime，WebSocket 直接承载 `BitfunAppServer`；仅适用于 loopback 单用户模式 | 补齐连接身份、作用域绑定和 Host allowlist 后才能扩展部署范围 |
-| CLI stdio Server Host | `bitfun server` 命令在 `src/apps/cli/src/server_host.rs` 独立装配 stdio `BitfunAppServer`；该装配点是 CLI 唯一允许依赖 App Server implementation 的位置。Host 注入 canonical cwd workspace scope、显式 method allowlist、transport limits 与 stdin EOF disconnect 信号 | 保持独立 Host 表面：stdout 只承载 JSON-RPC line 流量，frame 超限 fail closed，断连后取消在途 Turn 并确定性退出；TUI/controller/Headless CLI 不依赖 App Server |
+| Web Host | 当前 Server 已组装 Embedded Runtime，WebSocket 直接承载 `OpenBitFunAppServer`；仅适用于 loopback 单用户模式 | 补齐连接身份、作用域绑定和 Host allowlist 后才能扩展部署范围 |
+| CLI stdio Server Host | `openbitfun server` 命令在 `src/apps/cli/src/server_host.rs` 独立装配 stdio `OpenBitFunAppServer`；该装配点是 CLI 唯一允许依赖 App Server implementation 的位置。Host 注入 canonical cwd workspace scope、显式 method allowlist、transport limits 与 stdin EOF disconnect 信号 | 保持独立 Host 表面：stdout 只承载 JSON-RPC line 流量，frame 超限 fail closed，断连后取消在途 Turn 并确定性退出；TUI/controller/Headless CLI 不依赖 App Server |
 | App Server protocol/client | 已拆为 behavior-light crate，已有版本、能力、限制、错误和部分事件恢复类型 | 补齐 Host 注入能力、可靠性语义及跨 transport 合同测试 |
 | App Server server | 已注册 app、agent、session、permission、TUI/workspace、git、config 和 i18n handler | 按真实 owner 和 Host 装配收窄能力，不以已存在 DTO 代替可用性证据 |
 
@@ -111,7 +111,7 @@ GUI、Web 和 TUI 若分别围绕 Tauri command、WebSocket route、CLI/Core 直
 - UI 组件与 Tauri、Core singleton 或私有 Runtime IPC 绑定，无法验证跨入口行为等价。
 - “handler 已存在”“DTO 已生成”或“能力被硬编码为 available”被误当成端到端能力已交付。
 
-BitFun 的目标是让 direct adapter 与连接型 App Server adapter 共享可验证的产品后端行为合同，同时保持业务 owner 平台无关。App Server 为需要连接边界的 Host 提供可版本化、可生成 client 的 wire；它不再是 Embedded 的统一 transport，也不统一 GUI/TUI renderer、布局、键位、窗口、终端或 controller-local effect。
+OpenBitFun 的目标是让 direct adapter 与连接型 App Server adapter 共享可验证的产品后端行为合同，同时保持业务 owner 平台无关。App Server 为需要连接边界的 Host 提供可版本化、可生成 client 的 wire；它不再是 Embedded 的统一 transport，也不统一 GUI/TUI renderer、布局、键位、窗口、终端或 controller-local effect。
 
 ## 3. 范围与非目标
 
@@ -287,7 +287,7 @@ Tauri 继续拥有窗口、菜单、系统托盘、文件选择器、剪贴板�
 
 ## 9. Web、stdio 与远程 Host
 
-CLI 的 `bitfun server` 是同一 App Server 合同的独立 stdio Server Host：stdout 只承载 JSON-RPC line 流量；canonical cwd 是唯一 workspace scope；Host 注入显式 method allowlist；`app/initialize` 返回该 Host 的实际能力与 transport limits；stdin 读取端按 advertised frame limit fail closed；stdin EOF 触发断连生命周期（取消在途 Turn 并确定性退出）。该 Host 是独立 Host surface，不是 TUI/Headless CLI 的默认路径。
+CLI 的 `openbitfun server` 是同一 App Server 合同的独立 stdio Server Host：stdout 只承载 JSON-RPC line 流量；canonical cwd 是唯一 workspace scope；Host 注入显式 method allowlist；`app/initialize` 返回该 Host 的实际能力与 transport limits；stdin 读取端按 advertised frame limit fail closed；stdin EOF 触发断连生命周期（取消在途 Turn 并确定性退出）。该 Host 是独立 Host surface，不是 TUI/Headless CLI 的默认路径。
 
 WebSocket 是 App Server 的一种 transport，不是另一套业务 API。Web Host 必须使用同一 method、DTO、错误和事件合同，同时根据部署场景构造显式 capability allowlist。
 
@@ -383,8 +383,8 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
 
 边界规则：
 
-- protocol/client 的依赖闭包不得引入 `bitfun-core`、Runtime 实现、Service 实现或 `product-full`。
-- server wiring 可以依赖生产 handler 所需的明确 owner feature，但禁止选择 `bitfun-core/product-full`。
+- protocol/client 的依赖闭包不得引入 `openbitfun-core`、Runtime 实现、Service 实现或 `product-full`。
+- server wiring 可以依赖生产 handler 所需的明确 owner feature，但禁止选择 `openbitfun-core/product-full`。
 - 新 domain 只能增加真实 handler 所需的最窄 owner feature，并通过边界检查证明依赖方向。
 - protocol DTO 不复制 Runtime 内部对象；只暴露 Rich Client 需要的稳定字段和 read model。
 - `app-server-protocol` 是 TypeScript wire schema 的唯一导出 owner；`app-server/ts`
@@ -408,7 +408,7 @@ Embedded direct invocation 可以依赖同进程构造身份，但仍必须传�
    直接调用各自使用的 owner/service API，不定义第二套 `TuiBackend`、catch-all TUI client、
    surface service、owner adapter 或统一 TUI management 模块。
  3. **迁移 Embedded TUI**：扩展既有 `CliAgentRuntimeClient` 支持 TUI Runtime 用例，将调用从
-   `AppServerTuiBackend` 移出；再移除 in-memory transport、Embedded `BitfunAppServer`、
+   `AppServerTuiBackend` 移出；再移除 in-memory transport、Embedded `OpenBitFunAppServer`、
    server thread 和 TUI-facing App Server client 依赖。非 Runtime 能力保留按领域拆分的
    直调 owner/service，并在 controller-local 调用前执行 Remote workspace fail-closed 检查。
 4. **迁移 Desktop GUI**：Embedded 时使用 direct Runtime adapter；Web/Shared 或需要连接治理

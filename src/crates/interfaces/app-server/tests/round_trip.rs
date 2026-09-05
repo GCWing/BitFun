@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_client_protocol::{ConnectionTo, Dispatch, JsonRpcResponse, Responder, SentRequest};
-use bitfun_app_server::{transport, AppClient, AppServer};
+use openbitfun_app_server::{transport, AppClient, AppServer};
 use serde::{Deserialize, Serialize};
 use tokio::task::LocalSet;
 
@@ -72,10 +72,10 @@ async fn request_response_round_trip() {
                 .builder()
                 .connect_with(client_transport, async |cx: ConnectionTo<AppServer>| {
                     let response = recv(cx.send_request(GreetRequest {
-                        name: "bitfun".to_string(),
+                        name: "openbitfun".to_string(),
                     }))
                     .await?;
-                    assert_eq!(response.message, "hello, bitfun!");
+                    assert_eq!(response.message, "hello, openbitfun!");
                     Ok(())
                 })
                 .await;

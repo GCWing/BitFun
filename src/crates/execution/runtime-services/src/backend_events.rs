@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bitfun_events::{
+use log::{error, trace, warn};
+use openbitfun_events::{
     BackgroundCommandLifecycleInfo, EventEmitter, ToolExecutionProgressInfo, ToolTerminalReadyInfo,
 };
-use log::{error, trace, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -108,7 +108,7 @@ pub async fn emit_global_event(event: BackendEvent) -> Result<()> {
 mod tests {
     use super::{BackendEvent, BackendEventSystem};
     use async_trait::async_trait;
-    use bitfun_events::{
+    use openbitfun_events::{
         BackgroundCommandLifecycleInfo, EventEmitter, ToolExecutionProgressInfo,
         ToolTerminalReadyInfo,
     };

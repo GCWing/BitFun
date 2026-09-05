@@ -8,12 +8,12 @@ mod manager;
 mod process;
 mod registry;
 
-pub use bitfun_services_integrations::mcp::server::{MCPServerStatus, MCPServerType};
 pub use config::{
     MCPServerConfig, MCPServerOAuthConfig, MCPServerTimeouts, MCPServerTransport,
     MCPServerXaaConfig,
 };
 pub use connection::{MCPConnection, MCPConnectionPool};
 pub use manager::MCPServerManager;
+pub use openbitfun_services_integrations::mcp::server::{MCPServerStatus, MCPServerType};
 pub use process::MCPServerProcess;
 pub use registry::MCPServerRegistry;

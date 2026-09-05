@@ -1,7 +1,7 @@
 mod prompt_builder_impl;
 mod user_context;
 
-pub use bitfun_agent_runtime::prompt::{
+pub use openbitfun_agent_runtime::prompt::{
     render_direct_tool_listing_body, PrependedPromptReminders, RemoteExecutionHints,
     RuntimeContextNeeds, ToolListingSections,
 };

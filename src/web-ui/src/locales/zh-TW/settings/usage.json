@@ -36,7 +36,7 @@
   "refresh": "重新整理",
   "loading": "正在載入調用統計…",
   "loadFailed": "載入調用統計失敗，請重試。",
-  "unsupported": "目前連線裝置的 BitFun 版本較舊，暫不支援調用統計。",
+  "unsupported": "目前連線裝置的 OpenBitFun 版本較舊，暫不支援調用統計。",
   "empty": {
     "title": "暫無調用資料",
     "description": "開始與模型對話後，這裡會顯示模型調用統計。"

@@ -34,10 +34,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...props}
       aria-busy={loading || undefined}
       className={classNames(styles.button, className)}
-      data-bf-component="button"
-      data-bf-part="root"
-      data-bf-tone={tone}
-      data-bf-variant={variant}
+      data-openbitfun-component="button"
+      data-openbitfun-part="root"
+      data-openbitfun-tone={tone}
+      data-openbitfun-variant={variant}
       data-loading={loading ? "true" : "false"}
       data-size={size}
       disabled={disabled || loading}

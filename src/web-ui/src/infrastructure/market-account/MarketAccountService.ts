@@ -92,7 +92,7 @@ class BroadcastMarketAccountSyncPort implements MarketAccountSyncPort {
 export function createMarketAccountSyncPort(): MarketAccountSyncPort {
   if (typeof BroadcastChannel === 'undefined') return noopSyncPort;
   try {
-    return new BroadcastMarketAccountSyncPort(new BroadcastChannel('bitfun-market-account'));
+    return new BroadcastMarketAccountSyncPort(new BroadcastChannel('openbitfun-market-account'));
   } catch {
     return noopSyncPort;
   }

@@ -10,6 +10,6 @@ export const skillGroupPickerAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'summary' }, { id: 'summaryGroup' }, { id: 'empty' },
   ],
   states: [
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
   ],
 };

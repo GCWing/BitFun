@@ -1,6 +1,6 @@
 #[cfg(feature = "rpc")]
 use agent_client_protocol::JsonRpcMessage;
-use bitfun_app_server_protocol::{
+use openbitfun_app_server_protocol::{
     agent::{RunResponse, SubmitDialogTurnMessage, SubmitDialogTurnRequest},
     config::GetAgentProfileConfigMessage,
     permission::RespondPermissionMessage,

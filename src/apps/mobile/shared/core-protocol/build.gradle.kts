@@ -20,13 +20,13 @@ val generateRelayContractFixtures = tasks.register("generateRelayContractFixture
     outputs.dir(outputDir).withPropertyName("generatedSources")
     doLast {
         val target = outputDir.get().asFile
-            .resolve("com/bitfun/mobile/core/protocol/RelayContractFixtures.kt")
+            .resolve("com/openbitfun/mobile/core/protocol/RelayContractFixtures.kt")
         target.parentFile.mkdirs()
         val fixtures = inputDir.listFiles { file -> file.extension == "json" }
             .orEmpty()
             .sortedBy { it.name }
         val source = buildString {
-            appendLine("package com.bitfun.mobile.core.protocol")
+            appendLine("package com.openbitfun.mobile.core.protocol")
             appendLine()
             appendLine("// Generated from src/shared/relay-protocol-contract-fixtures by the")
             appendLine("// generateRelayContractFixtures Gradle task. Do not edit by hand.")
@@ -51,7 +51,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.bitfun.mobile.core.protocol"
+        namespace = "com.openbitfun.mobile.core.protocol"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
         withHostTest {}

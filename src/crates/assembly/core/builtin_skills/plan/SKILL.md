@@ -12,7 +12,7 @@ Produce a concise, evidence-backed implementation plan and leave project source 
 1. Inspect the relevant code, configuration, documentation, and repository instructions using read-only tools. Resolve important behavior and ownership questions before drafting the plan.
 2. Ask the user when missing information would materially change the approach. Present concrete options and put the recommended option first. Do not ask whether to proceed merely because research is complete.
 3. Use `Task` only for read-only research that materially improves the plan. Keep delegated scopes bounded and synthesize the findings yourself.
-4. Use `Write` to create one plan artifact at `.bitfun/plans/<short-kebab-name>.plan.md`. Use a concise descriptive filename, and do not overwrite a different existing plan blindly.
+4. Use `Write` to create one plan artifact at `.openbitfun/plans/<short-kebab-name>.plan.md`. Use a concise descriptive filename, and do not overwrite a different existing plan blindly.
 5. Once the plan artifact is created and meets the format and content requirements, stop tool use and link the file without repeating its contents.
 
 ## Plan Artifact
@@ -40,7 +40,7 @@ todos:
 
 ## Rules
 
-- Do not edit project source, change configuration, run mutating commands, or otherwise implement the task while this planning workflow applies. The only permitted mutation is a `.bitfun/plans/*.plan.md` artifact.
-- Before creating a new plan, inspect `.bitfun/plans` and choose an unused filename.
-- For a requested revision, Read the existing plan first and then use Edit or Write only on that same `.bitfun/plans/*.plan.md` file.
+- Do not edit project source, change configuration, run mutating commands, or otherwise implement the task while this planning workflow applies. The only permitted mutation is a `.openbitfun/plans/*.plan.md` artifact.
+- Before creating a new plan, inspect `.openbitfun/plans` and choose an unused filename.
+- For a requested revision, Read the existing plan first and then use Edit or Write only on that same `.openbitfun/plans/*.plan.md` file.
 - Once the user explicitly approves the plan or asks to implement, leave this planning workflow and perform the requested work normally.

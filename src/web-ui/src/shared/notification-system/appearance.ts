@@ -23,9 +23,9 @@ export const notificationAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'centerItem' },
   ],
   states: [
-    { id: 'success', selector: { kind: 'self', suffix: '[data-bf-state~="success"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'unread', selector: { kind: 'self', suffix: '[data-bf-state~="unread"]' } },
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'success', selector: { kind: 'self', suffix: '[data-openbitfun-state~="success"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'unread', selector: { kind: 'self', suffix: '[data-openbitfun-state~="unread"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

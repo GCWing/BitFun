@@ -114,8 +114,8 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
       {...props}
       aria-orientation="horizontal"
       className={classNames(styles.tabGroup, className)}
-      data-bf-component="tab-group"
-      data-bf-part="root"
+      data-openbitfun-component="tab-group"
+      data-openbitfun-part="root"
       data-size={size}
       ref={ref}
       role="tablist"
@@ -127,7 +127,7 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
         return (
           <div
             className={styles.item}
-            data-bf-part="item"
+            data-openbitfun-part="item"
             data-has-end-action={hasEndAction ? "true" : "false"}
             data-has-icon={hasIcon ? "true" : "false"}
             key={item.value}
@@ -137,8 +137,8 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
               aria-disabled={item.disabled || undefined}
               aria-selected={selected}
               className={styles.tab}
-              data-bf-part="tab"
-              data-bf-value={item.value}
+              data-openbitfun-part="tab"
+              data-openbitfun-value={item.value}
               disabled={item.disabled}
               id={item.id ?? `${generatedId}-tab-${index}`}
               onClick={() => selectItem(item)}
@@ -151,14 +151,14 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
               type="button"
             >
               {hasIcon && (
-                <span aria-hidden="true" className={styles.icon} data-bf-part="icon">
+                <span aria-hidden="true" className={styles.icon} data-openbitfun-part="icon">
                   {item.icon}
                 </span>
               )}
-              <span className={styles.label} data-bf-part="label">{item.label}</span>
+              <span className={styles.label} data-openbitfun-part="label">{item.label}</span>
             </button>
             {hasEndAction && (
-              <span className={styles.endAction} data-bf-part="endAction">
+              <span className={styles.endAction} data-openbitfun-part="endAction">
                 {item.endAction}
               </span>
             )}

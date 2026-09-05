@@ -6,9 +6,9 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useEffect, useRef, useState } from 'react';
-import { Checkbox, Textarea } from '@bitfun/ui';
+import { Checkbox, Textarea } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatHeaderCommandSummary } from '../modern/FlowChatHeader';
 import './BackgroundCommandInputDialog.scss';
@@ -80,12 +80,12 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
       </DialogHeader>
       <DialogBody inset="none">
         <div className="background-command-input-dialog__modal">
-      <form data-bf-component="background-command-input-dialog" data-bf-part="root" data-bf-state={[isSending && 'sending', maskInput && 'masked'].filter(Boolean).join(' ')} className="background-command-input-dialog" onSubmit={handleSubmit}>
-        <div data-bf-component="background-command-input-dialog" data-bf-part="summary" className="background-command-input-dialog__summary">
-          <span data-bf-component="background-command-input-dialog" data-bf-part="summaryLabel" className="background-command-input-dialog__summary-label">
+      <form data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="root" data-openbitfun-state={[isSending && 'sending', maskInput && 'masked'].filter(Boolean).join(' ')} className="background-command-input-dialog" onSubmit={handleSubmit}>
+        <div data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="summary" className="background-command-input-dialog__summary">
+          <span data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="summaryLabel" className="background-command-input-dialog__summary-label">
             {t('backgroundCommandInput.commandLabel')}
           </span>
-          <code data-bf-component="background-command-input-dialog" data-bf-part="command">{command.command || command.title}</code>
+          <code data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="command">{command.command || command.title}</code>
         </div>
 
         <Textarea
@@ -101,7 +101,7 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           spellCheck={false}
         />
 
-        <div data-bf-component="background-command-input-dialog" data-bf-part="options" className="background-command-input-dialog__options">
+        <div data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="options" className="background-command-input-dialog__options">
           <Checkbox
             checked={appendEnter}
             onChange={(event) => setAppendEnter(event.target.checked)}
@@ -116,11 +116,11 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           />
         </div>
 
-        <p data-bf-component="background-command-input-dialog" data-bf-part="note" className="background-command-input-dialog__note">
+        <p data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="note" className="background-command-input-dialog__note">
           {t('backgroundCommandInput.privacyNote')}
         </p>
 
-        <div data-bf-component="background-command-input-dialog" data-bf-part="actions" className="background-command-input-dialog__actions">
+        <div data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="actions" className="background-command-input-dialog__actions">
           <Button
             type="button"
             variant="outline"

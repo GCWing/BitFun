@@ -3,8 +3,8 @@ use crate::agentic::agents::{
 };
 use crate::agentic::tools::framework::ToolUseContext;
 use crate::agentic::tools::implementations::skills::get_skill_registry;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::skills::{SkillData, SkillInfo};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_agent_runtime::skills::{SkillData, SkillInfo};
 use sha2::{Digest, Sha256};
 
 const CAPABILITY_CATALOG_LIMIT: usize = 24;
@@ -185,7 +185,7 @@ pub async fn resolve_review_capability(
     context: &ToolUseContext,
     key: &str,
     fingerprint: &str,
-) -> BitFunResult<ResolvedReviewCapability> {
+) -> OpenBitFunResult<ResolvedReviewCapability> {
     if key == BUILTIN_CAPABILITY_KEY {
         ensure_capability_fingerprint(
             &ReviewCapabilityDescriptor::new(
@@ -230,7 +230,9 @@ pub async fn resolve_review_capability(
             .await
             .into_iter()
             .find(|agent| agent.key == agent_key)
-            .ok_or_else(|| BitFunError::tool("Review agent is no longer available".to_string()))?;
+            .ok_or_else(|| {
+                OpenBitFunError::tool("Review agent is no longer available".to_string())
+            })?;
         let workspace_root = (!context.is_remote())
             .then(|| context.workspace_root())
             .flatten();
@@ -238,7 +240,7 @@ pub async fn resolve_review_capability(
             .get_custom_subagent_detail_by_key(&agent.key, workspace_root)
             .await?;
         if !detail.readonly || !detail.review {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Selected review agent is not read-only review guidance".to_string(),
             ));
         }
@@ -259,7 +261,7 @@ pub async fn resolve_review_capability(
         });
     }
 
-    Err(BitFunError::tool(
+    Err(OpenBitFunError::tool(
         "Unknown review capability source".to_string(),
     ))
 }
@@ -278,7 +280,10 @@ fn agent_fingerprint_material(guidance: &str, preferred_model: Option<&str>) -> 
     )
 }
 
-async fn load_review_skill(context: &ToolUseContext, skill_key: &str) -> BitFunResult<SkillData> {
+async fn load_review_skill(
+    context: &ToolUseContext,
+    skill_key: &str,
+) -> OpenBitFunResult<SkillData> {
     let still_implicitly_invocable = implicitly_invocable_skills(context)
         .await
         .into_iter()
@@ -290,7 +295,7 @@ async fn load_review_skill(context: &ToolUseContext, skill_key: &str) -> BitFunR
     let registry = get_skill_registry();
     if context.is_remote() {
         let fs = context.ws_fs().ok_or_else(|| {
-            BitFunError::tool("Remote review skill loading is unavailable".to_string())
+            OpenBitFunError::tool("Remote review skill loading is unavailable".to_string())
         })?;
         let root = context
             .workspace
@@ -319,21 +324,25 @@ async fn load_review_skill(context: &ToolUseContext, skill_key: &str) -> BitFunR
 async fn load_discovered_review_skill(
     context: &ToolUseContext,
     info: &SkillInfo,
-) -> BitFunResult<SkillData> {
+) -> OpenBitFunResult<SkillData> {
     let skill_file = format!("{}/SKILL.md", info.path.trim_end_matches(['/', '\\']));
     let markdown = if context.is_remote() {
         context
             .ws_fs()
             .ok_or_else(|| {
-                BitFunError::tool("Remote review skill loading is unavailable".to_string())
+                OpenBitFunError::tool("Remote review skill loading is unavailable".to_string())
             })?
             .read_file_text(&skill_file)
             .await
-            .map_err(|error| BitFunError::tool(format!("Failed to read review skill: {error}")))?
+            .map_err(|error| {
+                OpenBitFunError::tool(format!("Failed to read review skill: {error}"))
+            })?
     } else {
         tokio::fs::read_to_string(&skill_file)
             .await
-            .map_err(|error| BitFunError::tool(format!("Failed to read review skill: {error}")))?
+            .map_err(|error| {
+                OpenBitFunError::tool(format!("Failed to read review skill: {error}"))
+            })?
     };
     let mut data = SkillData::from_markdown_for_source_slot(
         info.path.clone(),
@@ -342,7 +351,7 @@ async fn load_discovered_review_skill(
         true,
         &info.source_slot,
     )
-    .map_err(|error| BitFunError::tool(error.to_string()))?;
+    .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
     data.key = info.key.clone();
     data.source_slot = info.source_slot.clone();
     data.dir_name = info.dir_name.clone();
@@ -360,7 +369,7 @@ fn catalog_source_limits(skill_count: usize, agent_count: usize) -> (usize, usiz
 fn ensure_capability_fingerprint(
     descriptor: &ReviewCapabilityDescriptor,
     fingerprint: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     if descriptor.fingerprint == fingerprint {
         Ok(())
     } else {
@@ -368,8 +377,8 @@ fn ensure_capability_fingerprint(
     }
 }
 
-fn capability_changed_error() -> BitFunError {
-    BitFunError::tool(
+fn capability_changed_error() -> OpenBitFunError {
+    OpenBitFunError::tool(
         "The selected review capability is unavailable or changed; continue with the primary review instead"
             .to_string(),
     )
@@ -396,10 +405,10 @@ fn is_compatible_review_skill(dir_name: &str) -> bool {
     dir_name.starts_with("code-review-") && dir_name.len() > "code-review-".len()
 }
 
-fn bounded_selected_guidance(guidance: &str) -> BitFunResult<String> {
+fn bounded_selected_guidance(guidance: &str) -> OpenBitFunResult<String> {
     let guidance = guidance.trim();
     if guidance.is_empty() || guidance.chars().count() > SELECTED_GUIDANCE_LIMIT {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "Selected review guidance is empty or exceeds the focused-check context limit"
                 .to_string(),
         ));
@@ -445,7 +454,7 @@ mod tests {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -479,13 +488,13 @@ mod tests {
     #[test]
     fn capability_fingerprint_changes_with_effective_model_preference() {
         let inherited = ReviewCapabilityDescriptor::new(
-            "agent:project::bitfun::reviewer",
+            "agent:project::openbitfun::reviewer",
             "Reviewer",
             "Check one concern",
             &agent_fingerprint_material("same guidance", None),
         );
         let explicit = ReviewCapabilityDescriptor::new(
-            "agent:project::bitfun::reviewer",
+            "agent:project::openbitfun::reviewer",
             "Reviewer",
             "Check one concern",
             &agent_fingerprint_material("same guidance", Some("fast")),

@@ -59,7 +59,7 @@ export function MobileChoiceSheet({
       ) : undefined}
       onOpenChange={onOpenChange}
     >
-      <div className={styles.options} data-bf-component="mobile-choice-sheet" data-bf-part="options" role="radiogroup">
+      <div className={styles.options} data-openbitfun-component="mobile-choice-sheet" data-openbitfun-part="options" role="radiogroup">
         {options.length === 0 ? emptyContent : options.map((option) => (
           <MobileListRow
             appearance={optionAppearance}

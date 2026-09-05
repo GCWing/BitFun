@@ -36,15 +36,15 @@ describe('SnapshotAPI request dedupe', () => {
     };
     invokeMock.mockResolvedValueOnce(stats);
 
-    const first = snapshotAPI.getSessionStats('session-1', 'D:/workspace/BitFun');
-    const second = snapshotAPI.getSessionStats('session-1', 'D:/workspace/BitFun');
+    const first = snapshotAPI.getSessionStats('session-1', 'D:/workspace/OpenBitFun');
+    const second = snapshotAPI.getSessionStats('session-1', 'D:/workspace/OpenBitFun');
 
     await expect(Promise.all([first, second])).resolves.toEqual([stats, stats]);
     expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith('get_session_stats', {
       request: {
         session_id: 'session-1',
-        workspacePath: 'D:/workspace/BitFun',
+        workspacePath: 'D:/workspace/OpenBitFun',
       },
     });
   });
@@ -64,8 +64,8 @@ describe('SnapshotAPI request dedupe', () => {
         total_changes: 2,
       });
 
-    await snapshotAPI.getSessionStats('session-1', 'D:/workspace/BitFun');
-    await snapshotAPI.getSessionStats('session-1', 'D:/workspace/BitFun');
+    await snapshotAPI.getSessionStats('session-1', 'D:/workspace/OpenBitFun');
+    await snapshotAPI.getSessionStats('session-1', 'D:/workspace/OpenBitFun');
 
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });

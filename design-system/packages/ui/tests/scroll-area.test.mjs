@@ -10,10 +10,10 @@ test("ScrollArea defaults to a native vertical viewport with automatic visibilit
     createElement(ScrollArea, { "aria-label": "Activity" }, "Content"),
   );
 
-  assert.match(markup, /data-bf-component="scroll-area"/);
-  assert.match(markup, /data-bf-part="viewport"/);
-  assert.match(markup, /data-bf-orientation="vertical"/);
-  assert.match(markup, /data-bf-scrollbar-visibility="auto"/);
+  assert.match(markup, /data-openbitfun-component="scroll-area"/);
+  assert.match(markup, /data-openbitfun-part="viewport"/);
+  assert.match(markup, /data-openbitfun-orientation="vertical"/);
+  assert.match(markup, /data-openbitfun-scrollbar-visibility="auto"/);
   assert.match(markup, /aria-label="Activity"/);
 });
 
@@ -26,21 +26,21 @@ test("ScrollArea exposes orientation and scrollbar visibility contracts", () => 
     ),
   );
 
-  assert.match(markup, /data-bf-orientation="both"/);
-  assert.match(markup, /data-bf-scrollbar-visibility="always"/);
+  assert.match(markup, /data-openbitfun-orientation="both"/);
+  assert.match(markup, /data-openbitfun-scrollbar-visibility="always"/);
 });
 
 test("ScrollArea preserves feature-owned appearance contracts", () => {
   const markup = renderToStaticMarkup(
     createElement(
       ScrollArea,
-      { "data-bf-component": "model-settings", "data-bf-part": "root" },
+      { "data-openbitfun-component": "model-settings", "data-openbitfun-part": "root" },
       "Content",
     ),
   );
 
-  assert.match(markup, /data-bf-component="model-settings"/);
-  assert.match(markup, /data-bf-part="root"/);
+  assert.match(markup, /data-openbitfun-component="model-settings"/);
+  assert.match(markup, /data-openbitfun-part="root"/);
 });
 
 test("ScrollArea styling uses public scrollbar tokens and preserves native scrolling", async () => {
@@ -52,10 +52,10 @@ test("ScrollArea styling uses public scrollbar tokens and preserves native scrol
   assert.match(styles, /overflow-y: auto/);
   assert.match(styles, /overflow-x: auto/);
   assert.match(styles, /overflow: scroll/);
-  assert.match(styles, /--bf-scrollbar-width/);
-  assert.match(styles, /--bf-scrollbar-radius/);
-  assert.match(styles, /--bf-color-scrollbar-thumb/);
-  assert.match(styles, /--bf-color-scrollbar-thumb-hover/);
+  assert.match(styles, /--openbitfun-scrollbar-width/);
+  assert.match(styles, /--openbitfun-scrollbar-radius/);
+  assert.match(styles, /--openbitfun-color-scrollbar-thumb/);
+  assert.match(styles, /--openbitfun-color-scrollbar-thumb-hover/);
   assert.match(styles, /scrollbar-width: none/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

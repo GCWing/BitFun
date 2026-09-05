@@ -26,9 +26,9 @@ pub use self::types::{
 };
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
-pub use bitfun_core_types::speech::*;
 pub use error::{SpeechError, SpeechResult};
-use error::{SpeechError as BitFunError, SpeechResult as BitFunResult};
+use error::{SpeechError as OpenBitFunError, SpeechResult as OpenBitFunResult};
+pub use openbitfun_core_types::speech::*;
 #[cfg(feature = "speech-realtime")]
 pub use realtime::VolcengineRealtimeSpeechConfig;
 use std::collections::HashMap;
@@ -104,13 +104,13 @@ impl SpeechService {
         }
     }
 
-    pub async fn list_models(&self) -> BitFunResult<SpeechListModelsResponse> {
+    pub async fn list_models(&self) -> OpenBitFunResult<SpeechListModelsResponse> {
         Ok(SpeechListModelsResponse {
             models: self.store.list_statuses().await?,
         })
     }
 
-    pub async fn model_status(&self, model_id: &str) -> BitFunResult<SpeechModelStatus> {
+    pub async fn model_status(&self, model_id: &str) -> OpenBitFunResult<SpeechModelStatus> {
         let manifest = get_builtin_speech_model_manifest(model_id)?;
         self.store.status_for_manifest(&manifest).await
     }
@@ -119,7 +119,7 @@ impl SpeechService {
         &self,
         request: SpeechDownloadModelRequest,
         on_progress: F,
-    ) -> BitFunResult<SpeechModelStatus>
+    ) -> OpenBitFunResult<SpeechModelStatus>
     where
         F: Fn(SpeechModelProgressEvent) + Send + Sync + 'static,
     {
@@ -131,7 +131,7 @@ impl SpeechService {
         {
             let mut downloads = self.downloads.lock().await;
             if downloads.contains_key(&manifest.id) {
-                return Err(BitFunError::validation(format!(
+                return Err(OpenBitFunError::validation(format!(
                     "Speech model is already downloading: {}",
                     manifest.id
                 )));
@@ -181,7 +181,7 @@ impl SpeechService {
         });
 
         task.await.map_err(|error| {
-            BitFunError::service(format!("Speech model download task failed: {error}"))
+            OpenBitFunError::service(format!("Speech model download task failed: {error}"))
         })?
     }
 
@@ -196,7 +196,7 @@ impl SpeechService {
     pub async fn cancel_model_download(
         &self,
         request: SpeechCancelModelDownloadRequest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let manifest = get_builtin_speech_model_manifest(&request.model_id)?;
         self.cancel_active_download(&manifest.id).await;
         self.store.status_for_manifest(&manifest).await
@@ -205,7 +205,7 @@ impl SpeechService {
     pub async fn delete_model(
         &self,
         request: SpeechDeleteModelRequest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let manifest = get_builtin_speech_model_manifest(&request.model_id)?;
         self.cancel_active_download(&manifest.id).await;
         self.recognizer.unload().await?;
@@ -215,7 +215,7 @@ impl SpeechService {
     pub async fn verify_model(
         &self,
         request: SpeechVerifyModelRequest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let manifest = get_builtin_speech_model_manifest(&request.model_id)?;
         self.store.verify_model(&manifest).await
     }
@@ -223,13 +223,13 @@ impl SpeechService {
     pub async fn start_input_session(
         &self,
         request: SpeechStartInputSessionRequest,
-    ) -> BitFunResult<SpeechInputSession> {
+    ) -> OpenBitFunResult<SpeechInputSession> {
         let model_id = request
             .model_id
             .unwrap_or_else(|| LOCAL_SENSEVOICE_SMALL_INT8_MODEL_ID.to_string());
         let manifest = get_builtin_speech_model_manifest(&model_id)?;
         if !self.store.has_required_files(&manifest).await {
-            return Err(BitFunError::NotFound(
+            return Err(OpenBitFunError::NotFound(
                 "Speech model is not installed; download it before starting voice input"
                     .to_string(),
             ));
@@ -237,7 +237,7 @@ impl SpeechService {
 
         let sample_rate = request.sample_rate.unwrap_or(DEFAULT_SPEECH_SAMPLE_RATE);
         if sample_rate == 0 {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Sample rate must be greater than zero",
             ));
         }
@@ -245,7 +245,7 @@ impl SpeechService {
             .max_recording_seconds
             .unwrap_or(DEFAULT_MAX_RECORDING_SECONDS);
         if max_recording_seconds == 0 {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Recording limit must be greater than zero",
             ));
         }
@@ -299,20 +299,20 @@ impl SpeechService {
     pub async fn append_audio_chunk(
         &self,
         request: SpeechAppendAudioChunkRequest,
-    ) -> BitFunResult<SpeechAppendAudioChunkResponse> {
+    ) -> OpenBitFunResult<SpeechAppendAudioChunkResponse> {
         let bytes = BASE64_STANDARD
             .decode(request.pcm16_base64.as_bytes())
-            .map_err(|e| BitFunError::validation(format!("Invalid base64 audio chunk: {e}")))?;
+            .map_err(|e| OpenBitFunError::validation(format!("Invalid base64 audio chunk: {e}")))?;
         if bytes.len() % 2 != 0 {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "PCM16 audio chunks must contain complete samples",
             ));
         }
 
         let mut sessions = self.sessions.lock().await;
-        let state = sessions
-            .get_mut(&request.session_id)
-            .ok_or_else(|| BitFunError::NotFound("Speech input session not found".to_string()))?;
+        let state = sessions.get_mut(&request.session_id).ok_or_else(|| {
+            OpenBitFunError::NotFound("Speech input session not found".to_string())
+        })?;
         let max_bytes =
             state.session.sample_rate as u64 * state.session.max_recording_seconds as u64 * 2;
         let remaining_bytes = max_bytes.saturating_sub(state.received_bytes);
@@ -339,18 +339,20 @@ impl SpeechService {
     pub async fn finish_input_session(
         &self,
         request: SpeechFinishInputSessionRequest,
-    ) -> BitFunResult<SpeechTranscriptionResult> {
+    ) -> OpenBitFunResult<SpeechTranscriptionResult> {
         let state = self
             .sessions
             .lock()
             .await
             .remove(&request.session_id)
-            .ok_or_else(|| BitFunError::NotFound("Speech input session not found".to_string()))?;
+            .ok_or_else(|| {
+                OpenBitFunError::NotFound("Speech input session not found".to_string())
+            })?;
         let manifest = get_builtin_speech_model_manifest(&state.session.model_id)?;
         let pcm16_le = fs::read(&state.audio_path).await?;
         let _ = fs::remove_file(&state.audio_path).await;
         if pcm16_le.is_empty() {
-            return Err(BitFunError::validation("No speech audio was captured"));
+            return Err(OpenBitFunError::validation("No speech audio was captured"));
         }
 
         self.recognizer
@@ -367,7 +369,7 @@ impl SpeechService {
     pub async fn cancel_input_session(
         &self,
         request: SpeechCancelInputSessionRequest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         if let Some(state) = self.sessions.lock().await.remove(&request.session_id) {
             let _ = fs::remove_file(state.audio_path).await;
         }
@@ -382,7 +384,7 @@ mod tests {
     #[tokio::test]
     async fn append_audio_chunk_truncates_at_recording_limit() {
         let root = std::env::temp_dir().join(format!(
-            "bitfun-speech-limit-test-{}",
+            "openbitfun-speech-limit-test-{}",
             Uuid::new_v4().simple()
         ));
         let service = SpeechService::new(SpeechStoragePaths::new(

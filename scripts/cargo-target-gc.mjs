@@ -9,9 +9,9 @@
  * - deps / build: delete hashes with no remaining fingerprint directory
  *
  * Env:
- *   BITFUN_TARGET_GC=0          disable
- *   BITFUN_TARGET_GC_DRY_RUN=1  report only
- *   BITFUN_TARGET_GC_MIN_AGE_HOURS=24
+ *   OPENBITFUN_TARGET_GC=0          disable
+ *   OPENBITFUN_TARGET_GC_DRY_RUN=1  report only
+ *   OPENBITFUN_TARGET_GC_MIN_AGE_HOURS=24
  */
 import { execFileSync } from 'node:child_process';
 import {
@@ -412,16 +412,16 @@ export function runCargoTargetGc(options = {}) {
   const dryRun =
     options.dryRun ??
     ['1', 'true', 'yes'].includes(
-      String(process.env.BITFUN_TARGET_GC_DRY_RUN ?? '').toLowerCase()
+      String(process.env.OPENBITFUN_TARGET_GC_DRY_RUN ?? '').toLowerCase()
     );
   const enabled =
     options.enabled ??
     !['0', 'false', 'no'].includes(
-      String(process.env.BITFUN_TARGET_GC ?? '1').toLowerCase()
+      String(process.env.OPENBITFUN_TARGET_GC ?? '1').toLowerCase()
     );
   const configuredMinAgeHours = Number(
     options.fingerprintMinAgeHours ??
-      process.env.BITFUN_TARGET_GC_MIN_AGE_HOURS ??
+      process.env.OPENBITFUN_TARGET_GC_MIN_AGE_HOURS ??
       DEFAULT_FINGERPRINT_MIN_AGE_MS / (60 * 60 * 1_000)
   );
   const fingerprintMinAgeMs =
@@ -527,9 +527,9 @@ function printHelp() {
 Prune stale Cargo incremental / fingerprint / deps caches for one profile.
 
 Environment:
-  BITFUN_TARGET_GC=0           disable
-  BITFUN_TARGET_GC_DRY_RUN=1   dry-run
-  BITFUN_TARGET_GC_MIN_AGE_HOURS=24
+  OPENBITFUN_TARGET_GC=0           disable
+  OPENBITFUN_TARGET_GC_DRY_RUN=1   dry-run
+  OPENBITFUN_TARGET_GC_MIN_AGE_HOURS=24
 `);
 }
 

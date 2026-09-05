@@ -55,7 +55,7 @@
     "loading": "正在加载实时语音设置…",
     "enabled": {
       "label": "启用客户端语音助手",
-      "description": "从客户端右下角与火山引擎端到端实时语音模型通话，并允许它理解工作区状态和启动 BitFun 任务。"
+      "description": "从客户端右下角与火山引擎端到端实时语音模型通话，并允许它理解工作区状态和启动 OpenBitFun 任务。"
     },
     "apiKey": {
       "label": "火山引擎 API Key",
@@ -79,25 +79,25 @@
       "unsaved": "实时语音配置有尚未保存的修改。"
     },
     "call": {
-      "title": "BitFun 实时通话",
+      "title": "OpenBitFun 实时通话",
       "button": "开始实时语音通话",
       "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",
       "switchToVoice": "切换到实时语音",
       "switchToChat": "返回文字聊天",
-      "empty": "直接说话即可。需要做事时，我会启动一个新的 BitFun 会话。",
+      "empty": "直接说话即可。需要做事时，我会启动一个新的 OpenBitFun 会话。",
       "mute": "静音麦克风",
       "unmute": "取消静音",
       "hangUp": "挂断",
       "settings": "实时语音设置",
       "configureFirst": "请先配置火山引擎实时语音 API Key。",
       "startFailed": "实时语音通话启动失败",
-      "taskComplete": "BitFun 任务已完成，正在整理结果。",
-      "taskFailed": "BitFun 任务执行失败，正在说明原因。",
-      "taskStopping": "正在停止当前 BitFun 任务…",
-      "taskStopped": "当前 BitFun 任务已停止。",
+      "taskComplete": "OpenBitFun 任务已完成，正在整理结果。",
+      "taskFailed": "OpenBitFun 任务执行失败，正在说明原因。",
+      "taskStopping": "正在停止当前 OpenBitFun 任务…",
+      "taskStopped": "当前 OpenBitFun 任务已停止。",
       "taskAlreadyComplete": "任务已经完成，无需停止。",
-      "noActiveTask": "当前没有正在执行的 BitFun 任务。",
+      "noActiveTask": "当前没有正在执行的 OpenBitFun 任务。",
       "taskOutcome": {
         "completed": "任务已完成。{{conclusion}}",
         "completedWithoutConclusion": "任务已完成，但没有返回文字结论。",
@@ -121,13 +121,13 @@
       "audioPlaybackFailed": "语音播放失败，请检查系统输出设备"
       },
       "taskPhases": {
-        "starting": "正在创建新的 BitFun 会话。",
-        "working": "BitFun 仍在处理任务，我会继续跟进。",
-        "using_tools": "BitFun 正在使用工具推进任务。",
-        "waiting_approval": "任务正在等待你在 BitFun 中确认权限。",
-        "needs_input": "BitFun 需要你在任务会话中补充信息。",
-        "finishing": "任务主体已完成，BitFun 正在整理最终结果。",
-        "stopping": "正在停止当前 BitFun 任务。"
+        "starting": "正在创建新的 OpenBitFun 会话。",
+        "working": "OpenBitFun 仍在处理任务，我会继续跟进。",
+        "using_tools": "OpenBitFun 正在使用工具推进任务。",
+        "waiting_approval": "任务正在等待你在 OpenBitFun 中确认权限。",
+        "needs_input": "OpenBitFun 需要你在任务会话中补充信息。",
+        "finishing": "任务主体已完成，OpenBitFun 正在整理最终结果。",
+        "stopping": "正在停止当前 OpenBitFun 任务。"
       }
     }
   },
@@ -237,7 +237,7 @@
     }
   },
   "messages": {
-    "unsupported": "语音输入仅在 BitFun 桌面端中可用。",
+    "unsupported": "语音输入仅在 OpenBitFun 桌面端中可用。",
     "loadFailed": "加载语音输入设置失败",
     "modelsLoadFailed": "加载本地语音模型状态失败。",
     "retry": "重试",

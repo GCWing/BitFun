@@ -24,7 +24,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { Icon, IconButton, Input, ScrollArea, Textarea, Tooltip } from '@bitfun/ui';
+import { Icon, IconButton, Input, ScrollArea, Textarea, Tooltip } from '@openbitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -43,7 +43,7 @@ function isFileMissingError(error: unknown): boolean {
   return /does not exist|no such file|not found/i.test(message);
 }
 
-const DEFAULT_AGENT_NAME = 'BitFun Agent';
+const DEFAULT_AGENT_NAME = 'OpenBitFun Agent';
 
 type RightPanelView = 'info' | 'personaDoc';
 
@@ -326,14 +326,14 @@ const AssistantConfigPage: React.FC = () => {
   // ── Right panel: identity info ──────────────────────────────────────────
 
   const renderInfoPanel = () => (
-    <div className="acp-right-info" data-bf-component="assistant-config-page" data-bf-part="details">
+    <div className="acp-right-info" data-openbitfun-component="assistant-config-page" data-openbitfun-part="details">
       <div className="acp-right-shell">
         {/* Persona docs */}
         <div className="acp-section acp-section--nested">
           <div className="acp-section__head">
             <span className="acp-section__title">{t('nursery.assistant.personaDocsTitle')}</span>
           </div>
-          <div className="acp-persona-doc-list" data-bf-component="assistant-config-page" data-bf-part="personaList">
+          <div className="acp-persona-doc-list" data-openbitfun-component="assistant-config-page" data-openbitfun-part="personaList">
             {PERSONA_DOC_FILES.map((fileName) => {
               const selected = personaDoc?.fileName === fileName && rightView === 'personaDoc';
               const labelKey = fileName.replace(/\.md$/i, '') as 'SOUL' | 'USER' | 'IDENTITY';
@@ -342,9 +342,9 @@ const AssistantConfigPage: React.FC = () => {
                   key={fileName}
                   type="button"
                   className={`acp-persona-doc-row${selected ? ' acp-persona-doc-row--selected' : ''}`}
-                  data-bf-component="assistant-config-page"
-                  data-bf-part="persona"
-                  data-bf-state={selected ? 'selected' : undefined}
+                  data-openbitfun-component="assistant-config-page"
+                  data-openbitfun-part="persona"
+                  data-openbitfun-state={selected ? 'selected' : undefined}
                   aria-pressed={selected}
                   onClick={() => openPersonaDoc(fileName)}
                 >
@@ -367,7 +367,7 @@ const AssistantConfigPage: React.FC = () => {
             ) : (
               <Suspense
                 fallback={(
-                  <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading">
+                  <div className="acp-loading" data-openbitfun-component="assistant-config-page" data-openbitfun-part="loading">
                     <Icon name="refresh" size="sm" className="nursery-spinning" />
                   </div>
                 )}
@@ -398,10 +398,10 @@ const AssistantConfigPage: React.FC = () => {
     const usesHybridEditor = sections.hasFrontmatter;
     const usesSourceBodyEditor = bodyEditability.mode === 'unsafe';
     return (
-      <div className="acp-right-info" data-bf-component="assistant-config-page" data-bf-part="details">
+      <div className="acp-right-info" data-openbitfun-component="assistant-config-page" data-openbitfun-part="details">
         <div className="acp-right-shell acp-right-shell--editor">
-          <div className="acp-persona-editor" data-bf-component="assistant-config-page" data-bf-part="editor">
-            <div className="acp-persona-editor__head" data-bf-component="assistant-config-page" data-bf-part="editorHeader">
+          <div className="acp-persona-editor" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editor">
+            <div className="acp-persona-editor__head" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editorHeader">
               <Tooltip content={t('nursery.template.closeDetail')}>
                 <IconButton
                   type="button"
@@ -425,13 +425,13 @@ const AssistantConfigPage: React.FC = () => {
                 />
               </Tooltip>
             </div>
-            <div className="acp-persona-editor__body" data-bf-component="assistant-config-page" data-bf-part="editorBody">
-              {error && <p className="acp-persona-editor__error" data-bf-component="assistant-config-page" data-bf-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
+            <div className="acp-persona-editor__body" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editorBody">
+              {error && <p className="acp-persona-editor__error" data-openbitfun-component="assistant-config-page" data-openbitfun-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
               {loading ? (
-                <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading"><Icon name="refresh" size="sm" className="nursery-spinning" /></div>
+                <div className="acp-loading" data-openbitfun-component="assistant-config-page" data-openbitfun-part="loading"><Icon name="refresh" size="sm" className="nursery-spinning" /></div>
               ) : usesHybridEditor ? (
                 <div className="acp-persona-editor__hybrid">
-                  <section className="acp-persona-editor__frontmatter" data-bf-component="assistant-config-page" data-bf-part="frontmatter">
+                  <section className="acp-persona-editor__frontmatter" data-openbitfun-component="assistant-config-page" data-openbitfun-part="frontmatter">
                     <AutoResizeTextarea
                       key={`${fileName}-frontmatter`}
                       value={sections.frontmatter}
@@ -439,7 +439,7 @@ const AssistantConfigPage: React.FC = () => {
                     />
                   </section>
                   <div className="acp-persona-editor__divider" aria-hidden="true" />
-                  <section className="acp-persona-editor__body-editor" data-bf-component="assistant-config-page" data-bf-part="bodyEditor">
+                  <section className="acp-persona-editor__body-editor" data-openbitfun-component="assistant-config-page" data-openbitfun-part="bodyEditor">
                       {usesSourceBodyEditor ? (
                         <EditArea
                           key={`${fileName}-body-source`}
@@ -486,18 +486,18 @@ const AssistantConfigPage: React.FC = () => {
   return (
     <div
       className="nursery-page acp-page"
-      data-bf-component="assistant-config-page"
-      data-bf-part="root"
+      data-openbitfun-component="assistant-config-page"
+      data-openbitfun-part="root"
     >
       {/* Top bar — back only */}
-      <div className="nursery-page__bar acp-page__bar" data-bf-component="assistant-config-page" data-bf-part="toolbar">
+      <div className="nursery-page__bar acp-page__bar" data-openbitfun-component="assistant-config-page" data-openbitfun-part="toolbar">
         <Tooltip content={t('nursery.backToGallery')}>
           <IconButton
             type="button"
             size="sm"
             className="nursery-page__back"
-            data-bf-component="assistant-config-page"
-            data-bf-part="back"
+            data-openbitfun-component="assistant-config-page"
+            data-openbitfun-part="back"
             onClick={openGallery}
             aria-label={t('nursery.backToGallery')}
             icon={<Icon name="arrow-left" size="xs" />}
@@ -506,11 +506,11 @@ const AssistantConfigPage: React.FC = () => {
       </div>
 
       {/* Two-column layout */}
-      <div className="acp-layout" data-bf-component="assistant-config-page" data-bf-part="layout">
+      <div className="acp-layout" data-openbitfun-component="assistant-config-page" data-openbitfun-part="layout">
         {/* Left: identity header + quick input + sessions */}
         <div className="acp-layout__left">
           {/* Identity header above the input */}
-          <div className="acp-left-header" data-bf-component="assistant-config-page" data-bf-part="identity">
+          <div className="acp-left-header" data-openbitfun-component="assistant-config-page" data-openbitfun-part="identity">
             <AssistantAvatarPicker
               presetValue={displayIdentity.avatar}
               value={displayIdentity.emoji}
@@ -598,7 +598,7 @@ const AssistantConfigPage: React.FC = () => {
             workspaceId={workspace?.id}
             assistantName={identityName}
           />
-          <ScrollArea className="acp-sessions-area" data-bf-component="assistant-config-page" data-bf-part="sessions">
+          <ScrollArea className="acp-sessions-area" data-openbitfun-component="assistant-config-page" data-openbitfun-part="sessions">
             <h2 className="acp-sessions-area__title">{t('nursery.assistant.sessionsSectionTitle')}</h2>
             <SessionsSection
               workspaceId={workspace?.id}

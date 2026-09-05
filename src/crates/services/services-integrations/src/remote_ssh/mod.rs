@@ -1,10 +1,11 @@
 //! Remote SSH service contracts.
 //!
-//! `bitfun-core::service::remote_ssh` remains as the compatibility facade for
+//! `openbitfun-core::service::remote_ssh` remains as the compatibility facade for
 //! the legacy public path.
 
 mod file_name_search;
 pub mod paths;
+mod product_paths;
 pub mod remote_git;
 mod shell;
 #[cfg(feature = "remote-ssh-concrete")]

@@ -6,8 +6,8 @@ use std::sync::{Mutex, OnceLock};
 use serde_json::{json, Value};
 use tokio::sync::{RwLock, RwLockReadGuard};
 
-use bitfun_core::service::remote_connect::DeviceIdentity;
-use bitfun_product_domains::remote_surface::{
+use openbitfun_core::service::remote_connect::DeviceIdentity;
+use openbitfun_product_domains::remote_surface::{
     capability_map, digest as remote_surface_digest, PeerHostKind,
 };
 

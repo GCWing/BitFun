@@ -638,7 +638,7 @@ export class FlowChatManager {
       throw new Error('Workspace path is required to create an ACP session');
     }
 
-    window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+    window.dispatchEvent(new CustomEvent('openbitfun:acp-session-creation', {
       detail: { phase: 'start', clientId, action: 'create' },
     }));
 
@@ -671,7 +671,7 @@ export class FlowChatManager {
       succeeded = true;
       return response.sessionId;
     } finally {
-      window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+      window.dispatchEvent(new CustomEvent('openbitfun:acp-session-creation', {
         detail: { phase: 'finish', clientId, action: 'create', succeeded },
       }));
     }
@@ -976,7 +976,7 @@ export class FlowChatManager {
       
       this.syncTodosToStateMachine(sessionId);
       
-      window.dispatchEvent(new CustomEvent('bitfun:todowrite-update', {
+      window.dispatchEvent(new CustomEvent('openbitfun:todowrite-update', {
         detail: {
           sessionId,
           turnId,

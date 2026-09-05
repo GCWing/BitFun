@@ -1,7 +1,7 @@
 #![cfg(all(feature = "workspace-instructions", feature = "workspace-runtime"))]
 
-use bitfun_services_core::workspace::LocalWorkspaceFs;
-use bitfun_services_core::workspace_instructions::{
+use openbitfun_services_core::workspace::LocalWorkspaceFs;
+use openbitfun_services_core::workspace_instructions::{
     read_workspace_instruction_files, read_workspace_instruction_files_with_fs,
     read_workspace_instruction_sources, read_workspace_instruction_sources_with_fs,
 };

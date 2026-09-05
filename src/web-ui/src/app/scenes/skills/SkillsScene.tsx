@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -245,41 +245,41 @@ const SkillsScene: React.FC = () => {
     ?? CATEGORIES[0];
 
   return (
-    <div className="bitfun-skills-scene" data-testid="agent-skill-panel" data-bf-scene="skills" data-bf-part="root" data-bf-tab={activeTab}>
-      <div className="skills-tabs-bar" data-testid="skills-tabs" data-bf-scene="skills" data-bf-part="header" data-bf-tab={activeTab}>
-        <div className="skills-tabs-bar__tabs" data-bf-scene="skills" data-bf-part="tabs">
+    <div className="openbitfun-skills-scene" data-testid="agent-skill-panel" data-openbitfun-scene="skills" data-openbitfun-part="root" data-openbitfun-tab={activeTab}>
+      <div className="skills-tabs-bar" data-testid="skills-tabs" data-openbitfun-scene="skills" data-openbitfun-part="header" data-openbitfun-tab={activeTab}>
+        <div className="skills-tabs-bar__tabs" data-openbitfun-scene="skills" data-openbitfun-part="tabs">
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'installed' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('installed')}
-            data-bf-scene="skills"
-            data-bf-part="tab"
-            data-bf-tab="installed"
-            data-bf-state={activeTab === 'installed' ? 'active' : undefined}
+            data-openbitfun-scene="skills"
+            data-openbitfun-part="tab"
+            data-openbitfun-tab="installed"
+            data-openbitfun-state={activeTab === 'installed' ? 'active' : undefined}
           ><span>{t('installed.titleAll')}</span></button>
-          <span className="skills-tabs-bar__divider" data-bf-scene="skills" data-bf-part="tabDivider" />
+          <span className="skills-tabs-bar__divider" data-openbitfun-scene="skills" data-openbitfun-part="tabDivider" />
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
             disabled={!desktopConfigAvailable}
             onClick={() => setActiveTab('discover')}
-            data-bf-scene="skills"
-            data-bf-part="tab"
-            data-bf-tab="discover"
-            data-bf-state={activeTab === 'discover' ? 'active' : undefined}
+            data-openbitfun-scene="skills"
+            data-openbitfun-part="tab"
+            data-openbitfun-tab="discover"
+            data-openbitfun-state={activeTab === 'discover' ? 'active' : undefined}
           ><span>{t('market.title')}</span></button>
         </div>
       </div>
 
-      <div className="skills-page" data-bf-scene="skills" data-bf-part="content" data-bf-tab={activeTab}>
+      <div className="skills-page" data-openbitfun-scene="skills" data-openbitfun-part="content" data-openbitfun-tab={activeTab}>
 
         {activeTab === 'installed' && (
-          <div className="skills-installed" data-bf-scene="skills" data-bf-part="installed">
-            {desktopConfigAvailable && <ScrollArea className="skills-sidebar" data-bf-scene="skills" data-bf-part="sidebar">
-              <div className="skills-sidebar__header" data-bf-scene="skills" data-bf-part="sidebarHeader">
-                <h2 className="skills-sidebar__title" data-bf-scene="skills" data-bf-part="sidebarTitle">{t('installed.titleAll')}</h2>
+          <div className="skills-installed" data-openbitfun-scene="skills" data-openbitfun-part="installed">
+            {desktopConfigAvailable && <ScrollArea className="skills-sidebar" data-openbitfun-scene="skills" data-openbitfun-part="sidebar">
+              <div className="skills-sidebar__header" data-openbitfun-scene="skills" data-openbitfun-part="sidebarHeader">
+                <h2 className="skills-sidebar__title" data-openbitfun-scene="skills" data-openbitfun-part="sidebarTitle">{t('installed.titleAll')}</h2>
               </div>
-              <nav className="skills-sidebar__nav" data-bf-scene="skills" data-bf-part="sidebarNav">
+              <nav className="skills-sidebar__nav" data-openbitfun-scene="skills" data-openbitfun-part="sidebarNav">
                 {CATEGORIES.map((cat) => {
                   const count = installed.counts[cat.id];
                   const isEmpty = count === 0;
@@ -289,31 +289,31 @@ const SkillsScene: React.FC = () => {
                       type="button"
                       className={`skills-sidebar__item ${installedFilter === cat.id ? 'is-active' : ''} ${isEmpty ? 'is-empty' : ''}`}
                       onClick={() => setInstalledFilter(cat.id)}
-                      data-bf-scene="skills"
-                      data-bf-part="sidebarItem"
-                      data-bf-category={cat.id}
-                      data-bf-state={[
+                      data-openbitfun-scene="skills"
+                      data-openbitfun-part="sidebarItem"
+                      data-openbitfun-category={cat.id}
+                      data-openbitfun-state={[
                         installedFilter === cat.id && 'active',
                         isEmpty && 'empty',
                       ].filter(Boolean).join(' ') || undefined}
                     >
-                      <span className="skills-sidebar__item-icon" data-bf-scene="skills" data-bf-part="sidebarItemIcon">{cat.icon}</span>
-                      <span className="skills-sidebar__item-label" data-bf-scene="skills" data-bf-part="sidebarItemLabel">{t(cat.labelKey)}</span>
-                      <span className="skills-sidebar__item-count" data-bf-scene="skills" data-bf-part="sidebarItemCount">{isEmpty ? '—' : count}</span>
+                      <span className="skills-sidebar__item-icon" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemIcon">{cat.icon}</span>
+                      <span className="skills-sidebar__item-label" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemLabel">{t(cat.labelKey)}</span>
+                      <span className="skills-sidebar__item-count" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemCount">{isEmpty ? '—' : count}</span>
                     </button>
                   );
                 })}
               </nav>
-              <div className="skills-sidebar__footer" data-bf-scene="skills" data-bf-part="sidebarFooter">
-                <p className="skills-sidebar__hint" data-bf-scene="skills" data-bf-part="sidebarHint">
+              <div className="skills-sidebar__footer" data-openbitfun-scene="skills" data-openbitfun-part="sidebarFooter">
+                <p className="skills-sidebar__hint" data-openbitfun-scene="skills" data-openbitfun-part="sidebarHint">
                   {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
                 </p>
               </div>
             </ScrollArea>}
 
-            <div className="skills-main" data-bf-scene="skills" data-bf-part="main">
+            <div className="skills-main" data-openbitfun-scene="skills" data-openbitfun-part="main">
               {!desktopConfigAvailable ? (
-                <div className="skills-main__empty" data-testid="skills-management-unavailable" data-bf-scene="skills" data-bf-part="empty">
+                <div className="skills-main__empty" data-testid="skills-management-unavailable" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                   <Package size={28} strokeWidth={1.2} />
                   <span>{t(remoteConnectionActive ? 'list.remoteUnavailable' : 'list.desktopUnavailable')}</span>
                 </div>
@@ -321,7 +321,7 @@ const SkillsScene: React.FC = () => {
                 <SkillsSuiteView />
               ) : (
                 <>
-                  <div className="skills-main__toolbar" data-bf-scene="skills" data-bf-part="toolbar">
+                  <div className="skills-main__toolbar" data-openbitfun-scene="skills" data-openbitfun-part="toolbar">
                     <SearchField
                       className="skills-main__toolbar-search"
                       value={installedSearch}
@@ -337,9 +337,9 @@ const SkillsScene: React.FC = () => {
                       type="button"
                       className={`skills-main__chip-btn${hideDuplicates ? ' is-active' : ''}`}
                       onClick={() => setHideDuplicates(!hideDuplicates)}
-                      data-bf-scene="skills"
-                      data-bf-part="filterAction"
-                      data-bf-state={hideDuplicates ? 'active' : undefined}
+                      data-openbitfun-scene="skills"
+                      data-openbitfun-part="filterAction"
+                      data-openbitfun-state={hideDuplicates ? 'active' : undefined}
                     >
                       <Icon name="filter" size="xs" />
                       <span>{t('toolbar.hideDuplicates')}</span>
@@ -358,17 +358,17 @@ const SkillsScene: React.FC = () => {
                   <div className="skills-main__list-shell">
                     <div
                       className="skills-main__list-header"
-                      data-bf-scene="skills"
-                      data-bf-part="installedListHeader"
+                      data-openbitfun-scene="skills"
+                      data-openbitfun-part="installedListHeader"
                     >
                       <div className="skills-main__list-heading">
-                        <span data-bf-scene="skills" data-bf-part="installedListTitle">
+                        <span data-openbitfun-scene="skills" data-openbitfun-part="installedListTitle">
                           {t(activeInstalledCategory.titleKey)}
                         </span>
                         <span
                           className="skills-main__list-count"
-                          data-bf-scene="skills"
-                          data-bf-part="installedListCount"
+                          data-openbitfun-scene="skills"
+                          data-openbitfun-part="installedListCount"
                         >
                           {installedFiltered.length}
                         </span>
@@ -394,15 +394,15 @@ const SkillsScene: React.FC = () => {
                             key={`ins-sk-${i}`}
                             className="skills-card-skeleton"
                             style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                            data-bf-scene="skills"
-                            data-bf-part="skeleton"
+                            data-openbitfun-scene="skills"
+                            data-openbitfun-part="skeleton"
                           />
                         ))}
                       </ScrollArea>
                     )}
 
                     {!installed.loading && installed.error && (
-                      <div className="skills-main__empty skills-main__empty--error" data-bf-scene="skills" data-bf-part="error">
+                      <div className="skills-main__empty skills-main__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
                         <Package size={28} strokeWidth={1.2} />
                         <span>{t('list.loadFailed')}</span>
                         <Button
@@ -416,7 +416,7 @@ const SkillsScene: React.FC = () => {
                     )}
 
                     {!installed.loading && !installed.error && installedFiltered.length === 0 && (
-                      <div className="skills-main__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
+                      <div className="skills-main__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                         <Package size={28} strokeWidth={1.2} />
                         <span>
                           {installed.skills.length === 0
@@ -430,8 +430,8 @@ const SkillsScene: React.FC = () => {
                       <ScrollArea
                         className="skills-main__grid"
                         data-testid="skill-list"
-                        data-bf-scene="skills"
-                        data-bf-part="list"
+                        data-openbitfun-scene="skills"
+                        data-openbitfun-part="list"
                       >
                         {installedFiltered.map((skill, index) => (
                           <div
@@ -460,22 +460,22 @@ const SkillsScene: React.FC = () => {
                             data-skill-name={skill.name}
                             data-skill-level={skill.level}
                             data-skill-builtin={skill.isBuiltin ? 'true' : 'false'}
-                            data-bf-scene="skills"
-                            data-bf-part="installedCard"
-                            data-bf-level={skill.level}
-                            data-bf-state={[
+                            data-openbitfun-scene="skills"
+                            data-openbitfun-part="installedCard"
+                            data-openbitfun-level={skill.level}
+                            data-openbitfun-state={[
                               skill.isShadowed && 'shadowed',
                               skill.isBuiltin && 'builtin',
                             ].filter(Boolean).join(' ') || undefined}
                           >
-                            <div className="skills-card__top" data-bf-scene="skills" data-bf-part="installedCardTop">
-                              <div className="skills-card__icon" data-bf-scene="skills" data-bf-part="installedCardIcon">
+                            <div className="skills-card__top" data-openbitfun-scene="skills" data-openbitfun-part="installedCardTop">
+                              <div className="skills-card__icon" data-openbitfun-scene="skills" data-openbitfun-part="installedCardIcon">
                                 <Icon name="extension" size="md" />
                               </div>
-                              <div className="skills-card__info" data-bf-scene="skills" data-bf-part="installedCardInfo">
-                                <span className="skills-card__name" data-testid="skill-list-item-title" data-bf-scene="skills" data-bf-part="installedCardName">{skill.name}</span>
+                              <div className="skills-card__info" data-openbitfun-scene="skills" data-openbitfun-part="installedCardInfo">
+                                <span className="skills-card__name" data-testid="skill-list-item-title" data-openbitfun-scene="skills" data-openbitfun-part="installedCardName">{skill.name}</span>
                                 {skill.description?.trim() && (
-                                  <span className="skills-card__desc" data-testid="skill-list-item-description" data-bf-scene="skills" data-bf-part="installedCardDescription">{skill.description}</span>
+                                  <span className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</span>
                                 )}
                               </div>
                               <div className="skills-card__status-badges">
@@ -505,13 +505,13 @@ const SkillsScene: React.FC = () => {
 
                             <div
                               className="skills-card__meta"
-                              data-bf-scene="skills"
-                              data-bf-part="installedCardMeta"
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="installedCardMeta"
                             >
                               <span
                                 className="skills-card__source"
-                                data-bf-scene="skills"
-                                data-bf-part="installedCardSource"
+                                data-openbitfun-scene="skills"
+                                data-openbitfun-part="installedCardSource"
                               >
                                 <StatusPill className="skills-card__source-pill" tone="neutral">
                                   {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
@@ -521,8 +521,8 @@ const SkillsScene: React.FC = () => {
 
                             <div
                               className="skills-card__level"
-                              data-bf-scene="skills"
-                              data-bf-part="installedCardLevel"
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="installedCardLevel"
                             >
                               {skill.level === 'user'
                                 ? <Icon name="user" size="xs" />
@@ -542,8 +542,8 @@ const SkillsScene: React.FC = () => {
                               className="skills-card__global-toggle"
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
-                              data-bf-scene="skills"
-                              data-bf-part="installedCardStatus"
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="installedCardStatus"
                             >
                               {skill.level === 'user' ? (
                                 <Switch
@@ -564,16 +564,16 @@ const SkillsScene: React.FC = () => {
                               className="skills-card__actions"
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
-                              data-bf-scene="skills"
-                              data-bf-part="installedCardActions"
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="installedCardActions"
                             >
                               <IconButton
                                 size="sm"
                                 onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
                                 aria-label={t('list.item.detail')}
                                 title={t('list.item.detail')}
-                                data-bf-scene="skills"
-                                data-bf-part="installedCardDetails"
+                                data-openbitfun-scene="skills"
+                                data-openbitfun-part="installedCardDetails"
                                 icon={<Icon name="arrow-right" size="sm" />}
                               />
                               {canDeleteSkill(skill) && (
@@ -583,8 +583,8 @@ const SkillsScene: React.FC = () => {
                                   onClick={() => setDeleteTarget(skill)}
                                   aria-label={t('list.item.deleteTooltip')}
                                   title={t('list.item.deleteTooltip')}
-                                  data-bf-scene="skills"
-                                  data-bf-part="installedCardDelete"
+                                  data-openbitfun-scene="skills"
+                                  data-openbitfun-part="installedCardDelete"
                                   icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
                                 />
                               )}
@@ -602,14 +602,14 @@ const SkillsScene: React.FC = () => {
         )}
 
         {desktopConfigAvailable && activeTab === 'discover' && (
-          <div className="skills-discover" data-bf-scene="skills" data-bf-part="discover">
-            <div className="skills-discover__hero" data-bf-scene="skills" data-bf-part="discoverHero">
-              <div className="skills-discover__hero-content" data-bf-scene="skills" data-bf-part="discoverHeroContent">
-                <h1 className="skills-discover__title" data-bf-scene="skills" data-bf-part="discoverTitle">{t('market.title')}</h1>
-                <p className="skills-discover__subtitle" data-bf-scene="skills" data-bf-part="discoverSubtitle">
+          <div className="skills-discover" data-openbitfun-scene="skills" data-openbitfun-part="discover">
+            <div className="skills-discover__hero" data-openbitfun-scene="skills" data-openbitfun-part="discoverHero">
+              <div className="skills-discover__hero-content" data-openbitfun-scene="skills" data-openbitfun-part="discoverHeroContent">
+                <h1 className="skills-discover__title" data-openbitfun-scene="skills" data-openbitfun-part="discoverTitle">{t('market.title')}</h1>
+                <p className="skills-discover__subtitle" data-openbitfun-scene="skills" data-openbitfun-part="discoverSubtitle">
                   {t('market.subtitle')}
                 </p>
-                <div className="skills-discover__search-wrapper" data-bf-scene="skills" data-bf-part="discoverSearch">
+                <div className="skills-discover__search-wrapper" data-openbitfun-scene="skills" data-openbitfun-part="discoverSearch">
                   <SearchField
                     className="skills-discover__search"
                     value={searchDraft}
@@ -631,42 +631,42 @@ const SkillsScene: React.FC = () => {
 
             <ScrollArea className="skills-discover__content">
               {market.marketLoading && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-openbitfun-scene="skills" data-openbitfun-part="loading">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <div
                       key={`mkt-sk-${i}`}
                       className="skills-discover__skeleton-card"
                       style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                      data-bf-scene="skills"
-                      data-bf-part="skeleton"
+                      data-openbitfun-scene="skills"
+                      data-openbitfun-part="skeleton"
                     />
                   ))}
                 </div>
               )}
 
               {!market.marketLoading && market.marketError && (
-                <div className="skills-discover__empty skills-discover__empty--error" data-bf-scene="skills" data-bf-part="error">
+                <div className="skills-discover__empty skills-discover__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
                   <Package size={28} strokeWidth={1.5} />
                   <span>{market.marketError}</span>
                 </div>
               )}
 
               {!market.marketLoading && !market.marketError && market.loadingMore && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-openbitfun-scene="skills" data-openbitfun-part="loading">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <div
                       key={`mkt-page-sk-${i}`}
                       className="skills-discover__skeleton-card"
                       style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                      data-bf-scene="skills"
-                      data-bf-part="skeleton"
+                      data-openbitfun-scene="skills"
+                      data-openbitfun-part="skeleton"
                     />
                   ))}
                 </div>
               )}
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
-                <div className="skills-discover__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
+                <div className="skills-discover__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                   <Package size={28} strokeWidth={1.5} />
                   <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
                 </div>
@@ -675,14 +675,14 @@ const SkillsScene: React.FC = () => {
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
                 <>
                   {marketQuery && (
-                    <div className="skills-discover__results-info" data-bf-scene="skills" data-bf-part="resultsInfo">
+                    <div className="skills-discover__results-info" data-openbitfun-scene="skills" data-openbitfun-part="resultsInfo">
                       <span>
                         {t('market.resultsInfo', { query: marketQuery, count: market.totalLoaded })}
                       </span>
                     </div>
                   )}
 
-                  <div className="skills-discover__grid" data-testid="skill-list" data-bf-scene="skills" data-bf-part="list">
+                  <div className="skills-discover__grid" data-testid="skill-list" data-openbitfun-scene="skills" data-openbitfun-part="list">
                     {market.marketSkills.map((skill, index) => {
                       const isInstalled = installedSkillNames.has(skill.name);
                       const isDownloading = market.downloadingPackage === skill.installId;
@@ -705,7 +705,7 @@ const SkillsScene: React.FC = () => {
                             </StatusPill>
                           ) : null}
                           meta={(
-                            <span className="bitfun-skills-scene__market-meta">
+                            <span className="openbitfun-skills-scene__market-meta">
                               <TrendingUp size={12} />
                               {skill.installs ?? 0}
                             </span>
@@ -734,19 +734,19 @@ const SkillsScene: React.FC = () => {
                   </div>
 
                   {(market.totalPages > 1 || market.hasMore) && (
-                    <div className="skills-discover__pagination" data-bf-scene="skills" data-bf-part="pagination">
+                    <div className="skills-discover__pagination" data-openbitfun-scene="skills" data-openbitfun-part="pagination">
                       <button
                         type="button"
                         className="skills-discover__page-btn"
                         onClick={market.goToPrevPage}
                         disabled={market.currentPage === 0 || market.loadingMore}
                         aria-label={t('market.pagination.prev')}
-                        data-bf-scene="skills"
-                        data-bf-part="pageButton"
+                        data-openbitfun-scene="skills"
+                        data-openbitfun-part="pageButton"
                       >
                         <Icon name="chevron-left" size="sm" />
                       </button>
-                      <span className="skills-discover__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
+                      <span className="skills-discover__page-info" data-openbitfun-scene="skills" data-openbitfun-part="pageInfo">
                         {market.hasMore
                           ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
                           : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
@@ -757,8 +757,8 @@ const SkillsScene: React.FC = () => {
                         onClick={() => void market.goToNextPage()}
                         disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
                         aria-label={t('market.pagination.next')}
-                        data-bf-scene="skills"
-                        data-bf-part="pageButton"
+                        data-openbitfun-scene="skills"
+                        data-openbitfun-part="pageButton"
                       >
                         <Icon name="chevron-right" size="sm" />
                       </button>
@@ -821,7 +821,7 @@ const SkillsScene: React.FC = () => {
         descriptionTestId="skill-detail-description"
         closeButtonTestId="skill-detail-close"
         meta={selectedMarketSkill ? (
-          <span className="bitfun-skills-scene__market-meta">
+          <span className="openbitfun-skills-scene__market-meta">
             <TrendingUp size={12} />
             {selectedMarketSkill.installs ?? 0}
           </span>
@@ -873,16 +873,16 @@ const SkillsScene: React.FC = () => {
       >
         {selectedInstalledSkill ? (
           <>
-            <div className="bitfun-skills-scene__detail-row">
-              <span className="bitfun-skills-scene__detail-label">{t('list.item.sourceLabel')}</span>
-              <span className="bitfun-skills-scene__detail-value">
+            <div className="openbitfun-skills-scene__detail-row">
+              <span className="openbitfun-skills-scene__detail-label">{t('list.item.sourceLabel')}</span>
+              <span className="openbitfun-skills-scene__detail-value">
                 {getSkillSourceLabel(selectedInstalledSkill, t('list.item.unknownSource'))}
               </span>
             </div>
             {selectedInstalledSkill.isShadowed && (
-              <div className="bitfun-skills-scene__detail-row">
-                <span className="bitfun-skills-scene__detail-label">{t('list.item.shadowedLabel')}</span>
-                <span className="bitfun-skills-scene__detail-value">
+              <div className="openbitfun-skills-scene__detail-row">
+                <span className="openbitfun-skills-scene__detail-label">{t('list.item.shadowedLabel')}</span>
+                <span className="openbitfun-skills-scene__detail-value">
                   {t('list.item.shadowedDetail', {
                     source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
                       ?? t('list.item.unknownSource'),
@@ -890,12 +890,12 @@ const SkillsScene: React.FC = () => {
                 </span>
               </div>
             )}
-            <div className="bitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
-              <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
+            <div className="openbitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
+              <span className="openbitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
               {canRevealSkillPath ? (
                 <button
                   type="button"
-                  className="bitfun-skills-scene__detail-path-btn"
+                  className="openbitfun-skills-scene__detail-path-btn"
                   title={t('list.item.openPathInExplorer')}
                   onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
                   data-testid="skills-detail-path-btn"
@@ -903,34 +903,34 @@ const SkillsScene: React.FC = () => {
                   {selectedInstalledSkill.path}
                 </button>
               ) : (
-                <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+                <code className="openbitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
               )}
             </div>
           </>
         ) : null}
 
         {selectedMarketSkill?.source ? (
-          <div className="bitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
-            <span className="bitfun-skills-scene__detail-label">{t('market.item.sourceLabel')}</span>
-            <span className="bitfun-skills-scene__detail-value">{selectedMarketSkill.source}</span>
+          <div className="openbitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
+            <span className="openbitfun-skills-scene__detail-label">{t('market.item.sourceLabel')}</span>
+            <span className="openbitfun-skills-scene__detail-value">{selectedMarketSkill.source}</span>
           </div>
         ) : null}
 
         {selectedMarketSkill ? (
-          <div className="bitfun-skills-scene__detail-row">
-            <span className="bitfun-skills-scene__detail-label">{t('market.detail.installsLabel')}</span>
-            <span className="bitfun-skills-scene__detail-value">{selectedMarketSkill.installs ?? 0}</span>
+          <div className="openbitfun-skills-scene__detail-row">
+            <span className="openbitfun-skills-scene__detail-label">{t('market.detail.installsLabel')}</span>
+            <span className="openbitfun-skills-scene__detail-value">{selectedMarketSkill.installs ?? 0}</span>
           </div>
         ) : null}
 
         {selectedMarketSkill?.url ? (
-          <div className="bitfun-skills-scene__detail-row">
-            <span className="bitfun-skills-scene__detail-label">{t('market.detail.linkLabel')}</span>
+          <div className="openbitfun-skills-scene__detail-row">
+            <span className="openbitfun-skills-scene__detail-label">{t('market.detail.linkLabel')}</span>
             <a
               href={selectedMarketSkill.url}
               target="_blank"
               rel="noreferrer"
-              className="bitfun-skills-scene__detail-link"
+              className="openbitfun-skills-scene__detail-link"
               data-testid="skills-detail-external-link"
             >
               {selectedMarketSkill.url}
@@ -956,7 +956,7 @@ const SkillsScene: React.FC = () => {
           <DialogClose />
         </DialogHeader>
         <DialogBody inset="none">
-        <div className="bitfun-skills-scene__modal-form">
+        <div className="openbitfun-skills-scene__modal-form">
           <Field label={t('form.level.label')} controlWidth="fill">
             <Select
               options={[
@@ -974,12 +974,12 @@ const SkillsScene: React.FC = () => {
           </Field>
 
           {installed.formLevel === 'project' && installed.hasWorkspace ? (
-            <div className="bitfun-skills-scene__form-hint">
+            <div className="openbitfun-skills-scene__form-hint">
               {t('form.level.selectedProjectPath', { path: installed.workspacePath })}
             </div>
           ) : null}
 
-          <div className="bitfun-skills-scene__path-input">
+          <div className="openbitfun-skills-scene__path-input">
             <Field label={t('form.path.label')} controlWidth="fill">
               <Input
                 placeholder={t('form.path.placeholder')}
@@ -995,39 +995,39 @@ const SkillsScene: React.FC = () => {
               icon={<FolderOpen size={15} />}
             />
           </div>
-          <div className="bitfun-skills-scene__path-hint">
+          <div className="openbitfun-skills-scene__path-hint">
             {t('form.path.hint')}
           </div>
 
           {installed.isValidating ? (
-            <div className="bitfun-skills-scene__validating">{t('form.validating')}</div>
+            <div className="openbitfun-skills-scene__validating">{t('form.validating')}</div>
           ) : null}
 
           {installed.validationResult ? (
             <div
               className={[
-                'bitfun-skills-scene__validation',
+                'openbitfun-skills-scene__validation',
                 installed.validationResult.valid ? 'is-valid' : 'is-invalid',
               ].filter(Boolean).join(' ')}
             >
               {installed.validationResult.valid ? (
                 <>
-                  <div className="bitfun-skills-scene__validation-name">
+                  <div className="openbitfun-skills-scene__validation-name">
                     {installed.validationResult.name}
                   </div>
-                  <div className="bitfun-skills-scene__validation-desc">
+                  <div className="openbitfun-skills-scene__validation-desc">
                     {installed.validationResult.description}
                   </div>
                 </>
               ) : (
-                <div className="bitfun-skills-scene__validation-error">
+                <div className="openbitfun-skills-scene__validation-error">
                   {installed.validationResult.error}
                 </div>
               )}
             </div>
           ) : null}
 
-          <div className="bitfun-skills-scene__modal-form-actions">
+          <div className="openbitfun-skills-scene__modal-form-actions">
             <Button
               variant="outline"
               size="sm"

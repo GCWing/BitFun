@@ -1,1 +1,1 @@
-pub use bitfun_agent_stream::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+pub use openbitfun_agent_stream::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};

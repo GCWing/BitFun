@@ -1,4 +1,4 @@
-use bitfun_agent_runtime::session_control::{
+use openbitfun_agent_runtime::session_control::{
     render_session_control_tool_use_message, resolve_session_control_cancel_route,
     session_control_cancel_result_message, session_control_created_result_message,
     validate_session_control_input, SessionControlAction, SessionControlAgentType,

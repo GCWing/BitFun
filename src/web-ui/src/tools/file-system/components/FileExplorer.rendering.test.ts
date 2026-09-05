@@ -21,7 +21,7 @@ describe('FileExplorer rendering contract', () => {
   it('reserves the virtual scroller gutter so row width stays stable', () => {
     const stylesheet = readSource('../styles/FileExplorer.scss');
 
-    expect(stylesheet).toContain('.bitfun-file-explorer__tree--virtual > div');
+    expect(stylesheet).toContain('.openbitfun-file-explorer__tree--virtual > div');
     expect(stylesheet).toContain('scrollbar-gutter: stable;');
   });
 });

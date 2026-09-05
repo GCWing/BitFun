@@ -410,8 +410,8 @@ function forbiddenRuleTextForPath(path) {
 }
 
 function checkCargoManifest(crateDir) {
-  checkForbiddenManifestDeps(crateDir, ['bitfun-core'], () => {
-    return 'extracted crate must not depend on bitfun-core';
+  checkForbiddenManifestDeps(crateDir, ['openbitfun-core'], () => {
+    return 'extracted crate must not depend on openbitfun-core';
   });
 }
 
@@ -746,11 +746,11 @@ function checkRustImports(crateDir) {
     }
     const lines = readText(path).split(/\r?\n/);
     lines.forEach((line, index) => {
-      if (/\bbitfun_core::/.test(line)) {
+      if (/\bopenbitfun_core::/.test(line)) {
         failures.push({
           path,
           line: index + 1,
-          message: 'extracted crate must not import bitfun_core',
+          message: 'extracted crate must not import openbitfun_core',
         });
       }
     });
@@ -1073,7 +1073,7 @@ function checkForbiddenContentUnder(repoDir, patterns, reason, trackedRustRepoPa
 export function runCoreBoundaryCheck() {
   failures.length = 0;
 
-  if (process.env.BITFUN_BOUNDARY_CHECK_SELF_TEST === '1') {
+  if (process.env.OPENBITFUN_BOUNDARY_CHECK_SELF_TEST === '1') {
     runManifestParserSelfTest({
       isManifestDependencyDeclaration,
       parseManifestDependencies,

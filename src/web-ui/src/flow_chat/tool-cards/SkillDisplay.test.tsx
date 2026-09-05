@@ -25,7 +25,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui/flow-chat', () => ({
+vi.mock('@openbitfun/ui/flow-chat', () => ({
   SkillToolCard: ({ summary }: { summary: string }) => (
     <div data-testid="skill-summary">{summary}</div>
   ),

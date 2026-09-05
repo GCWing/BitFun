@@ -1,6 +1,6 @@
 # Release Channels
 
-BitFun packages use an immutable build-time release channel. End users do not
+OpenBitFun packages use an immutable build-time release channel. End users do not
 switch channels at runtime.
 
 ## Stable
@@ -35,7 +35,7 @@ The selected ref must resolve to a commit in the protected `main` history. The
 workflow pins that SHA before dispatching platform jobs and rejects an existing
 release tag if it points somewhere else. Configure the signing secrets and the
 public beta approval policy so untrusted pull-request code cannot access them.
-This protected-history requirement applies to the canonical `GCWing/BitFun`
+This protected-history requirement applies to the canonical `GCWing/OpenBitFun`
 repository; forks may run packaging from their own test branches. A fork beta
 uses that fork's `channel-beta` release as both updater origins, so it cannot
 silently consume or mutate the canonical beta channel.
@@ -52,12 +52,12 @@ Installing beta replaces stable; side-by-side installation is not supported.
 The mirror script defaults to stable. Run a separate beta sync with:
 
 ```bash
-BITFUN_RELEASE_CHANNEL=beta scripts/openbitfun-release-sync.sh
+OPENBITFUN_RELEASE_CHANNEL=beta scripts/openbitfun-release-sync.sh
 ```
 
 The beta invocation writes below `/release/beta` and intentionally skips the
 stable-only CLI and Relay floating manifests.
 
-Production cron must run this in-repo script from the BitFun checkout. Do not
+Production cron must run this in-repo script from the OpenBitFun checkout. Do not
 create a detached copy. Host paths, Nginx, and the rest of the origin restore
 steps live in [`deploy/openbitfun-host/README.md`](../../deploy/openbitfun-host/README.md).

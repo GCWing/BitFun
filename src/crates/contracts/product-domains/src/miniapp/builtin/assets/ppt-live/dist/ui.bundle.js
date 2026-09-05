@@ -37065,7 +37065,7 @@ function createPptxDeck(deck = {}) {
   pptx.author = "PPT Live";
   pptx.subject = deck.brief?.topic || deck.title || "PPT Live deck";
   pptx.title = deck.title || "PPT Live";
-  pptx.company = "BitFun";
+  pptx.company = "OpenBitFun";
   pptx.lang = "zh-CN";
   pptx.theme = {
     headFontFace: PPTX_LATIN_FONT_FACE,
@@ -37304,7 +37304,7 @@ function exportFormatTone(formatId) {
 }
 
 // src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/src/agent-prompt.js
-var PPT_DESIGN_SKILL_KEY = "user::bitfun-system::ppt-design";
+var PPT_DESIGN_SKILL_KEY = "user::openbitfun-system::ppt-design";
 function serializeInput(input) {
   try {
     return JSON.stringify(input ?? {}, null, 2);
@@ -37366,7 +37366,7 @@ ${prompt}`;
 
 ## \u7EA6\u675F
 
-- \u7528\u6237\u4ECE BitFun \u4F1A\u8BDD\u6C14\u6CE1\u53D1\u8D77\u8BF7\u6C42\u3001\u5728 PPT Live \u753B\u5E03\u4E0A\u770B\u7ED3\u679C\uFF0C\u751F\u6210\u8FC7\u7A0B\u4E2D\u4E0D\u4F1A\u56DE\u7B54\u63D0\u95EE\u3002\u5982\u6709\u6B67\u4E49\u81EA\u884C\u5224\u65AD\u6700\u4F18\u65B9\u6848\u5E76\u8BB0\u5F55\u5047\u8BBE\u3002
+- \u7528\u6237\u4ECE OpenBitFun \u4F1A\u8BDD\u6C14\u6CE1\u53D1\u8D77\u8BF7\u6C42\u3001\u5728 PPT Live \u753B\u5E03\u4E0A\u770B\u7ED3\u679C\uFF0C\u751F\u6210\u8FC7\u7A0B\u4E2D\u4E0D\u4F1A\u56DE\u7B54\u63D0\u95EE\u3002\u5982\u6709\u6B67\u4E49\u81EA\u884C\u5224\u65AD\u6700\u4F18\u65B9\u6848\u5E76\u8BB0\u5F55\u5047\u8BBE\u3002
 - \u4E0D\u8981\u8C03\u7528 AskUserQuestion\u3001ControlHub\u3001GenerativeUI\u3001ComputerUse \u7B49\u4EA4\u4E92\u5DE5\u5177\u3002
 
 ## Authoring subset\uFF08\u751F\u6210\u89C4\u5219\uFF09
@@ -37425,7 +37425,7 @@ ${prompt}`;
   return prompt;
 }
 
-// src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/src/bitfun-backend-adapter.js
+// src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/src/openbitfun-backend-adapter.js
 var EVENT_LISTENERS = /* @__PURE__ */ new Set();
 function emitEvent(event) {
   EVENT_LISTENERS.forEach((listener) => {
@@ -37496,7 +37496,7 @@ function installAgentBackend(app) {
     }
   };
 }
-function installBitFunBackendAdapter(app = window.app) {
+function installOpenBitFunBackendAdapter(app = window.app) {
   if (!app || app.backend?.call) return;
   if (app.agent?.run) installAgentBackend(app);
 }
@@ -38124,7 +38124,7 @@ var historyItems = [];
 var lastHistoryWriteAt = 0;
 var $ = (id) => document.getElementById(id);
 var runtime = () => window.app || {};
-installBitFunBackendAdapter(runtime());
+installOpenBitFunBackendAdapter(runtime());
 var STORAGE_TIMEOUT_MS = 2500;
 var memoryStorage = /* @__PURE__ */ new Map();
 function safeLocalStorageGet(key) {
@@ -41036,7 +41036,7 @@ function resolveAppearanceMode(mode) {
   return "light";
 }
 function getHostAppearanceMode() {
-  const attributeMode = document.documentElement.getAttribute("data-bf-appearance-mode");
+  const attributeMode = document.documentElement.getAttribute("data-openbitfun-appearance-mode");
   if (attributeMode === "dark" || attributeMode === "light") return attributeMode;
   const runtimeMode = runtime().appearanceMode;
   if (runtimeMode === "dark" || runtimeMode === "light") return runtimeMode;
@@ -41045,7 +41045,7 @@ function getHostAppearanceMode() {
 function applyAppearanceMode(mode) {
   const resolved = resolveAppearanceMode(mode);
   const root = document.documentElement;
-  root.setAttribute("data-bf-appearance-mode", resolved);
+  root.setAttribute("data-openbitfun-appearance-mode", resolved);
   root.style.colorScheme = resolved;
   ensureCanvasFitted();
   rerender();

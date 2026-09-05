@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .viewport,
   .list,
@@ -11,27 +11,27 @@
 
   .root {
     display: flex;
-    inline-size: var(--bf-overlay-menu-inline-size);
+    inline-size: var(--openbitfun-overlay-menu-inline-size);
     max-inline-size: 100%;
-    max-block-size: var(--bf-overlay-menu-max-block-size);
-    padding-block: var(--bf-overlay-menu-surface-padding);
-    padding-inline: var(--bf-overlay-menu-surface-padding) 0;
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-overlay-menu-surface-radius);
-    color: var(--bf-color-action-neutral-content);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-menu);
+    max-block-size: var(--openbitfun-overlay-menu-max-block-size);
+    padding-block: var(--openbitfun-overlay-menu-surface-padding);
+    padding-inline: var(--openbitfun-overlay-menu-surface-padding) 0;
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-overlay-menu-surface-radius);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-menu);
   }
 
   .viewport {
     flex: 1 1 auto;
     min-inline-size: 0;
     max-block-size: calc(
-      var(--bf-overlay-menu-max-block-size)
-      - var(--bf-overlay-menu-surface-padding)
-      - var(--bf-overlay-menu-surface-padding)
+      var(--openbitfun-overlay-menu-max-block-size)
+      - var(--openbitfun-overlay-menu-surface-padding)
+      - var(--openbitfun-overlay-menu-surface-padding)
     );
-    padding-inline-end: var(--bf-overlay-menu-scrollbar-gap);
+    padding-inline-end: var(--openbitfun-overlay-menu-scrollbar-gap);
     /* Do not reserve an invisible one-sided track in menus that do not scroll. */
     scrollbar-gutter: auto;
   }
@@ -40,14 +40,14 @@
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
     /* Keep item focus rings inside the scroll viewport on every edge. */
-    padding: var(--bf-focus-width);
+    padding: var(--openbitfun-focus-width);
     /* Balance the end inset with the start inset after the viewport scrollbar gap. */
     padding-inline-end: calc(
-      var(--bf-overlay-menu-surface-padding)
-      + var(--bf-focus-width)
-      - var(--bf-overlay-menu-scrollbar-gap)
+      var(--openbitfun-overlay-menu-surface-padding)
+      + var(--openbitfun-focus-width)
+      - var(--openbitfun-overlay-menu-scrollbar-gap)
     );
   }
 
@@ -60,32 +60,32 @@
   }
 
   .section {
-    gap: var(--bf-overlay-menu-section-gap);
+    gap: var(--openbitfun-overlay-menu-section-gap);
   }
 
   .items {
-    gap: calc(var(--bf-space-1) / 2);
+    gap: calc(var(--openbitfun-space-1) / 2);
   }
 
   .heading {
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--bf-overlay-menu-heading-height);
-    gap: var(--bf-overlay-menu-heading-gap);
-    padding-inline: var(--bf-overlay-menu-heading-padding-inline);
+    min-block-size: var(--openbitfun-overlay-menu-heading-height);
+    gap: var(--openbitfun-overlay-menu-heading-gap);
+    padding-inline: var(--openbitfun-overlay-menu-heading-padding-inline);
   }
 
   .headingLabel {
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-body-sm-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-body-sm-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -97,41 +97,41 @@
   }
 
   .headingAction.headingAction {
-    inline-size: var(--bf-overlay-menu-heading-action-size);
-    block-size: var(--bf-overlay-menu-heading-action-size);
-    border-radius: var(--bf-radius-xs);
+    inline-size: var(--openbitfun-overlay-menu-heading-action-size);
+    block-size: var(--openbitfun-overlay-menu-heading-action-size);
+    border-radius: var(--openbitfun-radius-xs);
   }
 
   .item {
     inline-size: 100%;
-    min-block-size: var(--bf-overlay-menu-item-height);
-    padding-inline: var(--bf-overlay-menu-item-padding-inline);
-    border-radius: var(--bf-overlay-menu-item-radius);
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+    padding-inline: var(--openbitfun-overlay-menu-item-padding-inline);
+    border-radius: var(--openbitfun-overlay-menu-item-radius);
   }
 
-  .item > [data-bf-part="trigger"] {
-    gap: var(--bf-overlay-menu-item-gap);
+  .item > [data-openbitfun-part="trigger"] {
+    gap: var(--openbitfun-overlay-menu-item-gap);
   }
 
-  .item:has(> [data-bf-part="trigger"][aria-checked="true"]) {
-    color: var(--bf-color-action-neutral-content);
-    background: var(--bf-color-action-neutral-surface);
+  .item:has(> [data-openbitfun-part="trigger"][aria-checked="true"]) {
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
-  .item [data-bf-part="leading"] {
-    inline-size: var(--bf-overlay-menu-item-icon-size);
-    block-size: var(--bf-overlay-menu-item-icon-size);
+  .item [data-openbitfun-part="leading"] {
+    inline-size: var(--openbitfun-overlay-menu-item-icon-size);
+    block-size: var(--openbitfun-overlay-menu-item-icon-size);
   }
 
   .separator {
     flex: 0 0 auto;
     inline-size: 100%;
-    block-size: var(--bf-border-width-default);
+    block-size: var(--openbitfun-border-width-default);
     margin-block: calc(
-      var(--bf-overlay-menu-section-gap)
-      - calc(var(--bf-space-1) / 2)
+      var(--openbitfun-overlay-menu-section-gap)
+      - calc(var(--openbitfun-space-1) / 2)
     );
-    background: var(--bf-color-border-subtle);
+    background: var(--openbitfun-color-border-subtle);
   }
 
   @media (forced-colors: active) {

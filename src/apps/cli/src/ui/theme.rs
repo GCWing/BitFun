@@ -262,7 +262,7 @@ fn parse_osc_color(s: &str) -> Option<(u8, u8, u8)> {
 
 impl Theme {
     pub(crate) fn dark() -> Self {
-        Self::from_builtin_preset("bitfun-dark", Appearance::Dark)
+        Self::from_builtin_preset("openbitfun-dark", Appearance::Dark)
     }
 
     pub(crate) fn dark_ansi16() -> Self {
@@ -299,7 +299,7 @@ impl Theme {
     }
 
     pub(crate) fn light() -> Self {
-        Self::from_builtin_preset("bitfun-light", Appearance::Light)
+        Self::from_builtin_preset("openbitfun-light", Appearance::Light)
     }
 
     pub(crate) fn light_ansi16() -> Self {
@@ -719,45 +719,45 @@ static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> =
 
     HashMap::from([
         parse(
-            "bitfun-cyber",
+            "openbitfun-cyber",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-cyber.json"
+                "/themes/presets/openbitfun-cyber.json"
             )),
         ),
         parse(
-            "bitfun-dark",
+            "openbitfun-dark",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-dark.json"
+                "/themes/presets/openbitfun-dark.json"
             )),
         ),
         parse(
-            "bitfun-ink-night",
+            "openbitfun-ink-night",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-ink-night.json"
+                "/themes/presets/openbitfun-ink-night.json"
             )),
         ),
         parse(
-            "bitfun-light",
+            "openbitfun-light",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-light.json"
+                "/themes/presets/openbitfun-light.json"
             )),
         ),
         parse(
-            "bitfun-midnight",
+            "openbitfun-midnight",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-midnight.json"
+                "/themes/presets/openbitfun-midnight.json"
             )),
         ),
         parse(
-            "bitfun-tokyo-night",
+            "openbitfun-tokyo-night",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/bitfun-tokyo-night.json"
+                "/themes/presets/openbitfun-tokyo-night.json"
             )),
         ),
     ])

@@ -40,7 +40,7 @@ export const MobileIconButton = forwardRef<HTMLButtonElement, MobileIconButtonPr
         aria-pressed={selected}
         className={classNames(styles.root, className)}
         data-appearance={appearance}
-        data-bf-component="mobile-icon-button"
+        data-openbitfun-component="mobile-icon-button"
         data-loading={loading ? "true" : "false"}
         data-selected={selected === true ? "true" : "false"}
         data-size={size}
@@ -48,8 +48,8 @@ export const MobileIconButton = forwardRef<HTMLButtonElement, MobileIconButtonPr
         ref={ref}
         type={type}
       >
-        <span aria-hidden="true" className={styles.spinner} data-bf-part="progress" />
-        <span aria-hidden="true" className={styles.icon} data-bf-part="icon">
+        <span aria-hidden="true" className={styles.spinner} data-openbitfun-part="progress" />
+        <span aria-hidden="true" className={styles.icon} data-openbitfun-part="icon">
           {icon}
         </span>
       </button>

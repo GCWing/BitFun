@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     ClockPort, FileSystemPort, PortResult, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeServiceCapability, RuntimeServicePort, WorkspacePort,
 };

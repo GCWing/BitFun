@@ -4,8 +4,8 @@ use crate::infrastructure::{
 };
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::*;
-use bitfun_services_core::filesystem::FileSystemService as BaseFileSystemService;
 use log::debug;
+use openbitfun_services_core::filesystem::FileSystemService as BaseFileSystemService;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -14,15 +14,15 @@ use super::types::{DirectoryScanResult, DirectoryStats, FileSearchOptions, FileS
 
 const SLOW_FILESYSTEM_OPERATION_LOG_MS: u64 = 500;
 
-fn map_filesystem_error(error: impl std::fmt::Display) -> BitFunError {
-    BitFunError::service(error.to_string())
+fn map_filesystem_error(error: impl std::fmt::Display) -> OpenBitFunError {
+    OpenBitFunError::service(error.to_string())
 }
 
 #[cfg(feature = "remote-workspace")]
 async fn read_remote_directory_contents(
     path: &str,
     preferred_remote_connection_id: Option<&str>,
-) -> Option<BitFunResult<Vec<FileTreeNode>>> {
+) -> Option<OpenBitFunResult<Vec<FileTreeNode>>> {
     let explicit_connection_id = preferred_remote_connection_id
         .map(str::trim)
         .filter(|value| !value.is_empty());
@@ -39,7 +39,7 @@ async fn read_remote_directory_contents(
     let entry = match remote_entry {
         Some(entry) => entry,
         None if explicit_connection_id.is_some() => {
-            return Some(Err(BitFunError::service(format!(
+            return Some(Err(OpenBitFunError::service(format!(
                 "Remote workspace connection '{}' is unavailable or does not own path '{}'; local filesystem fallback was not attempted",
                 explicit_connection_id.unwrap_or_default(),
                 path
@@ -50,12 +50,12 @@ async fn read_remote_directory_contents(
 
     let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
     else {
-        return Some(Err(BitFunError::service(
+        return Some(Err(OpenBitFunError::service(
             "Remote workspace manager is unavailable",
         )));
     };
     let Some(file_service) = manager.get_file_service().await else {
-        return Some(Err(BitFunError::service(
+        return Some(Err(OpenBitFunError::service(
             "Remote file service is unavailable",
         )));
     };
@@ -74,7 +74,7 @@ async fn read_remote_directory_contents(
                     )
                 })
                 .collect()),
-            Err(error) => Err(BitFunError::service(format!(
+            Err(error) => Err(OpenBitFunError::service(format!(
                 "Failed to read remote directory: {}",
                 error
             ))),
@@ -90,7 +90,7 @@ async fn read_remote_directory_contents(
 async fn read_remote_directory_contents(
     path: &str,
     preferred_remote_connection_id: Option<&str>,
-) -> Option<BitFunResult<Vec<FileTreeNode>>> {
+) -> Option<OpenBitFunResult<Vec<FileTreeNode>>> {
     use crate::service::remote_ssh::workspace_state::{
         is_remote_path, remote_workspace_not_compiled_message,
     };
@@ -99,7 +99,7 @@ async fn read_remote_directory_contents(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     if explicit_connection_id.is_some() || is_remote_path(path).await {
-        return Some(Err(BitFunError::NotImplemented(
+        return Some(Err(OpenBitFunError::NotImplemented(
             remote_workspace_not_compiled_message(path),
         )));
     }
@@ -130,7 +130,7 @@ impl FileSystemService {
     }
 
     /// Builds a file tree.
-    pub async fn build_file_tree(&self, root_path: &str) -> BitFunResult<Vec<FileTreeNode>> {
+    pub async fn build_file_tree(&self, root_path: &str) -> OpenBitFunResult<Vec<FileTreeNode>> {
         self.build_file_tree_with_remote_hint(root_path, None).await
     }
 
@@ -139,7 +139,7 @@ impl FileSystemService {
         &self,
         root_path: &str,
         preferred_remote_connection_id: Option<&str>,
-    ) -> BitFunResult<Vec<FileTreeNode>> {
+    ) -> OpenBitFunResult<Vec<FileTreeNode>> {
         let started_at = std::time::Instant::now();
         // An explicit remote connection id is exact target identity, never a
         // hint the local scanner may ignore: route it through the remote
@@ -173,7 +173,7 @@ impl FileSystemService {
     }
 
     /// Scans a directory and returns a detailed result.
-    pub async fn scan_directory(&self, root_path: &str) -> BitFunResult<DirectoryScanResult> {
+    pub async fn scan_directory(&self, root_path: &str) -> OpenBitFunResult<DirectoryScanResult> {
         let start_time = std::time::Instant::now();
 
         let (files, statistics) = if is_remote_path(root_path).await {
@@ -221,7 +221,7 @@ impl FileSystemService {
     }
 
     /// Gets directory contents (shallow).
-    pub async fn get_directory_contents(&self, path: &str) -> BitFunResult<Vec<FileTreeNode>> {
+    pub async fn get_directory_contents(&self, path: &str) -> OpenBitFunResult<Vec<FileTreeNode>> {
         self.get_directory_contents_with_remote_hint(path, None)
             .await
     }
@@ -230,7 +230,7 @@ impl FileSystemService {
         &self,
         path: &str,
         preferred_remote_connection_id: Option<&str>,
-    ) -> BitFunResult<Vec<FileTreeNode>> {
+    ) -> OpenBitFunResult<Vec<FileTreeNode>> {
         if let Some(result) =
             read_remote_directory_contents(path, preferred_remote_connection_id).await
         {
@@ -249,7 +249,7 @@ impl FileSystemService {
         root_path: &str,
         pattern: &str,
         options: FileSearchOptions,
-    ) -> BitFunResult<Vec<FileSearchResult>> {
+    ) -> OpenBitFunResult<Vec<FileSearchResult>> {
         self.inner
             .search_files(root_path, pattern, options)
             .await
@@ -262,7 +262,7 @@ impl FileSystemService {
         pattern: &str,
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> OpenBitFunResult<FileSearchOutcome> {
         self.search_file_names_with_progress(root_path, pattern, options, cancel_flag, None)
             .await
     }
@@ -274,7 +274,7 @@ impl FileSystemService {
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> OpenBitFunResult<FileSearchOutcome> {
         self.inner
             .search_file_names_with_progress(
                 root_path,
@@ -293,7 +293,7 @@ impl FileSystemService {
         pattern: &str,
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> OpenBitFunResult<FileSearchOutcome> {
         self.search_file_contents_with_progress(root_path, pattern, options, cancel_flag, None)
             .await
     }
@@ -305,7 +305,7 @@ impl FileSystemService {
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> OpenBitFunResult<FileSearchOutcome> {
         self.inner
             .search_file_contents_with_progress(
                 root_path,
@@ -319,7 +319,7 @@ impl FileSystemService {
     }
 
     /// Reads a file.
-    pub async fn read_file(&self, file_path: &str) -> BitFunResult<FileReadResult> {
+    pub async fn read_file(&self, file_path: &str) -> OpenBitFunResult<FileReadResult> {
         self.inner
             .read_file(file_path)
             .await
@@ -327,7 +327,7 @@ impl FileSystemService {
     }
 
     /// Reads the exact file bytes without text or binary-content inference.
-    pub async fn read_file_bytes(&self, file_path: &str) -> BitFunResult<Vec<u8>> {
+    pub async fn read_file_bytes(&self, file_path: &str) -> OpenBitFunResult<Vec<u8>> {
         self.inner
             .read_file_bytes(file_path)
             .await
@@ -339,7 +339,7 @@ impl FileSystemService {
         &self,
         file_path: &str,
         content: &str,
-    ) -> BitFunResult<FileWriteResult> {
+    ) -> OpenBitFunResult<FileWriteResult> {
         self.inner
             .write_file(file_path, content)
             .await
@@ -352,7 +352,7 @@ impl FileSystemService {
         file_path: &str,
         content: &str,
         options: FileOperationOptions,
-    ) -> BitFunResult<FileWriteResult> {
+    ) -> OpenBitFunResult<FileWriteResult> {
         self.inner
             .write_file_with_options(file_path, content, options)
             .await
@@ -360,7 +360,7 @@ impl FileSystemService {
     }
 
     /// Copies a file.
-    pub async fn copy_file(&self, from: &str, to: &str) -> BitFunResult<u64> {
+    pub async fn copy_file(&self, from: &str, to: &str) -> OpenBitFunResult<u64> {
         self.inner
             .copy_file(from, to)
             .await
@@ -368,7 +368,7 @@ impl FileSystemService {
     }
 
     /// Moves a file.
-    pub async fn move_file(&self, from: &str, to: &str) -> BitFunResult<()> {
+    pub async fn move_file(&self, from: &str, to: &str) -> OpenBitFunResult<()> {
         self.inner
             .move_file(from, to)
             .await
@@ -376,7 +376,7 @@ impl FileSystemService {
     }
 
     /// Deletes a file.
-    pub async fn delete_file(&self, file_path: &str) -> BitFunResult<()> {
+    pub async fn delete_file(&self, file_path: &str) -> OpenBitFunResult<()> {
         self.inner
             .delete_file(file_path)
             .await
@@ -384,7 +384,7 @@ impl FileSystemService {
     }
 
     /// Gets file info.
-    pub async fn get_file_info(&self, file_path: &str) -> BitFunResult<FileInfo> {
+    pub async fn get_file_info(&self, file_path: &str) -> OpenBitFunResult<FileInfo> {
         self.inner
             .get_file_info(file_path)
             .await
@@ -392,7 +392,7 @@ impl FileSystemService {
     }
 
     /// Creates a directory.
-    pub async fn create_directory(&self, dir_path: &str) -> BitFunResult<()> {
+    pub async fn create_directory(&self, dir_path: &str) -> OpenBitFunResult<()> {
         self.inner
             .create_directory(dir_path)
             .await
@@ -400,7 +400,7 @@ impl FileSystemService {
     }
 
     /// Deletes a directory.
-    pub async fn delete_directory(&self, dir_path: &str, recursive: bool) -> BitFunResult<()> {
+    pub async fn delete_directory(&self, dir_path: &str, recursive: bool) -> OpenBitFunResult<()> {
         self.inner
             .delete_directory(dir_path, recursive)
             .await
@@ -423,7 +423,7 @@ impl FileSystemService {
     }
 
     /// Gets the file size.
-    pub async fn get_file_size(&self, file_path: &str) -> BitFunResult<u64> {
+    pub async fn get_file_size(&self, file_path: &str) -> OpenBitFunResult<u64> {
         self.inner
             .get_file_size(file_path)
             .await
@@ -431,7 +431,7 @@ impl FileSystemService {
     }
 
     /// Reads a text file quickly.
-    pub async fn read_text_file(&self, file_path: &str) -> BitFunResult<String> {
+    pub async fn read_text_file(&self, file_path: &str) -> OpenBitFunResult<String> {
         self.inner
             .read_text_file(file_path)
             .await
@@ -439,7 +439,7 @@ impl FileSystemService {
     }
 
     /// Writes a text file quickly.
-    pub async fn write_text_file(&self, file_path: &str, content: &str) -> BitFunResult<()> {
+    pub async fn write_text_file(&self, file_path: &str, content: &str) -> OpenBitFunResult<()> {
         self.inner
             .write_text_file(file_path, content)
             .await
@@ -447,7 +447,7 @@ impl FileSystemService {
     }
 
     /// Lists all files in a directory (recursive).
-    pub async fn list_all_files(&self, root_path: &str) -> BitFunResult<Vec<String>> {
+    pub async fn list_all_files(&self, root_path: &str) -> OpenBitFunResult<Vec<String>> {
         let tree = self.build_file_tree(root_path).await?;
         let mut files = Vec::new();
 
@@ -467,7 +467,7 @@ impl FileSystemService {
     }
 
     /// Calculates the directory size.
-    pub async fn calculate_directory_size(&self, dir_path: &str) -> BitFunResult<u64> {
+    pub async fn calculate_directory_size(&self, dir_path: &str) -> OpenBitFunResult<u64> {
         let scan_result = self.scan_directory(dir_path).await?;
         Ok(scan_result.statistics.total_size_bytes)
     }
@@ -477,7 +477,7 @@ impl FileSystemService {
         &self,
         root_path: &str,
         extension: &str,
-    ) -> BitFunResult<Vec<String>> {
+    ) -> OpenBitFunResult<Vec<String>> {
         let options = FileSearchOptions {
             include_content: false,
             file_extensions: Some(vec![extension.to_lowercase()]),
@@ -493,7 +493,7 @@ impl FileSystemService {
     }
 
     /// Gets directory statistics.
-    pub async fn get_directory_stats(&self, dir_path: &str) -> BitFunResult<DirectoryStats> {
+    pub async fn get_directory_stats(&self, dir_path: &str) -> OpenBitFunResult<DirectoryStats> {
         let scan_result = self.scan_directory(dir_path).await?;
         let stats = scan_result.statistics;
 
@@ -515,7 +515,10 @@ impl FileSystemService {
     }
 
     /// SHA-256 hex of on-disk content after editor-sync normalization (see `FileOperationService`).
-    pub async fn editor_sync_content_sha256_hex(&self, file_path: &str) -> BitFunResult<String> {
+    pub async fn editor_sync_content_sha256_hex(
+        &self,
+        file_path: &str,
+    ) -> OpenBitFunResult<String> {
         self.inner
             .editor_sync_content_sha256_hex(file_path)
             .await
@@ -560,12 +563,15 @@ mod remote_marker_tests {
         ] {
             let error = result.expect_err("remote-marked requests must fail closed");
             assert!(
-                matches!(error, crate::util::errors::BitFunError::NotImplemented(_)),
+                matches!(
+                    error,
+                    crate::util::errors::OpenBitFunError::NotImplemented(_)
+                ),
                 "unexpected error: {error}"
             );
             let message = error.to_string();
             assert!(
-                message.contains("not compiled into this BitFun host"),
+                message.contains("not compiled into this OpenBitFun host"),
                 "unexpected error: {message}"
             );
             assert!(

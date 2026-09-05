@@ -13,9 +13,9 @@ test("Alert exposes semantic tone and public anatomy", () => {
     tone: "warning",
   }));
 
-  assert.match(markup, /data-bf-component="alert"/);
-  assert.match(markup, /data-bf-tone="warning"/);
-  assert.match(markup, /data-bf-part="title"/);
-  assert.match(markup, /data-bf-part="message"/);
-  assert.match(markup, /data-bf-part="description"/);
+  assert.match(markup, /data-openbitfun-component="alert"/);
+  assert.match(markup, /data-openbitfun-tone="warning"/);
+  assert.match(markup, /data-openbitfun-part="title"/);
+  assert.match(markup, /data-openbitfun-part="message"/);
+  assert.match(markup, /data-openbitfun-part="description"/);
 });

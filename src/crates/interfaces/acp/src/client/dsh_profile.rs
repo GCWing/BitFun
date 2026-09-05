@@ -1,14 +1,14 @@
 //! Materialize the bundled DeepSeek Harness bridge into the user's dsh install.
 //!
-//! BitFun ships a compiled ACP bridge, but it does not ship a harness: `dsh` is
+//! OpenBitFun ships a compiled ACP bridge, but it does not ship a harness: `dsh` is
 //! a profile launcher, and a profile is just a directory under
 //! `$DSH_HOME/profiles/`. So instead of publishing the bridge to a registry, we
 //! copy the built profile next to the harness the user already installed and
-//! launch it with `dsh --profile bitfun-acp`. Every `@deepseek-ai/dsh-*` row in
+//! launch it with `dsh --profile openbitfun-acp`. Every `@deepseek-ai/dsh-*` row in
 //! that profile resolves out of the user's own installation through the flat
 //! `profiles/node_modules` fallback the launcher maintains, so nothing here
 //! installs a second harness, and the user's model and credentials — which live
-//! in dsh, not in BitFun — apply unchanged.
+//! in dsh, not in OpenBitFun — apply unchanged.
 //!
 //! The copy is idempotent: the built profile carries a content digest, and a
 //! destination already stamped with the same digest is left alone.
@@ -21,8 +21,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bitfun_core::service::remote_ssh::SSHConnectionManager;
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::service::remote_ssh::SSHConnectionManager;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -32,7 +32,7 @@ use super::requirements::probe_executable;
 /// Points directly at a built profile directory, overriding every other
 /// candidate. This is how a packaged build that lays resources out unusually —
 /// or a developer testing an unbuilt tree — names the source explicitly.
-const SOURCE_DIR_ENV: &str = "BITFUN_DSH_PROFILE_DIR";
+const SOURCE_DIR_ENV: &str = "OPENBITFUN_DSH_PROFILE_DIR";
 
 /// dsh's own state directory variable. Respecting it matters: a user who moved
 /// `$DSH_HOME` keeps their models and credentials there, and a profile written
@@ -40,7 +40,7 @@ const SOURCE_DIR_ENV: &str = "BITFUN_DSH_PROFILE_DIR";
 const DSH_HOME_ENV: &str = "DSH_HOME";
 
 /// Basename of the build stamp `scripts/build-profile.mjs` writes.
-const STAMP_FILENAME: &str = ".bitfun-bridge.json";
+const STAMP_FILENAME: &str = ".openbitfun-bridge.json";
 
 /// Directories the build owns end to end, replaced rather than merged.
 ///
@@ -69,7 +69,7 @@ struct BridgeStamp {
 /// a filesystem that refused the write — each of which would otherwise surface
 /// as `dsh` complaining about a profile that does not exist, or as a pile of
 /// module resolution failures with no hint about the cause.
-pub(crate) async fn ensure_bundled_profile(profile: &str) -> BitFunResult<PathBuf> {
+pub(crate) async fn ensure_bundled_profile(profile: &str) -> OpenBitFunResult<PathBuf> {
     let (source, stamp) = bundled_build(profile)?;
 
     // Checked on every launch, not just when copying: the pairing can break
@@ -89,7 +89,7 @@ pub(crate) async fn ensure_bundled_profile(profile: &str) -> BitFunResult<PathBu
     tokio::task::spawn_blocking(move || install_profile(&source, &target))
         .await
         .map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to install the DeepSeek Harness profile: {error}"
             ))
         })??;
@@ -101,17 +101,17 @@ pub(crate) async fn ensure_bundled_profile(profile: &str) -> BitFunResult<PathBu
     Ok(destination)
 }
 
-/// The built profile this BitFun ships, and what it says about itself.
-fn bundled_build(profile: &str) -> BitFunResult<(PathBuf, BridgeStamp)> {
+/// The built profile this OpenBitFun ships, and what it says about itself.
+fn bundled_build(profile: &str) -> OpenBitFunResult<(PathBuf, BridgeStamp)> {
     let source = bundled_profile_source(profile).ok_or_else(|| {
-        BitFunError::service(format!(
-            "The bundled DeepSeek Harness profile '{profile}' is missing from this BitFun build. \
+        OpenBitFunError::service(format!(
+            "The bundled DeepSeek Harness profile '{profile}' is missing from this OpenBitFun build. \
              Build it with `npm run build && node scripts/build-profile.mjs` in packages/dsh-acp, \
              or point {SOURCE_DIR_ENV} at a built profile directory."
         ))
     })?;
     let stamp = read_stamp(&source)?.ok_or_else(|| {
-        BitFunError::service(format!(
+        OpenBitFunError::service(format!(
             "The bundled DeepSeek Harness profile at {} has no {STAMP_FILENAME}; it is not a \
              finished build.",
             source.display()
@@ -126,15 +126,15 @@ fn bundled_build(profile: &str) -> BitFunResult<(PathBuf, BridgeStamp)> {
 /// failure here: a missing `dsh` already surfaces as an install prompt in the
 /// agent list, and guessing about an unrecognized version string would block a
 /// launch that may well work.
-async fn require_supported_dsh(minimum: &str) -> BitFunResult<()> {
+async fn require_supported_dsh(minimum: &str) -> OpenBitFunResult<()> {
     let Some(installed) = probe_executable("dsh").await.version else {
         return Ok(());
     };
     if version_is_supported(&installed, minimum) {
         return Ok(());
     }
-    Err(BitFunError::service(format!(
-        "DeepSeek Harness {installed} is older than {minimum}, which this BitFun build requires. \
+    Err(OpenBitFunError::service(format!(
+        "DeepSeek Harness {installed} is older than {minimum}, which this OpenBitFun build requires. \
          Update it with `npm install -g @deepseek-ai/dsh`."
     )))
 }
@@ -174,7 +174,7 @@ fn version_is_supported(installed: &str, minimum: &str) -> bool {
     installed >= minimum
 }
 
-/// Locate the built profile that ships with this BitFun.
+/// Locate the built profile that ships with this OpenBitFun.
 fn bundled_profile_source(profile: &str) -> Option<PathBuf> {
     if let Some(configured) = std::env::var_os(SOURCE_DIR_ENV) {
         let configured = PathBuf::from(configured);
@@ -238,13 +238,13 @@ fn profile_name_of(directory: &Path) -> Option<String> {
 }
 
 /// Read a build stamp, distinguishing "not installed" from "unreadable".
-fn read_stamp(directory: &Path) -> BitFunResult<Option<BridgeStamp>> {
+fn read_stamp(directory: &Path) -> OpenBitFunResult<Option<BridgeStamp>> {
     let path = directory.join(STAMP_FILENAME);
     let contents = match std::fs::read(&path) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "Failed to read {}: {error}",
                 path.display()
             )))
@@ -253,17 +253,17 @@ fn read_stamp(directory: &Path) -> BitFunResult<Option<BridgeStamp>> {
     serde_json::from_slice(&contents)
         .map(Some)
         .map_err(|error| {
-            BitFunError::service(format!("Failed to parse {}: {error}", path.display()))
+            OpenBitFunError::service(format!("Failed to parse {}: {error}", path.display()))
         })
 }
 
 /// `$DSH_HOME/profiles`, created if the user has not run dsh yet.
-fn dsh_profiles_directory() -> BitFunResult<PathBuf> {
+fn dsh_profiles_directory() -> OpenBitFunResult<PathBuf> {
     let home = match std::env::var_os(DSH_HOME_ENV) {
         Some(home) if !home.is_empty() => PathBuf::from(home),
         _ => dirs::home_dir()
             .ok_or_else(|| {
-                BitFunError::service(
+                OpenBitFunError::service(
                     "Cannot locate the home directory that holds the DeepSeek Harness install"
                         .to_string(),
                 )
@@ -277,9 +277,9 @@ fn dsh_profiles_directory() -> BitFunResult<PathBuf> {
 ///
 /// The stamp is copied only after every other file lands, so an interrupted
 /// install reads as absent rather than current and is simply redone.
-fn install_profile(source: &Path, destination: &Path) -> BitFunResult<()> {
+fn install_profile(source: &Path, destination: &Path) -> OpenBitFunResult<()> {
     let write_error = |error: std::io::Error| {
-        BitFunError::service(format!(
+        OpenBitFunError::service(format!(
             "Failed to install the DeepSeek Harness profile into {}: {error}",
             destination.display()
         ))
@@ -362,7 +362,7 @@ pub(crate) async fn ensure_bundled_profile_remote(
     env: &HashMap<String, String>,
     ssh: &SSHConnectionManager,
     connection_id: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let (source, stamp) = bundled_build(profile)?;
     let exports = remote_exports(env);
 
@@ -372,12 +372,12 @@ pub(crate) async fn ensure_bundled_profile_remote(
         .execute_command(connection_id, &probe_command)
         .await
         .map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to inspect the DeepSeek Harness install on the remote host: {error}"
             ))
         })?;
     if code != 0 {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "Failed to inspect the DeepSeek Harness install on the remote host: {}",
             remote_failure_summary(&stderr, &stdout)
         )));
@@ -388,9 +388,9 @@ pub(crate) async fn ensure_bundled_profile_remote(
     // different one here is how the list ends up saying "installed" while the
     // launch says "not installed".
     if probe.launcher.is_empty() {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "DeepSeek Harness is not installed on the remote host: `{launcher}` is not on the login \
-             shell's PATH. Install it there with `npm install -g @deepseek-ai/dsh`; BitFun ships \
+             shell's PATH. Install it there with `npm install -g @deepseek-ai/dsh`; OpenBitFun ships \
              the bridge, not the harness."
         )));
     }
@@ -398,16 +398,16 @@ pub(crate) async fn ensure_bundled_profile_remote(
     // Node installs it without complaint and then fails to boot it. Say that
     // here rather than letting the user read a SyntaxError out of a log.
     if let Some(node) = unsupported_node_version(&probe.node) {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "The remote host runs Node {node}, and DeepSeek Harness needs at least \
              {MIN_NODE_VERSION} to start (its own toolchain targets Node 22 LTS). Install a newer \
              Node on that host, then start the session again."
         )));
     }
     if !version_is_supported(&probe.version, &stamp.min_dsh_version) {
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "The remote host runs DeepSeek Harness {}, which is older than {}, the version this \
-             BitFun build requires. Update it there with `npm install -g @deepseek-ai/dsh`.",
+             OpenBitFun build requires. Update it there with `npm install -g @deepseek-ai/dsh`.",
             probe.version, stamp.min_dsh_version
         )));
     }
@@ -420,7 +420,7 @@ pub(crate) async fn ensure_bundled_profile_remote(
     let archive = tokio::task::spawn_blocking(move || archive_profile(&source))
         .await
         .map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to package the DeepSeek Harness profile for upload: {error}"
             ))
         })??;
@@ -430,7 +430,7 @@ pub(crate) async fn ensure_bundled_profile_remote(
         .open_workspace_stdio(connection_id, &install_command)
         .await
         .map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to install the DeepSeek Harness profile on the remote host: {error}"
             ))
         })?;
@@ -440,24 +440,24 @@ pub(crate) async fn ensure_bundled_profile_remote(
 
     let upload = async {
         stdin.write_all(&archive).await.map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to send the DeepSeek Harness profile to the remote host: {error}"
             ))
         })?;
         // The remote `tar` reads until end of input, so the shutdown is what
         // ends the extraction rather than a timeout.
         stdin.shutdown().await.map_err(|error| {
-            BitFunError::service(format!(
+            OpenBitFunError::service(format!(
                 "Failed to send the DeepSeek Harness profile to the remote host: {error}"
             ))
         })?;
-        Ok::<_, BitFunError>(completion.wait().await)
+        Ok::<_, OpenBitFunError>(completion.wait().await)
     };
 
     let exit = tokio::time::timeout(REMOTE_INSTALL_TIMEOUT, upload)
         .await
         .map_err(|_| {
-            BitFunError::service(
+            OpenBitFunError::service(
                 "Timed out installing the DeepSeek Harness profile on the remote host".to_string(),
             )
         })??;
@@ -472,7 +472,7 @@ pub(crate) async fn ensure_bundled_profile_remote(
         )
         .await;
         let summary = remote_failure_summary(&diagnostics, "");
-        return Err(BitFunError::service(format!(
+        return Err(OpenBitFunError::service(format!(
             "Failed to install the DeepSeek Harness profile on the remote host (exit {}){}",
             exit.exit_code
                 .map(|code| code.to_string())
@@ -589,9 +589,9 @@ fn remote_install_script(profile: &str, exports: &str) -> String {
 /// Ordering is the whole point: `tar` writes entries in the order they appear,
 /// so a transfer that dies halfway leaves a destination without a current stamp
 /// and the next launch simply redoes it.
-fn archive_profile(source: &Path) -> BitFunResult<Vec<u8>> {
+fn archive_profile(source: &Path) -> OpenBitFunResult<Vec<u8>> {
     let pack_error = |error: std::io::Error| {
-        BitFunError::service(format!(
+        OpenBitFunError::service(format!(
             "Failed to package the DeepSeek Harness profile at {}: {error}",
             source.display()
         ))
@@ -656,7 +656,7 @@ mod tests {
 
     fn scratch_directory(label: &str) -> PathBuf {
         let path =
-            std::env::temp_dir().join(format!("bitfun-dsh-{label}-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("openbitfun-dsh-{label}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).expect("scratch directory should be created");
         path
     }
@@ -668,7 +668,7 @@ mod tests {
         std::fs::write(
             root.join(STAMP_FILENAME),
             format!(
-                r#"{{"bridge":"0.0.1","content":"{content}","minDshVersion":"0.1.0-rc.6","profile":"bitfun-acp"}}"#
+                r#"{{"bridge":"0.0.1","content":"{content}","minDshVersion":"0.1.0-rc.6","profile":"openbitfun-acp"}}"#
             ),
         )
         .expect("stamp should be written");
@@ -719,7 +719,7 @@ mod tests {
             .expect("stamp should be present");
         assert_eq!(stamp.content, "digest");
         assert_eq!(stamp.min_dsh_version, "0.1.0-rc.6");
-        assert_eq!(profile_name_of(&source).as_deref(), Some("bitfun-acp"));
+        assert_eq!(profile_name_of(&source).as_deref(), Some("openbitfun-acp"));
 
         let empty = scratch_directory("stamp-empty");
         assert!(read_stamp(&empty)
@@ -752,7 +752,7 @@ mod tests {
             Some(source.to_string_lossy().as_ref()),
             || {
                 assert_eq!(
-                    bundled_profile_source("bitfun-acp").as_deref(),
+                    bundled_profile_source("openbitfun-acp").as_deref(),
                     Some(source.as_path())
                 );
             },
@@ -766,7 +766,7 @@ mod tests {
 
     #[test]
     fn the_remote_probe_answers_every_question_in_one_round_trip() {
-        let script = remote_probe_script("bitfun-acp", "dsh", "");
+        let script = remote_probe_script("openbitfun-acp", "dsh", "");
 
         // $DSH_HOME is resolved on the far side: reading it here would point at
         // the developer's own install, not the workspace's.
@@ -839,7 +839,7 @@ mod tests {
 
     #[test]
     fn the_remote_install_replaces_exactly_what_the_local_one_replaces() {
-        let script = remote_install_script("bitfun-acp", "export DSH_HOME=/opt/dsh\n");
+        let script = remote_install_script("openbitfun-acp", "export DSH_HOME=/opt/dsh\n");
 
         assert!(script.starts_with("set -e\n"));
         assert!(script.contains("export DSH_HOME=/opt/dsh"));

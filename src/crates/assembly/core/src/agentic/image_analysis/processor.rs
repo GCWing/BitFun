@@ -34,7 +34,7 @@ impl ImageAnalyzer {
         &self,
         request: AnalyzeImagesRequest,
         model_config: &AIModelConfig,
-    ) -> BitFunResult<Vec<ImageAnalysisResult>> {
+    ) -> OpenBitFunResult<Vec<ImageAnalysisResult>> {
         info!("Starting analysis of {} images", request.images.len());
 
         let mut tasks = vec![];
@@ -69,7 +69,7 @@ impl ImageAnalyzer {
                 }
                 Err(e) => {
                     error!("Image analysis task failed: {:?}", e);
-                    return Err(BitFunError::service(format!(
+                    return Err(OpenBitFunError::service(format!(
                         "Image analysis task failed: {}",
                         e
                     )));
@@ -87,7 +87,7 @@ impl ImageAnalyzer {
         user_context: Option<&str>,
         workspace_path: Option<PathBuf>,
         ai_client: Arc<AIClient>,
-    ) -> BitFunResult<ImageAnalysisResult> {
+    ) -> OpenBitFunResult<ImageAnalysisResult> {
         let start = std::time::Instant::now();
 
         debug!("Analyzing image: {}", image_ctx.id);
@@ -132,7 +132,7 @@ impl ImageAnalyzer {
         );
         let ai_response = ai_client.send_message(messages, None).await.map_err(|e| {
             error!("AI call failed: {}", e);
-            BitFunError::service(format!("Image analysis AI call failed: {}", e))
+            OpenBitFunError::service(format!("Image analysis AI call failed: {}", e))
         })?;
 
         debug!("AI response content: {}", ai_response.text);
@@ -151,7 +151,7 @@ impl ImageAnalyzer {
     async fn load_image_from_context(
         ctx: &ImageContextData,
         workspace_path: Option<&std::path::Path>,
-    ) -> BitFunResult<(Vec<u8>, Option<String>)> {
+    ) -> OpenBitFunResult<(Vec<u8>, Option<String>)> {
         if let Some(data_url) = &ctx.data_url {
             let (data, mime) = decode_data_url(data_url)?;
             return Ok((data, mime.or_else(|| Some(ctx.mime_type.clone()))));
@@ -164,7 +164,7 @@ impl ImageAnalyzer {
             return Ok((data, detected_mime.or_else(|| Some(ctx.mime_type.clone()))));
         }
 
-        Err(BitFunError::validation(
+        Err(OpenBitFunError::validation(
             "Image context missing path or data",
         ))
     }

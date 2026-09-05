@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# record-demo.sh — Record the README demo GIF of BitFun running a real task.
+# record-demo.sh — Record the README demo GIF of OpenBitFun running a real task.
 #
 # The README leads with a static screenshot, which cannot show what an Agent
 # actually does. A short loop of one real task running end to end is the single
@@ -19,7 +19,7 @@
 # your terminal in System Settings > Privacy & Security > Screen Recording.
 #
 # What to record (in order of how much it matters):
-#   1. Open BitFun on a real repository, type a real task, hit enter.
+#   1. Open OpenBitFun on a real repository, type a real task, hit enter.
 #   2. Let the Agent plan, edit files, and run something that visibly succeeds.
 #   3. End on the result — a passing test, a diff, a finished document.
 # Keep it under 30s. No title cards, no cursor hunting, no dead air.
@@ -53,7 +53,7 @@ echo
 
 SCREEN_INDEX="${DEMO_SCREEN_INDEX:-1}"
 echo "Recording screen index $SCREEN_INDEX for ${DURATION}s (override with DEMO_SCREEN_INDEX=n)."
-echo "Starting in 3 seconds — switch to BitFun now."
+echo "Starting in 3 seconds — switch to OpenBitFun now."
 sleep 3
 
 ffmpeg -hide_banner -loglevel error \
@@ -83,4 +83,4 @@ fi
 
 echo
 echo "Next: swap the screenshot at the top of README.md and README.zh-CN.md for:"
-echo "  ![BitFun in action](./${OUTPUT})"
+echo "  ![OpenBitFun in action](./${OUTPUT})"

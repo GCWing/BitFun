@@ -9,7 +9,7 @@
   right: 0;
   bottom: 0;
   z-index: 999999;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 95%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 95%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27,7 +27,7 @@
 .diff-fullscreen-container {
   width: 100vw;
   height: 100vh;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 96%, var(--openbitfun-color-content-on-dark));
   display: flex;
   flex-direction: column;
   position: relative;
@@ -64,8 +64,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 90%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 90%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
   z-index: 2;
@@ -82,7 +82,7 @@
 }
 
 .file-icon {
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 70%, transparent);
   flex-shrink: 0;
 }
 
@@ -91,17 +91,17 @@
 }
 
 .file-name {
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 95%, transparent);
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  font-family: var(--bf-type-code-md-font-family);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 95%, transparent);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  font-family: var(--openbitfun-type-code-md-font-family);
   margin-bottom: 2px;
 }
 
 .file-path-full {
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 50%, transparent);
-  font-size: var(--bf-type-label-sm-font-size);
-  font-family: var(--bf-type-code-md-font-family);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 50%, transparent);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-family: var(--openbitfun-type-code-md-font-family);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -117,7 +117,7 @@
 .header-divider {
   width: 1px;
   height: 20px;
-  background: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
   margin: 0 4px;
 }
 
@@ -126,7 +126,7 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 96%, var(--bf-color-content-on-dark));
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 96%, var(--openbitfun-color-content-on-dark));
   pointer-events: auto;
   z-index: 1;
 }
@@ -173,14 +173,14 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
-  font-size: var(--bf-type-body-md-font-size);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 90%, transparent);
+  font-size: var(--openbitfun-type-body-md-font-size);
   backdrop-filter: blur(4px);
   z-index: 1000;
 }
@@ -188,13 +188,13 @@
 .fullscreen-loading-overlay .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 30%, transparent);
-  border-top: 2px solid color-mix(in srgb, var(--bf-color-content-on-dark) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent);
+  border-top: 2px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 90%, transparent);
   border-radius: 50%;
-  animation: bitfun-diff-fullscreen-spin 1s linear infinite;
+  animation: openbitfun-diff-fullscreen-spin 1s linear infinite;
 }
 
-@keyframes bitfun-diff-fullscreen-spin {
+@keyframes openbitfun-diff-fullscreen-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
@@ -234,23 +234,23 @@
   }
   
   .file-name {
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
   
   .file-path-full {
-    font-size: var(--bf-type-meta-font-size);
+    font-size: var(--openbitfun-type-meta-font-size);
   }
 }
 
-:root[data-bf-appearance-mode='dark'] .diff-fullscreen-container {
-  background: var(--bf-color-surface-canvas);
+:root[data-openbitfun-appearance-mode='dark'] .diff-fullscreen-container {
+  background: var(--openbitfun-color-surface-canvas);
 }
 
-:root[data-bf-appearance-mode='dark'] .diff-fullscreen-header {
-  background: color-mix(in srgb, var(--bf-color-content-on-light) 95%, transparent);
-  border-bottom-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+:root[data-openbitfun-appearance-mode='dark'] .diff-fullscreen-header {
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 95%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
 }
 
-:root[data-bf-appearance-mode='dark'] .diff-fullscreen-content {
-  background: var(--bf-color-surface-canvas);
+:root[data-openbitfun-appearance-mode='dark'] .diff-fullscreen-content {
+  background: var(--openbitfun-color-surface-canvas);
 }

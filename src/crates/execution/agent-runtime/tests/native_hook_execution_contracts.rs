@@ -9,7 +9,7 @@
 #![cfg(unix)]
 #![cfg(feature = "native-hook-runtime")]
 
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookEventPayload, AgentHookOutcome, AgentHookPayload,
     AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome, AgentHookScope,
     AgentHookSettings, AgentHookSettingsLayer, MAX_HOOK_MODEL_OUTPUT_BYTES,

@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, FolderPlus } from 'lucide-react';
-import { Menu, MenuItem, MenuSeparator, Icon } from '@bitfun/ui';
+import { Menu, MenuItem, MenuSeparator, Icon } from '@openbitfun/ui';
 import { gitAPI } from '../../infrastructure/api';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
@@ -119,8 +119,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
             {i > 0 && t('welcome.commaSeparator')}
             <button
               type="button"
-              data-bf-component="welcome-panel"
-              data-bf-part="gitAction"
+              data-openbitfun-component="welcome-panel"
+              data-openbitfun-part="gitAction"
               className="welcome-panel__inline-btn"
               onClick={handleGitClick}
             >
@@ -224,24 +224,24 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   }, [onQuickAction]);
 
   return (
-    <div data-bf-component="welcome-panel" data-bf-part="root" className={`welcome-panel ${className}`}>
-      <div data-bf-component="welcome-panel" data-bf-part="content" className="welcome-panel__content">
+    <div data-openbitfun-component="welcome-panel" data-openbitfun-part="root" className={`welcome-panel ${className}`}>
+      <div data-openbitfun-component="welcome-panel" data-openbitfun-part="content" className="welcome-panel__content">
         {/* Greeting */}
-        <div data-bf-component="welcome-panel" data-bf-part="greeting" className="welcome-panel__greeting">
+        <div data-openbitfun-component="welcome-panel" data-openbitfun-part="greeting" className="welcome-panel__greeting">
           <div className="welcome-panel__greeting-inner">
             <div className="welcome-panel__greeting-text">
-              <h1 data-bf-component="welcome-panel" data-bf-part="heading" className="welcome-panel__heading">
+              <h1 data-openbitfun-component="welcome-panel" data-openbitfun-part="heading" className="welcome-panel__heading">
                 {greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}
               </h1>
-              <p data-bf-component="welcome-panel" data-bf-part="tagline" className="welcome-panel__tagline">{tagline}</p>
+              <p data-openbitfun-component="welcome-panel" data-openbitfun-part="tagline" className="welcome-panel__tagline">{tagline}</p>
             </div>
           </div>
         </div>
 
-        <div data-bf-component="welcome-panel" data-bf-part="divider" className="welcome-panel__divider" />
+        <div data-openbitfun-component="welcome-panel" data-openbitfun-part="divider" className="welcome-panel__divider" />
 
         {/* Narrative: workspace + git in natural language */}
-        <div data-bf-component="welcome-panel" data-bf-part="narrative" className="welcome-panel__narrative">
+        <div data-openbitfun-component="welcome-panel" data-openbitfun-part="narrative" className="welcome-panel__narrative">
           <p className="welcome-panel__narrative-text">
             {isClawSession ? (
               t('welcome.narrativeClaw')
@@ -250,8 +250,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                 {t('welcome.noWorkspaceHint')}
                 <button
                   type="button"
-                  data-bf-component="welcome-panel"
-                  data-bf-part="openWorkspaceAction"
+                  data-openbitfun-component="welcome-panel"
+                  data-openbitfun-part="openWorkspaceAction"
                   className="welcome-panel__inline-btn welcome-panel__inline-btn--interactive"
                   onClick={() => { void handleOpenOtherFolder(); }}
                   disabled={isSelectingWorkspace}
@@ -271,9 +271,9 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                       <button
                         ref={workspaceTriggerRef}
                         type="button"
-                        data-bf-component="welcome-panel"
-                        data-bf-part="workspaceAction"
-                        data-bf-state={workspaceDropdownOpen ? 'open' : undefined}
+                        data-openbitfun-component="welcome-panel"
+                        data-openbitfun-part="workspaceAction"
+                        data-openbitfun-state={workspaceDropdownOpen ? 'open' : undefined}
                         className={`welcome-panel__inline-btn welcome-panel__inline-btn--interactive${workspaceDropdownOpen ? ' welcome-panel__inline-btn--active' : ''}`}
                         onClick={() => setWorkspaceDropdownOpen(v => !v)}
                         disabled={isSelectingWorkspace}
@@ -288,9 +288,9 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                       {workspaceDropdownOpen && createPortal(
                         <Menu
                           ref={workspaceMenuRef}
-                          data-bf-component="welcome-panel"
-                          data-bf-part="workspaceMenu"
-                          data-bf-placement={workspaceMenuLayout?.placement ?? 'bottom'}
+                          data-openbitfun-component="welcome-panel"
+                          data-openbitfun-part="workspaceMenu"
+                          data-openbitfun-placement={workspaceMenuLayout?.placement ?? 'bottom'}
                           className="welcome-panel__dropdown"
                           style={{
                             top: `${workspaceMenuLayout?.top ?? 0}px`,
@@ -301,8 +301,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                           aria-label={t('shared:features.workspace')}
                         >
                           <MenuItem
-                            data-bf-component="welcome-panel"
-                            data-bf-part="workspaceItem"
+                            data-openbitfun-component="welcome-panel"
+                            data-openbitfun-part="workspaceItem"
                             leading={<FolderPlus size={12} />}
                             onClick={() => { void handleCreateWorkspace(); }}
                           >
@@ -326,8 +326,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                               {otherWorkspaces.map(ws => (
                                 <MenuItem
                                   key={ws.id}
-                                  data-bf-component="welcome-panel"
-                                  data-bf-part="workspaceItem"
+                                  data-openbitfun-component="welcome-panel"
+                                  data-openbitfun-part="workspaceItem"
                                   leading={<FolderOpen size={12} />}
                                   onClick={() => { void handleSwitchWorkspace(ws); }}
                                   title={ws.rootPath}
@@ -346,8 +346,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         <span className="welcome-panel__context-sep">/</span>
                         <button
                           type="button"
-                          data-bf-component="welcome-panel"
-                          data-bf-part="gitAction"
+                          data-openbitfun-component="welcome-panel"
+                          data-openbitfun-part="gitAction"
                           className="welcome-panel__inline-btn"
                           onClick={handleGitClick}
                         >
@@ -375,7 +375,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
         {/* Cowork examples */}
         {isCoworkSession && (
-          <div data-bf-component="welcome-panel" data-bf-part="cowork" className="welcome-panel__cowork">
+          <div data-openbitfun-component="welcome-panel" data-openbitfun-part="cowork" className="welcome-panel__cowork">
             <CoworkExampleCards resetKey={0} onSelectPrompt={p => handleQuickActionClick(p)} />
           </div>
         )}

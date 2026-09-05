@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MobileButton, MobileCard } from '@bitfun/ui/mobile';
+import { MobileButton, MobileCard } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import type { RemoteModelCatalog, RemoteModelConfig } from '../services/RemoteSessionManager';
 
-const MOBILE_LAST_SELECTED_MODEL_ID_KEY = 'bitfun.mobile.last_selected_model_id';
+const MOBILE_LAST_SELECTED_MODEL_ID_KEY = 'openbitfun.mobile.last_selected_model_id';
 
 const SparklesIcon: React.FC<{ className?: string; size?: number }> = ({ className, size = 10 }) => (
   <svg

@@ -18,17 +18,17 @@ use crate::service::instruction_context::build_workspace_instruction_files_conte
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::prompt::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use log::{debug, info, warn};
+use openbitfun_agent_runtime::prompt::{
     render_project_layout, render_runtime_context_reminder, render_user_context_reminder,
     render_workspace_context, PrependedPromptReminders, ProjectLayoutFacts, PromptRelatedPath,
     RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
     WorktreeContextFacts,
 };
-use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
-use bitfun_core_types::SessionExecutionTargetKind;
-use log::{debug, info, warn};
+use openbitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
+use openbitfun_core_types::{product_identity::hidden_data_directory, SessionExecutionTargetKind};
 use std::path::Path;
 
 /// Placeholder constants
@@ -516,15 +516,15 @@ For instructions on locating and reading the transcripts, read: `{}`
     /// Read app.language from global config, generate simple language instruction
     /// Returns empty string if config cannot be read
     /// Returns error if language code is unsupported
-    async fn get_language_preference(&self) -> BitFunResult<String> {
+    async fn get_language_preference(&self) -> OpenBitFunResult<String> {
         let language_code = get_app_language_code().await;
         Self::format_language_instruction(&language_code)
     }
 
     /// Format language instruction based on language code
-    fn format_language_instruction(lang_code: &str) -> BitFunResult<String> {
+    fn format_language_instruction(lang_code: &str) -> OpenBitFunResult<String> {
         let Some(locale) = LocaleId::from_str(lang_code) else {
-            return Err(BitFunError::config(format!(
+            return Err(OpenBitFunError::config(format!(
                 "Unknown language code: {}",
                 lang_code
             )));
@@ -550,11 +550,11 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{LANGUAGE_PREFERENCE}` - User language preference (read from global config)
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
-    /// - `{MEMORY_ROOT}` - BitFun memory workspace root, used by internal memory agents
+    /// - `{MEMORY_ROOT}` - OpenBitFun memory workspace root, used by internal memory agents
     /// - `{READ_TERMINAL}` - Local user terminal transcript guidance
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
-    pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
+    pub async fn build_prompt_from_template(&self, template: &str) -> OpenBitFunResult<String> {
         let mut result = template.to_string();
 
         // Replace {PERSONA}
@@ -603,7 +603,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         }
 
         // Replace {SESSION_ID} — used by deep-research Pro mode to anchor a per-session
-        // work_dir under .bitfun/sessions/{SESSION_ID}/research/. Falls back to a
+        // work_dir under .openbitfun/sessions/{SESSION_ID}/research/. Falls back to a
         // timestamp slug when no session is bound (e.g. one-shot prompt builds in tests).
         let mut resolved_session_id: Option<String> = None;
         if result.contains(PLACEHOLDER_SESSION_ID)
@@ -622,8 +622,12 @@ Do not read from, modify, create, move, or delete files outside this workspace u
                     format!("unbound-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"))
                 })
             });
+            let report_path = format!(
+                "{}/sessions/{session_id}/research/report.md",
+                hidden_data_directory()
+            );
             let report_link = user_workspace_relative_file_link(
-                &format!(".bitfun/sessions/{session_id}/research/report.md"),
+                &report_path,
                 self.context.remote_file_delivery_channel,
             );
             result = result.replace(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK, &report_link);
@@ -663,7 +667,7 @@ mod tests {
     use crate::agentic::agents::UserContextPolicy;
     use crate::agentic::WorkspaceBinding;
     use crate::service::workspace::RelatedPath;
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
     use std::path::PathBuf;
@@ -802,7 +806,7 @@ mod tests {
             .expect("runtime context should build");
 
         assert!(runtime_context.contains("## Local Client"));
-        assert!(runtime_context.contains("Local BitFun client OS:"));
+        assert!(runtime_context.contains("Local OpenBitFun client OS:"));
         assert!(runtime_context.contains("Computer use / `key_chord`"));
         assert!(!runtime_context.contains("## Workspace Execution"));
         assert!(!runtime_context.contains("## ExecCommand Shell"));
@@ -881,8 +885,8 @@ mod tests {
         assert!(runtime_context.contains("## Workspace Execution"));
         assert!(runtime_context.contains("## ExecCommand Shell"));
         assert!(runtime_context.contains("## Local Client"));
-        assert!(runtime_context.contains("Local BitFun client OS:"));
-        assert!(runtime_context.contains("Computer use and UI automation operate on the local BitFun desktop, even when workspace file and shell tools target a remote host."));
+        assert!(runtime_context.contains("Local OpenBitFun client OS:"));
+        assert!(runtime_context.contains("Computer use and UI automation operate on the local OpenBitFun desktop, even when workspace file and shell tools target a remote host."));
         assert!(runtime_context.contains("ExecCommand uses the remote user's default POSIX shell"));
         assert!(runtime_context.contains("This session operates on the remote SSH host only"));
     }
@@ -891,7 +895,7 @@ mod tests {
     async fn runtime_context_omits_local_client_os_for_remote_with_only_control_hub() {
         // Simulates a remote workspace where ComputerUse is disabled (filtered
         // out by is_available_in_context) but ControlHub remains available.
-        // The agent must NOT see "Local BitFun client OS" because that signal
+        // The agent must NOT see "Local OpenBitFun client OS" because that signal
         // causes it to mistake the client OS for the workspace execution OS.
         let context = PromptBuilderContext::new("/workspace/project", None, None)
             .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names([
@@ -916,7 +920,7 @@ mod tests {
             .contains("Workspace file and shell tools operate on remote SSH connection"));
         assert!(runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("## Local Client"));
-        assert!(!runtime_context.contains("Local BitFun client OS:"));
+        assert!(!runtime_context.contains("Local OpenBitFun client OS:"));
     }
 
     #[tokio::test]
@@ -1027,7 +1031,7 @@ mod tests {
 
         assert_eq!(
             prompt,
-            "[View full report](.bitfun/sessions/session-1/research/report.md)"
+            "[View full report](.openbitfun/sessions/session-1/research/report.md)"
         );
     }
 
@@ -1043,7 +1047,7 @@ mod tests {
 
         assert_eq!(
             prompt,
-            "[View full report](computer://.bitfun/sessions/session-1/research/report.md)"
+            "[View full report](computer://.openbitfun/sessions/session-1/research/report.md)"
         );
     }
 
@@ -1109,7 +1113,7 @@ mod tests {
         let execution_target = SessionExecutionTarget {
             kind: SessionExecutionTargetKind::ManagedWorktree,
             worktree_id: Some("wt-1".to_string()),
-            root_path: "/managed/BitFun-wt-1".to_string(),
+            root_path: "/managed/OpenBitFun-wt-1".to_string(),
             base_ref: Some("HEAD".to_string()),
             base_commit: Some("0123456789abcdef".to_string()),
             branch: None,
@@ -1117,9 +1121,9 @@ mod tests {
         };
         let workspace = WorkspaceBinding::new(
             Some("workspace-1".to_string()),
-            PathBuf::from("/managed/BitFun-wt-1"),
+            PathBuf::from("/managed/OpenBitFun-wt-1"),
         )
-        .with_project_root_path(PathBuf::from("/projects/BitFun"))
+        .with_project_root_path(PathBuf::from("/projects/OpenBitFun"))
         .with_execution_target(Some(execution_target));
         let context = build_prompt_context_for_workspace(
             &workspace,
@@ -1137,7 +1141,7 @@ mod tests {
 
         assert!(workspace_context.contains("Managed Git worktree created for this session"));
         assert!(workspace_context.contains("Owning project root"));
-        assert!(workspace_context.contains("/projects/BitFun"));
+        assert!(workspace_context.contains("/projects/OpenBitFun"));
         assert!(workspace_context.contains("Worktree ID: wt-1"));
         assert!(workspace_context.contains("Worktree checkout: detached HEAD"));
         assert!(workspace_context.contains("Worktree base commit: 0123456789abcdef"));

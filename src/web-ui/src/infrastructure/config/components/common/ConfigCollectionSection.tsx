@@ -27,25 +27,25 @@ export const ConfigCollectionSection: React.FC<ConfigCollectionSectionProps> = (
     <ConfigPageSection
       title={title}
       description={description}
-      className={`bitfun-config-collection-section ${hasEditor ? 'bitfun-config-collection-section--with-editor' : ''} ${className}`}
+      className={`openbitfun-config-collection-section ${hasEditor ? 'openbitfun-config-collection-section--with-editor' : ''} ${className}`}
     >
-      <div className="bitfun-config-collection-section__content" data-bf-component="config" data-bf-part="collectionSection">
+      <div className="openbitfun-config-collection-section__content" data-openbitfun-component="config" data-openbitfun-part="collectionSection">
         {toolbar && (
-          <div className="bitfun-config-collection-section__toolbar" data-bf-component="config" data-bf-part="collectionToolbar">
+          <div className="openbitfun-config-collection-section__toolbar" data-openbitfun-component="config" data-openbitfun-part="collectionToolbar">
             {toolbar}
           </div>
         )}
         {editor && (
-          <div className="bitfun-config-collection-section__editor" data-bf-component="config" data-bf-part="collectionEditor">
+          <div className="openbitfun-config-collection-section__editor" data-openbitfun-component="config" data-openbitfun-part="collectionEditor">
             {editor}
           </div>
         )}
         {filters && (
-          <div className="bitfun-config-collection-section__filters" data-bf-component="config" data-bf-part="collectionFilters">
+          <div className="openbitfun-config-collection-section__filters" data-openbitfun-component="config" data-openbitfun-part="collectionFilters">
             {filters}
           </div>
         )}
-        <div className="bitfun-config-collection-section__list" data-bf-component="config" data-bf-part="collectionList">
+        <div className="openbitfun-config-collection-section__list" data-openbitfun-component="config" data-openbitfun-part="collectionList">
           {children}
         </div>
       </div>

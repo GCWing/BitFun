@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import {
   FolderOpen,
   FileText,
@@ -88,11 +88,11 @@ export function getFileIcon(node: FileSystemNode, isExpanded?: boolean): React.R
 
 export function getFileIconClass(node: FileSystemNode, isExpanded?: boolean): string {
   if (node.isDirectory) {
-    return `bitfun-file-explorer__icon bitfun-file-explorer__icon--folder${isExpanded ? ' bitfun-file-explorer__icon--folder-open' : ''}`;
+    return `openbitfun-file-explorer__icon openbitfun-file-explorer__icon--folder${isExpanded ? ' openbitfun-file-explorer__icon--folder-open' : ''}`;
   }
   
   const iconType = getFileIconType(node);
-  return `bitfun-file-explorer__icon bitfun-file-explorer__icon--${iconType}`;
+  return `openbitfun-file-explorer__icon openbitfun-file-explorer__icon--${iconType}`;
 }
 
 export function isImageFile(node: FileSystemNode): boolean {

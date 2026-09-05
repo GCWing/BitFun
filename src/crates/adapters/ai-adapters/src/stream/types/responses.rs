@@ -1,6 +1,6 @@
 use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
-use bitfun_agent_stream::ModelResponseReplayCapture;
-use bitfun_core_types::{ModelReasoningSummaryPart, ModelResponseReplayItem};
+use openbitfun_agent_stream::ModelResponseReplayCapture;
+use openbitfun_core_types::{ModelReasoningSummaryPart, ModelResponseReplayItem};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -227,7 +227,7 @@ mod tests {
         ResponsesStreamEvent, ResponsesUsage,
     };
     use crate::stream::types::unified::UnifiedTokenUsage;
-    use bitfun_core_types::ModelResponseReplayItem;
+    use openbitfun_core_types::ModelResponseReplayItem;
     use serde_json::json;
 
     #[test]

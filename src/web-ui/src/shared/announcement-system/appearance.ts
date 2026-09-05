@@ -14,6 +14,6 @@ export const announcementAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'modalNavigation' },
   ],
   facets: [
-    { id: 'depth', attribute: 'data-bf-depth', values: ['1', '2'] },
+    { id: 'depth', attribute: 'data-openbitfun-depth', values: ['1', '2'] },
   ],
 };

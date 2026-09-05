@@ -2,7 +2,7 @@
  * TerminalScene styles.
  */
 
-.bitfun-terminal-scene {
+.openbitfun-terminal-scene {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -16,7 +16,7 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__empty-icon {
@@ -24,7 +24,7 @@
   }
 
   &__empty-hint {
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
     margin: 0;
   }
 }

@@ -1,4 +1,4 @@
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, CircleAlert, LoaderCircle, Wrench } from 'lucide-react';
@@ -184,8 +184,8 @@ const NurseryGallery: React.FC = () => {
   return (
     <GalleryLayout
       className="nursery-gallery"
-      data-bf-component="nursery-gallery"
-      data-bf-part="root"
+      data-openbitfun-component="nursery-gallery"
+      data-openbitfun-part="root"
     >
       <GalleryPageHeader
         title={(
@@ -216,9 +216,9 @@ const NurseryGallery: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones" data-bf-component="nursery-gallery" data-bf-part="content">
-        <section className="nursery-defaults" aria-labelledby="nursery-defaults-title" data-bf-component="nursery-gallery" data-bf-part="defaults">
-          <div className="nursery-defaults__content" data-bf-component="nursery-gallery" data-bf-part="defaultsContent">
+      <div className="gallery-zones" data-openbitfun-component="nursery-gallery" data-openbitfun-part="content">
+        <section className="nursery-defaults" aria-labelledby="nursery-defaults-title" data-openbitfun-component="nursery-gallery" data-openbitfun-part="defaults">
+          <div className="nursery-defaults__content" data-openbitfun-component="nursery-gallery" data-openbitfun-part="defaultsContent">
             <div className="nursery-defaults__title-row">
               <h3 className="nursery-defaults__title" id="nursery-defaults-title">
                 {t('nursery.template.title')}
@@ -229,8 +229,8 @@ const NurseryGallery: React.FC = () => {
 
             <div
               className="nursery-defaults__stats"
-              data-bf-component="nursery-gallery"
-              data-bf-part="stats"
+              data-openbitfun-component="nursery-gallery"
+              data-openbitfun-part="stats"
               aria-live="polite"
               aria-busy={templateStatsStatus === 'loading'}
             >

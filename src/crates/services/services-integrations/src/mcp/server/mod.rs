@@ -22,8 +22,7 @@ pub use process::MCPServerProcess;
 pub use reconnect::MCPReconnectTracker;
 pub use registry::MCPServerRegistry;
 pub use runtime_helpers::{
-    is_mcp_auth_error_message, merge_mcp_remote_headers, resolve_mcp_local_command,
-    MCPLocalCommandResolution,
+    is_mcp_auth_error_message, resolve_mcp_local_command, MCPLocalCommandResolution,
 };
 pub use runtime_policy::{
     compute_mcp_backoff_delay, detect_mcp_list_changed_kind, mcp_reconnect_runtime_decision,
@@ -157,7 +156,7 @@ pub struct MCPServerConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub working_directory: Option<String>,
     /// Whether a local process inherits every environment variable from the
-    /// BitFun process. `None` preserves the legacy behavior for native MCP
+    /// OpenBitFun process. `None` preserves the legacy behavior for native MCP
     /// configurations; imported executable configuration can opt out.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherit_parent_environment: Option<bool>,

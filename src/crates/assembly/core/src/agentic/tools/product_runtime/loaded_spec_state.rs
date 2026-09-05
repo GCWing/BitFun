@@ -1,7 +1,7 @@
 //! Product deferred-tool loaded-spec state owner.
 
 use crate::agentic::core::{Message, MessageContent};
-use bitfun_agent_tools::{
+use openbitfun_agent_tools::{
     collect_loaded_deferred_tool_specs, GetToolSpecLoadObservation, LoadedDeferredToolSpec,
 };
 
@@ -70,8 +70,8 @@ mod tests {
     use crate::agentic::core::{Message, ToolResult};
     use serde_json::json;
 
-    fn loaded_spec(tool_name: &str) -> bitfun_agent_tools::LoadedDeferredToolSpec {
-        bitfun_agent_tools::LoadedDeferredToolSpec {
+    fn loaded_spec(tool_name: &str) -> openbitfun_agent_tools::LoadedDeferredToolSpec {
+        openbitfun_agent_tools::LoadedDeferredToolSpec {
             tool_name: tool_name.to_string(),
             catalog_generation: 42,
         }

@@ -6,7 +6,9 @@
 
 use std::sync::{mpsc, Arc};
 
-use bitfun_core::service::config::{subscribe_config_updates, ConfigService, ConfigUpdateEvent};
+use openbitfun_core::service::config::{
+    subscribe_config_updates, ConfigService, ConfigUpdateEvent,
+};
 use serde::Deserialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -91,7 +93,7 @@ impl Default for SleepPreventionState {
 fn start_worker() -> Result<mpsc::Sender<SleepPreventionRequest>, String> {
     let (sender, receiver) = mpsc::channel();
     std::thread::Builder::new()
-        .name("bitfun-sleep-prevention".to_string())
+        .name("openbitfun-sleep-prevention".to_string())
         .spawn(move || run_worker(receiver))
         .map_err(|error| format!("Failed to start sleep-prevention worker: {}", error))?;
     Ok(sender)
@@ -117,9 +119,9 @@ fn set_inhibitor_enabled(
         if inhibitor.is_none() {
             let guard = keepawake::Builder::default()
                 .idle(true)
-                .reason("Prevent sleep is enabled in BitFun")
-                .app_name("BitFun")
-                .app_reverse_domain("com.bitfun.desktop")
+                .reason("Prevent sleep is enabled in OpenBitFun")
+                .app_name("OpenBitFun")
+                .app_reverse_domain("com.openbitfun.desktop")
                 .create()
                 .map_err(|error| {
                     let message = format!("Failed to prevent system sleep: {}", error);
@@ -285,7 +287,7 @@ pub async fn set_prevent_sleep_enabled(
     app: AppHandle,
     request: SetPreventSleepEnabledRequest,
 ) -> Result<(), String> {
-    crate::bitfun_control_host::configure_option_from_gui(
+    crate::openbitfun_control_host::configure_option_from_gui(
         &app,
         "setting.application.general",
         "prevent-sleep",
@@ -333,7 +335,7 @@ mod tests {
     use super::{
         apply_then_persist, config_event_requires_sync, start_worker, SleepPreventionState,
     };
-    use bitfun_core::service::config::ConfigUpdateEvent;
+    use openbitfun_core::service::config::ConfigUpdateEvent;
     use std::sync::{Arc, Mutex};
 
     #[tokio::test]

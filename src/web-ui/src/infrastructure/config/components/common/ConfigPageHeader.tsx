@@ -1,5 +1,5 @@
 import React from 'react';
-import { PageHeader } from '@bitfun/ui';
+import { PageHeader } from '@openbitfun/ui';
 import { formatStandaloneUiText } from './standaloneUiCopy';
 import './ConfigPageHeader.scss';
 
@@ -20,30 +20,30 @@ export const ConfigPageHeader: React.FC<ConfigPageHeaderProps> = ({
   ...props
 }) => {
   return (
-    <div className={`bitfun-config-page-header ${className}`} data-bf-component="config" data-bf-part="pageHeader" {...props}>
-      <div className="bitfun-config-page-header__inner" data-bf-component="config" data-bf-part="pageHeaderInner">
-        <div className="bitfun-config-page-header__left">
-          <div className="bitfun-config-page-header__info" data-bf-component="config" data-bf-part="pageHeaderInfo">
+    <div className={`openbitfun-config-page-header ${className}`} data-openbitfun-component="config" data-openbitfun-part="pageHeader" {...props}>
+      <div className="openbitfun-config-page-header__inner" data-openbitfun-component="config" data-openbitfun-part="pageHeaderInner">
+        <div className="openbitfun-config-page-header__left">
+          <div className="openbitfun-config-page-header__info" data-openbitfun-component="config" data-openbitfun-part="pageHeaderInfo">
             <PageHeader
               level={2}
               size="md"
               title={(
                 <span
-                  className="bitfun-config-page-header__title"
-                  data-bf-component="config"
-                  data-bf-part="pageHeaderTitle"
+                  className="openbitfun-config-page-header__title"
+                  data-openbitfun-component="config"
+                  data-openbitfun-part="pageHeaderTitle"
                 >
                   {title}
                 </span>
               )}
               description={subtitle ? (
-                <span className="bitfun-config-page-header__subtitle" data-bf-component="config" data-bf-part="pageHeaderSubtitle">{formatStandaloneUiText(subtitle)}</span>
+                <span className="openbitfun-config-page-header__subtitle" data-openbitfun-component="config" data-openbitfun-part="pageHeaderSubtitle">{formatStandaloneUiText(subtitle)}</span>
               ) : undefined}
             />
           </div>
         </div>
         {extra && (
-          <div className="bitfun-config-page-header__extra" data-bf-component="config" data-bf-part="pageHeaderExtra">
+          <div className="openbitfun-config-page-header__extra" data-openbitfun-component="config" data-openbitfun-part="pageHeaderExtra">
             {extra}
           </div>
         )}

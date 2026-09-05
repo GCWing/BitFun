@@ -1,4 +1,4 @@
-import { Select } from '@bitfun/ui';
+import { Select } from '@openbitfun/ui';
 import React from 'react';
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import { useTranslation } from 'react-i18next';
@@ -23,13 +23,13 @@ function AppearanceSelectionSection() {
     <div
       className="appearance-settings"
       data-testid="appearance-settings-section"
-      data-bf-component="appearance-settings"
-      data-bf-part="settings"
+      data-openbitfun-component="appearance-settings"
+      data-openbitfun-part="settings"
     >
       <div
         className="appearance-settings__content"
-        data-bf-component="appearance-settings"
-        data-bf-part="settingsContent"
+        data-openbitfun-component="appearance-settings"
+        data-openbitfun-part="settingsContent"
       >
         <ConfigPageSection
           title={t('appearance.interfaceTitle')}
@@ -41,8 +41,8 @@ function AppearanceSelectionSection() {
           >
             <div
               className="appearance-settings__language-select"
-              data-bf-component="appearance-settings"
-              data-bf-part="language"
+              data-openbitfun-component="appearance-settings"
+              data-openbitfun-part="language"
             >
               <Select
                 size="sm"
@@ -76,15 +76,15 @@ const AppearanceSettingsPage: React.FC = () => {
 
   return (
     <ConfigPageLayout
-      className="bitfun-appearance-settings"
-      data-bf-component="appearance-settings"
-      data-bf-part="root"
+      className="openbitfun-appearance-settings"
+      data-openbitfun-component="appearance-settings"
+      data-openbitfun-part="root"
     >
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent
-        className="bitfun-appearance-settings__content"
-        data-bf-component="appearance-settings"
-        data-bf-part="content"
+        className="openbitfun-appearance-settings__content"
+        data-openbitfun-component="appearance-settings"
+        data-openbitfun-part="content"
       >
         <ConfigPageSectionStack data-testid="appearance-settings">
           <AppearanceSelectionSection />

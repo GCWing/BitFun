@@ -5,5 +5,5 @@ export const canvasEditorAreaAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'root' }, { id: 'primary' }, { id: 'secondary' },
     { id: 'tertiary' }, { id: 'topRow' },
   ],
-  facets: [{ id: 'layout', attribute: 'data-bf-layout', values: ['none', 'horizontal', 'vertical', 'grid'] }],
+  facets: [{ id: 'layout', attribute: 'data-openbitfun-layout', values: ['none', 'horizontal', 'vertical', 'grid'] }],
 };

@@ -169,8 +169,9 @@ fn global_content_retention_does_not_grow_with_matching_file_count() {
 
 #[test]
 fn rg_candidate_protocol_rejects_banner_truncation_and_status_mismatch() {
-    let frame =
-        |payload: &str| format!("BITFUN_RG_CANDIDATES_BEGIN\0{payload}BITFUN_RG_CANDIDATES_END\0");
+    let frame = |payload: &str| {
+        format!("OPENBITFUN_RG_CANDIDATES_BEGIN\0{payload}OPENBITFUN_RG_CANDIDATES_END\0")
+    };
     let path = "/repo/quote'\n\\file";
     assert_eq!(
         parse_rg_candidates(&frame(&format!("{path}\0")), 0, "/repo").unwrap(),
@@ -189,7 +190,10 @@ fn rg_candidate_protocol_rejects_banner_truncation_and_status_mismatch() {
         (frame("/elsewhere/file\0"), 0),
         (frame("/repo/file\0"), 1),
         (frame(""), 0),
-        ("BITFUN_RG_CANDIDATES_BEGIN\0/repo/file\0".to_string(), 0),
+        (
+            "OPENBITFUN_RG_CANDIDATES_BEGIN\0/repo/file\0".to_string(),
+            0,
+        ),
     ] {
         assert!(
             parse_rg_candidates(&output, status, "/repo").is_err(),

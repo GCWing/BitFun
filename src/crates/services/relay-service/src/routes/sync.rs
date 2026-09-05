@@ -26,7 +26,7 @@ const MAX_NONCE_BYTES: usize = 256;
 
 // Per-account sync-session quotas.
 //
-// Defaults use i32::MAX so BitFun's own deployments do not hit artificial
+// Defaults use i32::MAX so OpenBitFun's own deployments do not hit artificial
 // product caps. Keep these knobs (and the upsert/make-room enforcement paths)
 // so self-hosted / open-source operators can lower them to bound each user's
 // cloud session backup footprint.

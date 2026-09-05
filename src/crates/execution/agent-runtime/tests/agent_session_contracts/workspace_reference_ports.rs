@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     AgentMessageWorkspaceReferencesRequest, AgentRuntimeBuilder, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentWorkspaceReference,
     AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchEntry,
@@ -15,8 +15,8 @@ struct FakeSubmissionPort;
 impl AgentSubmissionPort for FakeSubmissionPort {
     async fn create_session(
         &self,
-        _request: bitfun_agent_runtime::sdk::AgentSessionCreateRequest,
-    ) -> PortResult<bitfun_agent_runtime::sdk::AgentSessionCreateResult> {
+        _request: openbitfun_agent_runtime::sdk::AgentSessionCreateRequest,
+    ) -> PortResult<openbitfun_agent_runtime::sdk::AgentSessionCreateResult> {
         unreachable!("workspace reference contracts do not create sessions")
     }
 

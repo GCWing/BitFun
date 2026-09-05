@@ -183,8 +183,8 @@ class PlanBuildStateService {
   }
 
   private setupGlobalListeners(): void {
-    window.addEventListener('bitfun:todowrite-update', this.handleTodoWriteUpdate);
-    window.addEventListener('bitfun:dialog-cancelled', this.handleDialogCancelled);
+    window.addEventListener('openbitfun:todowrite-update', this.handleTodoWriteUpdate);
+    window.addEventListener('openbitfun:dialog-cancelled', this.handleDialogCancelled);
     agentAPI.onDialogTurnCompleted(this.handleDialogTurnSettled);
     agentAPI.onDialogTurnFailed(this.handleDialogTurnSettled);
     agentAPI.onDialogTurnCancelled(this.handleDialogTurnSettled);

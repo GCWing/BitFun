@@ -1,7 +1,7 @@
 /**
  * Planner button styles - pill layout.
  */
-.bitfun-planner-button {
+.openbitfun-planner-button {
   // Reset default styles
   margin: 0;
   padding: 0 10px;
@@ -20,9 +20,9 @@
   border-radius: 11px;
 
   // Default state without glass effect
-  background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
-  color: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent);
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 70%, transparent);
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -45,9 +45,9 @@
     height: 100%;
     background: linear-gradient(90deg,
       transparent,
-      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
-      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
-      color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent),
+      color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent),
+      color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent),
+      color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent),
       transparent
     );
     transform: translateX(-100%);
@@ -60,18 +60,18 @@
   @media (hover: hover) and (pointer: fine) {
     &:hover {
       background: linear-gradient(135deg,
-        color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent) 0%,
-        color-mix(in srgb, var(--bf-color-status-warning-content) 17%, transparent) 30%,
-        color-mix(in srgb, var(--bf-color-status-warning-content) 13%, transparent) 60%,
-        color-mix(in srgb, var(--bf-color-status-warning-content) 23%, transparent) 100%
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent) 0%,
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 17%, transparent) 30%,
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 13%, transparent) 60%,
+        color-mix(in srgb, var(--openbitfun-color-status-warning-content) 23%, transparent) 100%
       );
-      border-color: color-mix(in srgb, var(--bf-color-status-warning-content) 50%, transparent);
-      color: var(--bf-color-content-primary);
+      border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 50%, transparent);
+      color: var(--openbitfun-color-content-primary);
       box-shadow:
-        0 10px 20px color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-        0 6px 12px color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent),
-        var(--bf-shadow-inner-highlight-hover),
-        inset 0 -1px 0 color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
+        0 10px 20px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+        0 6px 12px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent),
+        var(--openbitfun-shadow-inner-highlight-hover),
+        inset 0 -1px 0 color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
       backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
       -webkit-backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
       transform: translateY(-1px);
@@ -91,9 +91,9 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 90%, transparent);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--bf-color-status-warning-content) 60%, transparent);
-    animation: bitfun-planner-button-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 90%, transparent);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 60%, transparent);
+    animation: openbitfun-planner-button-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     flex-shrink: 0;
     position: relative;
     z-index: 2;
@@ -101,23 +101,23 @@
   }
 
   &__text {
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     white-space: nowrap;
     position: relative;
     z-index: 2;
   }
 
   &__progress {
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     white-space: nowrap;
     position: relative;
     z-index: 2;
   }
 }
 
-@keyframes bitfun-planner-button-pulse {
+@keyframes openbitfun-planner-button-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);
@@ -129,7 +129,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-planner-button {
+  .openbitfun-planner-button {
     &::before {
       transition: none;
       transform: translateX(-100%);

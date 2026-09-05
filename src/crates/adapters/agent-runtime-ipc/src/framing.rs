@@ -1,6 +1,6 @@
 use crate::RuntimeIpcFrame;
-use bitfun_transport::encode_json_with_limit;
-use bitfun_transport::JsonCodecError;
+use openbitfun_transport::encode_json_with_limit;
+use openbitfun_transport::JsonCodecError;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub(crate) const MAX_REQUEST_FRAME_BYTES: usize = 128 * 1024;

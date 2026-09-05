@@ -67,6 +67,6 @@ describe('UserMessageItem action visibility', () => {
     expect(extractBlock(hover, '.user-message-item__timestamp {')).toContain('opacity: 1;');
     expect(extractBlock(hover, '.user-message-item__actions {')).toContain('opacity: 1;');
     expect(extractBlock(hover, '.user-message-item__actions {')).toContain('pointer-events: auto;');
-    expect(shell).toContain('margin-bottom: calc(var(--bf-control-flow-chat-flow-item-gap) + 1rem);');
+    expect(shell).toContain('margin-bottom: calc(var(--openbitfun-control-flow-chat-flow-item-gap) + 1rem);');
   });
 });

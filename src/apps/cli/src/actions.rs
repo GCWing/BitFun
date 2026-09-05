@@ -136,14 +136,14 @@ pub(crate) enum ActionHandler {
 }
 
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
-    "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
+    "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `openbitfun chat`";
 pub(crate) const IMAGE_ATTACHMENTS_REQUIRE_MESSAGE: &str =
     "Remove image attachments before running a slash command.";
 pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Extensions, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `openbitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` and `/connect` to manage models, `/skills` to manage skills, `/mcp` to manage MCP servers, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Extensions, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `openbitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, _context: ActionContext) -> bool {
@@ -918,7 +918,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "logout",
         name: "Logout",
         aliases: &["/logout"],
-        description: "Log out of BitFun account",
+        description: "Log out of OpenBitFun account",
         contexts: BOTH,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Logout,
@@ -1569,7 +1569,7 @@ impl ResolvedKeymap {
                 keymap.push_binding(
                     spec,
                     binding,
-                    "BitFun safety".to_string(),
+                    "OpenBitFun safety".to_string(),
                     BindingPolicy {
                         availability,
                         modifier_match: built_in_modifier_match(spec, binding),
@@ -1612,7 +1612,7 @@ impl ResolvedKeymap {
                 }
                 Err(error) => keymap.push_diagnostic(
                     format!(
-                        "Invalid {} ({}); using BitFun default",
+                        "Invalid {} ({}); using OpenBitFun default",
                         field.source(),
                         binding_error_summary(&error)
                     ),
@@ -1632,7 +1632,7 @@ impl ResolvedKeymap {
                 keymap.push_binding(
                     spec,
                     binding,
-                    "BitFun default".to_string(),
+                    "OpenBitFun default".to_string(),
                     BindingPolicy {
                         availability: spec.availability,
                         modifier_match: built_in_modifier_match(spec, binding),
@@ -2081,16 +2081,51 @@ fn overlapping_contexts(left: &ResolvedBinding, right: &ResolvedBinding) -> Vec<
 }
 
 fn wrap_help_notice(value: &str, max_chars: usize) -> Vec<String> {
+    let max_chars = max_chars.max(1);
+
     value
         .lines()
-        .flat_map(|line| {
-            let chars = line.chars().collect::<Vec<_>>();
-            chars
-                .chunks(max_chars.max(1))
-                .map(|chunk| chunk.iter().collect::<String>())
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|line| wrap_help_notice_line(line, max_chars))
         .collect()
+}
+
+fn wrap_help_notice_line(line: &str, max_chars: usize) -> Vec<String> {
+    if line.is_empty() {
+        return vec![String::new()];
+    }
+
+    let mut wrapped = Vec::new();
+    let mut current = String::new();
+
+    for word in line.split_whitespace() {
+        if !current.is_empty() && current.chars().count() + 1 + word.chars().count() <= max_chars {
+            current.push(' ');
+            current.push_str(word);
+            continue;
+        }
+
+        if !current.is_empty() {
+            wrapped.push(std::mem::take(&mut current));
+        }
+
+        let mut remaining = word;
+        while remaining.chars().count() > max_chars {
+            let chunk = remaining.chars().take(max_chars).collect::<String>();
+            wrapped.push(chunk);
+            remaining = &remaining[remaining
+                .char_indices()
+                .nth(max_chars)
+                .map(|(index, _)| index)
+                .expect("remaining is longer than max_chars")..];
+        }
+        current.push_str(remaining);
+    }
+
+    if !current.is_empty() {
+        wrapped.push(current);
+    }
+
+    wrapped
 }
 
 fn binding_error_summary(error: &str) -> &str {
@@ -2147,7 +2182,7 @@ mod tests {
         assert!(ActionHandler::AddModel.available_in_shared_tui(ActionContext::Startup));
         assert!(ActionHandler::Skills.available_in_shared_tui(ActionContext::Startup));
         assert!(ActionHandler::McpServers.available_in_shared_tui(ActionContext::Startup));
-        assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("openbitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/connect`"));
@@ -2688,7 +2723,7 @@ mod tests {
             Some("exit")
         );
         let diagnostic = keymap.diagnostics().join("\n");
-        assert!(diagnostic.contains("BitFun safety"));
+        assert!(diagnostic.contains("OpenBitFun safety"));
         assert!(diagnostic.contains("shortcuts.menu"));
         assert!(diagnostic.contains("Quit"));
         assert!(diagnostic.contains("Interrupt"));
@@ -2853,7 +2888,7 @@ mod tests {
         let diagnostic = keymap.diagnostics().join("\n");
         assert!(diagnostic.contains("Ctrl+Esc"));
         assert!(diagnostic.contains("shortcuts.menu"));
-        assert!(diagnostic.contains("BitFun safety"));
+        assert!(diagnostic.contains("OpenBitFun safety"));
     }
 
     #[test]
@@ -3045,7 +3080,7 @@ mod tests {
             help.lines().all(|line| line.chars().count() <= 74),
             "{help}"
         );
-        assert!(help.contains("BitFun safety"));
+        assert!(help.contains("OpenBitFun safety"));
     }
 
     #[test]
@@ -3058,7 +3093,7 @@ mod tests {
         let help = keymap.help_text(ActionState::chat(false, false));
 
         assert!(help.contains("shortcuts.send_message"), "{help}");
-        assert!(help.contains("BitFun default"), "{help}");
+        assert!(help.contains("OpenBitFun default"), "{help}");
         assert!(help.contains("Commands"), "{help}");
         assert!(!help.contains("open_palette"), "{help}");
         assert!(help.lines().all(|line| line.chars().count() <= 74));
@@ -3093,7 +3128,8 @@ mod tests {
 
         assert!(help.contains("Invalid shortcuts.send_message"), "{help}");
         assert!(help.contains("unsupported key"), "{help}");
-        assert!(help.contains("using BitFun default"), "{help}");
+        assert!(help.contains("using OpenBitFun"), "{help}");
+        assert!(help.lines().any(|line| line.trim() == "default"), "{help}");
         assert!(!help.contains("more shortcut notices"), "{help}");
         assert!(help.lines().count() <= 19, "{help}");
         assert!(help.lines().all(|line| line.chars().count() <= 74));

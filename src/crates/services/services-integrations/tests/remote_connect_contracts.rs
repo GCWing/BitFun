@@ -1,15 +1,15 @@
 #![cfg(feature = "remote-connect")]
 
-use bitfun_core_types::{
+use openbitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevReasoningCatalog, ModelsDevReasoningModel,
     ModelsDevReasoningProvider, ReasoningCapabilityStatus, ReasoningCatalogProjection,
     ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
 };
-use bitfun_events::{AgenticEvent, ToolEventData};
-use bitfun_runtime_ports::{
+use openbitfun_events::{AgenticEvent, ToolEventData};
+use openbitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
 };
-use bitfun_services_integrations::remote_connect::{
+use openbitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_lan_relay_url_with_ip,
     build_remote_chat_messages, build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_model_catalog,
@@ -1075,7 +1075,7 @@ async fn remote_connect_command_owner_builds_a_projected_plan_with_hidden_execut
         &host,
         &RemoteCommand::BuildPlan {
             session_id: "session-1".to_string(),
-            plan_file_path: "/repo/.bitfun/plans/mobile.plan.md".to_string(),
+            plan_file_path: "/repo/.openbitfun/plans/mobile.plan.md".to_string(),
             plan_name: Some("Mobile plan".to_string()),
             agent_type: Some("code".to_string()),
         },
@@ -1093,7 +1093,7 @@ async fn remote_connect_command_owner_builds_a_projected_plan_with_hidden_execut
     let submitted = host.submitted_dialog();
     assert_eq!(
         submitted.content,
-        remote_plan_build_content("/repo/.bitfun/plans/mobile.plan.md")
+        remote_plan_build_content("/repo/.openbitfun/plans/mobile.plan.md")
     );
     assert_eq!(
         submitted.display_content.as_deref(),
@@ -1108,18 +1108,18 @@ fn remote_connect_plan_projection_covers_legacy_create_and_modern_write_tools() 
         "CreatePlan",
         Some(&serde_json::json!({ "name": "Legacy plan" })),
         Some(&serde_json::json!({
-            "plan_file_path": "/repo/.bitfun/plans/legacy.plan.md",
+            "plan_file_path": "/repo/.openbitfun/plans/legacy.plan.md",
             "overview": "Ship the mobile flow"
         })),
     )
     .expect("legacy CreatePlan is projected");
     assert_eq!(legacy.name, "Legacy plan");
-    assert_eq!(legacy.file_path, "/repo/.bitfun/plans/legacy.plan.md");
+    assert_eq!(legacy.file_path, "/repo/.openbitfun/plans/legacy.plan.md");
 
     let modern = project_remote_plan_tool(
         "Write",
         Some(&serde_json::json!({
-            "file_path": "/repo/.bitfun/plans/modern.plan.md"
+            "file_path": "/repo/.openbitfun/plans/modern.plan.md"
         })),
         None,
     )
@@ -1599,7 +1599,7 @@ fn remote_connect_file_transfer_policy_preserves_name_fallback() {
 
 fn make_temp_remote_workspace() -> (PathBuf, PathBuf, PathBuf) {
     let base = std::env::temp_dir().join(format!(
-        "bitfun-remote-connect-contract-{}",
+        "openbitfun-remote-connect-contract-{}",
         uuid::Uuid::new_v4()
     ));
     let workspace = base.join("workspace");
@@ -2830,9 +2830,9 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         attempt_id: None,
         attempt_index: None,
         tool_event: ToolEventData::Started {
-            identity: bitfun_events::ToolEventIdentity::resolved(
+            identity: openbitfun_events::ToolEventIdentity::resolved(
                 "tool-1",
-                bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
+                openbitfun_agent_tools::CALL_DEFERRED_TOOL_NAME,
                 "AskUserQuestion",
             ),
             params: serde_json::json!({

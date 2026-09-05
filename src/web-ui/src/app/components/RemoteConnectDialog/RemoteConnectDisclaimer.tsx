@@ -1,4 +1,4 @@
-import { Button, ScrollArea, StatusPill } from '@bitfun/ui';
+import { Button, ScrollArea, StatusPill } from '@openbitfun/ui';
 import React from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import './RemoteConnectDisclaimer.scss';
@@ -18,29 +18,29 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
   const canAgree = !!onAgree && !agreed;
 
   return (
-    <div data-bf-component="remote-connect-disclaimer" data-bf-part="root" className="bitfun-remote-disclaimer">
-      <div className="bitfun-remote-disclaimer__meta" data-bf-component="remote-connect-disclaimer" data-bf-part="meta">
+    <div data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="root" className="openbitfun-remote-disclaimer">
+      <div className="openbitfun-remote-disclaimer__meta" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="meta">
         <StatusPill tone={agreed ? 'success' : 'warning'}>
           {t(agreed ? 'remoteConnect.disclaimerStatusAgreed' : 'remoteConnect.disclaimerStatusPending')}
         </StatusPill>
       </div>
 
-      <p className="bitfun-remote-disclaimer__text" data-bf-component="remote-connect-disclaimer" data-bf-part="intro">{t('remoteConnect.disclaimerIntro')}</p>
+      <p className="openbitfun-remote-disclaimer__text" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="intro">{t('remoteConnect.disclaimerIntro')}</p>
 
-      <h3 className="bitfun-remote-disclaimer__section-title" data-bf-component="remote-connect-disclaimer" data-bf-part="title">
+      <h3 className="openbitfun-remote-disclaimer__section-title" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="title">
         {t('remoteConnect.disclaimerKeyRisks')}
       </h3>
-      <ol className="bitfun-remote-disclaimer__list bitfun-remote-disclaimer__list--key" data-bf-component="remote-connect-disclaimer" data-bf-part="riskList">
+      <ol className="openbitfun-remote-disclaimer__list openbitfun-remote-disclaimer__list--key" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="riskList">
         <li>{t('remoteConnect.disclaimerItemGeneralRisk')}</li>
         <li>{t('remoteConnect.disclaimerItemSecurity')}</li>
         <li>{t('remoteConnect.disclaimerItemEncryption')}</li>
         <li>{t('remoteConnect.disclaimerItemPrivacy')}</li>
       </ol>
 
-      <details className="bitfun-remote-disclaimer__details" data-bf-component="remote-connect-disclaimer" data-bf-part="details">
+      <details className="openbitfun-remote-disclaimer__details" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="details">
         <summary>{t('remoteConnect.disclaimerFullDetails')}</summary>
-        <ScrollArea className="bitfun-remote-disclaimer__list-scroll">
-          <ol className="bitfun-remote-disclaimer__list" start={5}>
+        <ScrollArea className="openbitfun-remote-disclaimer__list-scroll">
+          <ol className="openbitfun-remote-disclaimer__list" start={5}>
             <li>{t('remoteConnect.disclaimerItemOpenSource')}</li>
             <li>{t('remoteConnect.disclaimerItemDataUsage')}</li>
             <li>{t('remoteConnect.disclaimerItemCredentials')}</li>
@@ -57,9 +57,9 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
         </ScrollArea>
       </details>
 
-      <div className="bitfun-remote-disclaimer__actions" data-bf-component="remote-connect-disclaimer" data-bf-part="actions">
+      <div className="openbitfun-remote-disclaimer__actions" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="actions">
         <Button
-          className="bitfun-remote-disclaimer__action"
+          className="openbitfun-remote-disclaimer__action"
           variant="outline"
           size="md"
           onClick={onClose}
@@ -68,7 +68,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
         </Button>
         {canAgree && (
           <Button
-            className="bitfun-remote-disclaimer__action"
+            className="openbitfun-remote-disclaimer__action"
             variant="fill"
             size="md"
             onClick={onAgree}

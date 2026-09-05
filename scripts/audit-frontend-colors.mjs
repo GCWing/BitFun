@@ -47,9 +47,9 @@ const CANONICAL_ZERO_METRICS = [
 ];
 const HEX_COLOR_PATTERN = /(?<!&)#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g;
 const FUNCTION_COLOR_PATTERN = /\b(?:rgba?|hsla?)\(\s*[^)]+\)/gi;
-const HOST_VARIABLE_PATTERN = /--bitfun-[a-z0-9-]+/g;
-const HOST_VARIABLE_FALLBACK_PATTERN = /var\(\s*(--bitfun-[a-z0-9-]+)\s*,/g;
-const HOST_VARIABLE_DEFINITION_PATTERN = /(?:^|[;{\s])(--bitfun-[a-z0-9-]+)\s*:/gm;
+const HOST_VARIABLE_PATTERN = /--openbitfun-[a-z0-9-]+/g;
+const HOST_VARIABLE_FALLBACK_PATTERN = /var\(\s*(--openbitfun-[a-z0-9-]+)\s*,/g;
+const HOST_VARIABLE_DEFINITION_PATTERN = /(?:^|[;{\s])(--openbitfun-[a-z0-9-]+)\s*:/gm;
 const CSS_NAMED_COLORS = new Set([
   'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure', 'beige', 'bisque', 'black', 'blue',
   'blueviolet', 'brown', 'burlywood', 'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue',

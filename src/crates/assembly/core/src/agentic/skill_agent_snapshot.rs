@@ -9,7 +9,7 @@ use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
-pub use bitfun_agent_runtime::skill_agent_snapshot::{
+pub use openbitfun_agent_runtime::skill_agent_snapshot::{
     build_skill_agent_tool_listing_sections_from_snapshot, diff_skill_agent_snapshot,
     render_full_agent_listing_body, render_full_skill_listing_body, AgentSnapshotEntry,
     SkillAgentDiff, SkillSnapshotEntry, TurnSkillAgentSnapshot, TurnSkillAgentSnapshotStore,
@@ -259,7 +259,7 @@ mod tests {
     use crate::agentic::tools::manifest_resolver::ResolvedToolManifest;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::types::ToolDefinition;
-    use bitfun_agent_tools::GetToolSpecDeferredToolSummary;
+    use openbitfun_agent_tools::GetToolSpecDeferredToolSummary;
     use serde_json::json;
 
     #[test]

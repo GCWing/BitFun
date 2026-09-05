@@ -1,8 +1,8 @@
-# BitFun 智能体工作流与审查体验产品需求调整提案
+# OpenBitFun 智能体工作流与审查体验产品需求调整提案
 
-> 范围：基于 Bun Rust 迁移文章、Claude Code dynamic workflows、GitHub Copilot cloud agent、Cursor Background Agent / Bugbot、Google Jules 和近期智能体 PR 研究，调整 BitFun 在长任务、并发任务、审查、token 成本和 GUI 交互上的产品需求。
+> 范围：基于 Bun Rust 迁移文章、Claude Code dynamic workflows、GitHub Copilot cloud agent、Cursor Background Agent / Bugbot、Google Jules 和近期智能体 PR 研究，调整 OpenBitFun 在长任务、并发任务、审查、token 成本和 GUI 交互上的产品需求。
 >
-> 本文是产品需求层调整，不是技术设计。它回答用户为什么需要这类能力、什么时候应该自动启用、什么时候应该收敛范围或停止、GUI 应如何表达并发，以及 BitFun 如何避免把工作流、证据和审查做成过重流程。
+> 本文是产品需求层调整，不是技术设计。它回答用户为什么需要这类能力、什么时候应该自动启用、什么时候应该收敛范围或停止、GUI 应如何表达并发，以及 OpenBitFun 如何避免把工作流、证据和审查做成过重流程。
 
 承接文档：
 
@@ -23,7 +23,7 @@
 
 ## 1. 核心结论
 
-BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新模式，也不应把 DeepReview 做成独立且默认沉重的高级入口。更好的产品方向是：
+OpenBitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新模式，也不应把 DeepReview 做成独立且默认沉重的高级入口。更好的产品方向是：
 
 1. **保持默认执行轻量，同时保留完整审核能力**：普通 Review 先由一个只读主审理解改动；只有具体未解决问题才触发有界补充检查。大目标或 provider 证据不完整时仍使用受管工作包，但文件分包与审核维度不得相乘。
 2. **把并发能力做成 GUI 中的单一任务控制台**：用户看到的是一个任务、一个进度、一组阶段和异常，而不是 64 个窗口、64 个聊天或 64 条不可理解的日志。
@@ -34,16 +34,16 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 
 ## 2. 业界参照与启发
 
-| 来源 | 先进点 | 对 BitFun 的启发 | 需要避免的误读 |
+| 来源 | 先进点 | 对 OpenBitFun 的启发 | 需要避免的误读 |
 |---|---|---|---|
-| Bun Rust 迁移 | 用动态工作流把超大迁移拆成规则生成、任务队列、并发执行、独立审查、修复回路和强测试 oracle | BitFun 应学习“失败队列化、审查隔离、过程修复、测试真实性确认”，不是只学习并发数量 | 不应鼓励普通任务默认启动大量 agent，也不应把大规模迁移经验泛化到所有改动 |
-| Claude Code dynamic workflows | workflow 可由脚本或 SDK 编排，适合批量、动态、可恢复任务 | BitFun 可以把工作流变成后台执行策略，而不是新的用户心智负担 | 不应让用户手写 workflow 才能获得价值 |
-| OpenAI Codex Review、Skills 与 subagents | `/review` 提供专用 reviewer；detached review 使用内置 `review-agent`；Skills 可隐式启用；Codex 仓库的 `code-review` 会按可用 `code-review-*` 能力委派独立复核 | 竞品能力应按用户最终获得的组合效果评估，不能只看核心命令。BitFun 应让内置、Skill 和用户审核能力在统一 Review 中按需发挥作用 | 不应把每项能力都默认变成一次完整 Diff 重读，也不应把 Skill 或代理身份暴露为用户必须理解的产品概念 |
-| GitHub Copilot cloud agent | 从 issue、dashboard、PR、CI 失败等入口异步启动任务，完成后创建或更新 PR，并请求人工 review | BitFun 应支持从任务、PR、CI、审查意见自然进入后台执行，并保留用户审核点 | 不应把 PR 作为所有任务的默认终点，个人本地任务仍要轻量 |
-| GitHub Copilot code review | 自动 PR review、review effort level、可配置自动请求审查 | BitFun 可学习目标集成和人工审核点，但普通 Review 不复制基于启发式风险的多 reviewer 升级 | 不应把“自动审查”误做成无差别门禁或默认 token 放大 |
-| Cursor Background Agent / Bugbot | 云端后台 agent、PR 自动审查、发现问题后回到编辑器修复、用 dashboard 展示用量 | BitFun 的 GUI 应围绕“后台任务控制台、异常优先、回到编辑器修复、成本可见”设计 | 不应在 GUI 上复制多终端或多聊天窗口 |
-| Google Jules | 异步任务、GitHub 集成、安全云环境、多请求同时处理、用户先审计划和结果 | BitFun 可学习“异步托管任务 + 人类审核点 + 多请求队列”的产品形态 | 不应要求所有长任务都进云端，本地桌面仍是 BitFun 的强项 |
-| 智能体 PR 实证研究 | 不同任务类型成功率差异明显，文档和测试更适合 agent，新功能和长期维护风险更高 | BitFun 应按任务类型选择审查强度和预算，不追求单一万能策略 | 不应只用短期合入率衡量成功，还要看返工、维护和 churn |
+| Bun Rust 迁移 | 用动态工作流把超大迁移拆成规则生成、任务队列、并发执行、独立审查、修复回路和强测试 oracle | OpenBitFun 应学习“失败队列化、审查隔离、过程修复、测试真实性确认”，不是只学习并发数量 | 不应鼓励普通任务默认启动大量 agent，也不应把大规模迁移经验泛化到所有改动 |
+| Claude Code dynamic workflows | workflow 可由脚本或 SDK 编排，适合批量、动态、可恢复任务 | OpenBitFun 可以把工作流变成后台执行策略，而不是新的用户心智负担 | 不应让用户手写 workflow 才能获得价值 |
+| OpenAI Codex Review、Skills 与 subagents | `/review` 提供专用 reviewer；detached review 使用内置 `review-agent`；Skills 可隐式启用；Codex 仓库的 `code-review` 会按可用 `code-review-*` 能力委派独立复核 | 竞品能力应按用户最终获得的组合效果评估，不能只看核心命令。OpenBitFun 应让内置、Skill 和用户审核能力在统一 Review 中按需发挥作用 | 不应把每项能力都默认变成一次完整 Diff 重读，也不应把 Skill 或代理身份暴露为用户必须理解的产品概念 |
+| GitHub Copilot cloud agent | 从 issue、dashboard、PR、CI 失败等入口异步启动任务，完成后创建或更新 PR，并请求人工 review | OpenBitFun 应支持从任务、PR、CI、审查意见自然进入后台执行，并保留用户审核点 | 不应把 PR 作为所有任务的默认终点，个人本地任务仍要轻量 |
+| GitHub Copilot code review | 自动 PR review、review effort level、可配置自动请求审查 | OpenBitFun 可学习目标集成和人工审核点，但普通 Review 不复制基于启发式风险的多 reviewer 升级 | 不应把“自动审查”误做成无差别门禁或默认 token 放大 |
+| Cursor Background Agent / Bugbot | 云端后台 agent、PR 自动审查、发现问题后回到编辑器修复、用 dashboard 展示用量 | OpenBitFun 的 GUI 应围绕“后台任务控制台、异常优先、回到编辑器修复、成本可见”设计 | 不应在 GUI 上复制多终端或多聊天窗口 |
+| Google Jules | 异步任务、GitHub 集成、安全云环境、多请求同时处理、用户先审计划和结果 | OpenBitFun 可学习“异步托管任务 + 人类审核点 + 多请求队列”的产品形态 | 不应要求所有长任务都进云端，本地桌面仍是 OpenBitFun 的强项 |
+| 智能体 PR 实证研究 | 不同任务类型成功率差异明显，文档和测试更适合 agent，新功能和长期维护风险更高 | OpenBitFun 应按任务类型选择审查强度和预算，不追求单一万能策略 | 不应只用短期合入率衡量成功，还要看返工、维护和 churn |
 
 ## 3. 用户核心诉求
 
@@ -67,7 +67,7 @@ BitFun 后续不应把 dynamic workflow 理解成一个需要用户学习的新�
 
 ```text
 用户表达目标
-  -> BitFun 判断任务规模、风险、验证条件和预算
+  -> OpenBitFun 判断任务规模、风险、验证条件和预算
   -> 默认选一个最低足够强度的执行策略
   -> 风险或失败出现时渐进升级
   -> 完成后给出结果、证据摘要和可选后续动作
@@ -170,9 +170,9 @@ workflow 不应成为通用默认。它适合满足以下条件的任务：
 
 ## 7. 自动化与上手难度
 
-用户不应先学习 workflow。BitFun 应把 workflow 包装成少数可理解的动作：
+用户不应先学习 workflow。OpenBitFun 应把 workflow 包装成少数可理解的动作：
 
-| 用户表达 | BitFun 自动映射 |
+| 用户表达 | OpenBitFun 自动映射 |
 |---|---|
 | “快点改完这个” | 低成本策略，少审查，任务结束给未验证项 |
 | “稳一点” | 强调更完整调查和验证；仅当主审形成具体未解决问题时才按普通 Review 额度调用补充检查 |
@@ -189,7 +189,7 @@ workflow 不应成为通用默认。它适合满足以下条件的任务：
 
 ## 8. Token、耗时和完成率平衡
 
-BitFun 不能把“任务完成率最高”作为唯一目标。用户通常需要的是“在当前成本约束下足够可靠地完成”。
+OpenBitFun 不能把“任务完成率最高”作为唯一目标。用户通常需要的是“在当前成本约束下足够可靠地完成”。
 
 ### 8.1 成本倾向信号（非固定模式）
 
@@ -331,7 +331,7 @@ flowchart TD
 
 ## 11. 过度设计和过度审核的防线
 
-BitFun 的优势不应表现为“每一步都有重流程”，而应表现为“该轻则轻，该重则重”。
+OpenBitFun 的优势不应表现为“每一步都有重流程”，而应表现为“该轻则轻，该重则重”。
 
 ### 11.1 不应默认做的事
 

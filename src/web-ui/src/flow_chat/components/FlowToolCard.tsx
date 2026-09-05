@@ -86,14 +86,14 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   return (
     <div
       className={`flow-tool-card-wrapper ${permissionPending ? 'flow-tool-card-wrapper--permission-pending' : ''} ${className}`.trim()}
-      data-bf-component="flow-tool-card"
-      data-bf-part="root"
-      data-bf-state={permissionPending ? 'permission-pending' : undefined}
+      data-openbitfun-component="flow-tool-card"
+      data-openbitfun-part="root"
+      data-openbitfun-state={permissionPending ? 'permission-pending' : undefined}
       data-testid={toolCardTestId}
       data-tool-name={effectiveToolItem.toolName}
       data-tool-card-id={toolItem.id}
-      data-bf-attention={attention}
-      data-bf-presentation={config.presentation}
+      data-openbitfun-attention={attention}
+      data-openbitfun-presentation={config.presentation}
     >
       <FlowToolCardErrorBoundary
         toolItem={effectiveToolItem}
@@ -120,8 +120,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
       {interruptionNote && !cardHandlesInterruptionNote && (
         <div
           className="flow-tool-card-note"
-          data-bf-component="flow-tool-card"
-          data-bf-part="note"
+          data-openbitfun-component="flow-tool-card"
+          data-openbitfun-part="note"
           role="note"
         >
           {interruptionNote}

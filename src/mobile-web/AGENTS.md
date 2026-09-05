@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Mobile web is the browser-based remote control client for BitFun desktop sessions.
+Mobile web is the browser-based remote control client for OpenBitFun desktop sessions.
 
 ## Boundaries
 
@@ -33,7 +33,7 @@ pnpm run build:mobile-web
 ```
 
 The build skips work when `src/mobile-web/dist` is newer than every input. Use
-`BITFUN_MOBILE_WEB_FORCE_BUILD=1` or `node scripts/mobile-web-build.cjs --force`
+`OPENBITFUN_MOBILE_WEB_FORCE_BUILD=1` or `node scripts/mobile-web-build.cjs --force`
 only when a rebuild is required despite unchanged inputs.
 
 For pairing, reconnect, disconnect, or chat behavior changes, also describe manual verification in the PR, including the browser/device used and the observed state transitions.

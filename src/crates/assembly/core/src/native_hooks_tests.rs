@@ -3,7 +3,9 @@ use crate::native_hooks::{
     dispatch_pre_tool_use, hook_settings_paths, ordered_layers, overview, overview_with_facts,
     take_pending_session_context, AgentHooksConfig, NativeHookSessionFacts,
 };
-use bitfun_agent_runtime::native_hooks::{AgentHookEvent, AgentHookScope, AgentHookSettingsLayer};
+use openbitfun_agent_runtime::native_hooks::{
+    AgentHookEvent, AgentHookScope, AgentHookSettingsLayer,
+};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -76,7 +78,7 @@ fn user_settings_path_is_always_present_and_project_path_is_gated() {
     assert_eq!(with_project[1].0, AgentHookScope::Project);
     assert_eq!(
         with_project[1].1,
-        workspace.join(".bitfun/config/hooks.json")
+        workspace.join(".openbitfun/config/hooks.json")
     );
 
     // No workspace means no project layer even when project hooks are enabled.

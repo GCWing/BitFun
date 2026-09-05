@@ -1,23 +1,23 @@
 [package]
-name = "bitfun-app-server"
+name = "openbitfun-app-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun generic JSON-RPC app-server surface over agent_client_protocol custom roles"
+description = "OpenBitFun generic JSON-RPC app-server surface over agent_client_protocol custom roles"
 
 [lib]
-name = "bitfun_app_server"
+name = "openbitfun_app_server"
 
 [dependencies]
 agent-client-protocol = { workspace = true }
-bitfun-app-server-protocol = { path = "../app-server-protocol" }
+openbitfun-app-server-protocol = { path = "../app-server-protocol" }
 # Host-service handlers use the reviewed Agent Runtime owner closure. Add a
 # narrower Core owner feature when a newly registered domain needs it; the
-# protocol surface must not inherit the broad bitfun-core/product-full union.
-bitfun-core = { path = "../../assembly/core", features = ["external-sources", "git", "i18n-runtime", "remote-connect", "web-tools"] }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "product-search"] }
+# protocol surface must not inherit the broad openbitfun-core/product-full union.
+openbitfun-core = { path = "../../assembly/core", features = ["external-sources", "git", "i18n-runtime", "remote-connect", "web-tools"] }
+openbitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "product-search"] }
 dunce = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 serde = { workspace = true }
@@ -30,12 +30,12 @@ url = { workspace = true }
 [features]
 default = []
 # Compatibility feature for existing callers. TypeScript schemas are owned and
-# exported by `bitfun-app-server-protocol`.
-ts = ["bitfun-app-server-protocol/ts"]
+# exported by `openbitfun-app-server-protocol`.
+ts = ["openbitfun-app-server-protocol/ts"]
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 async-trait = { workspace = true }
-bitfun-app-server-client = { path = "../app-server-client" }
+openbitfun-app-server-client = { path = "../app-server-client" }

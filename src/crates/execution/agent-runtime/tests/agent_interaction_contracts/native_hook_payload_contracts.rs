@@ -3,7 +3,7 @@
 //! Field names and per-event fields must stay identical to the Codex hook
 //! process interface so existing hook scripts keep working.
 
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookEvent, AgentHookEventPayload, AgentHookPayload, AgentHookPayloadCommon,
     AgentHookPermissionMode,
 };

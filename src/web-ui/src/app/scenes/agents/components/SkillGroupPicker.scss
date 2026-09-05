@@ -1,7 +1,7 @@
 .skill-group-picker {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 
   &__head,
   &__group-head,
@@ -14,55 +14,55 @@
 
   &__head {
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__selected-count {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     font-variant-numeric: tabular-nums;
   }
 
   &__sections {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__section-label {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
   }
 
   &__group {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
-    padding: var(--bf-space-2);
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-surface-subtle);
+    gap: var(--openbitfun-space-1);
+    padding: var(--openbitfun-space-2);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-surface-subtle);
   }
 
   &__group-head {
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__group-title-wrap {
     display: inline-flex;
     align-items: center;
     min-width: 0;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__group-name {
@@ -70,11 +70,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-transform: uppercase;
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
   }
 
   &__group-count {
@@ -83,17 +83,17 @@
     justify-content: center;
     min-width: 22px;
     padding: 1px 6px;
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-micro-font-size);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-micro-font-size);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
   &__group-actions {
     flex-shrink: 0;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -102,7 +102,7 @@
   &__skills {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__token {
@@ -112,29 +112,29 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     background: transparent;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
-      border-color: var(--bf-color-field-border-hover);
-      color: var(--bf-color-content-secondary);
+      border-color: var(--openbitfun-color-field-border-hover);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     &.is-on {
-      border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
-      background: var(--bf-color-action-secondary-background);
-      color: var(--bf-color-accent-default);
+      border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      background: var(--openbitfun-color-action-secondary-background);
+      color: var(--openbitfun-color-accent-default);
     }
 
     &:disabled {
@@ -147,24 +147,24 @@
 .skill-group-summary {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
 
   &__group {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   &__label {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__skills {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 }
 
@@ -172,9 +172,9 @@
   display: flex;
   box-sizing: border-box;
   max-height: min(620px, 70vh);
-  padding-block: var(--bf-space-3);
+  padding-block: var(--openbitfun-space-3);
   flex-direction: column;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 
   &__head,
   &__group-row,
@@ -186,23 +186,23 @@
 
   &__head {
     justify-content: space-between;
-    gap: var(--bf-space-3);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
+    gap: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 
   &__list {
-    border: 1px solid var(--bf-color-border-subtle);
+    border: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__group-row {
     justify-content: space-between;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-2) var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
   }
 
   &__group-row + &__group-row {
-    border-top: 1px solid var(--bf-color-border-subtle);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__group-copy {
@@ -214,15 +214,15 @@
   }
 
   &__group-name {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__group-meta,
   &__empty {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__group-actions {
@@ -235,16 +235,16 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   &__field {
     display: flex;
     flex-direction: column;
-    gap: var(--bf-space-1);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    gap: var(--openbitfun-space-1);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__token-grid {
@@ -252,9 +252,9 @@
     max-height: 360px;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--bf-space-1);
-    border: 1px solid var(--bf-color-border-subtle);
-    padding: var(--bf-space-2);
+    gap: var(--openbitfun-space-1);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    padding: var(--openbitfun-space-2);
   }
 
   &__token {
@@ -264,29 +264,29 @@
     min-height: 26px;
     padding: 3px 8px;
     border: 1px solid transparent;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     background: transparent;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
     transition:
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(.is-on):not(:disabled) {
-      border-color: var(--bf-color-field-border-hover);
-      color: var(--bf-color-content-secondary);
+      border-color: var(--openbitfun-color-field-border-hover);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     &.is-on {
-      border-color: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
-      background: var(--bf-color-action-secondary-background);
-      color: var(--bf-color-accent-default);
+      border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      background: var(--openbitfun-color-action-secondary-background);
+      color: var(--openbitfun-color-accent-default);
     }
 
     &:disabled {

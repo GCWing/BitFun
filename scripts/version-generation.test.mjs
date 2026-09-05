@@ -10,7 +10,7 @@ const expectedVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json
 
 for (const [buildEnv, isDev] of [['production', false], ['development', true]]) {
   test(`generates ${buildEnv} version metadata explicitly`, () => {
-    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), `bitfun-version-${buildEnv}-`));
+    const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), `openbitfun-version-${buildEnv}-`));
     const result = run(['--build-env', buildEnv, '--output-root', outputRoot]);
     assert.equal(result.status, 0, result.stderr);
     const generated = JSON.parse(
@@ -24,10 +24,10 @@ for (const [buildEnv, isDev] of [['production', false], ['development', true]]) 
 }
 
 test('records the immutable release channel in generated metadata', () => {
-  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-version-beta-'));
+  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-version-beta-'));
   const result = run(
     ['--build-env', 'production', '--output-root', outputRoot],
-    { BITFUN_RELEASE_CHANNEL: 'beta' },
+    { OPENBITFUN_RELEASE_CHANNEL: 'beta' },
   );
   assert.equal(result.status, 0, result.stderr);
   const generated = JSON.parse(
@@ -37,7 +37,7 @@ test('records the immutable release channel in generated metadata', () => {
 });
 
 test('fails instead of reusing stale metadata when build environment is missing', () => {
-  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-version-missing-'));
+  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-version-missing-'));
   const result = run(['--output-root', outputRoot]);
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}\n${result.stderr}`, /Expected --build-env/);

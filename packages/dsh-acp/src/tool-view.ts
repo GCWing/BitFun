@@ -3,7 +3,7 @@
  * an IDE renders. This is the part `@deepseek-ai/dsh-acp` deliberately omits:
  * its wire is automation-only, so it publishes no tool identity at all.
  *
- * @module @bitfun/dsh-acp/tool-view
+ * @module @openbitfun/dsh-acp/tool-view
  */
 
 import type { ToolCallContent, ToolCallLocation, ToolKind } from '@agentclientprotocol/sdk'

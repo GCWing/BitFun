@@ -60,7 +60,7 @@ const codes = await Promise.all([
   runPrefixed('mobile-web', 'pnpm', ['run', 'prepare:mobile-web']),
   // The DeepSeek Harness bridge Tauri ships as a resource. On a cold tree this
   // installs its own pinned toolchain (~30s), which still fits inside the two
-  // above; it is independent of them, and of BitFun's pnpm store.
+  // above; it is independent of them, and of OpenBitFun's pnpm store.
   runPrefixed('dsh-profile', 'pnpm', ['run', 'prepare:dsh-profile']),
 ]);
 

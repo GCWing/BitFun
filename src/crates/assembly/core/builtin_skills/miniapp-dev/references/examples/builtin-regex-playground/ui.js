@@ -28,13 +28,13 @@ const PATTERN_KEYS = [
 const SAMPLE_TEXT = `# Paste any text here — matches highlight in real time.
 
 Contact: alice@example.com / 13800138000
-Project: https://github.com/GCWing/BitFun
+Project: https://github.com/GCWing/OpenBitFun
 Internal IP: 192.168.1.10 and 10.0.0.1
 Trace ID: 8f2c3a01-4e6b-4d1c-9bb1-1f3a6d2c0a55
 Releasing v1.4.0-beta.2, commit 7a3f9d2
 
 // TODO: Extract the block above into a utility function
-const userName = "Bitfun";
+const userName = "OpenBitFun";
 `;
 
 const I18N = {

@@ -1,4 +1,4 @@
-# BitFun 编译与依赖治理计划
+# OpenBitFun 编译与依赖治理计划
 
 > 最近核实：2026-08-14
 >
@@ -17,7 +17,7 @@
 | 结论 | 说明 |
 |---|---|
 | 集成测试链接拓扑已收敛 | Services 两个 crate 的集成 target 总数从 33 降到 25；External Sources 的 adapter/assembly target 从 22 降到 7；五个 Contracts/AI/Assembly crate 又从 28 降到 10，feature、平台和外部系统失败域保持独立 |
-| Agent Runtime 基线不再隐藏重型 capability | `bitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
+| Agent Runtime 基线不再隐藏重型 capability | `openbitfun-core/agent-runtime` 只保留生命周期和基础工具 owner；文档转换与订阅认证也改为产品显式 modifier。在最新主线 A/B 中，三平台 normal/build 闭包进一步减少 69/64/110 个版本化 package instance |
 | App Server 不继承未消费能力 | App Server 保持现有 Agent/Git/外部来源 handler 边界，不再因 Core 基线携带文档转换和本地订阅凭据，三平台闭包减少 61/56/78 |
 | SDK Host 使用显式能力闭包 | SDK Host 保留当前本机协议和工具能力，但不再通过 `product-full` 携带协议未暴露的 Remote Connect、SSH、Function Agent 等能力；Windows/macOS/Linux normal/build 闭包减少 66/68/76 |
 | Core 默认值不再代表完整产品 | Core library 的默认 feature 集合为空，能力内部实现依赖回到实际 owner；最新三平台 feature-free 闭包继续减少 30/31/31 个 package instance |
@@ -200,15 +200,15 @@ Oniguruma 后端处理。当前 manifest 直接选择 `regex-onig`，因此运�
 Syntect→Ratatui 样式转换保持不变，同时让未生效的 fancy 后端与未消费的 YAML loader 退出。
 
 Package instance 会低估“同一个大 crate 少编译了多少 feature 代码”。在 Windows
-`agent-runtime` 闭包中，`bitfun-services-integrations` 的 Cargo active feature 从 61 个降到 6 个，
-只保留 `workspace-search` 及其 5 个直接依赖 feature；`bitfun-product-domains` 从 13 个降到 5 个，
+`agent-runtime` 闭包中，`openbitfun-services-integrations` 的 Cargo active feature 从 61 个降到 6 个，
+只保留 `workspace-search` 及其 5 个直接依赖 feature；`openbitfun-product-domains` 从 13 个降到 5 个，
 只保留 Agent Runtime 实际使用的 external-subagent contract slice。Function Agent、MiniApp、
 Plugin Source 由各自 owner 选择，完整产品仍经 `product-full` 显式恢复。
 
 上一轮根 `Cargo.lock` 从 1176 降到 1169，精确删除 `syntect-tui`、`custom_error`、`fancy-regex`、
 `yaml-rust`、`linked-hash-map`、`tauri-plugin-global-shortcut` 和 `global-hotkey`；没有新增、升级或
 降级 package。本轮 feature/角色边界调整保持该 lockfile 字节不变，也没有新增第三方 package。
-Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 不提交。
+Installer 自己生成的 `OpenBitFun-Installer/src-tauri/Cargo.lock` 不提交。
 
 以下以 `gcwing/main@a4e06cae3` 为变更前基线，完成 Core feature-free 依赖基线的剩余 owner
 收敛。统计仍使用相同三个 target triple、`normal,build` 边和版本化 package instance 去重口径：
@@ -226,7 +226,7 @@ Installer 自己生成的 `BitFun-Installer/src-tauri/Cargo.lock` 不提交。
 
 Core 的直接 Tokio capability 从 `fs/io-util/macros/net/rt/sync/time` 收敛为 `fs/sync`；异步宏、
 网络以及产品 runtime 能力由现有 `agent-runtime`、`browser-control` owner
-显式选择。feature-free Core 仍通过 `bitfun-services-core/json-io` 获得其原子 JSON 写入所需的
+显式选择。feature-free Core 仍通过 `openbitfun-services-core/json-io` 获得其原子 JSON 写入所需的
 `rt/time`，测试使用的多线程运行时只留在 dev-dependency。`runtime-ports/permission` 没有被机械移出：`GlobalConfig` 与项目权限文件公开 DTO
 确实在 feature-free facade 中使用它，继续保留比制造条件 API 更符合契约稳定性。
 
@@ -237,15 +237,15 @@ workspace 读取由 `workspace-text-runtime` 选择，诊断日志脱敏与本�
 
 本轮有意收紧了数项编译期契约。直接使用 feature-free Core 的仓外 consumer 若调用
 `I18nService`，必须显式选择 `i18n-runtime`；旧的
-`bitfun_core::infrastructure::events::TransportEmitter` 导入路径不再提供，host adapter 应直接从
-`bitfun-transport` 导入。直接依赖 feature-free `bitfun-services-core` 的 consumer 若调用诊断脱敏、
+`openbitfun_core::infrastructure::events::TransportEmitter` 导入路径不再提供，host adapter 应直接从
+`openbitfun-transport` 导入。直接依赖 feature-free `openbitfun-services-core` 的 consumer 若调用诊断脱敏、
 本地 Diff 或异步 workspace 文本 API，必须分别选择 `diagnostics`、`diff` 或
 `workspace-text-runtime`；通过 Core 兼容 facade 调用前两者时选择同名 Core feature。仓内真实 consumer
 已全部迁移，完整产品的运行时事件、翻译和服务行为不变，但这些源码迁移不能描述为对未知外部
 consumer 零影响。
 
 该轮结束时根 lock package 为 1169，新增、升级、降级 package 均为 0。由于 Core 删除本地
-`bitfun-transport` 直接边，`Cargo.lock` 的 Core dependency record 同步删除这一行；这是依赖边
+`openbitfun-transport` 直接边，`Cargo.lock` 的 Core dependency record 同步删除这一行；这是依赖边
 收敛，不是 package 集合增长，也不通过保留无 owner 的 optional dependency 伪造字节不变。
 
 以下以 `gcwing/main@aeb8099ae` 为变更前基线，继续收敛两个稳定契约 crate 的源码与依赖可见面。
@@ -269,7 +269,7 @@ Tool Contracts 约 6,846 行源码中，ACP/MCP bridge、Computer Use 与 elemen
 样本，因此不宣称完整产品 wall-clock 提速。完整产品和真实 owner 显式恢复原 API，runtime ownership、
 wire shape 与行为不变。
 
-`bitfun-agent-runtime` 的直接 Runtime Ports 边也不再选择其源码未消费的 `remote-exec-port` 与
+`openbitfun-agent-runtime` 的直接 Runtime Ports 边也不再选择其源码未消费的 `remote-exec-port` 与
 `tool-runtime-handles`；Core 的 `agent-runtime` owner 仍显式选择二者，因为具体 assembly 路径确实使用这些句柄。
 
 这次切片包含有意的编译期可见性收紧：直接依赖 Runtime Ports 或 Tool Contracts 的仓外 consumer 需要
@@ -289,7 +289,7 @@ target triple 和 `normal,build` 版本化 package instance 去重口径；它�
 | Core feature-free | 63 → 63 | 51 → 51 | 50 → 50 | 空默认与显式 owner feature 不变；只删除 consumer 侧冗余开关 |
 | Core `product-full` | 569 → 569 | 556 → 556 | 600 → 600 | 完整产品 owner 集合与运行能力不变 |
 | CLI | 642 → 640 | 641 → 639 | 664 → 662 | Markdown 只使用 parser，退出未消费的 `getopts` 与 HTML renderer |
-| Desktop | 790 → 790 | 805 → 793 | 887 → 887 | BitFun 的 macOS Objective-C 直接依赖边按实际 imports 选择 feature；Tauri/wry 等第三方仍合并自身所需 feature |
+| Desktop | 790 → 790 | 805 → 793 | 887 → 887 | OpenBitFun 的 macOS Objective-C 直接依赖边按实际 imports 选择 feature；Tauri/wry 等第三方仍合并自身所需 feature |
 | Relay Service | 190 → 190 | 193 → 193 | 192 → 192 | 独立 Docker manifest 保持显式版本与默认策略，闭包不变 |
 | Services Integrations feature-free | 26 → 26 | 28 → 28 | 27 → 27 | Qrcode 的 PNG/SVG 能力仍由 `remote-connect` owner 显式选择 |
 
@@ -302,7 +302,7 @@ MiniApp/Skin Market 的 2 个 SQLx 声明改为继承 workspace 根策略。剩�
 第三方默认收敛只处理有源码与构建证据的依赖：Futures 保留 `std`，Tracing 保留 `std`，Chrono 保留
 `serde + clock + std`；Tokio Stream 的真实 consumer 只使用 feature-free 的 Receiver/iter wrappers；
 Remote Connect 显式选择 qrcode 的 `image + svg`；Pulldown-Cmark 不启用 CLI 未使用的命令行/HTML renderer；
-BitFun 的 macOS Objective-C binding 直接依赖边只选择源码导入的类型和所需 `std`；Cargo 的最终
+OpenBitFun 的 macOS Objective-C binding 直接依赖边只选择源码导入的类型和所需 `std`；Cargo 的最终
 feature union 仍包含 Tauri、wry、notification、updater 等第三方路径的需求。根 `Cargo.lock` 从 1169
 降到 1158，新增 package 为 0；删除项仅来自
 Pulldown-Cmark 的 `getopts`/HTML escape 子图和未使用的 Objective-C framework binding。未关闭 Axum、Tauri、
@@ -318,7 +318,7 @@ Clap、Tracing Subscriber、Notify 等默认即产品契约或缺少独立收益
 
 重复版本数量只用于发现候选，不能直接转化为治理任务。`oxc`、`rquickjs`、vendored `git2`、`sherpa-onnx` 等重依赖都有真实 capability owner；只有某个产品入口不消费对应能力时，才允许让它退出该入口的构建图。
 
-以下以 `gcwing/main@d1d1dd9e8` 为变更前基线，把 `bitfun-agent-runtime` 内部长期共存的完整 Runtime、
+以下以 `gcwing/main@d1d1dd9e8` 为变更前基线，把 `openbitfun-agent-runtime` 内部长期共存的完整 Runtime、
 DeepResearch 纯编号和原生 Hook 配置/执行拆成同 crate 的 owner feature。没有新增 crate 或兼容 `full`
 umbrella；统计仍按三个既定 target triple、`normal,build` 版本化 package instance 去重：
 
@@ -344,27 +344,27 @@ focused target 加进 CI，也没有新增 job、矩阵或仓库级命令。
 best-effort 行为保持不变。路径拼接语义也由 `WorkspaceFileSystem` provider 持有：本地 provider
 继承宿主路径规则，Remote SSH 对绝对、home 和相对 workspace root 均保持 POSIX 分隔符。
 
-`bitfun-services-integrations::deep_research::run_for_session_workspace` 与
+`openbitfun-services-integrations::deep_research::run_for_session_workspace` 与
 `try_renumber_research_report` 的公开函数签名现在要求显式传入 `WorkspaceFileSystem`；仓内唯一生产
 调用者已迁移。这是为消除远程路径宿主回退而做的有意源码契约收紧，不能描述为对未知的仓外 path/git
 consumer 零影响。完整 Rust Runtime SDK 同时将兼容版本提升为 v6：仓外 embedder 需要在
-`bitfun-agent-runtime` 依赖上显式选择 `agent-runtime`；启用后原 `sdk` 公开路径和行为保持不变。
+`openbitfun-agent-runtime` 依赖上显式选择 `agent-runtime`；启用后原 `sdk` 公开路径和行为保持不变。
 
 这里仍只报告依赖图和 focused-test 输入，不宣称完整产品 wall-clock 提速。根 `Cargo.lock` package
 集合与字节均不变，新增/升级/降级 package 为 0；`.github` 和 `ci.yml` 不变。
 
 ### 3.3 App Server TypeScript schema owner
 
-变更前，Web `gen:types` 先编译 protocol，再编译完整 `bitfun-app-server`，后者会把
+变更前，Web `gen:types` 先编译 protocol，再编译完整 `openbitfun-app-server`，后者会把
 Core、Agent Runtime 和具体 Service handler 闭包带入前端类型生成。最新同代码状态的
 Frontend Build 样本中，`gen:types` 约 430 秒，占 `build:web` 约 484 秒的 88.8%；其中
 protocol 导出约 42.58 秒，App Server 导出约 6 分 26 秒。单次 CI 样本只用于定位热点，
 不能独立证明合入后的 wall-clock 收益。
 
-本轮将 behavior-light wire DTO 和 TS derive 统一到 `bitfun-app-server-protocol`，server 端
+本轮将 behavior-light wire DTO 和 TS derive 统一到 `openbitfun-app-server-protocol`，server 端
 保留 Core/Runtime/Service owner 到 wire read model 的显式转换。既有 `app-server::schema`
-继续兼容 re-export，`bitfun-app-server/ts` 继续兼容转发；隐藏且无生产 consumer 的第二套
-client 删除，正式 client 仍由 `bitfun-app-server-client` 拥有。兼容面是已有平铺类型路径、
+继续兼容 re-export，`openbitfun-app-server/ts` 继续兼容转发；隐藏且无生产 consumer 的第二套
+client 删除，正式 client 仍由 `openbitfun-app-server-client` 拥有。兼容面是已有平铺类型路径、
 method 和 wire shape；旧 server-only inherent/`From` helper 不是版本化公共 SDK，仓内调用已
 迁入 adapter 或稳定 contract 方法。三平台
 `normal,build,dev` 版本化 package instance 去重结果如下：
@@ -436,7 +436,7 @@ package 数按 `normal,build` 边、`{p}` package identity 去重，因此不与
 | App Server TS 闭包 | protocol 默认保持 RPC 兼容，独立 `ts` 导出不再编译 ACP/Tokio/RMCP runtime 子图；生成文件哈希不变 |
 | 未使用直接依赖 | 删除 CLI/Desktop/Core/MiniApp Market/Page Function 的失效直接边；保留 Syntect 实际 Oniguruma 后端，根 lock 只减 7 个 package |
 
-内置 Agent 内容已经移到无第三方依赖的 `bitfun-agent-content`，减少了 Core build-script 工作；
+内置 Agent 内容已经移到无第三方依赖的 `openbitfun-agent-content`，减少了 Core build-script 工作；
 但 Core 仍直接依赖该 crate。没有足够产品收益前，不为消除这一编译指纹引入动态 provider、
 运行时文件读取或资源协议。
 

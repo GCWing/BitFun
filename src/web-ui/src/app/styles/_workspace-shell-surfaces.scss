@@ -6,24 +6,24 @@
  */
 
 @mixin sidebar-background {
-  background: var(--bf-color-surface-chrome);
+  background: var(--openbitfun-color-surface-chrome);
 }
 
 @mixin navigation-hover-feedback {
-  background: var(--bf-color-action-neutral-surface);
+  background: var(--openbitfun-color-action-neutral-surface);
 }
 
 @mixin navigation-selection-feedback {
-  background: var(--bf-color-selection-surface);
+  background: var(--openbitfun-color-selection-surface);
 }
 
 @mixin sidebar-hairline-color {
-  border-color: var(--bf-color-border-subtle);
+  border-color: var(--openbitfun-color-border-subtle);
 
-  :root[data-bf-appearance-mode='light'] & {
+  :root[data-openbitfun-appearance-mode='light'] & {
     border-color: color-mix(
       in srgb,
-      var(--bf-color-content-on-light) 5%,
+      var(--openbitfun-color-content-on-light) 5%,
       transparent
     );
   }

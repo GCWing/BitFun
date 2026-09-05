@@ -33,12 +33,12 @@ export interface LogEntry {
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
 
-const CONSOLE_FORWARD_INSTALLED = '__bitfun_console_forward_installed__';
+const CONSOLE_FORWARD_INSTALLED = '__openbitfun_console_forward_installed__';
 let includeSensitiveDiagnostics = true;
 
 declare global {
   // Injected by the desktop WebView initialization script before the frontend bundle runs.
-  var __BITFUN_BOOTSTRAP_LOG_LEVEL__: string | undefined;
+  var __OPENBITFUN_BOOTSTRAP_LOG_LEVEL__: string | undefined;
 }
 
 export function setIncludeSensitiveDiagnostics(enabled: boolean): void {
@@ -214,7 +214,7 @@ function logLevelFromString(value: unknown): LogLevel | null {
 }
 
 function initialLogLevel(): LogLevel {
-  const bootstrapLevel = logLevelFromString(globalThis.__BITFUN_BOOTSTRAP_LOG_LEVEL__);
+  const bootstrapLevel = logLevelFromString(globalThis.__OPENBITFUN_BOOTSTRAP_LOG_LEVEL__);
   if (bootstrapLevel !== null) {
     return bootstrapLevel;
   }

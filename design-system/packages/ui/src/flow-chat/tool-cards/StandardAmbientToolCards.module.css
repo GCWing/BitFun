@@ -1,30 +1,30 @@
-@layer bf.components {
+@layer openbitfun.components {
   .sections {
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   .section {
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .sectionLabel {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
   }
 
   .error {
-    color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-type-body-sm-font-size);
-    line-height: var(--bf-type-body-md-line-height);
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -34,15 +34,15 @@
   .messageBlock {
     max-block-size: 20rem;
     margin: 0;
-    padding: var(--bf-space-3);
+    padding: var(--openbitfun-space-3);
     overflow: auto;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-canvas);
-    color: var(--bf-color-content-secondary);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-surface-canvas);
+    color: var(--openbitfun-color-content-secondary);
     font-family: inherit;
-    font-size: var(--bf-type-body-sm-font-size);
-    line-height: var(--bf-type-body-md-line-height);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    line-height: var(--openbitfun-type-body-md-line-height);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -52,32 +52,32 @@
     min-inline-size: 0;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding-block-end: var(--bf-space-2);
-    border-block-end: 1px solid var(--bf-color-border-subtle);
+    gap: var(--openbitfun-space-2);
+    padding-block-end: var(--openbitfun-space-2);
+    border-block-end: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   .metaLabel,
   .pill {
     display: inline-flex;
     align-items: center;
-    padding-block: var(--bf-space-1);
-    padding-inline: var(--bf-space-2);
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-surface-raised);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-body-sm-font-size);
+    padding-block: var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-space-2);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-surface-raised);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .metaLabel {
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .metaDescription {
     min-inline-size: 0;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .fetchTitle {
@@ -91,7 +91,7 @@
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
   }
 
   .openLink {
@@ -99,14 +99,14 @@
     min-inline-size: 0;
     align-items: center;
     align-self: flex-start;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     appearance: none;
     padding: 0;
     border: 0;
-    color: var(--bf-color-action-primary-content);
+    color: var(--openbitfun-color-action-primary-content);
     background: transparent;
     font: inherit;
-    font-size: var(--bf-type-body-sm-font-size);
+    font-size: var(--openbitfun-type-body-sm-font-size);
     text-align: start;
     cursor: pointer;
   }
@@ -133,14 +133,14 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .pills {
     display: flex;
     min-inline-size: 0;
     flex-wrap: wrap;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .imageContent {
@@ -159,14 +159,14 @@
     padding: 0;
     overflow: hidden;
     appearance: none;
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-surface-canvas);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-surface-canvas);
     cursor: zoom-in;
   }
 
   .imageButton:focus-visible {
-    outline: 2px solid var(--bf-color-focus-ring);
+    outline: 2px solid var(--openbitfun-color-focus-ring);
     outline-offset: 2px;
   }
 
@@ -179,9 +179,9 @@
 
   .imageError {
     inline-size: 100%;
-    padding: var(--bf-space-3);
-    color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-type-body-sm-font-size);
+    padding: var(--openbitfun-space-3);
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-body-sm-font-size);
     text-align: center;
   }
 
@@ -201,20 +201,20 @@
     object-fit: contain;
   }
 
-  [data-bf-tool-card="default"][data-bf-confirmation="true"]
-    > [data-bf-component="flow-chat-tool-card"][data-bf-part="surface"] {
-    border-radius: var(--bf-radius-sm);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 6%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 24%, transparent);
+  [data-openbitfun-tool-card="default"][data-openbitfun-confirmation="true"]
+    > [data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="surface"] {
+    border-radius: var(--openbitfun-radius-sm);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 24%, transparent);
   }
 
   .todoCompact {
     display: flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .todoCompactIcon {
@@ -236,9 +236,9 @@
     display: inline-flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     overflow: hidden;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -258,18 +258,18 @@
     display: flex;
     min-inline-size: 0;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding-block: var(--bf-space-2);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-sm-font-size);
+    gap: var(--openbitfun-space-2);
+    padding-block: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-sm-font-size);
   }
 
   .todoItem + .todoItem {
-    border-block-start: 1px solid var(--bf-color-border-subtle);
+    border-block-start: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   .todoItem[data-status="in_progress"] {
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .todoItem[data-status="completed"],

@@ -1,11 +1,11 @@
-//! Product wiring for native BitFun agent hooks.
+//! Product wiring for native OpenBitFun agent hooks.
 //!
 //! This module connects the portable hook engine
-//! (`bitfun_agent_runtime::native_hooks`) to BitFun configuration and the
+//! (`openbitfun_agent_runtime::native_hooks`) to OpenBitFun configuration and the
 //! agent runtime dispatch sites:
 //!
-//! - Settings discovery: user scope `~/.config/bitfun/config/hooks.json`
-//!   plus project scope `{project}/.bitfun/config/hooks.json`, both using the
+//! - Settings discovery: user scope `~/.config/openbitfun/config/hooks.json`
+//!   plus project scope `{project}/.openbitfun/config/hooks.json`, both using the
 //!   Codex-compatible `hooks.json` document schema.
 //! - Gating: `hooks.enabled` and `hooks.project_hooks_enabled` in the app
 //!   settings document. Project hooks are disabled by default because they
@@ -21,20 +21,20 @@ use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 pub use crate::service::config::types::AgentHooksConfig;
 use async_trait::async_trait;
+use dashmap::DashMap;
+use log::{debug, info, warn};
 #[cfg(feature = "opencode-plugin-host")]
-use bitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookEvent, AgentHookEventPayload, AgentHookMatcher, AgentHookOutcome,
     AgentHookPayload, AgentHookPayloadCommon, AgentHookPermissionMode, AgentHookPermissionOutcome,
     AgentHookScope, AgentHookSettings, AgentHookSettingsLayer, BuiltinHookExecutor, HookCall,
     HookCallPayload, HookHandler, HookHandlerResult, RuntimeHookKind, RuntimeHookPlan,
     RuntimeHookRegistration, RuntimeHookRegistry, RuntimeHookSource, MAX_HOOKS_FILE_BYTES,
 };
-use bitfun_agent_runtime::post_call_hooks::{
+use openbitfun_agent_runtime::post_call_hooks::{
     resolve_deep_review_shared_context_tool_use, DeepReviewSharedContextToolUseFacts,
 };
-use dashmap::DashMap;
-use log::{debug, info, warn};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
@@ -69,11 +69,11 @@ pub(crate) fn plugin_hook_registry(_workspace_scope: &str) -> RuntimeHookRegistr
 #[cfg(feature = "opencode-plugin-host")]
 pub(crate) async fn dispatch_plugin_hook(
     workspace_scope: &str,
-    generation: Option<&bitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity>,
+    generation: Option<&openbitfun_agent_runtime::native_hooks::PluginHookGenerationIdentity>,
     hook_name: &str,
     input: Value,
     output: Value,
-) -> bitfun_agent_runtime::native_hooks::PluginHookDispatchResult {
+) -> openbitfun_agent_runtime::native_hooks::PluginHookDispatchResult {
     AgentHookEngine::with_registry(plugin_hook_registry(workspace_scope))
         .dispatch_plugin_hook_for_generation(
             Some(workspace_scope),
@@ -227,7 +227,7 @@ impl PluginToolAfterOutput {
             metadata,
         } = self;
         // The Host carries title and metadata through the complete ordered
-        // OpenCode Hook chain. BitFun's stable ToolResult contract currently
+        // OpenCode Hook chain. OpenBitFun's stable ToolResult contract currently
         // has one mutable presentation field: the model-visible output. Keep
         // the raw result immutable and avoid inventing a second persistence/UI
         // schema until a product consumer for these two presentation facts is
@@ -240,7 +240,7 @@ impl PluginToolAfterOutput {
 #[cfg(all(test, feature = "opencode-plugin-host"))]
 mod plugin_tool_output_tests {
     use super::{plugin_tool_after_output, plugin_tool_before_output};
-    use bitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
+    use openbitfun_agent_runtime::native_hooks::PluginHookDispatchResult;
     use serde_json::{json, Value};
 
     fn dispatch_result(output: Value, executed_handlers: usize) -> PluginHookDispatchResult {
@@ -744,7 +744,7 @@ fn publish_command_registrations(
     workspace_scope: Option<&str>,
     manual_settings: AgentHookSettings,
     imported_settings: AgentHookSettings,
-) -> Result<(), bitfun_agent_runtime::native_hooks::RuntimeHookRegistryError> {
+) -> Result<(), openbitfun_agent_runtime::native_hooks::RuntimeHookRegistryError> {
     let manual = manual_settings.registrations();
     let user_entries = manual
         .iter()
@@ -1218,13 +1218,13 @@ mod cache_tests {
         first.set_source_activation_for_workspace(
             RuntimeHookSource::Plugin,
             Some(&workspace_scope),
-            bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready,
+            openbitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready,
         );
 
         assert_eq!(
             second
                 .source_activation_for_workspace(RuntimeHookSource::Plugin, Some(&workspace_scope)),
-            bitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready
+            openbitfun_agent_runtime::native_hooks::RuntimeHookActivation::Ready
         );
         second.clear_source_workspace(RuntimeHookSource::Plugin, &workspace_scope);
     }

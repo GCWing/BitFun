@@ -303,7 +303,7 @@ export async function sendMessage(
   // Switch UI mode if specified
   if (switchToMode && switchToMode !== session.mode) {
     context.flowChatStore.updateSessionMode(sessionId, switchToMode);
-    window.dispatchEvent(new CustomEvent('bitfun:session-switched', {
+    window.dispatchEvent(new CustomEvent('openbitfun:session-switched', {
       detail: { sessionId, mode: switchToMode }
     }));
   }
@@ -324,7 +324,7 @@ export async function sendMessage(
       options?.execution?.kind === 'fresh_external_subagent'
       && (acpClientId || driver.id !== 'local')
     ) {
-      throw new Error('External subagent command delegation requires the local BitFun runtime');
+      throw new Error('External subagent command delegation requires the local OpenBitFun runtime');
     }
 
     if (

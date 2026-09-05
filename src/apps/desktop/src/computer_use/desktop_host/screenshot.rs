@@ -11,17 +11,17 @@
 #[cfg(target_os = "macos")]
 use super::macos;
 use super::DesktopComputerUseHost;
-use bitfun_core::agentic::tools::computer_use_host::{
+use image::codecs::jpeg::JpegEncoder;
+use image::{DynamicImage, Rgb, RgbImage};
+use log::{debug, warn};
+use openbitfun_core::agentic::tools::computer_use_host::{
     clamp_point_crop_half_extent, ComputerScreenshot, ComputerUseDisplayInfo, ComputerUseHost,
     ComputerUseImageContentRect, ComputerUseImageGlobalBounds, ComputerUseNavigateQuadrant,
     ComputerUseNavigationRect, ComputerUseScreenshotParams, ComputerUseScreenshotRefinement,
     OcrRegionNative, OcrTextMatch, ScreenshotCropCenter,
     COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, Rgb, RgbImage};
-use log::{debug, warn};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
 use screenshots::display_info::DisplayInfo;
@@ -370,9 +370,9 @@ impl MacPointerGeo {
     }
 
     /// Map **continuous** framebuffer pixel center `(cx, cy)` (0.5 = middle of left/top pixel) to CG global.
-    fn full_pixel_center_to_global_f64(&self, cx: f64, cy: f64) -> BitFunResult<(f64, f64)> {
+    fn full_pixel_center_to_global_f64(&self, cx: f64, cy: f64) -> OpenBitFunResult<(f64, f64)> {
         if self.disp_w <= 0.0 || self.disp_h <= 0.0 || self.full_px_w == 0 || self.full_px_h == 0 {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Invalid macOS pointer geometry.".to_string(),
             ));
         }
@@ -438,7 +438,7 @@ pub(super) struct PointerMap {
 
 impl PointerMap {
     /// Continuous mapping: **composed JPEG** pixel `(x,y)` -> global (macOS CG).
-    pub(super) fn map_image_to_global_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
+    pub(super) fn map_image_to_global_f64(&self, x: i32, y: i32) -> OpenBitFunResult<(f64, f64)> {
         if self.image_w == 0
             || self.image_h == 0
             || self.content_w == 0
@@ -446,7 +446,7 @@ impl PointerMap {
             || self.native_w == 0
             || self.native_h == 0
         {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Invalid screenshot coordinate map (zero dimension).".to_string(),
             ));
         }
@@ -476,9 +476,13 @@ impl PointerMap {
     }
 
     /// Normalized 0..=1000 maps to the **capture** bitmap.
-    pub(super) fn map_normalized_to_global_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
+    pub(super) fn map_normalized_to_global_f64(
+        &self,
+        x: i32,
+        y: i32,
+    ) -> OpenBitFunResult<(f64, f64)> {
         if self.native_w == 0 || self.native_h == 0 {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Invalid screenshot coordinate map (zero native dimension).".to_string(),
             ));
         }
@@ -531,14 +535,16 @@ pub(super) enum ComputerUseNavFocus {
 
 /// The `screenshots` crate still bundles image 0.24; rebuild its capture
 /// buffer as a workspace (image 0.25) `RgbaImage` by moving the raw bytes.
-fn to_workspace_rgba(captured: screenshots::image::RgbaImage) -> BitFunResult<image::RgbaImage> {
+fn to_workspace_rgba(
+    captured: screenshots::image::RgbaImage,
+) -> OpenBitFunResult<image::RgbaImage> {
     let (w, h) = captured.dimensions();
     image::RgbaImage::from_raw(w, h, captured.into_raw())
-        .ok_or_else(|| BitFunError::tool("Screenshot buffer conversion failed".to_string()))
+        .ok_or_else(|| OpenBitFunError::tool("Screenshot buffer conversion failed".to_string()))
 }
 
 impl DesktopComputerUseHost {
-    fn encode_jpeg(rgb: &RgbImage, quality: u8) -> BitFunResult<Vec<u8>> {
+    fn encode_jpeg(rgb: &RgbImage, quality: u8) -> OpenBitFunResult<Vec<u8>> {
         let mut buf = Vec::new();
         let mut enc = JpegEncoder::new_with_quality(&mut buf, quality);
         enc.encode(
@@ -547,7 +553,7 @@ impl DesktopComputerUseHost {
             rgb.height(),
             image::ExtendedColorType::Rgb8,
         )
-        .map_err(|e| BitFunError::tool(format!("JPEG encode: {}", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("JPEG encode: {}", e)))?;
         Ok(buf)
     }
 
@@ -561,7 +567,7 @@ impl DesktopComputerUseHost {
         display_origin_y: i32,
         native_w: u32,
         native_h: u32,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         let jpeg_bytes = Self::encode_jpeg(&rgb, Self::OCR_RAW_JPEG_QUALITY)?;
         let iw = rgb.width();
         let ih = rgb.height();
@@ -600,9 +606,9 @@ impl DesktopComputerUseHost {
     }
 
     /// Full primary-display region in **global logical coordinates** (same as `CGDisplayBounds` / AX).
-    fn ocr_full_primary_display_region() -> BitFunResult<OcrRegionNative> {
+    fn ocr_full_primary_display_region() -> OpenBitFunResult<OcrRegionNative> {
         let screen = Screen::from_point(0, 0)
-            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
         let d = screen.display_info;
         Ok(OcrRegionNative {
             x0: d.x,
@@ -615,7 +621,7 @@ impl DesktopComputerUseHost {
     /// Region to OCR: explicit `ocr_region_native`, else (macOS) frontmost window from AX, else full primary display.
     fn ocr_resolve_region_for_capture(
         region_native: Option<OcrRegionNative>,
-    ) -> BitFunResult<OcrRegionNative> {
+    ) -> OpenBitFunResult<OcrRegionNative> {
         if let Some(r) = region_native {
             return Ok(r);
         }
@@ -648,7 +654,7 @@ impl DesktopComputerUseHost {
         cx: f64,
         cy: f64,
         half: u32,
-    ) -> BitFunResult<OcrRegionNative> {
+    ) -> OpenBitFunResult<OcrRegionNative> {
         let hh = half as f64;
         let x0 = (cx - hh).floor() as i32;
         let y0 = (cy - hh).floor() as i32;
@@ -665,22 +671,24 @@ impl DesktopComputerUseHost {
     ///
     /// `region` and [`DisplayInfo::width`]/[`height`] are **global logical points** (CG / AX). The framebuffer
     /// is **physical pixels** on Retina; intersect in point space, then map to pixels like [`MacPointerGeo`].
-    fn screenshot_raw_native_region(region: OcrRegionNative) -> BitFunResult<ComputerScreenshot> {
+    fn screenshot_raw_native_region(
+        region: OcrRegionNative,
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         let cx = region.x0 + region.width as i32 / 2;
         let cy = region.y0 + region.height as i32 / 2;
         let screen = Screen::from_point(cx, cy)
             .or_else(|_| Screen::from_point(0, 0))
-            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
         let rgba = screen
             .capture()
-            .map_err(|e| BitFunError::tool(format!("Screenshot failed (OCR raw): {}", e)))
+            .map_err(|e| OpenBitFunError::tool(format!("Screenshot failed (OCR raw): {}", e)))
             .and_then(to_workspace_rgba)?;
         let (full_px_w, full_px_h) = rgba.dimensions();
         let d = screen.display_info;
         let disp_w = d.width as f64;
         let disp_h = d.height as f64;
         if disp_w <= 0.0 || disp_h <= 0.0 || full_px_w == 0 || full_px_h == 0 {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Invalid display geometry for OCR raw crop.".to_string(),
             ));
         }
@@ -697,7 +705,7 @@ impl DesktopComputerUseHost {
         let ix1 = (rx0 + rw).min(ox + disp_w);
         let iy1 = (ry0 + rh).min(oy + disp_h);
         if ix1 <= ix0 || iy1 <= iy0 {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "OCR region does not intersect the captured display. Focus the target app or set ocr_region_native."
                     .to_string(),
             ));
@@ -711,7 +719,7 @@ impl DesktopComputerUseHost {
         let px1 = px1_f.ceil().min(full_px_w as f64) as u32;
         let py1 = py1_f.ceil().min(full_px_h as f64) as u32;
         if px1 <= px0 || py1 <= py0 {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "OCR crop rectangle is empty after point-to-pixel mapping.".to_string(),
             ));
         }
@@ -739,10 +747,12 @@ impl DesktopComputerUseHost {
         }
     }
 
-    fn crop_rgb(src: &RgbImage, x0: u32, y0: u32, w: u32, h: u32) -> BitFunResult<RgbImage> {
+    fn crop_rgb(src: &RgbImage, x0: u32, y0: u32, w: u32, h: u32) -> OpenBitFunResult<RgbImage> {
         let (sw, sh) = src.dimensions();
         if x0.saturating_add(w) > sw || y0.saturating_add(h) > sh {
-            return Err(BitFunError::tool("Tile crop out of bounds.".to_string()));
+            return Err(OpenBitFunError::tool(
+                "Tile crop out of bounds.".to_string(),
+            ));
         }
         let view = image::imageops::crop_imm(src, x0, y0, w, h);
         Ok(view.to_image())
@@ -787,9 +797,9 @@ impl DesktopComputerUseHost {
         screen: Screen,
         ui_tree_text: Option<String>,
         implicit_confirmation_crop_applied: bool,
-    ) -> BitFunResult<(ComputerScreenshot, PointerMap, Option<ComputerUseNavFocus>)> {
+    ) -> OpenBitFunResult<(ComputerScreenshot, PointerMap, Option<ComputerUseNavFocus>)> {
         if params.crop_center.is_some() && params.navigate_quadrant.is_some() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Use either screenshot_crop_center_* or screenshot_navigate_quadrant, not both."
                     .to_string(),
             ));
@@ -872,12 +882,12 @@ impl DesktopComputerUseHost {
                 | Some(ComputerUseNavFocus::PointCrop { rect }) => rect,
             };
             let Some(base) = intersect_navigation_rect(base, full_rect) else {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "Navigation focus is outside the display.".to_string(),
                 ));
             };
             if base.width < 2 || base.height < 2 {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "Quadrant navigation: region is too small to subdivide further.".to_string(),
                 ));
             }
@@ -889,7 +899,7 @@ impl DesktopComputerUseHost {
                 native_h,
             );
             let Some(new_rect) = intersect_navigation_rect(expanded, full_rect) else {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "Quadrant crop out of bounds.".to_string(),
                 ));
             };
@@ -1165,7 +1175,7 @@ impl DesktopComputerUseHost {
         mouse_x: f64,
         mouse_y: f64,
         preferred_display_id: Option<u32>,
-    ) -> BitFunResult<(image::RgbaImage, Screen)> {
+    ) -> OpenBitFunResult<(image::RgbaImage, Screen)> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
         let target_display_id = preferred_display_id
@@ -1189,18 +1199,18 @@ impl DesktopComputerUseHost {
                 .or_else(|| Screen::from_point(mx, my).ok())
                 .or_else(|| Screen::from_point(0, 0).ok())
                 .ok_or_else(|| {
-                    BitFunError::tool("Screen capture init: no display available".to_string())
+                    OpenBitFunError::tool("Screen capture init: no display available".to_string())
                 })?
         } else {
             Screen::from_point(mx, my)
                 .or_else(|_| Screen::from_point(0, 0))
-                .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?
+                .map_err(|e| OpenBitFunError::tool(format!("Screen capture init: {}", e)))?
         };
         let rgba = screen
             .capture()
             .map_err(|e| {
-                BitFunError::tool(format!(
-                    "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
+                OpenBitFunError::tool(format!(
+                    "Screenshot failed (on macOS grant Screen Recording for OpenBitFun): {}",
                     e
                 ))
             })
@@ -1258,7 +1268,7 @@ impl DesktopComputerUseHost {
     pub(super) async fn screenshot_for_app_pid(
         &self,
         pid: i32,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         let window_target_rect = macos::catch_objc(|| {
             crate::computer_use::macos_ax_ui::window_bounds_global_for_pid(pid)
         })
@@ -1269,7 +1279,7 @@ impl DesktopComputerUseHost {
             let s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             (s.screenshot_cache.clone(), s.preferred_display_id)
         };
         let (mouse_x, mouse_y) = Self::current_mouse_position();
@@ -1327,7 +1337,7 @@ impl DesktopComputerUseHost {
             let mut s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             s.screenshot_cache = Some(ScreenshotCacheEntry {
                 rgba: rgba.clone(),
                 screen,
@@ -1339,13 +1349,13 @@ impl DesktopComputerUseHost {
             Self::screenshot_sync_tool_with_capture(params, None, rgba, screen, None, false)
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
         let refinement = Self::refinement_from_shot(&shot);
         {
             let mut s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             s.transition_after_screenshot(map, refinement, nav_out);
             s.app_pointer_maps.insert(pid, map);
             if let Some(id) = shot.screenshot_id.clone() {
@@ -1370,7 +1380,7 @@ impl DesktopComputerUseHost {
         &self,
         pid: i32,
         hwnd_raw: isize,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         use windows::Win32::Foundation::HWND;
 
         let cap = tokio::task::spawn_blocking(move || {
@@ -1378,10 +1388,10 @@ impl DesktopComputerUseHost {
             crate::computer_use::windows_capture::screenshot_window_capture(hwnd)
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
         let img = image::load_from_memory(&cap.png)
-            .map_err(|e| BitFunError::tool(format!("decode window capture PNG: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("decode window capture PNG: {}", e)))?;
         let rgb = img.to_rgb8();
         let native_w = rgb.width();
         let native_h = rgb.height();
@@ -1408,7 +1418,7 @@ impl DesktopComputerUseHost {
             let mut s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             s.pointer_map = Some(map);
             s.app_pointer_maps.insert(pid, map);
             if let Some(id) = shot.screenshot_id.clone() {
@@ -1425,12 +1435,12 @@ impl DesktopComputerUseHost {
     pub(super) async fn screenshot_display_impl(
         &self,
         params: ComputerUseScreenshotParams,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         let (nav_snapshot, cached, click_needs, preferred_display_id) = {
             let s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             (
                 s.navigation_focus,
                 s.screenshot_cache.clone(),
@@ -1559,7 +1569,7 @@ impl DesktopComputerUseHost {
             let mut s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             s.screenshot_cache = Some(ScreenshotCacheEntry {
                 rgba: rgba.clone(),
                 screen,
@@ -1580,14 +1590,14 @@ impl DesktopComputerUseHost {
             )
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
         let refinement = Self::refinement_from_shot(&shot);
         {
             let mut s = self
                 .state
                 .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
             s.transition_after_screenshot(map, refinement, nav_out);
             if let Some(id) = shot.screenshot_id.clone() {
                 s.screenshot_pointer_maps.insert(id, map);
@@ -1599,7 +1609,7 @@ impl DesktopComputerUseHost {
 
     pub(super) async fn screenshot_peek_full_display_impl(
         &self,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         // Phase 1 fix: previously this captured `Screen::from_point(0, 0)`
         // (the primary display) which broke confirmation flows on multi-monitor
         // setups. We now prefer the screen that backs the most recent main
@@ -1631,13 +1641,13 @@ impl DesktopComputerUseHost {
                 .or_else(|| Screen::from_point(mx, my).ok())
                 .or_else(|| Screen::from_point(0, 0).ok())
                 .ok_or_else(|| {
-                    BitFunError::tool(
+                    OpenBitFunError::tool(
                         "Screen capture init (peek): no display available".to_string(),
                     )
                 })?;
             let rgba = screen
                 .capture()
-                .map_err(|e| BitFunError::tool(format!("Screenshot failed (peek): {}", e)))
+                .map_err(|e| OpenBitFunError::tool(format!("Screenshot failed (peek): {}", e)))
                 .and_then(to_workspace_rgba)?;
             Self::screenshot_sync_tool_with_capture(
                 ComputerUseScreenshotParams::default(),
@@ -1649,22 +1659,22 @@ impl DesktopComputerUseHost {
             )
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
         Ok(shot)
     }
 
     pub(super) async fn ocr_find_text_matches_impl(
         &self,
         text_query: &str,
-        region_native: Option<bitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
-    ) -> BitFunResult<Vec<OcrTextMatch>> {
+        region_native: Option<openbitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
+    ) -> OpenBitFunResult<Vec<OcrTextMatch>> {
         let region_opt = region_native.clone();
         let shot = tokio::task::spawn_blocking(move || {
             let region = Self::ocr_resolve_region_for_capture(region_opt)?;
             Self::screenshot_raw_native_region(region)
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
         let query = text_query.to_string();
         let desktop_matches = tokio::task::spawn_blocking(move || {
             // Vision (`VNRecognizeTextRequest`) can throw `NSException` on
@@ -1682,11 +1692,11 @@ impl DesktopComputerUseHost {
             }
         })
         .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
         Ok(desktop_matches
             .into_iter()
             .map(
-                |m| bitfun_core::agentic::tools::computer_use_host::OcrTextMatch {
+                |m| openbitfun_core::agentic::tools::computer_use_host::OcrTextMatch {
                     text: m.text,
                     confidence: m.confidence,
                     center_x: m.center_x,
@@ -1705,11 +1715,11 @@ impl DesktopComputerUseHost {
         gx: f64,
         gy: f64,
         half_extent_native: u32,
-    ) -> BitFunResult<Vec<u8>> {
+    ) -> OpenBitFunResult<Vec<u8>> {
         let region = Self::ocr_region_square_around_point(gx, gy, half_extent_native)?;
         let shot = tokio::task::spawn_blocking(move || Self::screenshot_raw_native_region(region))
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
         Ok(shot.bytes)
     }
 }

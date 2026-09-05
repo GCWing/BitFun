@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "defaultLightAppearanceId": "bitfun-light",
-  "defaultDarkAppearanceId": "bitfun-dark",
+  "defaultLightAppearanceId": "openbitfun-light",
+  "defaultDarkAppearanceId": "openbitfun-dark",
   "appearances": [
     {
-      "id": "bitfun-light",
+      "id": "openbitfun-light",
       "bgPrimary": "#f8f8f9",
       "bgSecondary": "#ffffff",
       "bgScene": "#ffffff",
@@ -14,7 +14,7 @@
       "accentColor": "#101a27"
     },
     {
-      "id": "bitfun-monochrome",
+      "id": "openbitfun-monochrome",
       "bgPrimary": "#1c1c1f",
       "bgSecondary": "#262626",
       "bgScene": "#ffffff",
@@ -24,7 +24,7 @@
       "accentColor": "#f3f3f5"
     },
     {
-      "id": "bitfun-slate",
+      "id": "openbitfun-slate",
       "bgPrimary": "#1c1c1f",
       "bgSecondary": "#262626",
       "bgScene": "#262626",
@@ -34,7 +34,7 @@
       "accentColor": "#94a3b8"
     },
     {
-      "id": "bitfun-dark",
+      "id": "openbitfun-dark",
       "bgPrimary": "#0e0e10",
       "bgSecondary": "#1c1c1f",
       "bgScene": "#1c1c1f",
@@ -44,7 +44,7 @@
       "accentColor": "#60a5fa"
     },
     {
-      "id": "bitfun-midnight",
+      "id": "openbitfun-midnight",
       "bgPrimary": "#2b2d30",
       "bgSecondary": "#1c1c1f",
       "bgScene": "#2b2d30",
@@ -54,7 +54,7 @@
       "accentColor": "#60a5fa"
     },
     {
-      "id": "bitfun-china-style",
+      "id": "openbitfun-china-style",
       "bgPrimary": "#faf8f0",
       "bgSecondary": "#f5f3e8",
       "bgScene": "#faf8f0",
@@ -64,7 +64,7 @@
       "accentColor": "#2e5e8a"
     },
     {
-      "id": "bitfun-china-night",
+      "id": "openbitfun-china-night",
       "bgPrimary": "#1c1c1f",
       "bgSecondary": "#212019",
       "bgScene": "#1c1c1f",
@@ -74,7 +74,7 @@
       "accentColor": "#73a5cc"
     },
     {
-      "id": "bitfun-cyber",
+      "id": "openbitfun-cyber",
       "bgPrimary": "#0e0e10",
       "bgSecondary": "#1c1c1f",
       "bgScene": "#1c1c1f",
@@ -84,7 +84,7 @@
       "accentColor": "#00e6ff"
     },
     {
-      "id": "bitfun-tokyo-night",
+      "id": "openbitfun-tokyo-night",
       "bgPrimary": "#1a1b26",
       "bgSecondary": "#1e202e",
       "bgScene": "#1a1b26",

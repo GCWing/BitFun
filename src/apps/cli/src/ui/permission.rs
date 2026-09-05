@@ -11,7 +11,7 @@ use ratatui::{
 
 use super::string_utils::truncate_str;
 use super::theme::Theme;
-use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
+use openbitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PermissionPrompt {
@@ -284,11 +284,11 @@ mod tests {
         permission_project_display_label, PermissionAction, PermissionPrompt,
     };
     use crate::ui::theme::{builtin_theme_json, Appearance, EffectiveColorScheme, Theme};
-    use bitfun_agent_runtime::sdk::{
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use openbitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionReply, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind,
     };
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use serde_json::Map;
 
     fn request() -> PermissionRequest {
@@ -369,10 +369,10 @@ mod tests {
     #[test]
     fn permission_prompt_prefers_a_nonempty_project_path_for_display() {
         let mut with_path = request();
-        with_path.project_path = Some("  E:/Projects/BitFun  ".to_string());
+        with_path.project_path = Some("  E:/Projects/OpenBitFun  ".to_string());
         assert_eq!(
             permission_project_display_label(&with_path),
-            "E:/Projects/BitFun"
+            "E:/Projects/OpenBitFun"
         );
 
         let mut empty_path = request();
@@ -382,7 +382,11 @@ mod tests {
 
     #[test]
     fn permission_footer_secondary_content_remains_visible_in_ansi16_themes() {
-        for theme_id in ["bitfun-dark", "bitfun-midnight", "bitfun-tokyo-night"] {
+        for theme_id in [
+            "openbitfun-dark",
+            "openbitfun-midnight",
+            "openbitfun-tokyo-night",
+        ] {
             let theme = Theme::dark()
                 .apply_opencode_theme_json(
                     builtin_theme_json(theme_id).expect("built-in theme must exist"),

@@ -6,7 +6,7 @@ import {
   MobileIconButton,
   MobileListRow,
   MobileSheet,
-} from '@bitfun/ui/mobile';
+} from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import LanguageToggleButton from './LanguageToggleButton';
 

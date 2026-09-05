@@ -56,7 +56,7 @@ export const NavigationPanel = forwardRef<HTMLElement, NavigationPanelProps>(
       <nav
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component="navigation-panel"
+        data-openbitfun-component="navigation-panel"
         ref={ref}
       >
         {children}
@@ -71,7 +71,7 @@ export const NavigationPanelHeader = forwardRef<HTMLDivElement, NavigationPanelH
       <div
         {...props}
         className={classNames(styles.header, className)}
-        data-bf-part="header"
+        data-openbitfun-part="header"
         ref={ref}
       />
     );
@@ -84,7 +84,7 @@ export const NavigationPanelBody = forwardRef<HTMLDivElement, NavigationPanelBod
       <ScrollArea
         {...props}
         className={classNames(styles.body, className)}
-        data-bf-part="body"
+        data-openbitfun-part="body"
         orientation="vertical"
         ref={ref}
         scrollbarVisibility={scrollbarVisibility}
@@ -99,7 +99,7 @@ export const NavigationPanelContent = forwardRef<HTMLDivElement, NavigationPanel
       <div
         {...props}
         className={classNames(styles.content, className)}
-        data-bf-part="content"
+        data-openbitfun-part="content"
         ref={ref}
       />
     );
@@ -112,7 +112,7 @@ export const NavigationPanelFooter = forwardRef<HTMLDivElement, NavigationPanelF
       <div
         {...props}
         className={classNames(styles.footer, className)}
-        data-bf-part="footer"
+        data-openbitfun-part="footer"
         ref={ref}
       />
     );
@@ -157,16 +157,16 @@ export const NavigationPanelSection = forwardRef<HTMLElement, NavigationPanelSec
         aria-label={ariaLabel}
         aria-labelledby={resolvedLabelledBy}
         className={classNames(styles.section, className)}
-        data-bf-part="section"
+        data-openbitfun-part="section"
         ref={ref}
       >
         {headingId && (
-          <div className={styles.heading} data-bf-part="heading" id={headingId}>
-            <span className={styles.headingLabel} data-bf-part="heading-label">
+          <div className={styles.heading} data-openbitfun-part="heading" id={headingId}>
+            <span className={styles.headingLabel} data-openbitfun-part="heading-label">
               {title}
             </span>
             {actions.length > 0 && (
-              <span className={styles.headingActions} data-bf-part="heading-actions">
+              <span className={styles.headingActions} data-openbitfun-part="heading-actions">
                 {actions.map((action) => (
                   <IconButton
                     aria-label={action.label}
@@ -184,7 +184,7 @@ export const NavigationPanelSection = forwardRef<HTMLElement, NavigationPanelSec
             )}
           </div>
         )}
-        <div className={styles.items} data-bf-part="section-items">
+        <div className={styles.items} data-openbitfun-part="section-items">
           {children}
         </div>
       </section>
@@ -198,7 +198,7 @@ export const NavigationPanelSeparator = forwardRef<HTMLDivElement, NavigationPan
       <div
         {...props}
         className={classNames(styles.separator, className)}
-        data-bf-part="separator"
+        data-openbitfun-part="separator"
         ref={ref}
         role="separator"
       />

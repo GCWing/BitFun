@@ -36,7 +36,7 @@ describe('WorkspaceListSection layout styles', () => {
     const workspaceList = extractBlock(stylesheet, '&__workspace-list');
     const workspaceDropTarget = extractBlock(stylesheet, '&__workspace-drop-target');
 
-    expect(workspaceList).toContain('gap: var(--bf-space-2);');
+    expect(workspaceList).toContain('gap: var(--openbitfun-space-2);');
     expect(workspaceDropTarget).toContain('gap: 0;');
   });
 
@@ -65,7 +65,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceGroup).toContain('min-width: 0;');
     expect(workspaceItem).toContain('min-width: 0;');
     expect(workspaceItem).toContain('max-width: 100%;');
-    expect(workspaceItem).toContain('gap: calc(var(--bf-space-1) / 2);');
+    expect(workspaceItem).toContain('gap: calc(var(--openbitfun-space-1) / 2);');
     expect(workspaceCard).toContain('max-width: 100%;');
     expect(workspaceCard).toContain('overflow: hidden;');
     expect(workspaceIcon).toContain('width: 16px;');
@@ -89,7 +89,7 @@ describe('WorkspaceListSection layout styles', () => {
 
     expect(assistantItem).toContain('min-width: 0;');
     expect(assistantItem).toContain('max-width: 100%;');
-    expect(assistantItem).toContain('gap: calc(var(--bf-space-1) / 2);');
+    expect(assistantItem).toContain('gap: calc(var(--openbitfun-space-1) / 2);');
     expect(assistantCard).toContain('max-width: 100%;');
     expect(assistantCard).toContain('min-height: 30px;');
     expect(assistantCard).toContain('overflow: hidden;');
@@ -117,16 +117,16 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantMenu).toContain('gap: 4px;');
     // The 30px session indent now lives on the list as a shared rail so the
     // rows and their sibling "show more" toggle stay on one text axis.
-    expect(stylesheet).toContain('--bf-nav-session-rail: 30px;');
+    expect(stylesheet).toContain('--openbitfun-nav-session-rail: 30px;');
     expect(stylesheet).toContain('padding-right: 0;');
   });
 
   it('keeps nested selection surfaces full-width while aligning their titles', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const fullWidthSessionLists = stylesheet.match(
-      /\.bitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 0;/g,
+      /\.openbitfun-nav-panel__inline-list \{\n\s+\/\/[^\n]+\n\s+margin-left: 0;/g,
     );
-    const sessionRails = stylesheet.match(/--bf-nav-session-rail: 30px;/g);
+    const sessionRails = stylesheet.match(/--openbitfun-nav-session-rail: 30px;/g);
 
     expect(fullWidthSessionLists).toHaveLength(2);
     expect(sessionRails).toHaveLength(2);
@@ -157,10 +157,10 @@ describe('WorkspaceListSection layout styles', () => {
     const stylesheet = readWorkspaceListStylesheet();
 
     expect(stylesheet).toContain(
-      '.bitfun-nav-panel__workspace-item:hover,\n' +
-      '  .bitfun-nav-panel__assistant-item:hover,\n' +
-      '  .bitfun-nav-panel__workspace-item-card:hover,\n' +
-      '  .bitfun-nav-panel__assistant-item-card:hover {\n' +
+      '.openbitfun-nav-panel__workspace-item:hover,\n' +
+      '  .openbitfun-nav-panel__assistant-item:hover,\n' +
+      '  .openbitfun-nav-panel__workspace-item-card:hover,\n' +
+      '  .openbitfun-nav-panel__assistant-item-card:hover {\n' +
       '    transform: none;\n' +
       '    box-shadow: none;\n' +
       '  }',
@@ -173,25 +173,25 @@ describe('WorkspaceListSection layout styles', () => {
     const remoteHost = extractBlock(stylesheet, '&__workspace-item-remote-host');
     const remoteNameRow = extractBlock(
       stylesheet,
-      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-name-row",
+      "&__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-name-row",
     );
     const remoteNameButton = extractBlock(
       stylesheet,
-      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-name-btn",
+      "&__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-name-btn",
     );
 
-    expect(remoteNameRow).toContain('gap: var(--bf-space-2);');
+    expect(remoteNameRow).toContain('gap: var(--openbitfun-space-2);');
     expect(remoteNameButton).toContain('flex: 1 1 0;');
     expect(remoteNameButton).toContain('max-width: none;');
-    expect(remoteChip).toContain('gap: var(--bf-space-2);');
+    expect(remoteChip).toContain('gap: var(--openbitfun-space-2);');
     expect(remoteChip).toContain('flex: 0 0 auto;');
     expect(remoteChip).toContain('margin-left: auto;');
-    expect(remoteChip).toContain('padding: 0 var(--bf-space-2);');
-    expect(remoteChip).toContain('border-radius: var(--bf-radius-base);');
+    expect(remoteChip).toContain('padding: 0 var(--openbitfun-space-2);');
+    expect(remoteChip).toContain('border-radius: var(--openbitfun-radius-base);');
     expect(stylesheet).toContain(
       '&.is-connected {\n' +
-      '      background: var(--bf-color-status-success-surface);\n' +
-      '      color: var(--bf-color-status-success-content);',
+      '      background: var(--openbitfun-color-status-success-surface);\n' +
+      '      color: var(--openbitfun-color-status-success-content);',
     );
     expect(remoteHost).toContain('flex: 0 0 auto;');
     expect(remoteHost).toContain('white-space: nowrap;');
@@ -225,11 +225,11 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceCard).toContain('align-items: center;');
     expect(collapseButton).toContain('min-height: 30px;');
     expect(stylesheet).not.toContain(
-      "&__workspace-item[data-bf-state~='remote'] &__workspace-item-collapse-btn",
+      "&__workspace-item[data-openbitfun-state~='remote'] &__workspace-item-collapse-btn",
     );
   });
 
-  it('uses stable BitFun semantics for grouped entries without a redundant aggregate header', () => {
+  it('uses stable OpenBitFun semantics for grouped entries without a redundant aggregate header', () => {
     const itemSource = readWorkspaceItemSource();
     const listSource = readWorkspaceListSource();
     const stylesheet = readWorkspaceListStylesheet();
@@ -251,7 +251,7 @@ describe('WorkspaceListSection layout styles', () => {
 
   it('uses the standard workspace session-row presentation inside assistant groups', () => {
     const itemSource = readWorkspaceItemSource();
-    const assistantSessionsStart = itemSource.indexOf('bitfun-nav-panel__assistant-item-sessions');
+    const assistantSessionsStart = itemSource.indexOf('openbitfun-nav-panel__assistant-item-sessions');
     const assistantSessionsEnd = itemSource.indexOf('useWorkspaceViewPreferences', assistantSessionsStart);
     const assistantSessionsMarkup = itemSource.slice(assistantSessionsStart, assistantSessionsEnd);
 

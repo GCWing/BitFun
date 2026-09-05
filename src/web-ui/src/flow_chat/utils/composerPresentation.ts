@@ -1,4 +1,5 @@
 import type { ContextItem, SessionReferenceContext } from '@/shared/types/context';
+import type { TurnRailCapsulePreview } from '@/shared/types/session-history';
 
 export const COMPOSER_PRESENTATION_VERSION = 1;
 
@@ -79,6 +80,26 @@ export function hasComposerPresentationReferences(
   return Boolean(
     presentation?.segments.some(segment => segment.kind !== 'text'),
   );
+}
+
+/** Reduce a full presentation to the read-only facts needed by Turn Rail. */
+export function composerPresentationToTurnRailPreview(
+  presentation: ComposerPresentation | null | undefined,
+): TurnRailCapsulePreview | undefined {
+  if (!presentation || !hasComposerPresentationReferences(presentation)) return undefined;
+  const segments = presentation.segments.map(segment => {
+    if (segment.kind === 'text') return { kind: 'text' as const, text: segment.text };
+    if (segment.kind === 'inline-token') {
+      return { kind: 'inlineToken' as const, tokenType: segment.tokenType, label: segment.label };
+    }
+    return {
+      kind: 'context' as const,
+      contextType: segment.context.type,
+      label: segment.label,
+      ...(segment.title ? { title: segment.title } : {}),
+    };
+  });
+  return segments.length > 0 ? { segments } : undefined;
 }
 
 export function composerPresentationToEditorText(

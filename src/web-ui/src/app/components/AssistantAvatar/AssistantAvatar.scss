@@ -8,11 +8,11 @@
   height: var(--assistant-avatar-size);
   place-items: center;
   overflow: visible;
-  border: 1px solid color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
   border-radius: 50%;
-  background: var(--bf-color-content-on-dark);
-  color: var(--bf-color-content-secondary);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
+  background: var(--openbitfun-color-content-on-dark);
+  color: var(--openbitfun-color-content-secondary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--openbitfun-color-content-on-light) 8%, transparent);
   isolation: isolate;
 
   &__art {
@@ -38,24 +38,24 @@
     display: block;
     /* typography-audit: allow -- emoji is graphic content scaled from the avatar box */
     font-size: calc(var(--assistant-avatar-size) * 0.5);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     transform: translateY(-1%);
   }
 
   &.is-emoji {
-    background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-secondary);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &.is-image {
-    border-color: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+    border-color: color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
   }
 
   &.is-active {
-    border-color: color-mix(in srgb, var(--bf-color-accent-default) 72%, var(--bf-color-field-border-hover));
+    border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 72%, var(--openbitfun-color-field-border-hover));
     box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--bf-color-accent-default) 15%, transparent),
-      inset 0 0 0 1px color-mix(in srgb, var(--bf-color-surface-canvas) 36%, transparent);
+      0 0 0 2px color-mix(in srgb, var(--openbitfun-color-accent-default) 15%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-surface-canvas) 36%, transparent);
   }
 
   &.is-running::after {
@@ -63,8 +63,8 @@
     position: absolute;
     inset: -2px;
     z-index: 2;
-    border: 2px solid color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent);
-    border-top-color: var(--bf-color-accent-default);
+    border: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent);
+    border-top-color: var(--openbitfun-color-accent-default);
     border-radius: 50%;
     animation: assistant-avatar-running 900ms linear infinite;
   }
@@ -76,17 +76,17 @@
     z-index: 3;
     width: max(6px, calc(var(--assistant-avatar-size) * 0.24));
     height: max(6px, calc(var(--assistant-avatar-size) * 0.24));
-    border: 1.5px solid var(--bf-color-surface-canvas);
+    border: 1.5px solid var(--openbitfun-color-surface-canvas);
     border-radius: 50%;
-    background: var(--bf-color-accent-default);
+    background: var(--openbitfun-color-accent-default);
   }
 
   &.is-attention &__status-dot {
-    background: var(--bf-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-content);
   }
 
   &.is-error &__status-dot {
-    background: var(--bf-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-content);
   }
 }
 
@@ -97,6 +97,6 @@
 @media (prefers-reduced-motion: reduce) {
   .assistant-avatar.is-running::after {
     animation: none;
-    border-color: var(--bf-color-accent-default);
+    border-color: var(--openbitfun-color-accent-default);
   }
 }

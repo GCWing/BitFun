@@ -2,9 +2,9 @@
 
 use serde_json::{json, Value};
 
-use bitfun_agent_runtime::sdk::{PermissionGrantKey, PermissionReply};
-use bitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
-use bitfun_core::service::workspace::WorkspaceKind;
+use openbitfun_agent_runtime::sdk::{PermissionGrantKey, PermissionReply};
+use openbitfun_core::service::remote_ssh::workspace_state::resolve_workspace_session_identity;
+use openbitfun_core::service::workspace::WorkspaceKind;
 
 use crate::peer_host::args::{get_string, request_value};
 use crate::peer_host::state::PeerHostState;
@@ -53,7 +53,7 @@ async fn permission_project_id_for_workspace(
     )
     .await
     .ok_or_else(|| format!("Workspace identity is unavailable: {workspace_id}"))?;
-    bitfun_core::agentic::tools::pipeline::permission_project_id_for_workspace_identity(
+    openbitfun_core::agentic::tools::pipeline::permission_project_id_for_workspace_identity(
         &identity, is_remote,
     )
     .map_err(|error| error.to_string())

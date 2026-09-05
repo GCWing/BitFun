@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[cfg(feature = "ssh-remote")]
-use bitfun_runtime_ports::PortResult;
+use openbitfun_runtime_ports::PortResult;
 #[cfg(feature = "ssh-remote")]
-use bitfun_runtime_ports::{PortError, PortErrorKind, RemoteExecPort};
+use openbitfun_runtime_ports::{PortError, PortErrorKind, RemoteExecPort};
 #[cfg(feature = "remote-connect")]
-use bitfun_runtime_ports::{RemoteProjectionPort, RemoteWorkspacePort};
-use bitfun_runtime_ports::{SessionStorePort, TerminalPort};
+use openbitfun_runtime_ports::{RemoteProjectionPort, RemoteWorkspacePort};
+use openbitfun_runtime_ports::{SessionStorePort, TerminalPort};
 #[cfg(any(
     feature = "model-catalog",
     feature = "mcp-runtime",
@@ -23,11 +23,11 @@ use bitfun_runtime_ports::{SessionStorePort, TerminalPort};
     feature = "tools-miniapp",
     feature = "git"
 ))]
-use bitfun_runtime_services::RuntimeServiceMarkerPort;
-use bitfun_runtime_services::{
+use openbitfun_runtime_services::RuntimeServiceMarkerPort;
+use openbitfun_runtime_services::{
     RuntimeServices, RuntimeServicesBuilder, RuntimeServicesProvider, RuntimeServicesRegistry,
 };
-use bitfun_services_core::local_runtime_ports::LocalRuntimePorts;
+use openbitfun_services_core::local_runtime_ports::LocalRuntimePorts;
 use terminal_core::TerminalRuntimePort;
 
 use crate::agentic::session::CoreSessionStorePort;
@@ -43,12 +43,12 @@ struct CoreRemoteExecSshManagerProvider;
 
 #[cfg(feature = "ssh-remote")]
 #[async_trait::async_trait]
-impl bitfun_services_integrations::remote_ssh::RemoteExecSshManagerProvider
+impl openbitfun_services_integrations::remote_ssh::RemoteExecSshManagerProvider
     for CoreRemoteExecSshManagerProvider
 {
     async fn ssh_manager(
         &self,
-    ) -> PortResult<bitfun_services_integrations::remote_ssh::SSHConnectionManager> {
+    ) -> PortResult<openbitfun_services_integrations::remote_ssh::SSHConnectionManager> {
         let manager =
             crate::service::remote_ssh::get_remote_workspace_manager().ok_or_else(|| {
                 PortError::new(
@@ -81,7 +81,7 @@ impl CoreRuntimeServicesProvider {
     #[cfg(feature = "ssh-remote")]
     pub fn remote_exec_port() -> Arc<dyn RemoteExecPort> {
         Arc::new(
-            bitfun_services_integrations::remote_ssh::RemoteExecRuntimePort::new(Arc::new(
+            openbitfun_services_integrations::remote_ssh::RemoteExecRuntimePort::new(Arc::new(
                 CoreRemoteExecSshManagerProvider,
             )),
         )
@@ -156,7 +156,7 @@ impl RuntimeServicesProvider for CoreLocalRuntimeServicesProvider {
 
         #[cfg(feature = "git")]
         let builder = builder.with_optional_git(Some(Arc::new(
-            bitfun_services_integrations::git::GitWorkspaceDiffPort::new(
+            openbitfun_services_integrations::git::GitWorkspaceDiffPort::new(
                 self.ports.workspace_root(),
             ),
         )));
@@ -186,7 +186,7 @@ pub fn build_local_runtime_services(
 #[cfg(test)]
 mod local_runtime_tests {
     use super::build_local_runtime_services;
-    use bitfun_runtime_ports::{RuntimeServiceCapability, WorkspaceDiffContent};
+    use openbitfun_runtime_ports::{RuntimeServiceCapability, WorkspaceDiffContent};
 
     #[test]
     fn local_runtime_services_bind_required_core_and_workspace_ports() {
@@ -215,7 +215,7 @@ mod local_runtime_tests {
     #[tokio::test]
     async fn local_runtime_services_bind_git_queries_to_the_canonical_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");
-        bitfun_services_integrations::git::execute_git_command_sync(
+        openbitfun_services_integrations::git::execute_git_command_sync(
             workspace.path().to_string_lossy().as_ref(),
             &["init"],
         )

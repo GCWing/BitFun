@@ -1,6 +1,6 @@
 # 插件运行时与 Plugin Host 设计
 
-本文定义 BitFun 主应用与第三方插件代码之间的运行边界。OpenCode 的兼容范围见
+本文定义 OpenBitFun 主应用与第三方插件代码之间的运行边界。OpenCode 的兼容范围见
 [`opencode-extension-compatibility.md`](opencode-extension-compatibility.md)，生态语义与脚本接口见
 [`opencode-plugin-runtime-adapter-design.md`](opencode-plugin-runtime-adapter-design.md)，外部来源的发现、确认和状态见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。详细设计与
@@ -95,7 +95,7 @@ workspace 的逻辑实例和多个 session 的调用；这些身份必须随请�
 ### 3.2 插件之间的隔离承诺
 
 Plugin Host 的首要目的，是把第三方 JS/TS 异常与 Rust 主应用进程隔开，不是把插件彼此隔开。共享同一 Host 的
-插件会共同承担同步死循环、OOM、`process.exit`、进程级环境修改和未文档化全局状态带来的风险。BitFun 可以按
+插件会共同承担同步死循环、OOM、`process.exit`、进程级环境修改和未文档化全局状态带来的风险。OpenBitFun 可以按
 插件身份归因普通异常和撤下贡献，但不承诺同一 Host 内的插件故障互不影响，也不承诺兼容插件之间依赖
 `globalThis` 或模块缓存的未文档化协作。
 
@@ -281,18 +281,18 @@ existing-session ensure 暂缺 execution root 时的诊断可能进入全局范�
 插件贡献；刷新失败可保留已确认的上一代贡献，因此诊断表达“本次激活/刷新失败”，不能把原生路径成功写成插件激活成功。
 
 standalone `.js` Tool 继续由 `ScriptToolRuntime` 为每个脚本启动 Node worker，两条执行路径不共享生命周期对象。当前
-分发仍要求系统 Bun 或 `BITFUN_BUN_COMMAND`，自动目录发现、完整 OpenCode Client/Hook/TUI 表面、安全启用门禁、
+分发仍要求系统 Bun 或 `OPENBITFUN_BUN_COMMAND`，自动目录发现、完整 OpenCode Client/Hook/TUI 表面、安全启用门禁、
 不可变旧版本恢复和资源沙箱仍未完成；共享 Host 进程隔离也不承诺插件间隔离。
 
 ## 8. 验证要求
 
 当前 Rust 边界调整至少运行：
 
-- `cargo test --locked -p bitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_contracts`
-- `cargo test --locked -p bitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_diagnostics_contracts`
-- `cargo test -p bitfun-plugin-runtime-client`
-- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- `cargo test -p bitfun-core --no-default-features --features plugin-runtime --lib plugin_runtime::tests`
+- `cargo test --locked -p openbitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_contracts`
+- `cargo test --locked -p openbitfun-runtime-ports --no-default-features --features plugin-runtime --test plugin_runtime_contracts plugin_runtime_diagnostics_contracts`
+- `cargo test -p openbitfun-plugin-runtime-client`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_source_adapter`
+- `cargo test -p openbitfun-core --no-default-features --features plugin-runtime --lib plugin_runtime::tests`
 - `node scripts/check-core-boundaries.mjs`
 
 目标 Plugin Host 还必须使用固定版本真实 fixture 验证：

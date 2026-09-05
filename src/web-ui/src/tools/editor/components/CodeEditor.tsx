@@ -5,7 +5,7 @@
  * @module components/CodeEditor
  */
 
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { AlertCircle } from 'lucide-react';
 import type * as monaco from 'monaco-editor';
@@ -17,7 +17,7 @@ import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/Mo
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
-import { LoadingState } from '@bitfun/ui';
+import { LoadingState } from '@openbitfun/ui';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
@@ -2159,9 +2159,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       data-editor-id={`editor-${filePath.replace(/[^a-zA-Z0-9]/g, '-')}`}
       data-file-path={filePath}
       data-readonly={readOnly ? 'true' : 'false'}
-      data-bf-component="editor-tool"
-      data-bf-part="root"
-      data-bf-state={[
+      data-openbitfun-component="editor-tool"
+      data-openbitfun-part="root"
+      data-openbitfun-state={[
         loading && showLoadingOverlay && 'loading',
         error && 'error',
         largeFileMode && 'large-file',
@@ -2175,7 +2175,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         />
       )}
       
-      <div className="code-editor-tool__content" data-shortcut-scope="editor" data-bf-component="editor-tool" data-bf-part="content">
+      <div className="code-editor-tool__content" data-shortcut-scope="editor" data-openbitfun-component="editor-tool" data-openbitfun-part="content">
         <div 
           ref={containerRef} 
           style={{ 
@@ -2189,13 +2189,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       </div>
 
       {loading && showLoadingOverlay && (
-        <div className="code-editor-tool__loading-overlay" data-bf-component="editor-tool" data-bf-part="loading">
+        <div className="code-editor-tool__loading-overlay" data-openbitfun-component="editor-tool" data-openbitfun-part="loading">
           <LoadingState size="md">{loadingOverlayText}</LoadingState>
         </div>
       )}
 
       {error && (
-        <div className="code-editor-tool__error-overlay" data-bf-component="editor-tool" data-bf-part="error">
+        <div className="code-editor-tool__error-overlay" data-openbitfun-component="editor-tool" data-openbitfun-part="error">
           <AlertCircle className="code-editor-tool__error-icon" />
           <p className="code-editor-tool__error-message">{error}</p>
           <Button
@@ -2209,7 +2209,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       )}
 
       {saving && (
-        <div className="code-editor-tool__saving-indicator" data-bf-component="editor-tool" data-bf-part="saving">
+        <div className="code-editor-tool__saving-indicator" data-openbitfun-component="editor-tool" data-openbitfun-part="saving">
           {t('editor.codeEditor.saving')}
         </div>
       )}

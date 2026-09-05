@@ -23,7 +23,7 @@ export function threadGoalActionsForStatus(status: string): ThreadGoalUiAction[]
 }
 
 export function resumeDismissStorageKey(sessionId: string, goalId: string): string {
-  return `bitfun.threadGoal.resumeDismissed.${sessionId}.${goalId}`;
+  return `openbitfun.threadGoal.resumeDismissed.${sessionId}.${goalId}`;
 }
 
 export function isResumePromptDismissed(sessionId: string, goal: ThreadGoalSnapshot): boolean {

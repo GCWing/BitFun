@@ -1,11 +1,11 @@
 use crate::product_assembly;
 use crate::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};
-use bitfun_product_capabilities::{
+use openbitfun_product_capabilities::{
     product_assembly_plan_for_profile, DeliveryProfile, ProductServiceCapabilityStatus,
 };
-use bitfun_runtime_ports::RuntimeServiceCapability;
-use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
-use bitfun_runtime_services::{RuntimeServicesBuilder, RuntimeServicesRegistry};
+use openbitfun_runtime_ports::RuntimeServiceCapability;
+use openbitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use openbitfun_runtime_services::{RuntimeServicesBuilder, RuntimeServicesRegistry};
 
 #[test]
 fn core_runtime_services_provider_registers_existing_adapters_and_capability_markers() {

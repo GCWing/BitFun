@@ -2,7 +2,7 @@
  * SessionScene styles — ChatPane + Resizer + AuxPane layout.
  * Resizer styles moved here from WorkspaceShell.scss.
  */
-.bitfun-session-scene {
+.openbitfun-session-scene {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -11,8 +11,8 @@
   height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--bf-color-surface-scene);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-scene);
+  color: var(--openbitfun-color-content-primary);
 
   &--dragging {
     user-select: none;
@@ -20,23 +20,23 @@
 
     * { pointer-events: none; }
 
-    .bitfun-pane-resizer,
-    .bitfun-bottom-pane-resizer { pointer-events: auto; }
+    .openbitfun-pane-resizer,
+    .openbitfun-bottom-pane-resizer { pointer-events: auto; }
 
-    .bitfun-session-scene__chat-pane,
-    .bitfun-session-scene__aux-pane,
-    .bitfun-session-scene__bottom-terminal-pane { transition: none; }
+    .openbitfun-session-scene__chat-pane,
+    .openbitfun-session-scene__aux-pane,
+    .openbitfun-session-scene__bottom-terminal-pane { transition: none; }
 
-    .bitfun-dual-column__header,
-    .bitfun-dual-column__header-two-row,
-    .bitfun-dual-column__drop-indicator-content,
-    .bitfun-dual-column__dropdown {
+    .openbitfun-dual-column__header,
+    .openbitfun-dual-column__header-two-row,
+    .openbitfun-dual-column__drop-indicator-content,
+    .openbitfun-dual-column__dropdown {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
 
-    .bitfun-dual-column__header::after,
-    .bitfun-dual-column__header-two-row::after { display: none !important; }
+    .openbitfun-dual-column__header::after,
+    .openbitfun-dual-column__header-two-row::after { display: none !important; }
   }
 
   &--dragging-bottom {
@@ -45,7 +45,7 @@
 }
 
 
-.bitfun-session-scene__main-row {
+.openbitfun-session-scene__main-row {
   display: flex;
   flex-direction: row;
   flex: 1 1 auto;
@@ -56,7 +56,7 @@
 }
 
 
-.bitfun-session-scene__chat-pane {
+.openbitfun-session-scene__chat-pane {
   flex: 1 1 auto;
   min-width: 400px;
   height: 100%;
@@ -71,7 +71,7 @@
 }
 
 
-.bitfun-session-scene__aux-pane {
+.openbitfun-session-scene__aux-pane {
   display: flex;
   flex-shrink: 0;
   height: 100%;
@@ -80,8 +80,8 @@
   box-sizing: border-box;
   max-width: 1200px;
 
-  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  transition: width var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+              opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   &--collapsed {
     min-width: 0;
@@ -99,15 +99,15 @@
     transition: none;
     * { transition: none !important; animation: none !important; }
 
-    .bitfun-dual-column__header,
-    .bitfun-dual-column__header-two-row,
-    .bitfun-dual-column__drop-indicator-content,
-    .bitfun-dual-column__dropdown {
+    .openbitfun-dual-column__header,
+    .openbitfun-dual-column__header-two-row,
+    .openbitfun-dual-column__drop-indicator-content,
+    .openbitfun-dual-column__dropdown {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
-    .bitfun-dual-column__header::after,
-    .bitfun-dual-column__header-two-row::after { display: none !important; }
+    .openbitfun-dual-column__header::after,
+    .openbitfun-dual-column__header-two-row::after { display: none !important; }
   }
 
   &--editor-mode {
@@ -126,8 +126,8 @@
       inset: 0;
       background: linear-gradient(
         to right,
-        color-mix(in srgb, var(--bf-color-accent-default) 25%, transparent) 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 12%, transparent) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 25%, transparent) 0%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 12%, transparent) 50%,
         transparent 100%
       );
       pointer-events: none;
@@ -141,27 +141,27 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent);
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;
-      text-shadow: 0 1px 2px color-mix(in srgb, var(--bf-color-content-on-light) 30%, transparent);
+      text-shadow: 0 1px 2px color-mix(in srgb, var(--openbitfun-color-content-on-light) 30%, transparent);
       animation: pane-collapse-hint 0.3s ease-out;
     }
   }
 }
 
 
-.bitfun-pane-resizer {
+.openbitfun-pane-resizer {
   width: 1px;
   flex-shrink: 0;
   position: relative;
   cursor: col-resize;
   user-select: none;
-  z-index: var(--bf-layer-sticky);
-  background: var(--bf-color-border-subtle);
+  z-index: var(--openbitfun-layer-sticky);
+  background: var(--openbitfun-color-border-subtle);
 
   &::before {
     content: '';
@@ -175,9 +175,9 @@
 
   // Explicit property list (no `transition: all`): only the collapse width
   // and cheap paint properties animate; hover feedback uses transform below.
-  transition: width var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-              background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  transition: width var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+              opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+              background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   &--collapsed {
     width: 0;
@@ -199,11 +199,11 @@
     width: 2px;
     height: 50px;
     background: transparent;
-    border-radius: var(--bf-radius-sm);
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    border-radius: var(--openbitfun-radius-sm);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                box-shadow var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -214,76 +214,76 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
-    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
-    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    color: color-mix(in srgb, var(--openbitfun-color-content-muted) 60%, transparent);
+    transition: color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   &:hover,
   &--hovering {
-    .bitfun-pane-resizer__line {
+    .openbitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
-        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleY(1);
       opacity: 1;
     }
-    .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
+    .openbitfun-pane-resizer__handle { opacity: 1; }
+    .openbitfun-pane-resizer__icon { color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
-    .bitfun-pane-resizer__line {
+    .openbitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
-        var(--bf-color-accent-default) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent) 20%,
+        var(--openbitfun-color-accent-default) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleY(1.2);
       opacity: 1;
     }
-    .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: var(--bf-color-accent-default); }
+    .openbitfun-pane-resizer__handle { opacity: 1; }
+    .openbitfun-pane-resizer__icon { color: var(--openbitfun-color-accent-default); }
   }
 
   &:focus {
     outline: none;
-    .bitfun-pane-resizer__line {
+    .openbitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
-        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleY(1.1);
       opacity: 1;
     }
-    .bitfun-pane-resizer__handle { opacity: 1; }
+    .openbitfun-pane-resizer__handle { opacity: 1; }
   }
 
   &:focus-visible {
-    .bitfun-pane-resizer__line {
-      outline: 2px solid var(--bf-color-focus-ring);
+    .openbitfun-pane-resizer__line {
+      outline: 2px solid var(--openbitfun-color-focus-ring);
       outline-offset: 2px;
     }
   }
 }
 
 
-.bitfun-session-scene__bottom-terminal-pane {
+.openbitfun-session-scene__bottom-terminal-pane {
   display: flex;
   flex: 0 0 auto;
   width: 100%;
@@ -291,9 +291,9 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-  border-top: 1px solid var(--bf-color-border-subtle);
-  transition: height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-              opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+  border-top: 1px solid var(--openbitfun-color-border-subtle);
+  transition: height var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+              opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   &--collapsed {
     min-height: 0;
@@ -310,18 +310,18 @@
 }
 
 
-.bitfun-bottom-pane-resizer {
+.openbitfun-bottom-pane-resizer {
   height: 1px;
   flex: 0 0 auto;
   position: relative;
   cursor: row-resize;
   user-select: none;
-  z-index: var(--bf-layer-sticky);
-  background: var(--bf-color-border-subtle);
+  z-index: var(--openbitfun-layer-sticky);
+  background: var(--openbitfun-color-border-subtle);
   transition:
-    background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-    height var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-    opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+    height var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+    opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
   &::before {
     content: '';
@@ -353,11 +353,11 @@
     width: 72px;
     height: 2px;
     background: transparent;
-    border-radius: var(--bf-radius-sm);
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                background-color var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                box-shadow var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                transform var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    border-radius: var(--openbitfun-radius-sm);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                box-shadow var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
     opacity: 0;
     pointer-events: none;
   }
@@ -368,69 +368,69 @@
     left: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
     pointer-events: none;
   }
 
   &__icon {
-    color: color-mix(in srgb, var(--bf-color-content-muted) 60%, transparent);
-    transition: color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    color: color-mix(in srgb, var(--openbitfun-color-content-muted) 60%, transparent);
+    transition: color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   &:hover,
   &--hovering {
-    .bitfun-bottom-pane-resizer__line {
+    .openbitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 20%,
-        color-mix(in srgb, var(--bf-color-accent-default) 80%, transparent) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 20%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 80%, transparent) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 80%,
         transparent 100%
       );
       transform: translate(-50%, -50%) scaleX(1);
       opacity: 1;
     }
-    .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent); }
+    .openbitfun-bottom-pane-resizer__handle { opacity: 1; }
+    .openbitfun-bottom-pane-resizer__icon { color: color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent); }
   }
 
   &--dragging {
-    .bitfun-bottom-pane-resizer__line {
+    .openbitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 20%,
-        var(--bf-color-accent-default) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 60%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent) 20%,
+        var(--openbitfun-color-accent-default) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 60%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent);
       transform: translate(-50%, -50%) scaleX(1.19);
       opacity: 1;
     }
-    .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: var(--bf-color-accent-default); }
+    .openbitfun-bottom-pane-resizer__handle { opacity: 1; }
+    .openbitfun-bottom-pane-resizer__icon { color: var(--openbitfun-color-accent-default); }
   }
 
   &:focus {
     outline: none;
-    .bitfun-bottom-pane-resizer__line {
+    .openbitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 20%,
-        color-mix(in srgb, var(--bf-color-accent-default) 90%, transparent) 50%,
-        color-mix(in srgb, var(--bf-color-accent-default) 50%, transparent) 80%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent) 20%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 90%, transparent) 50%,
+        color-mix(in srgb, var(--openbitfun-color-accent-default) 50%, transparent) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
       transform: translate(-50%, -50%) scaleX(1.11);
       opacity: 1;
     }
-    .bitfun-bottom-pane-resizer__handle { opacity: 1; }
+    .openbitfun-bottom-pane-resizer__handle { opacity: 1; }
   }
 
   &:focus-visible {
-    .bitfun-bottom-pane-resizer__line {
-      outline: 2px solid var(--bf-color-focus-ring);
+    .openbitfun-bottom-pane-resizer__line {
+      outline: 2px solid var(--openbitfun-color-focus-ring);
       outline-offset: 2px;
     }
   }
@@ -449,29 +449,29 @@
 
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-session-scene,
-  .bitfun-session-scene__chat-pane,
-  .bitfun-session-scene__aux-pane,
-  .bitfun-session-scene__bottom-terminal-pane,
-  .bitfun-pane-resizer,
-  .bitfun-bottom-pane-resizer,
-  .bitfun-pane-resizer__line,
-  .bitfun-bottom-pane-resizer__line,
-  .bitfun-pane-resizer__handle,
-  .bitfun-bottom-pane-resizer__handle,
-  .bitfun-pane-resizer__icon,
-  .bitfun-bottom-pane-resizer__icon {
+  .openbitfun-session-scene,
+  .openbitfun-session-scene__chat-pane,
+  .openbitfun-session-scene__aux-pane,
+  .openbitfun-session-scene__bottom-terminal-pane,
+  .openbitfun-pane-resizer,
+  .openbitfun-bottom-pane-resizer,
+  .openbitfun-pane-resizer__line,
+  .openbitfun-bottom-pane-resizer__line,
+  .openbitfun-pane-resizer__handle,
+  .openbitfun-bottom-pane-resizer__handle,
+  .openbitfun-pane-resizer__icon,
+  .openbitfun-bottom-pane-resizer__icon {
     transition: none;
   }
 
-  .bitfun-session-scene__aux-pane--near-collapse {
+  .openbitfun-session-scene__aux-pane--near-collapse {
     &::before, &::after { animation: none; }
   }
 }
 
 
 @media (hover: none) and (pointer: coarse) {
-  .bitfun-pane-resizer {
+  .openbitfun-pane-resizer {
     width: 8px;
 
     &::before { left: -10px; right: -10px; }
@@ -479,7 +479,7 @@
     &__handle { opacity: 0.8; }
   }
 
-  .bitfun-bottom-pane-resizer {
+  .openbitfun-bottom-pane-resizer {
     height: 8px;
 
     &::before { top: -10px; bottom: -10px; }
@@ -490,14 +490,14 @@
 
 
 @media (prefers-contrast: high) {
-  .bitfun-pane-resizer {
+  .openbitfun-pane-resizer {
     &__line { background: currentColor; opacity: 1; }
     &:hover &__line,
     &--hovering &__line,
     &--dragging &__line { background: currentColor; outline: 2px solid currentColor; }
   }
 
-  .bitfun-bottom-pane-resizer {
+  .openbitfun-bottom-pane-resizer {
     &__line { background: currentColor; opacity: 1; }
     &:hover &__line,
     &--hovering &__line,

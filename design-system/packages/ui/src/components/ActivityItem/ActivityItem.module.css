@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .trigger,
   .body,
@@ -20,10 +20,10 @@
     display: inline-flex;
     align-items: center;
     min-inline-size: 0;
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-meta-font-family);
-    font-weight: var(--bf-type-meta-font-weight);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
   .root[data-has-detail="true"] {
@@ -71,7 +71,7 @@
   }
 
   .leading > :where(svg, img),
-  .leading > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -82,7 +82,7 @@
     flex: 1 1 auto;
     align-items: center;
     min-inline-size: 0;
-    gap: var(--bf-control-activity-item-content-gap);
+    gap: var(--openbitfun-control-activity-item-content-gap);
     white-space: nowrap;
   }
 
@@ -98,8 +98,8 @@
 
   .label {
     flex: 0 0 auto;
-    color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   .description {
@@ -107,82 +107,82 @@
   }
 
   .root[data-appearance="inline"] {
-    gap: var(--bf-control-activity-item-inline-gap);
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-meta-line-height);
+    gap: var(--openbitfun-control-activity-item-inline-gap);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
   }
 
   .root[data-appearance="inline"] .trigger,
   .root[data-appearance="inline"] .body {
-    gap: var(--bf-control-activity-item-inline-gap);
+    gap: var(--openbitfun-control-activity-item-inline-gap);
   }
 
   .root[data-appearance="inline"] .leading {
-    inline-size: var(--bf-control-activity-item-inline-icon-size);
-    block-size: var(--bf-control-activity-item-inline-icon-size);
+    inline-size: var(--openbitfun-control-activity-item-inline-icon-size);
+    block-size: var(--openbitfun-control-activity-item-inline-icon-size);
   }
 
   .root[data-appearance="surface"] {
     inline-size: 100%;
-    min-block-size: var(--bf-control-activity-item-surface-height);
-    gap: var(--bf-control-activity-item-surface-gap);
-    padding-block: var(--bf-control-activity-item-surface-padding-block);
-    padding-inline-start: var(--bf-control-activity-item-surface-padding-inline-start);
-    padding-inline-end: var(--bf-control-activity-item-surface-padding-inline-end);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-control-activity-item-surface-radius);
-    background: var(--bf-color-surface-raised);
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    min-block-size: var(--openbitfun-control-activity-item-surface-height);
+    gap: var(--openbitfun-control-activity-item-surface-gap);
+    padding-block: var(--openbitfun-control-activity-item-surface-padding-block);
+    padding-inline-start: var(--openbitfun-control-activity-item-surface-padding-inline-start);
+    padding-inline-end: var(--openbitfun-control-activity-item-surface-padding-inline-end);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-control-activity-item-surface-radius);
+    background: var(--openbitfun-color-surface-raised);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-appearance="surface"] .trigger,
   .root[data-appearance="surface"] .body {
-    gap: var(--bf-control-activity-item-surface-gap);
+    gap: var(--openbitfun-control-activity-item-surface-gap);
   }
 
   .root[data-appearance="surface"] .leading {
-    inline-size: var(--bf-control-activity-item-surface-icon-size);
-    block-size: var(--bf-control-activity-item-surface-icon-size);
+    inline-size: var(--openbitfun-control-activity-item-surface-icon-size);
+    block-size: var(--openbitfun-control-activity-item-surface-icon-size);
   }
 
-  .root[data-appearance="surface"]:not([data-disabled="true"]):is(:hover, [data-bf-preview-state="hover"]) {
-    border-color: var(--bf-color-border-default);
-    background: var(--bf-color-action-neutral-surface-hover);
+  .root[data-appearance="surface"]:not([data-disabled="true"]):is(:hover, [data-openbitfun-preview-state="hover"]) {
+    border-color: var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
-  .root[data-appearance="surface"]:not([data-disabled="true"]):is(:active, [data-bf-preview-state="active"]) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+  .root[data-appearance="surface"]:not([data-disabled="true"]):is(:active, [data-openbitfun-preview-state="active"]) {
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .root:has(.trigger:focus-visible) {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .root[data-disabled="true"] {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
   .root[data-disabled="true"] .label {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
   }
 
   .metadata {
-    padding-inline: var(--bf-space-1);
+    padding-inline: var(--openbitfun-space-1);
   }
 
   .divider {
-    inline-size: var(--bf-border-width-default);
-    block-size: var(--bf-control-activity-item-divider-block-size);
-    background: var(--bf-color-border-subtle);
+    inline-size: var(--openbitfun-border-width-default);
+    block-size: var(--openbitfun-control-activity-item-divider-block-size);
+    background: var(--openbitfun-color-border-subtle);
   }
 
   .actions {
@@ -197,28 +197,28 @@
   }
 
   .root[data-appearance="surface"] .detail {
-    padding-block-start: var(--bf-space-1);
-    border-block-start: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
+    padding-block-start: var(--openbitfun-space-1);
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
   .changeCount {
-    gap: var(--bf-control-change-count-gap);
-    padding-block: var(--bf-control-change-count-padding-block);
-    padding-inline: var(--bf-control-change-count-padding-inline);
-    border-radius: var(--bf-control-change-count-radius);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    gap: var(--openbitfun-control-change-count-gap);
+    padding-block: var(--openbitfun-control-change-count-padding-block);
+    padding-inline: var(--openbitfun-control-change-count-padding-inline);
+    border-radius: var(--openbitfun-control-change-count-radius);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
   }
 
   .additions {
-    color: var(--bf-color-code-change-added);
+    color: var(--openbitfun-color-code-change-added);
   }
 
   .deletions {
-    color: var(--bf-color-code-change-removed);
+    color: var(--openbitfun-color-code-change-removed);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -233,7 +233,7 @@
     }
 
     .root:has(.trigger:focus-visible) {
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
 
     .divider {

@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: flex;
     box-sizing: border-box;
@@ -6,59 +6,59 @@
     min-inline-size: 0;
     min-block-size: 52px;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     margin: 0;
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border: var(--bf-border-width-default) solid transparent;
-    border-radius: var(--bf-radius-md);
-    color: var(--bf-color-content-primary);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border: var(--openbitfun-border-width-default) solid transparent;
+    border-radius: var(--openbitfun-radius-md);
+    color: var(--openbitfun-color-content-primary);
     background: transparent;
     text-align: start;
     cursor: pointer;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-appearance="surface"] {
     min-block-size: 64px;
-    border-color: var(--bf-color-border-subtle);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    border-color: var(--openbitfun-color-border-subtle);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-xs);
   }
 
   .root[data-selected="true"] {
-    border-color: var(--bf-color-border-strong);
-    background: var(--bf-color-surface-tertiary);
+    border-color: var(--openbitfun-color-border-strong);
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .root:is(:hover, [data-bf-preview-state="hover"]):not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
+    .root:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }
 
-  .root:is(:active, [data-bf-preview-state="active"]):not(:disabled) {
-    background: var(--bf-color-action-neutral-surface-pressed);
+  .root:is(:active, [data-openbitfun-preview-state="active"]):not(:disabled) {
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
     transform: scale(0.99);
   }
 
-  .root:is(:focus-visible, [data-bf-preview-state="focus-visible"]) {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+  .root:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .root:disabled {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
     cursor: not-allowed;
   }
 
   .root[data-tone="danger"] {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   .root[data-tone="danger"] .label,
@@ -73,7 +73,7 @@
     box-sizing: border-box;
     flex: 0 0 auto;
     place-items: center;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .copy {
@@ -82,7 +82,7 @@
     min-inline-size: 0;
     flex: 1 1 auto;
     flex-direction: column;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   .label,
@@ -95,14 +95,14 @@
   }
 
   .label {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-body-md-font-size);
-    font-weight: var(--bf-type-label-lg-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    font-weight: var(--openbitfun-type-label-lg-font-weight);
   }
 
   .supportingText {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-xs-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-xs-font-size);
   }
 
   @media (prefers-reduced-motion: reduce) {

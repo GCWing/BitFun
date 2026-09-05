@@ -14,6 +14,10 @@ const modelSettingsStyles = readFileSync(
   fileURLToPath(new URL('./ModelSettingsPage.scss', import.meta.url)),
   'utf8',
 );
+const collectionItemStyles = readFileSync(
+  fileURLToPath(new URL('./common/ConfigCollectionItem.scss', import.meta.url)),
+  'utf8',
+);
 
 describe('model service collapsed presentation', () => {
   it('starts provider groups collapsed and exposes an accessible user toggle', () => {
@@ -27,11 +31,36 @@ describe('model service collapsed presentation', () => {
 
   it('includes the leading card inset in the provider toggle hit area', () => {
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-header\s*\{[\s\S]*?padding-inline:\s*0 var\(--bf-space-4\)/,
+      /&__provider-group-header\s*\{[\s\S]*?padding-inline:\s*0 var\(--openbitfun-space-4\)/,
     );
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-toggle\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?padding-inline-start:\s*var\(--bf-space-4\)/,
+      /&__provider-group-toggle\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?padding-inline-start:\s*var\(--openbitfun-space-4\)/,
     );
+  });
+
+  it('matches the subscription group radius without an outer border', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-radius:\s*var\(--openbitfun-layout-field-group-radius\)/,
+    );
+  });
+
+  it('keeps provider headers and models on one theme-adaptive grouped surface', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/,
+    );
+    expect(modelSettingsStyles).toMatch(
+      /&__provider-group-header\s*\{[^}]*background:\s*transparent/,
+    );
+  });
+
+  it('draws one consistent divider between provider headers and model rows', () => {
+    expect(modelSettingsStyles).toMatch(
+      /&\[data-expanded='true'\]\s*\{[^}]*border-bottom:\s*1px solid var\(--openbitfun-color-border-subtle\)/,
+    );
+    expect(collectionItemStyles).toMatch(
+      /& \+ \.openbitfun-collection-item\s*\{[^}]*border-top:\s*1px solid var\(--openbitfun-color-border-subtle\)/,
+    );
+    expect(modelSettingsStyles).not.toContain('&:not(:last-child)');
   });
 
   it('marks the primary model slot as required in both label and control semantics', () => {
@@ -42,15 +71,15 @@ describe('model service collapsed presentation', () => {
 
   it('keeps the enable switch at the trailing edge and reveals secondary model actions on interaction', () => {
     expect(modelSettingsSource).toMatch(
-      /<span className="bitfun-model-settings__model-enable">[\s\S]*?<Switch[\s\S]*?<div[\s\S]*?className="bitfun-model-settings__model-actions"/,
+      /<span className="openbitfun-model-settings__model-enable">[\s\S]*?<Switch[\s\S]*?<div[\s\S]*?className="openbitfun-model-settings__model-actions"/,
     );
-    expect(modelSettingsSource).toContain('data-bf-part="modelActions"');
+    expect(modelSettingsSource).toContain('data-openbitfun-part="modelActions"');
     expect(modelSettingsSource).toContain('toggleOnRowClick');
   });
 
   it('uses the semantic highlight color for each provider model count', () => {
     expect(modelSettingsStyles).toMatch(
-      /&__provider-group-count\s*\{[\s\S]*?color:\s*var\(--bf-color-content-required-indicator\)/,
+      /&__provider-group-count\s*\{[\s\S]*?color:\s*var\(--openbitfun-color-content-required-indicator\)/,
     );
   });
 });

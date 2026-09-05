@@ -1,11 +1,11 @@
-# BitFun 运行时性能审阅报告(02)
+# OpenBitFun 运行时性能审阅报告(02)
 
 - 审阅日期:2026-07-26
 - 审阅维度:执行性能(运行时)—— Rust 后端热点路径 / 前端 React 高频路径 / Tauri IPC 层
 - 方法:Grep 系统性扫描典型反模式(clone 密集区、async 中同步 IO、`Regex::new` 非静态、`block_on`、`JSON.parse(JSON.stringify)`、`setInterval`、`structuredClone`、未节流事件监听、高频 `invoke`/`emit`),对每个可疑点精读上下文并论证调用频率后才收录;所有明显但经确认无害的候选项在文末"误报排除记录"中留档,避免后续重复审查。
 - 所有行号以当前 main 分支(48a003b73)为准。
 
-> 退役说明（2026-08）：本文是提交 `48a003b73` 的固定历史审阅证据。此后 BitFun LSP Runtime 已被完整删除，
+> 退役说明（2026-08）：本文是提交 `48a003b73` 的固定历史审阅证据。此后 OpenBitFun LSP Runtime 已被完整删除，
 > 因此下文问题 #5 与任务 T3 已通过退役关闭，所述路径也不再存在。保留这些段落只为解释当时结论；不得据此恢复、
 > 优化或重新实现 LSP Runtime。
 >

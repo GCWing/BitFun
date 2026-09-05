@@ -6,13 +6,13 @@ use crate::service::config::{
 };
 use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
 use async_trait::async_trait;
-use bitfun_ai_adapters::{
-    ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
-    ModelExchangeRoundAttempt, ModelExchangeTraceConfig, ModelExchangeTraceSink,
-};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use log::{debug, warn};
+use openbitfun_ai_adapters::{
+    ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
+    ModelExchangeRoundAttempt, ModelExchangeTraceConfig, ModelExchangeTraceSink,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};

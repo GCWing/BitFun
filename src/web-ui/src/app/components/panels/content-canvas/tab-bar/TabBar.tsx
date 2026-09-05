@@ -12,7 +12,7 @@ import { TabOverflowMenu } from './TabOverflowMenu';
 import type { CanvasTab, EditorGroupId, TabDragPayload } from '../types';
 import { createLogger } from '@/shared/utils/logger';
 import './TabBar.scss';
-import { Icon, Tooltip } from '@bitfun/ui';
+import { Icon, Tooltip } from '@openbitfun/ui';
 
 const log = createLogger('TabBar');
 const TAB_REORDER_DURATION_MS = 160;
@@ -369,16 +369,16 @@ export const TabBar: React.FC<TabBarProps> = ({
   }, [onTabClose, visibleTabs]);
 
   return (
-    <div data-bf-component="canvas-tab-bar" data-bf-part="root" data-bf-group={groupId} data-bf-state={isActiveGroup ? 'active' : ''}
+    <div data-openbitfun-component="canvas-tab-bar" data-openbitfun-part="root" data-openbitfun-group={groupId} data-openbitfun-state={isActiveGroup ? 'active' : ''}
       ref={containerRef}
       className={`canvas-tab-bar ${isActiveGroup ? 'is-active-group' : ''}`}
     >
       {/* Tab list */}
-      <div ref={tabsListRef} className="canvas-tab-bar__tabs" data-bf-component="canvas-tab-bar" data-bf-part="list" data-bf-group={groupId}>
+      <div ref={tabsListRef} className="canvas-tab-bar__tabs" data-openbitfun-component="canvas-tab-bar" data-openbitfun-part="list" data-openbitfun-group={groupId}>
         {displayedTabs.map((tab, index) => (
           <div
-            data-bf-component="canvas-tab-bar"
-            data-bf-part="tabWrapper"
+            data-openbitfun-component="canvas-tab-bar"
+            data-openbitfun-part="tabWrapper"
             data-tab-id={tab.id}
             key={tab.id}
             className="canvas-tab-bar__tab-wrapper"
@@ -397,7 +397,7 @@ export const TabBar: React.FC<TabBarProps> = ({
           >
             {/* Drop indicator */}
             {dragOverIndex === index && draggingTabId && (
-              <div data-bf-component="canvas-tab-bar" data-bf-part="dropIndicator" className="canvas-tab-drop-indicator" />
+              <div data-openbitfun-component="canvas-tab-bar" data-openbitfun-part="dropIndicator" className="canvas-tab-drop-indicator" />
             )}
             
             <Tab
@@ -420,7 +420,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       </div>
 
       {/* Actions area */}
-      <div ref={actionsRef} className="canvas-tab-bar__actions" data-bf-component="canvas-tab-bar" data-bf-part="actions" data-bf-group={groupId}>
+      <div ref={actionsRef} className="canvas-tab-bar__actions" data-openbitfun-component="canvas-tab-bar" data-openbitfun-part="actions" data-openbitfun-group={groupId}>
         {/* Overflow menu (all groups; mission control only in primary) */}
         {visibleTabs.length > 0 && layoutReady && (
           <TabOverflowMenu
@@ -437,8 +437,8 @@ export const TabBar: React.FC<TabBarProps> = ({
         {onCloseAllTabs && visibleTabs.length > 0 && (
           <Tooltip content={t('tabs.closeAll')} placement="bottom">
             <button
-              data-bf-component="canvas-tab-bar"
-              data-bf-part="action"
+              data-openbitfun-component="canvas-tab-bar"
+              data-openbitfun-part="action"
               className="canvas-tab-bar__action-btn canvas-tab-bar__action-btn--close-all"
               onClick={async (e) => {
                 e.stopPropagation();

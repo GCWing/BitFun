@@ -1,23 +1,23 @@
 [package]
-name = "bitfun-services-core"
+name = "openbitfun-services-core"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun core service owner crate"
+description = "OpenBitFun core service owner crate"
 autotests = false
 
 [lib]
-name = "bitfun_services_core"
+name = "openbitfun_services_core"
 crate-type = ["rlib"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
 aes-gcm = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-bitfun-core-types = { path = "../../contracts/core-types", optional = true }
-bitfun-events = { path = "../../contracts/events", optional = true }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
-bitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
+openbitfun-core-types = { path = "../../contracts/core-types", optional = true }
+openbitfun-events = { path = "../../contracts/events", optional = true }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
+openbitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
 tokio = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -69,6 +69,7 @@ filesystem = [
     "dep:base64",
     "dep:chrono",
     "dep:ignore",
+    "dep:openbitfun-core-types",
     "dep:regex",
     "dep:sha2",
     "dep:tokio",
@@ -87,8 +88,8 @@ json-io = [
     "windows/Win32_Storage_FileSystem",
 ]
 local-storage = [
-    "dep:bitfun-core-types",
-    "dep:bitfun-events",
+    "dep:openbitfun-core-types",
+    "dep:openbitfun-events",
     "dep:chrono",
     "dep:fs2",
     "dep:libc",
@@ -104,6 +105,7 @@ local-storage = [
     "windows/Win32_Foundation",
     "windows/Win32_Storage_FileSystem",
 ]
+product-identity = ["dep:openbitfun-core-types"]
 token-usage-statistics = ["local-storage", "dep:chrono-tz"]
 process-runtime = [
     "dep:libc",
@@ -132,9 +134,9 @@ markdown = ["dep:regex", "dep:serde_yaml"]
 workspace-runtime = [
     "dep:anyhow",
     "dep:async-trait",
-    "dep:bitfun-runtime-ports",
-    "bitfun-runtime-ports/runtime-event-port",
-    "bitfun-runtime-ports/workspace-ports",
+    "dep:openbitfun-runtime-ports",
+    "openbitfun-runtime-ports/runtime-event-port",
+    "openbitfun-runtime-ports/workspace-ports",
     "dep:dunce",
     "dep:filetime",
     "process-runtime",
@@ -146,14 +148,14 @@ workspace-identity = ["dep:dunce", "dep:sha2"]
 runtime-ownership = ["dep:dunce", "dep:fs2", "dep:sha2"]
 permission = [
     "dep:async-trait",
-    "dep:bitfun-runtime-ports",
+    "dep:openbitfun-runtime-ports",
     "dep:rusqlite",
     "dep:tokio",
-    "bitfun-runtime-ports/permission",
+    "openbitfun-runtime-ports/permission",
     "tokio/rt",
 ]
 session-search = [
-    "dep:bitfun-product-domains",
+    "dep:openbitfun-product-domains",
     "dep:rusqlite",
     "dep:tokio",
     "tokio/rt",

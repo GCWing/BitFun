@@ -65,7 +65,7 @@ describe('L0 Internationalization', () => {
       await browser.pause(2000);
 
       // Navigate to Basics tab (language selector lives there)
-      const navItems = await $$('.bitfun-settings-nav__item');
+      const navItems = await $$('.openbitfun-settings-nav__item');
       console.log(`[L0] Found ${navItems.length} settings nav items`);
 
       let basicsTab = null;

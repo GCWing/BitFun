@@ -13,7 +13,7 @@
 //!   refresh UI / notify peer controllers.
 //!
 //! The cursor (`version` + content `hash` of the last uploaded/applied blob)
-//! is persisted in `~/.bitfun/account_sync/<user>.settings.json`, separate
+//! is persisted in `~/.openbitfun/account_sync/<user>.settings.json`, separate
 //! from the session sync state, so restarts do not re-apply unchanged blobs
 //! and co-located processes (e.g. CLI daemon + interactive CLI) share one
 //! cursor without racing the session backup writer.
@@ -29,10 +29,10 @@ use anyhow::{anyhow, Result};
 use log::{debug, warn};
 use tokio::sync::{mpsc, Notify};
 
-use bitfun_services_integrations::remote_connect::account::{
+use openbitfun_services_integrations::remote_connect::account::{
     error_indicates_expired_token, AccountClient, AccountSession, SettingsBlob,
 };
-use bitfun_services_integrations::remote_connect::sync_state;
+use openbitfun_services_integrations::remote_connect::sync_state;
 
 /// How often the engine pulls cloud settings.
 pub const SETTINGS_PULL_INTERVAL: Duration = Duration::from_secs(30);
@@ -173,20 +173,38 @@ pub fn notify_settings_changed() {
     }
 }
 
-/// Extract the inner `config` object from a settings payload, tolerating both
-/// the `ConfigExport` wrapper (`{ config, export_timestamp, version }`) and a
-/// bare `GlobalConfig` JSON.
-fn inner_config_value(payload: &str) -> Result<serde_json::Value> {
-    let value: serde_json::Value =
-        serde_json::from_str(payload).map_err(|e| anyhow!("parse settings payload: {e}"))?;
-    Ok(value.get("config").cloned().unwrap_or(value))
+/// Parses the only supported account-settings payload: a complete current
+/// OpenBitFun `ConfigExport` wrapper.
+fn config_export_value(payload: &str) -> Result<crate::service::config::ConfigExport> {
+    serde_json::from_str(payload).map_err(|e| anyhow!("parse OpenBitFun settings export: {e}"))
+}
+
+fn canonicalize_json(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(fields) => {
+            let mut entries = fields.into_iter().collect::<Vec<_>>();
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            serde_json::Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(key, value)| (key, canonicalize_json(value)))
+                    .collect(),
+            )
+        }
+        serde_json::Value::Array(values) => serde_json::Value::Array(
+            values.into_iter().map(canonicalize_json).collect(),
+        ),
+        value => value,
+    }
 }
 
 /// Hash the canonical config content of a settings payload, ignoring volatile
 /// wrapper fields such as `export_timestamp`.
 fn settings_content_hash(payload: &str) -> Result<String> {
-    let inner = inner_config_value(payload)?;
-    let canonical = serde_json::to_string(&inner)
+    let export = config_export_value(payload)?;
+    let canonical = serde_json::to_string(&canonicalize_json(serde_json::to_value(
+        export.config,
+    )?))
         .map_err(|e| anyhow!("serialize settings for hashing: {e}"))?;
     Ok(sync_state::content_hash(&canonical))
 }
@@ -311,17 +329,17 @@ async fn apply_settings_blob_for_generation(
         return Err(anyhow!("account context changed before settings apply"));
     }
 
-    let inner_config = inner_config_value(&blob.plaintext)?;
+    let export = config_export_value(&blob.plaintext)?;
     let config_service = crate::service::config::get_global_config_service()
         .await
         .map_err(|e| anyhow!("config service: {e}"))?;
     let import_result = match expected_local_config {
         Some(expected) if !force => {
             config_service
-                .import_account_settings_if_unchanged(inner_config, expected)
+                .import_account_settings_if_unchanged(export, expected)
                 .await
         }
-        _ => config_service.import_account_settings(inner_config).await,
+        _ => config_service.import_account_settings(export).await,
     }
     .map_err(|e| anyhow!("import cloud config: {e}"))?;
     if !import_result.success {
@@ -520,40 +538,60 @@ async fn wait_for_local_config_change(
 mod tests {
     use super::*;
 
+    fn settings_payload(
+        config: crate::service::config::GlobalConfig,
+        export_timestamp: &str,
+        version: &str,
+    ) -> String {
+        serde_json::to_string(&crate::service::config::ConfigExport {
+            product_id: openbitfun_core_types::product_identity::product_id().to_string(),
+            format_version: crate::service::config::CURRENT_CONFIG_EXPORT_FORMAT_VERSION,
+            config,
+            export_timestamp: export_timestamp.to_string(),
+            version: version.to_string(),
+        })
+        .unwrap()
+    }
+
     #[test]
     fn content_hash_ignores_export_wrapper_fields() {
-        let a = r#"{"config":{"ai":{"models":[{"id":"m1"}]}},"export_timestamp":"2026-01-01T00:00:00Z","version":"1"}"#;
-        let b = r#"{"config":{"ai":{"models":[{"id":"m1"}]}},"export_timestamp":"2026-02-02T00:00:00Z","version":"2"}"#;
+        let config = crate::service::config::GlobalConfig::default();
+        let a = settings_payload(config.clone(), "2026-01-01T00:00:00Z", "1.0.0");
+        let b = settings_payload(config, "2026-02-02T00:00:00Z", "1.1.0");
         assert_eq!(
-            settings_content_hash(a).unwrap(),
-            settings_content_hash(b).unwrap()
+            settings_content_hash(&a).unwrap(),
+            settings_content_hash(&b).unwrap()
         );
     }
 
     #[test]
     fn content_hash_changes_with_config_content() {
-        let a = r#"{"config":{"ai":{"models":[{"id":"m1"}]}}}"#;
-        let b = r#"{"config":{"ai":{"models":[{"id":"m2"}]}}}"#;
+        let a = crate::service::config::GlobalConfig::default();
+        let mut b = a.clone();
+        b.app.language = "en-US".to_string();
+        let a = settings_payload(a, "2026-01-01T00:00:00Z", "1.0.0");
+        let b = settings_payload(b, "2026-01-01T00:00:00Z", "1.0.0");
         assert_ne!(
-            settings_content_hash(a).unwrap(),
-            settings_content_hash(b).unwrap()
+            settings_content_hash(&a).unwrap(),
+            settings_content_hash(&b).unwrap()
         );
     }
 
     #[test]
-    fn content_hash_accepts_bare_config_payload() {
-        let wrapped = r#"{"config":{"ai":{"models":[{"id":"m1"}]}},"export_timestamp":"t"}"#;
-        let bare = r#"{"ai":{"models":[{"id":"m1"}]}}"#;
-        assert_eq!(
-            settings_content_hash(wrapped).unwrap(),
-            settings_content_hash(bare).unwrap()
-        );
+    fn content_hash_rejects_bare_config_payload() {
+        let bare = serde_json::to_string(&crate::service::config::GlobalConfig::default()).unwrap();
+        assert!(settings_content_hash(&bare).is_err());
     }
 
     #[test]
-    fn inner_config_unwraps_export_wrapper() {
-        let payload = r#"{"config":{"a":1},"export_timestamp":"t","version":"v"}"#;
-        let inner = inner_config_value(payload).unwrap();
-        assert_eq!(inner, serde_json::json!({"a": 1}));
+    fn config_export_parser_requires_current_wrapper_shape() {
+        let config = crate::service::config::GlobalConfig::default();
+        let payload = settings_payload(config.clone(), "2026-01-01T00:00:00Z", "1.0.0");
+        let export = config_export_value(&payload).unwrap();
+        assert_eq!(export.config.product_id, config.product_id);
+
+        let mut invalid: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        invalid.as_object_mut().unwrap().remove("format_version");
+        assert!(config_export_value(&invalid.to_string()).is_err());
     }
 }

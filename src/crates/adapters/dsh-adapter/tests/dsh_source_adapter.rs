@@ -1,10 +1,10 @@
-use bitfun_dsh_adapter::load_dsh_package_adapter;
-use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
-use bitfun_product_domains::plugin_source::{
+use openbitfun_dsh_adapter::load_dsh_package_adapter;
+use openbitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
+use openbitfun_product_domains::plugin_source::{
     PluginPackageFile, PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
     PluginTrustDecision, PluginTrustStore,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PluginCapabilityRef, PluginDispatchEnvelope, PluginOwnerKind, PluginOwnerRef,
     PluginRuntimeAvailability, PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest,
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginStatusKind, PluginTrustLevel,
@@ -98,7 +98,7 @@ fn read_request(plugin_ids: Vec<String>) -> PluginRuntimeReadRequest {
     }
 }
 
-fn dispatch_envelope(source: bitfun_runtime_ports::PluginSourceRef) -> PluginDispatchEnvelope {
+fn dispatch_envelope(source: openbitfun_runtime_ports::PluginSourceRef) -> PluginDispatchEnvelope {
     PluginDispatchEnvelope {
         envelope_version: 1,
         event_id: "dispatch-1".to_string(),
@@ -131,7 +131,7 @@ fn dispatch_envelope(source: bitfun_runtime_ports::PluginSourceRef) -> PluginDis
 
 fn activation_authority(
     input: &PluginPackageInput,
-) -> bitfun_product_domains::plugin_source::PluginActivationAuthority {
+) -> openbitfun_product_domains::plugin_source::PluginActivationAuthority {
     let source = input.clone().into_parts().1;
     let mut trust = PluginTrustStore::new(1);
     trust

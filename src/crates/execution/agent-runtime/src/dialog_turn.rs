@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use bitfun_events::AgenticEvent;
+use openbitfun_events::AgenticEvent;
 
 /// Generate a fresh turn id when callers do not supply one.
 pub fn new_turn_id(provided: Option<String>) -> String {
@@ -89,7 +89,7 @@ impl TurnTokenUsage {
 #[cfg(test)]
 mod tests {
     use super::TurnTokenUsage;
-    use bitfun_events::AgenticEvent;
+    use openbitfun_events::AgenticEvent;
 
     #[test]
     fn turn_usage_accumulates_rounds_and_ignores_other_turns() {

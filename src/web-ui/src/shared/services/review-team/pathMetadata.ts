@@ -66,7 +66,7 @@ export function workspaceAreaForReviewPath(normalizedPath: string): string {
     return 'web-ui';
   }
 
-  if (normalizedPath.startsWith('BitFun-Installer/')) {
+  if (normalizedPath.startsWith('OpenBitFun-Installer/')) {
     return 'installer';
   }
 

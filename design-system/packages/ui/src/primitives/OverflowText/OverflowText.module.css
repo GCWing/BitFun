@@ -1,4 +1,4 @@
-@layer bf.base {
+@layer openbitfun.base {
   .root {
     --_overflow-text-marquee-distance: 0px;
     --_overflow-text-marquee-duration: 2400ms;
@@ -26,13 +26,13 @@
     -webkit-mask-image: linear-gradient(
       to right,
       currentColor 0,
-      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
       transparent 100%
     );
     mask-image: linear-gradient(
       to right,
       currentColor 0,
-      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
       transparent 100%
     );
     -webkit-mask-repeat: no-repeat;
@@ -44,24 +44,24 @@
     -webkit-mask-image: linear-gradient(
       to left,
       currentColor 0,
-      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
       transparent 100%
     );
     mask-image: linear-gradient(
       to left,
       currentColor 0,
-      currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+      currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
       transparent 100%
     );
   }
 
   .root[data-overflow-behavior="marquee"][data-overflow="true"]:hover .content,
   .root[data-overflow-behavior="marquee"][data-overflow="true"]:focus-visible .content {
-    animation: bf-overflow-text-marquee var(--_overflow-text-marquee-duration) linear infinite alternate;
+    animation: openbitfun-overflow-text-marquee var(--_overflow-text-marquee-duration) linear infinite alternate;
     will-change: transform;
   }
 
-  @keyframes bf-overflow-text-marquee {
+  @keyframes openbitfun-overflow-text-marquee {
     0%,
     12% {
       transform: translateX(0);
@@ -78,13 +78,13 @@
       -webkit-mask-image: linear-gradient(
         to right,
         currentColor 0,
-        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
         transparent 100%
       );
       mask-image: linear-gradient(
         to right,
         currentColor 0,
-        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
         transparent 100%
       );
       -webkit-mask-repeat: no-repeat;
@@ -95,13 +95,13 @@
       -webkit-mask-image: linear-gradient(
         to left,
         currentColor 0,
-        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
         transparent 100%
       );
       mask-image: linear-gradient(
         to left,
         currentColor 0,
-        currentColor calc(100% - var(--bf-layout-overflow-text-fade-extent)),
+        currentColor calc(100% - var(--openbitfun-layout-overflow-text-fade-extent)),
         transparent 100%
       );
     }

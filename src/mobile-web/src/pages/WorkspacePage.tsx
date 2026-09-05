@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { MobileBanner, MobileIconButton, MobileListRow, MobilePageHeader, MobileStatus } from '@bitfun/ui/mobile';
+import { MobileBanner, MobileIconButton, MobileListRow, MobilePageHeader, MobileStatus } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
 import {

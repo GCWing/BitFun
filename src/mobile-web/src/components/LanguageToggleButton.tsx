@@ -1,5 +1,5 @@
 import React from 'react';
-import { MobileButton } from '@bitfun/ui/mobile';
+import { MobileButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { getMobileLanguageShortName } from '../i18n/localeRegistry';
 

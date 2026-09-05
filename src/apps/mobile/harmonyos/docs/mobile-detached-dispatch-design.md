@@ -100,7 +100,7 @@ dispatch 动词**。手机对外只有这一个通道，所以「手机能控制
 | job 本身是多轮会话 | 规范 Conversation model：`append` steer 当前轮，`continue` 排下一轮，worker 恢复目标会话 | 派出去不是一锤子买卖，手机要能持续插话 |
 | 结果回传是 controller 侧的 Git 快进 | 规范 Synchronization semantics 第 4 步：fetch 后 `--ff-only` 推进基线工作树 | 手机能**下令**同步，同步本身在 A 上发生；用户的 checkout 永不被改 |
 | 桌面 dispatch API 是薄层 | `dispatch_api.rs:271` / `:338` / `:455` / `:488` 等各自只做传输选择后调核心函数 | 手机动词复用同一批核心函数 |
-| 出站记录只存在 controller 本机 | `service/dispatch/mod.rs:93` `OutboundDispatchRecord`，落盘于 `~/.bitfun/dispatch/outbound/` | 手机问 A，列到的是 **A 派出去的** job，不是账号级全集 |
+| 出站记录只存在 controller 本机 | `service/dispatch/mod.rs:93` `OutboundDispatchRecord`，落盘于 `~/.openbitfun/dispatch/outbound/` | 手机问 A，列到的是 **A 派出去的** job，不是账号级全集 |
 | 账号设备通道上 `dispatch_target_*` 是保留名 | 规范 Protocol：这些名字先于 Peer Host 桥直接路由到 target CLI | 手机的动词不能用这个前缀 |
 | 光标每观察者独立，target 无 controller 租约 | 规范 Event and observer contract | 手机与桌面可同时观察同一个 job，互不干扰 |
 | 光标不能单独还原画面 | 同上：光标只记录读到哪，不记录画了什么 | 投影 + 光标 + 完整性事实必须原子地写在一起 |

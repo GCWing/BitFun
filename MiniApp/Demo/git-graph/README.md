@@ -6,7 +6,7 @@
 
 ## English
 
-This demo showcases BitFun MiniApp's full-stack collaboration capability — specifically, using a third-party npm package (`simple-git`) inside a Node.js/Bun Worker to read a local Git repository and render an interactive commit graph.
+This demo showcases OpenBitFun MiniApp's full-stack collaboration capability — specifically, using a third-party npm package (`simple-git`) inside a Node.js/Bun Worker to read a local Git repository and render an interactive commit graph.
 
 ### Features
 
@@ -58,21 +58,21 @@ miniapps/git-graph/
     └── esm_dependencies.json  # ESM deps (empty for this demo)
 ```
 
-**During development**: after editing `source/ui/*.js` or `source/styles/*.css`, run `npm run build` inside the `miniapps/git-graph` directory to regenerate `source/ui.js` and `source/style.css`. BitFun will pick up the latest build on next load.
+**During development**: after editing `source/ui/*.js` or `source/styles/*.css`, run `npm run build` inside the `miniapps/git-graph` directory to regenerate `source/ui.js` and `source/style.css`. OpenBitFun will pick up the latest build on next load.
 
-### Running in BitFun
+### Running in OpenBitFun
 
-1. **Install to user data directory**: copy this folder into BitFun's MiniApp data directory under an `app_id` subdirectory, e.g.:
+1. **Install to user data directory**: copy this folder into OpenBitFun's MiniApp data directory under an `app_id` subdirectory, e.g.:
    - The data directory is typically `{user_data}/miniapps/`
    - Create a subdirectory like `git-graph-sample` and place all files from this folder inside it (i.e. `meta.json`, `package.json`, `source/` etc. at the root of that subdirectory)
 
-2. **Or import via API**: if BitFun supports path-based import, use `create_miniapp` or equivalent, pointing to this directory as the source; make sure the `id` in `meta.json` matches the directory name.
+2. **Or import via API**: if OpenBitFun supports path-based import, use `create_miniapp` or equivalent, pointing to this directory as the source; make sure the `id` in `meta.json` matches the directory name.
 
 3. **Install dependencies**: inside the MiniApp's app directory, run:
-   - `bun install` or `npm install` (matching the runtime BitFun detected)
+   - `bun install` or `npm install` (matching the runtime OpenBitFun detected)
    - Or use the "Install Dependencies" action in the Mini Apps gallery (calls `miniapp_install_deps`)
 
-4. **Compile**: to regenerate `compiled.html`, call `miniapp_recompile` or let BitFun compile automatically when the MiniApp is opened.
+4. **Compile**: to regenerate `compiled.html`, call `miniapp_recompile` or let OpenBitFun compile automatically when the MiniApp is opened.
 
 5. Open the MiniApp in the Mini Apps gallery, pick a repository, and the Git Graph will appear.
 
@@ -95,7 +95,7 @@ miniapps/git-graph/
 
 ## 中文
 
-本示例展示 BitFun MiniApp 的前后端协同能力，尤其是通过 Node.js/Bun 在端侧使用三方 npm 库（`simple-git`）读取 Git 仓库并渲染交互式提交图谱。
+本示例展示 OpenBitFun MiniApp 的前后端协同能力，尤其是通过 Node.js/Bun 在端侧使用三方 npm 库（`simple-git`）读取 Git 仓库并渲染交互式提交图谱。
 
 ### 功能
 
@@ -147,21 +147,21 @@ miniapps/git-graph/
     └── esm_dependencies.json  # ESM 依赖（本示例为空）
 ```
 
-**开发时**：修改 `source/ui/*.js` 或 `source/styles/*.css` 后，在 `miniapps/git-graph` 目录执行 `npm run build` 生成 `source/ui.js` 与 `source/style.css`，BitFun 加载时会使用最新构建结果。
+**开发时**：修改 `source/ui/*.js` 或 `source/styles/*.css` 后，在 `miniapps/git-graph` 目录执行 `npm run build` 生成 `source/ui.js` 与 `source/style.css`，OpenBitFun 加载时会使用最新构建结果。
 
-### 在 BitFun 中运行
+### 在 OpenBitFun 中运行
 
-1. **安装到用户数据目录**：将本目录复制到 BitFun 的 MiniApp 数据目录下，并赋予一个 app_id 子目录，例如：
+1. **安装到用户数据目录**：将本目录复制到 OpenBitFun 的 MiniApp 数据目录下，并赋予一个 app_id 子目录，例如：
    - 数据目录一般为 `{user_data}/miniapps/`
    - 新建子目录如 `git-graph-sample`，将本目录中所有文件按相同结构放入其中（即 `meta.json`、`package.json`、`source/` 等在该子目录下）
 
-2. **或通过 API 创建**：若 BitFun 支持从路径导入，可使用 `create_miniapp` 或等价方式，将本目录作为 source 路径导入，并确保 `meta.json` 中的 `id` 与目录名一致。
+2. **或通过 API 创建**：若 OpenBitFun 支持从路径导入，可使用 `create_miniapp` 或等价方式，将本目录作为 source 路径导入，并确保 `meta.json` 中的 `id` 与目录名一致。
 
 3. **安装依赖**：在 MiniApp 的 app 目录下执行：
-   - `bun install` 或 `npm install`（与 BitFun 检测到的运行时一致）
+   - `bun install` 或 `npm install`（与 OpenBitFun 检测到的运行时一致）
    - 或在 Mini Apps 画廊中对该 MiniApp 执行「安装依赖」操作（调用 `miniapp_install_deps`）
 
-4. **编译**：若需重新生成 `compiled.html`，可调用 `miniapp_recompile` 或由 BitFun 在打开该 MiniApp 时自动编译。
+4. **编译**：若需重新生成 `compiled.html`，可调用 `miniapp_recompile` 或由 OpenBitFun 在打开该 MiniApp 时自动编译。
 
 5. 在 Mini Apps 画廊中打开该 MiniApp，选择仓库后即可查看 Git Graph。
 

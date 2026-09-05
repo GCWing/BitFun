@@ -1,9 +1,9 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, SourceKey,
 };
-use bitfun_product_domains::external_subagents::{
+use openbitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
@@ -12,7 +12,7 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     SecretText,
 };
-use bitfun_static_hook_support::{
+use openbitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, resolve_bounded_regular_file,
     BoundedDirectoryWalkError, BoundedDirectoryWalkLimits, BoundedFileResolveError,
     BoundedTextRead,
@@ -360,7 +360,7 @@ fn discover_layer(
                 version_parts.extend(referenced_content.iter().map(String::as_str));
                 let health = if source_diagnostics.iter().any(|item| {
                     item.severity
-                        == bitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Error
+                        == openbitfun_product_domains::external_sources::ExternalSourceDiagnosticSeverity::Error
                 }) {
                     ExternalSourceHealth::Partial
                 } else if source_diagnostics.is_empty() {

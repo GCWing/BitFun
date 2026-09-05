@@ -38,7 +38,7 @@ test('visible mobile controls use the shared mobile component entry', async () =
       assert.doesNotMatch(
         source,
         new RegExp(`<${tag}\\b`),
-        `${file} renders a raw <${tag}> instead of an @bitfun/ui/mobile component`,
+        `${file} renders a raw <${tag}> instead of an @openbitfun/ui/mobile component`,
       );
     }
     assert.doesNotMatch(

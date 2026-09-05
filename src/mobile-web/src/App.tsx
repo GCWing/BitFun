@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useCallback, useRef, useEffect } from 'react';
-import { MobileBanner, MobileButton, MobileScrim, MobileStatus } from '@bitfun/ui/mobile';
+import { MobileBanner, MobileButton, MobileScrim, MobileStatus } from '@openbitfun/ui/mobile';
 import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
@@ -334,7 +334,7 @@ const AppContent: React.FC = () => {
     setPrevPage(null);
     setNavDir(null);
     clearTimeout(timerRef.current);
-    localStorage.removeItem('bitfun.mobile.user_id');
+    localStorage.removeItem('openbitfun.mobile.user_id');
     useMobileStore.getState().resetConnectionState();
     pageStackRef.current = ['pairing'];
     setPage('pairing');

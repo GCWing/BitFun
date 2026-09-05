@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MobileButton, MobileIconButton } from '@bitfun/ui/mobile';
+import { MobileButton, MobileIconButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useTheme } from '../theme';
 

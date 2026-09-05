@@ -20,9 +20,9 @@ import {
 
 const root = process.cwd();
 const SOURCE_OWNER_ROOTS = [
-  'BitFun-Installer/src',
+  'OpenBitFun-Installer/src',
   'design-system/packages/design-tokens/src',
-  'design-system/packages/theme-bitfun/src',
+  'design-system/packages/theme-openbitfun/src',
   'src/apps/mobile/design-system/preview',
   'src/mobile-web/src',
   'src/web-ui',
@@ -30,7 +30,7 @@ const SOURCE_OWNER_ROOTS = [
 const NEAR_PAIR_DECISION_AUDIT_ROOTS = [
   { root: 'src/web-ui', args: ['--json', '--no-baseline', '--top', '0'] },
   { root: 'src/mobile-web/src', args: ['--root', 'src/mobile-web/src', '--json', '--no-baseline', '--top', '0'] },
-  { root: 'BitFun-Installer/src', args: ['--root', 'BitFun-Installer/src', '--json', '--no-baseline', '--top', '0'] },
+  { root: 'OpenBitFun-Installer/src', args: ['--root', 'OpenBitFun-Installer/src', '--json', '--no-baseline', '--top', '0'] },
 ];
 
 function contractOwnerHasKnownSource(owner) {
@@ -95,7 +95,7 @@ function formatNearPairDecisionKey(row) {
 }
 
 function createFixture(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-theme-audit-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-theme-audit-'));
   const sourceRoot = path.join(dir, 'src', 'web-ui', 'src');
   for (const [relativePath, content] of Object.entries(files)) {
     writeText(path.join(sourceRoot, relativePath), content);
@@ -147,21 +147,21 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
     'independent package CSS variable contracts must not overlap',
   );
   for (const contract of PACKAGE_CSS_VAR_DEFINITION_CONTRACTS) {
-    assert.match(contract.packageName, /^@bitfun\/[a-z0-9-]+$/);
+    assert.match(contract.packageName, /^@openbitfun\/[a-z0-9-]+$/);
     assert.ok(contract.owner.startsWith('design-system/packages/'));
     assert.ok(contract.variables.length > 0, `${contract.packageName} must expose variables`);
     assert.equal(
-      contract.variables.every(name => /^--bf-[a-z0-9-]+$/.test(name)),
+      contract.variables.every(name => /^--openbitfun-[a-z0-9-]+$/.test(name)),
       true,
-      `${contract.packageName} must expose canonical --bf-* variables only`,
+      `${contract.packageName} must expose canonical --openbitfun-* variables only`,
     );
   }
-  assert.ok(packageVariableNames.includes('--bf-space-1'));
-  assert.ok(packageVariableNames.includes('--bf-color-surface-canvas'));
+  assert.ok(packageVariableNames.includes('--openbitfun-space-1'));
+  assert.ok(packageVariableNames.includes('--openbitfun-color-surface-canvas'));
   assert.ok(CANONICAL_THEME_COLOR_TOKENS.length > 0);
   assert.equal(
     CANONICAL_THEME_COLOR_TOKENS.every(token => (
-      /^--bf-[a-z0-9-]+$/.test(token.cssVariable)
+      /^--openbitfun-[a-z0-9-]+$/.test(token.cssVariable)
       && token.name.startsWith('color.')
       && typeof token.value === 'string'
     )),
@@ -348,9 +348,9 @@ test('generated widget iframe has no compatibility alias module or contracts', (
 
 test('theme color audit emits scoped machine-readable reports', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-appearance-token-color-text-primary: #111111;',
+      '  --openbitfun-appearance-token-color-text-primary: #111111;',
       '  --static-only: #222222;',
       '}',
       '',
@@ -390,9 +390,9 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
 
 test('theme color audit reports static contract token external consumption', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-appearance-token-color-text-primary: #111111;',
+      '  --openbitfun-appearance-token-color-text-primary: #111111;',
       '  --private-helper-rgb: 17, 17, 17;',
       '  --derived-from-helper: rgb(var(--private-helper-rgb));',
       '  --payload-export: #333333;',
@@ -402,7 +402,7 @@ test('theme color audit reports static contract token external consumption', (t)
     ].join('\n'),
     'app/App.scss': [
       '.app {',
-      '  color: var(--bf-appearance-token-color-text-primary);',
+      '  color: var(--openbitfun-appearance-token-color-text-primary);',
       '  background: var(--derived-from-helper);',
       '}',
       '',
@@ -431,20 +431,20 @@ test('theme color audit reports static contract token external consumption', (t)
   assert.deepEqual(
     report.staticContractInternalOnlyVars.map(row => [row.key, row.definitionFiles, row.internalUsageCount]),
     [
-      ['--private-helper-rgb', ['design-system/packages/theme-bitfun/src/test.tokens.css'], 1],
-      ['--unused-export', ['design-system/packages/theme-bitfun/src/test.tokens.css'], 0],
+      ['--private-helper-rgb', ['design-system/packages/theme-openbitfun/src/test.tokens.css'], 1],
+      ['--unused-export', ['design-system/packages/theme-openbitfun/src/test.tokens.css'], 0],
     ],
   );
 });
 
 test('theme color audit resolves canonical variables from imported package CSS contracts', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'main.tsx': "import '@bitfun/theme-bitfun/default.css';\n",
+    'main.tsx': "import '@openbitfun/theme-openbitfun/default.css';\n",
     'app/App.scss': [
       '.app {',
-      '  color: var(--bf-color-content-primary);',
-      '  background: var(--bf-color-surface-canvas);',
-      '  padding: var(--bf-space-1);',
+      '  color: var(--openbitfun-color-content-primary);',
+      '  background: var(--openbitfun-color-surface-canvas);',
+      '  padding: var(--openbitfun-space-1);',
       '}',
       '',
     ].join('\n'),
@@ -456,8 +456,8 @@ test('theme color audit resolves canonical variables from imported package CSS c
 
   const report = JSON.parse(result.stdout);
   assert.deepEqual(report.packageCssContracts.importedPackages, [
-    '@bitfun/design-tokens',
-    '@bitfun/theme-bitfun',
+    '@openbitfun/design-tokens',
+    '@openbitfun/theme-openbitfun',
   ]);
   assert.equal(report.cssVarDefinitions.unresolvedUnique, 0);
   assert.equal(report.cssVarDefinitions.unresolvedRequiredUnique, 0);
@@ -465,8 +465,8 @@ test('theme color audit resolves canonical variables from imported package CSS c
 
 test('theme color audit does not require a widget payload on surfaces without that contract', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'main.tsx': "import '@bitfun/theme-bitfun/default.css';\n",
-    'app/App.scss': '.app { color: var(--bf-color-content-primary); }\n',
+    'main.tsx': "import '@openbitfun/theme-openbitfun/default.css';\n",
+    'app/App.scss': '.app { color: var(--openbitfun-color-content-primary); }\n',
   });
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -482,28 +482,28 @@ test('theme color audit does not require a widget payload on surfaces without th
 
 test('theme color audit counts only the generated widget variable contract', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-appearance-token-color-bg-primary: #121214;',
-      '  --bf-appearance-token-color-bg-secondary: #1c1c1f;',
-      '  --bf-font-family-mono: monospace;',
+      '  --openbitfun-appearance-token-color-bg-primary: #121214;',
+      '  --openbitfun-appearance-token-color-bg-secondary: #1c1c1f;',
+      '  --openbitfun-font-family-mono: monospace;',
       '}',
       '',
     ].join('\n'),
     'infrastructure/appearance/adapters/widgetAppearanceVariables.ts': [
       'const FALLBACK_VAR = {',
-      "  bgPrimary: '--bf-appearance-token-color-bg-primary',",
-      "  bgSecondary: '--bf-appearance-token-color-bg-secondary',",
+      "  bgPrimary: '--openbitfun-appearance-token-color-bg-primary',",
+      "  bgSecondary: '--openbitfun-appearance-token-color-bg-secondary',",
       '} as const;',
       '',
       'const WIDGET_APPEARANCE_STATIC_SHELL_VARS = {',
-      "  '--bf-appearance-token-btn-primary-bg': 'var(--bf-appearance-token-color-bg-primary)',",
+      "  '--openbitfun-appearance-token-btn-primary-bg': 'var(--openbitfun-appearance-token-color-bg-primary)',",
       '} as const;',
       '',
       'export const WIDGET_APPEARANCE_VARIABLE_NAMES = [',
-      "  '--bf-appearance-token-color-bg-primary',",
-      "  '--bf-appearance-token-color-bg-secondary',",
-      "  '--bf-font-family-mono',",
+      "  '--openbitfun-appearance-token-color-bg-primary',",
+      "  '--openbitfun-appearance-token-color-bg-secondary',",
+      "  '--openbitfun-font-family-mono',",
       '] as const;',
       '',
     ].join('\n'),
@@ -521,15 +521,15 @@ test('theme color audit counts only the generated widget variable contract', (t)
 
 test('theme color audit fails closed when the generated widget variable contract is not parseable', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-appearance-token-color-bg-primary: #121214;',
+      '  --openbitfun-appearance-token-color-bg-primary: #121214;',
       '}',
       '',
     ].join('\n'),
     'infrastructure/appearance/adapters/widgetAppearanceVariables.ts': [
       'const FALLBACK_VAR = {',
-      "  bgPrimary: '--bf-appearance-token-color-bg-primary',",
+      "  bgPrimary: '--openbitfun-appearance-token-color-bg-primary',",
       '} as const;',
       '',
       'export const WIDGET_APPEARANCE_VARIABLE_NAMES = Object.freeze([',
@@ -549,7 +549,7 @@ test('theme color audit reports fallback tokens that lack a boundary contract', 
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
       '.app {',
-      '  color: var(--runtime-accent, var(--bf-appearance-token-color-accent-500));',
+      '  color: var(--runtime-accent, var(--openbitfun-appearance-token-color-accent-500));',
       '}',
       '',
     ].join('\n'),
@@ -566,13 +566,13 @@ test('theme color audit reports fallback tokens that lack a boundary contract', 
 
 test('theme color audit reports specialized color domains separately from app UI', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': ':root { --bf-appearance-token-color-text-primary: #111111; }\n',
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': ':root { --openbitfun-appearance-token-color-text-primary: #111111; }\n',
     'infrastructure/appearance/builtins/dark.ts': "export const bg = '#222222';\n",
     'tools/mermaid-editor/theme/mermaidTheme.ts': "export const node = '#333333';\n",
     'tools/editor/editorColor.ts': "export const editorBg = '#444444';\n",
     'shared/prism/prismTheme.ts': "export const prism = { keyword: '#555555' };\n",
     'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
-    'tools/generative-widget/appearancePayload.ts': "export const fallback = { '--bf-appearance-token-color-text-primary': '#666666' };\n",
+    'tools/generative-widget/appearancePayload.ts': "export const fallback = { '--openbitfun-appearance-token-color-text-primary': '#666666' };\n",
     'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
     'infrastructure/appearance/appearanceDomainTokens.ts': "export const accents = { tool: '#dddddd' };\n",
     'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
@@ -698,14 +698,14 @@ test('theme color audit does not exempt executable styles merely because their p
 
 test('theme color audit can resolve peer-owned public package variables explicitly', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'components/Button.css': '.button { color: var(--bf-color-content-primary); padding: var(--bf-space-2); }\n',
+    'components/Button.css': '.button { color: var(--openbitfun-color-content-primary); padding: var(--openbitfun-space-2); }\n',
   });
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   const result = runAudit([
     '--root', sourceRoot,
-    '--package-contract', '@bitfun/design-tokens',
-    '--package-contract', '@bitfun/theme-bitfun',
+    '--package-contract', '@openbitfun/design-tokens',
+    '--package-contract', '@openbitfun/theme-openbitfun',
     '--json',
     '--no-baseline',
   ]);
@@ -715,7 +715,7 @@ test('theme color audit can resolve peer-owned public package variables explicit
   assert.equal(report.cssVarDefinitions.unresolvedUnique, 0);
   assert.deepEqual(
     report.packageCssContracts.importedPackages,
-    ['@bitfun/design-tokens', '@bitfun/theme-bitfun'],
+    ['@openbitfun/design-tokens', '@openbitfun/theme-openbitfun'],
   );
 });
 
@@ -801,10 +801,10 @@ test('theme color audit counts full CSS var governance debt before row truncatio
 
 test('theme color audit reports app literals that duplicate token values', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-color-accent-default: #3b82f6;',
-      '  --bf-color-status-warning-content: #f59e0b;',
+      '  --openbitfun-color-accent-default: #3b82f6;',
+      '  --openbitfun-color-status-warning-content: #f59e0b;',
       '}',
       '',
     ].join('\n'),
@@ -828,7 +828,7 @@ test('theme color audit reports app literals that duplicate token values', (t) =
   assert.equal(report.tokenAliasLiterals.uniqueColors, 2);
   assert.deepEqual(
     report.tokenAliasLiterals.top.map(row => row.aliases),
-    [['--bf-color-accent-default'], ['--bf-color-status-warning-content']],
+    [['--openbitfun-color-accent-default'], ['--openbitfun-color-status-warning-content']],
   );
   assert.equal(report.colorScopes.exception.occurrences, 1);
 });
@@ -907,7 +907,7 @@ test('theme color audit reports near color pairs inside specialized color domain
 
 test('theme color audit excludes test files from production color budgets', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': ':root { --bf-color-status-danger-content: #ef4444; }\n',
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': ':root { --openbitfun-color-status-danger-content: #ef4444; }\n',
     'app/App.scss': '.app { color: #ef4444; }\n',
     'app/App.test.tsx': "expect(button).toHaveStyle({ color: '#ef4444' });\n",
     'app/__tests__/Fixture.tsx': "export const visualLock = '#ef4444';\n",
@@ -956,7 +956,7 @@ test('theme color audit fails when fallback tokens lack a boundary contract', (t
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
       '.app {',
-      '  color: var(--runtime-accent, var(--bf-appearance-token-color-accent-500));',
+      '  color: var(--runtime-accent, var(--openbitfun-appearance-token-color-accent-500));',
       '}',
       '',
     ].join('\n'),
@@ -1010,7 +1010,7 @@ test('theme color audit accepts registered dynamic CSS var families', (t) => {
   const { dir, sourceRoot } = createFixture({
     'infrastructure/appearance/adapters/ThemeTokenAppearanceAdapter.ts': [
       "for (const [key, value] of Object.entries(fontSizeTokens)) {",
-      "  document.documentElement.style.setProperty(`--bf-font-size-${key}`, value);",
+      "  document.documentElement.style.setProperty(`--openbitfun-font-size-${key}`, value);",
       '}',
       '',
     ].join('\n'),
@@ -1030,21 +1030,21 @@ test('theme color audit accepts registered dynamic CSS var families', (t) => {
 
 test('theme color audit requires exact exports for dynamic-family CSS var usages', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'design-system/packages/theme-bitfun/src/test.tokens.css': [
+    'design-system/packages/theme-openbitfun/src/test.tokens.css': [
       ':root {',
-      '  --bf-appearance-token-color-purple-200: rgba(139, 92, 246, 0.15);',
+      '  --openbitfun-appearance-token-color-purple-200: rgba(139, 92, 246, 0.15);',
       '}',
       '',
     ].join('\n'),
     'infrastructure/appearance/adapters/ThemeTokenAppearanceAdapter.ts': [
       "for (const [key, value] of Object.entries(theme.colors.purple)) {",
-      "  document.documentElement.style.setProperty(`--bf-appearance-token-color-purple-${key}`, value);",
+      "  document.documentElement.style.setProperty(`--openbitfun-appearance-token-color-purple-${key}`, value);",
       '}',
       '',
     ].join('\n'),
     'app/components/NavPanel/Tabs.scss': [
       '.tabs {',
-      '  border-color: var(--bf-appearance-token-color-purple-300);',
+      '  border-color: var(--openbitfun-appearance-token-color-purple-300);',
       '}',
       '',
     ].join('\n'),
@@ -1064,7 +1064,7 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
   assert.equal(report.cssVarDefinitions.dynamicFamilyUnexportedUnique, 1);
   assert.deepEqual(
     report.dynamicFamilyUnexportedVars.map(row => [row.key, row.prefix]),
-    [['--bf-appearance-token-color-purple-300', '--bf-appearance-token-color-purple-']],
+    [['--openbitfun-appearance-token-color-purple-300', '--openbitfun-appearance-token-color-purple-']],
   );
 
   const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
@@ -1073,7 +1073,7 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
     `${blocked.stdout}\n${blocked.stderr}`,
     /cssVarDefinitions\.dynamicFamilyUnexportedUnique has 1 candidate\(s\), baseline is 0/,
   );
-  assert.match(`${blocked.stdout}\n${blocked.stderr}`, /--bf-appearance-token-color-purple-300/);
+  assert.match(`${blocked.stdout}\n${blocked.stderr}`, /--openbitfun-appearance-token-color-purple-300/);
 });
 
 test('theme color audit requires non-contract cross-file vars to be explicitly allowlisted', (t) => {
@@ -1150,7 +1150,7 @@ test('theme color audit fails stale non-contract var allowlist entries', (t) => 
 
 test('theme color audit excludes only explicitly named root-relative paths', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'app/App.scss': '.app { color: var(--bf-color-content-primary); }\n',
+    'app/App.scss': '.app { color: var(--openbitfun-color-content-primary); }\n',
     'generated/palette.css': '.generated { color: #ff00ff; }\n',
   });
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -1158,7 +1158,7 @@ test('theme color audit excludes only explicitly named root-relative paths', (t)
   const result = runAudit([
     '--root', sourceRoot,
     '--exclude', 'generated',
-    '--package-contract', '@bitfun/theme-bitfun',
+    '--package-contract', '@openbitfun/theme-openbitfun',
     '--json',
     '--no-baseline',
   ]);

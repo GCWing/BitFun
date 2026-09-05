@@ -272,10 +272,13 @@ mod tests {
     fn initialized_repository() -> tempfile::TempDir {
         let directory = tempfile::tempdir().expect("temporary repository should be created");
         git(directory.path(), &["init"]);
-        git(directory.path(), &["config", "user.name", "BitFun Tests"]);
         git(
             directory.path(),
-            &["config", "user.email", "bitfun@example.com"],
+            &["config", "user.name", "OpenBitFun Tests"],
+        );
+        git(
+            directory.path(),
+            &["config", "user.email", "openbitfun@example.com"],
         );
         std::fs::write(directory.path().join("tracked.txt"), "initial\n")
             .expect("fixture should be written");

@@ -11,5 +11,5 @@ export interface MobileCardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const MobileCard = forwardRef<HTMLDivElement, MobileCardProps>(function MobileCard({ appearance = "surface", className, padding = "md", ...props }, ref) {
-  return <div {...props} className={classNames(styles.root, className)} data-appearance={appearance} data-bf-component="mobile-card" data-padding={padding} ref={ref} />;
+  return <div {...props} className={classNames(styles.root, className)} data-appearance={appearance} data-openbitfun-component="mobile-card" data-padding={padding} ref={ref} />;
 });

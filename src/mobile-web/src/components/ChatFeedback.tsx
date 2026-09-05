@@ -1,5 +1,5 @@
 import React from 'react';
-import { MobileBanner } from '@bitfun/ui/mobile';
+import { MobileBanner } from '@openbitfun/ui/mobile';
 
 interface ChatFeedbackProps {
   actionMessage: string | null;

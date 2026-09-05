@@ -1,19 +1,19 @@
 // The approval band normally sits in the composer stack, directly above the
 // capsule. Embedded child-session panels reuse the same compact surface when
 // no child composer exists.
-.bitfun-chat-input-approval {
+.openbitfun-chat-input-approval {
   display: flex;
   flex-direction: column;
   gap: 5px;
   box-sizing: border-box;
   margin-bottom: 6px;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 52%, var(--bf-color-border-default));
+  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 52%, var(--openbitfun-color-border-default));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bf-color-surface-raised) 94%, var(--bf-color-status-warning-content));
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-control-font-size);
-  animation: bitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 94%, var(--openbitfun-color-status-warning-content));
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  animation: openbitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &__request {
     display: flex;
@@ -24,17 +24,17 @@
 
   &__icon {
     flex: none;
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   &__action {
     flex: none;
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   &__separator {
     flex: none;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   // The resource is the part worth the remaining width: which file, which
@@ -50,8 +50,8 @@
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -61,20 +61,20 @@
     margin-left: auto;
     padding: 1px 6px;
     border-radius: 8px;
-    color: var(--bf-color-content-on-dark);
-    background: var(--bf-color-status-warning-content);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
+    color: var(--openbitfun-color-content-on-dark);
+    background: var(--openbitfun-color-status-warning-content);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
     cursor: default;
   }
 
   &__note {
     margin: 0;
-    color: var(--bf-color-status-warning-content);
-    font-size: var(--bf-type-flow-support-font-size);
+    color: var(--openbitfun-color-status-warning-content);
+    font-size: var(--openbitfun-type-flow-support-font-size);
 
     &--error {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -94,9 +94,9 @@
     flex: none;
     align-items: center;
     padding: 2px;
-    border: 1px solid var(--bf-color-border-default);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 7px;
-    background: var(--bf-color-surface-canvas);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   &__scope-option {
@@ -104,18 +104,18 @@
     padding: 1px 7px;
     border: none;
     border-radius: 5px;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     background: transparent;
-    font-size: var(--bf-type-flow-support-font-size);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     cursor: pointer;
 
     &--active {
-      color: var(--bf-color-content-primary);
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 18%, transparent);
+      color: var(--openbitfun-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-color-status-warning-content);
+      outline: 2px solid var(--openbitfun-color-status-warning-content);
       outline-offset: 1px;
     }
   }
@@ -125,14 +125,14 @@
 // A narrow composer drops secondary identity information while the shared
 // buttons wrap as complete, readable actions.
 @media (max-width: 560px) {
-  .bitfun-chat-input-approval {
+  .openbitfun-chat-input-approval {
     &__owner {
       display: none;
     }
   }
 }
 
-@keyframes bitfun-chat-input-approval-in {
+@keyframes openbitfun-chat-input-approval-in {
   from {
     opacity: 0;
     transform: translateY(3px);
@@ -144,7 +144,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input-approval {
+  .openbitfun-chat-input-approval {
     animation: none;
   }
 }

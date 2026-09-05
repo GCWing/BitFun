@@ -4,11 +4,11 @@ use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
-use bitfun_agent_stream::ToolCallCompletion;
-use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use chrono::{DateTime, Utc};
 use futures::Stream;
 use log::{debug, error, warn};
+use openbitfun_agent_stream::ToolCallCompletion;
+use openbitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
     StatusCode,
@@ -570,8 +570,8 @@ mod tests {
     use axum::response::IntoResponse;
     use axum::routing::post;
     use axum::{Json, Router};
-    use bitfun_core_types::errors::ErrorCategory;
     use futures::StreamExt;
+    use openbitfun_core_types::errors::ErrorCategory;
     use reqwest::header::HeaderValue;
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},

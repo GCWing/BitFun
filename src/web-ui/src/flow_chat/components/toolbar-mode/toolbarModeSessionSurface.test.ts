@@ -169,7 +169,7 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(source).toContain('renderMiniAppIcon');
     expect(source).not.toContain('getMiniAppIconGradient');
     expect(welcomeSource).toContain('computeFlowChatInputStackFooterPx(inputHeight)');
-    expect(welcomeSource).toContain('bitfun-fmc__miniapp-welcome-content');
+    expect(welcomeSource).toContain('openbitfun-fmc__miniapp-welcome-content');
     expect(welcomeSource).toContain('WELCOME_CONTENT_BLOCK_PADDING_PX + inputClearance');
     expect(styles).toContain('overflow-y: auto;');
     // The ordinary project workspace remains valid only for the host session.

@@ -3,13 +3,13 @@
  */
 
 .readonly-code-block {
-  --readonly-code-selection-bg: color-mix(in srgb, var(--bf-color-accent-default) 30%, transparent);
+  --readonly-code-selection-bg: color-mix(in srgb, var(--openbitfun-color-accent-default) 30%, transparent);
 
   position: relative;
   width: 100%;
   overflow: hidden;
   border-radius: 6px;
-  background: var(--bf-color-surface-panel);
+  background: var(--openbitfun-color-surface-panel);
   
   // Monaco editor container
   .monaco-editor-core {
@@ -70,7 +70,7 @@
 
 // Bordered mode
 .readonly-code-block--bordered {
-  border: 1px solid var(--bf-color-border-default);
+  border: 1px solid var(--openbitfun-color-border-default);
 }
 
 // Inline mode (for inline code)

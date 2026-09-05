@@ -1,9 +1,9 @@
 use anyhow::{anyhow, bail, Context, Result};
-use bitfun_acp::client::{
+use clap::ValueEnum;
+use openbitfun_acp::client::{
     AcpClientConfig, AcpClientInfo, AcpClientPermissionMode, AcpClientRequirementProbe,
 };
-use bitfun_acp::AcpClientService;
-use clap::ValueEnum;
+use openbitfun_acp::AcpClientService;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -85,9 +85,9 @@ impl CliAcpPermissionMode {
 pub(crate) fn print_status(command: &str) -> Result<()> {
     let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir =
-        CliConfig::config_dir().context("Failed to resolve BitFun config directory")?;
+        CliConfig::config_dir().context("Failed to resolve OpenBitFun config directory")?;
 
-    println!("BitFun ACP");
+    println!("OpenBitFun ACP");
     println!("Status: available");
     println!("Protocol: Agent Client Protocol v1 over stdio");
     println!("Server command: {}", shell_command(command));
@@ -115,21 +115,21 @@ pub(crate) async fn print_doctor(command: &str) -> Result<bool> {
     ));
 
     checks.push(check_result(
-        "BitFun config directory",
+        "OpenBitFun config directory",
         CliConfig::config_dir()
             .map(|path| path.display().to_string())
             .map_err(|error| error.to_string()),
     ));
 
-    let core_config = bitfun_core::service::config::initialize_global_config()
+    let core_config = openbitfun_core::service::config::initialize_global_config()
         .await
         .map(|_| "initialized".to_string())
         .map_err(|error| error.to_string());
     checks.push(check_result("Core config service", core_config));
 
-    let ai_check = match bitfun_core::service::config::get_global_config_service().await {
+    let ai_check = match openbitfun_core::service::config::get_global_config_service().await {
         Ok(service) => {
-            let ai_config: bitfun_core::service::config::types::AIConfig =
+            let ai_config: openbitfun_core::service::config::types::AIConfig =
                 service.get_config(Some("ai")).await.unwrap_or_default();
             let enabled_models = ai_config
                 .models
@@ -155,7 +155,7 @@ pub(crate) async fn print_doctor(command: &str) -> Result<bool> {
     };
     checks.push(ai_check);
 
-    println!("BitFun ACP doctor");
+    println!("OpenBitFun ACP doctor");
     println!();
 
     let mut has_error = false;
@@ -204,8 +204,8 @@ pub(crate) fn acp_help_text(command: &str) -> String {
         "\
 Agent Client Protocol (ACP)\n\
 ─────────────────────────────────\n\
-BitFun exposes its agent runtime as an ACP server over stdio.\n\
-BitFun CLI can also launch external ACP agents such as opencode, Claude Code, and Codex.\n\
+OpenBitFun exposes its agent runtime as an ACP server over stdio.\n\
+OpenBitFun CLI can also launch external ACP agents such as opencode, Claude Code, and Codex.\n\
 \n\
 Use this from an ACP-compatible editor or host:\n\
   {command} acp\n\
@@ -222,7 +222,7 @@ Human-facing helper commands:\n\
 Notes:\n\
 - The plain `acp` command reserves stdout for JSON-RPC protocol traffic.\n\
 - Logs for the ACP server are written to stderr.\n\
-- Run the command from the project directory you want BitFun to operate on.",
+- Run the command from the project directory you want OpenBitFun to operate on.",
         command = command
     )
 }
@@ -264,8 +264,8 @@ pub(crate) async fn list_external_clients() -> Result<()> {
     }
 
     println!();
-    println!("Enable a built-in client with `bitfun acp clients enable opencode`.");
-    println!("Run a prompt with `bitfun acp run opencode \"your task\"`.");
+    println!("Enable a built-in client with `openbitfun acp clients enable opencode`.");
+    println!("Run a prompt with `openbitfun acp run opencode \"your task\"`.");
     Ok(())
 }
 
@@ -422,13 +422,13 @@ pub(crate) async fn run_external_client(
 }
 
 async fn create_client_service() -> Result<Arc<AcpClientService>> {
-    bitfun_core::service::config::initialize_global_config()
+    openbitfun_core::service::config::initialize_global_config()
         .await
         .map_err(|error| anyhow!(error.to_string()))?;
-    let config_service = bitfun_core::service::config::get_global_config_service()
+    let config_service = openbitfun_core::service::config::get_global_config_service()
         .await
         .map_err(|error| anyhow!(error.to_string()))?;
-    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+    let path_manager = openbitfun_core::infrastructure::try_get_path_manager_arc()
         .map_err(|error| anyhow!(error.to_string()))?;
     let service = AcpClientService::new(config_service, path_manager)
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -550,7 +550,7 @@ fn print_requirement_probe(probe: &AcpClientRequirementProbe) {
     }
 }
 
-fn print_requirement_item(label: &str, item: &bitfun_acp::client::AcpRequirementProbeItem) {
+fn print_requirement_item(label: &str, item: &openbitfun_acp::client::AcpRequirementProbeItem) {
     let installed = if item.installed {
         "installed"
     } else {
@@ -591,7 +591,7 @@ fn print_zed_config(command: &str) -> Result<()> {
     println!();
     let snippet = json!({
         "agent_servers": {
-            "BitFun": {
+            "OpenBitFun": {
                 "command": command,
                 "args": ["acp"]
             }
@@ -616,7 +616,7 @@ fn print_generic_config(command: &str) -> Result<()> {
     println!();
     println!("JSON shape:");
     let snippet = json!({
-        "name": "BitFun",
+        "name": "OpenBitFun",
         "transport": "stdio",
         "command": command,
         "args": ["acp"]

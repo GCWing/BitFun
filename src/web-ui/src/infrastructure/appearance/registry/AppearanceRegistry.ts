@@ -12,8 +12,8 @@ import {
 
 const SURFACE_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const CONTRACT_ID_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
-const FACET_ATTRIBUTE_PATTERN = /^data-bf-[a-z][a-z0-9-]*$/;
-const STATE_SUFFIX_PATTERN = /^(?::(?:hover|active|focus-visible|focus-within|disabled)(?::not\(:disabled\))?|:has\(input:checked\)|\[data-bf-state~="[a-z][a-zA-Z0-9-]*"\])$/;
+const FACET_ATTRIBUTE_PATTERN = /^data-openbitfun-[a-z][a-z0-9-]*$/;
+const STATE_SUFFIX_PATTERN = /^(?::(?:hover|active|focus-visible|focus-within|disabled)(?::not\(:disabled\))?|:has\(input:checked\)|\[data-openbitfun-state~="[a-z][a-zA-Z0-9-]*"\])$/;
 
 export class AppearanceRegistry {
   private readonly components = new Map<string, AppearanceSurfaceDescriptor>();

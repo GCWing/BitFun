@@ -370,7 +370,7 @@ pub(crate) async fn begin_login(
         method: super::SubscriptionLoginMethod::Device,
         authorization_url,
         user_code: Some(user_code),
-        instructions: "Open the verification link, confirm the code, then return to BitFun."
+        instructions: "Open the verification link, confirm the code, then return to OpenBitFun."
             .to_string(),
         runner: Box::pin(runner),
     })

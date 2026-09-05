@@ -22,7 +22,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
   Tooltip: ({
     children,
     content,
@@ -64,7 +65,7 @@ describe('FlowChatTurnRail', () => {
   const emphasizedBars = () => {
     const selectors = Array.from(style.sheet!.cssRules)
       .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule)
-      .filter(rule => rule.style.getPropertyValue('background') === 'var(--bf-color-content-primary)')
+      .filter(rule => rule.style.getPropertyValue('background') === 'var(--openbitfun-color-content-primary)')
       .map(rule => rule.selectorText);
     expect(selectors.length).toBeGreaterThan(0);
     // Both current and hover may use primary ink, but their compiled selectors
@@ -253,6 +254,39 @@ describe('FlowChatTurnRail', () => {
     expect(tooltip?.textContent).toContain('Turn 1');
     expect(tooltip?.textContent).toContain('First user message');
     expect(tooltip?.querySelector('.flowchat-turn-rail__tooltip-time')).toBeNull();
+  });
+
+  it('renders catalog-only capsule previews without the raw prompt markers', () => {
+    act(() => {
+      root.render(
+        <FlowChatTurnRail
+          turns={[{
+            ...turns[0],
+            content: '[$pdf] #file: src/auth.ts',
+            capsulePreview: {
+              segments: [
+                { kind: 'inlineToken', tokenType: 'skill', label: 'pdf' },
+                { kind: 'text', text: ' ' },
+                { kind: 'context', contextType: 'file', label: 'auth.ts', title: 'src/auth.ts' },
+              ],
+            },
+          }]}
+          currentTurnId="turn-1"
+          visibleTurnIds={['turn-1']}
+          onNavigate={vi.fn()}
+        />,
+      );
+    });
+
+    const tooltip = container.querySelector('[data-testid="tooltip-content"]');
+    expect(tooltip?.textContent).toContain('pdf');
+    expect(tooltip?.textContent).toContain('auth.ts');
+    expect(tooltip?.textContent).not.toContain('[$pdf]');
+    expect(tooltip?.textContent).not.toContain('#file:');
+    expect(tooltip?.querySelectorAll('.user-message-item__reference')).toHaveLength(2);
+    expect(tooltip?.querySelector('[data-testid="icon-extension"]')).not.toBeNull();
+    expect(tooltip?.querySelector('[data-testid="icon-extension"]')?.closest('.message-reference-capsule')
+      ?.textContent).toContain('pdf');
   });
 
   it('delegates clicks to the shared turn navigation callback', () => {

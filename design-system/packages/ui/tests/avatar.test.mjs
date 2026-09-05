@@ -11,10 +11,10 @@ test("Avatar renders text fallback with a stable anatomy contract", () => {
     size: "sm",
   }));
 
-  assert.match(markup, /data-bf-component="avatar"/);
-  assert.match(markup, /data-bf-shape="square"/);
+  assert.match(markup, /data-openbitfun-component="avatar"/);
+  assert.match(markup, /data-openbitfun-shape="square"/);
   assert.match(markup, /data-size="sm"/);
-  assert.match(markup, /data-bf-part="text"/);
+  assert.match(markup, /data-openbitfun-part="text"/);
 });
 
 test("AvatarGroup reports overflow", () => {
@@ -25,6 +25,6 @@ test("AvatarGroup reports overflow", () => {
     createElement(Avatar, null, "B"),
   ));
 
-  assert.match(markup, /data-bf-component="avatar-group"/);
+  assert.match(markup, /data-openbitfun-component="avatar-group"/);
   assert.match(markup, /\+1/);
 });

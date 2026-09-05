@@ -21,7 +21,7 @@ import {
   DialogBody,
   DialogClose,
   DialogHeader,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -411,24 +411,24 @@ const TodosScene: React.FC = () => {
 
   return (
     <ScrollArea
-      className="bf-todos"
-      data-bf-scene="todos"
-      data-bf-part="root"
+      className="openbitfun-todos"
+      data-openbitfun-scene="todos"
+      data-openbitfun-part="root"
       data-testid="todos-scene"
     >
-      <header className="bf-todos__head" data-bf-scene="todos" data-bf-part="header">
-        <div className="bf-todos__head-main">
-          <span className="bf-todos__head-icon" aria-hidden="true"><CalendarClock size={24} /></span>
-          <div className="bf-todos__head-text">
-            <h2 className="bf-todos__title">{t('title')}</h2>
-            <p className="bf-todos__subtitle">{t('header.subtitle')}</p>
+      <header className="openbitfun-todos__head" data-openbitfun-scene="todos" data-openbitfun-part="header">
+        <div className="openbitfun-todos__head-main">
+          <span className="openbitfun-todos__head-icon" aria-hidden="true"><CalendarClock size={24} /></span>
+          <div className="openbitfun-todos__head-text">
+            <h2 className="openbitfun-todos__title">{t('title')}</h2>
+            <p className="openbitfun-todos__subtitle">{t('header.subtitle')}</p>
           </div>
         </div>
-        <div className="bf-todos__head-actions" data-bf-scene="todos" data-bf-part="headerActions">
+        <div className="openbitfun-todos__head-actions" data-openbitfun-scene="todos" data-openbitfun-part="headerActions">
           <div
-            className="bf-todos__month-navigation"
-            data-bf-scene="todos"
-            data-bf-part="monthNavigation"
+            className="openbitfun-todos__month-navigation"
+            data-openbitfun-scene="todos"
+            data-openbitfun-part="monthNavigation"
           >
             <Tooltip content={t('calendar.previousMonth')}>
               <IconButton
@@ -440,7 +440,7 @@ const TodosScene: React.FC = () => {
                 data-testid="todos-calendar-prev"
               />
             </Tooltip>
-            <span className="bf-todos__month-label" data-testid="todos-calendar-month">
+            <span className="openbitfun-todos__month-label" data-testid="todos-calendar-month">
               <CalendarDays size={14} aria-hidden="true" />
               <span>{monthLabel}</span>
             </span>
@@ -458,7 +458,7 @@ const TodosScene: React.FC = () => {
           <Button
             size="sm"
             variant="outline"
-            className="bf-todos__today-button"
+            className="openbitfun-todos__today-button"
             onClick={showCurrentMonth}
           >
             {t('calendar.today')}
@@ -466,7 +466,7 @@ const TodosScene: React.FC = () => {
           <Button
             size="sm"
             variant="fill"
-            className="bf-todos__new-button"
+            className="openbitfun-todos__new-button"
             leadingIcon={<Icon name="plus" size="lg" />}
             onClick={handleCreateNew}
             disabled={workspaceOptions.length === 0}
@@ -483,13 +483,13 @@ const TodosScene: React.FC = () => {
         size="2xl"
         closeOnPointerOutside={!renderedEditor.saving}
         aria-label={renderedEditor.editingJob ? t('editor.editTitle') : t('editor.createTitle')}
-        className="bf-todos-editor-dialog"
+        className="openbitfun-todos-editor-dialog"
         data-testid="todos-editor-modal"
       >
-        <DialogHeader className="bf-todos-editor-dialog__header">
+        <DialogHeader className="openbitfun-todos-editor-dialog__header">
           {!renderedEditor.saving && <DialogClose />}
         </DialogHeader>
-        <DialogBody className="bf-todos-editor-dialog__body" inset="none">
+        <DialogBody className="openbitfun-todos-editor-dialog__body" inset="none">
           <TodoEditor
             draft={renderedEditor.draft}
             onDraftChange={setDraft}
@@ -511,57 +511,57 @@ const TodosScene: React.FC = () => {
         </DialogBody>
       </Dialog>
 
-      <div className="bf-todos__panes" data-bf-scene="todos" data-bf-part="panes">
+      <div className="openbitfun-todos__panes" data-openbitfun-scene="todos" data-openbitfun-part="panes">
         {/* ── Tier 1: due within 24 hours ───────────────────── */}
         <ScrollArea
-          className="bf-todos__pane bf-todos__pane--list"
+          className="openbitfun-todos__pane openbitfun-todos__pane--list"
           aria-label={t('list.title')}
-          data-bf-scene="todos"
-          data-bf-part="listPane"
+          data-openbitfun-scene="todos"
+          data-openbitfun-part="listPane"
           data-testid="todos-list-pane"
           role="region"
         >
           <section
-            className="bf-todos__overview"
+            className="openbitfun-todos__overview"
             aria-label={t('overview.title')}
-            data-bf-scene="todos"
-            data-bf-part="overview"
+            data-openbitfun-scene="todos"
+            data-openbitfun-part="overview"
             data-testid="todos-overview"
           >
-            <header className="bf-todos__overview-head">
-              <h3 className="bf-todos__overview-title">{t('overview.title')}</h3>
+            <header className="openbitfun-todos__overview-head">
+              <h3 className="openbitfun-todos__overview-title">{t('overview.title')}</h3>
               <CalendarDays size={14} aria-hidden="true" />
             </header>
-            <div className="bf-todos__overview-metrics">
-              <div className="bf-todos__overview-metric">
-                <p className="bf-todos__overview-value">
+            <div className="openbitfun-todos__overview-metrics">
+              <div className="openbitfun-todos__overview-metric">
+                <p className="openbitfun-todos__overview-value">
                   <strong>{visibleTodos.length}</strong>
                   <span>{t('overview.unit')}</span>
                 </p>
-                <p className="bf-todos__overview-label">{t('overview.total')}</p>
+                <p className="openbitfun-todos__overview-label">{t('overview.total')}</p>
               </div>
-              <div className="bf-todos__overview-metric">
-                <p className="bf-todos__overview-value">
+              <div className="openbitfun-todos__overview-metric">
+                <p className="openbitfun-todos__overview-value">
                   <strong>{dueSoonTodoCount}</strong>
                   <span>{t('overview.unit')}</span>
                 </p>
-                <p className="bf-todos__overview-label">{t('overview.dueSoon')}</p>
+                <p className="openbitfun-todos__overview-label">{t('overview.dueSoon')}</p>
               </div>
             </div>
           </section>
 
-          <header className="bf-todos__pane-head">
-            <h3 className="bf-todos__list-title">
+          <header className="openbitfun-todos__pane-head">
+            <h3 className="openbitfun-todos__list-title">
               {t('list.countTitle', { total: visibleTodos.length })}
             </h3>
           </header>
 
           {visibleTodos.length === 0 ? (
-            <p className="bf-todos__empty" data-bf-scene="todos" data-bf-part="empty">
+            <p className="openbitfun-todos__empty" data-openbitfun-scene="todos" data-openbitfun-part="empty">
               {t('list.empty')}
             </p>
           ) : (
-            <div className="bf-todos__rows" data-bf-scene="todos" data-bf-part="rows">
+            <div className="openbitfun-todos__rows" data-openbitfun-scene="todos" data-openbitfun-part="rows">
               {visibleTodos.map((occurrence) => (
                 <TodoItemRow
                   key={occurrence.job.id}
@@ -582,11 +582,11 @@ const TodosScene: React.FC = () => {
           )}
 
           {buckets.inactive.length > 0 ? (
-            <div className="bf-todos__inactive" data-bf-scene="todos" data-bf-part="inactive">
-              <h4 className="bf-todos__inactive-title">
+            <div className="openbitfun-todos__inactive" data-openbitfun-scene="todos" data-openbitfun-part="inactive">
+              <h4 className="openbitfun-todos__inactive-title">
                 {t('inactive.title', { total: buckets.inactive.length })}
               </h4>
-              <div className="bf-todos__rows">
+              <div className="openbitfun-todos__rows">
                 {buckets.inactive.map((entry) => (
                   <TodoItemRow
                     key={entry.job.id}
@@ -608,9 +608,9 @@ const TodosScene: React.FC = () => {
 
         {/* ── Tier 2: more than 24 hours out ────────────────── */}
         <div
-          className="bf-todos__pane bf-todos__pane--calendar"
-          data-bf-scene="todos"
-          data-bf-part="calendarPane"
+          className="openbitfun-todos__pane openbitfun-todos__pane--calendar"
+          data-openbitfun-scene="todos"
+          data-openbitfun-part="calendarPane"
           data-has-selection={selectedDayKey ? 'true' : 'false'}
           data-testid="todos-calendar-pane"
         >
@@ -628,20 +628,20 @@ const TodosScene: React.FC = () => {
             minimumRetainMs={160}
           >
             <ScrollArea
-              className="bf-todos__day-detail-presence"
+              className="openbitfun-todos__day-detail-presence"
               data-open={selectedDayKey ? 'true' : 'false'}
               aria-hidden={!selectedDayKey}
               {...(!selectedDayKey ? { inert: '' } : {})}
             >
               <section
-                className="bf-todos__day-detail"
+                className="openbitfun-todos__day-detail"
                 aria-label={t('calendar.dayDetailTitle')}
-                data-bf-scene="todos"
-                data-bf-part="dayDetail"
+                data-openbitfun-scene="todos"
+                data-openbitfun-part="dayDetail"
                 data-testid="todos-day-detail"
               >
-                <header className="bf-todos__day-detail-head">
-                  <h4 className="bf-todos__day-detail-title">
+                <header className="openbitfun-todos__day-detail-head">
+                  <h4 className="openbitfun-todos__day-detail-title">
                     {renderedSelectedDayOccurrences[0]
                       ? formatDateTime(renderedSelectedDayOccurrences[0].atMs, formatDate)
                       : t('calendar.dayDetailTitle')}
@@ -656,11 +656,11 @@ const TodosScene: React.FC = () => {
                   </Button>
                 </header>
                 {renderedSelectedDayOccurrences.length === 0 ? (
-                  <p className="bf-todos__empty" data-testid="todos-day-empty">
+                  <p className="openbitfun-todos__empty" data-testid="todos-day-empty">
                     {t('calendar.dayEmpty')}
                   </p>
                 ) : (
-                  <div className="bf-todos__rows">
+                  <div className="openbitfun-todos__rows">
                     {renderedSelectedDayOccurrences.map((occurrence) => (
                       <TodoItemRow
                         key={`${occurrence.job.id}-${occurrence.atMs}`}

@@ -1065,8 +1065,8 @@ fn lineage_sibling_session_id(
 
 #[cfg(test)]
 mod session_lineage_tests {
-    use bitfun_events::AgenticEvent;
-    use bitfun_runtime_ports::{
+    use openbitfun_events::AgenticEvent;
+    use openbitfun_runtime_ports::{
         AgentSessionLifecycleStatus, AgentSessionLineageEntry, AgentSessionLineageInspection,
         AgentSessionLineageSnapshot, SessionTranscript, TranscriptContent, TranscriptMessage,
     };

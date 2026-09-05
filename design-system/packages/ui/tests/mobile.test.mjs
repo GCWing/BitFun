@@ -49,13 +49,13 @@ test("mobile entry exposes touch controls without product state", () => {
     trailing: createElement("svg"),
   }));
 
-  assert.match(iconButton, /data-bf-component="mobile-icon-button"/);
+  assert.match(iconButton, /data-openbitfun-component="mobile-icon-button"/);
   assert.match(iconButton, /data-appearance="floating"/);
   assert.match(iconButton, /aria-busy="true"/);
   assert.match(iconButton, /disabled=""/);
-  assert.match(textField, /data-bf-component="mobile-text-field"/);
+  assert.match(textField, /data-openbitfun-component="mobile-text-field"/);
   assert.match(textField, /<input[^>]*aria-label="Search"/);
-  assert.match(row, /data-bf-component="mobile-list-row"/);
+  assert.match(row, /data-openbitfun-component="mobile-list-row"/);
   assert.match(row, /data-selected="true"/);
   assert.match(row, /aria-current="true"/);
 });
@@ -72,11 +72,11 @@ test("mobile entry exposes reusable composer and floating action anatomy", () =>
     trailing: createElement("button", null, "Settings"),
   }));
 
-  assert.match(composer, /data-bf-component="mobile-composer"/);
+  assert.match(composer, /data-openbitfun-component="mobile-composer"/);
   assert.match(composer, /data-expanded="false"/);
-  assert.match(composer, /data-bf-part="editor"[^>]*role="button"/);
-  assert.match(actions, /data-bf-component="mobile-floating-actions"/);
-  assert.match(actions, /data-bf-part="trailing"/);
+  assert.match(composer, /data-openbitfun-part="editor"[^>]*role="button"/);
+  assert.match(actions, /data-openbitfun-component="mobile-floating-actions"/);
+  assert.match(actions, /data-openbitfun-part="trailing"/);
 });
 
 test("mobile entry exposes the complete reusable mobile surface set", () => {
@@ -101,7 +101,7 @@ test("mobile entry exposes the complete reusable mobile surface set", () => {
   ].map(example => renderToStaticMarkup(example));
 
   for (const name of ["badge", "banner", "button", "card", "disclosure", "file-button", "link", "message", "page-header", "scrim", "section", "segmented-control", "status", "textarea"]) {
-    assert.ok(examples.some(markup => markup.includes(`data-bf-component="mobile-${name}"`)), `missing mobile-${name}`);
+    assert.ok(examples.some(markup => markup.includes(`data-openbitfun-component="mobile-${name}"`)), `missing mobile-${name}`);
   }
   assert.equal(typeof MobileActionSheet, "function");
   assert.equal(typeof MobileConfirmSheet, "function");
@@ -139,7 +139,7 @@ test("mobile stylesheet is isolated and uses semantic tokens", async () => {
   assert.match(styles, /data-expanded=true/);
   assert.match(styles, /pointer-events:none/);
   assert.match(styles, /mobile-sheet/);
-  assert.match(styles, /--bf-color-surface-panel/);
-  assert.match(styles, /--bf-shadow-base/);
+  assert.match(styles, /--openbitfun-color-surface-panel/);
+  assert.match(styles, /--openbitfun-shadow-base/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}\b/i);
 });

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { MobileButton, MobileCard, MobileTextField } from '@bitfun/ui/mobile';
+import { MobileButton, MobileCard, MobileTextField } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { messages } from '../i18n/messages';
 import type { RemoteToolStatus } from '../services/RemoteSessionManager';

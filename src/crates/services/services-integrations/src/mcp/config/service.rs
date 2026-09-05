@@ -182,7 +182,6 @@ impl MCPConfigService {
             .ok_or_else(|| MCPRuntimeError::validation("Authorization value cannot be empty"))?;
 
         remove_mcp_authorization_keys(&mut config.headers);
-        remove_mcp_authorization_keys(&mut config.env);
         config
             .headers
             .insert("Authorization".to_string(), normalized);
@@ -207,7 +206,6 @@ impl MCPConfigService {
         }
 
         remove_mcp_authorization_keys(&mut config.headers);
-        remove_mcp_authorization_keys(&mut config.env);
         self.save_server_config(&config).await?;
         Ok(config)
     }
@@ -217,13 +215,13 @@ impl MCPConfigService {
             let import_metadata = servers
                 .get(&config.id)
                 .and_then(Value::as_object)
-                .and_then(|server| server.get("_bitfunImport"))
+                .and_then(|server| server.get("_openbitfunImport"))
                 .cloned();
             let mut replacement = config_to_cursor_format(config);
             if let (Some(metadata), Some(replacement)) =
                 (import_metadata, replacement.as_object_mut())
             {
-                replacement.insert("_bitfunImport".to_string(), metadata);
+                replacement.insert("_openbitfunImport".to_string(), metadata);
             }
             servers.insert(config.id.clone(), replacement);
             Ok(())

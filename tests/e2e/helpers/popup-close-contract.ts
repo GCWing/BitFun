@@ -24,7 +24,7 @@ export async function expectPopupCloseContract(anchorSelector: string): Promise<
     const dialog = anchor.matches('[role="dialog"]')
       ? anchor
       : anchor.closest<HTMLElement>('[role="dialog"]') ?? anchor;
-    const closeButton = dialog.querySelector<HTMLButtonElement>('[data-bf-role="popup-close"]');
+    const closeButton = dialog.querySelector<HTMLButtonElement>('[data-openbitfun-role="popup-close"]');
     const icon = closeButton?.querySelector<SVGElement>('svg');
     if (!closeButton || !icon) return null;
 

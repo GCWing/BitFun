@@ -42,7 +42,7 @@ mod windows {
     use super::ResolveBrowserDroppedFilePathsRequest;
 
     const DEVTOOLS_CALL_TIMEOUT: Duration = Duration::from_secs(5);
-    const BROWSER_DROP_REGISTRY_KEY: &str = "__BITFUN_BROWSER_DROP_FILES__";
+    const BROWSER_DROP_REGISTRY_KEY: &str = "__OPENBITFUN_BROWSER_DROP_FILES__";
 
     type DevToolsResult = Result<String, String>;
     type DevToolsResultSlot = Arc<Mutex<Option<oneshot::Sender<DevToolsResult>>>>;
@@ -142,7 +142,7 @@ mod windows {
         webview: &tauri::WebviewWindow,
         request: &ResolveBrowserDroppedFilePathsRequest,
     ) -> Result<Vec<String>, String> {
-        let object_group = format!("bitfun-browser-drop-{}", request.token);
+        let object_group = format!("openbitfun-browser-drop-{}", request.token);
         let token = serde_json::to_string(&request.token)
             .map_err(|error| format!("Failed to encode browser drop token: {error}"))?;
 

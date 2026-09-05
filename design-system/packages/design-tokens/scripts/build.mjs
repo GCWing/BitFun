@@ -9,7 +9,7 @@ import {
   mergeTokenDocuments,
   renderCss,
   resolveTokens,
-} from "@bitfun/token-engine";
+} from "@openbitfun/token-engine";
 
 const packageDirectory = fileURLToPath(new URL("../", import.meta.url));
 const sourceDirectory = path.join(packageDirectory, "src");
@@ -124,7 +124,7 @@ const typescript = [
   `export type SystemTokenMode = ${tokenModes.map((mode) => JSON.stringify(mode)).join(" | ")};`,
   "export interface SystemTokenCatalogEntry {",
   "  readonly category: string;",
-  "  readonly cssVariable: `--bf-${string}`;",
+  "  readonly cssVariable: `--openbitfun-${string}`;",
   "  readonly description?: string;",
   "  readonly name: TokenName;",
   "  readonly type: string;",
@@ -135,28 +135,28 @@ const typescript = [
   "",
 ].join("\n");
 const css = [
-  "@layer bf.tokens.system, bf.tokens.theme, bf.reset, bf.base, bf.components, bf.overrides;\n",
+  "@layer openbitfun.tokens.system, openbitfun.tokens.theme, openbitfun.reset, openbitfun.base, openbitfun.components, openbitfun.overrides;\n",
   renderCss(systemTokens, {
-    layer: "bf.tokens.system",
+    layer: "openbitfun.tokens.system",
     preserveReferences: true,
-    selector: ":where([data-bf-design-system-root])",
+    selector: ":where([data-openbitfun-design-system-root])",
   }),
   renderCss(diffResolvedTokens(systemTokens, compactTokens), {
-    layer: "bf.tokens.system",
+    layer: "openbitfun.tokens.system",
     preserveReferences: true,
-    selector: ':where([data-bf-design-system-root][data-density="compact"])',
+    selector: ':where([data-openbitfun-design-system-root][data-density="compact"])',
   }),
   renderCss(diffResolvedTokens(systemTokens, touchTokens), {
-    layer: "bf.tokens.system",
+    layer: "openbitfun.tokens.system",
     preserveReferences: true,
-    selector: ':where([data-bf-design-system-root][data-density="touch"])',
+    selector: ':where([data-openbitfun-design-system-root][data-density="touch"])',
   }),
   "@media (prefers-reduced-motion: reduce) {\n",
-  "  :where([data-bf-design-system-root]) {\n",
-  "    --bf-motion-duration-fast: 0ms;\n",
-  "    --bf-motion-duration-normal: 0ms;\n",
-  "    --bf-motion-duration-slow: 0ms;\n",
-  "    --bf-motion-duration-loop: 0ms;\n",
+  "  :where([data-openbitfun-design-system-root]) {\n",
+  "    --openbitfun-motion-duration-fast: 0ms;\n",
+  "    --openbitfun-motion-duration-normal: 0ms;\n",
+  "    --openbitfun-motion-duration-slow: 0ms;\n",
+  "    --openbitfun-motion-duration-loop: 0ms;\n",
   "  }\n",
   "}\n",
 ].join("\n");

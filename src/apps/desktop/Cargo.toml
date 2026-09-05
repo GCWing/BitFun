@@ -1,16 +1,16 @@
 [package]
-name = "bitfun-desktop"
+name = "openbitfun-desktop"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "BitFun Desktop Application (Tauri)"
+description = "OpenBitFun Desktop Application (Tauri)"
 
 [lib]
-name = "bitfun_desktop_lib"
+name = "openbitfun_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "bitfun-desktop"
+name = "openbitfun-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -19,18 +19,18 @@ serde_json = { workspace = true }
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
-bitfun-relay-service = { path = "../../crates/services/relay-service" }
-bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "permission", "workspace-ports"] }
-bitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["appearance-market"] }
-bitfun-services-integrations = { path = "../../crates/services/services-integrations", features = ["canvas-runtime", "miniapp-market", "speech-realtime"] }
-bitfun-core-types = { path = "../../crates/contracts/core-types" }
-bitfun-agent-tools = { path = "../../crates/execution/tool-contracts", features = ["element-token"] }
-bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
-bitfun-events = { path = "../../crates/contracts/events" }
-bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
-bitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
+openbitfun-core = { path = "../../crates/assembly/core", features = ["product-full"] }
+openbitfun-relay-service = { path = "../../crates/services/relay-service" }
+openbitfun-agent-runtime = { path = "../../crates/execution/agent-runtime", features = ["agent-runtime"] }
+openbitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports", features = ["agent-api", "permission", "workspace-ports"] }
+openbitfun-product-domains = { path = "../../crates/contracts/product-domains", features = ["appearance-market"] }
+openbitfun-services-integrations = { path = "../../crates/services/services-integrations", features = ["canvas-runtime", "miniapp-market", "speech-realtime"] }
+openbitfun-core-types = { path = "../../crates/contracts/core-types" }
+openbitfun-agent-tools = { path = "../../crates/execution/tool-contracts", features = ["element-token"] }
+openbitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
+openbitfun-events = { path = "../../crates/contracts/events" }
+openbitfun-webdriver = { path = "../../crates/adapters/webdriver" }
+openbitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
 
 # Tauri
 tauri = { workspace = true }
@@ -141,7 +141,7 @@ default = []
 # Enable webview devtools and element inspector for development builds.
 # Only active in debug builds or when explicitly requested via --features devtools.
 # Never enabled in release profile intended for end users.
-devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
+devtools = ["tauri/devtools", "openbitfun-webdriver/embedded"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 atspi = { workspace = true }

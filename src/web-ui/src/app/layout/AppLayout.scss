@@ -1,5 +1,5 @@
 /**
- * BitFun desktop shell.
+ * OpenBitFun desktop shell.
  *
  * The root stays visually quiet and lets the scene viewport carry elevation.
  * Frequent workspace and panel changes deliberately avoid entrance motion.
@@ -17,7 +17,7 @@ html, body {
   padding: 0;
   height: 100vh;
   width: 100vw;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   overflow: hidden;
 }
 
@@ -30,7 +30,7 @@ html, body {
 }
 
 // ==================== Main layout container ====================
-.bitfun-app-layout {
+.openbitfun-app-layout {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -39,19 +39,19 @@ html, body {
   overflow: hidden;
 
   // Use theme background
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
 
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-body-sm-font-family);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-body-sm-font-family);
   position: relative;
 
   // Ensure layout stability
   min-height: 100vh;
   max-height: 100vh;
   overflow: hidden;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
-  font-family: var(--bf-type-body-sm-font-family);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
+  font-family: var(--openbitfun-type-body-sm-font-family);
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -61,7 +61,7 @@ html, body {
     outline: none;
   }
 
-  &[data-bf-background-media='video'] {
+  &[data-openbitfun-background-media='video'] {
     background: transparent;
   }
 
@@ -71,7 +71,7 @@ html, body {
 
   // ==================== Startup mode ====================
   &--startup-mode {
-    background: var(--bf-color-surface-canvas);
+    background: var(--openbitfun-color-surface-canvas);
   }
 
   // ==================== Modifier - loading ====================
@@ -82,11 +82,11 @@ html, body {
 
   // ==================== Modifier - error ====================
   &--error {
-    .bitfun-app-header {
-      border-bottom-color: var(--bf-color-status-danger-content);
+    .openbitfun-app-header {
+      border-bottom-color: var(--openbitfun-color-status-danger-content);
       background: linear-gradient(135deg,
-        var(--bf-color-status-danger-surface) 0%,
-        var(--bf-color-action-neutral-surface) 100%);
+        var(--openbitfun-color-status-danger-surface) 0%,
+        var(--openbitfun-color-action-neutral-surface) 100%);
     }
   }
 
@@ -94,7 +94,7 @@ html, body {
   &--modal-open {
     overflow: hidden;
 
-    .bitfun-app-main {
+    .openbitfun-app-main {
       filter: blur(2px);
       pointer-events: none;
     }
@@ -103,7 +103,7 @@ html, body {
 }
 
 // ==================== Main content area (full height, no TitleBar) ====================
-.bitfun-app-main-workspace {
+.openbitfun-app-main-workspace {
   position: relative;
   z-index: 1;
   display: flex;
@@ -114,15 +114,15 @@ html, body {
   width: 100%;
   margin-top: 0;
   overflow: hidden;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
 }
 
-.bitfun-app-layout--toolbar-mode > [data-bf-component='toolbar-mode'][data-bf-part='root'] {
+.openbitfun-app-layout--toolbar-mode > [data-openbitfun-component='toolbar-mode'][data-openbitfun-part='root'] {
   position: relative;
   z-index: 1;
 }
 
-.bitfun-appearance-background-media {
+.openbitfun-appearance-background-media {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -131,7 +131,7 @@ html, body {
   pointer-events: none;
 }
 
-.bitfun-appearance-background-media__video {
+.openbitfun-appearance-background-media__video {
   display: block;
   width: 100%;
   height: 100%;
@@ -143,37 +143,37 @@ html, body {
   }
 }
 
-.bitfun-window-mode-hint {
+.openbitfun-window-mode-hint {
   @include surfaces.floating;
 
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + var(--bf-space-2));
+  top: calc(env(safe-area-inset-top, 0px) + var(--openbitfun-space-2));
   left: 50%;
-  z-index: var(--bf-layer-notification);
+  z-index: var(--openbitfun-layer-notification);
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   max-width: min(560px, calc(100vw - 32px));
   min-height: 34px;
-  padding: var(--bf-space-1) var(--bf-space-3);
-  color: var(--bf-color-content-primary);
+  padding: var(--openbitfun-space-1) var(--openbitfun-space-3);
+  color: var(--openbitfun-color-content-primary);
   pointer-events: none;
   transform: translateX(-50%);
 
   &__title {
     flex: 0 0 auto;
     min-width: 0;
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-meta-line-height);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
     white-space: nowrap;
   }
 
   &__detail {
     min-width: 0;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-meta-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -185,7 +185,7 @@ html, body {
 
 // ==================== Responsive ====================
 @media (max-width: 768px) {
-  .bitfun-window-mode-hint {
+  .openbitfun-window-mode-hint {
     align-items: flex-start;
     flex-direction: column;
     gap: 1px;
@@ -201,19 +201,19 @@ html, body {
 
 // ==================== High-contrast mode ====================
 @media (prefers-contrast: high) {
-  .bitfun-app-layout {
-    background: var(--bf-color-surface-scene);
+  .openbitfun-app-layout {
+    background: var(--openbitfun-color-surface-scene);
   }
 }
 
 // ==================== Reduced motion preference ====================
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-app-layout * {
+  .openbitfun-app-layout * {
     transition: none;
     animation: none;
   }
 
-  .bitfun-appearance-background-media__video {
+  .openbitfun-appearance-background-media__video {
     display: none;
   }
 

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# BitFun Relay Server standalone Docker build.
+# OpenBitFun Relay Server standalone Docker build.
 # The reduced repository-root context contains only the relay app and services.
 #
 # Rebuild caching:
@@ -9,8 +9,8 @@
 #   RUN (cache mounts are not part of the image filesystem).
 #
 # China mirrors (optional):
-#   docker compose build --build-arg BITFUN_USE_CN_MIRROR=1
-#   Also: BITFUN_APT_MIRROR, BITFUN_CARGO_SPARSE_URL
+#   docker compose build --build-arg OPENBITFUN_USE_CN_MIRROR=1
+#   Also: OPENBITFUN_APT_MIRROR, OPENBITFUN_CARGO_SPARSE_URL
 
 # Pin a minor toolchain so floating `rust:1-bookworm` updates do not bust the
 # entire builder cache on every upstream image refresh.
@@ -22,9 +22,9 @@ WORKDIR /build/src/apps/relay-server
 #   docker compose build --build-arg CARGO_BUILD_JOBS=1
 # Note: empty value must NOT be set as ENV — cargo chokes on empty string.
 ARG CARGO_BUILD_JOBS=
-ARG BITFUN_USE_CN_MIRROR=0
-ARG BITFUN_APT_MIRROR=mirrors.aliyun.com
-ARG BITFUN_CARGO_SPARSE_URL=sparse+https://rsproxy.cn/index/
+ARG OPENBITFUN_USE_CN_MIRROR=0
+ARG OPENBITFUN_APT_MIRROR=mirrors.aliyun.com
+ARG OPENBITFUN_CARGO_SPARSE_URL=sparse+https://rsproxy.cn/index/
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CARGO_TERM_COLOR=always \
@@ -32,15 +32,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Configure apt + cargo mirrors inside the builder when deploying from China.
 RUN set -eux; \
-    if [ "${BITFUN_USE_CN_MIRROR}" = "1" ]; then \
+    if [ "${OPENBITFUN_USE_CN_MIRROR}" = "1" ]; then \
       sed -i \
-        -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
-        -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+        -e "s|deb.debian.org/debian|${OPENBITFUN_APT_MIRROR}/debian|g" \
+        -e "s|security.debian.org/debian-security|${OPENBITFUN_APT_MIRROR}/debian-security|g" \
         /etc/apt/sources.list 2>/dev/null || true; \
       if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
         sed -i \
-          -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
-          -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+          -e "s|deb.debian.org/debian|${OPENBITFUN_APT_MIRROR}/debian|g" \
+          -e "s|security.debian.org/debian-security|${OPENBITFUN_APT_MIRROR}/debian-security|g" \
           /etc/apt/sources.list.d/debian.sources; \
       fi; \
       mkdir -p /usr/local/cargo; \
@@ -54,10 +54,10 @@ RUN set -eux; \
       # while global builds kept working.
       printf '%s\n' \
         '[source.crates-io]' \
-        'replace-with = "bitfun-rsproxy-sparse"' \
+        'replace-with = "openbitfun-rsproxy-sparse"' \
         '' \
-        '[source.bitfun-rsproxy-sparse]' \
-        "registry = \"${BITFUN_CARGO_SPARSE_URL}\"" \
+        '[source.openbitfun-rsproxy-sparse]' \
+        "registry = \"${OPENBITFUN_CARGO_SPARSE_URL}\"" \
         > /usr/local/cargo/config.toml; \
     fi
 
@@ -80,14 +80,14 @@ COPY src/crates/services/page-function-runtime/Cargo.toml ../../crates/services/
 
 # Warm dependency objects into the BuildKit target cache. Placeholder sources
 # live only in this layer; real sources are copied afterward.
-RUN --mount=type=cache,id=bitfun-relay-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,id=bitfun-relay-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=bitfun-relay-target,target=/build/src/apps/relay-server/target,sharing=locked \
+RUN --mount=type=cache,id=openbitfun-relay-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=openbitfun-relay-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=openbitfun-relay-target,target=/build/src/apps/relay-server/target,sharing=locked \
     mkdir -p src/bin \
         ../../crates/services/relay-service/src \
         ../../crates/services/page-function-runtime/src \
     && printf 'fn main() {}\n' > src/main.rs \
-    && printf 'pub use bitfun_relay_service::*;\n' > src/lib.rs \
+    && printf 'pub use openbitfun_relay_service::*;\n' > src/lib.rs \
     && printf 'fn main() {}\n' > src/bin/relay_admin.rs \
     && printf '// placeholder\n' > ../../crates/services/relay-service/src/lib.rs \
     && printf '// placeholder\n' > ../../crates/services/page-function-runtime/src/lib.rs \
@@ -103,18 +103,18 @@ COPY src/crates/services/page-function-runtime/src/ ../../crates/services/page-f
 
 # Rebuild workspace crates against cached dependency objects, then copy
 # release binaries out of the cache mount into the image.
-RUN --mount=type=cache,id=bitfun-relay-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,id=bitfun-relay-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=bitfun-relay-target,target=/build/src/apps/relay-server/target,sharing=locked \
-    rm -f target/release/bitfun-relay-server \
+RUN --mount=type=cache,id=openbitfun-relay-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=openbitfun-relay-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=openbitfun-relay-target,target=/build/src/apps/relay-server/target,sharing=locked \
+    rm -f target/release/openbitfun-relay-server \
         target/release/relay-admin \
-        target/release/deps/*bitfun_relay_service* \
-        target/release/deps/*bitfun_page_function_runtime* \
-        target/release/deps/*bitfun_relay_server* \
+        target/release/deps/*openbitfun_relay_service* \
+        target/release/deps/*openbitfun_page_function_runtime* \
+        target/release/deps/*openbitfun_relay_server* \
         target/release/deps/*relay_admin* \
-    && rm -rf target/release/.fingerprint/bitfun-relay-service-* \
-        target/release/.fingerprint/bitfun-page-function-runtime-* \
-        target/release/.fingerprint/bitfun-relay-server-* \
+    && rm -rf target/release/.fingerprint/openbitfun-relay-service-* \
+        target/release/.fingerprint/openbitfun-page-function-runtime-* \
+        target/release/.fingerprint/openbitfun-relay-server-* \
         target/release/.fingerprint/relay-admin-* \
     && touch ../../crates/services/relay-service/src/lib.rs \
         ../../crates/services/page-function-runtime/src/lib.rs \
@@ -123,26 +123,33 @@ RUN --mount=type=cache,id=bitfun-relay-cargo-registry,target=/usr/local/cargo/re
         src/bin/relay_admin.rs \
     && { [ -n "${CARGO_BUILD_JOBS:-}" ] || unset CARGO_BUILD_JOBS; } \
     && cargo build --release \
-    && cp target/release/bitfun-relay-server target/release/relay-admin /out/ \
-    && (strip /out/bitfun-relay-server /out/relay-admin || true)
+    && cp target/release/openbitfun-relay-server target/release/relay-admin /out/ \
+    && (strip /out/openbitfun-relay-server /out/relay-admin || true)
 
 FROM debian:bookworm-slim
 
-ARG BITFUN_USE_CN_MIRROR=0
-ARG BITFUN_APT_MIRROR=mirrors.aliyun.com
+ARG RELAY_GIT_COMMIT=unknown
+ARG OPENBITFUN_USE_CN_MIRROR=0
+ARG OPENBITFUN_APT_MIRROR=mirrors.aliyun.com
+
+LABEL org.opencontainers.image.title="OpenBitFun Relay Server" \
+      org.opencontainers.image.description="Self-hosted relay server for OpenBitFun" \
+      org.opencontainers.image.source="https://github.com/GCWing/OpenBitFun" \
+      org.opencontainers.image.revision="${RELAY_GIT_COMMIT}" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -eux; \
-    if [ "${BITFUN_USE_CN_MIRROR}" = "1" ]; then \
+    if [ "${OPENBITFUN_USE_CN_MIRROR}" = "1" ]; then \
       sed -i \
-        -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
-        -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+        -e "s|deb.debian.org/debian|${OPENBITFUN_APT_MIRROR}/debian|g" \
+        -e "s|security.debian.org/debian-security|${OPENBITFUN_APT_MIRROR}/debian-security|g" \
         /etc/apt/sources.list 2>/dev/null || true; \
       if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
         sed -i \
-          -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
-          -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+          -e "s|deb.debian.org/debian|${OPENBITFUN_APT_MIRROR}/debian|g" \
+          -e "s|security.debian.org/debian-security|${OPENBITFUN_APT_MIRROR}/debian-security|g" \
           /etc/apt/sources.list.d/debian.sources; \
       fi; \
     fi; \
@@ -152,7 +159,7 @@ RUN set -eux; \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /out/bitfun-relay-server /app/bitfun-relay-server
+COPY --from=builder /out/openbitfun-relay-server /app/openbitfun-relay-server
 COPY --from=builder /out/relay-admin /app/relay-admin
 RUN mkdir -p /app/static /app/data /app/room-web
 
@@ -163,4 +170,4 @@ EXPOSE 9700
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD curl -fsS "http://127.0.0.1:${RELAY_PORT}/health" || exit 1
 
-CMD ["/app/bitfun-relay-server"]
+CMD ["/app/openbitfun-relay-server"]

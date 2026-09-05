@@ -46,7 +46,7 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
     return (
       <span
         className={classNames(styles.root, className)}
-        data-bf-component="action-card"
+        data-openbitfun-component="action-card"
         data-disabled={disabled ? "true" : "false"}
         data-has-actions={actions.length > 0 ? "true" : "false"}
         data-selected={selected ? "true" : "false"}
@@ -55,27 +55,27 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
         <button
           {...props}
           className={styles.trigger}
-          data-bf-part="trigger"
+          data-openbitfun-part="trigger"
           disabled={disabled}
           ref={ref}
           type={type}
         >
           {leading !== undefined && leading !== null && (
-            <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+            <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
               {leading}
             </span>
           )}
-          <span className={styles.content} data-bf-part="content">
-            <span className={styles.title} data-bf-part="title">{children}</span>
+          <span className={styles.content} data-openbitfun-part="content">
+            <span className={styles.title} data-openbitfun-part="title">{children}</span>
             {description !== undefined && description !== null && (
-              <span className={styles.description} data-bf-part="description">
+              <span className={styles.description} data-openbitfun-part="description">
                 {description}
               </span>
             )}
           </span>
         </button>
         {actions.length > 0 && (
-          <span className={styles.actions} data-bf-part="actions">
+          <span className={styles.actions} data-openbitfun-part="actions">
             {actions.map((action) => (
               <IconButton
                 aria-label={action.label}

@@ -10,13 +10,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 #[cfg(feature = "function-agents")]
-use bitfun_product_domains::function_agents::ports::{
+use log::info;
+#[cfg(feature = "function-agents")]
+use openbitfun_product_domains::function_agents::ports::{
     FunctionAgentAiPort, FunctionAgentGitPort, FunctionAgentRuntimeFacade,
 };
 #[cfg(feature = "tools-miniapp")]
-use bitfun_product_domains::miniapp::ports::{MiniAppRuntimeFacade, MiniAppStoragePort};
-#[cfg(feature = "function-agents")]
-use log::info;
+use openbitfun_product_domains::miniapp::ports::{MiniAppRuntimeFacade, MiniAppStoragePort};
 
 #[cfg(feature = "function-agents")]
 use crate::function_agents::common::AgentResult;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bookmark } from 'lucide-react';
-import { Icon as CatalogIcon, Tooltip } from '@bitfun/ui';
+import { Icon as CatalogIcon, Tooltip } from '@openbitfun/ui';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import type { ShellEntry } from '../hooks/shellEntryTypes';
 
@@ -52,7 +52,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
       role="button"
       tabIndex={0}
       className={[
-        'bitfun-shell-nav__terminal-item',
+        'openbitfun-shell-nav__terminal-item',
         isActive && 'is-active',
         displayCwd && 'has-cwd',
       ].filter(Boolean).join(' ')}
@@ -74,27 +74,27 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
       data-command-id={entry.sessionId}
       data-command-status={entry.isRunning ? 'running' : 'stopped'}
     >
-      <div className="bitfun-shell-nav__terminal-item-row">
+      <div className="openbitfun-shell-nav__terminal-item-row">
         <Tooltip content={entry.name} placement="right">
-          <span className="bitfun-shell-nav__terminal-item-main">
+          <span className="openbitfun-shell-nav__terminal-item-main">
             {showSavedBadge ? (
-              <Bookmark size={14} className="bitfun-shell-nav__terminal-icon bitfun-shell-nav__terminal-icon--saved" />
+              <Bookmark size={14} className="openbitfun-shell-nav__terminal-icon openbitfun-shell-nav__terminal-icon--saved" />
             ) : (
-              <CatalogIcon name="terminal" size="sm" className="bitfun-shell-nav__terminal-icon" />
+              <CatalogIcon name="terminal" size="sm" className="openbitfun-shell-nav__terminal-icon" />
             )}
 
-            <span className="bitfun-shell-nav__terminal-label" data-testid="shell-command-text">{entry.name}</span>
+            <span className="openbitfun-shell-nav__terminal-label" data-testid="shell-command-text">{entry.name}</span>
 
             {showSavedBadge ? (
-              <span className="bitfun-shell-nav__saved-indicator">{savedBadgeLabel}</span>
+              <span className="openbitfun-shell-nav__saved-indicator">{savedBadgeLabel}</span>
             ) : null}
 
             {entry.startupCommand ? (
-              <span className="bitfun-shell-nav__cmd-indicator">{startupCommandBadgeLabel}</span>
+              <span className="openbitfun-shell-nav__cmd-indicator">{startupCommandBadgeLabel}</span>
             ) : null}
 
             <span
-              className={`bitfun-shell-nav__terminal-dot${entry.isRunning ? ' is-running' : ' is-stopped'}`}
+              className={`openbitfun-shell-nav__terminal-dot${entry.isRunning ? ' is-running' : ' is-stopped'}`}
               data-testid="shell-command-status"
               data-command-status={entry.isRunning ? 'running' : 'stopped'}
             />
@@ -104,7 +104,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
         <Tooltip content={quickAction.title} placement="right">
           <button
             type="button"
-            className="bitfun-shell-nav__terminal-close"
+            className="openbitfun-shell-nav__terminal-close"
             onClick={(event) => {
               event.stopPropagation();
               quickAction.onClick();
@@ -116,7 +116,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
       </div>
 
       {displayCwd ? (
-        <span className="bitfun-shell-nav__terminal-cwd" title={displayCwd}>
+        <span className="openbitfun-shell-nav__terminal-cwd" title={displayCwd}>
           {displayCwd}
         </span>
       ) : null}

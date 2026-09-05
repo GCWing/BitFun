@@ -472,7 +472,7 @@ export default function conversationPresentationUnitTest() {
         id: 'plan-1',
         name: 'Write',
         status: 'completed',
-        input_preview: '{"file_path":"/repo/.bitfun/plans/mobile.plan.md"}'
+        input_preview: '{"file_path":"/repo/.openbitfun/plans/mobile.plan.md"}'
       };
       const groups = ToolCollapsePolicy.collapsedGroups([
         toolStatus('1', 'Read', 'completed'),
@@ -481,7 +481,7 @@ export default function conversationPresentationUnitTest() {
       ]);
       expect(groups.length).assertEqual(3);
       expect(groups[1].tools[0].name).assertEqual('Write');
-      expect(PlanToolPolicy.descriptor(planTool)?.file_path || '').assertEqual('/repo/.bitfun/plans/mobile.plan.md');
+      expect(PlanToolPolicy.descriptor(planTool)?.file_path || '').assertEqual('/repo/.openbitfun/plans/mobile.plan.md');
       expect(PlanToolPolicy.canBuild(planTool)).assertTrue();
     });
 
@@ -594,7 +594,7 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.scanToConnect')).assertEqual('扫码连接电脑');
-      expect(RemoteI18n.t('sidebar.signInBitFunAccount')).assertEqual('登录 BitFun 账号');
+      expect(RemoteI18n.t('sidebar.signInOpenBitFunAccount')).assertEqual('登录 OpenBitFun 账号');
       expect(RemoteI18n.t('connect.chooseConnectionTitle')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
       expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
@@ -770,7 +770,7 @@ export default function conversationPresentationUnitTest() {
       expect(named.allowRename).assertTrue();
       expect(named.showActions).assertTrue();
       const branded = ConversationHeaderPolicy.present(ChatSurface.Remote, '', '', 'feat/ui', false);
-      expect(branded.subtitle).assertEqual('BitFun · feat/ui');
+      expect(branded.subtitle).assertEqual('OpenBitFun · feat/ui');
     });
 
   });

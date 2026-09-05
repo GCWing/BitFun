@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use bitfun_agent_runtime::sdk::{
+use crossterm::event::KeyEvent;
+use openbitfun_agent_runtime::sdk::{
     AgentSessionLifecycleStatus, AgentSessionLineageEntry, AgentSessionLineageSnapshot,
 };
-use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 
 use crate::ui::{

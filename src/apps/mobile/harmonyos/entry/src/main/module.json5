@@ -65,9 +65,9 @@
         "name": "EntryAbility",
         "srcEntry": "./ets/entryability/EntryAbility.ets",
         "description": "$string:EntryAbility_desc",
-        "icon": "$media:bitfun_icon",
+        "icon": "$media:openbitfun-app-icon",
         "label": "$string:EntryAbility_label",
-        "startWindowIcon": "$media:startIcon",
+        "startWindowIcon": "$media:openbitfun-start-window",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
         "skills": [

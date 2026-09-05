@@ -4,8 +4,8 @@ use crate::service::config::types::{
     DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS, MAX_CONFIGURED_OUTPUT_TOKENS_RATIO_PERCENT,
     MIN_MODEL_CONTEXT_WINDOW_TOKENS,
 };
-pub use bitfun_core_types::AIConfig;
 use log::warn;
+pub use openbitfun_core_types::AIConfig;
 
 fn append_endpoint(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim();

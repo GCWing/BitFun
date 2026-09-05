@@ -1,20 +1,20 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     box-sizing: border-box;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    min-inline-size: var(--bf-space-6);
-    min-block-size: var(--bf-space-6);
-    padding: calc(var(--bf-space-1) / 2);
+    min-inline-size: var(--openbitfun-space-6);
+    min-block-size: var(--openbitfun-space-6);
+    padding: calc(var(--openbitfun-space-1) / 2);
     vertical-align: middle;
-    color: var(--bf-color-action-neutral-content);
-    font-family: var(--bf-type-meta-font-family);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-meta-font-weight);
-    line-height: var(--bf-type-meta-line-height);
-    letter-spacing: var(--bf-type-meta-letter-spacing);
+    color: var(--openbitfun-color-action-neutral-content);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -24,16 +24,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-inline-size: var(--bf-space-5);
-    min-block-size: var(--bf-space-5);
-    padding-inline: calc(var(--bf-space-1) / 2);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-action-neutral-surface);
+    min-inline-size: var(--openbitfun-space-5);
+    min-block-size: var(--openbitfun-space-5);
+    padding-inline: calc(var(--openbitfun-space-1) / 2);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   @media (forced-colors: active) {
     .value {
-      outline: var(--bf-border-width-default) solid CanvasText;
+      outline: var(--openbitfun-border-width-default) solid CanvasText;
       color: CanvasText;
       background: Canvas;
     }

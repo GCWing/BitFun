@@ -25,7 +25,7 @@ export const Spinner = forwardRef<HTMLSpanElement, SpinnerProps>(function Spinne
       aria-hidden={ariaLabel ? undefined : "true"}
       aria-label={ariaLabel}
       className={classNames(styles.root, className)}
-      data-bf-component="spinner"
+      data-openbitfun-component="spinner"
       data-size={size}
       data-variant={variant}
       ref={ref}
@@ -49,12 +49,12 @@ export const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
       <div
         {...props}
         className={classNames(styles.loadingState, className)}
-        data-bf-component="loading-state"
+        data-openbitfun-component="loading-state"
         data-size={size}
         ref={ref}
       >
         <Spinner size={size} />
-        {children ? <span className={styles.label} data-bf-part="label">{children}</span> : null}
+        {children ? <span className={styles.label} data-openbitfun-part="label">{children}</span> : null}
       </div>
     );
   },

@@ -1,4 +1,4 @@
-import { Button, Icon, IconButton, Input, ScrollArea } from '@bitfun/ui';
+import { Button, Icon, IconButton, Input, ScrollArea } from '@openbitfun/ui';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 ;
@@ -137,7 +137,7 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
           className="acp-avatar-picker__popover"
           role="region"
           aria-labelledby={titleId}
-          data-bf-placement={popoverLayout?.placement ?? 'bottom'}
+          data-openbitfun-placement={popoverLayout?.placement ?? 'bottom'}
           style={{
             top: `${popoverLayout?.top ?? 0}px`,
             left: `${popoverLayout?.left ?? 0}px`,

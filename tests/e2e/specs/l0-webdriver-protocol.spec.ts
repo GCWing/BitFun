@@ -1,7 +1,7 @@
 import { browser, expect } from '@wdio/globals';
 
 const DRIVER_HOST = '127.0.0.1';
-const DRIVER_PORT = Number(process.env.BITFUN_E2E_WEBDRIVER_PORT || 4445);
+const DRIVER_PORT = Number(process.env.OPENBITFUN_E2E_WEBDRIVER_PORT || 4445);
 const ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';
 const SHADOW_KEY = 'shadow-6066-11e4-a52e-4f735466cecf';
 

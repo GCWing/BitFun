@@ -19,12 +19,12 @@ fn external_start_timeout(timeouts: super::super::MCPServerTimeouts) -> Duration
 
 impl MCPServerManager {
     /// Adds a runtime-only MCP server without saving it to user or project config.
-    pub async fn add_ephemeral_server(&self, config: MCPServerConfig) -> BitFunResult<()> {
+    pub async fn add_ephemeral_server(&self, config: MCPServerConfig) -> OpenBitFunResult<()> {
         config.validate()?;
 
         let server_id = config.id.clone();
         if self.runtime.contains(&server_id).await {
-            return Err(BitFunError::Configuration(format!(
+            return Err(OpenBitFunError::Configuration(format!(
                 "MCP server already exists: {}",
                 server_id
             )));
@@ -80,7 +80,7 @@ impl MCPServerManager {
         &self,
         config: MCPServerConfig,
         workspace_key: String,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         config.validate()?;
         let _lifecycle_guard = self.ephemeral_lifecycle.lock().await;
         let server_id = config.id.clone();
@@ -134,7 +134,7 @@ impl MCPServerManager {
                     .insert(server_id.clone());
             } else {
                 let _ = self.remove_ephemeral_server(&server_id).await;
-                return Err(BitFunError::MCPError(
+                return Err(OpenBitFunError::MCPError(
                     "External MCP server did not retain its connection".to_string(),
                 ));
             }
@@ -146,7 +146,7 @@ impl MCPServerManager {
                 .await
                 .remove(&server_id);
             self.ephemeral_start_tokens.write().await.remove(&server_id);
-            return Err(BitFunError::Configuration(format!(
+            return Err(OpenBitFunError::Configuration(format!(
                 "MCP server already exists: {}",
                 server_id
             )));
@@ -232,7 +232,7 @@ impl MCPServerManager {
     /// Withdraws new tool/resource access immediately, then lets already-held
     /// connection users finish before the process is reclaimed. The grace is
     /// bounded so a deleted or malicious server cannot remain indefinitely.
-    pub async fn retire_external_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
+    pub async fn retire_external_ephemeral_server(&self, server_id: &str) -> OpenBitFunResult<()> {
         const RETIREMENT_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
         const RETIREMENT_RECLAIM_ATTEMPTS: usize = 3;
         const RETIREMENT_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
@@ -352,7 +352,7 @@ impl MCPServerManager {
     }
 
     /// Removes a runtime-only MCP server and its registered tools without touching persisted config.
-    pub async fn remove_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
+    pub async fn remove_ephemeral_server(&self, server_id: &str) -> OpenBitFunResult<()> {
         info!("Removing ephemeral MCP server: id={}", server_id);
 
         if !self.runtime.contains(server_id).await {

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookMatcher, BuiltinHookExecutor, HookCall, HookHandler, HookHandlerResult,
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistration,
     RuntimeHookRegistry, RuntimeHookRegistryBuildError, RuntimeHookSource,

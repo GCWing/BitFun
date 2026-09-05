@@ -56,7 +56,7 @@ describe('MEditorErrorBoundary', () => {
     })
 
     const fallback = container.querySelector<HTMLTextAreaElement>(
-      '[data-bf-component="m-editor"][data-m-editor-fallback="true"] textarea'
+      '[data-openbitfun-component="m-editor"][data-m-editor-fallback="true"] textarea'
     )
     expect(fallback?.value).toBe('# Recovery plan')
     expect(fallback?.readOnly).toBe(true)

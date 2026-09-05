@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
-use bitfun_services_core::dispatch_workspace::sha256_file;
+use openbitfun_services_core::dispatch_workspace::sha256_file;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -79,7 +79,7 @@ const MAX_BUNDLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Cap on the change list reported after a sync, so a huge refactor cannot push
 /// the response past the smallest host transport envelope.
 const MAX_REPORTED_CHANGES: usize = 2_000;
-const DEFAULT_SYNC_COMMIT_MESSAGE: &str = "BitFun dispatch result";
+const DEFAULT_SYNC_COMMIT_MESSAGE: &str = "OpenBitFun dispatch result";
 /// A freshly spawned child may not have published an inspectable process
 /// identity by the first poll. Keep that tiny start window from spawning a
 /// duplicate worker while still allowing a dead child to be recovered.
@@ -1075,9 +1075,9 @@ fn sync_in_store(
                 "-c",
                 "commit.gpgsign=false",
                 "-c",
-                "user.name=BitFun Dispatch",
+                "user.name=OpenBitFun Dispatch",
                 "-c",
-                "user.email=dispatch@bitfun.local",
+                "user.email=dispatch@openbitfun.local",
                 "commit",
                 "--no-verify",
                 "-m",
@@ -1573,7 +1573,7 @@ fn commit_exists(repo: &Path, commit: &str) -> Result<bool> {
 }
 
 fn git_command(dir: &Path) -> Command {
-    let mut command = bitfun_services_core::process_manager::create_command("git");
+    let mut command = openbitfun_services_core::process_manager::create_command("git");
     command
         .current_dir(dir)
         // A detached dispatch worker has nobody to answer a credential or
@@ -1926,10 +1926,10 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: None,
                 base_commit: "0".repeat(40),
-                branch: "bitfun/dispatch/job-1".to_string(),
+                branch: "openbitfun/dispatch/job-1".to_string(),
             },
         )
         .expect("provision");
@@ -1957,10 +1957,10 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: Some(source.to_string_lossy().to_string()),
                 base_commit: base_commit.clone(),
-                branch: "bitfun/dispatch/job-1".to_string(),
+                branch: "openbitfun/dispatch/job-1".to_string(),
             },
         )
         .expect("provision");
@@ -2009,10 +2009,10 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: Some(missing.to_string_lossy().to_string()),
                 base_commit: "0".repeat(40),
-                branch: "bitfun/dispatch/job-1".to_string(),
+                branch: "openbitfun/dispatch/job-1".to_string(),
             },
         )
         .expect("provision");
@@ -2053,7 +2053,7 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: Some(
                     temp.path()
                         .join("no-such-repository")
@@ -2061,7 +2061,7 @@ mod tests {
                         .to_string(),
                 ),
                 base_commit: "0".repeat(40),
-                branch: "bitfun/dispatch/job-1".to_string(),
+                branch: "openbitfun/dispatch/job-1".to_string(),
             },
         )
         .expect("provision");
@@ -2115,7 +2115,7 @@ mod tests {
             job_id: "job-1".to_string(),
             repo_key: "abcdef0123456789".to_string(),
             remote_url: None,
-            project_label: Some("BitFun".to_string()),
+            project_label: Some("OpenBitFun".to_string()),
             base_commit: base_commit.clone(),
             branch: "main".to_string(),
         };
@@ -2211,7 +2211,7 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: None,
                 base_commit,
                 branch: "main".to_string(),
@@ -2363,10 +2363,10 @@ mod tests {
 
     #[test]
     fn completed_clean_sync_poll_returns_the_durable_result() {
-        const CHILD_ENV: &str = "BITFUN_DISPATCH_CLEAN_SYNC_POLL_CHILD";
-        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
+        const CHILD_ENV: &str = "OPENBITFUN_DISPATCH_CLEAN_SYNC_POLL_CHILD";
+        if let Some(openbitfun_home) = std::env::var_os(CHILD_ENV) {
             let store = DispatchStore::open_default().expect("open isolated default store");
-            let source = PathBuf::from(bitfun_home).join("source");
+            let source = PathBuf::from(openbitfun_home).join("source");
             let base_commit = init_source_repository(&source);
             provision_from_bundle(&store, &source, &base_commit);
 
@@ -2417,9 +2417,9 @@ mod tests {
         }
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let bitfun_home = dir.path().join("bitfun-home");
+        let openbitfun_home = dir.path().join("openbitfun-home");
         let user_root = dir.path().join("user-root");
-        let output = bitfun_services_core::process_manager::create_command(
+        let output = openbitfun_services_core::process_manager::create_command(
             std::env::current_exe().expect("test executable"),
         )
         .args([
@@ -2427,12 +2427,12 @@ mod tests {
             "dispatch::workspace::tests::completed_clean_sync_poll_returns_the_durable_result",
             "--nocapture",
         ])
-        .env(CHILD_ENV, &bitfun_home)
-        .env("BITFUN_HOME", &bitfun_home)
-        .env("BITFUN_USER_ROOT", &user_root)
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env_remove("BITFUN_E2E_HOME")
-        .env_remove("BITFUN_E2E_USER_ROOT")
+        .env(CHILD_ENV, &openbitfun_home)
+        .env("OPENBITFUN_HOME", &openbitfun_home)
+        .env("OPENBITFUN_USER_ROOT", &user_root)
+        .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+        .env_remove("OPENBITFUN_E2E_HOME")
+        .env_remove("OPENBITFUN_E2E_USER_ROOT")
         .output()
         .expect("run isolated clean-sync poll test");
         assert!(
@@ -2626,10 +2626,10 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
-                project_label: Some("BitFun".to_string()),
+                project_label: Some("OpenBitFun".to_string()),
                 remote_url: None,
                 base_commit: "0".repeat(40),
-                branch: "bitfun/dispatch/job-1".to_string(),
+                branch: "openbitfun/dispatch/job-1".to_string(),
             },
         )
         .expect("partial repository should be rebuilt");
@@ -2673,7 +2673,7 @@ mod tests {
             job_id: "job-1".to_string(),
             repo_key: "abcdef0123456789".to_string(),
             remote_url: None,
-            project_label: Some("BitFun".to_string()),
+            project_label: Some("OpenBitFun".to_string()),
             base_commit: base_commit.to_string(),
             branch: "main".to_string(),
         };
@@ -2715,14 +2715,18 @@ mod tests {
         // The controller branches its baseline before bundling, so the managed
         // branch is what the target fetches out of the bundle.
         let bundle = temp.path().join("base.bundle");
-        git(&source, &["branch", &format!("bitfun/dispatch/{first}")]).expect("managed branch");
+        git(
+            &source,
+            &["branch", &format!("openbitfun/dispatch/{first}")],
+        )
+        .expect("managed branch");
         git(
             &source,
             &[
                 "bundle",
                 "create",
                 path_arg(&bundle).expect("path"),
-                &format!("bitfun/dispatch/{first}"),
+                &format!("openbitfun/dispatch/{first}"),
             ],
         )
         .expect("bundle");
@@ -2732,9 +2736,9 @@ mod tests {
             job_id: job_id.to_string(),
             repo_key: "abcdef0123456789".to_string(),
             remote_url: None,
-            project_label: Some("BitFun".to_string()),
+            project_label: Some("OpenBitFun".to_string()),
             base_commit: base_commit.clone(),
-            branch: format!("bitfun/dispatch/{job_id}"),
+            branch: format!("openbitfun/dispatch/{job_id}"),
         };
 
         // The first session has to carry the objects over: nothing is cached yet.
@@ -2797,7 +2801,7 @@ mod tests {
                 &["symbolic-ref", "--quiet", "--short", "HEAD"],
             )
             .expect("branch");
-            assert_eq!(branch.trim(), format!("bitfun/dispatch/{job_id}"));
+            assert_eq!(branch.trim(), format!("openbitfun/dispatch/{job_id}"));
         }
 
         // And re-provisioning either one is still idempotent.
@@ -2814,11 +2818,11 @@ mod tests {
         };
         assert_eq!(
             label(&worktree_directory_name(
-                Some("BitFun"),
+                Some("OpenBitFun"),
                 None,
                 "dispatch-3d82ff46-bbf9-44c3"
             )),
-            "BitFun"
+            "OpenBitFun"
         );
         // No label: the remote's own basename is the next most recognizable name.
         assert_eq!(
@@ -2843,7 +2847,10 @@ mod tests {
             "workspace"
         );
         // An id with no characters to digest still yields a usable directory.
-        assert_eq!(worktree_directory_name(Some("BitFun"), None, ""), "BitFun");
+        assert_eq!(
+            worktree_directory_name(Some("OpenBitFun"), None, ""),
+            "OpenBitFun"
+        );
     }
 
     /// Every job id is minted as `dispatch-<uuid>`, so a suffix sliced off the
@@ -2851,13 +2858,13 @@ mod tests {
     /// of a project onto one directory and made the second one fail to provision.
     #[test]
     fn every_job_of_one_project_gets_its_own_worktree_directory() {
-        let name = |job_id: &str| worktree_directory_name(Some("BitFun"), None, job_id);
+        let name = |job_id: &str| worktree_directory_name(Some("OpenBitFun"), None, job_id);
         let first = name("dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f");
         let second = name("dispatch-ac8fe8a3-85c7-4091-9ba4-856db2d55c2b");
 
         assert_ne!(first, second);
-        assert!(first.starts_with("BitFun-"), "{first} lost its label");
-        assert!(second.starts_with("BitFun-"), "{second} lost its label");
+        assert!(first.starts_with("OpenBitFun-"), "{first} lost its label");
+        assert!(second.starts_with("OpenBitFun-"), "{second} lost its label");
         // Stable across calls: a retry must land on the directory it already has.
         assert_eq!(first, name("dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f"));
         // Ids that differ only past the slice window still separate.
@@ -2869,7 +2876,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
         let name = worktree_directory_name(
-            Some("BitFun"),
+            Some("OpenBitFun"),
             None,
             "dispatch-3d82ff46-bbf9-44c3-9c0f-2a1b0c4d5e6f",
         );

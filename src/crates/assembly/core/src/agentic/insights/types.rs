@@ -197,7 +197,7 @@ pub struct UsagePattern {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InsightsSuggestions {
-    pub bitfun_md_additions: Vec<MdAddition>,
+    pub openbitfun_md_additions: Vec<MdAddition>,
     pub features_to_try: Vec<FeatureRecommendation>,
     pub usage_patterns: Vec<UsagePattern>,
 }

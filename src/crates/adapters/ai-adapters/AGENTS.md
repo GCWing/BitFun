@@ -2,11 +2,11 @@
 
 Scope: this guide applies to `src/crates/adapters/ai-adapters`.
 
-`bitfun-ai-adapters` owns provider-specific request/response mapping, stream
+`openbitfun-ai-adapters` owns provider-specific request/response mapping, stream
 protocol parsing, subscription auth (in-app OAuth login and credential
 resolution), and provider/model selection helpers that are independent of core
 config IO. Keep provider quirks here, then convert stream chunks into the
-provider-neutral contracts owned by `bitfun-agent-stream`.
+provider-neutral contracts owned by `openbitfun-agent-stream`.
 
 ## Guardrails
 
@@ -30,9 +30,9 @@ provider-neutral contracts owned by `bitfun-agent-stream`.
 ## Verification
 
 ```bash
-cargo test -p bitfun-agent-stream
-cargo test -p bitfun-ai-adapters
-cargo test -p bitfun-ai-adapters --features subscription-auth subscription_auth
+cargo test -p openbitfun-agent-stream
+cargo test -p openbitfun-ai-adapters
+cargo test -p openbitfun-ai-adapters --features subscription-auth subscription_auth
 ```
 
 If stream behavior affects core integration, also run the relevant tests in

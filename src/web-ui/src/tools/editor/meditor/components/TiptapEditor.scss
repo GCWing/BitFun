@@ -8,7 +8,7 @@
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  padding: var(--bf-space-4);
+  padding: var(--openbitfun-space-4);
   border-radius: 0;
 
   /* Single contenteditable surface: suppress global :focus-visible ring on the whole editor */
@@ -22,42 +22,42 @@
   .ProseMirror {
     min-height: 100%;
     outline: none;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
 
     /* blockId lives on <hr> itself — do not use paragraph chrome (padding + radius + hover fill) on hr */
     > [data-block-id]:not(hr) {
-      margin-bottom: var(--bf-space-2);
-      padding: var(--bf-space-2);
+      margin-bottom: var(--openbitfun-space-2);
+      padding: var(--openbitfun-space-2);
       border-radius: 0;
-      transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+      transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
       &:hover {
-        background: var(--bf-color-surface-subtle);
+        background: var(--openbitfun-color-surface-subtle);
       }
 
       &.m-editor-tiptap-block-highlighted {
-        background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
       }
     }
 
     > p.is-empty {
       position: relative;
-      min-height: calc(var(--bf-type-label-md-font-size) * var(--bf-type-body-lg-line-height));
+      min-height: calc(var(--openbitfun-type-label-md-font-size) * var(--openbitfun-type-body-lg-line-height));
     }
 
     > p.is-empty::before {
       content: attr(data-placeholder);
-      color: var(--bf-color-content-disabled);
+      color: var(--openbitfun-color-content-disabled);
       float: left;
       height: 0;
-      font-size: var(--bf-type-label-md-font-size);
-      letter-spacing: var(--bf-type-body-sm-letter-spacing);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
-      transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     }
 
     > p.is-empty::before {
@@ -87,35 +87,35 @@
     h5,
     h6 {
       margin: 0;
-      color: var(--bf-color-content-primary);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
 
     h1 {
-      font-size: var(--bf-type-heading-dialog-font-size);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-heading-dialog-font-size);
+      color: var(--openbitfun-color-content-primary);
       text-align: center;
     }
 
     h2 {
-      font-size: var(--bf-type-flow-section-title-font-size);
+      font-size: var(--openbitfun-type-flow-section-title-font-size);
     }
 
     h3 {
-      font-size: var(--bf-type-flow-title-font-size);
+      font-size: var(--openbitfun-type-flow-title-font-size);
     }
 
     h4 {
-      font-size: var(--bf-type-body-lg-font-size);
+      font-size: var(--openbitfun-type-body-lg-font-size);
     }
 
     h5 {
-      font-size: var(--bf-type-body-md-font-size);
+      font-size: var(--openbitfun-type-body-md-font-size);
     }
 
     h6 {
-      font-size: var(--bf-type-label-md-font-size);
-      letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
       text-transform: uppercase;
     }
 
@@ -133,13 +133,13 @@
       margin: 0.25rem 0.3rem;
       padding: markdownCode.$pre-padding;
       overflow-x: auto;
-      font-size: var(--bf-type-flow-code-font-size);
-      line-height: var(--bf-type-body-sm-line-height);
-      font-family:var(--bf-type-code-md-font-family);
+      font-size: var(--openbitfun-type-flow-code-font-size);
+      line-height: var(--openbitfun-type-body-sm-line-height);
+      font-family:var(--openbitfun-type-code-md-font-family);
       color: markdownCode.$pre-code-fg;
       background: markdownCode.$pre-bg;
       border: 1px dashed markdownCode.$pre-border;
-      border-radius: var(--bf-control-flow-chat-card-radius);
+      border-radius: var(--openbitfun-control-flow-chat-card-radius);
       box-shadow: markdownCode.$pre-shadow;
       transition:
         border-color 0.3s ease,
@@ -155,12 +155,12 @@
     code {
       padding: 0.1em 0.4em;
       margin: 0 0.05em;
-      font-size: var(--bf-type-label-md-font-size);
-      font-weight: var(--bf-type-label-sm-font-weight);
-      line-height: var(--bf-type-modifier-leading-ui-line-height);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
+      line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
       vertical-align: baseline;
       white-space: nowrap;
-      font-family:var(--bf-type-code-md-font-family);
+      font-family:var(--openbitfun-type-code-md-font-family);
       color: markdownCode.$inline-code-fg;
       background: markdownCode.$inline-code-bg;
       border: 1px solid markdownCode.$inline-code-border;
@@ -183,7 +183,7 @@
       display: block;
       padding: 0;
       margin: 0;
-      font-size: var(--bf-type-flow-code-font-size);
+      font-size: var(--openbitfun-type-flow-code-font-size);
       font-weight: inherit;
       white-space: pre-wrap;
       word-break: break-word;
@@ -203,10 +203,10 @@
     hr {
       display: block;
       height: 0;
-      margin: var(--bf-space-4) 0;
+      margin: var(--openbitfun-space-4) 0;
       padding: 0;
       border: 0;
-      border-top: 1px solid var(--bf-color-border-subtle);
+      border-top: 1px solid var(--openbitfun-color-border-subtle);
       background: none;
       background-color: transparent;
       overflow: visible;
@@ -214,11 +214,11 @@
       border-radius: 0;
 
       &[data-block-id] {
-        margin-bottom: var(--bf-space-2);
+        margin-bottom: var(--openbitfun-space-2);
       }
 
       &[data-block-id].m-editor-tiptap-block-highlighted {
-        border-top-color: color-mix(in srgb, var(--bf-color-status-warning-content) 55%, transparent);
+        border-top-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 55%, transparent);
       }
     }
 
@@ -227,11 +227,11 @@
       width: 100%;
       border-collapse: collapse;
       border-spacing: 0;
-      margin: var(--bf-space-4) 0;
+      margin: var(--openbitfun-space-4) 0;
       table-layout: fixed;
-      font-size: var(--bf-type-body-md-font-size);
+      font-size: var(--openbitfun-type-body-md-font-size);
       border: 1px solid markdownTable.$border;
-      border-radius: var(--bf-control-flow-chat-card-radius);
+      border-radius: var(--openbitfun-control-flow-chat-card-radius);
       background: markdownTable.$surface;
       box-shadow: markdownTable.$shadow;
       overflow: hidden;
@@ -239,7 +239,7 @@
 
     th,
     td {
-      padding: var(--bf-space-3) var(--bf-space-4);
+      padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
       border: none;
       border-bottom: 1px solid markdownTable.$cell-border;
       vertical-align: top;
@@ -248,17 +248,17 @@
       overflow-wrap: anywhere;
       text-align: left;
       background: transparent;
-      transition: background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     }
 
     th {
-      font-weight: var(--bf-type-label-selected-font-weight);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
       background: markdownTable.$th-bg;
       color: markdownTable.$th-fg;
     }
 
     td {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
     }
 
     th + th,
@@ -296,30 +296,30 @@
 
     tbody tr:first-child th:first-child,
     thead th:first-child {
-      border-top-left-radius: var(--bf-control-flow-chat-card-radius);
+      border-top-left-radius: var(--openbitfun-control-flow-chat-card-radius);
     }
 
     tbody tr:first-child th:last-child,
     thead th:last-child {
-      border-top-right-radius: var(--bf-control-flow-chat-card-radius);
+      border-top-right-radius: var(--openbitfun-control-flow-chat-card-radius);
     }
 
     tbody tr:last-child td:first-child,
     tbody tr:last-child th:first-child {
-      border-bottom-left-radius: var(--bf-control-flow-chat-card-radius);
+      border-bottom-left-radius: var(--openbitfun-control-flow-chat-card-radius);
     }
 
     tbody tr:last-child td:last-child,
     tbody tr:last-child th:last-child {
-      border-bottom-right-radius: var(--bf-control-flow-chat-card-radius);
+      border-bottom-right-radius: var(--openbitfun-control-flow-chat-card-radius);
     }
 
     tbody tr:first-child th:only-child {
-      border-radius: var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius) 0 0;
+      border-radius: var(--openbitfun-control-flow-chat-card-radius) var(--openbitfun-control-flow-chat-card-radius) 0 0;
     }
 
     tbody tr:last-child td:only-child {
-      border-radius: 0 0 var(--bf-control-flow-chat-card-radius) var(--bf-control-flow-chat-card-radius);
+      border-radius: 0 0 var(--openbitfun-control-flow-chat-card-radius) var(--openbitfun-control-flow-chat-card-radius);
     }
 
     th code,
@@ -347,7 +347,7 @@
     > ol:not([data-type='taskList']) > li {
       list-style: none;
       position: relative;
-      margin-bottom: var(--bf-space-1);
+      margin-bottom: var(--openbitfun-space-1);
       padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
     }
 
@@ -357,8 +357,8 @@
       left: 0;
       top: 0;
       width: markdownLayout.$list-marker-width;
-      color: var(--bf-color-content-primary);
-      font-weight: var(--bf-type-label-sm-font-weight);
+      color: var(--openbitfun-color-content-primary);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
 
     > ul:not([data-type='taskList']) > li::before {
@@ -381,7 +381,7 @@
 
     li > ul:not([data-type='taskList']),
     li > ol:not([data-type='taskList']) {
-      margin-top: var(--bf-space-1);
+      margin-top: var(--openbitfun-space-1);
       margin-bottom: 0;
       padding-left: markdownLayout.$list-indent;
     }
@@ -397,7 +397,7 @@
       grid-template-columns: markdownLayout.$list-marker-width 1fr;
       column-gap: markdownLayout.$list-gap;
       align-items: start;
-      margin-bottom: var(--bf-space-1);
+      margin-bottom: var(--openbitfun-space-1);
     }
 
     > ul[data-type='taskList'] > li > label {
@@ -425,7 +425,7 @@
 
     ul[data-type='taskList'] li > ul,
     ul[data-type='taskList'] li > ol {
-      margin-top: var(--bf-space-1);
+      margin-top: var(--openbitfun-space-1);
       margin-bottom: 0;
       padding-left: markdownLayout.$list-indent;
     }
@@ -436,11 +436,11 @@
     }
 
     li > p + p {
-      margin-top: var(--bf-space-2);
+      margin-top: var(--openbitfun-space-2);
     }
 
     a {
-      color: var(--bf-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
       text-decoration: none;
 
       &:hover {
@@ -452,7 +452,7 @@
       max-width: 100%;
       box-sizing: content-box;
       background-color: transparent;
-      border-radius: var(--bf-radius-base);
+      border-radius: var(--openbitfun-radius-base);
       vertical-align: middle;
     }
   }
@@ -461,8 +461,8 @@
     position: absolute;
     z-index: 20;
     width: auto;
-    max-width: calc(100% - var(--bf-space-8));
-    color: var(--bf-color-content-primary);
+    max-width: calc(100% - var(--openbitfun-space-8));
+    color: var(--openbitfun-color-content-primary);
   }
 
   .m-editor-inline-ai__surface {
@@ -472,12 +472,12 @@
   .m-editor-inline-ai__panel {
     @include surfaces.floating;
 
-    width: min(26rem, calc(100vw - var(--bf-space-8)));
+    width: min(26rem, calc(100vw - var(--openbitfun-space-8)));
     padding: 10px 10px 8px;
   }
 
   .m-editor-inline-ai__composer {
-    margin-bottom: var(--bf-space-1);
+    margin-bottom: var(--openbitfun-space-1);
   }
 
   .m-editor-inline-ai__composer-input {
@@ -496,20 +496,20 @@
     padding: 2px 8px;
     min-height: 0;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-content-muted) 14%, transparent);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    background: color-mix(in srgb, var(--openbitfun-color-content-muted) 14%, transparent);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     white-space: nowrap;
   }
 
   .m-editor-inline-ai__section-title {
-    margin: var(--bf-space-2) 0 6px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    margin: var(--openbitfun-space-2) 0 6px;
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     opacity: 0.72;
   }
 
@@ -528,7 +528,7 @@
   .m-editor-inline-ai__footer {
     display: flex;
     justify-content: flex-end;
-    margin-top: var(--bf-space-1);
+    margin-top: var(--openbitfun-space-1);
   }
 
   .m-editor-inline-ai-widget {
@@ -537,9 +537,9 @@
   }
 
   .m-editor-inline-ai-preview {
-    margin: var(--bf-space-2) 0 var(--bf-space-3);
+    margin: var(--openbitfun-space-2) 0 var(--openbitfun-space-3);
     padding: 0;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .m-editor-inline-ai-preview--inline {
@@ -550,20 +550,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     margin-bottom: 6px;
   }
 
   .m-editor-inline-ai-preview__title {
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-accent-default);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-accent-default);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
   }
 
   .m-editor-inline-ai-preview__status {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-disabled);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-disabled);
     white-space: nowrap;
   }
 
@@ -571,9 +571,9 @@
     overflow: visible;
     position: relative;
     color: inherit;
-    padding-left: var(--bf-space-3);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    padding-left: var(--openbitfun-space-3);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 
   .m-editor-inline-ai-preview__body::before {
@@ -584,25 +584,25 @@
     bottom: 6px;
     width: 2px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
   }
 
   .m-editor-inline-ai-preview--streaming,
   .m-editor-inline-ai-preview--submitting,
   .m-editor-inline-ai-preview--ready {
     .m-editor-inline-ai-preview__body {
-      color: color-mix(in srgb, var(--bf-color-accent-default) 68%, var(--bf-color-content-secondary));
+      color: color-mix(in srgb, var(--openbitfun-color-accent-default) 68%, var(--openbitfun-color-content-secondary));
     }
   }
 
   .m-editor-inline-ai-preview--error {
     .m-editor-inline-ai-preview__title,
     .m-editor-inline-ai-preview__body {
-      color: var(--bf-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-content);
     }
 
     .m-editor-inline-ai-preview__body::before {
-      background: var(--bf-color-status-danger-border);
+      background: var(--openbitfun-color-status-danger-border);
     }
   }
 
@@ -611,9 +611,9 @@
   }
 
   .m-editor-inline-ai-rendered__loading {
-    margin-bottom: var(--bf-space-2);
-    color: var(--bf-color-content-disabled);
-    font-size: var(--bf-type-label-sm-font-size);
+    margin-bottom: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-disabled);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   .m-editor-inline-ai-rendered__content {
@@ -625,7 +625,7 @@
     margin: 0 0 6px;
     padding: 4px 8px;
     border-radius: 8px;
-    transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   .m-editor-inline-ai-rendered__content > *:first-child {
@@ -640,20 +640,20 @@
   .m-editor-inline-ai-rendered__content.markdown-body h2,
   .m-editor-inline-ai-rendered__content.markdown-body h3 {
     color: inherit;
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h1 {
-    font-size: var(--bf-type-body-lg-font-size);
+    font-size: var(--openbitfun-type-body-lg-font-size);
     text-align: left;
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h2 {
-    font-size: var(--bf-type-body-md-font-size);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body h3 {
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body p {
@@ -664,7 +664,7 @@
     margin: 0 0 6px;
     padding: markdownCode.$bq-padding;
     font-style: italic;
-    font-size: var(--bf-type-meta-font-size);
+    font-size: var(--openbitfun-type-meta-font-size);
     color: markdownCode.$bq-fg;
     background: markdownCode.$bq-bg;
     border-left: 3px solid markdownCode.$bq-border;
@@ -675,13 +675,13 @@
   .m-editor-inline-ai-rendered__content.markdown-body pre {
     margin: 0 0 6px;
     padding: 8px 10px;
-    font-size: var(--bf-type-meta-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    font-family:var(--openbitfun-type-code-md-font-family);
     color: markdownCode.$pre-code-fg;
     background: markdownCode.$pre-bg;
     border: 1px dashed markdownCode.$pre-border;
-    border-radius: var(--bf-control-flow-chat-card-radius);
+    border-radius: var(--openbitfun-control-flow-chat-card-radius);
     box-shadow: markdownCode.$pre-shadow;
     overflow-x: auto;
     transition:
@@ -714,9 +714,9 @@
   .m-editor-inline-ai-rendered__content.markdown-body td code,
   .m-editor-inline-ai-rendered__content.markdown-body th code {
     padding: 0.1em 0.35em;
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    font-family:var(--bf-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    font-family:var(--openbitfun-type-code-md-font-family);
     color: markdownCode.$inline-code-fg;
     background: markdownCode.$inline-code-bg;
     border: 1px solid markdownCode.$inline-code-border;
@@ -724,7 +724,7 @@
   }
 
   .m-editor-inline-ai-rendered__content.markdown-body hr {
-    margin: var(--bf-space-2) 0;
+    margin: var(--openbitfun-space-2) 0;
     border: none;
     border-top: 1px solid color-mix(in srgb, currentColor 24%, transparent);
   }
@@ -746,8 +746,8 @@
 
   .m-editor-inline-ai-preview__placeholder {
     color: inherit;
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     padding: 4px 6px;
   }
 
@@ -756,44 +756,44 @@
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 6px;
-    margin-left: var(--bf-space-3);
+    margin-left: var(--openbitfun-space-3);
   }
 
   .m-editor-inline-ai__error {
-    margin-top: var(--bf-space-2);
-    color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-type-label-sm-font-size);
+    margin-top: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   .m-editor-render-only-block,
   .m-editor-raw-html-block,
   .m-editor-frontmatter {
-    margin: var(--bf-space-3) 0;
+    margin: var(--openbitfun-space-3) 0;
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-base);
-    background: var(--bf-color-action-quiet-hover);
-    color: var(--bf-color-content-secondary);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .m-editor-frontmatter__header {
     display: flex;
     align-items: center;
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-color-border-default);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
     user-select: none;
   }
 
   .m-editor-frontmatter__label {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .m-editor-raw-html-inline {
-    color: var(--bf-color-content-secondary);
-    background: color-mix(in srgb, var(--bf-color-status-warning-content) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bf-color-status-warning-content) 28%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 28%, transparent);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -804,17 +804,17 @@
 
   .m-editor-raw-html-block__label,
   .m-editor-raw-html-inline__label {
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wide-letter-spacing);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
     text-transform: uppercase;
-    color: var(--bf-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   .m-editor-raw-html-inline__source {
     margin: 0;
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -857,18 +857,18 @@
   .m-editor-raw-html-block__textarea,
   .m-editor-frontmatter__textarea {
     margin: 0;
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
     display: block;
     width: 100%;
     min-height: 180px;
     resize: vertical;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 94%, var(--bf-color-content-on-light));
-    color: var(--bf-color-content-primary);
-    padding: var(--bf-space-3);
-    line-height: var(--bf-type-support-line-height);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 12%, transparent);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 94%, var(--openbitfun-color-content-on-light));
+    color: var(--openbitfun-color-content-primary);
+    padding: var(--openbitfun-space-3);
+    line-height: var(--openbitfun-type-support-line-height);
     word-break: break-word;
     outline: none;
     user-select: text;
@@ -876,8 +876,8 @@
     -webkit-user-drag: none;
 
     &:focus {
-      border-color: color-mix(in srgb, var(--bf-color-content-primary) 20%, transparent);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
+      border-color: color-mix(in srgb, var(--openbitfun-color-content-primary) 20%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
     }
   }
 
@@ -902,7 +902,7 @@
 
     &:focus {
       border-color: transparent;
-      box-shadow: inset 0 0 0 1px var(--bf-color-border-default);
+      box-shadow: inset 0 0 0 1px var(--openbitfun-color-border-default);
     }
   }
 
@@ -912,16 +912,16 @@
 
   .m-editor-frontmatter__preview > .m-editor-frontmatter__source {
     margin: 0;
-    padding: var(--bf-space-3);
+    padding: var(--openbitfun-space-3);
     overflow-x: auto;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    color: var(--bf-color-content-secondary);
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    line-height: var(--bf-type-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    line-height: var(--openbitfun-type-support-line-height);
     white-space: pre;
 
     &:hover {
@@ -933,7 +933,7 @@
 
   .m-editor-render-only-block__preview .m-editor-render-only-block__markdown,
   .m-editor-raw-html-block__preview .m-editor-raw-html-block__markdown {
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .m-editor-render-only-block__preview .m-editor-render-only-block__markdown > :first-child,
@@ -961,16 +961,16 @@
   .m-editor-frontmatter__source-fallback {
     display: none;
     margin: 0;
-    font-family:var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
+    font-family:var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
     white-space: pre-wrap;
     word-break: break-word;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 12%, transparent);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 94%, var(--bf-color-content-on-light));
-    color: var(--bf-color-content-primary);
-    padding: var(--bf-space-3);
-    line-height: var(--bf-type-support-line-height);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 12%, transparent);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 94%, var(--openbitfun-color-content-on-light));
+    color: var(--openbitfun-color-content-primary);
+    padding: var(--openbitfun-space-3);
+    line-height: var(--openbitfun-type-support-line-height);
   }
 
   .m-editor-render-only-block[data-preview-empty='true'] .m-editor-render-only-block__preview,
@@ -991,8 +991,8 @@
   .m-editor-render-only-block__details-summary,
   .m-editor-raw-html-block__details-summary {
     cursor: pointer;
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
     list-style-position: outside;
   }
 
@@ -1003,7 +1003,7 @@
 
   .m-editor-render-only-block__details-body,
   .m-editor-raw-html-block__details-body {
-    margin-top: var(--bf-space-3);
+    margin-top: var(--openbitfun-space-3);
   }
 
   .m-editor-render-only-block__details-body > :first-child,
@@ -1020,29 +1020,29 @@
     display: grid;
     grid-template-columns: 20px minmax(0, 1fr);
     align-items: start;
-    gap: var(--bf-space-2);
-    margin: var(--bf-space-3) 0;
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 88%, var(--bf-color-content-on-dark));
+    gap: var(--openbitfun-space-2);
+    margin: var(--openbitfun-space-3) 0;
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 88%, var(--openbitfun-color-content-on-dark));
   }
 
   [data-type='details'] > button {
     border: none;
     background: transparent;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     padding: 0;
     width: 20px;
     height: 20px;
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     margin-top: 2px;
   }
 
   [data-type='details'] > button::before {
     content: '▸';
-    font-size: var(--bf-type-body-md-font-size);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
   [data-type='details'].is-open > button::before {
@@ -1056,9 +1056,9 @@
   [data-type='details'] summary {
     display: block;
     list-style: none;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     outline: none;
   }
 
@@ -1068,7 +1068,7 @@
   }
 
   [data-type='details'] [data-type='detailsContent'] {
-    padding-top: var(--bf-space-3);
+    padding-top: var(--openbitfun-space-3);
   }
 
   [data-type='details'] [data-type='detailsContent'] > :first-child {
@@ -1080,32 +1080,32 @@
   }
 
   .m-editor-details-block {
-    margin: var(--bf-space-3) 0;
-    border: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 10%, transparent);
-    border-radius: var(--bf-radius-base);
-    background: color-mix(in srgb, var(--bf-color-surface-scene) 88%, var(--bf-color-content-on-dark));
+    margin: var(--openbitfun-space-3) 0;
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 10%, transparent);
+    border-radius: var(--openbitfun-radius-base);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 88%, var(--openbitfun-color-content-on-dark));
     overflow: hidden;
   }
 
   .m-editor-details-block__header {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
-    background: color-mix(in srgb, var(--bf-color-content-primary) 4%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--bf-color-content-primary) 8%, transparent);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    background: color-mix(in srgb, var(--openbitfun-color-content-primary) 4%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--openbitfun-color-content-primary) 8%, transparent);
   }
 
   .m-editor-details-block__toggle {
     border: none;
     background: transparent;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     padding: 0;
     width: 20px;
     height: 20px;
-    font-size: var(--bf-type-body-md-font-size);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    font-size: var(--openbitfun-type-body-md-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   }
 
   .m-editor-details-block__summary {
@@ -1113,18 +1113,18 @@
     min-width: 0;
     border: none;
     background: transparent;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     outline: none;
   }
 
   .m-editor-details-block__summary::placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .m-editor-details-block__body {
-    padding: var(--bf-space-3);
+    padding: var(--openbitfun-space-3);
   }
 
   .m-editor-details-block__content > :first-child {
@@ -1136,9 +1136,9 @@
   }
 }
 
-:root[data-bf-appearance-mode="light"] .m-editor-tiptap,
-:root[data-bf-appearance-mode="light"] .m-editor-tiptap,
-[data-bf-appearance-mode="light"] .m-editor-tiptap,
+:root[data-openbitfun-appearance-mode="light"] .m-editor-tiptap,
+:root[data-openbitfun-appearance-mode="light"] .m-editor-tiptap,
+[data-openbitfun-appearance-mode="light"] .m-editor-tiptap,
 .light .m-editor-tiptap {
   .ProseMirror {
     blockquote {

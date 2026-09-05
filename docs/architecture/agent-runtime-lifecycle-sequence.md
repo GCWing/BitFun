@@ -1,7 +1,7 @@
 # Agent Runtime 生命周期时序
 
 本文件是 [`agent-runtime-services-design.md`](agent-runtime-services-design.md) 的生命周期补充，
-描述 `bitfun-agent-runtime` 的 `sdk` / `AgentRuntime` 门面如何把智能体（agent）从构建到销毁的
+描述 `openbitfun-agent-runtime` 的 `sdk` / `AgentRuntime` 门面如何把智能体（agent）从构建到销毁的
 全生命周期映射到具体接口与底层 Port。当前接口名称、字段和消费方以代码为准：
 [sdk.rs](../../src/crates/execution/agent-runtime/src/sdk.rs)、
 [runtime.rs](../../src/crates/execution/agent-runtime/src/runtime.rs)、
@@ -12,7 +12,7 @@
 
 > 范围：本文件只描述 `agent-runtime` crate 暴露的稳定 SDK 接口与对应 Port 的调用顺序，不构成
 > 对内部协调器、调度器、持久化或具体工具执行的承诺。`run()` 是 SDK 层对「会话解析 + turn 提交」
-> 的编排封装，真实 turn 执行由 `bitfun-core` owner 在端口实现侧完成。
+> 的编排封装，真实 turn 执行由 `openbitfun-core` owner 在端口实现侧完成。
 
 ## 生命周期阶段总览
 
@@ -30,7 +30,7 @@
 ## 时序图
 
 ```
-调用方(SDK)          AgentRuntime(sdk.rs)        底层Port(runtime.rs)         事件/状态            bitfun-core实现
+调用方(SDK)          AgentRuntime(sdk.rs)        底层Port(runtime.rs)         事件/状态            openbitfun-core实现
     │                       │                          │                     │                       │
     │═══════════════════════╗│                          │                     │                       │
     │ ① 构建期 (Build)      ║│                          │                     │                       │

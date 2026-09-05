@@ -1,27 +1,27 @@
-@layer bf.components {
+@layer openbitfun.components {
   .field {
-    --_field-height: var(--bf-control-height-sm);
+    --_field-height: var(--openbitfun-control-height-sm);
     --_field-icon-size: 14px;
 
     display: inline-flex;
     align-items: center;
     min-inline-size: 0;
     block-size: var(--_field-height);
-    gap: var(--bf-space-2);
-    padding-inline: var(--bf-space-2);
-    border: var(--bf-border-width-default) solid var(--bf-color-field-border);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-field-background);
+    gap: var(--openbitfun-space-2);
+    padding-inline: var(--openbitfun-space-2);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-field-background);
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .field:hover:not([data-disabled="true"]) {
-    border-color: var(--bf-color-field-border-hover);
-    background: var(--bf-color-field-background-hover);
+    border-color: var(--openbitfun-color-field-border-hover);
+    background: var(--openbitfun-color-field-background-hover);
   }
 
   .field[data-field-surface="ambient"],
@@ -30,30 +30,30 @@
   }
 
   .field:focus-within {
-    border-color: var(--bf-color-field-border-focus);
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-focus-ring);
+    border-color: var(--openbitfun-color-field-border-focus);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
   .field[data-invalid="true"] {
-    border-color: var(--bf-color-status-danger-border);
+    border-color: var(--openbitfun-color-status-danger-border);
   }
 
   .field[data-invalid="true"]:focus-within {
-    box-shadow: 0 0 0 var(--bf-focus-width) var(--bf-color-status-danger-surface);
+    box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-status-danger-surface);
   }
 
   .field[data-disabled="true"] {
-    color: var(--bf-color-content-disabled);
+    color: var(--openbitfun-color-content-disabled);
     cursor: not-allowed;
   }
 
   .field[data-size="md"] {
-    --_field-height: var(--bf-control-height-md);
+    --_field-height: var(--openbitfun-control-height-md);
     --_field-icon-size: 16px;
   }
 
   .field[data-size="lg"] {
-    --_field-height: var(--bf-control-height-lg);
+    --_field-height: var(--openbitfun-control-height-lg);
     --_field-icon-size: 20px;
   }
 
@@ -65,18 +65,18 @@
     padding: 0;
     border: 0;
     outline: 0;
-    caret-color: var(--bf-color-accent-default);
+    caret-color: var(--openbitfun-color-accent-default);
     color: inherit;
     background: transparent;
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   }
 
   .input::placeholder {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 1;
   }
 
@@ -94,13 +94,13 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .leading > :where(svg, img),
   .trailing > :where(svg, img),
-  .leading > [data-bf-component="icon"],
-  .trailing > [data-bf-component="icon"] {
+  .leading > [data-openbitfun-component="icon"],
+  .trailing > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: var(--_field-icon-size);
     block-size: var(--_field-icon-size);
@@ -120,7 +120,7 @@
 
     .field:focus-within {
       border-color: Highlight;
-      box-shadow: 0 0 0 var(--bf-focus-width) Highlight;
+      box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
     }
   }
 }

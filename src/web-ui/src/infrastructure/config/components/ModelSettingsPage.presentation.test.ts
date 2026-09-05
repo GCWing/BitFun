@@ -26,14 +26,14 @@ describe('ModelSettingsPage presentation', () => {
   });
 
   it('preserves the intrinsic width of design-system switches in edit rows', () => {
-    expect(styles.match(/> :not\(\[data-bf-component='switch'\]\)/g)).toHaveLength(2);
+    expect(styles.match(/> :not\(\[data-openbitfun-component='switch'\]\)/g)).toHaveLength(2);
     expect(styles).not.toMatch(/> \* \{\s*min-width: 0;\s*width: 100%/);
     expect(styles).not.toMatch(/> \* \{\s*width: auto;\s*max-width: none;/);
   });
 
   it('lets advanced mode actions align to the right edge of their rows', () => {
     expect(styles).toMatch(
-      /&__custom-headers-row,\s*&__custom-request-body-row\s*\{\s*> \.bitfun-config-page-row__meta\s*\{\s*width: 100%;\s*max-width: none;/,
+      /&__custom-headers-row,\s*&__custom-request-body-row\s*\{\s*> \.openbitfun-config-page-row__meta\s*\{\s*width: 100%;\s*max-width: none;/,
     );
     expect(styles).toMatch(/&__inline-header-actions\s*\{[\s\S]*?margin-left: auto;/);
   });

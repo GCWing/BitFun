@@ -58,36 +58,36 @@ describe('ComposerVoiceInputButton', () => {
       root.render(<ComposerVoiceInputButton controller={createRecordingController()} />);
     });
 
-    const cancel = container.querySelector<HTMLButtonElement>('[data-bf-action="cancel"] button');
-    const transcribe = container.querySelector<HTMLButtonElement>('[data-bf-action="transcribe"] button');
-    const send = container.querySelector<HTMLButtonElement>('[data-bf-action="send"] button');
-    const actionShells = container.querySelectorAll<HTMLElement>('[data-bf-part="action"]');
+    const cancel = container.querySelector<HTMLButtonElement>('[data-openbitfun-action="cancel"] button');
+    const transcribe = container.querySelector<HTMLButtonElement>('[data-openbitfun-action="transcribe"] button');
+    const send = container.querySelector<HTMLButtonElement>('[data-openbitfun-action="send"] button');
+    const actionShells = container.querySelectorAll<HTMLElement>('[data-openbitfun-part="action"]');
 
     expect(actionShells).toHaveLength(3);
     actionShells.forEach((actionShell) => {
-      expect(actionShell.classList.contains('bitfun-chat-input__voice-pill-action-shell')).toBe(true);
+      expect(actionShell.classList.contains('openbitfun-chat-input__voice-pill-action-shell')).toBe(true);
     });
 
     expect(cancel).toMatchObject({
       dataset: expect.objectContaining({
-        bfRole: 'composer-action',
-        bfShape: 'circle',
-        bfVariant: 'quiet',
+        openbitfunRole: 'composer-action',
+        openbitfunShape: 'circle',
+        openbitfunVariant: 'quiet',
       }),
     });
     expect(transcribe).toMatchObject({
       dataset: expect.objectContaining({
-        bfRole: 'composer-action',
-        bfShape: 'circle',
-        bfVariant: 'fill',
+        openbitfunRole: 'composer-action',
+        openbitfunShape: 'circle',
+        openbitfunVariant: 'fill',
       }),
     });
     expect(send).toMatchObject({
       dataset: expect.objectContaining({
-        bfRole: 'composer-action',
-        bfShape: 'circle',
-        bfTone: 'danger',
-        bfVariant: 'primary',
+        openbitfunRole: 'composer-action',
+        openbitfunShape: 'circle',
+        openbitfunTone: 'danger',
+        openbitfunVariant: 'primary',
       }),
     });
   });

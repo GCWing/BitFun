@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
-use bitfun_product_domains::external_sources::{
+use clap::ValueEnum;
+use openbitfun_product_domains::external_sources::{
     ExternalMcpImportApplyOutcomeV1, ExternalMcpImportApplyRequestV1,
     ExternalMcpImportDispositionV1, ExternalMcpImportPlanV1, ExternalMcpImportSelectionV1,
     EXTERNAL_MCP_IMPORT_SCHEMA_V1,
 };
-use clap::ValueEnum;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -22,7 +22,7 @@ pub(crate) struct McpImportCommand {
 
 pub(crate) async fn execute(command: McpImportCommand) -> Result<()> {
     let workspace = std::env::current_dir().ok();
-    let plan = bitfun_core::external_mcp_import::plan_external_mcp_import(workspace.clone())
+    let plan = openbitfun_core::external_mcp_import::plan_external_mcp_import(workspace.clone())
         .await
         .map_err(operation_error)?;
     if !command.apply {
@@ -34,7 +34,7 @@ pub(crate) async fn execute(command: McpImportCommand) -> Result<()> {
             "No eligible external MCP servers are available to import"
         ));
     }
-    let result = bitfun_core::external_mcp_import::apply_external_mcp_import(
+    let result = openbitfun_core::external_mcp_import::apply_external_mcp_import(
         workspace,
         ExternalMcpImportApplyRequestV1 {
             schema_version: EXTERNAL_MCP_IMPORT_SCHEMA_V1,
@@ -65,7 +65,7 @@ fn selections(
         return Err(anyhow!("--native-id requires exactly one --candidate"));
     }
     let eligible =
-        |item: &&bitfun_product_domains::external_sources::ExternalMcpImportPlanItemV1| {
+        |item: &&openbitfun_product_domains::external_sources::ExternalMcpImportPlanItemV1| {
             matches!(
                 item.disposition,
                 ExternalMcpImportDispositionV1::Eligible
@@ -161,7 +161,7 @@ fn print_value(
 }
 
 fn operation_error(
-    error: bitfun_product_domains::external_sources::ExternalSourceOperationError,
+    error: openbitfun_product_domains::external_sources::ExternalSourceOperationError,
 ) -> anyhow::Error {
     anyhow!("{}: {}", error.code.as_str(), error.detail)
 }
@@ -169,7 +169,7 @@ fn operation_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::external_sources::{
+    use openbitfun_product_domains::external_sources::{
         ExternalMcpImportPlanItemV1, ExternalMcpTransportKind,
     };
 

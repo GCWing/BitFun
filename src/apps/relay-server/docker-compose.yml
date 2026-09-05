@@ -7,13 +7,17 @@ services:
         # Pass through optional parallelism limit for low-memory hosts:
         #   RELAY_CARGO_BUILD_JOBS=1 docker compose build
         CARGO_BUILD_JOBS: ${RELAY_CARGO_BUILD_JOBS:-}
-        # China mirror switch (set by deploy.sh / BITFUN_MIRROR=cn):
-        BITFUN_USE_CN_MIRROR: ${BITFUN_USE_CN_MIRROR:-0}
-        BITFUN_APT_MIRROR: ${BITFUN_APT_MIRROR:-mirrors.aliyun.com}
-        BITFUN_CARGO_SPARSE_URL: ${BITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}
+        # Production sets this to the exact checkout commit so the runtime
+        # image can be audited just like the two marketplace images.
+        RELAY_GIT_COMMIT: ${RELAY_GIT_COMMIT:-unknown}
+        # China mirror switch (set by deploy.sh / OPENBITFUN_MIRROR=cn):
+        OPENBITFUN_USE_CN_MIRROR: ${OPENBITFUN_USE_CN_MIRROR:-0}
+        OPENBITFUN_APT_MIRROR: ${OPENBITFUN_APT_MIRROR:-mirrors.aliyun.com}
+        OPENBITFUN_CARGO_SPARSE_URL: ${OPENBITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}
+    image: openbitfun-relay:${RELAY_GIT_COMMIT:-local}
     # Intentionally no `platform:` pin — build/run for the host CPU
     # (linux/amd64 on x86_64, linux/arm64 on aarch64).
-    container_name: bitfun-relay
+    container_name: openbitfun-relay
     restart: unless-stopped
     ports:
       # Host and container port both follow RELAY_PORT (default 9700).
@@ -21,11 +25,11 @@ services:
     environment:
       - RELAY_PORT=${RELAY_PORT:-9700}
       - RELAY_STATIC_DIR=/app/static
-      # Room mobile-web assets and BitFun Pages (`pages/{user_id}/{slug}/`) share this dir.
+      # Room mobile-web assets and OpenBitFun Pages (`pages/{user_id}/{slug}/`) share this dir.
       - RELAY_ROOM_WEB_DIR=/app/room-web
       - RELAY_ROOM_TTL=300
       - RELAY_ASSET_STORE_MAX_BYTES=1073741824
-      - RELAY_DB_PATH=/app/data/bitfun_relay.db
+      - RELAY_DB_PATH=/app/data/openbitfun_relay.db
       - RELAY_PAGE_PUBLIC_BASE_URL=${RELAY_PAGE_PUBLIC_BASE_URL:-}
       - RELAY_PAGE_AUTH_BASE_URL=${RELAY_PAGE_AUTH_BASE_URL:-}
     volumes:
@@ -43,7 +47,7 @@ services:
   # Uncomment if you need HTTPS / domain-based access.
   # caddy:
   #   image: caddy:2-alpine
-  #   container_name: bitfun-caddy
+  #   container_name: openbitfun-caddy
   #   restart: unless-stopped
   #   ports:
   #     - "80:80"

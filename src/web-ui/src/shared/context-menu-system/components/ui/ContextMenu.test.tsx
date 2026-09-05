@@ -257,10 +257,10 @@ describe('ContextMenu presence', () => {
     ]} />));
     act(() => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
     for (const part of ['root', 'item', 'separator', 'icon', 'label', 'shortcut', 'submenuArrow', 'submenu']) {
-      expect(document.querySelector(`[data-bf-product-component="context-menu"][data-bf-product-part="${part}"]`)).not.toBeNull();
+      expect(document.querySelector(`[data-openbitfun-product-component="context-menu"][data-openbitfun-product-part="${part}"]`)).not.toBeNull();
     }
-    expect(document.querySelector('[data-bf-component="menu"][data-bf-product-part="root"]')).not.toBeNull();
-    expect(document.querySelector('[data-bf-product-part="item"][data-bf-state="disabled"]')?.getAttribute('aria-disabled')).toBe('true');
-    expect(document.querySelector('[data-bf-product-part="item"][data-bf-state="submenu-active"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[data-openbitfun-component="menu"][data-openbitfun-product-part="root"]')).not.toBeNull();
+    expect(document.querySelector('[data-openbitfun-product-part="item"][data-openbitfun-state="disabled"]')?.getAttribute('aria-disabled')).toBe('true');
+    expect(document.querySelector('[data-openbitfun-product-part="item"][data-openbitfun-state="submenu-active"]')?.getAttribute('aria-expanded')).toBe('true');
   });
 });

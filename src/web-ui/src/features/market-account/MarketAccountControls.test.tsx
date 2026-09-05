@@ -45,7 +45,7 @@ vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({ success: mocks.success, error: mocks.error }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Avatar: ({ src, alt }: any) => <img src={src} alt={alt} />,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
@@ -88,7 +88,7 @@ describe('MarketAccountControls', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
+    document.querySelector('[data-openbitfun-overlay-host="true"]')?.remove();
   });
 
   it('opens the shared GitHub login dialog and starts the vault-backed flow', async () => {
@@ -115,7 +115,7 @@ describe('MarketAccountControls', () => {
     const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
     await act(async () => trigger?.click());
     const menu = document.querySelector<HTMLElement>('[role="menu"]');
-    expect(menu?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(menu?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     const logout = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     expect(logout?.textContent).toContain('market.signOut');
     await act(async () => logout?.click());

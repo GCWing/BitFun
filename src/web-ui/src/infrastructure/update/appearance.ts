@@ -23,11 +23,11 @@ export const updateAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'restartHint' },
   ],
   facets: [
-    { id: 'variant', attribute: 'data-bf-variant', values: ['daily', 'manual'] },
-    { id: 'status', attribute: 'data-bf-status', values: ['downloading', 'error', 'installed'] },
+    { id: 'variant', attribute: 'data-openbitfun-variant', values: ['daily', 'manual'] },
+    { id: 'status', attribute: 'data-openbitfun-status', values: ['downloading', 'error', 'installed'] },
   ],
   states: [
-    { id: 'highlight', selector: { kind: 'self', suffix: '[data-bf-state~="highlight"]' } },
-    { id: 'indeterminate', selector: { kind: 'self', suffix: '[data-bf-state~="indeterminate"]' } },
+    { id: 'highlight', selector: { kind: 'self', suffix: '[data-openbitfun-state~="highlight"]' } },
+    { id: 'indeterminate', selector: { kind: 'self', suffix: '[data-openbitfun-state~="indeterminate"]' } },
   ],
 };

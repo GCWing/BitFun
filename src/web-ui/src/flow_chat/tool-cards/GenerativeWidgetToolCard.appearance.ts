@@ -7,7 +7,7 @@ export const generativeWidgetToolCardAppearanceDescriptor: AppearanceSurfaceDesc
     { id: 'captureRoot' }, { id: 'exportStage' },
   ],
   states: [
-    { id: 'failed', selector: { kind: 'self', suffix: '[data-bf-state~="failed"]' } },
-    { id: 'exporting', selector: { kind: 'self', suffix: '[data-bf-state~="exporting"]' } },
+    { id: 'failed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="failed"]' } },
+    { id: 'exporting', selector: { kind: 'self', suffix: '[data-openbitfun-state~="exporting"]' } },
   ],
 };

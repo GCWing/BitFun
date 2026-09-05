@@ -1,9 +1,9 @@
 //! Provider-neutral runtime event router.
 
 use crate::event_bus::{EventBusResult, EventSubscriberResult};
-use bitfun_events::{AgenticEvent, AgenticEventEnvelope as EventEnvelope};
 use dashmap::DashMap;
 use log::{debug, trace, warn};
+use openbitfun_events::{AgenticEvent, AgenticEventEnvelope as EventEnvelope};
 use std::sync::Arc;
 
 /// Event subscriber trait

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use bitfun_core::infrastructure::ai::AIClientFactory;
-use bitfun_core::service::config::{
+use openbitfun_core::infrastructure::ai::AIClientFactory;
+use openbitfun_core::service::config::{
     model_runtime_binding_fingerprint, AIModelConfig, ConfigService, ModelCapability, ModelCategory,
 };
-use bitfun_sdk_host::host::{TemporaryModelInstallError, TemporaryModelInstaller};
-use bitfun_sdk_host::protocol::{TemporaryModelConfig, TemporaryModelProvider};
+use openbitfun_sdk_host::host::{TemporaryModelInstallError, TemporaryModelInstaller};
+use openbitfun_sdk_host::protocol::{TemporaryModelConfig, TemporaryModelProvider};
 
 pub(crate) struct ConfigTemporaryModelInstaller {
     config: Arc<ConfigService>,
@@ -90,9 +90,9 @@ impl TemporaryModelInstaller for ConfigTemporaryModelInstaller {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_core::service::config::{ModelCapability, ModelCategory};
-    use bitfun_sdk_host::host::TemporaryModelInstallError;
-    use bitfun_sdk_host::protocol::{TemporaryModelConfig, TemporaryModelProvider};
+    use openbitfun_core::service::config::{ModelCapability, ModelCategory};
+    use openbitfun_sdk_host::host::TemporaryModelInstallError;
+    use openbitfun_sdk_host::protocol::{TemporaryModelConfig, TemporaryModelProvider};
 
     use super::resolve_temporary_model;
 

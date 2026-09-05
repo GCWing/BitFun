@@ -1,17 +1,16 @@
 //! Product-owned plugin package and trust contracts.
 //!
-//! These contracts identify BitFun-managed packages before an ecosystem
+//! These contracts identify OpenBitFun-managed packages before an ecosystem
 //! adapter or PluginRuntimeClient implementation is selected. Filesystem discovery and trust
 //! persistence are concrete service integration responsibilities.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 
 const PLUGIN_PACKAGE_MANIFEST_SCHEMA_VERSION: u16 = 1;
-const PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 2;
-const LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 1;
+pub const PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 2;
 
 const MAX_PACKAGE_ID_LEN: usize = 128;
 const MAX_ADAPTER_ID_LEN: usize = 64;
@@ -244,7 +243,7 @@ struct PluginActivationRecord {
     updated_at_ms: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginTrustStore {
     schema_version: u16,
@@ -252,80 +251,6 @@ pub struct PluginTrustStore {
     records: Vec<PluginTrustRecord>,
     activation_epoch: u64,
     activation_records: Vec<PluginActivationRecord>,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum PersistedPluginTrustStore {
-    V2(PersistedPluginTrustStoreV2),
-    V1(PersistedPluginTrustStoreV1),
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedPluginTrustStoreV1 {
-    schema_version: u16,
-    epoch: u64,
-    records: Vec<PluginTrustRecord>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedPluginTrustStoreV2 {
-    schema_version: u16,
-    epoch: u64,
-    records: Vec<PluginTrustRecord>,
-    activation_epoch: u64,
-    activation_records: Vec<PluginActivationRecord>,
-}
-
-impl<'de> Deserialize<'de> for PluginTrustStore {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match PersistedPluginTrustStore::deserialize(deserializer)? {
-            PersistedPluginTrustStore::V1(persisted)
-                if persisted.schema_version == LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
-            {
-                Ok(Self {
-                    schema_version: PLUGIN_TRUST_STORE_SCHEMA_VERSION,
-                    epoch: persisted.epoch,
-                    records: persisted.records,
-                    activation_epoch: persisted.epoch,
-                    activation_records: Vec::new(),
-                })
-            }
-            PersistedPluginTrustStore::V1(persisted)
-                if persisted.schema_version == PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
-            {
-                Err(serde::de::Error::custom(
-                    "schema-v2 plugin trust store requires activation fields",
-                ))
-            }
-            PersistedPluginTrustStore::V1(persisted) => Ok(Self {
-                schema_version: persisted.schema_version,
-                epoch: persisted.epoch,
-                records: persisted.records,
-                activation_epoch: 0,
-                activation_records: Vec::new(),
-            }),
-            PersistedPluginTrustStore::V2(persisted)
-                if persisted.schema_version == LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
-            {
-                Err(serde::de::Error::custom(
-                    "schema-v1 plugin trust store cannot contain activation fields",
-                ))
-            }
-            PersistedPluginTrustStore::V2(persisted) => Ok(Self {
-                schema_version: persisted.schema_version,
-                epoch: persisted.epoch,
-                records: persisted.records,
-                activation_epoch: persisted.activation_epoch,
-                activation_records: persisted.activation_records,
-            }),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -790,6 +715,14 @@ impl fmt::Display for PluginSourceContractError {
                 write!(
                     formatter,
                     "unsupported plugin manifest schema version: {version}"
+                )
+            }
+            Self::UnsupportedTrustStoreSchema(version)
+                if *version < PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
+            {
+                write!(
+                    formatter,
+                    "pre-OpenBitFun plugin trust schema version {version} requires the explicit data migration tool"
                 )
             }
             Self::UnsupportedTrustStoreSchema(version) => {

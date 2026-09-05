@@ -1,12 +1,12 @@
-use bitfun_product_domains::external_subagents::ExternalSubagentMode;
-use bitfun_product_domains::plugin_capabilities::{
+use openbitfun_product_domains::external_subagents::ExternalSubagentMode;
+use openbitfun_product_domains::plugin_capabilities::{
     PluginAgentProjection, PluginCapabilityProjection, PluginContributorIdentity,
     PluginSkillRootContribution, PluginToolRef,
 };
-use bitfun_product_domains::tool_permissions::{
+use openbitfun_product_domains::tool_permissions::{
     PermissionConstraintLayer, PermissionEffect, PermissionRule,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     HookFunctionContributorOutcome, HookFunctionPluginIdentity, HookFunctionRegistrationBatch,
     HookFunctionToolRegistration,
 };
@@ -649,7 +649,8 @@ fn attributed_skill_roots(
             log::warn!("Skipping unavailable OpenCode plugin skill root");
             continue;
         };
-        if bitfun_services_core::bounded_fs::is_symlink_or_reparse(&metadata) || !metadata.is_dir()
+        if openbitfun_services_core::bounded_fs::is_symlink_or_reparse(&metadata)
+            || !metadata.is_dir()
         {
             log::warn!("Skipping invalid OpenCode plugin skill root");
             continue;
@@ -672,7 +673,7 @@ fn attributed_skill_roots(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         HookFunctionConfigContribution, HookFunctionConfigContributor, HookFunctionGeneration,
         HookFunctionRegistrationBatch,
     };

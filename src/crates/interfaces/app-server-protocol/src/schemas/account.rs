@@ -4,7 +4,7 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
-pub use bitfun_product_domains::account::{
+pub use openbitfun_product_domains::account::{
     AccountDevice, AccountInfo, SettingsSyncProgress, SettingsSyncStatus,
 };
 

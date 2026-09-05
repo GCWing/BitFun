@@ -1,4 +1,4 @@
-# BitFun Skin market deployment
+# OpenBitFun Skin market deployment
 
 This directory deploys the Appearance package catalog exposed to users as the
 **Skin market** at `https://market.openbitfun.com/skin/`.
@@ -7,13 +7,13 @@ It is intentionally isolated from the production MiniApp market:
 
 | Resource | Skin market |
 | --- | --- |
-| Container | `bitfun-skin-market` |
+| Container | `openbitfun-skin-market` |
 | Loopback origin | `127.0.0.1:9720` |
-| Checkout | `/srv/bitfun-skin-market/app` |
-| SQLite | `/srv/bitfun-skin-market/data/market.sqlite` |
-| Artifacts | `/srv/bitfun-skin-market/artifacts` |
-| Backups | `/srv/bitfun-skin-market/backups` |
-| Root-only environment | `/etc/bitfun-skin-market/market.env` |
+| Checkout | `/srv/openbitfun-skin-market/app` |
+| SQLite | `/srv/openbitfun-skin-market/data/market.sqlite` |
+| Artifacts | `/srv/openbitfun-skin-market/artifacts` |
+| Backups | `/srv/openbitfun-skin-market/backups` |
+| Root-only environment | `/etc/openbitfun-skin-market/market.env` |
 | Deploy ref | `refs/heads/skin-market-deploy` |
 
 The Skin server has no OAuth client or credential database. Desktop clients
@@ -33,7 +33,7 @@ checkouts; do not recreate MiniApp from the Skin Compose project.
 
 1. Deploy only a committed, explicit commit. Never build a dirty checkout or a
    floating branch name.
-2. Do not read, copy or print `/etc/bitfun-skin-market/market.env`.
+2. Do not read, copy or print `/etc/openbitfun-skin-market/market.env`.
 3. Record the previous commit and verify a current SQLite backup before a
    backend or schema deployment.
 4. Do not recreate or modify the MiniApp, Relay, API or website containers.
@@ -51,9 +51,9 @@ Choose the smallest relevant checks, then create one explicit commit:
 
 ```bash
 pnpm run fmt:rs
-cargo test -p bitfun-product-domains --no-default-features --features appearance-market
-cargo test -p bitfun-skin-market-service
-cargo check -p bitfun-skin-market-server
+cargo test -p openbitfun-product-domains --no-default-features --features appearance-market
+cargo test -p openbitfun-skin-market-service
+cargo check -p openbitfun-skin-market-server
 pnpm run type-check:skin-market
 pnpm run test:skin-market
 pnpm run build:skin-market
@@ -73,15 +73,15 @@ Create only the dedicated roots; UID/GID `10002` owns live data, never secrets:
 
 ```bash
 ssh lwb 'set -eu
-install -d -m 0755 /srv/bitfun-skin-market
+install -d -m 0755 /srv/openbitfun-skin-market
 install -d -o 10002 -g 10002 -m 0750 \
-  /srv/bitfun-skin-market/data /srv/bitfun-skin-market/artifacts
-install -d -m 0750 /srv/bitfun-skin-market/backups
-install -d -m 0700 /etc/bitfun-skin-market
-test ! -e /srv/bitfun-skin-market/app
-git clone --no-hardlinks /srv/bitfun-miniapp-market/app /srv/bitfun-skin-market/app
-git -C /srv/bitfun-skin-market/app checkout --detach
-git -C /srv/bitfun-skin-market/app status --short'
+  /srv/openbitfun-skin-market/data /srv/openbitfun-skin-market/artifacts
+install -d -m 0750 /srv/openbitfun-skin-market/backups
+install -d -m 0700 /etc/openbitfun-skin-market
+test ! -e /srv/openbitfun-skin-market/app
+git clone --no-hardlinks /srv/openbitfun-miniapp-market/app /srv/openbitfun-skin-market/app
+git -C /srv/openbitfun-skin-market/app checkout --detach
+git -C /srv/openbitfun-skin-market/app status --short'
 ```
 
 Create the environment with a controlled editor, using
@@ -89,9 +89,9 @@ Create the environment with a controlled editor, using
 server; do not pass it as a command argument or paste it into logs:
 
 ```bash
-ssh -t lwb 'umask 077; vi /etc/bitfun-skin-market/market.env'
-ssh lwb 'chmod 600 /etc/bitfun-skin-market/market.env; \
-  stat -c "%U:%G %a %n" /etc/bitfun-skin-market/market.env'
+ssh -t lwb 'umask 077; vi /etc/openbitfun-skin-market/market.env'
+ssh lwb 'chmod 600 /etc/openbitfun-skin-market/market.env; \
+  stat -c "%U:%G %a %n" /etc/openbitfun-skin-market/market.env'
 ```
 
 Production identity verification should use
@@ -106,14 +106,14 @@ database:
 
 ```bash
 ssh lwb 'set -eu
-install -m 0750 /srv/bitfun-skin-market/app/deploy/skin-market/backup.sh \
-  /usr/local/sbin/bitfun-skin-market-backup
-install -m 0750 /srv/bitfun-skin-market/app/deploy/skin-market/restore-drill.sh \
-  /usr/local/sbin/bitfun-skin-market-restore-drill
-install -m 0644 /srv/bitfun-skin-market/app/deploy/skin-market/bitfun-skin-market-backup.service \
-  /etc/systemd/system/bitfun-skin-market-backup.service
-install -m 0644 /srv/bitfun-skin-market/app/deploy/skin-market/bitfun-skin-market-backup.timer \
-  /etc/systemd/system/bitfun-skin-market-backup.timer
+install -m 0750 /srv/openbitfun-skin-market/app/deploy/skin-market/backup.sh \
+  /usr/local/sbin/openbitfun-skin-market-backup
+install -m 0750 /srv/openbitfun-skin-market/app/deploy/skin-market/restore-drill.sh \
+  /usr/local/sbin/openbitfun-skin-market-restore-drill
+install -m 0644 /srv/openbitfun-skin-market/app/deploy/skin-market/openbitfun-skin-market-backup.service \
+  /etc/systemd/system/openbitfun-skin-market-backup.service
+install -m 0644 /srv/openbitfun-skin-market/app/deploy/skin-market/openbitfun-skin-market-backup.timer \
+  /etc/systemd/system/openbitfun-skin-market-backup.timer
 systemctl daemon-reload'
 ```
 
@@ -124,27 +124,27 @@ container inspect/health commands are expected not to find a container:
 
 ```bash
 ssh lwb 'set -eu
-git -C /srv/bitfun-skin-market/app status --short
-git -C /srv/bitfun-skin-market/app rev-parse HEAD
-docker inspect --format "{{.Config.Image}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" bitfun-skin-market 2>/dev/null || true
+git -C /srv/openbitfun-skin-market/app status --short
+git -C /srv/openbitfun-skin-market/app rev-parse HEAD
+docker inspect --format "{{.Config.Image}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" openbitfun-skin-market 2>/dev/null || true
 curl -fsS http://127.0.0.1:9720/skin/api/v1/health 2>/dev/null || true
-stat -c "%U:%G %a %n" /etc/bitfun-skin-market/market.env'
+stat -c "%U:%G %a %n" /etc/openbitfun-skin-market/market.env'
 ```
 
 For an existing deployment, save the rollback target and confirm or create
 today's backup before changing the checkout:
 
 ```bash
-PREVIOUS_COMMIT="$(ssh lwb 'git -C /srv/bitfun-skin-market/app rev-parse HEAD')"
+PREVIOUS_COMMIT="$(ssh lwb 'git -C /srv/openbitfun-skin-market/app rev-parse HEAD')"
 ssh lwb 'set -eu
-if test -f /srv/bitfun-skin-market/data/market.sqlite; then
+if test -f /srv/openbitfun-skin-market/data/market.sqlite; then
   today="$(date -u +%F)"
-  target="/srv/bitfun-skin-market/backups/daily/${today}"
+  target="/srv/openbitfun-skin-market/backups/daily/${today}"
   if test -d "$target"; then
     (cd "$target" && sha256sum -c SHA256SUMS)
     test "$(sqlite3 "$target/market.sqlite" "PRAGMA integrity_check;")" = ok
   else
-    /usr/local/sbin/bitfun-skin-market-backup
+    /usr/local/sbin/openbitfun-skin-market-backup
   fi
 fi'
 ```
@@ -152,7 +152,7 @@ fi'
 Send only the explicit commit to the dedicated ref:
 
 ```bash
-if REMOTE_REF_COMMIT="$(ssh lwb 'git -C /srv/bitfun-skin-market/app \
+if REMOTE_REF_COMMIT="$(ssh lwb 'git -C /srv/openbitfun-skin-market/app \
   rev-parse refs/heads/skin-market-deploy 2>/dev/null')"; then
   DEPLOY_LEASE="refs/heads/skin-market-deploy:${REMOTE_REF_COMMIT}"
 else
@@ -162,19 +162,19 @@ else
 fi
 git push \
   --force-with-lease="${DEPLOY_LEASE}" \
-  ssh://lwb/srv/bitfun-skin-market/app \
+  ssh://lwb/srv/openbitfun-skin-market/app \
   "${DEPLOY_COMMIT}:refs/heads/skin-market-deploy"
 ssh lwb "set -eu
-test -z \"\$(git -C /srv/bitfun-skin-market/app status --porcelain)\"
-git -C /srv/bitfun-skin-market/app checkout --detach '$DEPLOY_COMMIT'
-test \"\$(git -C /srv/bitfun-skin-market/app rev-parse HEAD)\" = '$DEPLOY_COMMIT'"
+test -z \"\$(git -C /srv/openbitfun-skin-market/app status --porcelain)\"
+git -C /srv/openbitfun-skin-market/app checkout --detach '$DEPLOY_COMMIT'
+test \"\$(git -C /srv/openbitfun-skin-market/app rev-parse HEAD)\" = '$DEPLOY_COMMIT'"
 ```
 
 Build while any existing container continues serving, then recreate only Skin:
 
 ```bash
 ssh lwb "set -eu
-cd /srv/bitfun-skin-market/app
+cd /srv/openbitfun-skin-market/app
 test \"\$(git rev-parse HEAD)\" = '$DEPLOY_COMMIT'
 export MARKET_GIT_COMMIT='$DEPLOY_COMMIT'
 docker compose -f deploy/skin-market/docker-compose.yml build skin-market
@@ -189,16 +189,16 @@ ssh lwb 'set -eu
 for attempt in $(seq 1 45); do
   status="$(docker inspect --format \
     "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" \
-    bitfun-skin-market)"
+    openbitfun-skin-market)"
   test "$status" = healthy && exit 0
   sleep 2
 done
-docker inspect --format "{{json .State}}" bitfun-skin-market
+docker inspect --format "{{json .State}}" openbitfun-skin-market
 exit 1'
 
 DEPLOYED_COMMIT="$(ssh lwb 'docker inspect --format \
   "{{index .Config.Labels \"org.opencontainers.image.revision\"}}" \
-  bitfun-skin-market')"
+  openbitfun-skin-market')"
 test "$DEPLOYED_COMMIT" = "$DEPLOY_COMMIT"
 ssh lwb 'curl -fsS http://127.0.0.1:9720/skin/api/v1/health'
 ```
@@ -208,11 +208,11 @@ enable the timer:
 
 ```bash
 ssh lwb 'set -eu
-/usr/local/sbin/bitfun-skin-market-backup
+/usr/local/sbin/openbitfun-skin-market-backup
 today="$(date -u +%F)"
-/usr/local/sbin/bitfun-skin-market-restore-drill \
-  "/srv/bitfun-skin-market/backups/daily/${today}"
-systemctl enable --now bitfun-skin-market-backup.timer'
+/usr/local/sbin/openbitfun-skin-market-restore-drill \
+  "/srv/openbitfun-skin-market/backups/daily/${today}"
+systemctl enable --now openbitfun-skin-market-backup.timer'
 ```
 
 ## Nginx route
@@ -231,10 +231,10 @@ list) and the origin firewall allowlist. Stop if any of the three sets differ.
 ```bash
 ssh lwb 'set -eu
 install -m 0644 \
-  /srv/bitfun-skin-market/app/deploy/skin-market/nginx-skin-market-http.conf \
+  /srv/openbitfun-skin-market/app/deploy/skin-market/nginx-skin-market-http.conf \
   /etc/nginx/conf.d/skin-market.conf
 install -m 0644 \
-  /srv/bitfun-skin-market/app/deploy/miniapp-market/nginx-market.openbitfun.com.conf \
+  /srv/openbitfun-skin-market/app/deploy/miniapp-market/nginx-market.openbitfun.com.conf \
   /etc/nginx/sites-available/market.openbitfun.com.conf
 nginx -t
 systemctl reload nginx

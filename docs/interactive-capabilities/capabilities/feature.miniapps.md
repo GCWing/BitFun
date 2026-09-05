@@ -11,9 +11,9 @@ title_en: "Mini Apps"
 
 > 功能 / Feature
 
-在 BitFun 内安装、创建和运行轻量应用，让界面、数据与 Agent 工作流组合在一起。
+在 OpenBitFun 内安装、创建和运行轻量应用，让界面、数据与 Agent 工作流组合在一起。
 
-Install, create, and run lightweight apps inside BitFun, combining UI, data, and agent workflows.
+Install, create, and run lightweight apps inside OpenBitFun, combining UI, data, and agent workflows.
 
 ## 完整功能清单 / Everything included
 
@@ -51,13 +51,13 @@ Install, create, and run lightweight apps inside BitFun, combining UI, data, and
 3. 打开应用并按页面提示使用
    Launch the app and follow its interface
 
-入口 / Entry: BitFun 功能入口
+入口 / Entry: OpenBitFun 功能入口
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

@@ -1,7 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PortError, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
     SessionStorageKind, SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort,
 };
@@ -10,8 +10,8 @@ use crate::agentic::core::SessionConfig;
 use crate::infrastructure::{get_path_manager_arc, PathManager};
 use crate::service::WorkspaceRuntimeService;
 #[cfg(not(feature = "remote-workspace"))]
-use bitfun_services_core::workspace_identity::workspace_session_identity;
-use bitfun_services_core::workspace_identity::{
+use openbitfun_services_core::workspace_identity::workspace_session_identity;
+use openbitfun_services_core::workspace_identity::{
     unresolved_remote_session_storage_dir, WorkspaceSessionIdentity, LOCAL_WORKSPACE_SSH_HOST,
 };
 
@@ -264,7 +264,7 @@ mod tests {
 
     fn test_port() -> (CoreSessionStorePort, PathBuf) {
         let test_root =
-            std::env::temp_dir().join(format!("bitfun-session-store-port-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("openbitfun-session-store-port-{}", Uuid::new_v4()));
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(
             test_root.join("user"),
         ));

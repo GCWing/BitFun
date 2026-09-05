@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# BitFun Relay Server — restart script.
+# OpenBitFun Relay Server — restart script.
 # Run this script on the target server itself after SSH login.
 
 set -euo pipefail
@@ -10,7 +10,7 @@ source "${SCRIPT_DIR}/common.sh"
 
 usage() {
   cat <<'EOF'
-BitFun Relay Server restart script
+OpenBitFun Relay Server restart script
 
 Usage:
   bash restart.sh
@@ -38,7 +38,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "=== BitFun Relay Server Restart ==="
+echo "=== OpenBitFun Relay Server Restart ==="
 require_docker_daemon
 resolve_compose
 cd "$SCRIPT_DIR"

@@ -1,4 +1,4 @@
-# Caddyfile for BitFun Relay Server
+# Caddyfile for OpenBitFun Relay Server
 # Replace YOUR_DOMAIN with your actual domain, or use :443 with self-signed cert.
 #
 # Body size: account sync POSTs full encrypted session bundles. Axum allows

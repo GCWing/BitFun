@@ -1,19 +1,19 @@
-//! PublishAppearance tool — submit a local `.bitfun-appearance` archive to
+//! PublishAppearance tool — submit a local `.openbitfun-appearance` archive to
 //! the public Skin market for human review.
 
 use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolUseContext};
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
-use bitfun_product_domains::appearance_market::{
+use openbitfun_product_domains::appearance_market::{
     validate_appearance_market_slug, AppearanceMarketLicense,
     AppearanceMarketSubmissionDraftRequest,
 };
-use bitfun_services_integrations::appearance_market::{
+use openbitfun_services_integrations::appearance_market::{
     resolve_appearance_release_target, submit_appearance_package, suggest_appearance_slug,
     AppearanceMarketClient, AppearanceReleaseTarget,
 };
-use bitfun_services_integrations::miniapp_market::DesktopAuthPollRequest;
+use openbitfun_services_integrations::miniapp_market::DesktopAuthPollRequest;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -38,10 +38,10 @@ impl Tool for PublishAppearanceTool {
         "PublishAppearance"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Submit a local `.bitfun-appearance` package to the BitFun Skin market for human review.
+    async fn description(&self) -> OpenBitFunResult<String> {
+        Ok(r#"Submit a local `.openbitfun-appearance` package to the OpenBitFun Skin market for human review.
 
-The product calls catalog entries "Skins", but package/runtime identifiers always remain Appearance: `appearance.json`, schema `bitfun.appearance`, and extension `.bitfun-appearance`. Pass an absolute local path to a completed archive. The package itself supplies the public name, description, author, version, mode and preview; the tool derives the marketplace slug and next release number from submission history.
+The product calls catalog entries "Skins", but package/runtime identifiers always remain Appearance: `appearance.json`, schema `openbitfun.appearance`, and extension `.openbitfun-appearance`. Pass an absolute local path to a completed archive. The package itself supplies the public name, description, author, version, mode and preview; the tool derives the marketplace slug and next release number from submission history.
 
 The caller must explicitly provide the package's SPDX license expression. If the package is not under a standard SPDX license, provide `custom_license_url` instead. The package is validated locally before upload and validated again by the server. If sign-in is required, the tool returns a GitHub authorization URL; show it to the user and call this tool again after authorization.
 
@@ -60,7 +60,7 @@ This is an outward-facing publication action. Use it only when the user explicit
             "properties": {
                 "package_path": {
                     "type": "string",
-                    "description": "Absolute local path to a `.bitfun-appearance` archive. Remote SSH workspace paths are not supported."
+                    "description": "Absolute local path to a `.openbitfun-appearance` archive. Remote SSH workspace paths are not supported."
                 },
                 "slug": {
                     "type": "string",
@@ -82,9 +82,9 @@ This is an outward-facing publication action. Use it only when the user explicit
                     "type": "string",
                     "description": "Optional public HTTPS repository URL for the Skin source."
                 },
-                "min_bitfun_version": {
+                "min_openbitfun_version": {
                     "type": "string",
-                    "description": "Minimum compatible BitFun semantic version. Defaults to this running client version."
+                    "description": "Minimum compatible OpenBitFun semantic version. Defaults to this running client version."
                 }
             }
         })
@@ -102,7 +102,7 @@ This is an outward-facing publication action. Use it only when the user explicit
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let package_path = input
             .get("package_path")
             .and_then(Value::as_str)
@@ -137,7 +137,7 @@ This is an outward-facing publication action. Use it only when the user explicit
             .filter(|value| !value.is_empty())
             .unwrap_or("<none>");
         let min_version = input
-            .get("min_bitfun_version")
+            .get("min_openbitfun_version")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -187,7 +187,7 @@ This is an outward-facing publication action. Use it only when the user explicit
             Value::String(repository.to_string()),
         );
         intent.display_metadata.insert(
-            "appearanceMinBitFunVersion".to_string(),
+            "appearanceMinOpenBitFunVersion".to_string(),
             Value::String(min_version.to_string()),
         );
         intent.display_metadata.insert(
@@ -201,10 +201,10 @@ This is an outward-facing publication action. Use it only when the user explicit
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
-            return Err(BitFunError::validation(
-                "PublishAppearance reads a package from the local desktop host and cannot use a remote SSH workspace path. Export the .bitfun-appearance package to the local device, switch to a local workspace, and call the tool again.",
+            return Err(OpenBitFunError::validation(
+                "PublishAppearance reads a package from the local desktop host and cannot use a remote SSH workspace path. Export the .openbitfun-appearance package to the local device, switch to a local workspace, and call the tool again.",
             ));
         }
         let package_path = required_local_package_path(input)?;
@@ -225,20 +225,20 @@ This is an outward-facing publication action. Use it only when the user explicit
             .map(str::to_string)
             .unwrap_or_else(|| suggest_appearance_slug(fallback_name, fallback_seed));
         if !validate_appearance_market_slug(&slug) {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "slug must contain 3-63 lowercase ASCII letters, digits, or hyphens and cannot start with a hyphen.",
             ));
         }
 
         let mut client = AppearanceMarketClient::from_environment()
             .await
-            .map_err(|error| BitFunError::tool(format!("Skin market unavailable: {error}")))?;
+            .map_err(|error| OpenBitFunError::tool(format!("Skin market unavailable: {error}")))?;
         let me = client.me().await.map_err(|error| {
-            BitFunError::tool(format!("Skin market sign-in check failed: {error}"))
+            OpenBitFunError::tool(format!("Skin market sign-in check failed: {error}"))
         })?;
         let Some(me) = me else {
             let start = client.start_desktop_auth().await.map_err(|error| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "Could not start Skin market GitHub sign-in: {error}"
                 ))
             })?;
@@ -273,14 +273,14 @@ This is an outward-facing publication action. Use it only when the user explicit
                     "expires_at": expires_at,
                 }),
                 result_for_assistant: Some(format!(
-                    "The user is not signed in to the Skin market. Show this GitHub authorization link and ask them to open it in a browser: {authorization_url}\nBitFun is polling in the background. After authorization, call PublishAppearance again with the same arguments."
+                    "The user is not signed in to the Skin market. Show this GitHub authorization link and ask them to open it in a browser: {authorization_url}\nOpenBitFun is polling in the background. After authorization, call PublishAppearance again with the same arguments."
                 )),
                 image_attachments: None,
             }]);
         };
 
         let submissions = client.list_submissions().await.map_err(|error| {
-            BitFunError::tool(format!("Could not load Skin submission history: {error}"))
+            OpenBitFunError::tool(format!("Could not load Skin submission history: {error}"))
         })?;
         let (listing_id, release_number) = match resolve_appearance_release_target(
             &submissions,
@@ -323,25 +323,25 @@ This is an outward-facing publication action. Use it only when the user explicit
                 }
             });
         if changelog.len() > 2_000 {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "changelog must be no longer than 2,000 bytes.",
             ));
         }
-        let min_bitfun_version = input
-            .get("min_bitfun_version")
+        let min_openbitfun_version = input
+            .get("min_openbitfun_version")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .unwrap_or(crate::VERSION)
             .to_string();
-        semver::Version::parse(&min_bitfun_version).map_err(|_| {
-            BitFunError::validation("min_bitfun_version must use semantic version syntax.")
+        semver::Version::parse(&min_openbitfun_version).map_err(|_| {
+            OpenBitFunError::validation("min_openbitfun_version must use semantic version syntax.")
         })?;
         let draft = AppearanceMarketSubmissionDraftRequest {
             listing_id,
             slug: slug.clone(),
             release_number,
-            min_bitfun_version,
+            min_openbitfun_version,
             changelog,
             license,
             repository_url,
@@ -381,7 +381,7 @@ This is an outward-facing publication action. Use it only when the user explicit
                 }
                 _ => "",
             };
-            BitFunError::tool(format!(
+            OpenBitFunError::tool(format!(
                 "Publishing Skin failed ({}): {}{hint}",
                 error.code, error
             ))
@@ -408,32 +408,34 @@ This is an outward-facing publication action. Use it only when the user explicit
     }
 }
 
-fn required_local_package_path(input: &Value) -> BitFunResult<PathBuf> {
+fn required_local_package_path(input: &Value) -> OpenBitFunResult<PathBuf> {
     let raw = input
         .get("package_path")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| BitFunError::validation("package_path is required."))?;
+        .ok_or_else(|| OpenBitFunError::validation("package_path is required."))?;
     let path = Path::new(raw);
     if !path.is_absolute() {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "package_path must be an absolute local path.",
         ));
     }
-    if !raw.to_ascii_lowercase().ends_with(".bitfun-appearance") {
-        return Err(BitFunError::validation(
-            "package_path must end in .bitfun-appearance.",
+    if !raw.to_ascii_lowercase().ends_with(".openbitfun-appearance") {
+        return Err(OpenBitFunError::validation(
+            "package_path must end in .openbitfun-appearance.",
         ));
     }
     Ok(path.to_path_buf())
 }
 
-fn publication_metadata(input: &Value) -> BitFunResult<(AppearanceMarketLicense, Option<String>)> {
+fn publication_metadata(
+    input: &Value,
+) -> OpenBitFunResult<(AppearanceMarketLicense, Option<String>)> {
     let spdx = optional_text(input, "license_spdx");
     let custom_url = optional_https_url(input, "custom_license_url")?;
     if spdx.is_none() == custom_url.is_none() {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "Provide exactly one of license_spdx or custom_license_url, confirmed by the user.",
         ));
     }
@@ -444,7 +446,7 @@ fn publication_metadata(input: &Value) -> BitFunResult<(AppearanceMarketLicense,
                     || matches!(character, '-' | '.' | '+' | '(' | ')' | ' ' | ':')
             })
     }) {
-        return Err(BitFunError::validation(
+        return Err(OpenBitFunError::validation(
             "license_spdx is not a supported SPDX expression shape.",
         ));
     }
@@ -467,14 +469,14 @@ fn optional_text(input: &Value, field: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn optional_https_url(input: &Value, field: &str) -> BitFunResult<Option<String>> {
+fn optional_https_url(input: &Value, field: &str) -> OpenBitFunResult<Option<String>> {
     let Some(value) = optional_text(input, field) else {
         return Ok(None);
     };
     let parsed = reqwest::Url::parse(&value)
-        .map_err(|_| BitFunError::validation(format!("{field} must be a valid HTTPS URL.")))?;
+        .map_err(|_| OpenBitFunError::validation(format!("{field} must be a valid HTTPS URL.")))?;
     if parsed.scheme() != "https" || parsed.host_str().is_none() {
-        return Err(BitFunError::validation(format!(
+        return Err(OpenBitFunError::validation(format!(
             "{field} must be a valid HTTPS URL."
         )));
     }
@@ -507,11 +509,11 @@ mod tests {
         let intents = tool
             .permission_intents(
                 &json!({
-                    "package_path": "/tmp/calm.bitfun-appearance",
+                    "package_path": "/tmp/calm.openbitfun-appearance",
                     "slug": "calm-skin",
                     "license_spdx": "MIT",
                     "repository_url": "https://example.com/calm",
-                    "min_bitfun_version": "1.2.3",
+                    "min_openbitfun_version": "1.2.3",
                     "changelog": "Initial release"
                 }),
                 &context,
@@ -519,7 +521,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             intents[0].resources,
-            ["appearance:calm-skin; release=next; package=/tmp/calm.bitfun-appearance; license=SPDX: MIT; repository=https://example.com/calm; min-version=1.2.3".to_string()]
+            ["appearance:calm-skin; release=next; package=/tmp/calm.openbitfun-appearance; license=SPDX: MIT; repository=https://example.com/calm; min-version=1.2.3".to_string()]
         );
         assert!(intents[0].save_resources.is_empty());
         assert_eq!(

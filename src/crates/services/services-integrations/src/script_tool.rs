@@ -1,12 +1,12 @@
 //! Local process owner for provider-neutral JavaScript tool workers.
 
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PortError, PortErrorKind, PortResult, ScriptToolInvokeRequest, ScriptToolInvokeResponse,
     ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
     ScriptToolRuntimeAvailability,
 };
-use bitfun_services_core::process_tree::ProcessTreeChild;
+use openbitfun_services_core::process_tree::ProcessTreeChild;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -110,7 +110,7 @@ function moduleContext() {
   };
   sandbox.global = sandbox;
   sandbox.globalThis = sandbox;
-  return vm.createContext(sandbox, { name: "bitfun-script-tool" });
+  return vm.createContext(sandbox, { name: "openbitfun-script-tool" });
 }
 
 function normalizeSchema(rawSchema, path) {
@@ -853,7 +853,7 @@ impl ScriptToolRuntime for NodeScriptToolRuntime {
                 Err(reason) => ScriptToolRuntimeAvailability::Unavailable { reason },
             },
             None => ScriptToolRuntimeAvailability::Unavailable {
-                reason: "BitFun could not find Node.js for external tools".to_string(),
+                reason: "OpenBitFun could not find Node.js for external tools".to_string(),
             },
         };
         availability
@@ -1049,7 +1049,7 @@ async fn probe_node_version(executable: &PathBuf) -> Result<String, String> {
         .env_remove("NODE_PATH");
     let mut child = ProcessTreeChild::spawn(&mut command)
         .await
-        .map_err(|_| "BitFun could not start Node.js for external tools".to_string())?;
+        .map_err(|_| "OpenBitFun could not start Node.js for external tools".to_string())?;
     let stdout = child
         .take_stdout()
         .ok_or_else(|| "Node.js version output was unavailable".to_string())?;
@@ -1085,7 +1085,7 @@ async fn probe_node_version(executable: &PathBuf) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{CachedNodeAvailability, NodeScriptToolRuntime};
-    use bitfun_runtime_ports::{ScriptToolRuntime, ScriptToolRuntimeAvailability};
+    use openbitfun_runtime_ports::{ScriptToolRuntime, ScriptToolRuntimeAvailability};
     use std::path::PathBuf;
     use tokio::sync::{Mutex, RwLock};
 

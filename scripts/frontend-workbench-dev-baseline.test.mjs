@@ -25,7 +25,7 @@ test('desktop development prepares the FrontendWorkbench baseline before launch'
 });
 
 test('requests a build when the desktop frontend baseline is missing', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-workbench-baseline-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-workbench-baseline-'));
   write(root, 'src/web-ui/src/main.tsx', 'export {};');
 
   assert.deepEqual(getFrontendWorkbenchDevBaselinePlan(root), {
@@ -35,7 +35,7 @@ test('requests a build when the desktop frontend baseline is missing', async () 
 });
 
 test('requests a rebuild when frontend source is newer than the baseline', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-workbench-baseline-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-workbench-baseline-'));
   const baseline = write(root, 'dist/index.html', '<main>old</main>');
   const source = write(root, 'src/web-ui/src/main.tsx', 'export const changed = true;');
   const now = Date.now() / 1000;
@@ -48,7 +48,7 @@ test('requests a rebuild when frontend source is newer than the baseline', async
 });
 
 test('reuses a current baseline and ignores generated dependency output', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'bitfun-workbench-baseline-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'openbitfun-workbench-baseline-'));
   const source = write(root, 'src/web-ui/src/main.tsx', 'export {};');
   const baseline = write(root, 'dist/index.html', '<main>current</main>');
   const generated = write(root, 'design-system/packages/ui/dist/index.js', 'generated');

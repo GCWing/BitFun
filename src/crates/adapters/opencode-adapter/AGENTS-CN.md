@@ -13,7 +13,7 @@ Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Sub
 - 当前 `load_opencode_package_adapter` 在 OC-R1/OC-R2 替换其生产角色前仍只做静态预览；不得把这一 P0
   入口继续扩成另一种 OpenCode 受管包格式。
 - 当前已将 OpenCode Command、standalone Tool 和 Subagent 的标准配置与目录作为只读实时来源；完整插件目录和
-  package spec 仍是后续目标，不是可执行的生产来源。源文件无需导入 BitFun。低风险声明式结果按用户的自动应用/
+  package spec 仍是后续目标，不是可执行的生产来源。源文件无需导入 OpenBitFun。低风险声明式结果按用户的自动应用/
   先询问偏好处理；可执行来源首次 import 前按来源、插件身份和执行域
   决策。import 前可见的运行条件扩大和 import 后贡献扩大是两个独立门槛，不对每个内部生命周期状态重复审批。代码
   更新只有在来源身份/完整性、来源更新策略和当前运行条件仍允许时才能自动准备。
@@ -35,8 +35,8 @@ Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Sub
 
 ## 边界规则
 
-- 依赖 `bitfun-runtime-ports` 等稳定接口和 `PluginRuntimeAdapter` 边界 trait，不依赖
-  `bitfun-core`、app crate、Tauri API、产品界面或具体服务管理器。
+- 依赖 `openbitfun-runtime-ports` 等稳定接口和 `PluginRuntimeAdapter` 边界 trait，不依赖
+  `openbitfun-core`、app crate、Tauri API、产品界面或具体服务管理器。
 - OpenCode 配置 JSON、来源顺序、加载器兼容、参数展开和受管 Plugin Host Config 贡献归属保留在本 crate 内。
   跨 crate 输出使用类型化来源快照、生态无关的 Agent/权限/Plugin Tool/Skill 贡献、adapter 绑定和 `PluginRuntimeClient` DTO，
   不得把 OpenCode 原始 JSON 或源码语法暴露为产品接口。Config 投影不得生成 Agent runtime key、选择原生 Tool
@@ -49,22 +49,22 @@ Agent/权限/Plugin Tool/Skill 投影，以及 Command、standalone Tool 和 Sub
   OpenCode JSON 访问，也不得只为目标设计完整性增加 API。
 - 经评审的产品组装根只选择并构造已编译的 OpenCode adapter/provider，再注入 `PluginRuntimeClient`；它不发现
   动态来源、不准备依赖，也不 import 插件模块。
-- Product Assembly 只允许从经过评审的组装模块（如 `bitfun-core/plugin_runtime`、
-  `bitfun-core/external_sources` 或 OpenCode 专属的 `bitfun-core/plugin_host` 组装路径）消费本 crate；增加其他消费方时必须同步
+- Product Assembly 只允许从经过评审的组装模块（如 `openbitfun-core/plugin_runtime`、
+  `openbitfun-core/external_sources` 或 OpenCode 专属的 `openbitfun-core/plugin_host` 组装路径）消费本 crate；增加其他消费方时必须同步
   边界脚本和聚焦组装路径测试。
 - 本 crate 不得依赖 Codex、Claude Code 或其他生态 adapter。新生态是由 Product Assembly 注册的同级 adapter，
   不是本 adapter 的模式。
-- 生产 crate 不得直接依赖 `bitfun_opencode_adapter` 内部类型。未支持能力必须诊断化，
+- 生产 crate 不得直接依赖 `openbitfun_opencode_adapter` 内部类型。未支持能力必须诊断化，
   不得因外部插件内容导致运行时崩溃。
 
 ## 验证
 
-- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
-- `cargo test -p bitfun-opencode-adapter --test opencode_mcp_adapter`
-- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_command_adapter::`
-- `cargo test -p bitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
-- `cargo test -p bitfun-opencode-adapter --test tool_source_contracts`
-- `cargo test -p bitfun-opencode-adapter --lib p0_c2_fixture`
-- `cargo test -p bitfun-opencode-adapter --lib plugin_config_projection`
-- `cargo test -p bitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_source_adapter`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_mcp_adapter`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_static_source_contracts opencode_command_adapter::`
+- `cargo test -p openbitfun-opencode-adapter --test opencode_static_source_contracts opencode_subagent_adapter::`
+- `cargo test -p openbitfun-opencode-adapter --test tool_source_contracts`
+- `cargo test -p openbitfun-opencode-adapter --lib p0_c2_fixture`
+- `cargo test -p openbitfun-opencode-adapter --lib plugin_config_projection`
+- `cargo test -p openbitfun-opencode-adapter --lib client_path_projects_trusted_custom_tool_candidate_with_permission_prompt`
 - `node scripts/check-core-boundaries.mjs`

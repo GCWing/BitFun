@@ -1,7 +1,7 @@
 {
   "en": {
     "success_title": "Sign-in complete",
-    "success_message": "You are now signed in. You can close this window and return to BitFun.",
+    "success_message": "You are now signed in. You can close this window and return to OpenBitFun.",
     "error_title": "Sign-in failed",
     "bad_request": "Bad request",
     "missing_code": "Missing authorization code",
@@ -9,7 +9,7 @@
   },
   "zh-CN": {
     "success_title": "登录完成",
-    "success_message": "登录已完成。你可以关闭此窗口并返回 BitFun。",
+    "success_message": "登录已完成。你可以关闭此窗口并返回 OpenBitFun。",
     "error_title": "登录失败",
     "bad_request": "请求无效",
     "missing_code": "缺少授权码",
@@ -17,7 +17,7 @@
   },
   "zh-TW": {
     "success_title": "登入完成",
-    "success_message": "登入已完成。你可以關閉此視窗並返回 BitFun。",
+    "success_message": "登入已完成。你可以關閉此視窗並返回 OpenBitFun。",
     "error_title": "登入失敗",
     "bad_request": "請求無效",
     "missing_code": "缺少授權碼",

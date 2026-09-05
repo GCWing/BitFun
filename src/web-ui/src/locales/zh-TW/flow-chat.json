@@ -309,7 +309,7 @@
       "legacyModel": "這個工作階段建立時尚未記錄逐回合模型名稱，因此報告無法確認精確模型。",
       "inferredModel": "舊工作階段缺少逐回合模型名稱，已根據工作階段的模型設定推測。",
       "filesUnavailable": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
-      "filesNoRecordedChanges": "BitFun 沒有偵測到目前工作階段中的檔案變更。如果本次工作階段沒有編輯檔案，這是正常狀態。",
+      "filesNoRecordedChanges": "OpenBitFun 沒有偵測到目前工作階段中的檔案變更。如果本次工作階段沒有編輯檔案，這是正常狀態。",
       "filesRemoteUnavailable": "沒有找到這個遠端工作階段的快照彙總；如果工具記錄能識別到寫入、編輯或刪除檔案，仍會顯示檔案列。",
       "filesNotTracked": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
       "fileTurnIndexes": "當檔案活動來自彙總而不是逐回合操作記錄時，不會記錄回合。",
@@ -455,7 +455,7 @@
     "more": "更多會話",
     "restoreMain": "恢復主視窗",
     "inUseTitle": "會話已在其他執行個體中開啟",
-    "inUseMessage": "此會話已在另一個 BitFun 執行個體中開啟。請先在該處關閉，然後重試。",
+    "inUseMessage": "此會話已在另一個 OpenBitFun 執行個體中開啟。請先在該處關閉，然後重試。",
     "surfaceSwitchDroppedTitle": "訊息未送出",
     "surfaceSwitchDropped": "訊息尚未送出時裝置已切換，且該會話的佇列已滿。請重新傳送。",
     "retry": "重試"
@@ -681,7 +681,7 @@
       "menuLabel": "這個任務在哪裡執行",
       "sessionScope": "僅目前任務",
       "localSection": "本機",
-      "localDescription": "在目前 BitFun 應用程式中執行",
+      "localDescription": "在目前 OpenBitFun 應用程式中執行",
       "sshSection": "SSH",
       "loading": "正在載入目標…",
       "noSshTargets": "沒有已儲存的 SSH 目標",
@@ -696,8 +696,8 @@
       "createFailed": "無法建立遠端任務。請重新檢查目標後再試。",
       "remoteTarget": "遠端裝置",
       "transferInProgress": "正在準備目標並傳送專案…",
-      "cliInstallStarted": "正在遠端裝置上準備 BitFun {{version}}…",
-      "cliInstallSucceeded": "BitFun {{version}} 已在遠端裝置上就緒。",
+      "cliInstallStarted": "正在遠端裝置上準備 OpenBitFun {{version}}…",
+      "cliInstallSucceeded": "OpenBitFun {{version}} 已在遠端裝置上就緒。",
       "cliInstallFailed": "無法準備遠端執行環境。請檢查 SSH 連線後重試。",
       "cliInstallInProgress": "正在準備遠端執行環境…",
       "cliInstallUnknownVersion": "所需版本",
@@ -736,7 +736,7 @@
       "unsupportedProfileNotice": "該工作階段使用目前版本無法執行的 {{id}}。請選擇受支援的 Harness。",
       "profileChangeBusy": "請等待目前回合結束後再切換 Harness。",
       "profileChangeOutcomeUnknown": "暫時無法確認 Harness 是否已切換，請重新整理工作階段後再重試。",
-      "profileUnavailable": "目前 BitFun Host 不支援該 Harness。",
+      "profileUnavailable": "目前 OpenBitFun Host 不支援該 Harness。",
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
       "otherAgentsTitle": "智能體",
       "otherAgentsEmpty": "目前沒有可用的主智能體",
@@ -897,7 +897,7 @@
     "noMatchingCommand": "沒有匹配的命令",
     "externalCommandContextUnsupported": "執行此委派命令前，請先移除輸入框中的附件與引用。",
     "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
-    "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
+    "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 OpenBitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
     "commandStatus": {
@@ -1122,7 +1122,7 @@
     },
     "decisionGate": {
       "title": "修復前確認待決策項",
-      "description": "請先選擇每個待決策項的處理方案，BitFun 會依你的選擇開始修改。",
+      "description": "請先選擇每個待決策項的處理方案，OpenBitFun 會依你的選擇開始修改。",
       "supplementLabel": "補充要求",
       "supplementPlaceholder": "可選：補充限制、範圍邊界或實作偏好。",
       "missingSelection": "開始前需要先為每個待決策項選擇一個方案。",
@@ -1198,8 +1198,8 @@
     },
     "resultRecovery": {
       "title": "嚴格審核需要補全結果",
-      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並補交缺失的審核報告。",
-      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核工作，並修正報告。",
+      "missingSubmitCodeReview": "審核已結束，但 OpenBitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核工作，並補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 OpenBitFun 無法讀取的結果。繼續會保留已完成的審核工作，並修正報告。",
       "wrongReviewMode": "審核回傳了標準審核結果。繼續會保留已完成的審核工作，並提交嚴格審核報告。"
     },
     "capacityQueue": {
@@ -1210,7 +1210,7 @@
       "detail": "容量等待不計入審核執行時間。",
       "activeReviewerDetail": "等待中的審核工作會在既有審核工作釋放容量後開始。容量等待不計入審核執行時間。",
       "longLaunchBatchWaitDetail": "本次審核等待時間已超過設定的容量視窗，因為前序審核工作仍在執行。你可以繼續等待、暫停等待、取消等待中的審核，或開啟審核設定。",
-      "providerDetail": "BitFun 正在等待暫時性的模型容量，這段等待不計入審核執行時間。",
+      "providerDetail": "OpenBitFun 正在等待暫時性的模型容量，這段等待不計入審核執行時間。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
       "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
@@ -1224,12 +1224,12 @@
         "temporaryOverload": "暫時過載"
       },
       "reasonDetails": {
-        "providerRateLimit": "模型提供方對本次審核請求觸發了限流。BitFun 會在容量恢復後重試。",
-        "providerConcurrencyLimit": "模型提供方拒絕了新的並發審核請求。BitFun 會在容量恢復後重試。",
-        "retryAfter": "模型提供方要求 BitFun 等待一段時間後再重試本次審核請求。",
+        "providerRateLimit": "模型提供方對本次審核請求觸發了限流。OpenBitFun 會在容量恢復後重試。",
+        "providerConcurrencyLimit": "模型提供方拒絕了新的並發審核請求。OpenBitFun 會在容量恢復後重試。",
+        "retryAfter": "模型提供方要求 OpenBitFun 等待一段時間後再重試本次審核請求。",
         "localConcurrencyCap": "目前嚴格審核容量已滿。等待中的審核工作會在活躍工作完成後開始。",
         "launchBatchBlocked": "前序審核工作仍在執行。等待可以保持計劃中的審核順序，避免後續工作搶跑。",
-        "temporaryOverload": "模型提供方暫時過載。BitFun 會在容量可用後重試。"
+        "temporaryOverload": "模型提供方暫時過載。OpenBitFun 會在容量可用後重試。"
       },
       "sessionBusy": "目前會話較忙，可暫停嚴格審核或稍後繼續。",
       "stopHint": "可使用停止來中斷本次審核。",
@@ -1284,7 +1284,7 @@
     "windowTitle": "審核方案",
     "eyebrow": "審核方案",
     "title": "開始本次審核？",
-    "body": "BitFun 會先直接審核本次變更，只在證據顯示有必要時增加補充檢查。繼續前可確認目標範圍、預計耗時與唯讀邊界。",
+    "body": "OpenBitFun 會先直接審核本次變更，只在證據顯示有必要時增加補充檢查。繼續前可確認目標範圍、預計耗時與唯讀邊界。",
     "readonlyLabel": "唯讀",
     "readonly": "審核不會修改檔案。",
     "sessionConcurrencyTitle": "目前會話較忙",
@@ -1492,7 +1492,7 @@
     "dialogNotFound": "未找到對話資料",
     "containerNotFound": "導出容器未找到",
     "generateFailed": "生成圖片失敗",
-    "fileNamePrefix": "BitFun對話",
+    "fileNamePrefix": "OpenBitFun對話",
     "exportSuccess": "圖片已導出：{{filePath}}",
     "exportSuccessPrefix": "圖片已導出：",
     "exportFailed": "導出圖片失敗，請重試",
@@ -1666,7 +1666,7 @@
       "openSourceFailed": "開啟生成式 UI 源碼編輯器失敗"
     },
     "generativeWidget": {
-      "exportFileNamePrefix": "BitFun組件"
+      "exportFileNamePrefix": "OpenBitFun組件"
     },
     "initMiniApp": {
       "title": "小應用",
@@ -1686,7 +1686,7 @@
       "title": "部署頁面",
       "deployingShort": "…",
       "untitled": "（未命名）",
-      "deployFailed": "無法部署 BitFun Page 版本",
+      "deployFailed": "無法部署 OpenBitFun Page 版本",
       "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
@@ -1697,7 +1697,7 @@
       "title": "發佈頁面",
       "publishingShort": "…",
       "untitled": "（未命名）",
-      "publishFailed": "無法發佈 BitFun Page",
+      "publishFailed": "無法發佈 OpenBitFun Page",
       "openFailed": "無法為該頁面建立安全存取連結。",
       "labelSlug": "slug",
       "labelVersion": "version",
@@ -1805,7 +1805,7 @@
       "saveToProject": "儲存到專案",
       "savingToProject": "正在儲存計劃到專案...",
       "saveToProjectUnavailable": "需要工作區才能儲存計劃",
-      "saveToProjectSuccess": "計劃已儲存至 .bitfun/plans",
+      "saveToProjectSuccess": "計劃已儲存至 .openbitfun/plans",
       "saveToProjectFailed": "儲存計劃到專案失敗",
       "revealPlanInExplorer": "在檔案管理器中定位計劃檔案",
       "revealPlanUnavailable": "僅本機工作區支援在檔案管理器中定位計劃檔案",
@@ -1840,7 +1840,7 @@
       "submittedWaiting": "已提交，等待處理",
       "submitting": "提交中...",
       "submitFailed": "答案提交失敗，請檢查連線後重試。",
-      "unsupportedOnPeer": "該裝置的 BitFun 版本暫不支援回答此問題，請更新該裝置上的 BitFun。",
+      "unsupportedOnPeer": "該裝置的 OpenBitFun 版本暫不支援回答此問題，請更新該裝置上的 OpenBitFun。",
       "waitingAnswer": "等待回答",
       "questionsCount": "{{count}} 個問題",
       "answerAllBeforeSubmit": "請回答所有問題後再提交",
@@ -1884,7 +1884,7 @@
       "appLabel": "應用",
       "targetLabel": "目標",
       "permissionDenied": "需要桌面控制權限",
-      "permissionDeniedHint": "BitFun 需要 macOS「輔助使用」和「螢幕錄製」權限才能控制其他應用。請打開系統設定，為 BitFun 授權後重試。",
+      "permissionDeniedHint": "OpenBitFun 需要 macOS「輔助使用」和「螢幕錄製」權限才能控制其他應用。請打開系統設定，為 OpenBitFun 授權後重試。",
       "openSettings": "打開系統設定",
       "openSettingsFailed": "無法打開系統設定"
     },
@@ -2384,7 +2384,7 @@
         "saveSuccess": "審核報告已匯出。",
         "saveFailed": "匯出審核報告失敗。",
         "saveDialogTitle": "匯出審核報告",
-        "fileNamePrefix": "BitFun-審核",
+        "fileNamePrefix": "OpenBitFun-審核",
         "editorTitle": "審核報告"
       },
       "reviewModes": {
@@ -2497,9 +2497,9 @@
     "modelExplanation": "模型說明",
     "modelSettings": "模型設定",
     "modelSelection": "選擇模型",
-    "primaryModel": "Primary 模型",
+    "primaryModel": "主力模型",
     "primaryModelDesc": "使用已設定的主力模型",
-    "fastModel": "Fast 模型",
+    "fastModel": "快速模型",
     "fastModelDesc": "使用已設定的快速模型",
     "providerModelCount": "{{total}} 個模型",
     "backToProviders": "返回供應商列表",
@@ -2511,6 +2511,16 @@
     "acpModeFailed": "切換模式失敗",
     "switchFailed": "切換模型失敗",
     "modelNotConfigured": "未設定",
+    "openModelSettings": "前往模型設定",
+    "status": {
+      "loading": "正在載入模型…",
+      "loadError": "模型設定載入失敗",
+      "unconfigured": "未設定模型",
+      "noEnabledChatModel": "沒有可用的聊天模型",
+      "catalogUnavailable": "模型目錄無法使用",
+      "degraded": "正在使用恢復模型",
+      "targetModelUnavailable": "目標模型無法使用"
+    },
     "tooltip": {
       "configName": "設定名稱",
       "modelName": "模型名稱",

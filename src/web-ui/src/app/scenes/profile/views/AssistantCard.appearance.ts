@@ -8,8 +8,8 @@ export const assistantCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'vibe' }, { id: 'footer' }, { id: 'setPrimary' }, { id: 'delete' },
     { id: 'chevron' },
   ],
-  facets: [{ id: 'primary', attribute: 'data-bf-primary', values: ['true', 'false'] }],
+  facets: [{ id: 'primary', attribute: 'data-openbitfun-primary', values: ['true', 'false'] }],
   states: [
-    { id: 'busy', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="busy"]' } },
+    { id: 'busy', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="busy"]' } },
   ],
 };

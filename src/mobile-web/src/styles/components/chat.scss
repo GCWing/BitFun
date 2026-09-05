@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
 }
 
 .chat-page__header {
@@ -13,11 +13,11 @@
   gap: var(--size-gap-2);
   padding: 0 var(--size-gap-5);
   min-height: 56px;
-  border-bottom: 1px solid var(--bf-color-border-subtle);
+  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
   flex-shrink: 0;
-  background: var(--bf-color-surface-raised);
-  backdrop-filter: var(--bf-effect-blur-base);
-  -webkit-backdrop-filter: var(--bf-effect-blur-base);
+  background: var(--openbitfun-color-surface-raised);
+  backdrop-filter: var(--openbitfun-effect-blur-base);
+  -webkit-backdrop-filter: var(--openbitfun-effect-blur-base);
   position: relative;
   z-index: 10;
 }
@@ -38,7 +38,7 @@
   height: 32px;
   background: none;
   border: none;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
@@ -46,8 +46,8 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
-    background: var(--bf-color-surface-subtle);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-surface-subtle);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
@@ -59,9 +59,9 @@
 }
 
 .chat-page__title {
-  font-size: var(--bf-type-body-md-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -84,10 +84,10 @@
   display: grid;
   min-width: 176px;
   padding: 8px;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: 16px;
-  background: var(--bf-color-surface-panel);
-  box-shadow: var(--bf-shadow-lg);
+  background: var(--openbitfun-color-surface-panel);
+  box-shadow: var(--openbitfun-shadow-lg);
 }
 
 .chat-page__header-menu button {
@@ -96,13 +96,13 @@
   border: 0;
   border-radius: 12px;
   background: transparent;
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
 
   &:active {
-    background: var(--bf-color-surface-subtle);
+    background: var(--openbitfun-color-surface-subtle);
   }
 }
 
@@ -115,13 +115,13 @@
   padding: 0;
   background: none;
   border: none;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   border-radius: 50%;
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
-    background: var(--bf-color-surface-subtle);
+    background: var(--openbitfun-color-surface-subtle);
   }
 }
 
@@ -130,8 +130,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--bf-type-support-font-size);
-  color: var(--bf-color-content-muted);
+  font-size: var(--openbitfun-type-support-font-size);
+  color: var(--openbitfun-color-content-muted);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -142,16 +142,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--bf-color-accent-default);
-  font-weight: var(--bf-type-label-lg-font-weight);
-  font-size: var(--bf-type-support-font-size);
+  color: var(--openbitfun-color-accent-default);
+  font-weight: var(--openbitfun-type-label-lg-font-weight);
+  font-size: var(--openbitfun-type-support-font-size);
 }
 
 .chat-page__workspace-branch {
-  color: var(--bf-color-content-muted);
-  font-weight: var(--bf-type-body-md-font-weight);
+  color: var(--openbitfun-color-content-muted);
+  font-weight: var(--openbitfun-type-body-md-font-weight);
   flex-shrink: 0;
-  font-size: var(--bf-type-support-font-size);
+  font-size: var(--openbitfun-type-support-font-size);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -171,8 +171,8 @@
 
 .chat-page__load-more-indicator {
   text-align: center;
-  font-size: var(--bf-type-body-xs-font-size);
-  color: var(--bf-color-content-muted);
+  font-size: var(--openbitfun-type-body-xs-font-size);
+  color: var(--openbitfun-color-content-muted);
   padding: var(--size-gap-2) 0;
 }
 
@@ -184,10 +184,10 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid var(--bf-color-border-subtle);
-  background: var(--bf-color-surface-raised);
-  color: var(--bf-color-content-primary);
-  box-shadow: var(--bf-shadow-base);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-raised);
+  color: var(--openbitfun-color-content-primary);
+  box-shadow: var(--openbitfun-shadow-base);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -197,11 +197,11 @@
 
   &:active {
     transform: translateX(-50%) scale(0.92);
-    box-shadow: var(--bf-shadow-sm);
+    box-shadow: var(--openbitfun-shadow-sm);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bf-color-accent-default);
+    outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: 2px;
   }
 
@@ -245,14 +245,14 @@
 
 .chat-msg__user-content {
   width: 100%;
-  font-size: var(--bf-type-body-md-font-size);
-  line-height: var(--bf-type-body-lg-line-height);
-  color: var(--bf-color-content-primary);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  line-height: var(--openbitfun-type-body-lg-line-height);
+  color: var(--openbitfun-color-content-primary);
   word-break: break-word;
   white-space: pre-wrap;
   padding: 8px 12px;
-  background: var(--bf-color-surface-subtle);
-  border: 1px solid var(--bf-color-border-subtle);
+  background: var(--openbitfun-color-surface-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: var(--size-radius-base);
 }
 
@@ -268,7 +268,7 @@
   height: 48px;
   border-radius: 6px;
   object-fit: cover;
-  border: 1px solid var(--bf-color-border-subtle);
+  border: 1px solid var(--openbitfun-color-border-subtle);
 }
 
 // Assistant message — full width, no wrapper
@@ -288,8 +288,8 @@
   gap: 6px;
   background: none;
   border: none;
-  color: var(--bf-color-content-muted);
-  font-size: var(--bf-type-body-xs-font-size);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-body-xs-font-size);
   cursor: pointer;
   padding: 3px 0;
   text-align: left;
@@ -308,9 +308,9 @@
 }
 
 .chat-msg__response-label {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   font-style: italic;
-  font-size: var(--bf-type-body-xs-font-size);
+  font-size: var(--openbitfun-type-body-xs-font-size);
 }
 
 // Image analysis indicator
@@ -319,9 +319,9 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  font-size: var(--bf-type-body-md-font-size);
-  color: var(--bf-color-content-secondary);
-  background: var(--bf-color-surface-subtle);
+  font-size: var(--openbitfun-type-body-md-font-size);
+  color: var(--openbitfun-color-content-secondary);
+  background: var(--openbitfun-color-surface-subtle);
   border-radius: 10px;
   animation: analyzeGlow 2s ease-in-out infinite;
 
@@ -333,7 +333,7 @@
 .chat-msg__image-analyzing-icon {
   display: flex;
   align-items: center;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
   animation: analyzeSpin 3s linear infinite;
 }
 
@@ -354,17 +354,17 @@
   right: 16px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: var(--bf-color-status-danger-content);
-  color: var(--bf-color-action-primary-content);
-  font-size: var(--bf-type-body-sm-font-size);
-  line-height: var(--bf-type-modifier-leading-ui-line-height);
+  background: var(--openbitfun-color-status-danger-content);
+  color: var(--openbitfun-color-action-primary-content);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   z-index: 9999;
   white-space: pre-line;
   animation: toastSlideIn 0.25s ease-out;
   backdrop-filter: blur(8px);
 
   &--info {
-    background: var(--bf-color-status-success-content);
+    background: var(--openbitfun-color-status-success-content);
   }
 }
 

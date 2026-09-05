@@ -1,8 +1,8 @@
 **中文** | [English](E2E-TESTING-GUIDE.md)
 
-# BitFun E2E 测试指南
+# OpenBitFun E2E 测试指南
 
-使用 WebDriverIO + BitFun 内嵌 WebDriver 进行 BitFun 项目的端到端测试完整指南。
+使用 WebDriverIO + OpenBitFun 内嵌 WebDriver 进行 OpenBitFun 项目的端到端测试完整指南。
 
 ## 目录
 
@@ -16,7 +16,7 @@
 
 ## 测试理念
 
-BitFun E2E 测试专注于**用户旅程**和**关键路径**，确保桌面应用从用户角度正常工作。我们使用分层测试方法来平衡覆盖率和执行速度。
+OpenBitFun E2E 测试专注于**用户旅程**和**关键路径**，确保桌面应用从用户角度正常工作。我们使用分层测试方法来平衡覆盖率和执行速度。
 
 ### 核心原则
 
@@ -28,7 +28,7 @@ BitFun E2E 测试专注于**用户旅程**和**关键路径**，确保桌面应�
 
 ## 测试级别
 
-BitFun 使用三级测试分类系统：
+OpenBitFun 使用三级测试分类系统：
 
 ### L0 - 冒烟测试（关键路径）
 
@@ -122,15 +122,15 @@ pnpm install
 
 # 构建应用（从项目根目录）
 cd ../..
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 ```
 
 ### 2. 验证安装
 
 检查应用二进制文件是否存在：
 
-**Windows**: `target/debug/bitfun-desktop.exe`
-**Linux/macOS**: `target/debug/bitfun-desktop`
+**Windows**: `target/debug/openbitfun-desktop.exe`
+**Linux/macOS**: `target/debug/openbitfun-desktop`
 
 ### 3. 运行测试
 
@@ -155,7 +155,7 @@ pnpm test -- --spec ./specs/l0-smoke.spec.ts
 测试框架统一运行在 debug/dev 模式：
 
 #### Debug 模式（默认）
-- **应用路径**: `target/debug/bitfun-desktop.exe`
+- **应用路径**: `target/debug/openbitfun-desktop.exe`
 - **特点**: 包含调试符号、需要 dev server（端口 1422）
 - **使用场景**: 本地开发、快速迭代
 
@@ -165,13 +165,13 @@ pnpm test -- --spec ./specs/l0-smoke.spec.ts
 
 ```bash
 # Debug 模式输出
-application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
+application: <PROJECT_ROOT>\target\debug\openbitfun-desktop.exe
 Debug build detected, checking dev server...
 ```
 
-**核心原理**: 功能 E2E 默认使用 `target/debug/bitfun-desktop.exe`。性能 E2E 需要显式设置 `BITFUN_E2E_APP_MODE=release-fast`，并先执行 `pnpm run desktop:build:release-fast`。
+**核心原理**: 功能 E2E 默认使用 `target/debug/openbitfun-desktop.exe`。性能 E2E 需要显式设置 `OPENBITFUN_E2E_APP_MODE=release-fast`，并先执行 `pnpm run desktop:build:release-fast`。
 
-不要直接手工启动 `target/release-fast/bitfun-desktop.exe` 做性能验证。直接启动会使用普通用户 profile，除非手动提供隔离存储环境变量。E2E launcher 会自动设置 `BITFUN_USER_ROOT`、`BITFUN_HOME` 和 `BITFUN_E2E_STORAGE_GUARD=1`，确保性能测试不会静默写入真实 BitFun profile。
+不要直接手工启动 `target/release-fast/openbitfun-desktop.exe` 做性能验证。直接启动会使用普通用户 profile，除非手动提供隔离存储环境变量。E2E launcher 会自动设置 `OPENBITFUN_USER_ROOT`、`OPENBITFUN_HOME` 和 `OPENBITFUN_E2E_STORAGE_GUARD=1`，确保性能测试不会静默写入真实 OpenBitFun profile。
 
 ### 5. 启动和长 Session 性能 E2E
 
@@ -187,17 +187,17 @@ pnpm --dir tests/e2e run fixture:long-session -- --workspace <workspace-path> --
 
 ```bash
 pnpm run desktop:build:release-fast
-cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:release-fast
+cross-env E2E_TEST_WORKSPACE=<workspace-path> OPENBITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:release-fast
 ```
 
 运行 debug 对照测试：
 
 ```bash
-cargo build -p bitfun-desktop
-cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:debug
+cargo build -p openbitfun-desktop
+cross-env E2E_TEST_WORKSPACE=<workspace-path> OPENBITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:debug
 ```
 
-测试报告会写入 `tests/e2e/reports/performance/`，包含启动阶段、Tauri API 聚合、首次打开长 session、后台 full hydrate 等时间片。可选阈值环境变量：`BITFUN_E2E_PERF_MAX_INTERACTIVE_MS`、`BITFUN_E2E_PERF_MAX_SESSION_FRAME_MS`。
+测试报告会写入 `tests/e2e/reports/performance/`，包含启动阶段、Tauri API 聚合、首次打开长 session、后台 full hydrate 等时间片。可选阈值环境变量：`OPENBITFUN_E2E_PERF_MAX_INTERACTIVE_MS`、`OPENBITFUN_E2E_PERF_MAX_SESSION_FRAME_MS`。
 
 ## 测试结构
 
@@ -402,7 +402,7 @@ await waitForStreamingComplete('[data-testid="model-response"]', 2000, 30000);
 3. **不要测试内部实现** - 专注于用户可见的行为
 4. **不要忽略不稳定的测试** - 修复或标记为跳过并说明原因
 5. **不要使用复杂的选择器** - 优先使用 data-testid
-6. **不要测试第三方代码** - 只测试 BitFun 功能
+6. **不要测试第三方代码** - 只测试 OpenBitFun 功能
 7. **不要混合测试级别** - 保持 L0/L1/L2 分离
 
 ### 条件测试
@@ -432,28 +432,28 @@ it('当工作区打开时应测试功能', async function () {
 **解决方案**:
 ```bash
 # 构建 debug 桌面应用
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 
-# 用 debug 模式运行测试，BitFun 会在进程内启动 WebDriver
-BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:l0:protocol
+# 用 debug 模式运行测试，OpenBitFun 会在进程内启动 WebDriver
+OPENBITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:l0:protocol
 
 # 确认应用进程可以监听 127.0.0.1:4445
 ```
 
 #### 2. 应用未构建
 
-**症状**: `Application not found at target/debug/bitfun-desktop.exe`
+**症状**: `Application not found at target/debug/openbitfun-desktop.exe`
 
 **解决方案**:
 ```bash
 # 构建应用（从项目根目录）
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 
 # 验证二进制文件存在
 # Windows
-dir target\debug\bitfun-desktop.exe
+dir target\debug\openbitfun-desktop.exe
 # Linux/macOS
-ls -la target/debug/bitfun-desktop
+ls -la target/debug/openbitfun-desktop
 ```
 
 #### 3. 测试超时
@@ -595,11 +595,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: 构建应用
-        run: cargo build -p bitfun-desktop
+        run: cargo build -p openbitfun-desktop
       - name: 安装测试依赖
         run: cd tests/e2e && pnpm install
       - name: 运行 L0 测试
-        run: cd tests/e2e && BITFUN_E2E_APP_MODE=debug pnpm run test:l0:all
+        run: cd tests/e2e && OPENBITFUN_E2E_APP_MODE=debug pnpm run test:l0:all
         
   l1-tests:
     runs-on: windows-latest
@@ -619,11 +619,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: 构建应用
-        run: cargo build -p bitfun-desktop
+        run: cargo build -p openbitfun-desktop
       - name: 安装测试依赖
         run: cd tests/e2e && pnpm install
       - name: 运行 L1 测试
-        run: cd tests/e2e && BITFUN_E2E_APP_MODE=debug pnpm run test:l1
+        run: cd tests/e2e && OPENBITFUN_E2E_APP_MODE=debug pnpm run test:l1
 ```
 
 ### 测试执行矩阵
@@ -658,7 +658,7 @@ jobs:
 - [WebDriverIO 文档](https://webdriver.io/)
 - [Tauri 测试指南](https://tauri.app/v1/guides/testing/)
 - [Page Object 模式](https://webdriver.io/docs/pageobjects/)
-- [BitFun 项目结构](../../AGENTS.md)
+- [OpenBitFun 项目结构](../../AGENTS.md)
 
 ## 贡献
 

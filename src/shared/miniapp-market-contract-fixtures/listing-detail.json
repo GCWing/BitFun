@@ -12,7 +12,7 @@
     "avatarUrl": "https://avatars.githubusercontent.com/u/24753352"
   },
   "latestRelease": 2,
-  "minBitfunVersion": "0.2.14",
+  "minOpenBitFunVersion": "1.0.0",
   "permissions": {
     "node": {
       "enabled": false
@@ -48,7 +48,7 @@
       "releaseId": "release-fixture-2",
       "listingId": "listing-fixture-1",
       "releaseNumber": 2,
-      "minBitfunVersion": "0.2.14",
+      "minOpenBitFunVersion": "1.0.0",
       "changelog": "Adds named capture highlighting.",
       "packageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "packageSize": 4096,

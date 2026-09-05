@@ -1,5 +1,5 @@
-use bitfun_product_domains::external_sources::{ExternalSourceScope, ExternalWatchRoot};
-use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
+use openbitfun_product_domains::external_sources::{ExternalSourceScope, ExternalWatchRoot};
+use openbitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -590,7 +590,7 @@ mod tests {
         LocalConfigDirectoryKind, LocalConfigDocumentKind, LocalConfigDocumentSource,
         LocalSourcePlanItem, OpenCodeLocalConfigOptions,
     };
-    use bitfun_product_domains::external_sources::ExternalSourceScope;
+    use openbitfun_product_domains::external_sources::ExternalSourceScope;
     use std::path::{Path, PathBuf};
 
     #[test]

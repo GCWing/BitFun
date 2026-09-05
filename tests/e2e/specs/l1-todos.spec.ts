@@ -32,7 +32,7 @@ describe('L1 Task Board', () => {
     expect(await $('[data-testid="todos-calendar-month"]').isDisplayed()).toBe(true);
     expect(await $('[data-testid="todos-new"]').isDisplayed()).toBe(true);
     expect(await $('[data-testid="todos-refresh"]').isExisting()).toBe(false);
-    expect(await $('.bf-todos__guide').isExisting()).toBe(false);
+    expect(await $('.openbitfun-todos__guide').isExisting()).toBe(false);
 
     const layout = await taskBoard.getLayoutMetrics();
     expect(layout).not.toBeNull();
@@ -70,7 +70,7 @@ describe('L1 Task Board', () => {
     taskCreated = true;
     expect(await row.isDisplayed()).toBe(true);
     expect(await row.getSize('height')).toBeLessThanOrEqual(84);
-    expect(await row.$('.bf-todos__row-icon').isDisplayed()).toBe(true);
+    expect(await row.$('.openbitfun-todos__row-icon').isDisplayed()).toBe(true);
     expect((await row.getText()).toLowerCase()).toMatch(/hour|小时|小時/);
 
     const currentMonth = await $('[data-testid="todos-calendar-month"]').getText();
@@ -81,7 +81,7 @@ describe('L1 Task Board', () => {
       timeout: 5_000,
       timeoutMsg: 'Task Board did not move to the next month',
     });
-    await $('.bf-todos__today-button').click();
+    await $('.openbitfun-todos__today-button').click();
     await browser.waitUntil(async () => (
       await $('[data-testid="todos-calendar-month"]').getText()
     ) === currentMonth, {

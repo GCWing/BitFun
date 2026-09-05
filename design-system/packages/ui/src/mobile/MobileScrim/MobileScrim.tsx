@@ -13,7 +13,7 @@ export const MobileScrim = forwardRef<HTMLButtonElement, MobileScrimProps>(
       <button
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component="mobile-scrim"
+        data-openbitfun-component="mobile-scrim"
         data-visible={visible ? "true" : "false"}
         ref={ref}
         type={type}

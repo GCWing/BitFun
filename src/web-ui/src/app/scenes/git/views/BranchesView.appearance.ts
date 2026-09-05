@@ -10,8 +10,8 @@ export const branchesViewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'commitActions' }, { id: 'commitDetails' },
   ],
   states: [
-    { id: 'current', selector: { kind: 'self', suffix: '[data-bf-state~="current"]' } },
-    { id: 'selected', selector: { kind: 'self', suffix: '[data-bf-state~="selected"]' } },
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'current', selector: { kind: 'self', suffix: '[data-openbitfun-state~="current"]' } },
+    { id: 'selected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="selected"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

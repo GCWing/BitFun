@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from '@bitfun/ui';
+import { Alert } from '@openbitfun/ui';
 import './ConfigPageState.scss';
 
 export interface ConfigMessageData {
@@ -20,9 +20,9 @@ export const ConfigMessage: React.FC<ConfigMessageProps> = ({
 
   return (
     <div
-      className={['bitfun-config-message', className].filter(Boolean).join(' ')}
-      data-bf-component="config"
-      data-bf-part="message"
+      className={['openbitfun-config-message', className].filter(Boolean).join(' ')}
+      data-openbitfun-component="config"
+      data-openbitfun-part="message"
     >
       <Alert tone={message.type} message={message.text} />
     </div>

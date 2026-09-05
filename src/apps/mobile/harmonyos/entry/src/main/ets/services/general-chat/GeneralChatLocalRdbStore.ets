@@ -5,7 +5,7 @@ import { OhosError } from '../OhosError';
 import { GeneralChatLocalStore } from './GeneralChatPort';
 
 const STORE_CONFIG: relationalStore.StoreConfig = {
-  name: 'bitfun_general_chat.db',
+  name: 'openbitfun_general_chat.db',
   securityLevel: relationalStore.SecurityLevel.S1
 };
 

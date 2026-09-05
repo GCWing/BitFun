@@ -50,7 +50,7 @@ describe('WritePlanDisplay', () => {
       root.render(
         <WritePlanDisplay
           toolItem={toolItem}
-          planFilePath="/workspace/.bitfun/plans/test.plan.md"
+          planFilePath="/workspace/.openbitfun/plans/test.plan.md"
           initialContent="---\nname: Test\noverview: Test plan.\ntodos: []\n---\n\n# Test"
           workspacePath="/workspace"
           remoteConnectionId="remote-1"

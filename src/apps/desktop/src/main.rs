@@ -11,5 +11,5 @@ fn main() {
         .enable_all()
         .build()
         .expect("failed to build Tokio runtime");
-    runtime.block_on(bitfun_desktop_lib::run());
+    runtime.block_on(openbitfun_desktop_lib::run());
 }

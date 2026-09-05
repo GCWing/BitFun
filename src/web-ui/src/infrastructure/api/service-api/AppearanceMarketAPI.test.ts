@@ -61,9 +61,9 @@ describe('AppearanceMarketAPI', () => {
 
     await market.listSubmissions();
     await market.submitPackage({
-      packagePath: '/tmp/tokyo-night.bitfun-appearance',
+      packagePath: '/tmp/tokyo-night.openbitfun-appearance',
       slug: 'tokyo-night',
-      minBitfunVersion: '0.2.15',
+      minOpenBitFunVersion: '1.0.0',
       changelog: 'Initial release',
       license: { spdxExpression: 'MIT' },
     });
@@ -75,9 +75,9 @@ describe('AppearanceMarketAPI', () => {
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'appearance_market_list_submissions', {});
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'appearance_market_submit_package', {
       request: {
-        packagePath: '/tmp/tokyo-night.bitfun-appearance',
+        packagePath: '/tmp/tokyo-night.openbitfun-appearance',
         slug: 'tokyo-night',
-        minBitfunVersion: '0.2.15',
+        minOpenBitFunVersion: '1.0.0',
         changelog: 'Initial release',
         license: { spdxExpression: 'MIT' },
       },

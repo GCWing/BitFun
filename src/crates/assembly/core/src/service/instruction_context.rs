@@ -1,7 +1,7 @@
 use crate::util::errors::*;
-use bitfun_runtime_ports::WorkspaceFileSystem;
-use bitfun_services_core::local_instructions::LocalInstructionFile;
-use bitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
+use openbitfun_runtime_ports::WorkspaceFileSystem;
+use openbitfun_services_core::local_instructions::LocalInstructionFile;
+use openbitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
 use std::path::Path;
 
 const MAX_RENDERED_INSTRUCTION_FILES: usize = 256;
@@ -39,7 +39,7 @@ async fn load_user_conditional_instruction_files() -> Vec<LocalInstructionFile> 
 
 pub(crate) async fn build_workspace_instruction_files_context(
     workspace_root: &Path,
-) -> BitFunResult<Option<String>> {
+) -> OpenBitFunResult<Option<String>> {
     Ok(
         build_workspace_instruction_files_context_detailed(workspace_root)
             .await?
@@ -49,15 +49,15 @@ pub(crate) async fn build_workspace_instruction_files_context(
 
 pub(crate) async fn build_workspace_instruction_files_context_detailed(
     workspace_root: &Path,
-) -> BitFunResult<InstructionContextBuild> {
+) -> OpenBitFunResult<InstructionContextBuild> {
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
-        bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
+        openbitfun_services_core::workspace_instructions::read_workspace_instruction_files(
             workspace_root,
         )
         .await
-        .map_err(BitFunError::service)?;
+        .map_err(OpenBitFunError::service)?;
     Ok(compose_local_instruction_sources(
         workspace_root,
         user_instruction_files,
@@ -70,16 +70,16 @@ pub(crate) async fn build_local_workspace_instruction_files_context_with_fs_deta
     workspace_root: &Path,
     fs: &dyn WorkspaceFileSystem,
     workspace_root_path: &str,
-) -> BitFunResult<InstructionContextBuild> {
+) -> OpenBitFunResult<InstructionContextBuild> {
     let (user_instruction_files, user_instruction_files_cacheable) =
         load_user_instruction_files(workspace_root).await;
     let workspace_instruction_files =
-        bitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
+        openbitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
             fs,
             workspace_root_path,
         )
         .await
-        .map_err(BitFunError::service)?;
+        .map_err(OpenBitFunError::service)?;
     Ok(compose_local_instruction_sources(
         workspace_root,
         user_instruction_files,
@@ -110,7 +110,7 @@ fn merge_local_instruction_sources(
     user_instruction_files: Vec<LocalInstructionFile>,
     mut workspace_instruction_files: Vec<WorkspaceInstructionFile>,
 ) -> Vec<WorkspaceInstructionFile> {
-    bitfun_services_core::workspace_instructions::retain_distinct_local_workspace_instruction_files(
+    openbitfun_services_core::workspace_instructions::retain_distinct_local_workspace_instruction_files(
         workspace_root,
         user_instruction_files
             .iter()
@@ -131,14 +131,14 @@ fn merge_local_instruction_sources(
 
 pub(crate) async fn load_local_conditional_instruction_files(
     workspace_root: &Path,
-) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+) -> OpenBitFunResult<Vec<WorkspaceInstructionFile>> {
     let user_instruction_files = load_user_conditional_instruction_files().await;
     let workspace_instruction_files =
-        bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources(
+        openbitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources(
             workspace_root,
         )
         .await
-        .map_err(BitFunError::service)?;
+        .map_err(OpenBitFunError::service)?;
     Ok(merge_local_instruction_sources(
         workspace_root,
         user_instruction_files,
@@ -150,15 +150,15 @@ pub(crate) async fn load_local_conditional_instruction_files_with_fs(
     workspace_root: &Path,
     fs: &dyn WorkspaceFileSystem,
     workspace_root_path: &str,
-) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+) -> OpenBitFunResult<Vec<WorkspaceInstructionFile>> {
     let user_instruction_files = load_user_conditional_instruction_files().await;
     let workspace_instruction_files =
-        bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+        openbitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
             fs,
             workspace_root_path,
         )
         .await
-        .map_err(BitFunError::service)?;
+        .map_err(OpenBitFunError::service)?;
     Ok(merge_local_instruction_sources(
         workspace_root,
         user_instruction_files,
@@ -169,26 +169,26 @@ pub(crate) async fn load_local_conditional_instruction_files_with_fs(
 pub(crate) async fn load_workspace_conditional_instruction_files_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
-) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
-    Ok(bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+) -> OpenBitFunResult<Vec<WorkspaceInstructionFile>> {
+    Ok(openbitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
             fs,
             workspace_root,
         )
         .await
-        .map_err(BitFunError::service)?)
+        .map_err(OpenBitFunError::service)?)
 }
 
 pub(crate) async fn build_workspace_instruction_files_context_with_fs(
     fs: &dyn WorkspaceFileSystem,
     workspace_root: &str,
-) -> BitFunResult<Option<String>> {
+) -> OpenBitFunResult<Option<String>> {
     let instruction_files =
-        bitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
+        openbitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
             fs,
             workspace_root,
         )
         .await
-        .map_err(BitFunError::service)?;
+        .map_err(OpenBitFunError::service)?;
     Ok(render_workspace_instruction_files_section(
         &instruction_files,
     ))
@@ -251,7 +251,7 @@ mod tests {
     #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     #[cfg(feature = "external-sources")]
-    use bitfun_services_core::workspace::LocalWorkspaceFs;
+    use openbitfun_services_core::workspace::LocalWorkspaceFs;
 
     #[cfg(feature = "external-sources")]
     #[tokio::test]
@@ -360,7 +360,7 @@ mod tests {
             claude.join("rules/oversized.md"),
             vec![
                 b'x';
-                bitfun_services_core::local_instructions::MAX_LOCAL_INSTRUCTION_FILE_BYTES + 1
+                openbitfun_services_core::local_instructions::MAX_LOCAL_INSTRUCTION_FILE_BYTES + 1
             ],
         )
         .expect("oversized user rule");

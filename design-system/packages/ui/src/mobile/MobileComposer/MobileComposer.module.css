@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     position: relative;
     box-sizing: border-box;
@@ -7,19 +7,19 @@
     min-inline-size: 0;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     min-block-size: 48px;
-    padding: var(--bf-space-1) var(--bf-space-2);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-base);
+    padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-base);
     transition:
-      min-block-size var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-      border-radius var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      min-block-size var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      border-radius var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-interactive="true"] {
@@ -30,12 +30,12 @@
 
   .root[data-interactive="true"]:active {
     transform: scale(0.99);
-    box-shadow: var(--bf-shadow-sm);
+    box-shadow: var(--openbitfun-shadow-sm);
   }
 
   .root[data-interactive="true"]:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .leading,
@@ -88,7 +88,7 @@
   .endActions {
     flex: 0 0 auto;
     justify-content: flex-end;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
   .root[data-expanded="true"] {
@@ -97,9 +97,9 @@
     flex-direction: column;
     align-items: stretch;
     gap: 0;
-    padding: var(--bf-space-2);
-    border-radius: var(--bf-radius-xl);
-    box-shadow: var(--bf-shadow-lg);
+    padding: var(--openbitfun-space-2);
+    border-radius: var(--openbitfun-radius-xl);
+    box-shadow: var(--openbitfun-shadow-lg);
   }
 
   .root[data-expanded="true"] .leading {
@@ -117,14 +117,14 @@
     min-block-size: 40px;
     align-items: center;
     justify-content: space-between;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .root[data-expanded="true"] .startActions {
     display: flex;
     min-inline-size: 0;
     flex: 1 1 auto;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -136,7 +136,7 @@
   @media (min-width: 700px) {
     .root[data-expanded="true"] {
       min-block-size: 116px;
-      padding: var(--bf-space-3);
+      padding: var(--openbitfun-space-3);
     }
   }
 

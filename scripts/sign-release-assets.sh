@@ -6,10 +6,10 @@
 # Usage: sign-release-assets.sh <file> [<file>...]
 #
 # Environment:
-#   BITFUN_SIGNING_KEY       minisign secret key, either the raw key file or
+#   OPENBITFUN_SIGNING_KEY       minisign secret key, either the raw key file or
 #                            base64 of that file (legacy wrapper format)
-#   BITFUN_SIGNING_PASSWORD  password for that key
-#   BITFUN_SIGNING_PUBKEY    minisign public key, either the raw key file or
+#   OPENBITFUN_SIGNING_PASSWORD  password for that key
+#   OPENBITFUN_SIGNING_PUBKEY    minisign public key, either the raw key file or
 #                            base64 of that file; used to self-verify
 #
 # With no signing key configured this is a no-op, so forks keep building.
@@ -29,7 +29,7 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-if [ -z "${BITFUN_SIGNING_KEY:-}" ]; then
+if [ -z "${OPENBITFUN_SIGNING_KEY:-}" ]; then
   echo "[sign] No signing key configured; assets ship with checksums only."
   exit 0
 fi
@@ -56,7 +56,7 @@ if ! command -v minisign >/dev/null 2>&1; then
             ;;
         esac
 
-        MINISIGN_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/bitfun-minisign-${MINISIGN_VERSION}"
+        MINISIGN_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/openbitfun-minisign-${MINISIGN_VERSION}"
         MINISIGN_ARCHIVE="$MINISIGN_ROOT/minisign-linux.tar.gz"
         mkdir -p "$MINISIGN_ROOT/bin"
         curl --fail --location --retry 3 \
@@ -93,20 +93,20 @@ umask 077
 # New Tauri CLIs accept the raw minisign key file as their environment value;
 # older repository secrets wrap that whole file in base64. Support both so the
 # Tauri bundler and direct minisign asset signing can share one secret.
-case "$BITFUN_SIGNING_KEY" in
+case "$OPENBITFUN_SIGNING_KEY" in
   "untrusted comment:"*)
-    printf '%s\n' "$BITFUN_SIGNING_KEY" >"$WORK/release.key"
+    printf '%s\n' "$OPENBITFUN_SIGNING_KEY" >"$WORK/release.key"
     ;;
   *)
-    printf '%s' "$BITFUN_SIGNING_KEY" | base64 -d >"$WORK/release.key"
+    printf '%s' "$OPENBITFUN_SIGNING_KEY" | base64 -d >"$WORK/release.key"
     ;;
 esac
-case "${BITFUN_SIGNING_PUBKEY:-}" in
+case "${OPENBITFUN_SIGNING_PUBKEY:-}" in
   "untrusted comment:"*)
-    printf '%s\n' "$BITFUN_SIGNING_PUBKEY" >"$WORK/release.pub"
+    printf '%s\n' "$OPENBITFUN_SIGNING_PUBKEY" >"$WORK/release.pub"
     ;;
   *)
-    printf '%s' "${BITFUN_SIGNING_PUBKEY:-}" | base64 -d >"$WORK/release.pub" 2>/dev/null || true
+    printf '%s' "${OPENBITFUN_SIGNING_PUBKEY:-}" | base64 -d >"$WORK/release.pub" 2>/dev/null || true
     ;;
 esac
 
@@ -127,7 +127,7 @@ for target in "$@"; do
     continue
   fi
 
-  printf '%s\n' "${BITFUN_SIGNING_PASSWORD:-}" |
+  printf '%s\n' "${OPENBITFUN_SIGNING_PASSWORD:-}" |
     minisign -S -s "$WORK/release.key" -m "$target" -x "${target}.minisig" >/dev/null
 
   # Verify before publishing. A signature nobody checked is worse than none,
@@ -135,7 +135,7 @@ for target in "$@"; do
   if [ -s "$WORK/release.pub" ]; then
     minisign -Vm "$target" -p "$WORK/release.pub" -x "${target}.minisig" >/dev/null
   else
-    echo "[sign] ERROR: BITFUN_SIGNING_PUBKEY is required to self-verify signatures." >&2
+    echo "[sign] ERROR: OPENBITFUN_SIGNING_PUBKEY is required to self-verify signatures." >&2
     exit 1
   fi
 

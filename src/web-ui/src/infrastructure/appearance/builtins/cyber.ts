@@ -30,13 +30,13 @@ const CYBER_SURFACE_SECONDARY = '#1c1c1f';
 
 const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
 
-export const bitfunCyberPalette: AppearancePalette = {
+export const openBitFunCyberPalette: AppearancePalette = {
 
-  id: 'bitfun-cyber',
+  id: 'openbitfun-cyber',
   name: 'Cyber',
   type: 'dark',
   description: 'Tech-style appearance - Deep black hole, neon future, ultimate tech aesthetics',
-  author: 'BitFun Team',
+  author: 'OpenBitFun Team',
   version: '1.0.0',
 
 

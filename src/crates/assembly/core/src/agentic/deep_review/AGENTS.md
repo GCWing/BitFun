@@ -33,7 +33,7 @@ Use the nearest Web UI check for frontend-only behavior. For shared runtime
 behavior, run:
 
 ```bash
-cargo test -p bitfun-core --no-default-features --features agent-runtime --lib deep_review -- --nocapture
+cargo test -p openbitfun-core --no-default-features --features agent-runtime --lib deep_review -- --nocapture
 ```
 
 Also run the relevant Rust or desktop check when the change touches backend

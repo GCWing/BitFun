@@ -23,32 +23,39 @@ fn normalize_line_endings(content: &str) -> String {
     content.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-async fn ensure_markdown_placeholder(path: &Path, content: &str) -> BitFunResult<bool> {
+async fn ensure_markdown_placeholder(path: &Path, content: &str) -> OpenBitFunResult<bool> {
     if path.exists() {
         return Ok(false);
     }
 
     let normalized_content = normalize_line_endings(content);
-    fs::write(path, normalized_content)
-        .await
-        .map_err(|e| BitFunError::service(format!("Failed to create {}: {}", path.display(), e)))?;
+    fs::write(path, normalized_content).await.map_err(|e| {
+        OpenBitFunError::service(format!("Failed to create {}: {}", path.display(), e))
+    })?;
 
     Ok(true)
 }
 
-fn gitignore_already_ignores_bitfun(content: &str) -> bool {
+fn gitignore_already_ignores_openbitfun(content: &str) -> bool {
+    let directory = openbitfun_core_types::product_identity::hidden_data_directory();
     content.lines().any(|line| {
         let entry = line.trim();
         !entry.starts_with('#')
-            && matches!(entry, ".bitfun" | ".bitfun/" | "/.bitfun" | "/.bitfun/")
+            && (entry == directory
+                || entry == format!("{directory}/")
+                || entry == format!("/{directory}")
+                || entry == format!("/{directory}/"))
     })
 }
 
-pub(crate) async fn ensure_workspace_gitignore_ignores_bitfun(
+pub(crate) async fn ensure_workspace_gitignore_ignores_openbitfun(
     workspace_root: &Path,
-) -> BitFunResult<bool> {
+) -> OpenBitFunResult<bool> {
     let gitignore_path = workspace_root.join(".gitignore");
-    let bitfun_entry = ".bitfun/";
+    let openbitfun_entry = format!(
+        "{}/",
+        openbitfun_core_types::product_identity::hidden_data_directory()
+    );
 
     let content = match fs::read_to_string(&gitignore_path).await {
         Ok(content) => content,
@@ -60,7 +67,7 @@ pub(crate) async fn ensure_workspace_gitignore_ignores_bitfun(
             return Ok(false);
         }
         Err(error) => {
-            return Err(BitFunError::service(format!(
+            return Err(OpenBitFunError::service(format!(
                 "Failed to read {}: {}",
                 gitignore_path.display(),
                 error
@@ -68,7 +75,7 @@ pub(crate) async fn ensure_workspace_gitignore_ignores_bitfun(
         }
     };
 
-    if gitignore_already_ignores_bitfun(&content) {
+    if gitignore_already_ignores_openbitfun(&content) {
         return Ok(false);
     }
 
@@ -81,31 +88,34 @@ pub(crate) async fn ensure_workspace_gitignore_ignores_bitfun(
     if !updated.is_empty() && !updated.ends_with('\n') && !updated.ends_with('\r') {
         updated.push_str(line_ending);
     }
-    updated.push_str(bitfun_entry);
+    updated.push_str(&openbitfun_entry);
     updated.push_str(line_ending);
 
     fs::write(&gitignore_path, updated).await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to update {} for .bitfun: {}",
+        OpenBitFunError::service(format!(
+            "Failed to update {} for {}: {}",
             gitignore_path.display(),
+            openbitfun_core_types::product_identity::hidden_data_directory(),
             e
         ))
     })?;
 
     debug!(
-        "Added workspace .gitignore entry for .bitfun: path={}",
-        gitignore_path.display()
+        "Added workspace .gitignore entry for {}: path={}",
+        openbitfun_core_types::product_identity::hidden_data_directory(),
+        gitignore_path.display(),
     );
 
     Ok(true)
 }
 
-async fn ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root: &Path) -> bool {
-    match ensure_workspace_gitignore_ignores_bitfun(workspace_root).await {
+async fn ensure_workspace_gitignore_ignores_openbitfun_best_effort(workspace_root: &Path) -> bool {
+    match ensure_workspace_gitignore_ignores_openbitfun(workspace_root).await {
         Ok(updated) => updated,
         Err(e) => {
             warn!(
-                "Failed to ensure workspace .gitignore ignores .bitfun: workspace={}, error={}",
+                "Failed to ensure workspace .gitignore ignores {}: workspace={}, error={}",
+                openbitfun_core_types::product_identity::hidden_data_directory(),
                 workspace_root.display(),
                 e
             );
@@ -114,9 +124,11 @@ async fn ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root: &
     }
 }
 
-pub(crate) async fn initialize_workspace_persona_files(workspace_root: &Path) -> BitFunResult<()> {
+pub(crate) async fn initialize_workspace_persona_files(
+    workspace_root: &Path,
+) -> OpenBitFunResult<()> {
     let gitignore_updated =
-        ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root).await;
+        ensure_workspace_gitignore_ignores_openbitfun_best_effort(workspace_root).await;
     let bootstrap_path = workspace_root.join(BOOTSTRAP_FILE_NAME);
     let soul_path = workspace_root.join(SOUL_FILE_NAME);
     let user_path = workspace_root.join(USER_FILE_NAME);
@@ -149,9 +161,9 @@ pub(crate) fn is_workspace_bootstrap_pending(workspace_root: &Path) -> bool {
 #[cfg(feature = "agent-runtime")]
 pub(crate) async fn ensure_workspace_persona_files_for_prompt(
     workspace_root: &Path,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     let gitignore_updated =
-        ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root).await;
+        ensure_workspace_gitignore_ignores_openbitfun_best_effort(workspace_root).await;
     let bootstrap_path = workspace_root.join(BOOTSTRAP_FILE_NAME);
     let soul_path = workspace_root.join(SOUL_FILE_NAME);
     let user_path = workspace_root.join(USER_FILE_NAME);
@@ -206,7 +218,9 @@ pub(crate) async fn ensure_workspace_persona_files_for_prompt(
     Ok(())
 }
 
-pub async fn reset_workspace_persona_files_to_default(workspace_root: &Path) -> BitFunResult<()> {
+pub async fn reset_workspace_persona_files_to_default(
+    workspace_root: &Path,
+) -> OpenBitFunResult<()> {
     let persona_templates = [
         (BOOTSTRAP_FILE_NAME, BOOTSTRAP_TEMPLATE),
         (SOUL_FILE_NAME, SOUL_TEMPLATE),
@@ -220,7 +234,7 @@ pub async fn reset_workspace_persona_files_to_default(workspace_root: &Path) -> 
         fs::write(&file_path, normalized_content)
             .await
             .map_err(|e| {
-                BitFunError::service(format!(
+                OpenBitFunError::service(format!(
                     "Failed to reset persona file '{}': {}",
                     file_path.display(),
                     e
@@ -239,7 +253,7 @@ pub async fn reset_workspace_persona_files_to_default(workspace_root: &Path) -> 
 #[cfg(feature = "agent-runtime")]
 pub(crate) async fn build_workspace_persona_prompt(
     workspace_root: &Path,
-) -> BitFunResult<Option<String>> {
+) -> OpenBitFunResult<Option<String>> {
     ensure_workspace_persona_files_for_prompt(workspace_root).await?;
 
     let mut documents = Vec::new();
@@ -326,7 +340,7 @@ fn persona_file_description(file_name: &str) -> &'static str {
 #[cfg(all(test, feature = "agent-runtime"))]
 mod tests {
     use super::{
-        ensure_workspace_gitignore_ignores_bitfun, ensure_workspace_persona_files_for_prompt,
+        ensure_workspace_gitignore_ignores_openbitfun, ensure_workspace_persona_files_for_prompt,
         initialize_workspace_persona_files, normalize_line_endings, BOOTSTRAP_FILE_NAME,
         IDENTITY_FILE_NAME, SOUL_FILE_NAME, USER_FILE_NAME,
     };
@@ -350,13 +364,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ensure_workspace_gitignore_ignores_bitfun_skips_when_gitignore_missing() {
-        let workspace_root = unique_workspace("bitfun-gitignore-missing");
+    async fn ensure_workspace_gitignore_ignores_openbitfun_skips_when_gitignore_missing() {
+        let workspace_root = unique_workspace("openbitfun-gitignore-missing");
         fs::create_dir_all(&workspace_root)
             .await
             .expect("Failed to create temp workspace");
 
-        let updated = ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+        let updated = ensure_workspace_gitignore_ignores_openbitfun(&workspace_root)
             .await
             .expect("Failed to ensure .gitignore");
 
@@ -372,8 +386,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ensure_workspace_gitignore_ignores_bitfun_appends_without_clobbering() {
-        let workspace_root = unique_workspace("bitfun-gitignore-append");
+    async fn ensure_workspace_gitignore_ignores_openbitfun_appends_without_clobbering() {
+        let workspace_root = unique_workspace("openbitfun-gitignore-append");
         fs::create_dir_all(&workspace_root)
             .await
             .expect("Failed to create temp workspace");
@@ -381,14 +395,14 @@ mod tests {
             .await
             .expect("Failed to seed .gitignore");
 
-        ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+        ensure_workspace_gitignore_ignores_openbitfun(&workspace_root)
             .await
             .expect("Failed to ensure .gitignore");
 
         let content = fs::read_to_string(workspace_root.join(".gitignore"))
             .await
             .expect("Failed to read .gitignore");
-        assert_eq!(content, "target/\n.env\n.bitfun/\n");
+        assert_eq!(content, "target/\n.env\n.openbitfun/\n");
 
         fs::remove_dir_all(&workspace_root)
             .await
@@ -396,23 +410,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ensure_workspace_gitignore_ignores_bitfun_is_idempotent() {
-        let workspace_root = unique_workspace("bitfun-gitignore-idempotent");
+    async fn ensure_workspace_gitignore_ignores_openbitfun_is_idempotent() {
+        let workspace_root = unique_workspace("openbitfun-gitignore-idempotent");
         fs::create_dir_all(&workspace_root)
             .await
             .expect("Failed to create temp workspace");
-        fs::write(workspace_root.join(".gitignore"), "target/\n.bitfun/\n")
+        fs::write(workspace_root.join(".gitignore"), "target/\n.openbitfun/\n")
             .await
             .expect("Failed to seed .gitignore");
 
-        ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+        ensure_workspace_gitignore_ignores_openbitfun(&workspace_root)
             .await
             .expect("Failed to ensure .gitignore");
 
         let content = fs::read_to_string(workspace_root.join(".gitignore"))
             .await
             .expect("Failed to read .gitignore");
-        assert_eq!(content, "target/\n.bitfun/\n");
+        assert_eq!(content, "target/\n.openbitfun/\n");
 
         fs::remove_dir_all(&workspace_root)
             .await
@@ -421,7 +435,7 @@ mod tests {
 
     #[tokio::test]
     async fn initialize_workspace_persona_files_creates_all_four_files() {
-        let workspace_root = unique_workspace("bitfun-bootstrap-init");
+        let workspace_root = unique_workspace("openbitfun-bootstrap-init");
 
         fs::create_dir_all(&workspace_root)
             .await
@@ -451,7 +465,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_workspace_persona_files_for_prompt_preserves_completed_bootstrap() {
-        let workspace_root = unique_workspace("bitfun-bootstrap-preserve");
+        let workspace_root = unique_workspace("openbitfun-bootstrap-preserve");
 
         fs::create_dir_all(&workspace_root)
             .await

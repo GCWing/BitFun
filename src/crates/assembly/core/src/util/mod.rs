@@ -6,7 +6,7 @@ pub mod front_matter_markdown;
 pub mod json_extract;
 pub mod plain_output;
 #[cfg(feature = "process-runtime")]
-pub use bitfun_services_core::process_manager;
+pub use openbitfun_services_core::process_manager;
 pub mod timing;
 pub mod token_counter;
 pub mod types;

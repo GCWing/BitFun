@@ -27,16 +27,16 @@ Peer Device Mode (same-account remote full client) is documented in
 `docs/architecture/peer-device-mode.md`. Frontend invariants:
 `src/infrastructure/peer-device/README.md`. Do not reintroduce nested
 sessions/chat shells; enter peer mode from the device list (Remote Connect →
-My BitFun) instead.
+My OpenBitFun) instead.
 
 One-click relay deploy wizard: `src/features/relay-deploy/` (see its README).
-The Remote Connect account group (My BitFun) login form and the Remote Connect
+The Remote Connect account group (My OpenBitFun) login form and the Remote Connect
 Self-Hosted entries must open `RelayDeployWizard`, not an external README.
 
 ## Local rules
 
 - Do not call Tauri APIs directly from UI components; go through the adapter / infrastructure layer
-- Reuse `@bitfun/ui`, design tokens, theme, i18n, and Zustand stores before adding new frontend primitives
+- Reuse `@openbitfun/ui`, design tokens, theme, i18n, and Zustand stores before adding new frontend primitives
 - Theme and color-token changes must follow
   `docs/architecture/theme-token-optimization.md`: failing audits should be
   fixed by reusing tokens, merging redundant values, or adding a scoped owner

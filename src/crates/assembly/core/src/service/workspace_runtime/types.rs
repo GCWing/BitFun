@@ -102,16 +102,8 @@ impl WorkspaceRuntimeContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RuntimeMigrationRecord {
-    pub source: PathBuf,
-    pub target: PathBuf,
-    pub strategy: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceRuntimeEnsureResult {
     pub context: WorkspaceRuntimeContext,
     pub created_directories: Vec<PathBuf>,
-    pub migrated_entries: Vec<RuntimeMigrationRecord>,
 }

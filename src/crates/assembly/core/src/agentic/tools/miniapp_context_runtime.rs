@@ -164,7 +164,7 @@ mod tests {
                 miniapp_context_scope: Some(snapshot.scope.clone()),
                 ..Default::default()
             },
-            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+            runtime_handles: openbitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
         let resolved = context
             .resolve_tool_path(&format!("{}/market.json", snapshot.relative_root))

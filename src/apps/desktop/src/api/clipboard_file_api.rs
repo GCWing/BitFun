@@ -1,6 +1,6 @@
 //! Clipboard File API
 
-use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -551,7 +551,7 @@ mod tests {
     #[test]
     fn copy_directory_recursive_copies_nested_binary_files() {
         let root = std::env::temp_dir().join(format!(
-            "bitfun-directory-copy-test-{}",
+            "openbitfun-directory-copy-test-{}",
             uuid::Uuid::new_v4()
         ));
         let source = root.join("source");
@@ -580,7 +580,7 @@ mod tests {
 #[cfg(test)]
 mod remote_guard_tests {
     use super::{paste_files, PasteFilesRequest};
-    use bitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+    use openbitfun_core::service::remote_ssh::workspace_state::init_remote_workspace_manager;
 
     const REMOTE_ROOT: &str = "/remote-audit-paste";
     const CONNECTION_ID: &str = "remote-audit-paste-connection";
@@ -596,9 +596,9 @@ mod remote_guard_tests {
             )
             .await;
 
-        let source = std::env::temp_dir().join("bitfun-remote-audit-paste-source.txt");
+        let source = std::env::temp_dir().join("openbitfun-remote-audit-paste-source.txt");
         std::fs::write(&source, b"local bytes").expect("write controller source");
-        let sentinel = std::env::temp_dir().join("bitfun-remote-audit-paste-source.txt.copy");
+        let sentinel = std::env::temp_dir().join("openbitfun-remote-audit-paste-source.txt.copy");
         let _ = std::fs::remove_file(&sentinel);
 
         let error = paste_files(PasteFilesRequest {

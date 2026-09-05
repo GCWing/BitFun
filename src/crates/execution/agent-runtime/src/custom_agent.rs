@@ -1,6 +1,7 @@
 //! Custom agent portable schema and serialization decisions.
 
 use crate::prompt::{UserContextPolicy, UserContextSection};
+use openbitfun_core_types::product_identity::hidden_data_directory;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_yaml::{Mapping, Value};
@@ -32,9 +33,10 @@ pub const DEFAULT_CUSTOM_SUBAGENT_READONLY: bool = true;
 pub const DEFAULT_CUSTOM_SUBAGENT_REVIEW: bool = false;
 pub const DEFAULT_CUSTOM_MODE_MODEL: &str = "primary";
 pub const DEFAULT_CUSTOM_SUBAGENT_MODEL: &str = "fast";
-// Only BitFun custom agents are loaded. Unlike skills, custom subagents from
+// Only OpenBitFun custom agents are loaded. Unlike skills, custom subagents from
 // different vendors do not share a stable schema or compatible tool contract.
-pub const CUSTOM_AGENT_PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[(".bitfun", "agents")];
+pub const CUSTOM_AGENT_PROJECT_AGENT_SUBDIRS: &[(&str, &str)] =
+    &[(hidden_data_directory(), "agents")];
 pub const CUSTOM_AGENT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -240,7 +242,7 @@ impl CustomAgentDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomAgentDiscoveryRoots {
     pub workspace_root: Option<PathBuf>,
-    pub bitfun_user_agents_dir: Option<PathBuf>,
+    pub openbitfun_user_agents_dir: Option<PathBuf>,
     pub home_dir: Option<PathBuf>,
 }
 
@@ -348,10 +350,10 @@ pub fn custom_agent_possible_dirs(roots: &CustomAgentDiscoveryRoots) -> Vec<Cust
         }
     }
 
-    if let Some(bitfun_agents) = &roots.bitfun_user_agents_dir {
-        if bitfun_agents.exists() && bitfun_agents.is_dir() {
+    if let Some(openbitfun_agents) = &roots.openbitfun_user_agents_dir {
+        if openbitfun_agents.exists() && openbitfun_agents.is_dir() {
             entries.push(CustomAgentDirEntry {
-                path: bitfun_agents.clone(),
+                path: openbitfun_agents.clone(),
                 level: CustomAgentLevel::User,
             });
         }

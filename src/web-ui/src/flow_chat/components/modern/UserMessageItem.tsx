@@ -26,9 +26,9 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
-import { Tooltip, Icon } from '@bitfun/ui';
+import { Tooltip, Icon } from '@openbitfun/ui';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
-import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
+import { ToolProcessingDots } from '@openbitfun/ui/flow-chat';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,
@@ -496,7 +496,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
     // Avoid zero-size errors by rendering a placeholder instead of null.
     if (!message) {
-      return <div data-bf-component="user-message-item" data-bf-part="root" style={{ minHeight: '1px' }} />;
+      return <div data-openbitfun-component="user-message-item" data-openbitfun-part="root" style={{ minHeight: '1px' }} />;
     }
 
     if (isUsageReportMessage) {
@@ -513,7 +513,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
     if (isGoalLoadingMessage) {
       return (
-        <div data-bf-component="user-message-item" data-bf-part="loading" data-bf-state="loading" className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
+        <div data-openbitfun-component="user-message-item" data-openbitfun-part="loading" data-openbitfun-state="loading" className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
           <div className="session-usage-report-card__loading-main">
             <ToolProcessingDots className="session-usage-report-card__loading-dots" size={12} />
             <div>
@@ -527,9 +527,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     return (
       <div className={`user-message-item-shell${sentTime ? ' user-message-item-shell--with-timestamp' : ''}`}>
         <div
-          data-bf-component="user-message-item"
-          data-bf-part="root"
-          data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
+          data-openbitfun-component="user-message-item"
+          data-openbitfun-part="root"
+          data-openbitfun-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
           ref={containerRef}
           className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
           data-testid="chat-user-message"
@@ -557,7 +557,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             excludeSessionId={resolvedSessionId}
           />
         ) : (
-          <div className="user-message-item__main" data-bf-component="user-message-item" data-bf-part="main">
+          <div className="user-message-item__main" data-openbitfun-component="user-message-item" data-openbitfun-part="main">
             {isFailed && (
             <span className="user-message-item__failed-avatar" aria-hidden>
               <CircleUser size={18} strokeWidth={1.75} />
@@ -575,8 +575,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 <div 
                   ref={contentRef}
                   className="user-message-item__content"
-                  data-bf-component="user-message-item"
-                  data-bf-part="content"
+                  data-openbitfun-component="user-message-item"
+                  data-openbitfun-part="content"
                   data-testid="chat-user-message-content"
                   data-turn-id={turnId}
                   onClick={handleToggleExpand}
@@ -590,7 +590,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   ) : displayText}
                 </div>
                 {steeringTag && (
-                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
+                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-openbitfun-component="user-message-item" data-openbitfun-part="steeringTag">
                     {steeringTag.label}
                   </div>
                 )}
@@ -600,8 +600,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 <div 
                   ref={contentRef}
                   className="user-message-item__content"
-                  data-bf-component="user-message-item"
-                  data-bf-part="content"
+                  data-openbitfun-component="user-message-item"
+                  data-openbitfun-part="content"
                   data-testid="chat-user-message-content"
                   data-turn-id={turnId}
                   onClick={handleToggleExpand}
@@ -615,7 +615,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   ) : displayText}
                 </div>
                 {steeringTag && (
-                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
+                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-openbitfun-component="user-message-item" data-openbitfun-part="steeringTag">
                     {steeringTag.label}
                   </div>
                 )}
@@ -626,11 +626,11 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         )}
 
         {message.images && message.images.length > 0 && (
-          <div className="user-message-item__images" data-bf-component="user-message-item" data-bf-part="images">
+          <div className="user-message-item__images" data-openbitfun-component="user-message-item" data-openbitfun-part="images">
             {message.images.map(img => {
               const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
               return src ? (
-                <div data-bf-component="user-message-item" data-bf-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
+                <div data-openbitfun-component="user-message-item" data-openbitfun-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
                   <img src={src} alt={img.name} />
                 </div>
               ) : null;
@@ -642,9 +642,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             <div
               className="user-message-item__lightbox"
               onClick={() => setLightboxImage(null)}
-              data-bf-component="user-message-item"
-              data-bf-part="lightbox"
-              data-bf-native-webview-occlusion
+              data-openbitfun-component="user-message-item"
+              data-openbitfun-part="lightbox"
+              data-openbitfun-native-webview-occlusion
             >
               <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
                 <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
@@ -655,12 +655,12 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           )}
         </div>
 
-        <div className="user-message-item__meta" data-bf-component="user-message-item" data-bf-part="meta">
+        <div className="user-message-item__meta" data-openbitfun-component="user-message-item" data-openbitfun-part="meta">
           {sentTime && sentAtLabel && sentTimestamp !== null && (
             <time
               className="user-message-item__timestamp"
-              data-bf-component="user-message-item"
-              data-bf-part="timestamp"
+              data-openbitfun-component="user-message-item"
+              data-openbitfun-part="timestamp"
               data-testid="chat-user-message-timestamp"
               dateTime={new Date(sentTimestamp).toISOString()}
               title={sentAtLabel}
@@ -670,7 +670,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
             </time>
           )}
           {!isEditing && (
-            <div className="user-message-item__actions" data-bf-component="user-message-item" data-bf-part="actions">
+            <div className="user-message-item__actions" data-openbitfun-component="user-message-item" data-openbitfun-part="actions">
               <button
                 className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
                 onClick={handleCopy}

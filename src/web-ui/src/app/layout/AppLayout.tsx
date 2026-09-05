@@ -271,7 +271,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         const { pickWorkspaceDirectory } = await import(
           '@/infrastructure/peer-device/pickWorkspaceDirectory'
         );
-        unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
+        unlistenFns.push(await listen('openbitfun_menu_open_project', async () => {
           try {
             const selected = await pickWorkspaceDirectory({
               title: t('header.selectProjectDirectory'),
@@ -279,8 +279,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             if (selected) await openWorkspace(selected);
           } catch {}
         }));
-        unlistenFns.push(await listen('bitfun_menu_new_project', () => handleNewProject()));
-        unlistenFns.push(await listen('bitfun_menu_about', () => handleShowAbout()));
+        unlistenFns.push(await listen('openbitfun_menu_new_project', () => handleNewProject()));
+        unlistenFns.push(await listen('openbitfun_menu_about', () => handleShowAbout()));
       } catch {}
     })();
     return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
@@ -292,14 +292,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     const initializeFlowChat = async () => {
       if (!currentWorkspace?.rootPath) return;
 
-      // Remote session index and turns live under ~/.bitfun/remote_ssh/... (local disk).
+      // Remote session index and turns live under ~/.openbitfun/remote_ssh/... (local disk).
       // Always initialize FlowChat so historical sessions list even when SSH is not connected yet.
       try {
         const explicitPreferredMode =
-          sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
+          sessionStorage.getItem('openbitfun:flowchat:preferredMode') ||
           undefined;
         if (explicitPreferredMode) {
-          sessionStorage.removeItem('bitfun:flowchat:preferredMode');
+          sessionStorage.removeItem('openbitfun:flowchat:preferredMode');
         }
 
         const initializationPreferredMode =
@@ -452,7 +452,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           }
         };
 
-        unlistenFn = await listen('bitfun_main_window_close_requested', async () => {
+        unlistenFn = await listen('openbitfun_main_window_close_requested', async () => {
           if (handlingClose) return;
           handlingClose = true;
 
@@ -630,8 +630,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         .createAcpChatSession(clientId, config)
         .catch(error => log.error('Failed to create ACP FlowChat session', error));
     };
-    window.addEventListener('bitfun:create-acp-session', handler);
-    return () => window.removeEventListener('bitfun:create-acp-session', handler);
+    window.addEventListener('openbitfun:create-acp-session', handler);
+    return () => window.removeEventListener('openbitfun:create-acp-session', handler);
   }, [currentWorkspace]);
 
   React.useEffect(() => {
@@ -659,8 +659,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         });
       }
     };
-    window.addEventListener('bitfun:acp-session-creation', handler);
-    return () => window.removeEventListener('bitfun:acp-session-creation', handler);
+    window.addEventListener('openbitfun:acp-session-creation', handler);
+    return () => window.removeEventListener('openbitfun:acp-session-creation', handler);
   }, [tCommon]);
 
   // Global drag-and-drop
@@ -689,11 +689,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }, []);
 
   const containerClassName = [
-    'bitfun-app-layout',
-    isMacOS ? 'bitfun-app-layout--macos' : '',
+    'openbitfun-app-layout',
+    isMacOS ? 'openbitfun-app-layout--macos' : '',
     className,
-    isFullscreen ? 'bitfun-app-layout--window-fullscreen' : '',
-    isTransitioning ? 'bitfun-app-layout--transitioning' : '',
+    isFullscreen ? 'openbitfun-app-layout--window-fullscreen' : '',
+    isTransitioning ? 'openbitfun-app-layout--transitioning' : '',
   ].filter(Boolean).join(' ');
 
   if (isToolbarMode) {
@@ -701,12 +701,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       <>
         <DailyAppUpdateGate />
         <div
-          className={`${containerClassName} bitfun-app-layout--toolbar-mode`}
+          className={`${containerClassName} openbitfun-app-layout--toolbar-mode`}
           data-testid="app-layout"
-          data-bf-component="app-layout"
-          data-bf-part="root"
-          data-bf-state="toolbar"
-          data-bf-background-media={backgroundMedia?.url ? 'video' : undefined}
+          data-openbitfun-component="app-layout"
+          data-openbitfun-part="root"
+          data-openbitfun-state="toolbar"
+          data-openbitfun-background-media={backgroundMedia?.url ? 'video' : undefined}
         >
           <AppearanceBackgroundMediaLayer
             media={backgroundMedia}
@@ -727,10 +727,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       <div
         className={containerClassName}
         data-testid="app-layout"
-        data-bf-component="app-layout"
-        data-bf-part="root"
-        data-bf-state={isFullscreen ? 'fullscreen' : undefined}
-        data-bf-background-media={backgroundMedia?.url ? 'video' : undefined}
+        data-openbitfun-component="app-layout"
+        data-openbitfun-part="root"
+        data-openbitfun-state={isFullscreen ? 'fullscreen' : undefined}
+        data-openbitfun-background-media={backgroundMedia?.url ? 'video' : undefined}
       >
         <AppearanceBackgroundMediaLayer
           media={backgroundMedia}
@@ -740,19 +740,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {windowModeHint && (
           <div
             key={windowModeHint.id}
-            className="bitfun-window-mode-hint"
-            data-bf-component="app-layout"
-            data-bf-part="windowModeHint"
+            className="openbitfun-window-mode-hint"
+            data-openbitfun-component="app-layout"
+            data-openbitfun-part="windowModeHint"
             role="status"
             aria-live="polite"
           >
-            <span className="bitfun-window-mode-hint__title" data-bf-component="app-layout" data-bf-part="windowModeTitle">{windowModeHint.title}</span>
-            <span className="bitfun-window-mode-hint__detail" data-bf-component="app-layout" data-bf-part="windowModeDetail">{windowModeHint.detail}</span>
+            <span className="openbitfun-window-mode-hint__title" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeTitle">{windowModeHint.title}</span>
+            <span className="openbitfun-window-mode-hint__detail" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeDetail">{windowModeHint.detail}</span>
           </div>
         )}
 
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
-        <main className="bitfun-app-main-workspace" data-testid="app-main-content" data-bf-component="app-layout" data-bf-part="main">
+        <main className="openbitfun-app-main-workspace" data-testid="app-main-content" data-openbitfun-component="app-layout" data-openbitfun-part="main">
           <WorkspaceBody
             onMinimize={canUseNativeWindowControls && !isMacOS ? handleMinimize : undefined}
             onMaximize={canUseNativeWindowControls ? handleMaximize : undefined}

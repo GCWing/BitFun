@@ -5,21 +5,21 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
-use bitfun_app_server_protocol::account::*;
-use bitfun_app_server_protocol::agent::{
+use openbitfun_app_server_protocol::account::*;
+use openbitfun_app_server_protocol::agent::{
     AgentModeSummary, ListAgentModesRequest, ListAgentModesResponse,
 };
-use bitfun_app_server_protocol::external_source::*;
-use bitfun_app_server_protocol::hook::*;
-use bitfun_app_server_protocol::mcp::*;
-use bitfun_app_server_protocol::model::*;
-use bitfun_app_server_protocol::skill::*;
-use bitfun_app_server_protocol::subagent::*;
-use bitfun_app_server_protocol::worktree::*;
-use bitfun_core::service::config::model_projection::{
+use openbitfun_app_server_protocol::external_source::*;
+use openbitfun_app_server_protocol::hook::*;
+use openbitfun_app_server_protocol::mcp::*;
+use openbitfun_app_server_protocol::model::*;
+use openbitfun_app_server_protocol::skill::*;
+use openbitfun_app_server_protocol::subagent::*;
+use openbitfun_app_server_protocol::worktree::*;
+use openbitfun_core::service::config::model_projection::{
     model_catalog_projection, model_edit_projection, model_list_projection, selector_is_unset,
 };
-use bitfun_core::service::remote_connect::account_runtime::{
+use openbitfun_core::service::remote_connect::account_runtime::{
     AccountRuntime, AccountSyncProgress, AccountSyncStatus,
 };
 
@@ -34,11 +34,11 @@ use super::{
 /// source owners. Local-only capabilities must be enabled through the local
 /// Host constructor; constructing an App Server does not enable them by default.
 pub struct AppManagementService {
-    config: Arc<bitfun_core::service::config::ConfigService>,
-    mcp: Option<Arc<bitfun_core::service::mcp::MCPService>>,
+    config: Arc<openbitfun_core::service::config::ConfigService>,
+    mcp: Option<Arc<openbitfun_core::service::mcp::MCPService>>,
     external_source_updates: tokio::sync::broadcast::Sender<(
         String,
-        bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
+        openbitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
     )>,
     external_source_subscriptions: Arc<Mutex<HashSet<String>>>,
     account: Option<Arc<AccountRuntime>>,
@@ -58,13 +58,13 @@ impl AppManagementService {
         account: Option<Arc<AccountRuntime>>,
         local_worktrees_enabled: bool,
     ) -> Result<Self> {
-        let config = bitfun_core::service::config::get_global_config_service()
+        let config = openbitfun_core::service::config::get_global_config_service()
             .await
             .context("Failed to load the Host management configuration owner")?;
         let (external_source_updates, _) = tokio::sync::broadcast::channel(64);
         Ok(Self {
             config,
-            mcp: bitfun_core::service::mcp::get_global_mcp_service(),
+            mcp: openbitfun_core::service::mcp::get_global_mcp_service(),
             external_source_updates,
             external_source_subscriptions: Arc::new(Mutex::new(HashSet::new())),
             account,
@@ -91,7 +91,7 @@ impl AppManagementService {
     async fn model_config(
         &self,
         model_id: &str,
-    ) -> AppManagementResult<bitfun_core::service::config::AIModelConfig> {
+    ) -> AppManagementResult<openbitfun_core::service::config::AIModelConfig> {
         self.config
             .get_ai_models()
             .await
@@ -112,7 +112,7 @@ impl AppManagementService {
         &self,
     ) -> tokio::sync::broadcast::Receiver<(
         String,
-        bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
+        openbitfun_product_domains::external_sources::ExternalSourcePublicSnapshot,
     )> {
         self.external_source_updates.subscribe()
     }
@@ -132,8 +132,10 @@ impl AppManagementService {
             }
         }
         let mut subscription =
-            match bitfun_core::external_sources::subscribe_external_source_updates(Some(workspace))
-                .await
+            match openbitfun_core::external_sources::subscribe_external_source_updates(Some(
+                workspace,
+            ))
+            .await
             {
                 Ok(subscription) => subscription,
                 Err(error) => {
@@ -152,7 +154,7 @@ impl AppManagementService {
                     Ok(snapshot) => {
                         let _ = updates.send((
                             workspace_path.clone(),
-                            bitfun_product_domains::external_sources::ExternalSourcePublicSnapshot::from(snapshot),
+                            openbitfun_product_domains::external_sources::ExternalSourcePublicSnapshot::from(snapshot),
                         ));
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
@@ -169,9 +171,9 @@ impl AppManagementService {
 }
 
 fn external_source_error(
-    error: bitfun_product_domains::external_sources::ExternalSourceOperationError,
+    error: openbitfun_product_domains::external_sources::ExternalSourceOperationError,
 ) -> AppManagementError {
-    use bitfun_product_domains::external_sources::ExternalSourceOperationErrorCode as Code;
+    use openbitfun_product_domains::external_sources::ExternalSourceOperationErrorCode as Code;
     let encoded = error.encode();
     match error.code {
         Code::InvalidRequest => AppManagementError::invalid_request(encoded),
@@ -185,12 +187,13 @@ fn external_source_error(
 
 fn external_source_string_error(error: String) -> AppManagementError {
     external_source_error(
-        bitfun_core::external_sources::sanitize_external_source_operation_error(error),
+        openbitfun_core::external_sources::sanitize_external_source_operation_error(error),
     )
 }
 
 fn external_source_string_error_with_id(error: String, operation_id: &str) -> AppManagementError {
-    let mut typed = bitfun_core::external_sources::sanitize_external_source_operation_error(error);
+    let mut typed =
+        openbitfun_core::external_sources::sanitize_external_source_operation_error(error);
     if typed.correlation_id.is_none() {
         typed = typed.with_correlation_id(operation_id);
     } else if typed.causation_id.is_none() {
@@ -200,7 +203,7 @@ fn external_source_string_error_with_id(error: String, operation_id: &str) -> Ap
 }
 
 fn validate_external_operation(operation_id: &str) -> AppManagementResult<()> {
-    bitfun_app_server_protocol::external_source::validate_operation_id(operation_id)
+    openbitfun_app_server_protocol::external_source::validate_operation_id(operation_id)
         .map_err(AppManagementError::invalid_request)
 }
 
@@ -266,10 +269,10 @@ fn native_hook_location(path: &Path, workspace: &Path, user_hooks_file: Option<&
 }
 
 fn project_native_hook_overview(
-    overview: bitfun_core::native_hooks::NativeHookOverview,
+    overview: openbitfun_core::native_hooks::NativeHookOverview,
     workspace: &Path,
 ) -> NativeHookOverview {
-    let user_hooks_file = bitfun_core::infrastructure::try_get_path_manager_arc()
+    let user_hooks_file = openbitfun_core::infrastructure::try_get_path_manager_arc()
         .ok()
         .map(|manager| manager.user_hooks_file());
     let path_labels = overview
@@ -338,7 +341,7 @@ fn project_native_hook_overview(
 }
 
 async fn external_source_preferences() -> AppManagementResult<ExternalSourceConflictPreferences> {
-    bitfun_core::external_sources::external_source_conflict_choices()
+    openbitfun_core::external_sources::external_source_conflict_choices()
         .await
         .map(
             |(choices, lineage_current_keys, conflicted_candidate_ids)| {
@@ -356,10 +359,10 @@ async fn external_source_snapshot_response(
     workspace: &Path,
     force_refresh: bool,
 ) -> AppManagementResult<ExternalSourceSnapshotResponse> {
-    let surface = bitfun_core::external_sources::get_external_source_control_snapshot(
+    let surface = openbitfun_core::external_sources::get_external_source_control_snapshot(
         Some(workspace),
         force_refresh,
-        bitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
+        openbitfun_product_domains::external_sources::ExternalSourceHostCapabilities::read_write(),
     )
     .await
     .map_err(external_source_error)?;
@@ -370,7 +373,7 @@ async fn external_source_snapshot_response(
     })
 }
 
-fn core_error(error: bitfun_core::BitFunError) -> AppManagementError {
+fn core_error(error: openbitfun_core::OpenBitFunError) -> AppManagementError {
     AppManagementError::internal(sanitize_management_error(error.to_string()))
 }
 
@@ -423,14 +426,14 @@ fn string_update(
 
 fn model_from_mutation(
     mutation: ModelMutation,
-    existing: Option<bitfun_core::service::config::AIModelConfig>,
-) -> AppManagementResult<bitfun_core::service::config::AIModelConfig> {
+    existing: Option<openbitfun_core::service::config::AIModelConfig>,
+) -> AppManagementResult<openbitfun_core::service::config::AIModelConfig> {
     let current = existing.unwrap_or_default();
     let api_key = secret_update_value(mutation.api_key, Some(current.api_key))?;
     let custom_headers = headers_update(mutation.custom_headers, current.custom_headers)?;
     let custom_request_body =
         string_update(mutation.custom_request_body, current.custom_request_body)?;
-    Ok(bitfun_core::service::config::AIModelConfig {
+    Ok(openbitfun_core::service::config::AIModelConfig {
         id: mutation.id,
         name: mutation.name,
         provider: mutation.provider,
@@ -471,7 +474,7 @@ fn validate_model_update_identity(
 }
 
 fn skill_from_info(
-    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::SkillInfo,
 ) -> SkillSummary {
     SkillSummary {
         key: info.key,
@@ -490,7 +493,7 @@ fn skill_from_info(
 }
 
 fn skill_from_mode_info(
-    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
 ) -> SkillSummary {
     let skill = info.skill;
     SkillSummary {
@@ -509,9 +512,9 @@ fn skill_from_mode_info(
     }
 }
 
-fn subagent_from_info(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+fn subagent_from_info(info: openbitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
     let is_external =
-        info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External);
+        info.subagent_source == Some(openbitfun_core::agentic::agents::SubAgentSource::External);
     SubagentSummary {
         key: info.key,
         id: info.id,
@@ -520,7 +523,7 @@ fn subagent_from_info(info: bitfun_core::agentic::agents::AgentInfo) -> Subagent
         source: format!(
             "{:?}",
             info.subagent_source
-                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+                .unwrap_or(openbitfun_core::agentic::agents::SubAgentSource::Builtin)
         )
         .to_ascii_lowercase(),
         enabled: info.effective_enabled,
@@ -529,10 +532,10 @@ fn subagent_from_info(info: bitfun_core::agentic::agents::AgentInfo) -> Subagent
     }
 }
 
-fn native_mcp_detail(config: &bitfun_core::service::mcp::MCPServerConfig) -> String {
+fn native_mcp_detail(config: &openbitfun_core::service::mcp::MCPServerConfig) -> String {
     let server_type = format!("{:?}", config.server_type).to_ascii_lowercase();
     let transport = config.resolved_transport().as_str();
-    if config.server_type == bitfun_core::service::mcp::MCPServerType::Local {
+    if config.server_type == openbitfun_core::service::mcp::MCPServerType::Local {
         format!("type: {server_type}; transport: {transport}; command: {}; arguments: {}; environment variables set: {}",
             config.command.as_deref().unwrap_or("unknown"),
             config.args.len(),
@@ -563,10 +566,10 @@ fn native_mcp_detail(config: &bitfun_core::service::mcp::MCPServerConfig) -> Str
 }
 
 fn external_mcp_action(
-    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
-    snapshot: &bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
+    entry: &openbitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    snapshot: &openbitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
 ) -> McpServerAction {
-    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    use openbitfun_product_domains::external_sources::ExternalMcpActivationState as State;
     match &entry.activation_state {
         State::ApprovalRequired | State::Declined | State::ConfigurationChanged => {
             McpServerAction::ExternalDecision {
@@ -621,10 +624,10 @@ fn external_mcp_action(
 }
 
 async fn external_mcp_status(
-    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
-    manager: &bitfun_core::service::mcp::MCPServerManager,
+    entry: &openbitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    manager: &openbitfun_core::service::mcp::MCPServerManager,
 ) -> String {
-    use bitfun_product_domains::external_sources::ExternalMcpActivationState as State;
+    use openbitfun_product_domains::external_sources::ExternalMcpActivationState as State;
     match &entry.activation_state {
         State::Active => match entry.runtime_id.as_deref() {
             Some(id) => match tokio::time::timeout(
@@ -654,17 +657,17 @@ async fn external_mcp_status(
 }
 
 fn external_mcp_detail(
-    entry: &bitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
+    entry: &openbitfun_product_domains::external_sources::ExternalMcpCatalogEntry,
 ) -> String {
     let definition = &entry.definition;
     match definition.transport {
-        bitfun_product_domains::external_sources::ExternalMcpTransportKind::LocalStdio => format!(
+        openbitfun_product_domains::external_sources::ExternalMcpTransportKind::LocalStdio => format!(
             "source MCP configuration; local command: {}; arguments: {}; environment variables set: {}",
             definition.command_preview.as_deref().unwrap_or("unknown"),
             definition.argument_count,
             if definition.environment_keys.is_empty() { "none" } else { "configured" },
         ),
-        bitfun_product_domains::external_sources::ExternalMcpTransportKind::StreamableHttp => format!(
+        openbitfun_product_domains::external_sources::ExternalMcpTransportKind::StreamableHttp => format!(
             "source MCP configuration; remote origin: {}; HTTP headers: {}",
             definition.remote_url_preview.as_deref().unwrap_or("unknown"),
             if definition.header_names.is_empty() { "none" } else { "configured" },
@@ -676,19 +679,19 @@ fn external_mcp_detail(
 fn mcp_config_from_mutation(
     name: &str,
     mutation: McpServerMutation,
-) -> AppManagementResult<bitfun_core::service::mcp::MCPServerConfig> {
+) -> AppManagementResult<openbitfun_core::service::mcp::MCPServerConfig> {
     let (server_type, transport) = match mutation.transport {
         McpTransport::Stdio => (
-            bitfun_core::service::mcp::MCPServerType::Local,
-            bitfun_core::service::mcp::MCPServerTransport::Stdio,
+            openbitfun_core::service::mcp::MCPServerType::Local,
+            openbitfun_core::service::mcp::MCPServerTransport::Stdio,
         ),
         McpTransport::Sse => (
-            bitfun_core::service::mcp::MCPServerType::Remote,
-            bitfun_core::service::mcp::MCPServerTransport::Sse,
+            openbitfun_core::service::mcp::MCPServerType::Remote,
+            openbitfun_core::service::mcp::MCPServerTransport::Sse,
         ),
         McpTransport::StreamableHttp => (
-            bitfun_core::service::mcp::MCPServerType::Remote,
-            bitfun_core::service::mcp::MCPServerTransport::StreamableHttp,
+            openbitfun_core::service::mcp::MCPServerType::Remote,
+            openbitfun_core::service::mcp::MCPServerTransport::StreamableHttp,
         ),
     };
     let oauth = mutation
@@ -709,7 +712,7 @@ fn mcp_config_from_mutation(
                 "MCP XAA configuration does not match the supported schema",
             )
         })?;
-    Ok(bitfun_core::service::mcp::MCPServerConfig {
+    Ok(openbitfun_core::service::mcp::MCPServerConfig {
         id: name.to_string(),
         name: name.to_string(),
         server_type,
@@ -723,7 +726,7 @@ fn mcp_config_from_mutation(
         url: mutation.url,
         auto_start: mutation.auto_start,
         enabled: mutation.enabled,
-        location: bitfun_core::service::mcp::ConfigLocation::User,
+        location: openbitfun_core::service::mcp::ConfigLocation::User,
         capabilities: Vec::new(),
         settings: HashMap::new(),
         oauth,
@@ -738,22 +741,22 @@ impl AppManagementService {
         let mut capabilities = AppManagementCapabilities::available();
         if self.mcp.is_none() {
             capabilities.mcp =
-                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
                     reason: "The Host MCP owner is unavailable".to_string(),
                 };
         }
         if self.account.is_none() {
             let reason = "The Host did not provide an account owner".to_string();
             capabilities.account =
-                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
                     reason: reason.clone(),
                 };
             capabilities.settings_sync =
-                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
+                openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
         }
         if !self.local_worktrees_enabled {
             capabilities.worktrees =
-                bitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
+                openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
                     reason: "The Host did not enable local Worktree management".to_string(),
                 };
         }
@@ -923,7 +926,7 @@ impl AppManagementService {
         request: NativeHookOverviewRequest,
     ) -> AppManagementResult<NativeHookOverviewResponse> {
         let workspace = Path::new(&request.workspace_path);
-        let overview = bitfun_core::native_hooks::overview(Some(workspace)).await;
+        let overview = openbitfun_core::native_hooks::overview(Some(workspace)).await;
         Ok(NativeHookOverviewResponse(project_native_hook_overview(
             overview, workspace,
         )))
@@ -933,7 +936,7 @@ impl AppManagementService {
         &self,
         request: ExternalHookSnapshotRequest,
     ) -> AppManagementResult<ExternalHookSnapshotResponse> {
-        bitfun_core::external_hook_import::external_hook_import_snapshot(
+        openbitfun_core::external_hook_import::external_hook_import_snapshot(
             Some(Path::new(&request.workspace_path)),
             request.refresh_updates,
         )
@@ -946,7 +949,7 @@ impl AppManagementService {
         &self,
         request: ExternalHookPlanRequest,
     ) -> AppManagementResult<ExternalHookPlanResponse> {
-        bitfun_core::external_hook_import::plan_external_hook_import(
+        openbitfun_core::external_hook_import::plan_external_hook_import(
             Some(Path::new(&request.workspace_path)),
             request.source,
         )
@@ -960,7 +963,7 @@ impl AppManagementService {
         request: ExternalHookApplyRequest,
     ) -> AppManagementResult<ExternalHookApplyResponse> {
         validate_external_operation(&request.operation_id)?;
-        bitfun_core::external_hook_import::apply_external_hook_import(
+        openbitfun_core::external_hook_import::apply_external_hook_import(
             Some(Path::new(&request.workspace_path)),
             request.import_request,
         )
@@ -974,7 +977,7 @@ impl AppManagementService {
         request: ExternalHookMutationRequest,
     ) -> AppManagementResult<ExternalHookMutationResponse> {
         validate_external_operation(&request.operation_id)?;
-        bitfun_core::external_hook_import::mutate_external_hook_import(
+        openbitfun_core::external_hook_import::mutate_external_hook_import(
             Some(Path::new(&request.workspace_path)),
             request.mutation,
         )
@@ -1001,7 +1004,7 @@ impl AppManagementService {
             .validate()
             .map_err(AppManagementError::invalid_request)?;
         let workspace = Path::new(&request.workspace_path);
-        let surface = bitfun_core::external_sources::apply_external_source_control_action(
+        let surface = openbitfun_core::external_sources::apply_external_source_control_action(
             Some(workspace),
             request.request,
         )
@@ -1022,14 +1025,15 @@ impl AppManagementService {
         let operation_id = request.operation_id.clone();
         let result = match request.action {
             ExternalSourceReviewAction::Refresh => {
-                bitfun_core::external_sources::external_source_snapshot(Some(workspace), true).await
+                openbitfun_core::external_sources::external_source_snapshot(Some(workspace), true)
+                    .await
             }
             ExternalSourceReviewAction::SetPromptCommandConflictChoice {
                 conflict_key,
                 candidate_id,
                 expected_preference_revision,
             } => {
-                bitfun_core::external_sources::set_external_prompt_command_conflict_choice(
+                openbitfun_core::external_sources::set_external_prompt_command_conflict_choice(
                     Some(workspace),
                     &conflict_key,
                     &candidate_id,
@@ -1043,7 +1047,7 @@ impl AppManagementService {
                 approved,
                 expected_preference_revision,
             } => {
-                bitfun_core::external_sources::set_external_tool_target_decision(
+                openbitfun_core::external_sources::set_external_tool_target_decision(
                     Some(workspace),
                     &approval_key,
                     &decision_key,
@@ -1057,7 +1061,7 @@ impl AppManagementService {
                 candidate_id,
                 expected_preference_revision,
             } => {
-                bitfun_core::external_sources::set_external_tool_conflict_choice(
+                openbitfun_core::external_sources::set_external_tool_conflict_choice(
                     Some(workspace),
                     &conflict_key,
                     &candidate_id,
@@ -1072,7 +1076,7 @@ impl AppManagementService {
                 expected_preference_revision,
                 decision_key,
             } => {
-                bitfun_core::external_sources::set_external_subagent_activation(
+                openbitfun_core::external_sources::set_external_subagent_activation(
                     Some(workspace),
                     &candidate_id,
                     approved,
@@ -1088,7 +1092,7 @@ impl AppManagementService {
                 expected_subagent_generation,
                 expected_preference_revision,
             } => {
-                bitfun_core::external_sources::set_external_subagent_model_binding(
+                openbitfun_core::external_sources::set_external_subagent_model_binding(
                     Some(workspace),
                     &binding_key,
                     target,
@@ -1104,7 +1108,7 @@ impl AppManagementService {
                 expected_subagent_generation,
                 expected_preference_revision,
             } => {
-                bitfun_core::external_sources::choose_external_subagent_conflict(
+                openbitfun_core::external_sources::choose_external_subagent_conflict(
                     Some(workspace),
                     &conflict_key,
                     &candidate_id,
@@ -1127,14 +1131,15 @@ impl AppManagementService {
     ) -> AppManagementResult<SetNativeCommandChoiceResponse> {
         validate_external_operation(&request.operation_id)?;
         let operation_id = request.operation_id.clone();
-        let conflicts = bitfun_core::external_sources::set_native_prompt_command_conflict_choice(
-            Some(Path::new(&request.workspace_path)),
-            request.native_commands,
-            &request.selected_candidate_id,
-            request.expected_preference_revision,
-        )
-        .await
-        .map_err(|error| external_source_string_error_with_id(error, &operation_id))?;
+        let conflicts =
+            openbitfun_core::external_sources::set_native_prompt_command_conflict_choice(
+                Some(Path::new(&request.workspace_path)),
+                request.native_commands,
+                &request.selected_candidate_id,
+                request.expected_preference_revision,
+            )
+            .await
+            .map_err(|error| external_source_string_error_with_id(error, &operation_id))?;
         Ok(SetNativeCommandChoiceResponse {
             conflicts,
             preferences: external_source_preferences().await?,
@@ -1147,7 +1152,7 @@ impl AppManagementService {
     ) -> AppManagementResult<ExpandExternalCommandResponse> {
         validate_external_operation(&request.operation_id)?;
         let operation_id = request.operation_id.clone();
-        bitfun_core::external_sources::expand_external_prompt_command(
+        openbitfun_core::external_sources::expand_external_prompt_command(
             Some(Path::new(&request.workspace_path)),
             &request.command_name,
             &request.arguments,
@@ -1170,7 +1175,7 @@ impl AppManagementService {
         let workspace = request.workspace_path.map(PathBuf::from);
         if request.include_external {
             if let Err(error) =
-                bitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+                openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
                     workspace.as_deref(),
                 )
                 .await
@@ -1178,7 +1183,7 @@ impl AppManagementService {
                 tracing::warn!("Failed to initialize external agent sources: {error}");
             }
         }
-        let modes = bitfun_core::agentic::agents::get_agent_registry()
+        let modes = openbitfun_core::agentic::agents::get_agent_registry()
             .get_modes_info_for_workspace(workspace.as_deref(), request.include_external)
             .await
             .into_iter()
@@ -1187,7 +1192,7 @@ impl AppManagementService {
                 route_key: mode.key,
                 description: mode.description,
                 model_id: mode.model,
-                is_external: mode.source == bitfun_core::agentic::agents::AgentSource::External,
+                is_external: mode.source == openbitfun_core::agentic::agents::AgentSource::External,
             })
             .collect();
         Ok(ListAgentModesResponse { modes })
@@ -1198,7 +1203,7 @@ impl AppManagementService {
         _request: ListModelsRequest,
     ) -> AppManagementResult<ListModelsResponse> {
         let models = self.config.get_ai_models().await.map_err(core_error)?;
-        let config: bitfun_core::service::config::GlobalConfig =
+        let config: openbitfun_core::service::config::GlobalConfig =
             self.config.get_config(None).await.map_err(core_error)?;
         let projection = model_list_projection(&models, &config);
         Ok(ListModelsResponse {
@@ -1222,7 +1227,7 @@ impl AppManagementService {
         &self,
         _request: TuiModelCatalogRequest,
     ) -> AppManagementResult<TuiModelCatalogResponse> {
-        let catalog = bitfun_core::get_ai_model_catalog()
+        let catalog = openbitfun_core::get_ai_model_catalog()
             .await
             .map_err(AppManagementError::internal)?;
         let projection = model_catalog_projection(catalog);
@@ -1237,7 +1242,7 @@ impl AppManagementService {
         request: ProjectReasoningCatalogRequest,
     ) -> AppManagementResult<ProjectReasoningCatalogResponse> {
         Ok(ProjectReasoningCatalogResponse {
-            projection: bitfun_core::project_ai_model_reasoning_catalog(request.0).await,
+            projection: openbitfun_core::project_ai_model_reasoning_catalog(request.0).await,
         })
     }
 
@@ -1249,7 +1254,7 @@ impl AppManagementService {
         let model_id = model.id.clone();
         self.config.add_ai_model(model).await.map_err(core_error)?;
         if request.make_primary_if_empty {
-            let config: bitfun_core::service::config::GlobalConfig =
+            let config: openbitfun_core::service::config::GlobalConfig =
                 self.config.get_config(None).await.map_err(core_error)?;
             if selector_is_unset(&config.ai.default_models.primary) {
                 self.config
@@ -1313,7 +1318,8 @@ impl AppManagementService {
         request: ListSkillsRequest,
     ) -> AppManagementResult<ListSkillsResponse> {
         let workspace = PathBuf::from(&request.workspace_path);
-        let registry = bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+        let registry =
+            openbitfun_core::agentic::tools::implementations::skills::get_skill_registry();
         let skills = if request.manageable {
             registry
                 .get_mode_skill_infos_for_workspace(Some(&workspace), &request.mode_id)
@@ -1339,7 +1345,7 @@ impl AppManagementService {
         let workspace = PathBuf::from(&request.workspace_path);
         match request.level.as_str() {
             "user" => {
-                let _ = bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
+                let _ = openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
                     &request.mode_id,
                     &request.skill_key,
                     request.enabled,
@@ -1349,17 +1355,17 @@ impl AppManagementService {
                 .map_err(core_error)?;
             }
             "project" => {
-                let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
+                let mut document = openbitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
                     .await
                     .map_err(core_error)?;
-                bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
+                openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
                     &mut document,
                     &request.mode_id,
                     &request.skill_key,
                     !request.enabled,
                 )
                 .map_err(core_error)?;
-                bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
+                openbitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
                     &workspace,
                     &document,
                 )
@@ -1381,12 +1387,12 @@ impl AppManagementService {
     ) -> AppManagementResult<ListSubagentsResponse> {
         let workspace = PathBuf::from(&request.workspace_path);
         let scope = if request.management {
-            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement
+            openbitfun_core::agentic::agents::SubagentListScope::RegistryManagement
         } else {
-            bitfun_core::agentic::agents::SubagentListScope::TaskVisible
+            openbitfun_core::agentic::agents::SubagentListScope::TaskVisible
         };
-        let values = bitfun_core::agentic::agents::get_agent_registry()
-            .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+        let values = openbitfun_core::agentic::agents::get_agent_registry()
+            .get_subagents_for_query(&openbitfun_core::agentic::agents::SubagentQueryContext {
                 parent_agent_type: Some(&request.parent_mode_id),
                 workspace_root: Some(&workspace),
                 list_scope: scope,
@@ -1395,7 +1401,7 @@ impl AppManagementService {
             })
             .await;
         let has_external = values.iter().any(|info| {
-            info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+            info.subagent_source == Some(openbitfun_core::agentic::agents::SubAgentSource::External)
         });
         Ok(ListSubagentsResponse {
             subagents: values
@@ -1403,7 +1409,7 @@ impl AppManagementService {
                 .filter(|info| {
                     !request.management
                         || info.subagent_source
-                            != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                            != Some(openbitfun_core::agentic::agents::SubAgentSource::External)
                 })
                 .map(subagent_from_info)
                 .collect(),
@@ -1416,7 +1422,7 @@ impl AppManagementService {
         request: SetSubagentEnabledRequest,
     ) -> AppManagementResult<SetSubagentEnabledResponse> {
         let workspace = PathBuf::from(&request.workspace_path);
-        bitfun_core::agentic::agents::get_agent_registry()
+        openbitfun_core::agentic::agents::get_agent_registry()
             .update_subagent_override(
                 &request.parent_mode_id,
                 &request.subagent_id,
@@ -1438,10 +1444,10 @@ impl AppManagementService {
             .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         let workspace = PathBuf::from(request.workspace_path);
         let external =
-            bitfun_core::external_sources::external_source_snapshot(Some(&workspace), false)
+            openbitfun_core::external_sources::external_source_snapshot(Some(&workspace), false)
                 .await
                 .map_err(|error| AppManagementError::internal(sanitize_management_error(error)))?;
-        let tool_registry = bitfun_core::agentic::tools::registry::get_global_tool_registry();
+        let tool_registry = openbitfun_core::agentic::tools::registry::get_global_tool_registry();
         let tools = tool_registry.read().await.get_all_tools();
         let configs = mcp
             .config_service()
@@ -1469,7 +1475,7 @@ impl AppManagementService {
                 .iter()
                 .filter(|tool| tool.name().starts_with(&prefix))
                 .count();
-            let native_id = bitfun_core::external_sources::native_mcp_candidate_id(&config.id);
+            let native_id = openbitfun_core::external_sources::native_mcp_candidate_id(&config.id);
             let conflict = external.mcp_conflicts.iter().find(|conflict| {
                 conflict
                     .candidates
@@ -1490,7 +1496,7 @@ impl AppManagementService {
                         .find(|candidate| candidate.candidate_id == native_id)
                         .and_then(|candidate| candidate.unavailable_reason.clone())
                         .unwrap_or_else(|| {
-                            "Enable this BitFun server in its MCP configuration".to_string()
+                            "Enable this OpenBitFun server in its MCP configuration".to_string()
                         });
                     McpServerAction::ReadOnly { reason }
                 }
@@ -1511,7 +1517,7 @@ impl AppManagementService {
                 server_type: format!("{:?}", config.server_type).to_lowercase(),
                 status,
                 tool_count,
-                source_label: "BitFun".to_string(),
+                source_label: "OpenBitFun".to_string(),
                 external: false,
                 detail: native_mcp_detail(&config),
                 action,
@@ -1554,13 +1560,13 @@ impl AppManagementService {
                 tool_count: 0,
                 source_label: "External AI applications".to_string(),
                 external: true,
-                detail: "BitFun is still checking compatible MCP settings".to_string(),
+                detail: "OpenBitFun is still checking compatible MCP settings".to_string(),
                 action: McpServerAction::ReadOnly {
                     reason: "Still checking; this list updates automatically".to_string(),
                 },
             });
         }
-        let config_path = bitfun_core::infrastructure::try_get_path_manager_arc()
+        let config_path = openbitfun_core::infrastructure::try_get_path_manager_arc()
             .ok()
             .map(|manager| manager.app_config_file().display().to_string());
         Ok(ListMcpServersResponse {
@@ -1579,8 +1585,8 @@ impl AppManagementService {
             .ok_or_else(|| AppManagementError::unsupported("The Host MCP owner is unavailable"))?;
         let manager = mcp.server_manager();
         match manager.get_server_status(&request.server_id).await {
-            Ok(bitfun_core::service::mcp::MCPServerStatus::Connected)
-            | Ok(bitfun_core::service::mcp::MCPServerStatus::Healthy) => {
+            Ok(openbitfun_core::service::mcp::MCPServerStatus::Connected)
+            | Ok(openbitfun_core::service::mcp::MCPServerStatus::Healthy) => {
                 manager.stop_server(&request.server_id).await
             }
             _ => manager.start_server(&request.server_id).await,
@@ -1625,7 +1631,7 @@ impl AppManagementService {
         &self,
         request: ExternalMcpDecisionRequest,
     ) -> AppManagementResult<ExternalMcpDecisionResponse> {
-        bitfun_core::external_sources::set_external_mcp_server_decision(
+        openbitfun_core::external_sources::set_external_mcp_server_decision(
             Some(Path::new(&request.workspace_path)),
             &request.candidate_id,
             &request.decision_key,
@@ -1642,7 +1648,7 @@ impl AppManagementService {
         &self,
         request: McpConflictChoiceRequest,
     ) -> AppManagementResult<McpConflictChoiceResponse> {
-        bitfun_core::external_sources::choose_external_mcp_conflict(
+        openbitfun_core::external_sources::choose_external_mcp_conflict(
             Some(Path::new(&request.workspace_path)),
             &request.conflict_key,
             &request.candidate_id,
@@ -1657,7 +1663,7 @@ impl AppManagementService {
 }
 
 fn project_account_snapshot(
-    snapshot: bitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
+    snapshot: openbitfun_core::service::remote_connect::account_runtime::AccountSnapshot,
 ) -> AccountSnapshotResponse {
     AccountSnapshotResponse {
         logged_in: snapshot.logged_in,
@@ -1703,7 +1709,7 @@ fn project_sync_progress(progress: AccountSyncProgress) -> SettingsSyncProgress 
 }
 
 fn account_login_status_message(
-    result: &bitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
+    result: &openbitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
 ) -> String {
     if result.has_cloud_settings {
         return format!(
@@ -1769,39 +1775,39 @@ mod tests {
     use super::*;
     use crate::AppManagementErrorKind;
 
-    fn native_overview_with_sensitive_paths() -> bitfun_core::native_hooks::NativeHookOverview {
-        bitfun_core::native_hooks::NativeHookOverview {
+    fn native_overview_with_sensitive_paths() -> openbitfun_core::native_hooks::NativeHookOverview {
+        openbitfun_core::native_hooks::NativeHookOverview {
             enabled: true,
             project_hooks_enabled: true,
             files: vec![
-                bitfun_core::native_hooks::NativeHookFileView {
+                openbitfun_core::native_hooks::NativeHookFileView {
                     scope: "user",
-                    path: PathBuf::from("C:/Users/private/AppData/Roaming/BitFun/config/hooks.json"),
+                    path: PathBuf::from("C:/Users/private/AppData/Roaming/OpenBitFun/config/hooks.json"),
                     exists: true,
                     loaded: true,
                 },
-                bitfun_core::native_hooks::NativeHookFileView {
+                openbitfun_core::native_hooks::NativeHookFileView {
                     scope: "project",
-                    path: PathBuf::from("D:/secret/project/.bitfun/config/hooks.json"),
+                    path: PathBuf::from("D:/secret/project/.openbitfun/config/hooks.json"),
                     exists: true,
                     loaded: true,
                 },
-                bitfun_core::native_hooks::NativeHookFileView {
+                openbitfun_core::native_hooks::NativeHookFileView {
                     scope: "user",
                     path: PathBuf::from(
-                        "C:/Users/private/AppData/Roaming/BitFun/runtime/hook-imports/bundles/import-one/version/hooks.json",
+                        "C:/Users/private/AppData/Roaming/OpenBitFun/runtime/hook-imports/bundles/import-one/version/hooks.json",
                     ),
                     exists: true,
                     loaded: true,
                 },
             ],
-            rules: vec![bitfun_core::native_hooks::NativeHookRuleView {
+            rules: vec![openbitfun_core::native_hooks::NativeHookRuleView {
                 event: "PreToolUse",
                 matcher: "Bash".to_string(),
                 matcher_is_valid: true,
                 scope: "project",
-                source: "D:/secret/project/.bitfun/config/hooks.json".to_string(),
-                handlers: vec![bitfun_core::native_hooks::NativeHookHandlerView {
+                source: "D:/secret/project/.openbitfun/config/hooks.json".to_string(),
+                handlers: vec![openbitfun_core::native_hooks::NativeHookHandlerView {
                     command: format!("secret-token {}", "x".repeat(240)),
                     timeout_seconds: 5,
                     status_message: Some("Checking".to_string()),
@@ -1809,7 +1815,7 @@ mod tests {
             }],
             total_handlers: 1,
             issues: vec![
-                "Failed to read hook configuration: path=D:/secret/project/.bitfun/config/hooks.json"
+                "Failed to read hook configuration: path=D:/secret/project/.openbitfun/config/hooks.json"
                     .to_string(),
             ],
         }
@@ -1837,7 +1843,7 @@ mod tests {
 
     #[test]
     fn model_mutation_preserves_and_replaces_write_only_values() {
-        let existing = bitfun_core::service::config::AIModelConfig {
+        let existing = openbitfun_core::service::config::AIModelConfig {
             api_key: "existing-key".to_string(),
             custom_headers: Some(HashMap::from([(
                 "Authorization".to_string(),
@@ -1876,7 +1882,7 @@ mod tests {
 
         assert_eq!(
             overview.files[1].location,
-            "<workspace>/.bitfun/config/hooks.json"
+            "<workspace>/.openbitfun/config/hooks.json"
         );
         assert!(overview.files[2].location.starts_with("<managed-hooks>/"));
         assert!(overview.rules[0].handlers[0].command_truncated);
@@ -1891,7 +1897,7 @@ mod tests {
         for secret in ["D:/secret/project", "C:/Users/private", "secret-token"] {
             assert!(!debug.contains(secret), "native Hook Debug leaked {secret}");
         }
-        assert!(overview.issues[0].contains("<workspace>/.bitfun/config/hooks.json"));
+        assert!(overview.issues[0].contains("<workspace>/.openbitfun/config/hooks.json"));
         assert!(!overview.issues[0].contains("D:/secret/project"));
     }
 
@@ -1920,7 +1926,7 @@ mod tests {
 
     #[test]
     fn model_summary_exposes_only_sorted_header_names() {
-        let model = bitfun_core::service::config::AIModelConfig {
+        let model = openbitfun_core::service::config::AIModelConfig {
             api_key: "secret-key".to_string(),
             custom_headers: Some(HashMap::from([
                 ("Z-Header".to_string(), "secret-z".to_string()),
@@ -1929,7 +1935,7 @@ mod tests {
             ..Default::default()
         };
 
-        let summary = bitfun_core::service::config::model_projection::model_summary(&model);
+        let summary = openbitfun_core::service::config::model_projection::model_summary(&model);
         assert!(summary.api_key_configured);
         assert_eq!(summary.custom_header_names, ["A-Header", "Z-Header"]);
         let debug = format!("{summary:?}");
@@ -1963,11 +1969,11 @@ mod tests {
 
     #[test]
     fn native_mcp_detail_omits_remote_credentials_path_and_query() {
-        let config = bitfun_core::service::mcp::MCPServerConfig {
+        let config = openbitfun_core::service::mcp::MCPServerConfig {
             id: "remote".to_string(),
             name: "Remote".to_string(),
-            server_type: bitfun_core::service::mcp::MCPServerType::Remote,
-            transport: Some(bitfun_core::service::mcp::MCPServerTransport::StreamableHttp),
+            server_type: openbitfun_core::service::mcp::MCPServerType::Remote,
+            transport: Some(openbitfun_core::service::mcp::MCPServerTransport::StreamableHttp),
             command: None,
             args: Vec::new(),
             env: HashMap::new(),
@@ -1979,7 +1985,7 @@ mod tests {
             ),
             auto_start: true,
             enabled: true,
-            location: bitfun_core::service::mcp::ConfigLocation::User,
+            location: openbitfun_core::service::mcp::ConfigLocation::User,
             capabilities: Vec::new(),
             settings: HashMap::new(),
             oauth: None,

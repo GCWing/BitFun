@@ -17,10 +17,10 @@
 #![allow(dead_code)]
 
 use crate::computer_use::windows_ax_ui::build_updated_cache_with_retry;
-use bitfun_core::agentic::tools::computer_use_host::{
+use openbitfun_core::agentic::tools::computer_use_host::{
     parse_windows_accelerator_display, AppMenuShortcut,
 };
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
@@ -44,11 +44,11 @@ const MENU_BAR_SEARCH_MAX_VISITED: usize = 4_000;
 
 unsafe fn build_shortcuts_cache_request(
     automation: &IUIAutomation,
-) -> BitFunResult<IUIAutomationCacheRequest> {
+) -> OpenBitFunResult<IUIAutomationCacheRequest> {
     // SAFETY: `automation` is a live UI Automation COM interface and every
     // property, pattern, and scope identifier below is a documented UIA value.
     let cache_req = unsafe { automation.CreateCacheRequest() }
-        .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
+        .map_err(|e| OpenBitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
     for prop in [
         UIA_ControlTypePropertyId,
         UIA_NamePropertyId,
@@ -220,13 +220,13 @@ fn find_menu_bar(root: &IUIAutomationElement) -> Option<IUIAutomationElement> {
 /// Returns an empty result (not an error) when no `MenuBar` element is
 /// found — modern Fluent/Electron apps frequently have no classic menu
 /// bar, which is a legitimate "no shortcuts (via this mechanism)" answer.
-pub(super) fn get_app_menu_shortcuts(hwnd: HWND) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
+pub(super) fn get_app_menu_shortcuts(hwnd: HWND) -> OpenBitFunResult<(Vec<AppMenuShortcut>, u32)> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
         let automation: IUIAutomation =
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).map_err(|e| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "UI Automation (CoCreateInstance CUIAutomation): {}.",
                     e
                 ))
@@ -234,9 +234,9 @@ pub(super) fn get_app_menu_shortcuts(hwnd: HWND) -> BitFunResult<(Vec<AppMenuSho
 
         let cache_req = build_shortcuts_cache_request(&automation)?;
 
-        let uncached = automation
-            .ElementFromHandle(hwnd)
-            .map_err(|e| BitFunError::tool(format!("UI Automation ElementFromHandle: {}.", e)))?;
+        let uncached = automation.ElementFromHandle(hwnd).map_err(|e| {
+            OpenBitFunError::tool(format!("UI Automation ElementFromHandle: {}.", e))
+        })?;
 
         let root = build_updated_cache_with_retry(&uncached, &cache_req)?;
 

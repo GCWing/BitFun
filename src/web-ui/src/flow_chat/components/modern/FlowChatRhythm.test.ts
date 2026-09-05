@@ -43,16 +43,16 @@ describe('FlowChat transcript rhythm', () => {
     const toolStyles = readSource('../FlowToolCard.scss');
 
     expect(toolStyles).toContain(
-      'margin: 0 0 var(--bf-control-flow-chat-flow-item-gap) 0;',
+      'margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;',
     );
     expect(toolStyles).not.toContain(
-      'margin: 0 0 var(--bf-control-flow-chat-card-gap) 0;',
+      'margin: 0 0 var(--openbitfun-control-flow-chat-card-gap) 0;',
     );
     expect(toolStyles).toMatch(
-      /data-bf-attention='ambient'[\s\S]*?data-bf-expanded-shell='false'[\s\S]*?:has\([\s\S]*?\+ \.flowchat-flow-item[\s\S]*?margin-bottom: 0;/,
+      /data-openbitfun-attention='ambient'[\s\S]*?data-openbitfun-expanded-shell='false'[\s\S]*?:has\([\s\S]*?\+ \.flowchat-flow-item[\s\S]*?margin-bottom: 0;/,
     );
     expect(toolStyles).not.toContain(
-      "> [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']",
+      "> [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']",
     );
     expect(toolStyles).not.toContain('+ .task-with-subagent-wrapper');
     expect(toolStyles).not.toContain('.task-with-subagent-wrapper:not(');
@@ -63,7 +63,7 @@ describe('FlowChat transcript rhythm', () => {
     const userMessageStyles = readSource('./UserMessageItem.scss');
 
     expect(rendererStyles).toMatch(
-      /\[data-item-type='user-message'\]:not\(\[data-virtual-index='0'\]\)\s*\{\s*padding-top: var\(--bf-control-flow-chat-turn-gap\);/,
+      /\[data-item-type='user-message'\]:not\(\[data-virtual-index='0'\]\)\s*\{\s*padding-top: var\(--openbitfun-control-flow-chat-turn-gap\);/,
     );
     expect(rendererStyles).toContain(
       "&[data-turn-boundary-after='true']",
@@ -78,7 +78,7 @@ describe('FlowChat transcript rhythm', () => {
       '> .task-with-subagent-wrapper:is(',
     );
     expect(userMessageStyles).toMatch(
-      /margin:\s*0\.06rem\s*var\(--bf-control-flow-chat-content-padding-inline\)\s*var\(--bf-control-flow-chat-flow-item-gap\)/,
+      /margin:\s*0\.06rem\s*var\(--openbitfun-control-flow-chat-content-padding-inline\)\s*var\(--openbitfun-control-flow-chat-flow-item-gap\)/,
     );
   });
 
@@ -114,13 +114,13 @@ describe('FlowChat transcript rhythm', () => {
       "&[data-ambient-tool-run-continuation-after='true']",
     );
     expect(rendererStyles).not.toContain(
-      "> [data-bf-component='flow-chat-tool-card'][data-bf-part='root'][data-bf-expanded-shell='false']",
+      "> [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']",
     );
     expect(rendererStyles).not.toContain(
       '.task-with-subagent-wrapper:last-child:not(.task-with-subagent-wrapper--expanded)',
     );
     expect(taskStyles).toMatch(
-      /\.task-with-subagent-wrapper\s*\{[\s\S]*?margin-block:\s*0;[\s\S]*?&\.task-with-subagent-wrapper--expanded\s*\{\s*margin-block:\s*var\(--bf-space-1\) var\(--bf-space-3\);/,
+      /\.task-with-subagent-wrapper\s*\{[\s\S]*?margin-block:\s*0;[\s\S]*?&\.task-with-subagent-wrapper--expanded\s*\{\s*margin-block:\s*var\(--openbitfun-space-1\) var\(--openbitfun-space-3\);/,
     );
   });
 });

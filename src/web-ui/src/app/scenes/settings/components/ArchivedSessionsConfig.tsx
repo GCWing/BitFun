@@ -7,7 +7,7 @@
  * directly with explicit success or failure feedback.
  */
 
-import { Button, Icon } from '@bitfun/ui';
+import { Button, Icon } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Inbox } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -124,14 +124,14 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({
   const dateStr = formatDateTime(session.lastActiveAt);
 
   return (
-    <div data-bf-component="archived-sessions-config" data-bf-part="row" className="archived-sessions-config__row">
-      <div data-bf-component="archived-sessions-config" data-bf-part="rowInfo" className="archived-sessions-config__row-info">
+    <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="row" className="archived-sessions-config__row">
+      <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="rowInfo" className="archived-sessions-config__row-info">
         <span className="archived-sessions-config__row-name">{displayName}</span>
         {dateStr && (
           <span className="archived-sessions-config__row-date">{dateStr}</span>
         )}
       </div>
-      <div data-bf-component="archived-sessions-config" data-bf-part="rowActions" className="archived-sessions-config__row-actions">
+      <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="rowActions" className="archived-sessions-config__row-actions">
         <Button
           size="sm"
           variant="outline"
@@ -260,8 +260,8 @@ const ArchivedSessionsConfig: React.FC = () => {
     const handler = () => {
       void loadArchived(true);
     };
-    window.addEventListener('bitfun:session-archived', handler);
-    return () => window.removeEventListener('bitfun:session-archived', handler);
+    window.addEventListener('openbitfun:session-archived', handler);
+    return () => window.removeEventListener('openbitfun:session-archived', handler);
   }, [loadArchived]);
 
   // ── Group entries by workspace ───────────────────────────────────────────
@@ -508,7 +508,7 @@ const ArchivedSessionsConfig: React.FC = () => {
   const hasEntries = entries.length > 0;
 
   const headerExtra = (
-    <div data-bf-component="archived-sessions-config" data-bf-part="headerActions" className="archived-sessions-config__header-actions">
+    <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="headerActions" className="archived-sessions-config__header-actions">
       <ConfigRefreshButton
         tooltip={t('actions.refresh')}
         onClick={() => { void loadArchived(true); }}
@@ -531,7 +531,7 @@ const ArchivedSessionsConfig: React.FC = () => {
   );
 
   return (
-    <ConfigPageLayout data-bf-component="archived-sessions-config" data-bf-part="root" className="archived-sessions-config">
+    <ConfigPageLayout data-openbitfun-component="archived-sessions-config" data-openbitfun-part="root" className="archived-sessions-config">
       <ConfigPageHeader
         title={t('nav.sessions.archivedSessions')}
         subtitle={t('nav.sessions.archivedSessionsDescription')}
@@ -554,11 +554,11 @@ const ArchivedSessionsConfig: React.FC = () => {
             />
           ))}
           {loading ? (
-            <div data-bf-component="archived-sessions-config" data-bf-part="loading" className="archived-sessions-config__loading">
+            <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="loading" className="archived-sessions-config__loading">
               {t('nav.sessions.loading')}
             </div>
           ) : !hasEntries && loadFailures.length === 0 ? (
-            <div data-bf-component="archived-sessions-config" data-bf-part="empty" className="archived-sessions-config__empty">
+            <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="empty" className="archived-sessions-config__empty">
               <Inbox size={32} className="archived-sessions-config__empty-icon" />
               <span>{t('nav.sessions.noArchivedSessions')}</span>
             </div>
@@ -567,11 +567,11 @@ const ArchivedSessionsConfig: React.FC = () => {
             {Array.from(grouped.entries()).map(([workspaceKey, group]) => {
               const isCollapsed = collapsedWorkspaces.has(workspaceKey);
               return (
-              <div data-bf-component="archived-sessions-config" data-bf-part="group" data-bf-state={isCollapsed ? 'collapsed' : undefined} key={workspaceKey} className="archived-sessions-config__group">
+              <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="group" data-openbitfun-state={isCollapsed ? 'collapsed' : undefined} key={workspaceKey} className="archived-sessions-config__group">
                 <button
                   type="button"
-                  data-bf-component="archived-sessions-config"
-                  data-bf-part="groupHeader"
+                  data-openbitfun-component="archived-sessions-config"
+                  data-openbitfun-part="groupHeader"
                   className="archived-sessions-config__group-header"
                   onClick={() => toggleWorkspace(workspaceKey)}
                   aria-expanded={!isCollapsed}
@@ -587,7 +587,7 @@ const ArchivedSessionsConfig: React.FC = () => {
                   </span>
                 </button>
                 {!isCollapsed && (
-                <div data-bf-component="archived-sessions-config" data-bf-part="groupList" className="archived-sessions-config__group-list">
+                <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="groupList" className="archived-sessions-config__group-list">
                   {group.entries.map(entry => (
                     <ArchivedRow
                       key={archivedEntryIdentityKey(entry)}

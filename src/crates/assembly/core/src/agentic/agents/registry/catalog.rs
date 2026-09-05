@@ -7,7 +7,7 @@ use crate::agentic::agents::{
     SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, UltraMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
-use bitfun_agent_runtime::agents as runtime_agents;
+use openbitfun_agent_runtime::agents as runtime_agents;
 use std::sync::Arc;
 
 #[derive(Clone)]

@@ -118,13 +118,13 @@ describe('useInstalledSkills', () => {
     });
     await act(async () => {
       resolveLoad?.([{
-        key: 'bitfun:user:test',
+        key: 'openbitfun:user:test',
         name: 'test',
         description: '',
         path: 'D:/skills/test',
         level: 'user',
-        sourceSlot: 'bitfun-user',
-        sourceId: 'bitfun',
+        sourceSlot: 'openbitfun-user',
+        sourceId: 'openbitfun',
         dirName: 'test',
         isBuiltin: false,
       }]);
@@ -141,13 +141,13 @@ describe('useInstalledSkills', () => {
       resolveDelete = resolve;
     }));
     const skill: SkillInfo = {
-      key: 'bitfun:user:test',
+      key: 'openbitfun:user:test',
       name: 'test',
       description: '',
       path: 'D:/skills/test',
       level: 'user',
-      sourceSlot: 'bitfun-user',
-      sourceId: 'bitfun',
+      sourceSlot: 'openbitfun-user',
+      sourceId: 'openbitfun',
       dirName: 'test',
       isBuiltin: false,
     };

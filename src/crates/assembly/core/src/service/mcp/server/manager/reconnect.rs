@@ -1,5 +1,5 @@
 use super::*;
-use bitfun_services_integrations::mcp::server::{
+use openbitfun_services_integrations::mcp::server::{
     mcp_reconnect_runtime_decision, MCPReconnectRuntimeDecision,
 };
 
@@ -26,7 +26,7 @@ impl MCPServerManager {
         }
     }
 
-    async fn reconnect_once(&self) -> BitFunResult<()> {
+    async fn reconnect_once(&self) -> OpenBitFunResult<()> {
         let has_registered_servers = !self.runtime.is_empty().await;
         let has_pending_reconnects = self.runtime.has_pending_reconnects().await;
         if !has_registered_servers && !has_pending_reconnects {

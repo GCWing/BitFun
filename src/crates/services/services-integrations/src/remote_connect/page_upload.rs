@@ -1,4 +1,4 @@
-//! BitFun Page incremental upload client (Save Version → Deploy).
+//! OpenBitFun Page incremental upload client (Save Version → Deploy).
 
 use anyhow::{anyhow, Result};
 use log::{info, warn};
@@ -1176,8 +1176,10 @@ mod tests {
 
     #[test]
     fn collect_allows_worker_without_index() {
-        let base =
-            std::env::temp_dir().join(format!("bitfun-page-worker-only-{}", uuid::Uuid::new_v4()));
+        let base = std::env::temp_dir().join(format!(
+            "openbitfun-page-worker-only-{}",
+            uuid::Uuid::new_v4()
+        ));
         let server = base.join("server");
         std::fs::create_dir_all(&server).unwrap();
         std::fs::write(
@@ -1212,7 +1214,7 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let root = std::env::temp_dir().join(format!(
-            "bitfun-page-symlink-external-{}",
+            "openbitfun-page-symlink-external-{}",
             uuid::Uuid::new_v4()
         ));
         let page = root.join("page");
@@ -1231,8 +1233,10 @@ mod tests {
     fn directory_source_rejects_symlink_loops() {
         use std::os::unix::fs::symlink;
 
-        let root =
-            std::env::temp_dir().join(format!("bitfun-page-symlink-loop-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!(
+            "openbitfun-page-symlink-loop-{}",
+            uuid::Uuid::new_v4()
+        ));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("index.html"), b"<html></html>").unwrap();
         symlink(&root, root.join("loop")).unwrap();

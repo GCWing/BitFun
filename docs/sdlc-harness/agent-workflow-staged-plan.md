@@ -1,11 +1,11 @@
-# BitFun 智能体工作流场景收敛计划
+# OpenBitFun 智能体工作流场景收敛计划
 
 > 范围：承接 [product-requirements-agent-workflow-adjustment.md](product-requirements-agent-workflow-adjustment.md)，把智能体工作流、审查、并发和成本控制压回真实用户场景。
 > 本文不是新的 SDLC Harness 阶段路线图，不重新定义 P-1/P0/P1/P2/P3/P4。落地阶段仍以 [implementation-plan.md](implementation-plan.md) 为准。
 
 ## 1. 收敛结论
 
-BitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户真正要的是：
+OpenBitFun 不需要把 dynamic workflow 做成一个新的主产品模式。用户真正要的是：
 
 - 小任务快，并且知道哪些内容没有验证。
 - 重要改动能被合适强度地看一眼，而不是默认跑重审查。

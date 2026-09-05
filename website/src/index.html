@@ -6,7 +6,7 @@
     <meta name="theme-color" content="" />
     <meta name="description" content="__PAGE_DESCRIPTION__" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="BitFun Playbook" />
+    <meta property="og:site_name" content="OpenBitFun Playbook" />
     <meta property="og:title" content="__PAGE_TITLE__" />
     <meta property="og:description" content="__PAGE_DESCRIPTION__" />
     <meta property="og:url" content="__PAGE_URL__" />
@@ -16,13 +16,13 @@
       (() => {
         let theme = 'system';
         try {
-          const stored = localStorage.getItem('bitfun-playbook-theme');
+          const stored = localStorage.getItem('openbitfun-playbook-theme');
           if (['light', 'dark'].includes(stored)) theme = stored;
         } catch {}
         const root = document.documentElement;
         const dark = theme === 'dark'
           || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-        root.setAttribute('data-bf-design-system-root', '');
+        root.setAttribute('data-openbitfun-design-system-root', '');
         root.dataset.theme = theme;
         root.dataset.colorScheme = dark ? 'dark' : 'light';
         root.dataset.contrast = 'standard';
@@ -30,7 +30,7 @@
       })();
     </script>
     <link rel="canonical" href="__PAGE_URL__" />
-    <link rel="icon" href="/assets/bitfun.png" />
+    <link rel="icon" href="/assets/openbitfun.png" />
     <link rel="stylesheet" href="/assets/design-tokens.css?v=__ASSET_VERSION__" />
     <link rel="stylesheet" href="/assets/theme.css?v=__ASSET_VERSION__" />
     <link rel="stylesheet" href="/assets/styles.css?v=__ASSET_VERSION__" />
@@ -41,7 +41,7 @@
     <div id="app">
       <div class="loading-shell" aria-live="polite">
         <span class="loading-mark">B</span>
-        <span>Loading BitFun Playbook…</span>
+        <span>Loading OpenBitFun Playbook…</span>
       </div>
     </div>
     <script type="module" src="/assets/app.js?v=__ASSET_VERSION__"></script>

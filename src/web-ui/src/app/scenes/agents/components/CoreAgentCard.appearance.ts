@@ -16,7 +16,7 @@ export const coreAgentCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'meta' },
   ],
   states: [
-    { id: 'connected', selector: { kind: 'self', suffix: '[data-bf-state~="connected"]' } },
-    { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
+    { id: 'connected', selector: { kind: 'self', suffix: '[data-openbitfun-state~="connected"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: '[data-openbitfun-state~="disabled"]' } },
   ],
 };

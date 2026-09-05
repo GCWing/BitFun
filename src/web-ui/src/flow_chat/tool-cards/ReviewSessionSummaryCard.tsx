@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { ReviewSummaryToolCard } from '@bitfun/ui/flow-chat';
+import { ReviewSummaryToolCard } from '@openbitfun/ui/flow-chat';
 import { flowChatStore } from '../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { openMainSession } from '../services/sessionActivation';

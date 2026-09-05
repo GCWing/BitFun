@@ -35,14 +35,14 @@ function ActivityToolCardBase({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-tool-card={toolCard}
+      data-openbitfun-tool-card={toolCard}
       header={(
         <AmbientToolCardHeader
           action={action}
           content={summary !== undefined && summary !== null ? (
             <span
               className={styles.summary}
-              data-bf-part="summary"
+              data-openbitfun-part="summary"
               data-tone={status === "error" ? "danger" : "neutral"}
               title={summaryTitle}
             >

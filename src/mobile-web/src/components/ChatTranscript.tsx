@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MobileButton, MobileCard, MobileDisclosure, MobileMessage } from '@bitfun/ui/mobile';
+import { MobileButton, MobileCard, MobileDisclosure, MobileMessage } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import type { ActiveTurnSnapshot, ChatMessage, ChatMessageItem, RemoteToolStatus } from '../services/RemoteSessionManager';
 import ChatAskQuestionCard from './ChatAskQuestionCard';
@@ -135,13 +135,13 @@ const TodoCard: React.FC<{ tool: RemoteToolStatus }> = ({ tool }) => {
   const statusIcon = (s: string) => {
     switch (s) {
       case 'completed':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-success-content)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-status-success-content)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>;
       case 'in_progress':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-accent-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--bf-color-accent-default)"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-accent-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="var(--openbitfun-color-accent-default)"/></svg>;
       case 'cancelled':
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-status-danger-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>;
       default:
-        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bf-color-content-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
+        return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--openbitfun-color-content-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
     }
   };
 
@@ -330,9 +330,9 @@ export const TaskToolCard: React.FC<{
                   return (
                     <div key={`sub-tool-${t.id}-${idx}`} className={`chat-task-card__step chat-task-card__step--tool ${isDone ? 'is-done' : isErr ? 'is-error' : 'is-running'}`}>
                       {isDone ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--bf-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4" stroke="var(--openbitfun-color-status-success-content)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isErr ? (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--bf-color-status-danger-content)" strokeWidth="2" strokeLinecap="round"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="var(--openbitfun-color-status-danger-content)" strokeWidth="2" strokeLinecap="round"/></svg>
                       ) : (
                         <span className="chat-task-card__step-spinner" />
                       )}
@@ -539,7 +539,7 @@ const ReadFilesToggle: React.FC<{ tools: RemoteToolStatus[] }> = ({ tools }) => 
               const preview = t.input_preview || '';
               return (
                 <div key={t.id} style={{
-                  fontSize: 'var(--bf-type-body-xs-font-size)',
+                  fontSize: 'var(--openbitfun-type-body-xs-font-size)',
                   padding: '2px 0',
                   opacity: 0.8,
                 }}>

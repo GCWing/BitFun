@@ -5,7 +5,7 @@ import {
   MobileDisclosure,
   MobileIconButton,
   MobileTextField,
-} from '@bitfun/ui/mobile';
+} from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 
 interface PairingFormProps {

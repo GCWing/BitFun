@@ -1,5 +1,12 @@
 import type { ModelCapability, ModelCategory } from '../types';
 
+type ModelCapabilitySource = {
+  id?: string | null;
+  enabled?: boolean | null;
+  category?: ModelCategory | string | null;
+  capabilities?: readonly (ModelCapability | string)[] | null;
+};
+
 const MULTIMODAL_MODEL_HINTS = [
   'vision',
   'gpt-4o',
@@ -58,7 +65,7 @@ export function resolveModelCategory(
   return category ?? inferred;
 }
 
-export function getCapabilitiesByCategory(category: ModelCategory): ModelCapability[] {
+export function getCapabilitiesByCategory(category?: ModelCategory | string | null): ModelCapability[] {
   switch (category) {
     case 'speech_recognition':
       return ['speech_recognition'];
@@ -68,4 +75,46 @@ export function getCapabilitiesByCategory(category: ModelCategory): ModelCapabil
     default:
       return ['text_chat', 'function_calling'];
   }
+}
+
+/**
+ * Resolve the capabilities of a persisted model without guessing from its
+ * display name. Older configs may omit capabilities or persist an empty list;
+ * those records retain the backend-compatible category defaults.
+ */
+export function getEffectiveModelCapabilities(model: ModelCapabilitySource): ModelCapability[] {
+  const explicitCapabilities = Array.isArray(model.capabilities)
+    ? model.capabilities.filter((capability): capability is ModelCapability => (
+      capability === 'text_chat'
+      || capability === 'function_calling'
+      || capability === 'image_understanding'
+      || capability === 'speech_recognition'
+    ))
+    : [];
+
+  return explicitCapabilities.length > 0
+    ? explicitCapabilities
+    : getCapabilitiesByCategory(model.category);
+}
+
+/** A configured model can be selected for a specific capability. */
+export function isSelectableModelForCapability(
+  model: ModelCapabilitySource,
+  capability: ModelCapability,
+): boolean {
+  return Boolean(model.id?.trim())
+    && model.enabled === true
+    && getEffectiveModelCapabilities(model).includes(capability);
+}
+
+/** A model can be shown and selected for the normal text-chat composer. */
+export function isSelectableTextChatModel(model: ModelCapabilitySource): boolean {
+  return isSelectableModelForCapability(model, 'text_chat');
+}
+
+/** Preserve the caller's model shape while applying the canonical filter. */
+export function filterSelectableTextChatModels<T extends ModelCapabilitySource>(
+  models: readonly T[],
+): T[] {
+  return models.filter(isSelectableTextChatModel);
 }

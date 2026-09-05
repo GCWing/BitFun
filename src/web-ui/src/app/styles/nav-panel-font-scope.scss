@@ -1,31 +1,31 @@
 /** Shared semantic text roles for navigation surfaces. */
 
 @mixin nav-panel-text-heading {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 
   // A light content appearance may still place navigation inside inverse
   // structural chrome. Only force the crisp light-mode treatment when the
   // consumer is not inside the navigation chrome scope.
-  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
+  :root[data-openbitfun-appearance-mode='light'] &:not(.openbitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-color-content-on-light) 92%,
+      var(--openbitfun-color-content-on-light) 92%,
       transparent
     );
   }
 }
 
 @mixin nav-panel-text-body {
-  color: var(--bf-color-content-primary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 @mixin nav-panel-text-meta {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 
-  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
+  :root[data-openbitfun-appearance-mode='light'] &:not(.openbitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-color-content-on-light) 48%,
+      var(--openbitfun-color-content-on-light) 48%,
       transparent
     );
   }
@@ -34,14 +34,14 @@
 @mixin nav-panel-text-icon {
   color: color-mix(
     in srgb,
-    var(--bf-color-content-secondary) 78%,
-    var(--bf-color-content-muted)
+    var(--openbitfun-color-content-secondary) 78%,
+    var(--openbitfun-color-content-muted)
   );
 
-  :root[data-bf-appearance-mode='light'] &:not(.bitfun-nav-panel *) {
+  :root[data-openbitfun-appearance-mode='light'] &:not(.openbitfun-nav-panel *) {
     color: color-mix(
       in srgb,
-      var(--bf-color-content-on-light) 70%,
+      var(--openbitfun-color-content-on-light) 70%,
       transparent
     );
   }
@@ -50,25 +50,25 @@
 @mixin nav-panel-text-row {
   @include nav-panel-text-body;
 
-  font-family: var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-label-md-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
+  font-family: var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
   // Truncated labels need room for the bundled font's ascenders and descenders.
-  line-height: var(--bf-type-body-sm-line-height);
+  line-height: var(--openbitfun-type-body-sm-line-height);
 }
 
 @mixin nav-panel-text-row-active {
   @include nav-panel-text-heading;
 
-  font-weight: var(--bf-type-label-selected-font-weight);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
 @mixin nav-panel-text-group {
   @include nav-panel-text-meta;
 
-  font-family: var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-meta-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
-  line-height: var(--bf-type-body-sm-line-height);
+  font-family: var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
+  line-height: var(--openbitfun-type-body-sm-line-height);
 }

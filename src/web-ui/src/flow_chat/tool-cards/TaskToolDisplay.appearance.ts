@@ -8,7 +8,7 @@ export const taskToolDisplayAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'prompt' }, { id: 'cancel' },
   ],
   states: [
-    { id: 'failed', selector: { kind: 'self', suffix: '[data-bf-state~="failed"]' } },
-    { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
+    { id: 'failed', selector: { kind: 'self', suffix: '[data-openbitfun-state~="failed"]' } },
+    { id: 'expanded', selector: { kind: 'self', suffix: '[data-openbitfun-state~="expanded"]' } },
   ],
 };

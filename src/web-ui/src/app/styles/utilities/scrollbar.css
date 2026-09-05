@@ -6,8 +6,8 @@
  * 2. Consistent size, color, and interactions.
  * 3. Components inherit global styles without customization.
  * 4. Theme CSS variables adapt to different themes.
- *    - --bf-color-scrollbar-thumb: default thumb color
- *    - --bf-color-scrollbar-thumb-hover: thumb color on thumb hover
+ *    - --openbitfun-color-scrollbar-thumb: default thumb color
+ *    - --openbitfun-color-scrollbar-thumb-hover: thumb color on thumb hover
  */
 
 /* ==================== WebKit / Chromium scrollbar chrome ==================== */
@@ -32,19 +32,19 @@
 
 /* ==================== Scrollbar thumb - always visible ==================== */
 *::-webkit-scrollbar-thumb {
-  background: var(--bf-color-scrollbar-thumb);
+  background: var(--openbitfun-color-scrollbar-thumb);
   border-radius: 3px;
   transition: background 0.2s ease;
 }
 
 /* Stronger thumb color on thumb hover */
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--bf-color-scrollbar-thumb-hover);
+  background: var(--openbitfun-color-scrollbar-thumb-hover);
 }
 
 /* ==================== Show while scrolling ==================== */
 *.is-scrolling::-webkit-scrollbar-thumb {
-  background: var(--bf-color-scrollbar-thumb);
+  background: var(--openbitfun-color-scrollbar-thumb);
 }
 
 /*
@@ -56,7 +56,7 @@
 @supports (scrollbar-color: transparent transparent) {
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+    scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
   }
 }
 

@@ -1,8 +1,8 @@
 {
-  "name": "@bitfun/web-ui",
-  "version": "0.2.19",
+  "name": "@openbitfun/web-ui",
+  "version": "1.0.0",
   "private": true,
-  "description": "BitFun Web UI - 支持 Desktop 和 Server 两种部署方式",
+  "description": "OpenBitFun Web UI - 支持 Desktop 和 Server 两种部署方式",
   "type": "module",
   "scripts": {
     "prepare:design-system:dev": "pnpm --dir ../../design-system run prepare:consumer-dev",
@@ -16,7 +16,7 @@
     "pretype-check": "pnpm run prepare:design-system:build",
     "dev": "vite",
     "dev:force": "vite --force",
-    "gen:types": "node scripts/gen-api-barrel.mjs --clean && cargo test --locked --package bitfun-app-server-protocol --no-default-features --features ts --lib export -- --nocapture && node scripts/gen-api-barrel.mjs",
+    "gen:types": "node scripts/gen-api-barrel.mjs --clean && cargo test --locked --package openbitfun-app-server-protocol --no-default-features --features ts --lib export -- --nocapture && node scripts/gen-api-barrel.mjs",
     "build": "vite build",
     "build:desktop": "vite build --mode desktop",
     "build:web": "vite build --mode web",
@@ -29,9 +29,9 @@
     "test:run": "vitest run --maxWorkers=50%"
   },
   "dependencies": {
-    "@bitfun/design-tokens": "workspace:^",
-    "@bitfun/theme-bitfun": "workspace:^",
-    "@bitfun/ui": "workspace:^",
+    "@openbitfun/design-tokens": "workspace:^",
+    "@openbitfun/theme-openbitfun": "workspace:^",
+    "@openbitfun/ui": "workspace:^",
     "@monaco-editor/react": "^4.6.0",
     "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/api": "^2.10.1",

@@ -1,4 +1,4 @@
-# BitFun MiniApp Market Service
+# OpenBitFun MiniApp Market Service
 
 这里是 MiniApp 市场后端的主要业务实现。Axum 可执行入口位于
 `../../../apps/miniapp-market-server/`，生产部署文件位于
@@ -86,15 +86,15 @@
 
 ```bash
 pnpm run fmt:rs
-cargo test -p bitfun-miniapp-market-service
-cargo check -p bitfun-miniapp-market-server
+cargo test -p openbitfun-miniapp-market-service
+cargo check -p openbitfun-miniapp-market-server
 cargo check --workspace
 ```
 
 领域 DTO 或状态机变化再运行：
 
 ```bash
-cargo test -p bitfun-product-domains --features miniapp
+cargo test -p openbitfun-product-domains --features miniapp
 pnpm run type-check:miniapp-market
 pnpm run test:miniapp-market
 ```
@@ -118,7 +118,7 @@ yank、上传和 migration 变化不能只测试成功路径。
 
 ## 发布
 
-此 crate 被 `bitfun-miniapp-market-server` 编译进与网页相同的 Docker 镜像。
+此 crate 被 `openbitfun-miniapp-market-server` 编译进与网页相同的 Docker 镜像。
 不要在生产服务器直接执行 `cargo run`，不要手工替换 binary，也不要直接编辑
 SQLite/artifacts。完整流程见
 [生产部署手册](../../../../deploy/miniapp-market/README.md)。

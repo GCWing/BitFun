@@ -18,7 +18,7 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Button: ({
     children,
     onClick,
@@ -371,7 +371,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
   });
 
   it('still opens when skip preference is set but reviewers are skipped', async () => {
-    localStorage.setItem('bitfun.deepReview.skipCostConfirmation', 'true');
+    localStorage.setItem('openbitfun.deepReview.skipCostConfirmation', 'true');
     const result = vi.fn();
 
     await act(async () => {
@@ -386,7 +386,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
   });
 
   it('still opens when skip preference is set but the active session is busy', async () => {
-    localStorage.setItem('bitfun.deepReview.skipCostConfirmation', 'true');
+    localStorage.setItem('openbitfun.deepReview.skipCostConfirmation', 'true');
     const result = vi.fn();
 
     await act(async () => {

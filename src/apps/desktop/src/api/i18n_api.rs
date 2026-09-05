@@ -1,8 +1,8 @@
 //! I18n API
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
 use log::{error, info, warn};
+use openbitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
@@ -95,7 +95,7 @@ pub async fn i18n_set_language(
         return Err(format!("Unsupported language: {}", request.language));
     };
     let language = locale_id.as_str().to_string();
-    crate::bitfun_control_host::configure_option_from_gui(
+    crate::openbitfun_control_host::configure_option_from_gui(
         &app,
         "setting.application.appearance",
         "language",
@@ -157,7 +157,7 @@ pub async fn i18n_set_config(
             return Err(format!("Unsupported language: {}", language));
         };
 
-        crate::bitfun_control_host::configure_option_from_gui(
+        crate::openbitfun_control_host::configure_option_from_gui(
             &app,
             "setting.application.appearance",
             "language",

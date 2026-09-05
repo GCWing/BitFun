@@ -1,11 +1,11 @@
-# @bitfun/ui
+# @openbitfun/ui
 
 Theme-independent React primitives and components.
 
 ```tsx
-import "@bitfun/theme-bitfun/default.css";
-import "@bitfun/ui/styles.css";
-import { Button, ThemeRoot } from "@bitfun/ui";
+import "@openbitfun/theme-openbitfun/default.css";
+import "@openbitfun/ui/styles.css";
+import { Button, ThemeRoot } from "@openbitfun/ui";
 
 export function Example() {
   return (
@@ -25,7 +25,7 @@ surfaces do not inherit desktop component geometry or ship desktop component
 styles:
 
 ```tsx
-import "@bitfun/ui/mobile.css";
+import "@openbitfun/ui/mobile.css";
 import {
   MobileActionSheet,
   MobileBadge,
@@ -50,7 +50,7 @@ import {
   MobileStatus,
   MobileTextField,
   MobileTextarea,
-} from "@bitfun/ui/mobile";
+} from "@openbitfun/ui/mobile";
 ```
 
 These components own mobile touch targets, pressed/focus/disabled states,
@@ -153,7 +153,7 @@ import {
   ReadFileToolCard,
   ToolCardCopyButton,
   ToolCardChangeSummary,
-} from "@bitfun/ui/flow-chat";
+} from "@openbitfun/ui/flow-chat";
 ```
 
 `ChatComposer` owns the reusable 32px context band and the compact/expanded

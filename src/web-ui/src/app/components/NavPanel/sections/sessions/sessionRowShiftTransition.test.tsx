@@ -27,7 +27,7 @@ function stubRowLayout(): () => void {
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,
     get(this: HTMLElement) {
-      return this.classList.contains('bitfun-nav-panel__inline-list')
+      return this.classList.contains('openbitfun-nav-panel__inline-list')
         ? this.children.length * ROW_HEIGHT
         : ROW_HEIGHT;
     },
@@ -52,11 +52,11 @@ const SessionList: React.FC<{ sessionIds: string[] }> = ({ sessionIds }) => {
   const listRef = useRef<HTMLDivElement>(null);
   useSessionRowRemovalTransition(listRef, sessionIds.join('|'));
   return (
-    <div className="bitfun-nav-panel__inline-list" ref={listRef}>
+    <div className="openbitfun-nav-panel__inline-list" ref={listRef}>
       {sessionIds.map(sessionId => (
         <div
           key={sessionId}
-          className="bitfun-nav-panel__inline-item"
+          className="openbitfun-nav-panel__inline-item"
           data-session-id={sessionId}
         />
       ))}
@@ -151,7 +151,7 @@ describe('useSessionRowRemovalTransition', () => {
       root.render(<SessionList sessionIds={['a', 'b']} />);
     });
 
-    const list = container.querySelector<HTMLElement>('.bitfun-nav-panel__inline-list')!;
+    const list = container.querySelector<HTMLElement>('.openbitfun-nav-panel__inline-list')!;
     expect(list.style.height).toBe(`${3 * ROW_HEIGHT}px`);
     expect(list.style.overflow).toBe('hidden');
 
@@ -174,7 +174,7 @@ describe('useSessionRowRemovalTransition', () => {
       root.render(<SessionList sessionIds={['a', 'b', 'd']} />);
     });
 
-    const list = container.querySelector<HTMLElement>('.bitfun-nav-panel__inline-list')!;
+    const list = container.querySelector<HTMLElement>('.openbitfun-nav-panel__inline-list')!;
     expect(list.style.height).toBe(`${3 * ROW_HEIGHT}px`);
   });
 

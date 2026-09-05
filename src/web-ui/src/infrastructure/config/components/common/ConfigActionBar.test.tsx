@@ -35,7 +35,7 @@ describe('ConfigActionBar', () => {
       />,
     ));
 
-    expect(container.querySelector('[data-bf-part="fieldStatus"]')?.textContent).toBe('changeStatus.unsaved');
+    expect(container.querySelector('[data-openbitfun-part="fieldStatus"]')?.textContent).toBe('changeStatus.unsaved');
     const buttons = container.querySelectorAll('button');
     expect(buttons).toHaveLength(2);
     act(() => (buttons[0] as HTMLButtonElement).click());
@@ -68,7 +68,7 @@ describe('ConfigActionBar', () => {
       />,
     ));
 
-    expect(container.querySelector('[data-bf-part="actionBar"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="actionBar"]')).toBeNull();
   });
 
   it('keeps an explicit saved message visible when a page provides one', () => {
@@ -81,7 +81,7 @@ describe('ConfigActionBar', () => {
       />,
     ));
 
-    expect(container.querySelector('[data-bf-part="actionBar"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="actionBar"]')).not.toBeNull();
     expect(container.textContent).toContain('Saved just now');
     expect(container.querySelectorAll('button')).toHaveLength(0);
   });

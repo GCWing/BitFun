@@ -1,6 +1,6 @@
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 
-const BROWSER_DROP_REGISTRY_KEY = '__BITFUN_BROWSER_DROP_FILES__';
+const BROWSER_DROP_REGISTRY_KEY = '__OPENBITFUN_BROWSER_DROP_FILES__';
 
 type BrowserDropRegistryHost = typeof globalThis & {
   [BROWSER_DROP_REGISTRY_KEY]?: Map<string, readonly File[]>;

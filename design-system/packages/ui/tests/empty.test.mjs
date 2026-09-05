@@ -12,10 +12,10 @@ test("Empty exposes independent media, copy, and action regions", () => {
     title: "No items",
   }));
 
-  assert.match(markup, /data-bf-component="empty"/);
-  assert.match(markup, /data-bf-part="media"/);
+  assert.match(markup, /data-openbitfun-component="empty"/);
+  assert.match(markup, /data-openbitfun-part="media"/);
   assert.match(markup, /data-size="sm"/);
-  assert.match(markup, /data-bf-part="title"/);
-  assert.match(markup, /data-bf-part="description"/);
-  assert.match(markup, /data-bf-part="actions"/);
+  assert.match(markup, /data-openbitfun-part="title"/);
+  assert.match(markup, /data-openbitfun-part="description"/);
+  assert.match(markup, /data-openbitfun-part="actions"/);
 });

@@ -1,6 +1,6 @@
 #![cfg(feature = "plugin-source")]
 
-use bitfun_product_domains::plugin_source::{
+use openbitfun_product_domains::plugin_source::{
     PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
     PluginPackageTrustLevel, PluginTrustDecision, PluginTrustStore,
 };
@@ -11,7 +11,7 @@ const HASH_A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const HASH_B: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const PROJECT: &str = "project-1";
 const WORKSPACE: &str = "workspace-1";
-const SOURCE_PATH: &str = "file:///workspace/.bitfun/plugins/acme.demo";
+const SOURCE_PATH: &str = "file:///workspace/.openbitfun/plugins/acme.demo";
 
 fn source(content_hash: &str, source_path: &str) -> PluginPackageSourceIdentity {
     PluginPackageSourceIdentity {
@@ -175,7 +175,7 @@ fn manifest_and_trust_identity_reject_terminal_spoofing_characters() {
     assert!(PluginPackageManifest::parse_json(&bidi_manifest.to_string()).is_err());
 
     let trust_store = serde_json::json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "epoch": 2,
         "records": [{
             "projectDomainId": "project-1",
@@ -189,7 +189,9 @@ fn manifest_and_trust_identity_reject_terminal_spoofing_characters() {
             },
             "trustLevel": "source_approved",
             "updatedAtMs": 100
-        }]
+        }],
+        "activationEpoch": 2,
+        "activationRecords": []
     });
     let store: PluginTrustStore =
         serde_json::from_value(trust_store).expect("deserialize trust fixture");
@@ -199,7 +201,7 @@ fn manifest_and_trust_identity_reject_terminal_spoofing_characters() {
 #[test]
 fn trust_store_invalidates_changed_package_identity_and_advances_epoch_once() {
     let mut store = PluginTrustStore::new(1);
-    let original = source(HASH_A, "file:///workspace/.bitfun/plugins/acme.demo");
+    let original = source(HASH_A, "file:///workspace/.openbitfun/plugins/acme.demo");
 
     assert_eq!(store.epoch(), 1);
     assert_eq!(
@@ -233,7 +235,7 @@ fn trust_store_invalidates_changed_package_identity_and_advances_epoch_once() {
         .expect("idempotent trust decision"));
     assert_eq!(store.epoch(), 2);
 
-    let changed = source(HASH_B, "file:///workspace/.bitfun/plugins/acme.demo");
+    let changed = source(HASH_B, "file:///workspace/.openbitfun/plugins/acme.demo");
     assert!(store
         .reconcile_sources("project-1", "workspace-1", std::slice::from_ref(&changed))
         .expect("reconcile changed source"));
@@ -289,7 +291,7 @@ fn absent_sources_preserve_review_history_until_a_replacement_is_discovered() {
 #[test]
 fn trust_decisions_are_scoped_to_project_and_workspace() {
     let mut store = PluginTrustStore::new(1);
-    let package = source(HASH_A, "file:///workspace/.bitfun/plugins/acme.demo");
+    let package = source(HASH_A, "file:///workspace/.openbitfun/plugins/acme.demo");
 
     store
         .apply_decision(
@@ -318,7 +320,7 @@ fn trust_decisions_are_scoped_to_project_and_workspace() {
 #[test]
 fn revoke_requires_an_existing_source_approval() {
     let mut store = PluginTrustStore::new(1);
-    let package = source(HASH_A, "file:///workspace/.bitfun/plugins/acme.demo");
+    let package = source(HASH_A, "file:///workspace/.openbitfun/plugins/acme.demo");
 
     assert!(store
         .apply_decision(
@@ -364,11 +366,11 @@ fn trust_store_rejects_unknown_schema_and_duplicate_identity_records() {
 
     let identity = serde_json::to_value(source(
         HASH_A,
-        "file:///workspace/.bitfun/plugins/acme.demo",
+        "file:///workspace/.openbitfun/plugins/acme.demo",
     ))
     .expect("serialize source identity");
     let duplicate_records = serde_json::json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "epoch": 2,
         "records": [
             {
@@ -385,13 +387,15 @@ fn trust_store_rejects_unknown_schema_and_duplicate_identity_records() {
                     "packageId": "acme.demo",
                     "version": "2.0.0",
                     "adapter": "test_adapter",
-                    "sourcePath": "file:///workspace/.bitfun/plugins/acme.demo",
+                    "sourcePath": "file:///workspace/.openbitfun/plugins/acme.demo",
                     "contentHash": HASH_B
                 },
                 "trustLevel": "denied",
                 "updatedAtMs": 101
             }
-        ]
+        ],
+        "activationEpoch": 2,
+        "activationRecords": []
     });
 
     let duplicate_records: PluginTrustStore =
@@ -542,26 +546,20 @@ fn source_changes_deny_and_revoke_invalidate_activation_atomically() {
 }
 
 #[test]
-fn schema_v1_migrates_inactive_and_recreated_stores_do_not_reuse_generation() {
-    let package = source(HASH_A, SOURCE_PATH);
-    let schema_v1 = serde_json::json!({
+fn pre_openbitfun_trust_store_requires_explicit_migration() {
+    let pre_openbitfun = serde_json::json!({
         "schemaVersion": 1,
         "epoch": 7,
-        "records": [trust_record(&package, PluginPackageTrustLevel::SourceApproved)]
+        "records": [],
+        "activationEpoch": 7,
+        "activationRecords": []
     });
     let store: PluginTrustStore =
-        serde_json::from_value(schema_v1).expect("deserialize schema-v1 store");
-    store.validate().expect("validate migrated schema-v1 store");
-    assert_eq!(store.activation_epoch(), 7);
-    assert!(!store.is_activated(PROJECT, WORKSPACE, &package));
-    let migrated = serde_json::to_value(&store).expect("serialize migrated store");
-    assert_eq!(migrated["schemaVersion"], 2);
-    assert_eq!(migrated["activationRecords"], serde_json::json!([]));
-
-    let mut recreated = PluginTrustStore::new(store.activation_epoch());
-    approve_source(&mut recreated, &package);
-    activate_source(&mut recreated, &package);
-    assert!(recreated.activation_epoch() > store.activation_epoch());
+        serde_json::from_value(pre_openbitfun).expect("deserialize shaped trust store");
+    let error = store
+        .validate()
+        .expect_err("pre-OpenBitFun trust store must not enter the current runtime");
+    assert!(error.to_string().contains("explicit data migration tool"));
 }
 
 #[test]
@@ -638,7 +636,7 @@ fn activation_authority_requires_the_exact_activated_package() {
     let issued_epoch = authority.activation_epoch();
     assert_eq!(issued_epoch, store.activation_epoch());
     assert!(store.is_activation_current(&authority));
-    let mut other = source(HASH_B, "file:///workspace/.bitfun/plugins/acme.other");
+    let mut other = source(HASH_B, "file:///workspace/.openbitfun/plugins/acme.other");
     other.package_id = "acme.other".to_string();
     approve_source(&mut store, &other);
     activate_source(&mut store, &other);
@@ -675,11 +673,12 @@ fn trust_store_schema_versions_reject_missing_null_and_cross_version_fields() {
     }"#;
     assert!(serde_json::from_str::<PluginTrustStore>(missing_v2).is_err());
 
-    for invalid_v1 in [
+    for pre_openbitfun_shape in [
+        r#"{"schemaVersion":1,"epoch":1,"records":[]}"#,
         r#"{"schemaVersion":1,"epoch":1,"records":[],"activationEpoch":null}"#,
         r#"{"schemaVersion":1,"epoch":1,"records":[],"activationRecords":null}"#,
     ] {
-        assert!(serde_json::from_str::<PluginTrustStore>(invalid_v1).is_err());
+        assert!(serde_json::from_str::<PluginTrustStore>(pre_openbitfun_shape).is_err());
     }
 
     let null_v2 = r#"{

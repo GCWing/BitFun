@@ -1,4 +1,4 @@
-//! Shared verification primitives for BitFun release assets.
+//! Shared verification primitives for OpenBitFun release assets.
 //!
 //! Remote installers must use the same build-time trust root as the CLI
 //! self-updater. A SHA256 sidecar detects corruption, while the minisign
@@ -12,9 +12,9 @@ use sha2::{Digest, Sha256};
 ///
 /// Forks that publish their own releases set this at build time to their own
 /// key. When absent, [`OFFICIAL_RELEASE_PUBKEY`] applies.
-pub(crate) const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
+pub(crate) const RELEASE_PUBKEY: Option<&str> = option_env!("OPENBITFUN_RELEASE_PUBKEY");
 
-/// The official BitFun release public key (minisign key ID `50F47CBE6CC0A376`),
+/// The official OpenBitFun release public key (minisign key ID `50F47CBE6CC0A376`),
 /// base64-wrapped the way Tauri wraps `minisign.pub`. This is public data —
 /// every release publishes it as the `minisign.pub` asset — so compiling it in
 /// lets development builds verify and install official releases instead of
@@ -31,7 +31,9 @@ pub(crate) fn release_pubkey() -> Option<&'static str> {
 
 pub(crate) fn require_release_pubkey() -> Result<&'static str> {
     release_pubkey().ok_or_else(|| {
-        anyhow!("this build has no BitFun release signing key; refusing to install executable code")
+        anyhow!(
+            "this build has no OpenBitFun release signing key; refusing to install executable code"
+        )
     })
 }
 
@@ -102,7 +104,7 @@ fn decode_public_key(value: &str) -> Result<String> {
 
 /// Verify the minisign signature over a checksum sidecar, then return its
 /// normalized digest. This is useful when the eventual target host has only a
-/// SHA256 implementation and no copy of the BitFun trust root.
+/// SHA256 implementation and no copy of the OpenBitFun trust root.
 pub(crate) fn verify_signed_checksum(
     checksum_text: &str,
     signature_b64: &str,
@@ -117,11 +119,11 @@ pub(crate) fn verify_signed_checksum(
 mod tests {
     use super::*;
 
-    /// Fixture produced with the real `minisign` CLI, then wrapped the way
-    /// Tauri wraps keys and signatures.
-    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
-    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
-    const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+    /// Fixture produced with the Tauri signer CLI in its base64-wrapped
+    /// minisign wire format.
+    const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERENTQzQUM5RUY0NTIzRTMKUldUakkwWHZ5VHBVM1NOMXJWMHhLVlljSDBOY2x4YlpxVHA2clN1NEJPMWcyY2Qvd2U4VUR2b3AK";
+    const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUakkwWHZ5VHBVM2RVVFdoR3FNZDltSWNUeEQ1K2ZnNWRUSnYxWk5lUkZzd0h0MkdzSUhUSlV6a0haUTdNZm1aemM5QVBQWW50UWgvaWpFcEp1Zkp4SERWdnhIc1g2YUFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NDg2NTU4CWZpbGU6Lm9wZW5iaXRmdW4tbWluaXNpZ24tZml4dHVyZS50eHQKa1QxdDQ3bWtLVlhaZUdFSjR4R0V5R1Z3REVnUlI0RGJqbHFoZkVHdkdLSlFyTGJ5Z05JRTI5V3dwdXRkSFpZckUrK0RaUVVJYUJod1dzcmVydHZnQXc9PQo=";
+    const FIXTURE_DATA: &[u8] = b"hello-openbitfun\n";
 
     #[test]
     fn embedded_trust_root_is_always_available_and_well_formed() {
@@ -146,15 +148,15 @@ mod tests {
         let digest = format!("{:x}", Sha256::digest(FIXTURE_DATA));
         assert_eq!(
             parse_sha256(
-                &format!("{digest}  bitfun-cli.tar.gz\n"),
-                "bitfun-cli.tar.gz"
+                &format!("{digest}  openbitfun-cli.tar.gz\n"),
+                "openbitfun-cli.tar.gz"
             )
             .unwrap(),
             digest
         );
-        verify_sha256(FIXTURE_DATA, &digest, "bitfun-cli.tar.gz").unwrap();
-        assert!(verify_sha256(FIXTURE_DATA, &"0".repeat(64), "bitfun-cli.tar.gz").is_err());
-        assert!(parse_sha256("not-a-digest", "bitfun-cli.tar.gz").is_err());
+        verify_sha256(FIXTURE_DATA, &digest, "openbitfun-cli.tar.gz").unwrap();
+        assert!(verify_sha256(FIXTURE_DATA, &"0".repeat(64), "openbitfun-cli.tar.gz").is_err());
+        assert!(parse_sha256("not-a-digest", "openbitfun-cli.tar.gz").is_err());
     }
 
     #[test]

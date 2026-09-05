@@ -10,7 +10,7 @@ import React, { useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { NavItem as NavItemConfig } from '../types';
-import { Tooltip } from '@bitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 
 interface NavItemProps {
   item: NavItemConfig;
@@ -66,7 +66,7 @@ const NavItem: React.FC<NavItemProps> = ({
     <button
       type="button"
       className={[
-        'bitfun-nav-panel__item',
+        'openbitfun-nav-panel__item',
         isActive && 'is-active',
       ]
         .filter(Boolean)
@@ -74,15 +74,15 @@ const NavItem: React.FC<NavItemProps> = ({
       onClick={onClick}
       title={tooltipContent ?? displayLabel}
     >
-      <span className="bitfun-nav-panel__item-icon" aria-hidden="true">
+      <span className="openbitfun-nav-panel__item-icon" aria-hidden="true">
         <Icon size={15} />
       </span>
-      <span className="bitfun-nav-panel__item-label">{displayLabel}</span>
+      <span className="openbitfun-nav-panel__item-label">{displayLabel}</span>
 
       {badge && (
         <span
           ref={badgeRef}
-          className={`bitfun-nav-panel__item-badge ${onBadgeClick ? 'bitfun-nav-panel__item-badge--clickable' : ''}`}
+          className={`openbitfun-nav-panel__item-badge ${onBadgeClick ? 'openbitfun-nav-panel__item-badge--clickable' : ''}`}
           onClick={handleBadgeClick}
           title={badge}
         >
@@ -91,14 +91,14 @@ const NavItem: React.FC<NavItemProps> = ({
       )}
 
       {renderActions ? (
-        <span className="bitfun-nav-panel__item-actions-custom" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+        <span className="openbitfun-nav-panel__item-actions-custom" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
           {renderActions()}
         </span>
       ) : ActionIcon && onActionClick && (
         actionTitle ? (
           <Tooltip content={actionTitle} placement="right" followCursor>
             <span
-              className="bitfun-nav-panel__item-action"
+              className="openbitfun-nav-panel__item-action"
               onClick={handleActionClick}
               onMouseDown={e => e.stopPropagation()}
               role="button"
@@ -110,7 +110,7 @@ const NavItem: React.FC<NavItemProps> = ({
           </Tooltip>
         ) : (
           <span
-            className="bitfun-nav-panel__item-action"
+            className="openbitfun-nav-panel__item-action"
             onClick={handleActionClick}
             onMouseDown={e => e.stopPropagation()}
             role="button"

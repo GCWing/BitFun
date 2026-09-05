@@ -13,14 +13,14 @@ test("IconButton requires an accessible label and keeps its icon decorative", ()
     }),
   );
 
-  assert.match(markup, /data-bf-component="icon-button"/);
-  assert.match(markup, /data-bf-part="progress"/);
-  assert.match(markup, /data-bf-part="icon"/);
+  assert.match(markup, /data-openbitfun-component="icon-button"/);
+  assert.match(markup, /data-openbitfun-part="progress"/);
+  assert.match(markup, /data-openbitfun-part="icon"/);
   assert.match(markup, /aria-label="Show list"/);
   assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, /data-icon="list"/);
-  assert.match(markup, /data-bf-variant="quiet"/);
-  assert.match(markup, /data-bf-shape="square"/);
+  assert.match(markup, /data-openbitfun-variant="quiet"/);
+  assert.match(markup, /data-openbitfun-shape="square"/);
   assert.match(markup, /type="button"/);
 });
 
@@ -36,9 +36,9 @@ test("IconButton exposes presentation, shape, tone, and size independently", () 
     }),
   );
 
-  assert.match(markup, /data-bf-variant="primary"/);
-  assert.match(markup, /data-bf-shape="circle"/);
-  assert.match(markup, /data-bf-tone="danger"/);
+  assert.match(markup, /data-openbitfun-variant="primary"/);
+  assert.match(markup, /data-openbitfun-shape="circle"/);
+  assert.match(markup, /data-openbitfun-tone="danger"/);
   assert.match(markup, /data-size="lg"/);
 });
 
@@ -71,13 +71,13 @@ test("loading preserves the label while disabling activation", () => {
 test("IconButton styles consume shared action and geometry tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /\[data-bf-variant=primary\]/);
-  assert.match(styles, /--bf-color-action-neutral-surface-hover/);
-  assert.match(styles, /--bf-color-action-primary-background/);
-  assert.match(styles, /--bf-control-height-sm/);
-  assert.match(styles, /--bf-control-icon-button-xs-size/);
-  assert.match(styles, /--bf-radius-sm/);
-  assert.match(styles, /--bf-radius-pill/);
+  assert.match(styles, /\[data-openbitfun-variant=primary\]/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface-hover/);
+  assert.match(styles, /--openbitfun-color-action-primary-background/);
+  assert.match(styles, /--openbitfun-control-height-sm/);
+  assert.match(styles, /--openbitfun-control-icon-button-xs-size/);
+  assert.match(styles, /--openbitfun-radius-sm/);
+  assert.match(styles, /--openbitfun-radius-pill/);
 });
 
 test("every IconButton variant is composited over an opaque surface", async () => {
@@ -88,7 +88,7 @@ test("every IconButton variant is composited over an opaque surface", async () =
 
   assert.match(
     styles,
-    /\.button\s*\{[^}]*background:\s*var\(--bf-color-surface-tertiary\)/s,
+    /\.button\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/s,
   );
   assert.match(
     styles,

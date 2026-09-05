@@ -1,4 +1,4 @@
-import { Button, Stack, Switch } from "@bitfun/ui";
+import { Button, Stack, Switch } from "@openbitfun/ui";
 import { useI18n } from "../i18n";
 
 export function TokenEffectPreview() {

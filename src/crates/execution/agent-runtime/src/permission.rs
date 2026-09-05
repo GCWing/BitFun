@@ -1,14 +1,14 @@
 //! Provider-neutral permission planning, pending requests, and reply coordination.
 
-use bitfun_agent_tools::PermissionIntent;
-use bitfun_runtime_ports::{
+use dashmap::DashMap;
+use openbitfun_agent_tools::PermissionIntent;
+use openbitfun_runtime_ports::{
     wildcard_matches, ClockPort, PermissionAuditEvent, PermissionAuditRecord,
     PermissionAuditStorePort, PermissionEffect, PermissionEvaluator, PermissionGrant,
     PermissionGrantStorePort, PermissionReply, PermissionReplySource, PermissionReplyStorePort,
     PermissionRequest, PermissionRequestEvent, PermissionResourceCaseSensitivity, PortError,
     ResolvedPermissionPolicy,
 };
-use dashmap::DashMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock as StdRwLock};
@@ -291,7 +291,7 @@ impl PermissionRequestManager {
 
     pub async fn remove_project_grant(
         &self,
-        key: bitfun_runtime_ports::PermissionGrantKey,
+        key: openbitfun_runtime_ports::PermissionGrantKey,
     ) -> Result<bool, PermissionRequestManagerError> {
         let Some(grant_store) = &self.grant_store else {
             return Ok(false);
@@ -318,7 +318,7 @@ impl PermissionRequestManager {
     pub async fn list_project_permission_audit(
         &self,
         project_id: &str,
-    ) -> Result<Vec<bitfun_runtime_ports::PermissionAuditRecord>, PermissionRequestManagerError>
+    ) -> Result<Vec<openbitfun_runtime_ports::PermissionAuditRecord>, PermissionRequestManagerError>
     {
         self.audit_store
             .list_project_permission_audit(project_id)
@@ -761,7 +761,7 @@ fn audit_id(request_id: &str, event: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         PermissionAuditStorePort, PermissionReplyStorePort, PortResult, RuntimeServiceCapability,
         RuntimeServicePort,
     };
@@ -841,8 +841,8 @@ mod tests {
             action: "edit".to_string(),
             resources: vec!["src/main.rs".to_string()],
             save_resources: vec!["src/main.rs".to_string()],
-            source: bitfun_runtime_ports::PermissionRequestSource {
-                kind: bitfun_runtime_ports::PermissionRequestSourceKind::ToolCall,
+            source: openbitfun_runtime_ports::PermissionRequestSource {
+                kind: openbitfun_runtime_ports::PermissionRequestSourceKind::ToolCall,
                 identity: "write_file".to_string(),
             },
             delegation: None,

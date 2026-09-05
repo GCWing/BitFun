@@ -1,4 +1,4 @@
-.bitfun-acp-agents {
+.openbitfun-acp-agents {
   &__tabs {
     align-self: flex-start;
   }
@@ -6,7 +6,7 @@
   &__toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     align-items: center;
   }
 
@@ -14,7 +14,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     flex-wrap: wrap;
   }
 
@@ -27,17 +27,17 @@
   }
 
   &__json-textarea {
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-body-lg-line-height);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-body-lg-line-height);
   }
 
   &__json-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
-    margin-top: var(--bf-space-3);
+    gap: var(--openbitfun-space-2);
+    margin-top: var(--openbitfun-space-3);
   }
 
   &__registry-list {
@@ -50,11 +50,11 @@
   &__registry-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 82px 120px;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     align-items: center;
     min-height: 56px;
-    padding: var(--bf-space-2) var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-component-config-page-divider);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-component-config-page-divider);
     background: transparent;
 
     &:last-child {
@@ -62,7 +62,7 @@
     }
 
     &:hover {
-      background: var(--bf-color-surface-subtle);
+      background: var(--openbitfun-color-surface-subtle);
     }
 
     &--remote {
@@ -73,7 +73,7 @@
   &__registry-main {
     display: grid;
     grid-template-columns: 26px minmax(0, 1fr);
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     align-items: center;
     min-width: 0;
   }
@@ -84,10 +84,10 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border: 1px solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-sm);
-    background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-secondary);
+    border: 1px solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-sm);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__registry-copy {
@@ -98,10 +98,10 @@
     display: block;
     min-width: 0;
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    line-height: var(--bf-type-modifier-leading-dense-line-height);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -109,21 +109,21 @@
   &__registry-description {
     margin: 2px 0 0;
     overflow: hidden;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
-    line-height: var(--bf-type-meta-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__registry-command {
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   &__capabilities {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
     flex-wrap: wrap;
     justify-content: flex-start;
   }
@@ -145,9 +145,9 @@
   }
 
   &__empty {
-    padding: var(--bf-space-4);
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
+    padding: var(--openbitfun-space-4);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-md-font-size);
     text-align: center;
   }
 
@@ -162,17 +162,17 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-top: 1px solid var(--bf-component-config-page-divider);
+    border-top: 1px solid var(--openbitfun-component-config-page-divider);
   }
 
   &__hidden-remote-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     align-items: center;
     min-width: 0;
-    padding: var(--bf-space-3);
-    border-bottom: 1px solid var(--bf-component-config-page-divider);
+    padding: var(--openbitfun-space-3);
+    border-bottom: 1px solid var(--openbitfun-component-config-page-divider);
 
     &:last-child {
       border-bottom: 0;
@@ -188,18 +188,18 @@
     // The shared ConfigPageSection body owns the outer surface. Separate saved
     // servers with the same divider used by other settings collections.
     & + & {
-      border-top: 1px solid var(--bf-component-config-page-divider);
+      border-top: 1px solid var(--openbitfun-component-config-page-divider);
     }
   }
 
   &__remote-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     align-items: center;
-    padding: var(--bf-space-3);
+    padding: var(--openbitfun-space-3);
     min-width: 0;
-    border-bottom: 1px solid var(--bf-component-config-page-divider);
+    border-bottom: 1px solid var(--openbitfun-component-config-page-divider);
     background: transparent;
   }
 
@@ -207,16 +207,16 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     flex-wrap: wrap;
   }
 
   &__remote-summary {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     flex-wrap: wrap;
-    margin-top: var(--bf-space-1);
+    margin-top: var(--openbitfun-space-1);
   }
 
   &__remote-agent-list {

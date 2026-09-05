@@ -6,12 +6,12 @@
 
 #[cfg(feature = "rpc")]
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
-use bitfun_core_types::{
+use openbitfun_core_types::{
     ProviderCatalog, ReasoningCatalogProjection, ReasoningCatalogProjectionRequest,
 };
 use serde::{Deserialize, Serialize};
 
-pub use bitfun_core_types::model::{
+pub use openbitfun_core_types::model::{
     ModelEditProjection, ModelMutation, ModelSummary, SecretUpdate,
 };
 
@@ -151,7 +151,7 @@ pub enum ModelDefaultSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_core_types::ReasoningConfig;
+    use openbitfun_core_types::ReasoningConfig;
 
     fn model_summary() -> ModelSummary {
         ModelSummary {

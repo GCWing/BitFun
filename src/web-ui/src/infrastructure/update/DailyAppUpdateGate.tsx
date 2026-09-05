@@ -77,7 +77,7 @@ export function DailyAppUpdateGate(): ReactElement | null {
     const cancelStartupSchedule = scheduleAfterStartupSignal(() => {
       void runDailyCheck();
     }, {
-      signalName: 'bitfun:interactive-shell-ready',
+      signalName: 'openbitfun:interactive-shell-ready',
       fallbackTimeoutMs: 10000,
       frameCount: 1,
       onError: error => {

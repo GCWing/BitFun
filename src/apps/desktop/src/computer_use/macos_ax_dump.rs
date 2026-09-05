@@ -17,13 +17,13 @@
 // without weakening real warnings elsewhere.
 #![allow(dead_code)]
 
-use bitfun_core::agentic::tools::computer_use_host::{AppStateSnapshot, AxNode};
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{CFGetTypeID, CFTypeRef, TCFType};
 use core_foundation::boolean::{CFBoolean, CFBooleanGetTypeID, CFBooleanRef};
 use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::geometry::{CGPoint, CGSize};
+use openbitfun_core::agentic::tools::computer_use_host::{AppStateSnapshot, AxNode};
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 use sha1::{Digest, Sha1};
 use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
@@ -470,10 +470,10 @@ fn is_closed_menu_container(role: &str, frame: Option<(f64, f64, f64, f64)>) -> 
     }
 }
 
-pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
+pub(super) fn dump_app_ax(pid: i32, opts: DumpOpts) -> OpenBitFunResult<AppStateSnapshot> {
     let app = unsafe { AXUIElementCreateApplication(pid) };
     if app.is_null() {
-        return Err(BitFunError::tool(format!(
+        return Err(OpenBitFunError::tool(format!(
             "AXUIElementCreateApplication returned null for pid={}",
             pid
         )));
@@ -661,7 +661,7 @@ equivalents, or AXPress the menu first.\n",
     {
         let mut cache = snapshot_cache()
             .lock()
-            .map_err(|_| BitFunError::tool("AX snapshot cache poisoned".to_string()))?;
+            .map_err(|_| OpenBitFunError::tool("AX snapshot cache poisoned".to_string()))?;
         cache.insert(
             pid,
             CachedSnapshot {
@@ -672,7 +672,7 @@ equivalents, or AXPress the menu first.\n",
     }
 
     Ok(AppStateSnapshot {
-        app: bitfun_core::agentic::tools::computer_use_host::AppInfo {
+        app: openbitfun_core::agentic::tools::computer_use_host::AppInfo {
             name: window_title.clone().unwrap_or_default(),
             bundle_id: None,
             pid: Some(pid),
@@ -879,7 +879,7 @@ fn compute_digest(nodes: &[AxNode]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_core::agentic::tools::computer_use_host::AxNode;
+    use openbitfun_core::agentic::tools::computer_use_host::AxNode;
 
     fn n(idx: u32, parent: Option<u32>, role: &str, title: Option<&str>) -> AxNode {
         AxNode {

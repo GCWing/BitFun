@@ -20,13 +20,13 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
-use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
-use bitfun_product_domains::account::{AccountSnapshotProjection, SettingsSyncStatus};
-use bitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
-use bitfun_product_domains::native_hooks::{
+use openbitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
+use openbitfun_product_domains::account::{AccountSnapshotProjection, SettingsSyncStatus};
+use openbitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
+use openbitfun_product_domains::native_hooks::{
     NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
 };
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     AgentSessionComposerUpdate, AgentSessionLineageEntry, AgentSessionLineageInspection,
     AgentSessionLineageSnapshot, AgentSessionUsageRequest, AgentTurnCancellationResult,
     AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
@@ -70,22 +70,22 @@ use crate::ui::theme::{
 };
 use crate::ui::theme_selector::ThemeItem;
 use crate::ui::{init_terminal, restore_terminal, TerminalGuard};
-use bitfun_core::service::remote_connect::account_runtime::AccountRuntime;
-use bitfun_core::service::session_usage::render_usage_report_markdown;
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_core::service::remote_connect::account_runtime::AccountRuntime;
+use openbitfun_core::service::session_usage::render_usage_report_markdown;
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookCatalogSnapshotV1, ExternalHookMatcherSummary, ExternalHookNativeActivation,
     ExternalHookProjectionStatus,
 };
-use bitfun_product_domains::external_hook_import::{
+use openbitfun_product_domains::external_hook_import::{
     ExternalHookImportApplyOutcomeV1, ExternalHookImportApplyRequestV1,
     ExternalHookImportMutationRequestV1, ExternalHookImportMutationV1, ExternalHookImportPlanV1,
     ExternalHookImportSnapshotV1, EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
 };
-use bitfun_product_domains::external_source_control::{
+use openbitfun_product_domains::external_source_control::{
     ExternalSourceControlActionV1, ExternalSourceControlRequestV1,
     EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceDiagnosticSeverity,
     ExternalSourceHealth, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
     ExternalSourcePublicSnapshot as ExternalSourceCatalogSnapshot, ExternalSourceScope,
@@ -94,7 +94,7 @@ use bitfun_product_domains::external_sources::{
     PromptCommandExecutionTarget, PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
     PromptCommandShellReviewMode, PromptCommandShellReviewPlan, SourceKey,
 };
-use bitfun_product_domains::external_subagents::{
+use openbitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState,
     ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingTarget,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
@@ -551,8 +551,9 @@ pub(crate) struct ChatMode {
     external_tool_notice_key: Option<String>,
     external_tool_review_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_tool_mutation_rx: Option<Receiver<ExternalToolMutationResult>>,
-    external_control_snapshot:
-        Option<bitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1>,
+    external_control_snapshot: Option<
+        openbitfun_product_domains::external_source_control::ExternalSourceControlSnapshotV1,
+    >,
     external_control_mutation_rx: Option<Receiver<ExternalControlMutationResult>>,
     external_agent_notice_key: Option<String>,
     external_agent_review_snapshot: Option<ExternalSourceCatalogSnapshot>,

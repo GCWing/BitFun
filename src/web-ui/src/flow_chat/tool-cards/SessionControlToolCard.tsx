@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { SessionControlToolCard as SessionControlToolCardView } from '@bitfun/ui/flow-chat';
+import { SessionControlToolCard as SessionControlToolCardView } from '@openbitfun/ui/flow-chat';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 interface SessionSummary {
@@ -193,7 +193,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
   ].filter((field): field is NonNullable<typeof field> => Boolean(field));
 
   return (
-    <div ref={cardRootRef} data-bf-adapter="session-control" data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-openbitfun-adapter="session-control" data-tool-card-id={toolId ?? ''}>
       <SessionControlToolCardView
         status={status}
         isExpanded={isExpanded}

@@ -191,36 +191,31 @@ impl CliTestEnvironment {
         std::fs::create_dir_all(&config_dir).expect("create model config directory");
         let base_url = format!("{}/v1", server_base_url.trim_end_matches('/'));
         let request_url = format!("{base_url}/chat/completions");
-        let config = json!({
-            "app": {
-                "ai_experience": {
-                    "enable_session_title_generation": false
-                }
-            },
-            "ai": {
-                "models": [{
-                    "id": "cli-e2e-model",
-                    "name": "CLI E2E Model",
-                    "provider": "openai",
-                    "model_name": "cli-e2e-model",
-                    "base_url": base_url,
-                    "request_url": request_url,
-                    "api_key": "cli-e2e-key",
-                    "enabled": true,
-                    "category": "general_chat",
-                    "capabilities": capabilities
-                }],
-                "default_models": {
-                    "primary": "cli-e2e-model"
-                },
-                "agent_model_defaults": {
-                    "mode": "cli-e2e-model"
-                },
-                "max_rounds": 1,
-                "stream_idle_timeout_secs": 10,
-                "stream_ttft_timeout_secs": 10
-            }
+        let mut config =
+            serde_json::to_value(openbitfun_core::service::config::GlobalConfig::default())
+                .expect("serialize default CLI config");
+        config["app"]["ai_experience"]["enable_session_title_generation"] = json!(false);
+        config["ai"]["models"] = json!([{
+            "id": "cli-e2e-model",
+            "name": "CLI E2E Model",
+            "provider": "openai",
+            "model_name": "cli-e2e-model",
+            "base_url": base_url,
+            "request_url": request_url,
+            "api_key": "cli-e2e-key",
+            "enabled": true,
+            "category": "general_chat",
+            "capabilities": capabilities
+        }]);
+        config["ai"]["default_models"] = json!({
+            "primary": "cli-e2e-model"
         });
+        config["ai"]["agent_model_defaults"] = json!({
+            "mode": "cli-e2e-model"
+        });
+        config["ai"]["max_rounds"] = json!(1);
+        config["ai"]["stream_idle_timeout_secs"] = json!(10);
+        config["ai"]["stream_ttft_timeout_secs"] = json!(10);
         std::fs::write(
             config_dir.join("app.json"),
             serde_json::to_vec_pretty(&config).expect("serialize model config"),
@@ -238,8 +233,9 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn std_command(&self) -> Command {
-        let mut command =
-            bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"));
+        let mut command = openbitfun_services_core::process_manager::create_command(env!(
+            "CARGO_BIN_EXE_openbitfun"
+        ));
         command.current_dir(&self.workspace);
         self.apply_std_environment(&mut command);
         command
@@ -248,11 +244,11 @@ impl CliTestEnvironment {
     pub(crate) fn apply_tokio_environment(&self, command: &mut tokio::process::Command) {
         command
             .current_dir(&self.workspace)
-            .env_remove("BITFUN_USER_ROOT")
-            .env_remove("BITFUN_HOME")
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env("BITFUN_E2E_USER_ROOT", &self.user_root)
-            .env("BITFUN_E2E_HOME", &self.home_root)
+            .env_remove("OPENBITFUN_USER_ROOT")
+            .env_remove("OPENBITFUN_HOME")
+            .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+            .env("OPENBITFUN_E2E_USER_ROOT", &self.user_root)
+            .env("OPENBITFUN_E2E_HOME", &self.home_root)
             .env("APPDATA", &self.config_root)
             .env("XDG_CONFIG_HOME", &self.config_root)
             .env("HOME", &self.home_root)
@@ -261,21 +257,17 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn pty_command(&self) -> CommandBuilder {
-        self.pty_command_for(env!("CARGO_BIN_EXE_bitfun"))
-    }
-
-    pub(crate) fn deprecated_pty_command(&self) -> CommandBuilder {
-        self.pty_command_for(env!("CARGO_BIN_EXE_bitfun-cli"))
+        self.pty_command_for(env!("CARGO_BIN_EXE_openbitfun"))
     }
 
     fn pty_command_for(&self, binary: &str) -> CommandBuilder {
         let mut command = CommandBuilder::new(binary);
         command.cwd(&self.workspace);
-        command.env_remove("BITFUN_USER_ROOT");
-        command.env_remove("BITFUN_HOME");
-        command.env("BITFUN_E2E_STORAGE_GUARD", "1");
-        command.env("BITFUN_E2E_USER_ROOT", &self.user_root);
-        command.env("BITFUN_E2E_HOME", &self.home_root);
+        command.env_remove("OPENBITFUN_USER_ROOT");
+        command.env_remove("OPENBITFUN_HOME");
+        command.env("OPENBITFUN_E2E_STORAGE_GUARD", "1");
+        command.env("OPENBITFUN_E2E_USER_ROOT", &self.user_root);
+        command.env("OPENBITFUN_E2E_HOME", &self.home_root);
         command.env("APPDATA", &self.config_root);
         command.env("XDG_CONFIG_HOME", &self.config_root);
         command.env("HOME", &self.home_root);
@@ -286,11 +278,11 @@ impl CliTestEnvironment {
 
     fn apply_std_environment(&self, command: &mut Command) {
         command
-            .env_remove("BITFUN_USER_ROOT")
-            .env_remove("BITFUN_HOME")
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env("BITFUN_E2E_USER_ROOT", &self.user_root)
-            .env("BITFUN_E2E_HOME", &self.home_root)
+            .env_remove("OPENBITFUN_USER_ROOT")
+            .env_remove("OPENBITFUN_HOME")
+            .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+            .env("OPENBITFUN_E2E_USER_ROOT", &self.user_root)
+            .env("OPENBITFUN_E2E_HOME", &self.home_root)
             .env("APPDATA", &self.config_root)
             .env("XDG_CONFIG_HOME", &self.config_root)
             .env("HOME", &self.home_root)
@@ -299,7 +291,7 @@ impl CliTestEnvironment {
     }
 
     fn run_git(&self, args: &[&str]) {
-        let output = bitfun_services_core::process_manager::create_command("git")
+        let output = openbitfun_services_core::process_manager::create_command("git")
             .args(args)
             .current_dir(&self.workspace)
             .output()
@@ -675,7 +667,7 @@ fn serve_product_control_response(stream: &mut TcpStream, attempt: usize) {
                             "id": call_id,
                             "type": "function",
                             "function": {
-                                "name": "BitFunControl",
+                                "name": "OpenBitFunControl",
                                 "arguments": arguments.to_string()
                             }
                         }]

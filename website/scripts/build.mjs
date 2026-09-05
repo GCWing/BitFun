@@ -15,7 +15,7 @@ const outputRoot = path.join(websiteRoot, 'dist');
 const catalogPath = path.join(repositoryRoot, 'docs/interactive-capabilities/capabilities.json');
 const execFileAsync = promisify(execFile);
 const designTokensRoot = path.join(repositoryRoot, 'design-system/packages/design-tokens');
-const themeRoot = path.join(repositoryRoot, 'design-system/packages/theme-bitfun');
+const themeRoot = path.join(repositoryRoot, 'design-system/packages/theme-openbitfun');
 
 async function buildThemeContracts() {
   await execFileAsync(process.execPath, [path.join(designTokensRoot, 'scripts/build.mjs')], {
@@ -50,8 +50,8 @@ function renderPage(template, { title, description, url, pageData, assetVersion 
 
 async function main() {
   await buildThemeContracts();
-  const designTokensCssPath = fileURLToPath(import.meta.resolve('@bitfun/design-tokens/tokens.css'));
-  const themeCssPath = fileURLToPath(import.meta.resolve('@bitfun/theme-bitfun/themes.css'));
+  const designTokensCssPath = fileURLToPath(import.meta.resolve('@openbitfun/design-tokens/tokens.css'));
+  const themeCssPath = fileURLToPath(import.meta.resolve('@openbitfun/theme-openbitfun/themes.css'));
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   const template = await readFile(path.join(sourceRoot, 'index.html'), 'utf8');
   const appSource = await readFile(path.join(sourceRoot, 'app.js'), 'utf8');
@@ -60,7 +60,7 @@ async function main() {
   const designTokensSource = await readFile(designTokensCssPath, 'utf8');
   const themeSource = await readFile(themeCssPath, 'utf8');
   const buildSource = await readFile(buildScriptPath);
-  const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/Logo-ICON.png');
+  const logoPath = path.join(repositoryRoot, 'src/apps/desktop/icons/openbitfun-app-icon.png');
   const logoSource = await readFile(logoPath);
   const socialImage = path.join(sourceRoot, 'og.png');
   let socialSource = Buffer.alloc(0);
@@ -93,7 +93,7 @@ async function main() {
   await writeFile(path.join(outputRoot, 'assets/design-tokens.css'), designTokensSource);
   await writeFile(path.join(outputRoot, 'assets/theme.css'), themeSource);
   await cp(path.join(sourceRoot, 'styles.css'), path.join(outputRoot, 'assets/styles.css'));
-  await cp(logoPath, path.join(outputRoot, 'assets/bitfun.png'));
+  await cp(logoPath, path.join(outputRoot, 'assets/openbitfun.png'));
 
   try {
     await cp(socialImage, path.join(outputRoot, 'og.png'));
@@ -115,9 +115,9 @@ async function main() {
     }, null, 2)}\n`,
   );
 
-  const homeDescription = `Learn ${catalog.counts.features} BitFun features and ${catalog.counts.settings} settings pages in Chinese or English.`;
+  const homeDescription = `Learn ${catalog.counts.features} OpenBitFun features and ${catalog.counts.settings} settings pages in Chinese or English.`;
   await writeFile(path.join(outputRoot, 'index.html'), renderPage(template, {
-    title: 'BitFun Playbook — Features, settings, and practical guides',
+    title: 'OpenBitFun Playbook — Features, settings, and practical guides',
     description: homeDescription,
     url: `${catalog.origin}/`,
     assetVersion,
@@ -128,7 +128,7 @@ async function main() {
     const directory = path.join(outputRoot, 'capabilities', capability.id);
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, 'index.html'), renderPage(template, {
-      title: `${capability.titleEn} / ${capability.titleZh} — BitFun Playbook`,
+      title: `${capability.titleEn} / ${capability.titleZh} — OpenBitFun Playbook`,
       description: capability.summaryEn,
       url: capability.docsUrl,
       assetVersion,
@@ -149,7 +149,7 @@ async function main() {
   );
 
   process.stdout.write(
-    `Built BitFun Playbook ${assetVersion} with ${catalog.counts.features} feature guides + ${catalog.counts.settings} settings guides (${catalog.digest.slice(0, 12)} catalog).\n`,
+    `Built OpenBitFun Playbook ${assetVersion} with ${catalog.counts.features} feature guides + ${catalog.counts.settings} settings guides (${catalog.digest.slice(0, 12)} catalog).\n`,
   );
 }
 

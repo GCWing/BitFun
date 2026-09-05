@@ -2,28 +2,28 @@
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
-use bitfun_core::miniapp::ai_bridge::{
+use futures::StreamExt;
+use openbitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
+use openbitfun_core::miniapp::ai_bridge::{
     ai_stream_chunk_payload, ai_stream_done_payload, ai_stream_error_payload,
     available_models_for_permissions, plan_ai_chat_request, plan_ai_complete_request,
     require_enabled_ai_permissions, require_non_empty_ai_messages, require_non_empty_stream_id,
     MiniAppAiMessagePlan, MiniAppAiMessageRole, MiniAppAiModelDescriptor, MiniAppAiModelInfo,
     MiniAppAiUsage,
 };
-use bitfun_core::miniapp::lifecycle::{
+use openbitfun_core::miniapp::lifecycle::{
     draft_worker_key, miniapp_runtime_event_payload, miniapp_worker_stopped_payload,
     should_emit_worker_restarted, should_stop_worker_for_runtime_update, worker_restart_reason,
     workspace_root_from_input,
 };
-use bitfun_core::miniapp::rate_limit::{MiniAppRateLimitState, MiniAppRateLimitSubject};
-use bitfun_core::miniapp::{
+use openbitfun_core::miniapp::rate_limit::{MiniAppRateLimitState, MiniAppRateLimitSubject};
+use openbitfun_core::miniapp::{
     dispatch_host, is_host_primitive, InstallResult as CoreInstallResult, MiniApp,
     MiniAppAiContext, MiniAppCustomizationMetadata, MiniAppDraft, MiniAppMeta,
     MiniAppPermissionDiff, MiniAppPermissions, MiniAppSource,
 };
-use bitfun_core::service::config::types::GlobalConfig;
-use bitfun_core::util::types::Message;
-use futures::StreamExt;
+use openbitfun_core::service::config::types::GlobalConfig;
+use openbitfun_core::util::types::Message;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -89,7 +89,7 @@ impl From<MiniAppSourceDto> for MiniAppSource {
             esm_dependencies: d
                 .esm_dependencies
                 .into_iter()
-                .map(|x| bitfun_core::miniapp::EsmDep {
+                .map(|x| openbitfun_core::miniapp::EsmDep {
                     name: x.name,
                     version: x.version,
                     url: x.url,
@@ -99,7 +99,7 @@ impl From<MiniAppSourceDto> for MiniAppSource {
             npm_dependencies: d
                 .npm_dependencies
                 .into_iter()
-                .map(|x| bitfun_core::miniapp::NpmDep {
+                .map(|x| openbitfun_core::miniapp::NpmDep {
                     name: x.name,
                     version: x.version,
                 })
@@ -564,8 +564,8 @@ pub async fn miniapp_runtime_status(state: State<'_, AppState>) -> Result<Runtim
     Ok(RuntimeStatus {
         available: true,
         kind: Some(match info.kind {
-            bitfun_core::miniapp::RuntimeKind::Bun => "bun".to_string(),
-            bitfun_core::miniapp::RuntimeKind::Node => "node".to_string(),
+            openbitfun_core::miniapp::RuntimeKind::Bun => "bun".to_string(),
+            openbitfun_core::miniapp::RuntimeKind::Node => "node".to_string(),
         }),
         version: Some(info.version.clone()),
         path: Some(info.path.to_string_lossy().to_string()),
@@ -638,7 +638,7 @@ pub async fn miniapp_worker_call(
 /// Host-side framework primitive RPC.
 ///
 /// Routes `fs.*` / `shell.*` / `os.*` / `net.*` calls directly to the Rust
-/// implementation in `bitfun_core::miniapp::host_dispatch`, no Bun/Node Worker
+/// implementation in `openbitfun_core::miniapp::host_dispatch`, no Bun/Node Worker
 /// required. Used for MiniApps with `permissions.node.enabled = false` (and as
 /// the future migration target for everyone, since these calls don't actually
 /// need a JS sandbox).
@@ -1609,7 +1609,7 @@ pub async fn miniapp_ai_list_models(
                 supports_text_chat: model.capabilities.iter().any(|capability| {
                     matches!(
                         capability,
-                        bitfun_core::service::config::types::ModelCapability::TextChat
+                        openbitfun_core::service::config::types::ModelCapability::TextChat
                     )
                 }),
             }),

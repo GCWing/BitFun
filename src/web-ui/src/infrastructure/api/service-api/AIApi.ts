@@ -58,8 +58,8 @@ export interface AIModelCatalogEntry {
   reasoning?: ReasoningCatalogProjection;
 }
 
-export type ProviderCatalogSource = 'cache' | 'bundle' | 'bitfun' | 'mixed';
-export type ProviderCatalogModelSource = 'models_dev' | 'bitfun' | 'merged';
+export type ProviderCatalogSource = 'cache' | 'bundle' | 'openbitfun' | 'mixed';
+export type ProviderCatalogModelSource = 'models_dev' | 'openbitfun' | 'merged';
 
 export interface ProviderCatalogModelCapabilities {
   chat: boolean;

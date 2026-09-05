@@ -1,36 +1,36 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     box-sizing: border-box;
-    border-radius: var(--bf-radius-sm);
-    color: var(--bf-color-accent-default);
+    border-radius: var(--openbitfun-radius-sm);
+    color: var(--openbitfun-color-accent-default);
     text-decoration-line: underline;
-    text-decoration-thickness: var(--bf-border-width-default);
+    text-decoration-thickness: var(--openbitfun-border-width-default);
     text-underline-offset: 0.16em;
     touch-action: manipulation;
   }
 
   .root:hover {
-    color: var(--bf-color-accent-hover);
+    color: var(--openbitfun-color-accent-hover);
   }
 
   .root:active {
-    color: var(--bf-color-accent-hover);
+    color: var(--openbitfun-color-accent-hover);
   }
 
   .root:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .root[data-appearance="surface"] {
     display: inline-flex;
     min-block-size: 44px;
     align-items: center;
-    padding-inline: var(--bf-space-3);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-radius-pill);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-xs);
+    padding-inline: var(--openbitfun-space-3);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-radius-pill);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-xs);
     text-decoration: none;
   }
 

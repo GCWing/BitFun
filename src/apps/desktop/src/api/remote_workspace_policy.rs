@@ -2,7 +2,7 @@
 //!
 //! Every Tauri command registered in `lib.rs` (`tauri::generate_handler!`)
 //! must have exactly one row in
-//! `bitfun_product_domains::remote_surface`, which declares how the command
+//! `openbitfun_product_domains::remote_surface`, which declares how the command
 //! behaves for remote SSH/Docker workspaces and in Peer Device Mode. Remote SSH
 //! workspaces have no central command router: each handler adapts itself
 //! (usually through `resolve_desktop_path_target` / `lookup_remote_connection`
@@ -16,17 +16,17 @@
 //! registry's `TauriCommand` rows are the same set. See
 //! `docs/architecture/remote-surface-contract.md`.
 
-pub use bitfun_product_domains::remote_surface::RemoteWorkspaceStance as RemoteWorkspacePolicy;
+pub use openbitfun_product_domains::remote_surface::RemoteWorkspaceStance as RemoteWorkspacePolicy;
 
 /// The declared remote-workspace stance of a registered Tauri command.
 pub fn remote_workspace_policy(command: &str) -> Option<RemoteWorkspacePolicy> {
-    bitfun_product_domains::remote_surface::operation(command).map(|op| op.remote_workspace)
+    openbitfun_product_domains::remote_surface::operation(command).map(|op| op.remote_workspace)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_product_domains::remote_surface::{operations, OperationSurface};
+    use openbitfun_product_domains::remote_surface::{operations, OperationSurface};
     use std::collections::BTreeSet;
 
     /// Extracts the command names registered in `tauri::generate_handler!`.
@@ -102,11 +102,11 @@ mod tests {
     }
 
     #[test]
-    fn token_usage_statistics_are_scoped_to_the_current_bitfun_host() {
+    fn token_usage_statistics_are_scoped_to_the_current_openbitfun_host() {
         assert_eq!(
             remote_workspace_policy("get_token_usage_statistics"),
             Some(RemoteWorkspacePolicy::Agnostic),
-            "token usage is recorded by the current BitFun runtime and does not follow the workspace filesystem to an SSH host"
+            "token usage is recorded by the current OpenBitFun runtime and does not follow the workspace filesystem to an SSH host"
         );
     }
 

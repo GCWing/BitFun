@@ -74,7 +74,7 @@ describe('WorktreeAPI', () => {
     invokeMock.mockRejectedValue(transportError);
 
     await expect(
-      api.bindSession('history-1', true, 'request-3', 'D:\\workspace\\BitFun'),
+      api.bindSession('history-1', true, 'request-3', 'D:\\workspace\\OpenBitFun'),
     ).rejects.toMatchObject({
       name: 'WorktreeCommandError',
       code: 'worktree_not_found',

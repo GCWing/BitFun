@@ -1,6 +1,6 @@
 //! SQLite-backed project permission grants and bounded audit facts.
 
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort, PermissionGrant,
     PermissionGrantKey, PermissionGrantStorePort, PermissionReplyStorePort, PermissionRequest,
     PortError, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,

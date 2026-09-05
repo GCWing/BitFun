@@ -21,7 +21,7 @@ const PERMISSION_REQUEST_NOTIFY_CONFIG_KEY = 'app.notifications.permission_reque
 
 /**
  * Sends one generic desktop notification for user-actionable permission
- * requests received while BitFun is in the background. Core runtime and ACP
+ * requests received while OpenBitFun is in the background. Core runtime and ACP
  * requests share the same policy, de-duplication, and round-level batching.
  */
 export const usePermissionRequestNotify = () => {

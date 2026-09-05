@@ -1,13 +1,13 @@
 //! Compatibility adapter for MiniApp host primitive dispatch.
 //!
-//! Concrete fs/shell/net/os dispatch lives in `bitfun-services-integrations`.
+//! Concrete fs/shell/net/os dispatch lives in `openbitfun-services-integrations`.
 
 use crate::miniapp::types::MiniAppPermissions;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-pub use bitfun_services_integrations::miniapp::host_dispatch::is_host_primitive;
+pub use openbitfun_services_integrations::miniapp::host_dispatch::is_host_primitive;
 
 pub async fn dispatch_host(
     perms: &MiniAppPermissions,
@@ -17,8 +17,8 @@ pub async fn dispatch_host(
     granted_paths: &[PathBuf],
     method: &str,
     params: Value,
-) -> BitFunResult<Value> {
-    bitfun_services_integrations::miniapp::host_dispatch::dispatch_host(
+) -> OpenBitFunResult<Value> {
+    openbitfun_services_integrations::miniapp::host_dispatch::dispatch_host(
         perms,
         app_id,
         app_data_dir,
@@ -32,16 +32,18 @@ pub async fn dispatch_host(
 }
 
 fn map_host_dispatch_error(
-    err: bitfun_services_integrations::miniapp::host_dispatch::MiniAppHostDispatchError,
-) -> BitFunError {
-    use bitfun_services_integrations::miniapp::host_dispatch::MiniAppHostDispatchErrorKind;
+    err: openbitfun_services_integrations::miniapp::host_dispatch::MiniAppHostDispatchError,
+) -> OpenBitFunError {
+    use openbitfun_services_integrations::miniapp::host_dispatch::MiniAppHostDispatchErrorKind;
 
     match err.kind() {
-        MiniAppHostDispatchErrorKind::Parse => BitFunError::parse(err.message().to_string()),
+        MiniAppHostDispatchErrorKind::Parse => OpenBitFunError::parse(err.message().to_string()),
         MiniAppHostDispatchErrorKind::Validation => {
-            BitFunError::validation(err.message().to_string())
+            OpenBitFunError::validation(err.message().to_string())
         }
-        MiniAppHostDispatchErrorKind::Io => BitFunError::io(err.message().to_string()),
-        MiniAppHostDispatchErrorKind::Service => BitFunError::service(err.message().to_string()),
+        MiniAppHostDispatchErrorKind::Io => OpenBitFunError::io(err.message().to_string()),
+        MiniAppHostDispatchErrorKind::Service => {
+            OpenBitFunError::service(err.message().to_string())
+        }
     }
 }

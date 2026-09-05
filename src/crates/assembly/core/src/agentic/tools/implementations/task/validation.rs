@@ -1,12 +1,12 @@
 use super::*;
 
 impl TaskTool {
-    pub(super) fn context_mode_from_input(input: &Value) -> BitFunResult<SubagentContextMode> {
+    pub(super) fn context_mode_from_input(input: &Value) -> OpenBitFunResult<SubagentContextMode> {
         match input.get("fork_context") {
             None | Some(Value::Null) => Ok(SubagentContextMode::Fresh),
             Some(value) => {
                 let fork_context = value.as_bool().ok_or_else(|| {
-                    BitFunError::tool("fork_context must be a boolean".to_string())
+                    OpenBitFunError::tool("fork_context must be a boolean".to_string())
                 })?;
                 Ok(if fork_context {
                     SubagentContextMode::Fork
@@ -89,13 +89,13 @@ impl TaskTool {
             || input.get("retry_coverage").is_some()
     }
 
-    pub(super) fn ensure_delegation_allowed(context: &ToolUseContext) -> BitFunResult<()> {
+    pub(super) fn ensure_delegation_allowed(context: &ToolUseContext) -> OpenBitFunResult<()> {
         let delegation_policy = context.delegation_policy();
         if delegation_policy.allow_subagent_spawn {
             return Ok(());
         }
 
-        Err(BitFunError::tool(
+        Err(OpenBitFunError::tool(
             "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
         ))
     }

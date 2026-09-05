@@ -83,9 +83,9 @@ export function AppearanceBackgroundMediaLayer({
   if (!media?.url || !media.posterUrl) return null;
   return (
     <div
-      className="bitfun-appearance-background-media"
+      className="openbitfun-appearance-background-media"
       aria-hidden="true"
-      data-bf-background-media="video"
+      data-openbitfun-background-media="video"
       style={{
         backgroundImage: `url("${media.posterUrl}")`,
         backgroundPosition: media.position ?? 'center',
@@ -94,7 +94,7 @@ export function AppearanceBackgroundMediaLayer({
     >
       <video
         ref={videoRef}
-        className="bitfun-appearance-background-media__video"
+        className="openbitfun-appearance-background-media__video"
         src={media.url}
         poster={media.posterUrl}
         autoPlay

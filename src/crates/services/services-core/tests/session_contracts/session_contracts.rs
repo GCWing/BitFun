@@ -1,4 +1,4 @@
-use bitfun_services_core::session::{DialogTurnKind, SessionKind, SessionMetadata};
+use openbitfun_services_core::session::{DialogTurnKind, SessionKind, SessionMetadata};
 
 #[test]
 fn session_metadata_preserves_subagent_visibility_contract() {

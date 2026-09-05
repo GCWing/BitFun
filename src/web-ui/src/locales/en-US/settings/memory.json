@@ -1,7 +1,7 @@
 {
   "title": "Memory",
   "subtitle": "Control automatic memory generation, usage, and consolidation scope.",
-  "scopeNotice": "These settings, session candidates, and memory files belong to the host currently running BitFun. Another device or peer host may have different memory data and settings.",
+  "scopeNotice": "These settings, session candidates, and memory files belong to the host currently running OpenBitFun. Another device or peer host may have different memory data and settings.",
   "sections": {
     "basic": {
       "title": "Basics",

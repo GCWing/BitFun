@@ -9,12 +9,12 @@ export const workspaceItemAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'sessions' }, { id: 'remoteStatus' },
     { id: 'indexIndicator' }, { id: 'indexPanel' },
   ],
-  facets: [{ id: 'variant', attribute: 'data-bf-variant', values: ['workspace', 'assistant'] }],
+  facets: [{ id: 'variant', attribute: 'data-openbitfun-variant', values: ['workspace', 'assistant'] }],
   states: [
-    { id: 'active', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="active"]' } },
-    { id: 'dragging', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="dragging"]' } },
-    { id: 'collapsed', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="collapsed"]' } },
-    { id: 'remote', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-bf-state~="remote"]' } },
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
+    { id: 'active', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'dragging', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="dragging"]' } },
+    { id: 'collapsed', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="collapsed"]' } },
+    { id: 'remote', selector: { kind: 'ancestorPart', part: 'root', suffix: '[data-openbitfun-state~="remote"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
   ],
 };

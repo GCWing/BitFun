@@ -10,12 +10,12 @@ impl ChatMode {
 
     fn reload_context(
         &self,
-        target: bitfun_runtime_ports::AgentContextReloadTarget,
+        target: openbitfun_runtime_ports::AgentContextReloadTarget,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        use bitfun_runtime_ports::{AgentContextReloadRequest, AgentContextReloadTarget};
+        use openbitfun_runtime_ports::{AgentContextReloadRequest, AgentContextReloadTarget};
 
         let request = AgentContextReloadRequest {
             session_id: chat_state.core_session_id.clone(),
@@ -58,7 +58,7 @@ impl ChatMode {
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 let registry =
-                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+                    openbitfun_core::agentic::tools::implementations::skills::get_skill_registry();
                 let skills = registry
                     .get_user_invocable_skills_for_workspace(
                         Some(&workspace),
@@ -110,7 +110,7 @@ impl ChatMode {
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 let registry =
-                    bitfun_core::agentic::tools::implementations::skills::get_skill_registry();
+                    openbitfun_core::agentic::tools::implementations::skills::get_skill_registry();
                 let skills = registry
                     .get_mode_skill_infos_for_workspace(Some(&workspace), &self.agent_type)
                     .await;
@@ -192,21 +192,21 @@ impl ChatMode {
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
                 match skill.level.as_str() {
                     "user" => {
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_user_mode_skill_state(
                             &mode_id, &skill.key, enabled, skill.default_enabled,
                         )
                         .await
                         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
                     }
                     "project" => {
-                        let mut document = bitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
+                        let mut document = openbitfun_core::agentic::tools::implementations::skills::mode_overrides::load_project_mode_skills_document_local(&workspace)
                             .await
                             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::set_mode_skill_disabled_in_document(
                             &mut document, &mode_id, &skill.key, !enabled,
                         )
                         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-                        bitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
+                        openbitfun_core::agentic::tools::implementations::skills::mode_overrides::save_project_mode_skills_document_local(
                             &workspace, &document,
                         )
                         .await
@@ -271,14 +271,17 @@ impl ChatMode {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                let values = bitfun_core::agentic::agents::get_agent_registry()
-                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
-                        parent_agent_type: Some(&self.agent_type),
-                        workspace_root: Some(&workspace),
-                        list_scope: bitfun_core::agentic::agents::SubagentListScope::TaskVisible,
-                        include_disabled: false,
-                        external_sources_supported: true,
-                    })
+                let values = openbitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(
+                        &openbitfun_core::agentic::agents::SubagentQueryContext {
+                            parent_agent_type: Some(&self.agent_type),
+                            workspace_root: Some(&workspace),
+                            list_scope:
+                                openbitfun_core::agentic::agents::SubagentListScope::TaskVisible,
+                            include_disabled: false,
+                            external_sources_supported: true,
+                        },
+                    )
                     .await;
                 Ok::<_, anyhow::Error>((
                     values.into_iter().map(subagent_summary).collect::<Vec<_>>(),
@@ -327,26 +330,26 @@ impl ChatMode {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                let values = bitfun_core::agentic::agents::get_agent_registry()
-                    .get_subagents_for_query(&bitfun_core::agentic::agents::SubagentQueryContext {
+                let values = openbitfun_core::agentic::agents::get_agent_registry()
+                    .get_subagents_for_query(&openbitfun_core::agentic::agents::SubagentQueryContext {
                         parent_agent_type: Some(&self.agent_type),
                         workspace_root: Some(&workspace),
                         list_scope:
-                            bitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
+                            openbitfun_core::agentic::agents::SubagentListScope::RegistryManagement,
                         include_disabled: true,
                         external_sources_supported: true,
                     })
                     .await;
                 let has_external = values.iter().any(|info| {
                     info.subagent_source
-                        == Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                        == Some(openbitfun_core::agentic::agents::SubAgentSource::External)
                 });
                 Ok::<_, anyhow::Error>((
                     values
                         .into_iter()
                         .filter(|info| {
                             info.subagent_source
-                                != Some(bitfun_core::agentic::agents::SubAgentSource::External)
+                                != Some(openbitfun_core::agentic::agents::SubAgentSource::External)
                         })
                         .map(subagent_summary)
                         .collect::<Vec<_>>(),
@@ -429,7 +432,7 @@ impl ChatMode {
                     anyhow::bail!("Subagent management is unavailable for a Remote workspace")
                 }
                 let workspace = std::path::PathBuf::from(self.agent.workspace_path_string());
-                bitfun_core::agentic::agents::get_agent_registry()
+                openbitfun_core::agentic::agents::get_agent_registry()
                     .update_subagent_override(&mode_id, &subagent.id, enabled, Some(&workspace))
                     .await
                     .map_err(|error| anyhow::anyhow!(error.to_string()))?;
@@ -464,7 +467,7 @@ impl ChatMode {
 }
 
 fn skill_summary(
-    info: bitfun_core::agentic::tools::implementations::skills::SkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::SkillInfo,
 ) -> SkillSummary {
     SkillSummary {
         key: info.key,
@@ -483,7 +486,7 @@ fn skill_summary(
 }
 
 fn mode_skill_summary(
-    info: bitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
+    info: openbitfun_core::agentic::tools::implementations::skills::ModeSkillInfo,
 ) -> SkillSummary {
     let skill = info.skill;
     SkillSummary {
@@ -502,9 +505,9 @@ fn mode_skill_summary(
     }
 }
 
-fn subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
+fn subagent_summary(info: openbitfun_core::agentic::agents::AgentInfo) -> SubagentSummary {
     let is_external =
-        info.subagent_source == Some(bitfun_core::agentic::agents::SubAgentSource::External);
+        info.subagent_source == Some(openbitfun_core::agentic::agents::SubAgentSource::External);
     SubagentSummary {
         key: info.key,
         id: info.id,
@@ -513,7 +516,7 @@ fn subagent_summary(info: bitfun_core::agentic::agents::AgentInfo) -> SubagentSu
         source: format!(
             "{:?}",
             info.subagent_source
-                .unwrap_or(bitfun_core::agentic::agents::SubAgentSource::Builtin)
+                .unwrap_or(openbitfun_core::agentic::agents::SubAgentSource::Builtin)
         )
         .to_ascii_lowercase(),
         enabled: info.effective_enabled,

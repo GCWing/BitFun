@@ -1,7 +1,7 @@
 //! Device identity for Remote Connect pairing and account device routing.
 //!
 //! `device_id` is generated once and persisted under
-//! `<BITFUN_HOME>/device_identity.json` (normally `~/.bitfun/device_identity.json`).
+//! `<OPENBITFUN_HOME>/device_identity.json` (normally `~/.openbitfun/device_identity.json`).
 //! Hostname/MAC are refreshed for display only — they must not rewrite `device_id`,
 //! because macOS private Wi‑Fi addresses and interface order make MAC unstable.
 
@@ -108,15 +108,15 @@ fn identity_file_path() -> Result<PathBuf> {
         }
     }
 
-    if let Ok(path) = std::env::var("BITFUN_DEVICE_IDENTITY_PATH") {
+    if let Ok(path) = std::env::var("OPENBITFUN_DEVICE_IDENTITY_PATH") {
         let path = path.trim();
         if !path.is_empty() {
             return Ok(PathBuf::from(path));
         }
     }
 
-    let home = super::bitfun_home_dir()
-        .ok_or_else(|| anyhow!("cannot determine BitFun home directory"))?;
+    let home = super::product_home_dir()
+        .ok_or_else(|| anyhow!("cannot determine OpenBitFun home directory"))?;
     Ok(home.join("device_identity.json"))
 }
 
@@ -178,7 +178,7 @@ mod tests {
     fn with_temp_identity_path<F: FnOnce()>(f: F) {
         let _guard = TEST_LOCK.lock().unwrap();
         let path = std::env::temp_dir().join(format!(
-            "bitfun-device-identity-{}-{}.json",
+            "openbitfun-device-identity-{}-{}.json",
             std::process::id(),
             uuid_like()
         ));

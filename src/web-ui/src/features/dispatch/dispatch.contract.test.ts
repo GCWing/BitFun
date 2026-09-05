@@ -80,7 +80,7 @@ describe('dispatch controller-only routing contract', () => {
   ];
 
   // Preparing a target means installing the signed release and nothing else.
-  // Compiling BitFun on someone else's machine is not a command this client
+  // Compiling OpenBitFun on someone else's machine is not a command this client
   // can issue, so the name must not survive anywhere in the routing surface.
   it('exposes no way to build the CLI on a target', () => {
     const sources = [
@@ -127,16 +127,47 @@ describe('dispatch wire contract single source', () => {
   });
 
   it('keeps the versioned feature capabilities required on both sides', () => {
-    for (const capability of ['per_turn_options', 'session_query', 'inline_attachments', 'reasoning_presets']) {
+    for (const capability of ['product_identity', 'per_turn_options', 'session_query', 'inline_attachments', 'reasoning_presets']) {
       expect(BASE_DISPATCH_CAPABILITIES).toContain(capability);
       expect(contractSource).toContain(`"${capability}",`);
     }
   });
+
+  it('requires the compiled product and data identities on every target probe', () => {
+    const productIdentity = read(
+      '../../../../../src/crates/contracts/core-types/src/product_identity.rs',
+    );
+    const targetDispatch = read('../../../../../src/apps/cli/src/dispatch/mod.rs');
+    const targetProtocol = read('../../../../../src/apps/cli/src/dispatch/protocol.rs');
+    const transportValidator = read(
+      '../../../../../src/crates/services/services-integrations/src/remote_ssh/dispatch_ssh.rs',
+    );
+
+    expect(productIdentity).toContain('pub const fn product_id()');
+    expect(productIdentity).toContain('pub const fn data_namespace()');
+    expect(targetDispatch).toContain(
+      'openbitfun_services_core::product_identity::product_id()',
+    );
+    expect(targetDispatch).toContain(
+      'openbitfun_services_core::product_identity::data_namespace()',
+    );
+    expect(targetProtocol).toContain('pub(crate) product_id: String');
+    expect(targetProtocol).toContain('pub(crate) data_namespace: String');
+    expect(transportValidator).toContain(
+      'openbitfun_services_core::product_identity::product_id()',
+    );
+    expect(transportValidator).toContain(
+      'openbitfun_services_core::product_identity::data_namespace()',
+    );
+    expect(transportValidator).toContain('.get("productId")');
+    expect(transportValidator).toContain('.get("dataNamespace")');
+  });
 });
 
 describe('dispatch preflight contract', () => {
-  it('fails closed on protocol v5 target reasoning and Git worktree delivery', () => {
-    expect(DISPATCH_PROTOCOL_VERSION).toBe(5);
+  it('fails closed on protocol v6 product identity, reasoning, and Git worktree delivery', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(6);
+    expect(BASE_DISPATCH_CAPABILITIES).toContain('product_identity');
     expect(BASE_DISPATCH_CAPABILITIES).toContain('per_turn_options');
     expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
       'workspace_serialization',

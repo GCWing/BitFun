@@ -9,22 +9,22 @@ $_diff-error-max-width: 400px;
 
 // Main Container
 .diff-editor-container {
-  --diff-editor-added-soft-bg: color-mix(in srgb, var(--bf-color-code-change-added) 15%, transparent);
-  --diff-editor-deleted-soft-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 15%, transparent);
-  --diff-editor-added-line-bg: color-mix(in srgb, var(--bf-color-code-change-added) 18%, transparent);
-  --diff-editor-deleted-line-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 18%, transparent);
-  --diff-editor-added-emphasis-bg: color-mix(in srgb, var(--bf-color-code-change-added) 20%, transparent);
-  --diff-editor-deleted-emphasis-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 20%, transparent);
-  --diff-editor-added-border: color-mix(in srgb, var(--bf-color-code-change-added) 30%, transparent);
-  --diff-editor-deleted-border: color-mix(in srgb, var(--bf-color-code-change-removed) 30%, transparent);
-  --diff-editor-added-char-bg: color-mix(in srgb, var(--bf-color-code-change-added) 38%, transparent);
-  --diff-editor-deleted-char-bg: color-mix(in srgb, var(--bf-color-code-change-removed) 38%, transparent);
+  --diff-editor-added-soft-bg: color-mix(in srgb, var(--openbitfun-color-code-change-added) 15%, transparent);
+  --diff-editor-deleted-soft-bg: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 15%, transparent);
+  --diff-editor-added-line-bg: color-mix(in srgb, var(--openbitfun-color-code-change-added) 18%, transparent);
+  --diff-editor-deleted-line-bg: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 18%, transparent);
+  --diff-editor-added-emphasis-bg: color-mix(in srgb, var(--openbitfun-color-code-change-added) 20%, transparent);
+  --diff-editor-deleted-emphasis-bg: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 20%, transparent);
+  --diff-editor-added-border: color-mix(in srgb, var(--openbitfun-color-code-change-added) 30%, transparent);
+  --diff-editor-deleted-border: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 30%, transparent);
+  --diff-editor-added-char-bg: color-mix(in srgb, var(--openbitfun-color-code-change-added) 38%, transparent);
+  --diff-editor-deleted-char-bg: color-mix(in srgb, var(--openbitfun-color-code-change-removed) 38%, transparent);
 
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bf-color-surface-canvas);
+  background: var(--openbitfun-color-surface-canvas);
   position: relative;
   overflow: hidden;
 }
@@ -34,65 +34,65 @@ $_diff-error-max-width: 400px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--bf-space-3);
-  background: var(--bf-color-surface-canvas);
-  border-bottom: 1px solid var(--bf-color-border-default);
+  padding: 0 var(--openbitfun-space-3);
+  background: var(--openbitfun-color-surface-canvas);
+  border-bottom: 1px solid var(--openbitfun-color-border-default);
   flex-shrink: 0;
   height: $_diff-toolbar-height;
   min-height: $_diff-toolbar-height;
   transition:
-    background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-    border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+    background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &__info {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-4);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-family: var(--bf-type-code-md-font-family);
+    gap: var(--openbitfun-space-4);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-family: var(--openbitfun-type-code-md-font-family);
   }
 
   &__stats {
     display: flex;
     align-items: center;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__stat {
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     padding: 2px 6px;
-    border-radius: var(--bf-radius-sm);
-    font-size: var(--bf-type-label-sm-font-size);
+    border-radius: var(--openbitfun-radius-sm);
+    font-size: var(--openbitfun-type-label-sm-font-size);
 
     &--add {
-      color: var(--bf-color-code-change-added);
+      color: var(--openbitfun-color-code-change-added);
       background: var(--diff-editor-added-soft-bg);
       border: 1px solid var(--diff-editor-added-border);
     }
 
     &--del {
-      color: var(--bf-color-code-change-removed);
+      color: var(--openbitfun-color-code-change-removed);
       background: var(--diff-editor-deleted-soft-bg);
       border: 1px solid var(--diff-editor-deleted-border);
     }
   }
 
   &__changes-count {
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__file-path {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-code-md-font-family);
-    font-size: var(--bf-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__actions {
     display: flex;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   &__btn {
@@ -101,29 +101,29 @@ $_diff-error-max-width: 400px;
     justify-content: center;
     min-width: 32px;
     height: 32px;
-    padding: 0 var(--bf-space-3);
-    background: var(--bf-color-action-neutral-surface);
-    border: 1px solid var(--bf-color-border-default);
-    border-radius: var(--bf-radius-base);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-body-lg-font-size);
-    line-height: var(--bf-type-modifier-leading-none-line-height);
+    padding: 0 var(--openbitfun-space-3);
+    background: var(--openbitfun-color-action-neutral-surface);
+    border: 1px solid var(--openbitfun-color-border-default);
+    border-radius: var(--openbitfun-radius-base);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-body-lg-font-size);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     cursor: pointer;
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
-      border-color: var(--bf-color-accent-default);
-      color: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      border-color: var(--openbitfun-color-accent-default);
+      color: var(--openbitfun-color-accent-default);
       transform: translateY(-1px);
       box-shadow:
-        0 2px 8px color-mix(in srgb, var(--bf-color-accent-default) 20%, transparent),
-        0 0 20px var(--bf-color-action-secondary-background);
+        0 2px 8px color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent),
+        0 0 20px var(--openbitfun-color-action-secondary-background);
     }
 
     &:active:not(:disabled) {
@@ -138,7 +138,7 @@ $_diff-error-max-width: 400px;
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bf-color-accent-default);
+      outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: 2px;
     }
   }
@@ -168,7 +168,7 @@ $_diff-error-max-width: 400px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--bf-color-surface-canvas) 85%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 85%, transparent);
   backdrop-filter: blur(4px);
   z-index: 100;
   animation: diff-editor-fade-in 0.2s ease-out;
@@ -191,34 +191,34 @@ $_diff-error-max-width: 400px;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  padding: var(--bf-space-6);
-  background: var(--bf-color-surface-canvas);
-  border: 1px solid var(--bf-color-border-subtle);
-  border-radius: var(--bf-radius-lg);
+  padding: var(--openbitfun-space-6);
+  background: var(--openbitfun-color-surface-canvas);
+  border: 1px solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
   max-width: $_diff-error-max-width;
   z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 
   &__icon {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     opacity: 0.6;
   }
 
   &__message {
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     margin: 0;
-    line-height: var(--bf-type-body-lg-line-height);
+    line-height: var(--openbitfun-type-body-lg-line-height);
   }
 
   &__path {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    font-family: var(--bf-type-code-md-font-family);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-family: var(--openbitfun-type-code-md-font-family);
     margin: 0;
     max-width: 100%;
     overflow: hidden;
@@ -231,20 +231,20 @@ $_diff-error-max-width: 400px;
 .diff-editor-container {
   :global {
     .monaco-diff-editor {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .editor.original,
     .monaco-diff-editor .editor.modified {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .monaco-editor {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .monaco-editor-background {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-overlays {
@@ -254,17 +254,17 @@ $_diff-error-max-width: 400px;
     .monaco-diff-editor .monaco-editor .margin,
     .monaco-diff-editor .editor.original .margin,
     .monaco-diff-editor .editor.modified .margin {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .monaco-editor .margin-view-overlays,
     .monaco-diff-editor .editor.original .margin-view-overlays,
     .monaco-diff-editor .editor.modified .margin-view-overlays {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     .monaco-diff-editor .monaco-editor .gutter-background {
-      background-color: var(--bf-color-surface-canvas) !important;
+      background-color: var(--openbitfun-color-surface-canvas) !important;
     }
 
     // Gutter Styles
@@ -283,10 +283,10 @@ $_diff-error-max-width: 400px;
       border: none !important;
       box-shadow: none !important;
       background: transparent !important;
-      color: var(--bf-color-content-muted) !important;
+      color: var(--openbitfun-color-content-muted) !important;
 
       &:hover {
-        color: var(--bf-color-content-secondary) !important;
+        color: var(--openbitfun-color-content-secondary) !important;
       }
 
       &:focus {
@@ -316,23 +316,23 @@ $_diff-error-max-width: 400px;
     }
 
     .monaco-diff-editor.side-by-side .editor.original {
-      border-right: 1px dashed var(--bf-color-field-border-hover) !important;
+      border-right: 1px dashed var(--openbitfun-color-field-border-hover) !important;
       transition: border-color 0.2s ease;
     }
 
     .monaco-diff-editor.side-by-side .editor.modified {
-      border-left: 1px dashed var(--bf-color-field-border-hover) !important;
+      border-left: 1px dashed var(--openbitfun-color-field-border-hover) !important;
       transition: border-color 0.2s ease;
     }
 
     .monaco-diff-editor.side-by-side:hover .editor.original {
       border-right-style: solid !important;
-      border-right-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent) !important;
+      border-right-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent) !important;
     }
 
     .monaco-diff-editor.side-by-side:hover .editor.modified {
       border-left-style: solid !important;
-      border-left-color: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent) !important;
+      border-left-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-lines {
@@ -345,7 +345,7 @@ $_diff-error-max-width: 400px;
 
     .monaco-diff-editor .monaco-editor .line-numbers {
       background-color: transparent !important;
-      color: var(--bf-color-content-muted) !important;
+      color: var(--openbitfun-color-content-muted) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-line {
@@ -357,26 +357,26 @@ $_diff-error-max-width: 400px;
     }
 
     .monaco-diff-editor .diffViewport {
-      background-color: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) !important;
-      border-left: 1px dashed var(--bf-color-field-border-hover) !important;
-      border-right: 1px dashed var(--bf-color-field-border-hover) !important;
+      background-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent) !important;
+      border-left: 1px dashed var(--openbitfun-color-field-border-hover) !important;
+      border-right: 1px dashed var(--openbitfun-color-field-border-hover) !important;
       transition: background-color 0.2s ease;
 
       &:hover {
-        background-color: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent) !important;
+        background-color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent) !important;
         border-left-style: solid !important;
         border-right-style: solid !important;
       }
     }
 
     .monaco-diff-editor .diagonal-fill {
-      background-color: var(--bf-color-surface-panel) !important;
+      background-color: var(--openbitfun-color-surface-panel) !important;
       background-image: repeating-linear-gradient(
         45deg,
         transparent,
         transparent 4px,
-        color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 4px,
-        color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent) 8px
+        color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent) 4px,
+        color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent) 8px
       ) !important;
     }
 
@@ -402,7 +402,7 @@ $_diff-error-max-width: 400px;
     }
 
     .monaco-diff-editor .char-modified {
-      background-color: color-mix(in srgb, var(--bf-color-accent-default) 32%, transparent) !important;
+      background-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 32%, transparent) !important;
       border-radius: 2px;
       border: none !important;
     }
@@ -411,15 +411,15 @@ $_diff-error-max-width: 400px;
       width: 8px !important;
 
       .insert {
-        background: var(--bf-color-status-success-content);
+        background: var(--openbitfun-color-status-success-content);
       }
 
       .delete {
-        background: var(--bf-color-status-danger-content);
+        background: var(--openbitfun-color-status-danger-content);
       }
 
       .modified {
-        background: var(--bf-color-status-warning-content);
+        background: var(--openbitfun-color-status-warning-content);
       }
     }
 
@@ -459,16 +459,16 @@ $_diff-error-max-width: 400px;
         background: transparent;
 
         .slider {
-          background: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
+          background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
           border-radius: 4px;
-          transition: background var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+          transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
           &:hover {
-            background: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+            background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
           }
 
           &.active {
-            background: color-mix(in srgb, var(--bf-color-content-on-dark) 25%, transparent);
+            background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 25%, transparent);
           }
         }
       }
@@ -493,14 +493,14 @@ $_diff-error-max-width: 400px;
 @media (max-width: 768px) {
   .diff-editor-toolbar {
     flex-wrap: wrap;
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-2) var(--bf-space-3);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-3);
     min-height: auto;
 
     &__info {
       width: 100%;
       flex-wrap: wrap;
-      margin-bottom: var(--bf-space-1);
+      margin-bottom: var(--openbitfun-space-1);
     }
 
     &__actions {
@@ -514,15 +514,15 @@ $_diff-error-max-width: 400px;
   }
 
   .diff-editor-error {
-    padding: var(--bf-space-4);
+    padding: var(--openbitfun-space-4);
     max-width: 280px;
 
     &__message {
-      font-size: var(--bf-type-label-sm-font-size);
+      font-size: var(--openbitfun-type-label-sm-font-size);
     }
 
     &__path {
-      font-size: var(--bf-type-micro-font-size);
+      font-size: var(--openbitfun-type-micro-font-size);
     }
   }
 }
@@ -530,7 +530,7 @@ $_diff-error-max-width: 400px;
 // High Contrast Mode
 @media (prefers-contrast: high) {
   .diff-editor-container {
-    border: 2px solid var(--bf-color-border-default);
+    border: 2px solid var(--openbitfun-color-border-default);
   }
 
   .diff-editor-toolbar {
@@ -540,7 +540,7 @@ $_diff-error-max-width: 400px;
       border-width: 2px;
 
       &:hover:not(:disabled) {
-        border-color: var(--bf-color-accent-default);
+        border-color: var(--openbitfun-color-accent-default);
       }
     }
 
@@ -562,12 +562,12 @@ $_diff-error-max-width: 400px;
       .monaco-diff-editor {
         .line-insert {
           background-color: var(--diff-editor-added-emphasis-bg) !important;
-          border-left: 3px solid var(--bf-color-code-change-added);
+          border-left: 3px solid var(--openbitfun-color-code-change-added);
         }
 
         .line-delete {
           background-color: var(--diff-editor-deleted-emphasis-bg) !important;
-          border-left: 3px solid var(--bf-color-code-change-removed);
+          border-left: 3px solid var(--openbitfun-color-code-change-removed);
         }
       }
     }
@@ -578,12 +578,12 @@ $_diff-error-max-width: 400px;
 :global {
   .diff-editor-container .monaco-diff-editor .monaco-editor-background,
   .diff-editor-container .monaco-diff-editor .monaco-editor .monaco-editor-background {
-    background-color: var(--bf-color-surface-canvas) !important;
+    background-color: var(--openbitfun-color-surface-canvas) !important;
   }
 
   .diff-editor-container .monaco-diff-editor .editor.original .monaco-editor,
   .diff-editor-container .monaco-diff-editor .editor.modified .monaco-editor {
-    background-color: var(--bf-color-surface-canvas) !important;
+    background-color: var(--openbitfun-color-surface-canvas) !important;
   }
 
   .monaco-diff-editor .gutter {

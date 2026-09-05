@@ -1,4 +1,4 @@
-import { Button, Icon, StatusPill, type StatusPillTone } from '@bitfun/ui';
+import { Button, Icon, StatusPill, type StatusPillTone } from '@openbitfun/ui';
 import {
   GalleryHorizontalEnd,
   HardDrive,
@@ -78,8 +78,8 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
       className="miniapp-library-row"
       role="listitem"
       data-action={action}
-      data-bf-component="miniapp-gallery-view"
-      data-bf-part="item"
+      data-openbitfun-component="miniapp-gallery-view"
+      data-openbitfun-part="item"
     >
       <button
         type="button"
@@ -89,8 +89,8 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
       >
         <span
           className="miniapp-library-row__showcase"
-          data-bf-component="miniapp-gallery-view"
-          data-bf-part="showcase"
+          data-openbitfun-component="miniapp-gallery-view"
+          data-openbitfun-part="showcase"
         >
           {!showcaseUnavailable && showcaseUrl ? (
             <img
@@ -121,13 +121,13 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
 
         <span
           className="miniapp-library-row__summary"
-          data-bf-component="miniapp-gallery-view"
-          data-bf-part="summary"
+          data-openbitfun-component="miniapp-gallery-view"
+          data-openbitfun-part="summary"
         >
           <span
             className="miniapp-library-row__title-row"
-            data-bf-component="miniapp-gallery-view"
-            data-bf-part="title"
+            data-openbitfun-component="miniapp-gallery-view"
+            data-openbitfun-part="title"
           >
             <strong className="miniapp-library-row__name">{name}</strong>
             <StatusPill className="miniapp-library-row__category" tone="neutral">
@@ -137,8 +137,8 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
           <span className="miniapp-library-row__description">{description}</span>
           <span
             className="miniapp-library-row__meta"
-            data-bf-component="miniapp-gallery-view"
-            data-bf-part="meta"
+            data-openbitfun-component="miniapp-gallery-view"
+            data-openbitfun-part="meta"
             role="group"
             aria-label={[version, metaLabel].filter(Boolean).join(', ')}
           >
@@ -176,14 +176,14 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
 
       <div
         className="miniapp-library-row__actions"
-        data-bf-component="miniapp-gallery-view"
-        data-bf-part="actions"
+        data-openbitfun-component="miniapp-gallery-view"
+        data-openbitfun-part="actions"
       >
         {statuses.length > 0 ? (
           <div
             className="miniapp-library-row__status-rail"
-            data-bf-component="miniapp-gallery-view"
-            data-bf-part="status"
+            data-openbitfun-component="miniapp-gallery-view"
+            data-openbitfun-part="status"
           >
             {statuses.map((status) => (
               <StatusPill

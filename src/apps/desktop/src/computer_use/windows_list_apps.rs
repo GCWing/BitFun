@@ -19,8 +19,8 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::Mutex;
 
-use bitfun_core::agentic::tools::computer_use_host::AppInfo;
-use bitfun_core::util::errors::BitFunResult;
+use openbitfun_core::agentic::tools::computer_use_host::AppInfo;
+use openbitfun_core::util::errors::OpenBitFunResult;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, TRUE};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -53,7 +53,7 @@ struct EnumState {
 /// window, sorted by name. `include_hidden` is accepted for parity with the
 /// macOS host; on Windows there is no per-app hidden flag, so every windowed
 /// process is returned regardless.
-pub(super) fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+pub(super) fn list_running_apps(_include_hidden: bool) -> OpenBitFunResult<Vec<AppInfo>> {
     let windows = enumerate_windows();
 
     // Group by pid: keep the first non-empty title as a fallback display name.

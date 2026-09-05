@@ -48,7 +48,7 @@
     "refreshFailed": "Refresh failed: {{error}}",
     "loginSuccess": "Signed in",
     "loginFailed": "Sign-in failed: {{error}}",
-    "peerLoginRequiresLocalDevice": "Antigravity sign-in must be completed on the device running BitFun. Switch to that device and sign in there.",
+    "peerLoginRequiresLocalDevice": "Antigravity sign-in must be completed on the device running OpenBitFun. Switch to that device and sign in there.",
     "logoutSuccess": "Signed out",
     "logoutCleanupPending": "Signed out. Credential cleanup is pending and will retry automatically.",
     "logoutFailed": "Sign-out failed: {{error}}",
@@ -91,7 +91,7 @@
     "vaultUnavailable": "Credential storage is temporarily unavailable. Try again; your sign-in has not been removed.",
     "retryVault": "Try vault again",
     "loginPending": "Sign-in authorization is in progress",
-    "browserInstructions": "Finish signing in in the browser BitFun opened. Keep this page open; BitFun will finish automatically.",
+    "browserInstructions": "Finish signing in in the browser OpenBitFun opened. Keep this page open; OpenBitFun will finish automatically.",
     "deviceInstructions": "Open the authorization page on any device, enter the verification code, then return here.",
     "loginCancelling": "Cancelling sign-in and closing the authorization session",
     "loginCompletedBeforeCancel": "Authorization had already completed, so this account remains signed in.",
@@ -151,7 +151,7 @@
   },
   "providers": {
     "openbitfun": {
-      "name": "OpenBitFun",
+      "name": "OpenBitFun Service",
       "description": "OpenBitFun Model Platform",
       "urlOptions": {
         "default": "Anthropic Format - Default",
@@ -399,7 +399,7 @@
   },
   "proxy": {
     "enable": "Enable Proxy",
-    "enableHint": "When enabled, all AI requests are sent through the proxy (requires a BitFun restart)",
+    "enableHint": "When enabled, all AI requests are sent through the proxy (requires a OpenBitFun restart)",
     "url": "Proxy URL",
     "urlPlaceholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:1080",
     "urlHint": "Supports HTTP/HTTPS/SOCKS5 proxy, format: protocol://address:port",
@@ -408,7 +408,7 @@
     "password": "Password (optional)",
     "passwordPlaceholder": "Proxy authentication password",
     "save": "Save Proxy Configuration",
-    "saveSuccess": "Proxy configuration saved. Restart BitFun to apply it"
+    "saveSuccess": "Proxy configuration saved. Restart OpenBitFun to apply it"
   },
   "streamIdleTimeout": {
     "title": "Streaming Timeout",
@@ -511,8 +511,8 @@
     "deleteSuccess": "Model configuration deleted",
     "providerDeleteFailed": "Failed to delete provider",
     "providerDeleteSuccess": "Provider and its model configurations deleted",
-    "referenceCheckFailed": "BitFun could not verify whether other settings still reference this model, so deletion was cancelled",
-    "providerReferenceCheckFailed": "BitFun could not verify whether other settings still reference this provider's models, so deletion was cancelled",
+    "referenceCheckFailed": "OpenBitFun could not verify whether other settings still reference this model, so deletion was cancelled",
+    "providerReferenceCheckFailed": "OpenBitFun could not verify whether other settings still reference this provider's models, so deletion was cancelled",
     "loadFailed": "Failed to load AI configuration",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",
@@ -554,7 +554,7 @@
     "reveal": "Show in folder",
     "revealFailed": "Unable to open the cache folder",
     "offlineTitle": "Updating without network access",
-    "offlineDescription": "On a device with internet access, download the original models.dev file, name it catalog.json, and place it in the cache directory above. Restart BitFun to apply it; Update now may overwrite this file.",
+    "offlineDescription": "On a device with internet access, download the original models.dev file, name it catalog.json, and place it in the cache directory above. Restart OpenBitFun to apply it; Update now may overwrite this file.",
     "downloadOriginal": "Download original catalog",
     "openCacheDirectory": "Open cache directory"
   },

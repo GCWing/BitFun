@@ -4,7 +4,7 @@ import {
   MobileIconButton,
   MobileStatus,
   MobileTextField,
-} from '@bitfun/ui/mobile';
+} from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import type { SessionInfo } from '../services/RemoteSessionManager';
 

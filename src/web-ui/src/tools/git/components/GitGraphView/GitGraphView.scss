@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--bf-color-surface-canvas);
-  color: var(--bf-color-content-primary);
+  background: var(--openbitfun-color-surface-canvas);
+  color: var(--openbitfun-color-content-primary);
 
   &--loading,
   &--error,
@@ -24,7 +24,7 @@
 
     p {
       margin: 0;
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
     }
 
   }
@@ -32,10 +32,10 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-    border-top-color: var(--bf-color-accent-default);
+    border: 3px solid color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
+    border-top-color: var(--openbitfun-color-accent-default);
     border-radius: 50%;
-    animation: bitfun-git-graph-spin 0.8s linear infinite;
+    animation: openbitfun-git-graph-spin 0.8s linear infinite;
   }
 
   &__header {
@@ -43,8 +43,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-panel);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-surface-panel);
     flex-shrink: 0;
   }
 
@@ -55,8 +55,8 @@
 
     h3 {
       margin: 0;
-      font-size: var(--bf-type-body-md-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      font-size: var(--openbitfun-type-body-md-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
   }
 
@@ -65,11 +65,11 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: var(--bf-color-accent-default);
-    color: var(--bf-color-content-on-dark);
+    background: var(--openbitfun-color-accent-default);
+    color: var(--openbitfun-color-content-on-dark);
     border-radius: 4px;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   &__search {
@@ -78,7 +78,7 @@
   }
 
   &__search-loading {
-    animation: bitfun-git-graph-spin 0.8s linear infinite;
+    animation: openbitfun-git-graph-spin 0.8s linear infinite;
   }
 
   &__search-navigation {
@@ -89,14 +89,14 @@
   }
 
   &__search-count {
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
     padding: 0 8px;
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
 
     &--no-results {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
     }
   }
 
@@ -110,7 +110,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
     cursor: pointer;
     transition:
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -118,8 +118,8 @@
       color 140ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:active:not(:disabled) {
@@ -150,54 +150,54 @@
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     
     &:hover {
-      background: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
     }
 
     &--selected {
-      background: var(--bf-color-action-secondary-background);
-      border-left: 2px solid var(--bf-color-accent-default);
+      background: var(--openbitfun-color-action-secondary-background);
+      border-left: 2px solid var(--openbitfun-color-accent-default);
       z-index: 2;
 
       &:hover {
-        background: var(--bf-color-action-secondary-hover);
+        background: var(--openbitfun-color-action-secondary-hover);
       }
     }
 
     &--search-match {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 6%, transparent);
-      border-left: 2px solid color-mix(in srgb, var(--bf-color-status-warning-content) 40%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 6%, transparent);
+      border-left: 2px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-color-status-warning-content) 10%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, transparent);
       }
     }
 
     &--current-search-match {
-      background: color-mix(in srgb, var(--bf-color-status-warning-content) 15%, transparent);
-      border-left: 3px solid var(--bf-color-status-warning-content);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 15%, transparent);
+      border-left: 3px solid var(--openbitfun-color-status-warning-content);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent);
       z-index: 3;
 
       &:hover {
-        background: color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent);
       }
 
       &.git-graph-view__hit-area--selected {
         background: linear-gradient(
           90deg,
-          color-mix(in srgb, var(--bf-color-status-warning-content) 20%, transparent),
-          var(--bf-color-action-secondary-hover)
+          color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent),
+          var(--openbitfun-color-action-secondary-hover)
         );
-        border-left: 3px solid var(--bf-color-status-warning-content);
+        border-left: 3px solid var(--openbitfun-color-status-warning-content);
         box-shadow:
-          inset 0 0 0 1px color-mix(in srgb, var(--bf-color-status-warning-content) 30%, transparent),
-          inset 3px 0 0 0 var(--bf-color-accent-default);
+          inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent),
+          inset 3px 0 0 0 var(--openbitfun-color-accent-default);
 
         &:hover {
           background: linear-gradient(
             90deg,
-            color-mix(in srgb, var(--bf-color-status-warning-content) 25%, transparent),
-            var(--bf-color-action-secondary-hover)
+            color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent),
+            var(--openbitfun-color-action-secondary-hover)
           );
         }
       }
@@ -210,19 +210,19 @@
     gap: 12px;
     padding: 0 16px;
     cursor: pointer;
-    border-bottom: 1px solid var(--bf-color-border-default);
+    border-bottom: 1px solid var(--openbitfun-color-border-default);
     transition: background 0.15s, box-shadow 0.15s;
-    background: var(--bf-color-surface-canvas);
+    background: var(--openbitfun-color-surface-canvas);
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      box-shadow: 0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
       z-index: 1;
     }
 
     &--selected {
-      background: var(--bf-color-action-secondary-background) !important;
-      box-shadow: 0 2px 4px color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent);
+      background: var(--openbitfun-color-action-secondary-background) !important;
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--openbitfun-color-content-on-light) 15%, transparent);
       z-index: 2;
     }
 
@@ -249,42 +249,42 @@
     gap: 4px;
     padding: 2px 8px;
     border-radius: 12px;
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     white-space: nowrap;
     cursor: help;
 
     &--branch {
-      background: var(--bf-color-accent-hover);
-      color: var(--bf-color-content-on-dark);
+      background: var(--openbitfun-color-accent-hover);
+      color: var(--openbitfun-color-content-on-dark);
     }
 
     &--remote {
-      background: var(--bf-color-accent-secondary-hover);
-      color: var(--bf-color-content-on-dark);
+      background: var(--openbitfun-color-accent-secondary-hover);
+      color: var(--openbitfun-color-content-on-dark);
     }
 
     &--tag {
-      background: var(--bf-domain-git-changes);
-      color: var(--bf-color-content-on-dark);
+      background: var(--openbitfun-domain-git-changes);
+      color: var(--openbitfun-color-content-on-dark);
     }
 
     &--current {
-      box-shadow: 0 0 0 2px var(--bf-color-surface-canvas),
+      box-shadow: 0 0 0 2px var(--openbitfun-color-surface-canvas),
                   0 0 0 4px currentColor;
     }
   }
 
   &__commit-message {
     flex: 1;
-    font-size: var(--bf-type-label-md-font-size);
+    font-size: var(--openbitfun-type-label-md-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 
     .git-graph-view__commit:hover & {
-      font-weight: var(--bf-type-label-sm-font-weight);
+      font-weight: var(--openbitfun-type-label-sm-font-weight);
     }
   }
 
@@ -292,8 +292,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: var(--bf-type-label-sm-font-size);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    color: var(--openbitfun-color-content-secondary);
     flex-shrink: 0;
   }
 
@@ -309,9 +309,9 @@
   }
 
   &__commit-hash {
-    font-family: var(--bf-type-code-md-font-family);
+    font-family: var(--openbitfun-type-code-md-font-family);
     padding: 2px 6px;
-    background: var(--bf-color-surface-tertiary);
+    background: var(--openbitfun-color-surface-tertiary);
     border-radius: 4px;
     white-space: nowrap;
   }
@@ -331,21 +331,21 @@
       padding: 4px;
       background: transparent;
       border: none;
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
       cursor: pointer;
       display: flex;
       align-items: center;
       border-radius: 4px;
 
       &:hover {
-        background: var(--bf-color-action-neutral-surface-hover);
-        color: var(--bf-color-content-primary);
+        background: var(--openbitfun-color-action-neutral-surface-hover);
+        color: var(--openbitfun-color-content-primary);
       }
     }
   }
 }
 
-@keyframes bitfun-git-graph-spin {
+@keyframes openbitfun-git-graph-spin {
   to {
     transform: rotate(360deg);
   }

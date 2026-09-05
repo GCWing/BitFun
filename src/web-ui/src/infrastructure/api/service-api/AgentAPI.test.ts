@@ -38,7 +38,7 @@ describe('AgentAPI', () => {
     await agentAPI.updateSessionMode({
       sessionId: 'session-1',
       modeId: 'reviewer',
-      workspacePath: 'D:/workspace/BitFun',
+      workspacePath: 'D:/workspace/OpenBitFun',
       remoteConnectionId: 'remote-1',
     });
 
@@ -46,7 +46,7 @@ describe('AgentAPI', () => {
       request: {
         sessionId: 'session-1',
         modeId: 'reviewer',
-        workspacePath: 'D:/workspace/BitFun',
+        workspacePath: 'D:/workspace/OpenBitFun',
         remoteConnectionId: 'remote-1',
       },
     });
@@ -65,7 +65,7 @@ describe('AgentAPI', () => {
 
     await agentAPI.loadSessionTurnWindow({
       sessionId: 'session-1',
-      workspacePath: 'D:/workspace/BitFun',
+      workspacePath: 'D:/workspace/OpenBitFun',
       targetStorageTurnIndex: 8,
       expectedTurnId: 'turn-8',
       expectedCatalogRevision: 'catalog-1',
@@ -77,7 +77,7 @@ describe('AgentAPI', () => {
     expect(invokeMock).toHaveBeenCalledWith('load_session_turn_window', {
       request: {
         sessionId: 'session-1',
-        workspacePath: 'D:/workspace/BitFun',
+        workspacePath: 'D:/workspace/OpenBitFun',
         targetStorageTurnIndex: 8,
         expectedTurnId: 'turn-8',
         expectedCatalogRevision: 'catalog-1',
@@ -99,7 +99,7 @@ describe('AgentAPI', () => {
     });
 
     await expect(agentAPI.rollbackSessionToTurn({
-      workspacePath: 'D:/workspace/BitFun',
+      workspacePath: 'D:/workspace/OpenBitFun',
       sessionId: 'session-1',
       targetTurnId: 'turn-7',
     })).resolves.toMatchObject({
@@ -115,7 +115,7 @@ describe('AgentAPI', () => {
       reason: 'reconcile marker',
     });
     await expect(agentAPI.rollbackSessionToTurn({
-      workspacePath: 'D:/workspace/BitFun',
+      workspacePath: 'D:/workspace/OpenBitFun',
       sessionId: 'session-1',
       targetTurnId: 'turn-7',
     })).resolves.toMatchObject({

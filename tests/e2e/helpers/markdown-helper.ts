@@ -11,7 +11,7 @@ export interface InlineAiPreviewState {
   previewText: string;
 }
 
-const markdownEditorSelector = '.bitfun-markdown-editor .m-editor-tiptap .ProseMirror';
+const markdownEditorSelector = '.openbitfun-markdown-editor .m-editor-tiptap .ProseMirror';
 
 export async function openMarkdownFile(workspacePath: string, filePath: string): Promise<void> {
   await browser.execute(async (targetWorkspacePath: string, targetFilePath: string) => {

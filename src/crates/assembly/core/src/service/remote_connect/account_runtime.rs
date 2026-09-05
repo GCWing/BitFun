@@ -16,11 +16,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, MutexGuard, Notify, RwLock};
 
-use bitfun_services_integrations::remote_connect::account::{
+use openbitfun_services_integrations::remote_connect::account::{
     ensure_relay_session_history_exportable, relay_session_export_metadata, AccountClient,
     AccountSession,
 };
-use bitfun_services_integrations::remote_connect::{session_store, sync_state, DeviceIdentity};
+use openbitfun_services_integrations::remote_connect::{session_store, sync_state, DeviceIdentity};
 
 use super::{settings_sync, validate_relay_base_url};
 
@@ -1172,8 +1172,8 @@ fn ensure_session_backup_complete(
 }
 
 pub fn build_session_backup(
-    metadata: &bitfun_services_core::session::SessionMetadata,
-    turns: &[bitfun_services_core::session::DialogTurnData],
+    metadata: &openbitfun_services_core::session::SessionMetadata,
+    turns: &[openbitfun_services_core::session::DialogTurnData],
 ) -> Result<AccountSessionBackup> {
     ensure_relay_session_history_exportable(metadata).map_err(anyhow::Error::msg)?;
     let metadata = relay_session_export_metadata(metadata, turns.len());

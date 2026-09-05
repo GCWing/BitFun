@@ -1,6 +1,6 @@
 use anyhow::Context;
-use bitfun_skin_market_service::build_skin_market_router;
-use bitfun_skin_market_service::config::SkinMarketConfig;
+use openbitfun_skin_market_service::build_skin_market_router;
+use openbitfun_skin_market_service::config::SkinMarketConfig;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -9,7 +9,7 @@ async fn main() -> anyhow::Result<()> {
         .json()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("bitfun_skin_market=info,tower_http=info")),
+                .unwrap_or_else(|_| EnvFilter::new("openbitfun_skin_market=info,tower_http=info")),
         )
         .init();
 

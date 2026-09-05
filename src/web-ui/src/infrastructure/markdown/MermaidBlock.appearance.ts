@@ -7,9 +7,9 @@ export const mermaidBlockAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'actions' }, { id: 'action' }, { id: 'source' }, { id: 'error' },
   ],
   states: [
-    { id: 'streaming', selector: { kind: 'self', suffix: '[data-bf-state~="streaming"]' } },
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'copied', selector: { kind: 'self', suffix: '[data-bf-state~="copied"]' } },
+    { id: 'streaming', selector: { kind: 'self', suffix: '[data-openbitfun-state~="streaming"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'copied', selector: { kind: 'self', suffix: '[data-openbitfun-state~="copied"]' } },
   ],
 };

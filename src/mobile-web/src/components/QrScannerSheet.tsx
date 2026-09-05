@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MobileBanner, MobileButton, MobileFileButton, MobileIconButton, MobileSheet, MobileTextField } from '@bitfun/ui/mobile';
+import { MobileBanner, MobileButton, MobileFileButton, MobileIconButton, MobileSheet, MobileTextField } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { parseScannedPairingLink } from '../services/pairingLink';
 

@@ -1,13 +1,13 @@
-use bitfun_opencode_adapter::load_opencode_package_adapter;
-use bitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
-use bitfun_product_domains::plugin_source::{PluginActivationAuthority, PluginPackageInput};
-use bitfun_runtime_ports::{
+use openbitfun_opencode_adapter::load_opencode_package_adapter;
+use openbitfun_plugin_runtime_client::DefaultPluginRuntimeClient;
+use openbitfun_product_domains::plugin_source::{PluginActivationAuthority, PluginPackageInput};
+use openbitfun_runtime_ports::{
     PluginCapabilityRef, PluginDataClassification, PluginDispatchEnvelope, PluginOwnerKind,
     PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef, PluginPermissionGate,
     PluginRuntimeAvailability, PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest,
     PluginRuntimeUnavailableReason, PluginStatusKind, PluginTrustLevel,
 };
-use bitfun_services_integrations::plugin_source::{
+use openbitfun_services_integrations::plugin_source::{
     ManagedPluginSourceService, ManagedPluginTrustDecision,
 };
 use sha2::{Digest, Sha256};
@@ -42,12 +42,12 @@ impl ManagedPackageFixture {
             .expect("system time")
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "bitfun-opencode-managed-{name}-{}-{nonce}",
+            "openbitfun-opencode-managed-{name}-{}-{nonce}",
             process::id()
         ));
         let workspace = root.join("workspace");
         let user_data = root.join("user");
-        let package = workspace.join(".bitfun/plugins/acme.demo");
+        let package = workspace.join(".openbitfun/plugins/acme.demo");
         let plugin_path = package.join(relative_path.replace('/', std::path::MAIN_SEPARATOR_STR));
         fs::create_dir_all(plugin_path.parent().expect("plugin parent")).expect("create package");
         fs::create_dir_all(user_data.join("plugins")).expect("create user package root");
@@ -65,7 +65,7 @@ impl ManagedPackageFixture {
             }]
         });
         fs::write(
-            package.join("bitfun.plugin.json"),
+            package.join("openbitfun.plugin.json"),
             serde_json::to_vec_pretty(&manifest).expect("serialize manifest"),
         )
         .expect("write manifest");
@@ -73,7 +73,7 @@ impl ManagedPackageFixture {
         let service = ManagedPluginSourceService::new(
             user_data.join("plugins"),
             user_data.clone(),
-            workspace.join(".bitfun/plugins"),
+            workspace.join(".openbitfun/plugins"),
             workspace.clone(),
             user_data.join("runtime/plugin-trust.json"),
         );
@@ -96,7 +96,7 @@ impl ManagedPackageFixture {
         fs::create_dir_all(file_path.parent().expect("declared file parent"))
             .expect("create declared file parent");
         fs::write(&file_path, content).expect("write declared file");
-        let manifest_path = self.package.join("bitfun.plugin.json");
+        let manifest_path = self.package.join("openbitfun.plugin.json");
         let mut manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(&manifest_path).expect("read plugin manifest"))
                 .expect("parse plugin manifest");
@@ -117,7 +117,9 @@ impl ManagedPackageFixture {
         .expect("update plugin manifest");
     }
 
-    async fn approved_input(&self) -> bitfun_product_domains::plugin_source::PluginPackageInput {
+    async fn approved_input(
+        &self,
+    ) -> openbitfun_product_domains::plugin_source::PluginPackageInput {
         self.service.refresh(&self.workspace).await;
         self.service
             .set_trust(
@@ -430,7 +432,7 @@ async fn activated_package_projects_permission_required_candidate_through_client
     assert!(response
         .effects
         .iter()
-        .all(|effect| effect.risk_level == bitfun_runtime_ports::PluginRiskLevel::High));
+        .all(|effect| effect.risk_level == openbitfun_runtime_ports::PluginRiskLevel::High));
 }
 
 #[tokio::test]
@@ -721,7 +723,7 @@ async fn managed_source_uri_encodes_reserved_path_characters() {
         .remove(0)
         .source;
 
-    assert!(source.starts_with("bitfun://managed-plugins/"));
+    assert!(source.starts_with("openbitfun://managed-plugins/"));
     assert!(source.contains("nested%20%23dir"));
     assert!(!source.starts_with("file://"));
 }
@@ -911,12 +913,12 @@ fn read_request_for(
     }
 }
 
-fn dispatch_envelope(source: bitfun_runtime_ports::PluginSourceRef) -> PluginDispatchEnvelope {
+fn dispatch_envelope(source: openbitfun_runtime_ports::PluginSourceRef) -> PluginDispatchEnvelope {
     dispatch_envelope_for(source, "project-1", "workspace-1", 20)
 }
 
 fn dispatch_envelope_for(
-    source: bitfun_runtime_ports::PluginSourceRef,
+    source: openbitfun_runtime_ports::PluginSourceRef,
     project_domain_id: &str,
     workspace_id: &str,
     trust_epoch: u64,
@@ -946,7 +948,7 @@ fn dispatch_envelope_for(
             schema_version: "agent.turn.completed.v1".to_string(),
             data_classification: PluginDataClassification::Workspace,
             redaction: PluginPayloadRedaction::Partial,
-            uri: Some("bitfun://payloads/payload-1".to_string()),
+            uri: Some("openbitfun://payloads/payload-1".to_string()),
         }),
         epochs: PluginRuntimeEpochs {
             trust_epoch,

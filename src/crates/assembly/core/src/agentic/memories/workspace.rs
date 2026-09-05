@@ -1,11 +1,11 @@
 use crate::agentic::memories::db::MemoryRow;
 use crate::infrastructure::get_path_manager_arc;
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_services_core::session::MemoryWorkspaceGitError;
-pub use bitfun_services_core::session::{
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use chrono::{DateTime, Utc};
+use openbitfun_services_core::session::MemoryWorkspaceGitError;
+pub use openbitfun_services_core::session::{
     MemoryWorkspaceChange, MemoryWorkspaceChangeStatus, MemoryWorkspaceDiff,
 };
-use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ const AD_HOC_INSTRUCTIONS: &str = r#"# Ad-hoc notes
 
 ## Instructions
 
-- This extension contains ad-hoc notes to add, update, or forget BitFun memories.
+- This extension contains ad-hoc notes to add, update, or forget OpenBitFun memories.
 - Consider every note as authoritative memory input from an explicit user request.
 - Use `phase2_workspace_diff.md` to find new or edited notes.
 - Consolidate new or edited note content into `MEMORY.md` and `memory_summary.md` when it is durable and reusable.
@@ -196,9 +196,9 @@ fn format_source_updated_at(unix_secs: i64) -> String {
     source_datetime_from_unix_secs(unix_secs).to_rfc3339()
 }
 
-pub async fn ensure_memory_workspace(root: &Path) -> BitFunResult<()> {
+pub async fn ensure_memory_workspace(root: &Path) -> OpenBitFunResult<()> {
     tokio::fs::create_dir_all(root).await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to create memory workspace {}: {}",
             root.display(),
             error
@@ -207,7 +207,7 @@ pub async fn ensure_memory_workspace(root: &Path) -> BitFunResult<()> {
     tokio::fs::create_dir_all(rollout_summaries_dir(root))
         .await
         .map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to create memory rollout summaries dir {}: {}",
                 rollout_summaries_dir(root).display(),
                 error
@@ -216,7 +216,7 @@ pub async fn ensure_memory_workspace(root: &Path) -> BitFunResult<()> {
     Ok(())
 }
 
-pub async fn sync_phase2_workspace_inputs(root: &Path, rows: &[MemoryRow]) -> BitFunResult<()> {
+pub async fn sync_phase2_workspace_inputs(root: &Path, rows: &[MemoryRow]) -> OpenBitFunResult<()> {
     ensure_memory_workspace(root).await?;
     seed_ad_hoc_memory_extension(root).await?;
     sync_rollout_summaries(root, rows).await?;
@@ -225,20 +225,20 @@ pub async fn sync_phase2_workspace_inputs(root: &Path, rows: &[MemoryRow]) -> Bi
     Ok(())
 }
 
-pub async fn prepare_memory_workspace(root: &Path) -> BitFunResult<()> {
+pub async fn prepare_memory_workspace(root: &Path) -> OpenBitFunResult<()> {
     ensure_memory_workspace(root).await?;
     seed_ad_hoc_memory_extension(root).await?;
     remove_phase2_workspace_diff(root).await?;
-    bitfun_services_core::session::ensure_memory_workspace_git_baseline(root)
+    openbitfun_services_core::session::ensure_memory_workspace_git_baseline(root)
         .await
         .map_err(map_memory_workspace_baseline_error)
 }
 
-pub async fn seed_ad_hoc_memory_extension(root: &Path) -> BitFunResult<()> {
+pub async fn seed_ad_hoc_memory_extension(root: &Path) -> OpenBitFunResult<()> {
     tokio::fs::create_dir_all(ad_hoc_notes_dir(root))
         .await
         .map_err(|error| {
-            BitFunError::io(format!(
+            OpenBitFunError::io(format!(
                 "Failed to create ad-hoc memory notes directory {}: {}",
                 ad_hoc_notes_dir(root).display(),
                 error
@@ -256,14 +256,14 @@ pub async fn seed_ad_hoc_memory_extension(root: &Path) -> BitFunResult<()> {
             file.write_all(AD_HOC_INSTRUCTIONS.as_bytes())
                 .await
                 .map_err(|error| {
-                    BitFunError::io(format!(
+                    OpenBitFunError::io(format!(
                         "Failed to seed ad-hoc memory instructions {}: {}",
                         instructions_path.display(),
                         error
                     ))
                 })?;
             file.flush().await.map_err(|error| {
-                BitFunError::io(format!(
+                OpenBitFunError::io(format!(
                     "Failed to flush ad-hoc memory instructions {}: {}",
                     instructions_path.display(),
                     error
@@ -272,7 +272,7 @@ pub async fn seed_ad_hoc_memory_extension(root: &Path) -> BitFunResult<()> {
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(error) => {
-            return Err(BitFunError::io(format!(
+            return Err(OpenBitFunError::io(format!(
                 "Failed to create ad-hoc memory instructions {}: {}",
                 instructions_path.display(),
                 error
@@ -283,40 +283,40 @@ pub async fn seed_ad_hoc_memory_extension(root: &Path) -> BitFunResult<()> {
     Ok(())
 }
 
-pub async fn memory_workspace_diff(root: &Path) -> BitFunResult<MemoryWorkspaceDiff> {
+pub async fn memory_workspace_diff(root: &Path) -> OpenBitFunResult<MemoryWorkspaceDiff> {
     remove_phase2_workspace_diff(root).await?;
-    bitfun_services_core::session::memory_workspace_diff(root)
+    openbitfun_services_core::session::memory_workspace_diff(root)
         .await
         .map_err(map_memory_workspace_diff_error)
 }
 
-pub async fn write_workspace_diff(root: &Path, diff: &MemoryWorkspaceDiff) -> BitFunResult<()> {
+pub async fn write_workspace_diff(root: &Path, diff: &MemoryWorkspaceDiff) -> OpenBitFunResult<()> {
     ensure_memory_workspace(root).await?;
     let path = phase2_workspace_diff_file(root);
     write_text_file_if_changed(
         &path,
-        &bitfun_services_core::session::render_memory_workspace_diff_file(diff),
+        &openbitfun_services_core::session::render_memory_workspace_diff_file(diff),
     )
     .await
 }
 
-pub async fn reset_memory_workspace_baseline(root: &Path) -> BitFunResult<()> {
+pub async fn reset_memory_workspace_baseline(root: &Path) -> OpenBitFunResult<()> {
     remove_phase2_workspace_diff(root).await?;
-    bitfun_services_core::session::reset_memory_workspace_git_baseline(root)
+    openbitfun_services_core::session::reset_memory_workspace_git_baseline(root)
         .await
         .map_err(map_memory_workspace_baseline_error)
 }
 
-pub async fn clear_phase2_workspace_diff(root: &Path) -> BitFunResult<()> {
+pub async fn clear_phase2_workspace_diff(root: &Path) -> OpenBitFunResult<()> {
     remove_phase2_workspace_diff(root).await
 }
 
-pub async fn remove_phase2_workspace_diff(root: &Path) -> BitFunResult<()> {
+pub async fn remove_phase2_workspace_diff(root: &Path) -> OpenBitFunResult<()> {
     let path = phase2_workspace_diff_file(root);
     match tokio::fs::remove_file(&path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(BitFunError::io(format!(
+        Err(error) => Err(OpenBitFunError::io(format!(
             "Failed to remove memory workspace diff {}: {}",
             path.display(),
             error
@@ -324,27 +324,27 @@ pub async fn remove_phase2_workspace_diff(root: &Path) -> BitFunResult<()> {
     }
 }
 
-fn map_memory_workspace_baseline_error(error: MemoryWorkspaceGitError) -> BitFunError {
+fn map_memory_workspace_baseline_error(error: MemoryWorkspaceGitError) -> OpenBitFunError {
     map_memory_workspace_git_error("Memory workspace baseline task failed", error)
 }
 
-fn map_memory_workspace_diff_error(error: MemoryWorkspaceGitError) -> BitFunError {
+fn map_memory_workspace_diff_error(error: MemoryWorkspaceGitError) -> OpenBitFunError {
     map_memory_workspace_git_error("Memory workspace diff task failed", error)
 }
 
 fn map_memory_workspace_git_error(
     join_context: &'static str,
     error: MemoryWorkspaceGitError,
-) -> BitFunError {
+) -> OpenBitFunError {
     match error {
         MemoryWorkspaceGitError::Join { source } => {
-            BitFunError::service(format!("{join_context}: {source}"))
+            OpenBitFunError::service(format!("{join_context}: {source}"))
         }
-        error => BitFunError::io(error.to_string()),
+        error => OpenBitFunError::io(error.to_string()),
     }
 }
 
-async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> BitFunResult<()> {
+async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> OpenBitFunResult<()> {
     let mut body = String::from("# Raw Memories\n\n");
     if rows.is_empty() {
         body.push_str("No raw memories yet.\n");
@@ -376,7 +376,7 @@ async fn rebuild_raw_memories(root: &Path, rows: &[MemoryRow]) -> BitFunResult<(
     write_text_file_if_changed(&path, &body).await
 }
 
-async fn sync_rollout_summaries(root: &Path, rows: &[MemoryRow]) -> BitFunResult<()> {
+async fn sync_rollout_summaries(root: &Path, rows: &[MemoryRow]) -> OpenBitFunResult<()> {
     let dir = rollout_summaries_dir(root);
     let keep = rows
         .iter()
@@ -406,9 +406,9 @@ async fn sync_rollout_summaries(root: &Path, rows: &[MemoryRow]) -> BitFunResult
     Ok(())
 }
 
-async fn prune_rollout_summaries(dir: &Path, keep: &HashSet<String>) -> BitFunResult<()> {
+async fn prune_rollout_summaries(dir: &Path, keep: &HashSet<String>) -> OpenBitFunResult<()> {
     let mut entries = tokio::fs::read_dir(dir).await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to read rollout summaries dir {}: {}",
             dir.display(),
             error
@@ -416,7 +416,7 @@ async fn prune_rollout_summaries(dir: &Path, keep: &HashSet<String>) -> BitFunRe
     })?;
 
     while let Some(entry) = entries.next_entry().await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to scan rollout summaries dir {}: {}",
             dir.display(),
             error
@@ -431,7 +431,7 @@ async fn prune_rollout_summaries(dir: &Path, keep: &HashSet<String>) -> BitFunRe
         }
         if let Err(error) = tokio::fs::remove_file(&path).await {
             if error.kind() != std::io::ErrorKind::NotFound {
-                return Err(BitFunError::io(format!(
+                return Err(OpenBitFunError::io(format!(
                     "Failed to prune rollout summary {}: {}",
                     path.display(),
                     error
@@ -458,11 +458,11 @@ fn sorted_rows(rows: &[MemoryRow]) -> Vec<&MemoryRow> {
     sorted
 }
 
-fn format_error(error: std::fmt::Error) -> BitFunError {
-    BitFunError::service(format!("Failed to format memory workspace file: {}", error))
+fn format_error(error: std::fmt::Error) -> OpenBitFunError {
+    OpenBitFunError::service(format!("Failed to format memory workspace file: {}", error))
 }
 
-async fn write_text_file_if_changed(path: &Path, body: &str) -> BitFunResult<()> {
+async fn write_text_file_if_changed(path: &Path, body: &str) -> OpenBitFunResult<()> {
     if let Ok(existing) = tokio::fs::read_to_string(path).await {
         if existing == body {
             return Ok(());
@@ -471,7 +471,7 @@ async fn write_text_file_if_changed(path: &Path, body: &str) -> BitFunResult<()>
 
     let temp_path = path.with_extension("tmp");
     tokio::fs::write(&temp_path, body).await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to write temp memory workspace file {}: {}",
             temp_path.display(),
             error
@@ -479,7 +479,7 @@ async fn write_text_file_if_changed(path: &Path, body: &str) -> BitFunResult<()>
     })?;
     tokio::fs::rename(&temp_path, path).await.map_err(|error| {
         let _ = std::fs::remove_file(&temp_path);
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to atomically replace memory workspace file {}: {}",
             path.display(),
             error
@@ -488,16 +488,16 @@ async fn write_text_file_if_changed(path: &Path, body: &str) -> BitFunResult<()>
     Ok(())
 }
 
-pub async fn clear_directory_contents(root: &Path) -> BitFunResult<()> {
+pub async fn clear_directory_contents(root: &Path) -> OpenBitFunResult<()> {
     tokio::fs::create_dir_all(root).await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to create directory {}: {}",
             root.display(),
             error
         ))
     })?;
     let mut entries = tokio::fs::read_dir(root).await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to read directory {}: {}",
             root.display(),
             error
@@ -505,7 +505,7 @@ pub async fn clear_directory_contents(root: &Path) -> BitFunResult<()> {
     })?;
 
     while let Some(entry) = entries.next_entry().await.map_err(|error| {
-        BitFunError::io(format!(
+        OpenBitFunError::io(format!(
             "Failed to scan directory {}: {}",
             root.display(),
             error
@@ -513,7 +513,7 @@ pub async fn clear_directory_contents(root: &Path) -> BitFunResult<()> {
     })? {
         let path = entry.path();
         if let Err(error) = remove_entry(&path).await {
-            return Err(BitFunError::io(format!(
+            return Err(OpenBitFunError::io(format!(
                 "Failed to clear directory entry {}: {}",
                 path.display(),
                 error
@@ -524,7 +524,7 @@ pub async fn clear_directory_contents(root: &Path) -> BitFunResult<()> {
     Ok(())
 }
 
-pub async fn reset_memory_workspace(root: &Path) -> BitFunResult<()> {
+pub async fn reset_memory_workspace(root: &Path) -> OpenBitFunResult<()> {
     clear_directory_contents(root).await
 }
 
@@ -611,7 +611,7 @@ mod tests {
         assert!(raw.contains("cwd: /workspace"));
         assert!(raw.contains(&format!("rollout_path: {session_a_rollout_path}")));
         assert!(!raw.contains("workspace_path:"));
-        assert!(!raw.contains("rollout_path: bitfun-session:session-a"));
+        assert!(!raw.contains("rollout_path: openbitfun-session:session-a"));
         assert!(raw.contains("updated_at: 1970-01-01T00:03:20+00:00"));
         assert!(raw.contains(&format!("rollout_summary_file: {session_a_summary_file}")));
         assert!(raw.contains(&format!("rollout_summary_file: {session_b_summary_file}")));
@@ -625,7 +625,7 @@ mod tests {
         assert!(summary_a.contains("cwd: /workspace"));
         assert!(summary_a.contains(&format!("rollout_path: {session_a_rollout_path}")));
         assert!(!summary_a.contains("workspace_path:"));
-        assert!(!summary_a.contains("rollout_path: bitfun-session:session-a"));
+        assert!(!summary_a.contains("rollout_path: openbitfun-session:session-a"));
         assert!(summary_a.contains("summary for session-a"));
         assert!(ad_hoc_notes_dir(root).exists());
         assert!(ad_hoc_instructions_file(root).exists());

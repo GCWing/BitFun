@@ -4,26 +4,26 @@ use std::sync::{OnceLock, RwLock};
 #[cfg(feature = "model-catalog")]
 use std::time::{Duration, Instant};
 
-use bitfun_ai_adapters::models_dev::{
+#[cfg(feature = "model-catalog")]
+use log::debug;
+use openbitfun_ai_adapters::models_dev::{
     project_reasoning_catalog_with_limit_and_auto_binding, ModelsDevCatalog,
 };
 #[cfg(feature = "model-catalog")]
-use bitfun_core_types::ReasoningCatalogProjectionRequest;
+use openbitfun_core_types::ReasoningCatalogProjectionRequest;
 #[cfg(feature = "model-catalog")]
-use bitfun_core_types::{
+use openbitfun_core_types::{
     ModelsDevCatalogSource, ModelsDevCatalogStatus, ModelsDevRefreshResult, ModelsDevRefreshStatus,
 };
-use bitfun_core_types::{
+use openbitfun_core_types::{
     ReasoningCatalogBinding, ReasoningCatalogProjection, ReasoningPresetDescriptor,
 };
 #[cfg(feature = "model-catalog")]
-use bitfun_events::{AIModelCatalogUpdatedEvent, AI_MODEL_CATALOG_UPDATED_EVENT};
+use openbitfun_events::{AIModelCatalogUpdatedEvent, AI_MODEL_CATALOG_UPDATED_EVENT};
 #[cfg(feature = "model-catalog")]
-use bitfun_services_integrations::models_dev::{
+use openbitfun_services_integrations::models_dev::{
     ModelsDevCatalogService, ModelsDevRefreshOutcome, ModelsDevSnapshot, ModelsDevSnapshotSource,
 };
-#[cfg(feature = "model-catalog")]
-use log::debug;
 use sha2::{Digest, Sha256};
 
 use crate::infrastructure::ai::provider_catalog::trusted_models_dev_binding;
@@ -443,7 +443,7 @@ pub(crate) fn apply_selected_reasoning_preset(
 
 #[cfg(test)]
 mod tests {
-    use bitfun_core_types::{
+    use openbitfun_core_types::{
         ReasoningCatalogBinding, ReasoningCatalogProjectionRequest, ReasoningConfig,
         ReasoningPreset, ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource,
     };
@@ -851,14 +851,15 @@ mod tests {
                 catalog: None,
                 version: 1,
                 sha256: "one".to_string(),
-                source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
+                source:
+                    openbitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
             },
         });
         let updated = super::ModelsDevReasoningCatalogSnapshot {
             catalog: None,
             version: 2,
             sha256: "two".to_string(),
-            source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
+            source: openbitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
         };
 
         assert!(super::replace_cached_catalog(&mut cache, updated));
@@ -875,20 +876,21 @@ mod tests {
                 catalog: Some(catalog.clone()),
                 version: 1,
                 sha256: "same".to_string(),
-                source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled,
+                source:
+                    openbitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Bundled,
             },
         });
         let updated = super::ModelsDevReasoningCatalogSnapshot {
             catalog: Some(catalog),
             version: 1,
             sha256: "same".to_string(),
-            source: bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
+            source: openbitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache,
         };
 
         assert!(super::replace_cached_catalog(&mut cache, updated));
         assert_eq!(
             cache.as_ref().map(|value| value.snapshot.source),
-            Some(bitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache)
+            Some(openbitfun_services_integrations::models_dev::ModelsDevSnapshotSource::Cache)
         );
     }
 }

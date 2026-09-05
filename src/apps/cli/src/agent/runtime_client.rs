@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
-use bitfun_agent_runtime::sdk::{
+use openbitfun_agent_runtime::sdk::{
     AgentContextReloadPort, AgentDialogSteerRequest, AgentDialogTurnExecution,
     AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
     AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
@@ -27,14 +27,14 @@ use bitfun_agent_runtime::sdk::{
     PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
     SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
 };
-use bitfun_agent_runtime_ipc::{
+use openbitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
     RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
     RuntimeIpcStreamInvalidationReason, RuntimeSessionForkRequest, RuntimeSessionRenameRequest,
     RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
 };
-use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
-use bitfun_runtime_ports::{
+use openbitfun_events::{AgenticEvent, AgenticEventEnvelope};
+use openbitfun_runtime_ports::{
     put_agent_workspace_references, AgentContextReloadRequest, AgentModeCatalogQuery,
     AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
     AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget,
@@ -355,7 +355,7 @@ pub(crate) struct CliAgentRuntimeClient {
     current_turn_id: Arc<Mutex<Option<String>>>,
     shared_agent_events: Option<SharedBroadcast<AgenticEventEnvelope>>,
     shared_permission_events:
-        Option<SharedBroadcast<bitfun_agent_runtime::sdk::PermissionRequestEvent>>,
+        Option<SharedBroadcast<openbitfun_agent_runtime::sdk::PermissionRequestEvent>>,
     shared_pending_permissions: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 }
 
@@ -455,9 +455,9 @@ impl CliAgentRuntimeClient {
                 }
                 let workspace = PathBuf::from(&binding.workspace_path);
                 if let Err(error) =
-                    bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
-                        &workspace,
-                    ))
+                    openbitfun_core::external_sources::ensure_external_source_workspace_snapshot(
+                        Some(&workspace),
+                    )
                     .await
                 {
                     tracing::warn!("Failed to initialize external agent sources: {error}");
@@ -510,7 +510,7 @@ impl CliAgentRuntimeClient {
         match &self.backend {
             CliAgentRuntimeBackend::Embedded(runtime) => Ok(runtime),
             CliAgentRuntimeBackend::Shared(_) => Err(anyhow::anyhow!(
-                "{operation} is not available in the first Shared TUI slice; use default Embedded `bitfun chat`"
+                "{operation} is not available in the first Shared TUI slice; use default Embedded `openbitfun chat`"
             )),
         }
     }
@@ -758,7 +758,7 @@ impl CliAgentRuntimeClient {
         root_session_id: &str,
         session_id: &str,
         expected_active_turn_id: &str,
-    ) -> Result<bitfun_agent_runtime::sdk::AgentTurnCancellationResult> {
+    ) -> Result<openbitfun_agent_runtime::sdk::AgentTurnCancellationResult> {
         let request = AgentSessionLineageCancellationRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             root_session_id: root_session_id.to_string(),
@@ -816,12 +816,12 @@ impl CliAgentRuntimeClient {
                         .map_err(anyhow::Error::new)
                         .map_err(with_session_conflict_help)?;
                     let restored_turn_id = match &restored.state {
-                        bitfun_agent_runtime::sdk::SessionState::Processing {
+                        openbitfun_agent_runtime::sdk::SessionState::Processing {
                             current_turn_id,
                             ..
                         } => Some(current_turn_id.clone()),
-                        bitfun_agent_runtime::sdk::SessionState::Idle
-                        | bitfun_agent_runtime::sdk::SessionState::Error { .. } => None,
+                        openbitfun_agent_runtime::sdk::SessionState::Idle
+                        | openbitfun_agent_runtime::sdk::SessionState::Error { .. } => None,
                     };
                     let transcript = runtime
                         .read_session_transcript(SessionTranscriptRequest {
@@ -860,12 +860,14 @@ impl CliAgentRuntimeClient {
                         ..
                     } => {
                         let restored_turn_id = match state {
-                            bitfun_agent_runtime_ipc::RuntimeSessionState::Processing {
+                            openbitfun_agent_runtime_ipc::RuntimeSessionState::Processing {
                                 current_turn_id,
                                 ..
                             } => Some(current_turn_id),
-                            bitfun_agent_runtime_ipc::RuntimeSessionState::Idle
-                            | bitfun_agent_runtime_ipc::RuntimeSessionState::Error { .. } => None,
+                            openbitfun_agent_runtime_ipc::RuntimeSessionState::Idle
+                            | openbitfun_agent_runtime_ipc::RuntimeSessionState::Error { .. } => {
+                                None
+                            }
                         };
                         (
                             session,
@@ -2084,9 +2086,9 @@ fn shared_receiver<T: Clone>(
 fn spawn_shared_event_bridge(
     mut source: broadcast::Receiver<RuntimeIpcClientEvent>,
     agent_sender: broadcast::Sender<AgenticEventEnvelope>,
-    permission_sender: broadcast::Sender<bitfun_agent_runtime::sdk::PermissionRequestEvent>,
+    permission_sender: broadcast::Sender<openbitfun_agent_runtime::sdk::PermissionRequestEvent>,
     agent_owner: SharedBroadcast<AgenticEventEnvelope>,
-    permission_owner: SharedBroadcast<bitfun_agent_runtime::sdk::PermissionRequestEvent>,
+    permission_owner: SharedBroadcast<openbitfun_agent_runtime::sdk::PermissionRequestEvent>,
     pending: Arc<RwLock<HashMap<String, PermissionRequest>>>,
 ) {
     tokio::spawn(async move {
@@ -2101,17 +2103,19 @@ fn spawn_shared_event_bridge(
                 })) => {
                     project_routed_permission_event(&mut event, &session_id);
                     match &event {
-                        bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } => {
+                        openbitfun_agent_runtime::sdk::PermissionRequestEvent::Asked {
+                            request,
+                        } => {
                             pending
                                 .write()
                                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                                 .insert(request.request_id.clone(), request.clone());
                         }
-                        bitfun_agent_runtime::sdk::PermissionRequestEvent::Replied {
+                        openbitfun_agent_runtime::sdk::PermissionRequestEvent::Replied {
                             request_id,
                             ..
                         }
-                        | bitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled {
+                        | openbitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled {
                             request_id,
                             ..
                         } => {
@@ -2133,7 +2137,7 @@ fn spawn_shared_event_bridge(
                     };
                     let _ = agent_sender.send(AgenticEventEnvelope::new(
                         event,
-                        bitfun_events::AgenticEventPriority::Critical,
+                        openbitfun_events::AgenticEventPriority::Critical,
                     ));
                     break;
                 }
@@ -2147,7 +2151,7 @@ fn spawn_shared_event_bridge(
                     };
                     let _ = agent_sender.send(AgenticEventEnvelope::new(
                         event,
-                        bitfun_events::AgenticEventPriority::Critical,
+                        openbitfun_events::AgenticEventPriority::Critical,
                     ));
                     break;
                 }
@@ -2173,10 +2177,10 @@ fn shared_disconnect_message(reason: Option<RuntimeIpcStreamInvalidationReason>)
 }
 
 fn project_routed_permission_event(
-    event: &mut bitfun_agent_runtime::sdk::PermissionRequestEvent,
+    event: &mut openbitfun_agent_runtime::sdk::PermissionRequestEvent,
     routed_session_id: &str,
 ) {
-    let bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } = event else {
+    let openbitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } = event else {
         return;
     };
     if request.session_id == routed_session_id {
@@ -2200,7 +2204,7 @@ fn unexpected_shared_result(operation: &str) -> anyhow::Error {
 
 #[cfg(test)]
 mod recovery_tests {
-    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+    use openbitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
 
     use super::CliAgentRuntimeClient;
 
@@ -2224,24 +2228,26 @@ mod recovery_tests {
 mod tests {
     use std::path::Path;
 
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         AgentSessionSummary, AgentSessionWorkspaceBinding, SessionExecutionTarget,
         SessionExecutionTargetKind, WorktreeLifecycle,
     };
 
-    use bitfun_agent_runtime::sdk::{
+    use openbitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
         PermissionRequestSource, PermissionRequestSourceKind, PortError, PortErrorKind,
         RuntimeError,
     };
-    use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
+    use openbitfun_agent_runtime_ipc::{
+        RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode,
+    };
 
     use super::{
         project_routed_permission_event, session_migration_notices, shared_disconnect_message,
         shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionMigrationNotice,
         SessionOperationError,
     };
-    use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
+    use openbitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
     #[test]
     fn oversized_shared_restore_explains_the_embedded_handoff() {
@@ -2251,7 +2257,7 @@ mod tests {
         }));
         let message = error.to_string();
         assert!(message.contains("history is too large"));
-        assert!(message.contains("default Embedded `bitfun chat`"));
+        assert!(message.contains("default Embedded `openbitfun chat`"));
     }
 
     #[test]
@@ -2284,7 +2290,7 @@ mod tests {
         );
         assert!(
             !SessionOperationError::shared(RuntimeIpcClientError::RequestEncoding(
-                bitfun_agent_runtime_ipc::RuntimeIpcIoError::FrameTooLarge {
+                openbitfun_agent_runtime_ipc::RuntimeIpcIoError::FrameTooLarge {
                     size: 129,
                     max_bytes: 128,
                 },
@@ -2335,7 +2341,7 @@ mod tests {
         let message =
             shared_disconnect_message(Some(RuntimeIpcStreamInvalidationReason::FrameTooLarge));
         assert!(message.contains("cancellation was requested"));
-        assert!(message.contains("default Embedded `bitfun chat`"));
+        assert!(message.contains("default Embedded `openbitfun chat`"));
     }
 
     #[test]
@@ -2795,8 +2801,8 @@ mod dual_backend_behavior_tests {
     use std::time::Duration;
 
     use async_trait::async_trait;
-    use bitfun_agent_runtime::event_queue::{EventQueue, EventQueueConfig};
-    use bitfun_agent_runtime::sdk::{
+    use openbitfun_agent_runtime::event_queue::{EventQueue, EventQueueConfig};
+    use openbitfun_agent_runtime::sdk::{
         AgentDialogTurnPort, AgentDialogTurnRequest, AgentEventSource, AgentModeCatalogEntry,
         AgentModeCatalogPort, AgentModeCatalogQuery, AgentRuntime, AgentRuntimeBuilder,
         AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
@@ -2810,11 +2816,11 @@ mod dual_backend_behavior_tests {
         PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeError,
         SessionState, SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest,
     };
-    use bitfun_agent_runtime_ipc::{
+    use openbitfun_agent_runtime_ipc::{
         RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcErrorCode,
         RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeIpcServer, RuntimeIpcServerConfig,
     };
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionReplyStorePort,
         RuntimeServiceCapability, RuntimeServicePort, SessionExecutionTarget,
         SessionExecutionTargetKind, WorktreeLifecycle,
@@ -2836,7 +2842,8 @@ mod dual_backend_behavior_tests {
     struct FixtureState {
         workspace: PathBuf,
         event_queue: Arc<EventQueue>,
-        sessions: Arc<StdMutex<HashMap<String, bitfun_agent_runtime::sdk::AgentSessionSummary>>>,
+        sessions:
+            Arc<StdMutex<HashMap<String, openbitfun_agent_runtime::sdk::AgentSessionSummary>>>,
         transcripts: Arc<StdMutex<HashMap<String, SessionTranscript>>>,
         cancellation_requests: Arc<StdMutex<Vec<AgentTurnCancellationRequest>>>,
         settlement_outcomes: Arc<StdMutex<HashMap<String, Option<PortError>>>>,
@@ -2858,8 +2865,8 @@ mod dual_backend_behavior_tests {
             session_id: impl Into<String>,
             session_name: impl Into<String>,
             agent_type: impl Into<String>,
-        ) -> bitfun_agent_runtime::sdk::AgentSessionSummary {
-            bitfun_agent_runtime::sdk::AgentSessionSummary {
+        ) -> openbitfun_agent_runtime::sdk::AgentSessionSummary {
+            openbitfun_agent_runtime::sdk::AgentSessionSummary {
                 session_id: session_id.into(),
                 session_name: session_name.into(),
                 agent_type: agent_type.into(),
@@ -2969,7 +2976,7 @@ mod dual_backend_behavior_tests {
         async fn list_sessions(
             &self,
             _request: AgentSessionListRequest,
-        ) -> PortResult<Vec<bitfun_agent_runtime::sdk::AgentSessionSummary>> {
+        ) -> PortResult<Vec<openbitfun_agent_runtime::sdk::AgentSessionSummary>> {
             Ok(self
                 .state
                 .sessions
@@ -2996,7 +3003,7 @@ mod dual_backend_behavior_tests {
 
         async fn rename_session(
             &self,
-            request: bitfun_agent_runtime::sdk::AgentSessionRenameRequest,
+            request: openbitfun_agent_runtime::sdk::AgentSessionRenameRequest,
         ) -> PortResult<()> {
             let mut sessions = self.state.sessions.lock().unwrap();
             let session = sessions.get_mut(&request.session_id).ok_or_else(|| {
@@ -3216,7 +3223,7 @@ mod dual_backend_behavior_tests {
     impl PermissionReplyStorePort for MemoryPermissionStore {
         async fn commit_permission_reply(
             &self,
-            _grants: Vec<bitfun_agent_runtime::sdk::PermissionGrant>,
+            _grants: Vec<openbitfun_agent_runtime::sdk::PermissionGrant>,
             audit: Vec<PermissionAuditRecord>,
         ) -> PortResult<()> {
             self.audit.lock().unwrap().extend(audit);
@@ -3709,7 +3716,7 @@ mod dual_backend_behavior_tests {
 
         let response = client
             .request(RuntimeIpcOperation::GetSessionLineage {
-                request: bitfun_agent_runtime::sdk::AgentSessionLineageRequest {
+                request: openbitfun_agent_runtime::sdk::AgentSessionLineageRequest {
                     workspace_path: fixture.workspace.to_string_lossy().into_owned(),
                     anchor_session_id: session.session_id,
                     remote_connection_id: Some("remote-connection".to_string()),

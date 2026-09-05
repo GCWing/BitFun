@@ -1,6 +1,6 @@
 import React, { forwardRef, useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input } from '@bitfun/ui';
+import { Input } from '@openbitfun/ui';
 
 export interface ConfigInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
    
@@ -63,8 +63,8 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
                 <span
                   aria-hidden="true"
                   className="config-form-label__required"
-                  data-bf-component="config"
-                  data-bf-part="required"
+                  data-openbitfun-component="config"
+                  data-openbitfun-part="required"
                 >
                   *
                 </span>
@@ -91,8 +91,8 @@ export const ConfigInput = forwardRef<HTMLInputElement, ConfigInputProps>(({
               <span
                 aria-hidden="true"
                 className="config-form-label__required"
-                data-bf-component="config"
-                data-bf-part="required"
+                data-openbitfun-component="config"
+                data-openbitfun-part="required"
               >
                 *
               </span>

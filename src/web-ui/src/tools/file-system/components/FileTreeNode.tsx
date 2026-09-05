@@ -30,7 +30,7 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
   const indentDepth = getPathDepth(node.path, workspacePath);
 
   return (
-    <div className={`bitfun-file-explorer__node ${className}`}>
+    <div className={`openbitfun-file-explorer__node ${className}`}>
       <FileTreeItem
         node={node}
         level={level}
@@ -48,7 +48,7 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
       />
 
       {node.isDirectory && isExpanded && (
-        <div className="bitfun-file-explorer__node-children">
+        <div className="openbitfun-file-explorer__node-children">
           {(node.children ?? []).map(child => (
             <FileTreeNode
               key={child.path}

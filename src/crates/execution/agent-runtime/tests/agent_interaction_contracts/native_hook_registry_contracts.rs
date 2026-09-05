@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitfun_agent_runtime::native_hooks::{
+use openbitfun_agent_runtime::native_hooks::{
     AgentHookEngine, AgentHookMatcher, PluginHookCall, PluginHookExecutor,
     PluginHookGenerationIdentity, PluginHookResult, RuntimeHookActivation, RuntimeHookKind,
     RuntimeHookPlan, RuntimeHookRegistration, RuntimeHookRegistry, RuntimeHookSource,

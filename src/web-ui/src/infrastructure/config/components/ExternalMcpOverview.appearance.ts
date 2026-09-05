@@ -9,9 +9,9 @@ export const externalMcpOverviewAppearanceDescriptor: AppearanceSurfaceDescripto
     { id: 'importOptionContent' }, { id: 'importOptionMeta' }, { id: 'importActions' }, { id: 'empty' },
   ],
   states: [
-    { id: 'pending', selector: { kind: 'self', suffix: '[data-bf-state~="pending"]' } },
-    { id: 'error', selector: { kind: 'self', suffix: '[data-bf-state~="error"]' } },
-    { id: 'muted', selector: { kind: 'self', suffix: '[data-bf-state~="muted"]' } },
-    { id: 'stale', selector: { kind: 'self', suffix: '[data-bf-state~="stale"]' } },
+    { id: 'pending', selector: { kind: 'self', suffix: '[data-openbitfun-state~="pending"]' } },
+    { id: 'error', selector: { kind: 'self', suffix: '[data-openbitfun-state~="error"]' } },
+    { id: 'muted', selector: { kind: 'self', suffix: '[data-openbitfun-state~="muted"]' } },
+    { id: 'stale', selector: { kind: 'self', suffix: '[data-openbitfun-state~="stale"]' } },
   ],
 };

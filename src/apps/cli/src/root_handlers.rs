@@ -15,8 +15,8 @@ use crate::{
     ConfigAction, DispatchAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
 };
-use bitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, SessionTranscriptRequest};
-use bitfun_core::external_sources::{
+use openbitfun_agent_runtime::sdk::{AgentSessionRestoreRequest, SessionTranscriptRequest};
+use openbitfun_core::external_sources::{
     external_source_snapshot, sanitize_external_source_operation_error,
     update_external_integration_policy, EcosystemId, ExternalIntegrationAccess,
     ExternalIntegrationCapabilityId, ExternalIntegrationMode, ExternalIntegrationPolicyMutation,
@@ -49,7 +49,7 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
     // worker builds its runtime. Select the CLI profile at the process entry
     // point so config canonicalization cannot lazily claim product-full first.
     crate::agent::agentic_system::select_agentic_system_profile(
-        bitfun_core::product_assembly::DeliveryProfile::Cli,
+        openbitfun_core::product_assembly::DeliveryProfile::Cli,
     )?;
     let verb = match action {
         DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
@@ -107,6 +107,8 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
         }
         Err(error) => {
             let response = serde_json::json!({
+                "productId": openbitfun_services_core::product_identity::product_id(),
+                "dataNamespace": openbitfun_services_core::product_identity::data_namespace(),
                 "protocolVersion": crate::dispatch::protocol::DISPATCH_PROTOCOL_VERSION,
                 "error": format!("{error:#}"),
             });
@@ -144,12 +146,16 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
         );
     }
     if let Some(session_id) = resume.as_deref().filter(|session_id| *session_id != "last") {
-        if let Err(error) = bitfun_agent_runtime::session_control::validate_session_id(session_id) {
+        if let Err(error) =
+            openbitfun_agent_runtime::session_control::validate_session_id(session_id)
+        {
             return exec_preflight_error(args.output_format, anyhow::anyhow!(error));
         }
     }
     if let Some(session_id) = args.session_id.as_deref() {
-        if let Err(error) = bitfun_agent_runtime::session_control::validate_session_id(session_id) {
+        if let Err(error) =
+            openbitfun_agent_runtime::session_control::validate_session_id(session_id)
+        {
             return exec_preflight_error(args.output_format, anyhow::anyhow!(error));
         }
     }
@@ -359,11 +365,11 @@ pub(crate) async fn handle_session_action(
         }
 
         SessionAction::Delete { id } => {
-            bitfun_agent_runtime::session_control::validate_session_id(&id)
+            openbitfun_agent_runtime::session_control::validate_session_id(&id)
                 .map_err(anyhow::Error::msg)?;
             runtime
                 .agent_runtime()
-                .delete_session(bitfun_runtime_ports::AgentSessionDeleteRequest {
+                .delete_session(openbitfun_runtime_ports::AgentSessionDeleteRequest {
                     workspace_path: workspace_path.to_string_lossy().to_string(),
                     session_id: id.clone(),
                     remote_connection_id: None,
@@ -391,7 +397,7 @@ pub(crate) async fn handle_session_action(
                 resolve_cli_session_id(runtime.agent_runtime(), &workspace_path, &id).await?;
             let result = runtime
                 .agent_runtime()
-                .fork_session(bitfun_agent_runtime::sdk::AgentSessionForkRequest {
+                .fork_session(openbitfun_agent_runtime::sdk::AgentSessionForkRequest {
                     workspace_path: workspace_path.to_string_lossy().to_string(),
                     source_session_id: session_id.clone(),
                     remote_connection_id: None,
@@ -416,7 +422,7 @@ pub(crate) async fn handle_session_action(
 }
 
 async fn resolve_cli_session_id(
-    runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
+    runtime: &openbitfun_agent_runtime::sdk::AgentRuntime,
     workspace_path: &Path,
     id: &str,
 ) -> Result<String> {
@@ -428,16 +434,17 @@ async fn resolve_cli_session_id(
             .ok_or_else(|| anyhow::anyhow!("No history sessions"));
     }
 
-    bitfun_agent_runtime::session_control::validate_session_id(id).map_err(anyhow::Error::msg)?;
+    openbitfun_agent_runtime::session_control::validate_session_id(id)
+        .map_err(anyhow::Error::msg)?;
     Ok(id.to_string())
 }
 
 async fn list_cli_sessions(
-    runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
+    runtime: &openbitfun_agent_runtime::sdk::AgentRuntime,
     workspace_path: &Path,
-) -> Result<Vec<bitfun_runtime_ports::AgentSessionSummary>> {
+) -> Result<Vec<openbitfun_runtime_ports::AgentSessionSummary>> {
     runtime
-        .list_sessions(bitfun_runtime_ports::AgentSessionListRequest {
+        .list_sessions(openbitfun_runtime_ports::AgentSessionListRequest {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -532,7 +539,7 @@ fn print_external_policy_status(snapshot: &ExternalSourceCatalogSnapshot) {
             "Status: safely off (policy schema {} is not supported by this version)",
             policy.schema_major
         );
-        println!("Recovery: bitfun config external reset-incompatible");
+        println!("Recovery: openbitfun config external reset-incompatible");
         println!("The original policy will be backed up before safe defaults are restored.");
         return;
     }
@@ -541,7 +548,7 @@ fn print_external_policy_status(snapshot: &ExternalSourceCatalogSnapshot) {
             "Status: safely off (policy status '{}' is not supported by this version)",
             policy.status.as_str()
         );
-        println!("Recovery: upgrade BitFun or connect through a compatible workspace host.");
+        println!("Recovery: upgrade OpenBitFun or connect through a compatible workspace host.");
         return;
     }
 
@@ -607,7 +614,7 @@ fn external_cli_operation_error(error: String) -> anyhow::Error {
             "This external integration requires review before it can run."
         }
         ExternalSourceOperationErrorCode::PolicyIncompatible => {
-            "Compatibility settings were written by a newer BitFun version."
+            "Compatibility settings were written by a newer OpenBitFun version."
         }
         ExternalSourceOperationErrorCode::PolicyLimited => {
             "The current safety policy does not allow this change."
@@ -629,7 +636,7 @@ fn external_cli_operation_error(error: String) -> anyhow::Error {
         }
         ExternalSourceOperationErrorCode::Unsupported
         | ExternalSourceOperationErrorCode::IncompatibleVersion => {
-            "This external integration is not supported by the current BitFun version."
+            "This external integration is not supported by the current OpenBitFun version."
         }
         ExternalSourceOperationErrorCode::Timeout
         | ExternalSourceOperationErrorCode::Overloaded
@@ -641,7 +648,7 @@ fn external_cli_operation_error(error: String) -> anyhow::Error {
         }
         ExternalSourceOperationErrorCode::InvalidResponse
         | ExternalSourceOperationErrorCode::Internal => {
-            "BitFun could not complete the external integration operation."
+            "OpenBitFun could not complete the external integration operation."
         }
     };
     let reference = error
@@ -659,7 +666,7 @@ fn select_external_ecosystem(
 ) -> Result<EcosystemId> {
     if !status.is_compatible() {
         return Err(anyhow::anyhow!(
-            "External compatibility policy is unsupported and safely off; upgrade BitFun or reset an incompatible policy before changing it"
+            "External compatibility policy is unsupported and safely off; upgrade OpenBitFun or reset an incompatible policy before changing it"
         ));
     }
     if let Some(requested) = requested {
@@ -697,8 +704,8 @@ async fn resolve_external_ecosystem(requested: Option<String>) -> Result<Ecosyst
 }
 
 fn print_external_policy_ecosystems(
-    policy: &bitfun_core::external_sources::ExternalIntegrationPolicySnapshot,
-    effective: &bitfun_core::external_sources::EffectiveExternalIntegrationPolicy,
+    policy: &openbitfun_core::external_sources::ExternalIntegrationPolicySnapshot,
+    effective: &openbitfun_core::external_sources::EffectiveExternalIntegrationPolicy,
     indent: &str,
 ) {
     for descriptor in &policy.registered_ecosystems {
@@ -754,7 +761,7 @@ async fn update_external_policy(
                 == ExternalIntegrationPolicyStatus::IncompatibleSchema)
     {
         return Err(anyhow::anyhow!(
-            "External compatibility policy is unsupported and safely off; upgrade BitFun or reset an incompatible policy before changing it"
+            "External compatibility policy is unsupported and safely off; upgrade OpenBitFun or reset an incompatible policy before changing it"
         ));
     }
     let snapshot = update_external_integration_policy(
@@ -849,20 +856,21 @@ async fn handle_external_config_action(action: ExternalConfigAction) -> Result<(
 }
 
 pub(crate) fn handle_health_command() -> Result<()> {
-    use bitfun_core::runtime_ports::PluginRuntimeAvailability;
+    use openbitfun_core::runtime_ports::PluginRuntimeAvailability;
 
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
-    let (_, services) = bitfun_core::product_runtime::build_local_runtime_services(&workspace, 16)?;
+    let (_, services) =
+        openbitfun_core::product_runtime::build_local_runtime_services(&workspace, 16)?;
     let product_runtime = crate::product_assembly::assemble_cli_runtime_parts(services)?;
 
-    println!("BitFun CLI health");
+    println!("OpenBitFun CLI health");
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
     println!(
         "Product runtime: {} assembly-ready",
         product_runtime.plan().profile().id()
     );
     println!("Runtime capability registrations: complete");
-    println!("Execution owner: bitfun-core compatibility");
+    println!("Execution owner: openbitfun-core compatibility");
     match product_runtime.plugin_runtime().availability() {
         PluginRuntimeAvailability::Disabled { reason } => {
             println!("Plugin runtime: disabled ({reason})");
@@ -885,14 +893,14 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
     let workspace_root = std::env::current_dir().context("Failed to resolve ACP workspace")?;
 
     crate::agent::agentic_system::select_agentic_system_profile(
-        bitfun_core::product_assembly::DeliveryProfile::Acp,
+        openbitfun_core::product_assembly::DeliveryProfile::Acp,
     )?;
-    bitfun_core::service::config::initialize_global_config()
+    openbitfun_core::service::config::initialize_global_config()
         .await
         .context("Failed to initialize global config service")?;
     tracing::info!("Global config service initialized");
 
-    use bitfun_core::infrastructure::ai::AIClientFactory;
+    use openbitfun_core::infrastructure::ai::AIClientFactory;
     AIClientFactory::initialize_global()
         .await
         .context("Failed to initialize global AIClientFactory")?;
@@ -900,19 +908,20 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     crate::initialize_terminal_service().await;
 
-    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+    let path_manager = openbitfun_core::infrastructure::try_get_path_manager_arc()
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-    let deployment = bitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded;
-    let runtime_ownership = bitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
-        path_manager.as_ref(),
-        "acp",
-        &workspace_root,
-        deployment,
-    )
-    .map_err(|error| anyhow::anyhow!(error.startup_message(deployment, "acp")))?;
+    let deployment = openbitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded;
+    let runtime_ownership =
+        openbitfun_core::runtime_ownership::CoreRuntimeOwnership::fixed_workspace(
+            path_manager.as_ref(),
+            "acp",
+            &workspace_root,
+            deployment,
+        )
+        .map_err(|error| anyhow::anyhow!(error.startup_message(deployment, "acp")))?;
 
     let agentic_system = crate::agent::agentic_system::init_agentic_system(
-        bitfun_core::product_assembly::DeliveryProfile::Acp,
+        openbitfun_core::product_assembly::DeliveryProfile::Acp,
         std::sync::Arc::new(runtime_ownership),
     )
     .await
@@ -921,7 +930,7 @@ pub(crate) async fn serve_acp_stdio() -> Result<()> {
 
     let runtime = crate::runtime::AcpRuntimeContext::build(agentic_system, workspace_root)?;
     let (agent_runtime, compatibility) = runtime.parts();
-    bitfun_acp::BitfunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;
+    openbitfun_acp::OpenBitFunAcpRuntime::serve_stdio(agent_runtime, compatibility).await?;
     Ok(())
 }
 

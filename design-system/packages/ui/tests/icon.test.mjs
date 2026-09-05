@@ -24,8 +24,8 @@ test("Icon exposes the complete named catalog without duplicate names", () => {
 test("Icon is decorative by default and owns its exact asset source", () => {
   const markup = renderToStaticMarkup(createElement(Icon, { name: "search" }));
 
-  assert.match(markup, /data-bf-component="icon"/);
-  assert.match(markup, /data-bf-name="search"/);
+  assert.match(markup, /data-openbitfun-component="icon"/);
+  assert.match(markup, /data-openbitfun-name="search"/);
   assert.match(markup, /data-size="lg"/);
   assert.match(markup, /aria-hidden="true"/);
   assert.match(markup, /mask-image:url/);
@@ -44,16 +44,16 @@ test("Icon exposes semantic size, tone, and accessible label independently", () 
   assert.match(markup, /aria-label="Successful"/);
   assert.doesNotMatch(markup, /aria-hidden/);
   assert.match(markup, /data-size="sm"/);
-  assert.match(markup, /data-bf-tone="success"/);
+  assert.match(markup, /data-openbitfun-tone="success"/);
 });
 
 test("Icon styles consume only public geometry and semantic color tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--bf-control-icon-size2xs/);
-  assert.match(styles, /--bf-control-icon-size-lg/);
-  assert.match(styles, /--bf-color-content-primary/);
-  assert.match(styles, /--bf-color-status-success-content/);
+  assert.match(styles, /--openbitfun-control-icon-size2xs/);
+  assert.match(styles, /--openbitfun-control-icon-size-lg/);
+  assert.match(styles, /--openbitfun-color-content-primary/);
+  assert.match(styles, /--openbitfun-color-status-success-content/);
   assert.match(styles, /mask-size:contain/);
 });
 
@@ -116,6 +116,6 @@ test("published Icon masks contain the current asset attributes for every catalo
 test("Combobox constrains catalog glyphs in both value and indicator slots", async () => {
   const source = await readFile(new URL("../src/components/Combobox/Combobox.module.css", import.meta.url), "utf8");
   for (const slot of ["valueLeading", "indicator"]) {
-    assert.match(source, new RegExp(`\\.${slot} > \\[data-bf-component="icon"\\]\\s*\\{\\s*inline-size: 100%;\\s*block-size: 100%;`));
+    assert.match(source, new RegExp(`\\.${slot} > \\[data-openbitfun-component="icon"\\]\\s*\\{\\s*inline-size: 100%;\\s*block-size: 100%;`));
   }
 });

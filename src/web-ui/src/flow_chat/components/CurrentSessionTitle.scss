@@ -2,28 +2,28 @@
  * CurrentSessionTitle styles
  * Displays the title of the active session
  */
-.bitfun-current-session-title {
+.openbitfun-current-session-title {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   height: 100%;
-  padding: 0 var(--bf-space-4);
+  padding: 0 var(--openbitfun-space-4);
   user-select: none;
   cursor: default;
   position: relative;
 
   &__text {
-    font-size: var(--bf-type-flow-body-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-flow-body-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 500px;
 
-    transition: opacity var(--bf-motion-duration-base) var(--bf-motion-easing-standard),
-                color var(--bf-motion-duration-base) var(--bf-motion-easing-standard);
+    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
+                color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
   }
 
   &__create-btn {
@@ -34,27 +34,27 @@
     height: 24px;
     padding: 0;
     border: none;
-    border-radius: var(--bf-radius-sm);
+    border-radius: var(--openbitfun-radius-sm);
     background: transparent;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     opacity: 1;
     transition:
-      transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
     flex-shrink: 0;
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-accent-default);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-accent-default);
       transform: translateY(-1px);
     }
 
     &:active {
       transform: translateY(0);
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     svg {
@@ -63,12 +63,12 @@
   }
 
   &:hover {
-    .bitfun-current-session-title__text {
-      color: var(--bf-color-content-primary);
+    .openbitfun-current-session-title__text {
+      color: var(--openbitfun-color-content-primary);
     }
 
-    .bitfun-current-session-title__create-btn {
-      color: var(--bf-color-content-secondary);
+    .openbitfun-current-session-title__create-btn {
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 }

@@ -12,7 +12,7 @@ function extractShellCss(html: string): string {
   const css = match?.[1] ?? '';
   return css.replace(
     /^(\s*):root\s*\{/m,
-    '$1.bitfun-generative-widget-static-renderer {',
+    '$1.openbitfun-generative-widget-static-renderer {',
   );
 }
 
@@ -49,17 +49,17 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
     if (!root) return;
 
     const globalWindow = window as Window & {
-      bitfunWidget?: { send: (data: unknown) => void };
+      openbitfunWidget?: { send: (data: unknown) => void };
       glimpse?: { send: (data: unknown) => void };
       sendPrompt?: (text: string) => void;
     };
 
-    const prevBridge = globalWindow.bitfunWidget;
+    const prevBridge = globalWindow.openbitfunWidget;
     const prevGlimpse = globalWindow.glimpse;
     const prevSendPrompt = globalWindow.sendPrompt;
 
     const noopBridge = { send: (_data: unknown) => {} };
-    globalWindow.bitfunWidget = noopBridge;
+    globalWindow.openbitfunWidget = noopBridge;
     globalWindow.glimpse = noopBridge;
     globalWindow.sendPrompt = (_text: string) => {};
 
@@ -68,7 +68,7 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
 
     return () => {
       root.innerHTML = '';
-      globalWindow.bitfunWidget = prevBridge;
+      globalWindow.openbitfunWidget = prevBridge;
       globalWindow.glimpse = prevGlimpse;
       globalWindow.sendPrompt = prevSendPrompt;
     };
@@ -77,7 +77,7 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
   const appearanceStyle = useMemo(() => {
     const style: React.CSSProperties & Record<string, string> = {
       background: 'transparent',
-      color: 'var(--bf-color-content-primary)',
+      color: 'var(--openbitfun-color-content-primary)',
       width: '100%',
     };
 
@@ -90,13 +90,13 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
 
   return (
     <div
-      className={`bitfun-generative-widget-static-renderer ${className}`.trim()}
+      className={`openbitfun-generative-widget-static-renderer ${className}`.trim()}
       style={appearanceStyle}
-      data-bf-appearance={appearancePayload?.id ?? 'unknown'}
-      data-bf-appearance-mode={appearancePayload?.mode ?? 'dark'}
+      data-openbitfun-appearance={appearancePayload?.id ?? 'unknown'}
+      data-openbitfun-appearance-mode={appearancePayload?.mode ?? 'dark'}
     >
       <style>{shellCss}</style>
-      <div ref={rootRef} className="bitfun-generative-widget-static-renderer__root" />
+      <div ref={rootRef} className="openbitfun-generative-widget-static-renderer__root" />
     </div>
   );
 };

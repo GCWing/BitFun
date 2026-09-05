@@ -1,5 +1,5 @@
 use crate::stream::types::unified::{UnifiedResponse, UnifiedTokenUsage};
-use bitfun_agent_stream::ToolCallCompletion;
+use openbitfun_agent_stream::ToolCallCompletion;
 use serde_json::Value;
 use std::mem;
 
@@ -350,7 +350,7 @@ mod tests {
 
         let responses = parser.normalize_response(UnifiedResponse {
             text: Some("<think>abc</think>done".to_string()),
-            tool_call_completion: Some(bitfun_agent_stream::ToolCallCompletion::NormalToolUse),
+            tool_call_completion: Some(openbitfun_agent_stream::ToolCallCompletion::NormalToolUse),
             finish_reason: Some("stop".to_string()),
             ..Default::default()
         });
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(responses[1].text.as_deref(), Some("done"));
         assert_eq!(
             responses[1].tool_call_completion,
-            Some(bitfun_agent_stream::ToolCallCompletion::NormalToolUse)
+            Some(openbitfun_agent_stream::ToolCallCompletion::NormalToolUse)
         );
         assert_eq!(responses[1].finish_reason.as_deref(), Some("stop"));
     }

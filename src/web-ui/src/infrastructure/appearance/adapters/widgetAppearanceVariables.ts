@@ -1,4 +1,4 @@
-import { themeCssVariables } from '@bitfun/theme-bitfun';
+import { themeCssVariables } from '@openbitfun/theme-openbitfun';
 
 import type { AppearanceThemeTokenName } from '../types';
 

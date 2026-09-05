@@ -356,7 +356,7 @@ export default function remoteControllersUnitTest() {
 
   describe('FileTargetResolver', () => {
     it('resolves remote file references and line ranges', 0, () => {
-      const context = new FilePreviewTargetContext('session-1', '/workspace/BitFun', 4);
+      const context = new FilePreviewTargetContext('session-1', '/workspace/OpenBitFun', 4);
       const computer = FileTargetResolver.resolve('computer://src/main.rs#L42-L58', '', context);
       const relative = FileTargetResolver.resolve('README.md:12-18', 'Readme', context);
       const windows = FileTargetResolver.resolve('C:\\workspace\\main.cpp#L9', '', context);
@@ -375,7 +375,7 @@ export default function remoteControllersUnitTest() {
     });
 
     it('normalizes schemes, encoded paths, extensionless files and trailing punctuation', 0, () => {
-      const context = new FilePreviewTargetContext('session-1', '/workspace/BitFun', 4);
+      const context = new FilePreviewTargetContext('session-1', '/workspace/OpenBitFun', 4);
       const fileUrl = FileTargetResolver.resolve('file:///workspace/Makefile', '', context);
       const encoded = FileTargetResolver.resolve('computer://docs/My%20File.md),', '', context);
       const dockerfile = FileTargetResolver.resolve('/workspace/Dockerfile', '', context);
@@ -392,7 +392,7 @@ export default function remoteControllersUnitTest() {
     });
 
     it('classifies web, anchor and unsupported references without file targets', 0, () => {
-      const context = new FilePreviewTargetContext('session-1', '/workspace/BitFun', 1);
+      const context = new FilePreviewTargetContext('session-1', '/workspace/OpenBitFun', 1);
       expect(FileTargetResolver.resolve('https://example.com', '', context).kind)
         .assertEqual(FileReferenceKind.HttpUrl);
       expect(FileTargetResolver.resolve('http://example.com', '', context).kind)
@@ -467,7 +467,7 @@ export default function remoteControllersUnitTest() {
       const state = new FilePreviewState();
       const controller = new RemoteFilePreviewController(client, state, () => true, () => 3);
       const target = new FilePreviewTarget(
-        'computer://src/main.rs', 'src/main.rs', 'main.rs', 'session-1', '/workspace/BitFun', 3
+        'computer://src/main.rs', 'src/main.rs', 'main.rs', 'session-1', '/workspace/OpenBitFun', 3
       );
 
       await controller.open(target);
@@ -866,12 +866,12 @@ export default function remoteControllersUnitTest() {
         fileSaver
       );
 
-      await controller.download('/workspace/BitFun/README.md', 'session-1', false, true);
+      await controller.download('/workspace/OpenBitFun/README.md', 'session-1', false, true);
 
-      expect(client.infoRequests[0]).assertEqual('/workspace/BitFun/README.md|session-1');
-      expect(client.readRequests[0]).assertEqual('/workspace/BitFun/README.md|session-1');
+      expect(client.infoRequests[0]).assertEqual('/workspace/OpenBitFun/README.md|session-1');
+      expect(client.readRequests[0]).assertEqual('/workspace/OpenBitFun/README.md|session-1');
       expect(fileSaver.savedNames[0]).assertEqual('README.md');
-      expect(status.downloadedFilePath).assertEqual('/workspace/BitFun/README.md');
+      expect(status.downloadedFilePath).assertEqual('/workspace/OpenBitFun/README.md');
       expect(status.fileDownloadStatus.indexOf('README.md') >= 0).assertTrue();
       expect(statusText).assertEqual(status.fileDownloadStatus);
       expect(busyEvents[0]).assertTrue();
@@ -881,7 +881,7 @@ export default function remoteControllersUnitTest() {
 
       scheduler.tick(1);
       expect(status.downloadingFilePath).assertEqual('');
-      expect(status.downloadedFilePath).assertEqual('/workspace/BitFun/README.md');
+      expect(status.downloadedFilePath).assertEqual('/workspace/OpenBitFun/README.md');
     });
 
     it('skips unavailable downloads before touching the client', 0, async () => {
@@ -905,9 +905,9 @@ export default function remoteControllersUnitTest() {
       );
 
       await controller.download('', 'session-1', false, true);
-      await controller.download('/workspace/BitFun/README.md', '', false, true);
-      await controller.download('/workspace/BitFun/README.md', 'session-1', true, true);
-      await controller.download('/workspace/BitFun/README.md', 'session-1', false, false);
+      await controller.download('/workspace/OpenBitFun/README.md', '', false, true);
+      await controller.download('/workspace/OpenBitFun/README.md', 'session-1', true, true);
+      await controller.download('/workspace/OpenBitFun/README.md', 'session-1', false, false);
 
       expect(client.infoRequests.length).assertEqual(0);
       expect(client.readRequests.length).assertEqual(0);
@@ -2573,7 +2573,7 @@ export default function remoteControllersUnitTest() {
       updatedAt: '',
       createdAt: '',
       messageCount: 3,
-      workspacePath: '/workspace/bitfun'
+      workspacePath: '/workspace/openbitfun'
     };
     const chatSession: RemoteSession = {
       id: 'chat-1',
@@ -2587,19 +2587,19 @@ export default function remoteControllersUnitTest() {
 
     it('combines query, workspace, agent and status filters', 0, () => {
       expect(ConversationSessionFilterPolicy.matches(
-        codeSession, 'layout', '', '/workspace/bitfun', 'code', 'idle', false
+        codeSession, 'layout', '', '/workspace/openbitfun', 'code', 'idle', false
       )).assertTrue();
       expect(ConversationSessionFilterPolicy.matches(
-        codeSession, 'notes', '', '/workspace/bitfun', 'code', 'idle', false
+        codeSession, 'notes', '', '/workspace/openbitfun', 'code', 'idle', false
       )).assertFalse();
       expect(ConversationSessionFilterPolicy.matches(
         codeSession, '', '', '/workspace/other', 'code', 'idle', false
       )).assertFalse();
       expect(ConversationSessionFilterPolicy.matches(
-        codeSession, '', '', '/workspace/bitfun/', 'code', 'idle', false
+        codeSession, '', '', '/workspace/openbitfun/', 'code', 'idle', false
       )).assertTrue();
       expect(ConversationSessionFilterPolicy.workspacePathsEqual(
-        '/workspace/bitfun/', '/workspace/bitfun'
+        '/workspace/openbitfun/', '/workspace/openbitfun'
       )).assertTrue();
       expect(ConversationSessionFilterPolicy.matches(
         chatSession, '', '/workspace/assistant', '', 'chat', 'active', true
@@ -2652,11 +2652,11 @@ export default function remoteControllersUnitTest() {
         sessions,
         query,
         sortMode: 'project',
-        workspaceName: 'BitFun',
-        workspacePath: '/workspace/bitfun',
+        workspaceName: 'OpenBitFun',
+        workspacePath: '/workspace/openbitfun',
         workspaceKind: 'normal',
         recentWorkspaces: [
-          { path: '/workspace/bitfun', name: 'BitFun', lastOpened: '', workspaceKind: 'normal' },
+          { path: '/workspace/openbitfun', name: 'OpenBitFun', lastOpened: '', workspaceKind: 'normal' },
           { path: '/workspace/notes', name: 'Notes', lastOpened: '', workspaceKind: 'assistant' }
         ],
         workspaceFilter: '',
@@ -2669,16 +2669,16 @@ export default function remoteControllersUnitTest() {
     };
 
     const all: RemoteSession[] = [
-      session('code-1', 'Fix layout', 'code', '/workspace/bitfun'),
-      session('code-2', 'Trailing slash', 'code', '/workspace/bitfun/'),
+      session('code-1', 'Fix layout', 'code', '/workspace/openbitfun'),
+      session('code-2', 'Trailing slash', 'code', '/workspace/openbitfun/'),
       session('chat-1', 'Product notes', 'claw', ''),
       session('chat-2', 'Assistant workspace', 'code', '/workspace/notes'),
-      session('gone-1', 'Archived', 'code', '/workspace/bitfun', 'archived')
+      session('gone-1', 'Archived', 'code', '/workspace/openbitfun', 'archived')
     ];
 
     it('does not invent a workspace group from a name without a path', 0, () => {
       const named = inputs([]);
-      named.workspaceName = 'BitFun';
+      named.workspaceName = 'OpenBitFun';
       named.workspacePath = '';
       named.recentWorkspaces = [];
       const projection = SessionListProjector.project(named);
@@ -2687,16 +2687,16 @@ export default function remoteControllersUnitTest() {
 
     it('does not turn a disconnected placeholder into a workspace group', 0, () => {
       const disconnected = inputs([
-        session('code-1', 'Cached', 'code', '/workspace/bitfun')
+        session('code-1', 'Cached', 'code', '/workspace/openbitfun')
       ]);
       disconnected.workspaceName = '未连接';
       disconnected.workspacePath = '';
       disconnected.recentWorkspaces = [
-        { path: '/workspace/bitfun', name: 'BitFun', lastOpened: '', workspaceKind: 'normal' }
+        { path: '/workspace/openbitfun', name: 'OpenBitFun', lastOpened: '', workspaceKind: 'normal' }
       ];
       const projection = SessionListProjector.project(disconnected);
       expect(projection.projects.map((item: RecentWorkspaceEntry) => item.name).join(','))
-        .assertEqual('BitFun');
+        .assertEqual('OpenBitFun');
     });
 
     it('splits chats from project sessions in one pass', 0, () => {
@@ -2705,10 +2705,10 @@ export default function remoteControllersUnitTest() {
       expect(projection.chats.map((item: RemoteSession) => item.id).join(',')).assertEqual('chat-1,chat-2');
       // A trailing slash is the same workspace, so both code sessions land in
       // the one bucket the sidebar renders under that project.
-      const bucket = SessionListProjector.sessionsForProject(projection, '/workspace/bitfun/');
+      const bucket = SessionListProjector.sessionsForProject(projection, '/workspace/openbitfun/');
       expect(bucket.map((item: RemoteSession) => item.id).join(',')).assertEqual('code-1,code-2');
       expect(projection.projects.map((item: RecentWorkspaceEntry) => item.path).join(','))
-        .assertEqual('/workspace/bitfun');
+        .assertEqual('/workspace/openbitfun');
       expect(projection.hasActiveFilter).assertFalse();
       expect(SessionListProjector.sessionsForProject(projection, '/nowhere').length).assertEqual(0);
     });
@@ -2733,7 +2733,7 @@ export default function remoteControllersUnitTest() {
       expect(cache.get(inputs(all, 'layout')) === first).assertFalse();
 
       const renamed = all.map((item: RemoteSession): RemoteSession => {
-        return item.id === 'code-1' ? session('code-1', 'Renamed', 'code', '/workspace/bitfun') : item;
+        return item.id === 'code-1' ? session('code-1', 'Renamed', 'code', '/workspace/openbitfun') : item;
       });
       const afterRename = cache.get(inputs(renamed));
       expect(afterRename === first).assertFalse();
@@ -2742,9 +2742,9 @@ export default function remoteControllersUnitTest() {
 
     it('buckets by day only when sorting by time', 0, () => {
       const now = new Date();
-      const recent = session('recent-1', 'Today', 'code', '/workspace/bitfun');
+      const recent = session('recent-1', 'Today', 'code', '/workspace/openbitfun');
       recent.updatedAt = now.toISOString();
-      const old = session('old-1', 'Older', 'code', '/workspace/bitfun');
+      const old = session('old-1', 'Older', 'code', '/workspace/openbitfun');
       old.updatedAt = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
       const byProject = SessionListProjector.project(inputs([recent, old]));

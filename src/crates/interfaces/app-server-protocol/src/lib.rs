@@ -1,4 +1,4 @@
-//! Behavior-light wire contracts for BitFun App Server clients and hosts.
+//! Behavior-light wire contracts for OpenBitFun App Server clients and hosts.
 //!
 //! This crate intentionally has no dependency on Core, Runtime implementations,
 //! services, product assembly, or a UI framework. Server adapters translate

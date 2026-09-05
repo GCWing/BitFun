@@ -2,7 +2,7 @@ import { browser } from '@wdio/globals';
 
 declare global {
   interface Window {
-    __BITFUN_STARTUP_TRACE__?: {
+    __OPENBITFUN_STARTUP_TRACE__?: {
       snapshot?: () => unknown;
     };
     __TAURI__?: {
@@ -287,7 +287,7 @@ async function readNativeStartupTraceSnapshot(): Promise<StartupTraceNativeSnaps
 
 export async function readStartupTraceSnapshot(): Promise<StartupTraceSnapshot> {
   const snapshot = await browser.execute(() => {
-    const diagnostics = window.__BITFUN_STARTUP_TRACE__;
+    const diagnostics = window.__OPENBITFUN_STARTUP_TRACE__;
     return diagnostics?.snapshot?.() ?? null;
   });
 

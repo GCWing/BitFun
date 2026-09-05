@@ -44,7 +44,7 @@ pub(crate) fn build_bridge_eval_script(
         r#"
 (() => {{
   {helper}
-  window.__bitfunWd.run({request_id}, {script}, {args}, {async_mode}, {frame_context});
+  window.__openbitfunWd.run({request_id}, {script}, {args}, {async_mode}, {frame_context});
 }})();
 "#,
         helper = bridge_helper_script(),
@@ -72,7 +72,7 @@ pub(crate) fn build_native_eval_script(
         r#"
 return (async () => {{
   {helper}
-  const response = await window.__bitfunWd.execute({script}, {args}, {async_mode}, {frame_context});
+  const response = await window.__openbitfunWd.execute({script}, {args}, {async_mode}, {frame_context});
   return JSON.stringify({{
     requestId: "__native__",
     ok: response.ok,
@@ -92,8 +92,8 @@ return (async () => {{
 fn bridge_helper_script() -> String {
     format!(
         r#"
-if (!window.__bitfunWd) {{
-  window.__bitfunWd = (() => {{
+if (!window.__openbitfunWd) {{
+  window.__openbitfunWd = (() => {{
 {core_head}
 {input}
 {keyboard}

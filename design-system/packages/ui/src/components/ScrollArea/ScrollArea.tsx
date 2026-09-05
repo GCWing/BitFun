@@ -6,8 +6,8 @@ export type ScrollAreaOrientation = "vertical" | "horizontal" | "both";
 export type ScrollbarVisibility = "auto" | "always" | "hidden";
 
 export interface ScrollAreaProps extends HTMLAttributes<HTMLDivElement> {
-  "data-bf-component"?: string;
-  "data-bf-part"?: string;
+  "data-openbitfun-component"?: string;
+  "data-openbitfun-part"?: string;
   orientation?: ScrollAreaOrientation;
   scrollbarVisibility?: ScrollbarVisibility;
 }
@@ -15,8 +15,8 @@ export interface ScrollAreaProps extends HTMLAttributes<HTMLDivElement> {
 export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
   function ScrollArea({
     className,
-    "data-bf-component": component = "scroll-area",
-    "data-bf-part": part = "viewport",
+    "data-openbitfun-component": component = "scroll-area",
+    "data-openbitfun-part": part = "viewport",
     orientation = "vertical",
     scrollbarVisibility = "auto",
     ...props
@@ -25,10 +25,10 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(
       <div
         {...props}
         className={classNames(styles.root, className)}
-        data-bf-component={component}
-        data-bf-orientation={orientation}
-        data-bf-part={part}
-        data-bf-scrollbar-visibility={scrollbarVisibility}
+        data-openbitfun-component={component}
+        data-openbitfun-orientation={orientation}
+        data-openbitfun-part={part}
+        data-openbitfun-scrollbar-visibility={scrollbarVisibility}
         ref={ref}
       />
     );

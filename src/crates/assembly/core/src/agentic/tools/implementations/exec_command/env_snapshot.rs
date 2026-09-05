@@ -1,5 +1,5 @@
 use super::shell_kind::exec_command_shell_kind;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     RemoteExecCommandRequest, RemoteExecControlAction, RemoteExecControlOrigin,
     RemoteExecControlRequest, RemoteExecPort,
 };
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn parses_env_snapshot_between_markers() {
         let snapshot = parse_remote_env_snapshot_output(
-            "noise\r\n__BITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__\r\nPATH=/home/me/.nvm/bin:/usr/bin\r\nNVM_DIR=/home/me/.nvm\r\nPWD=/tmp\r\nBAD-NAME=value\r\n__BITFUN_REMOTE_ENV_SNAPSHOT_END__\r\nmore noise",
+            "noise\r\n__OPENBITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__\r\nPATH=/home/me/.nvm/bin:/usr/bin\r\nNVM_DIR=/home/me/.nvm\r\nPWD=/tmp\r\nBAD-NAME=value\r\n__OPENBITFUN_REMOTE_ENV_SNAPSHOT_END__\r\nmore noise",
         )
         .expect("snapshot should parse");
 
@@ -135,8 +135,8 @@ mod tests {
         let command = remote_env_snapshot_command("/bin/bash", &ShellType::Bash);
 
         assert!(command.starts_with("'/bin/bash' -lic "));
-        assert!(command.contains("__BITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__"));
-        assert!(command.contains("__BITFUN_REMOTE_ENV_SNAPSHOT_END__"));
+        assert!(command.contains("__OPENBITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__"));
+        assert!(command.contains("__OPENBITFUN_REMOTE_ENV_SNAPSHOT_END__"));
     }
 
     #[test]

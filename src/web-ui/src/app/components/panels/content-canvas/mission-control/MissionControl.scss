@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   // Use same background variable as left panel
-  background: var(--bf-color-surface-workbench);
+  background: var(--openbitfun-color-surface-workbench);
   backdrop-filter: blur(20px);
   animation: missionControlFadeIn 0.15s ease-out;
 
@@ -35,14 +35,14 @@
     height: 36px;
     padding: 0 16px;
     flex-shrink: 0;
-    border-bottom: 1px dashed var(--bf-color-border-default);
+    border-bottom: 1px dashed var(--openbitfun-color-border-default);
   }
 
   &__title {
     margin: 0;
-    font-size: var(--bf-type-label-sm-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   &__header-actions {
@@ -55,7 +55,7 @@
   &__filters {
     padding: 8px 16px;
     flex-shrink: 0;
-    border-bottom: 1px dashed var(--bf-color-border-default);
+    border-bottom: 1px dashed var(--openbitfun-color-border-default);
   }
 
   &__filters-row {
@@ -76,13 +76,13 @@
     gap: 4px;
     flex-shrink: 0;
     padding: 2px;
-    background: var(--bf-color-surface-subtle);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-subtle);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 4px;
   }
 
   &__group-filter {
-    --private-mission-control-filter-color: var(--bf-color-accent-hover);
+    --private-mission-control-filter-color: var(--openbitfun-color-accent-hover);
 
     position: relative;
     display: flex;
@@ -93,11 +93,11 @@
     padding: 0;
     background: transparent;
     border: none;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     border-radius: 3px;
-    font-size: var(--bf-type-meta-font-size);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
     transition:
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
       background-color 140ms ease,
@@ -105,16 +105,16 @@
       color 140ms ease;
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
-      color: var(--bf-color-content-secondary);
+      background: var(--openbitfun-color-action-quiet-hover);
+      color: var(--openbitfun-color-content-secondary);
     }
 
     &.is-active {
-      background: color-mix(in srgb, var(--bf-color-action-quiet-hover) 84%, var(--private-mission-control-filter-color) 16%);
-      color: var(--bf-color-content-primary);
+      background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 84%, var(--private-mission-control-filter-color) 16%);
+      color: var(--openbitfun-color-content-primary);
       box-shadow:
         inset 0 0 0 1px var(--private-mission-control-filter-color),
-        0 1px 3px color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
+        0 1px 3px color-mix(in srgb, var(--openbitfun-color-content-on-light) 20%, transparent);
 
       .canvas-mission-control__group-filter-indicator {
         opacity: 1;
@@ -122,11 +122,11 @@
     }
 
     &--secondary {
-      --private-mission-control-filter-color: var(--bf-color-status-success-content);
+      --private-mission-control-filter-color: var(--openbitfun-color-status-success-content);
     }
 
     &--tertiary {
-      --private-mission-control-filter-color: var(--bf-color-status-warning-content);
+      --private-mission-control-filter-color: var(--openbitfun-color-status-warning-content);
     }
 
     &-indicator {
@@ -144,7 +144,7 @@
     &-text {
       position: relative;
       z-index: 1;
-      line-height: var(--bf-type-modifier-leading-none-line-height);
+      line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     }
   }
 
@@ -166,11 +166,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-color-scrollbar-thumb);
+      background: var(--openbitfun-color-scrollbar-thumb);
       border-radius: 3px;
       
       &:hover {
-        background: var(--bf-color-action-neutral-surface-pressed);
+        background: var(--openbitfun-color-action-neutral-surface-pressed);
       }
     }
   }
@@ -183,9 +183,9 @@
     align-items: center;
     justify-content: center;
     padding: 40px 30px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-sm-font-size);
-    border: 1px dashed var(--bf-color-border-default);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+    border: 1px dashed var(--openbitfun-color-border-default);
     border-radius: 6px;
   }
 
@@ -196,15 +196,15 @@
     justify-content: center;
     gap: 12px;
     padding: 6px 16px;
-    font-size: var(--bf-type-micro-font-size);
-    color: var(--bf-color-content-muted);
-    border-top: 1px dashed var(--bf-color-border-default);
+    font-size: var(--openbitfun-type-micro-font-size);
+    color: var(--openbitfun-color-content-muted);
+    border-top: 1px dashed var(--openbitfun-color-border-default);
     flex-shrink: 0;
   }
 
   &__separator {
     width: 1px;
     height: 10px;
-    background: var(--bf-color-border-default);
+    background: var(--openbitfun-color-border-default);
   }
 }

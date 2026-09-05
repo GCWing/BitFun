@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "31576ac07aa5a6ae4ff437630fb72d99a9097bba2e34815bf2786e31885d7647",
+  "catalogDigest": "e760eed82f192a25bb7b0fb296283e5edfb1ad8103d3aef460e58f2ae80f191c",
   "commandCount": 661,
   "coverage": {
     "commandCount": 661,
     "documentedCommandCount": 630,
     "implementationCommandCount": 31,
-    "implementationDigest": "b93e50920109afc78b821c590d39f8e8eca90273ee22e804c64da393d0c5c498"
+    "implementationDigest": "859a3a3cb1e4e27ca38cd9003cef14e8758483ce85417a2c22c6ab92df9dd2c3"
   },
   "commands": [
     {
@@ -71,7 +71,7 @@
       "visibility": "documented",
       "rustPath": "api::remote_connect_api::account_auto_sync",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_auto_sync( is_first_login: bool, workspace_path: String, config_json: String, sync_operation_id: u64, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>, ) -> Result<AutoSyncResult, String>",
+      "signature": "fn account_auto_sync( is_first_login: bool, workspace_path: String, config_json: String, sync_operation_id: u64, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<openbitfun_core::infrastructure::PathManager>>, ) -> Result<AutoSyncResult, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -199,7 +199,7 @@
       "visibility": "documented",
       "rustPath": "api::remote_connect_api::account_export_all_sessions",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_export_all_sessions( workspace_path: String, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>, ) -> Result<usize, String>",
+      "signature": "fn account_export_all_sessions( workspace_path: String, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<openbitfun_core::infrastructure::PathManager>>, ) -> Result<usize, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -215,7 +215,7 @@
       "visibility": "documented",
       "rustPath": "api::remote_connect_api::account_export_local_session",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_export_local_session( session_id: String, workspace_path: String, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>, ) -> Result<(), String>",
+      "signature": "fn account_export_local_session( session_id: String, workspace_path: String, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<openbitfun_core::infrastructure::PathManager>>, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -231,7 +231,7 @@
       "visibility": "documented",
       "rustPath": "api::remote_connect_api::account_fetch_session_turns",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_fetch_session_turns( session_id: String, workspace_path: String, coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>, ) -> Result<bool, String>",
+      "signature": "fn account_fetch_session_turns( session_id: String, workspace_path: String, coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<openbitfun_core::infrastructure::PathManager>>, ) -> Result<bool, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -311,7 +311,7 @@
       "visibility": "documented",
       "rustPath": "api::remote_connect_api::account_import_remote_sessions",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_import_remote_sessions( workspace_path: String, coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>, ) -> Result<Vec<String>, String>",
+      "signature": "fn account_import_remote_sessions( workspace_path: String, coordinator: State<'_, Arc<ConversationCoordinator>>, app_state: State<'_, crate::api::app_state::AppState>, path_manager: State<'_, Arc<openbitfun_core::infrastructure::PathManager>>, ) -> Result<Vec<String>, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -1363,7 +1363,7 @@
       "visibility": "documented",
       "rustPath": "clear_web_search_credential",
       "sourceFile": "src/apps/desktop/src/api/config_api.rs",
-      "signature": "fn clear_web_search_credential( _state: State<'_, AppState>, request: bitfun_core::service::web_search::ClearWebSearchCredentialRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "signature": "fn clear_web_search_credential( _state: State<'_, AppState>, request: openbitfun_core::service::web_search::ClearWebSearchCredentialRequest, ) -> Result<openbitfun_core::service::web_search::WebSearchCredentialStatus, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -2683,7 +2683,7 @@
       "visibility": "documented",
       "rustPath": "get_ai_model_catalog",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn get_ai_model_catalog() -> Result<bitfun_core::AIModelCatalog, String>",
+      "signature": "fn get_ai_model_catalog() -> Result<openbitfun_core::AIModelCatalog, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -3410,7 +3410,7 @@
       "visibility": "documented",
       "rustPath": "get_models_dev_catalog_status",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn get_models_dev_catalog_status() -> bitfun_core_types::ModelsDevCatalogStatus",
+      "signature": "fn get_models_dev_catalog_status() -> openbitfun_core_types::ModelsDevCatalogStatus",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -3858,7 +3858,7 @@
       "visibility": "documented",
       "rustPath": "get_subscription_login_status",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn get_subscription_login_status( request: SubscriptionLoginRequest, ) -> Result<bitfun_core::infrastructure::subscription_auth::LoginSessionSnapshot, String>",
+      "signature": "fn get_subscription_login_status( request: SubscriptionLoginRequest, ) -> Result<openbitfun_core::infrastructure::subscription_auth::LoginSessionSnapshot, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -3956,7 +3956,7 @@
       "visibility": "documented",
       "rustPath": "get_web_search_credential_status",
       "sourceFile": "src/apps/desktop/src/api/config_api.rs",
-      "signature": "fn get_web_search_credential_status( _state: State<'_, AppState>, request: GetWebSearchCredentialStatusRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "signature": "fn get_web_search_credential_status( _state: State<'_, AppState>, request: GetWebSearchCredentialStatusRequest, ) -> Result<openbitfun_core::service::web_search::WebSearchCredentialStatus, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -4004,7 +4004,7 @@
       "visibility": "documented",
       "rustPath": "git_add_worktree",
       "sourceFile": "src/apps/desktop/src/api/git_api.rs",
-      "signature": "fn git_add_worktree( state: State<'_, AppState>, request: GitAddWorktreeRequest, ) -> Result<bitfun_core::service::git::GitWorktreeInfo, String>",
+      "signature": "fn git_add_worktree( state: State<'_, AppState>, request: GitAddWorktreeRequest, ) -> Result<openbitfun_core::service::git::GitWorktreeInfo, String>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -4228,7 +4228,7 @@
       "visibility": "documented",
       "rustPath": "git_get_graph",
       "sourceFile": "src/apps/desktop/src/api/git_api.rs",
-      "signature": "fn git_get_graph( _state: State<'_, AppState>, repository_path: String, max_count: Option<usize>, branch_name: Option<String>, ) -> Result<bitfun_core::service::git::GitGraph, String>",
+      "signature": "fn git_get_graph( _state: State<'_, AppState>, repository_path: String, max_count: Option<usize>, branch_name: Option<String>, ) -> Result<openbitfun_core::service::git::GitGraph, String>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -4326,7 +4326,7 @@
       "visibility": "documented",
       "rustPath": "git_list_worktrees",
       "sourceFile": "src/apps/desktop/src/api/git_api.rs",
-      "signature": "fn git_list_worktrees( state: State<'_, AppState>, request: GitRepositoryRequest, ) -> Result<Vec<bitfun_core::service::git::GitWorktreeInfo>, String>",
+      "signature": "fn git_list_worktrees( state: State<'_, AppState>, request: GitRepositoryRequest, ) -> Result<Vec<openbitfun_core::service::git::GitWorktreeInfo>, String>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -4842,7 +4842,7 @@
       "visibility": "documented",
       "rustPath": "list_ai_models_by_config",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn list_ai_models_by_config( state: State<'_, AppState>, request: ListAIModelsByConfigRequest, ) -> Result<Vec<bitfun_core::util::types::RemoteModelInfo>, String>",
+      "signature": "fn list_ai_models_by_config( state: State<'_, AppState>, request: ListAIModelsByConfigRequest, ) -> Result<Vec<openbitfun_core::util::types::RemoteModelInfo>, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -5117,7 +5117,7 @@
       "visibility": "documented",
       "rustPath": "list_subscription_accounts",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn list_subscription_accounts( ) -> Result<Vec<bitfun_core::infrastructure::subscription_auth::SubscriptionAccount>, String>",
+      "signature": "fn list_subscription_accounts( ) -> Result<Vec<openbitfun_core::infrastructure::subscription_auth::SubscriptionAccount>, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -5229,7 +5229,7 @@
       "visibility": "documented",
       "rustPath": "load_mcp_json_config",
       "sourceFile": "src/apps/desktop/src/api/mcp_api.rs",
-      "signature": "fn load_mcp_json_config( state: State<'_, AppState>, ) -> Result<bitfun_core::service::mcp::config::MCPJsonConfigSnapshot, String>",
+      "signature": "fn load_mcp_json_config( state: State<'_, AppState>, ) -> Result<openbitfun_core::service::mcp::config::MCPJsonConfigSnapshot, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -5309,7 +5309,7 @@
       "visibility": "documented",
       "rustPath": "logout_subscription_account",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn logout_subscription_account( request: SubscriptionProviderRequest, ) -> Result<bitfun_core::infrastructure::subscription_auth::SubscriptionLogoutResult, String>",
+      "signature": "fn logout_subscription_account( request: SubscriptionProviderRequest, ) -> Result<openbitfun_core::infrastructure::subscription_auth::SubscriptionLogoutResult, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -5329,27 +5329,27 @@
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
-      "id": "mark_bitfun_control_surface_ready",
-      "moduleId": "bitfun_control_host",
+      "id": "mark_openbitfun_control_surface_ready",
+      "moduleId": "openbitfun_control_host",
       "capabilityId": null,
       "capabilityIds": [],
       "documentedItemIds": [],
       "visibility": "internal",
-      "rustPath": "bitfun_control_host::mark_bitfun_control_surface_ready",
-      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
-      "signature": "fn mark_bitfun_control_surface_ready()",
+      "rustPath": "openbitfun_control_host::mark_openbitfun_control_surface_ready",
+      "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
+      "signature": "fn mark_openbitfun_control_surface_ready()",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
-      "id": "mark_bitfun_control_surface_unready",
-      "moduleId": "bitfun_control_host",
+      "id": "mark_openbitfun_control_surface_unready",
+      "moduleId": "openbitfun_control_host",
       "capabilityId": null,
       "capabilityIds": [],
       "documentedItemIds": [],
       "visibility": "internal",
-      "rustPath": "bitfun_control_host::mark_bitfun_control_surface_unready",
-      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
-      "signature": "fn mark_bitfun_control_surface_unready()",
+      "rustPath": "openbitfun_control_host::mark_openbitfun_control_surface_unready",
+      "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
+      "signature": "fn mark_openbitfun_control_surface_unready()",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -6588,14 +6588,14 @@
     },
     {
       "id": "product_control_invoke",
-      "moduleId": "bitfun_control_host",
+      "moduleId": "openbitfun_control_host",
       "capabilityId": null,
       "capabilityIds": [],
       "documentedItemIds": [],
       "visibility": "internal",
-      "rustPath": "bitfun_control_host::product_control_invoke",
-      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
-      "signature": "fn product_control_invoke( app: AppHandle, mut request: BitFunControlHostRequest, ) -> Result<Value, String>",
+      "rustPath": "openbitfun_control_host::product_control_invoke",
+      "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
+      "signature": "fn product_control_invoke( app: AppHandle, mut request: OpenBitFunControlHostRequest, ) -> Result<Value, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -6611,7 +6611,7 @@
       "visibility": "documented",
       "rustPath": "project_ai_model_reasoning_catalog",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn project_ai_model_reasoning_catalog( request: bitfun_core_types::ReasoningCatalogProjectionRequest, ) -> bitfun_core_types::ReasoningCatalogProjection",
+      "signature": "fn project_ai_model_reasoning_catalog( request: openbitfun_core_types::ReasoningCatalogProjectionRequest, ) -> openbitfun_core_types::ReasoningCatalogProjection",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -6742,7 +6742,7 @@
       "visibility": "documented",
       "rustPath": "refresh_models_dev_catalog_now",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn refresh_models_dev_catalog_now( ) -> Result<bitfun_core_types::ModelsDevRefreshResult, String>",
+      "signature": "fn refresh_models_dev_catalog_now( ) -> Result<openbitfun_core_types::ModelsDevRefreshResult, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -6758,7 +6758,7 @@
       "visibility": "documented",
       "rustPath": "refresh_subscription_account",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn refresh_subscription_account( state: State<'_, AppState>, request: SubscriptionProviderRequest, ) -> Result<bitfun_core::infrastructure::subscription_auth::SubscriptionAccount, String>",
+      "signature": "fn refresh_subscription_account( state: State<'_, AppState>, request: SubscriptionProviderRequest, ) -> Result<openbitfun_core::infrastructure::subscription_auth::SubscriptionAccount, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -6948,7 +6948,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::reload_session_context",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn reload_session_context( runtime: State<'_, DesktopRuntimeContext>, request: bitfun_runtime_ports::AgentContextReloadRequest, ) -> Result<(), String>",
+      "signature": "fn reload_session_context( runtime: State<'_, DesktopRuntimeContext>, request: openbitfun_runtime_ports::AgentContextReloadRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
@@ -7368,7 +7368,7 @@
       "visibility": "documented",
       "rustPath": "api::ssh_api::remote_read_dir",
       "sourceFile": "src/apps/desktop/src/api/ssh_api.rs",
-      "signature": "fn remote_read_dir( state: State<'_, AppState>, connection_id: String, path: String, ) -> Result<Vec<bitfun_core::service::remote_ssh::RemoteDirEntry>, String>",
+      "signature": "fn remote_read_dir( state: State<'_, AppState>, connection_id: String, path: String, ) -> Result<Vec<openbitfun_core::service::remote_ssh::RemoteDirEntry>, String>",
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
@@ -7548,18 +7548,6 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "report_bitfun_control_result",
-      "moduleId": "bitfun_control_host",
-      "capabilityId": null,
-      "capabilityIds": [],
-      "documentedItemIds": [],
-      "visibility": "internal",
-      "rustPath": "bitfun_control_host::report_bitfun_control_result",
-      "sourceFile": "src/apps/desktop/src/bitfun_control_host.rs",
-      "signature": "fn report_bitfun_control_result( request: ReportBitFunControlResultRequest, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "WorkspaceAgnostic"
-    },
-    {
       "id": "report_canvas_runtime_error",
       "moduleId": "canvas",
       "capabilityId": "feature.canvas",
@@ -7604,6 +7592,18 @@
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn report_ide_control_result(request: IdeControlResultRequest) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
+    },
+    {
+      "id": "report_openbitfun_control_result",
+      "moduleId": "openbitfun_control_host",
+      "capabilityId": null,
+      "capabilityIds": [],
+      "documentedItemIds": [],
+      "visibility": "internal",
+      "rustPath": "openbitfun_control_host::report_openbitfun_control_result",
+      "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
+      "signature": "fn report_openbitfun_control_result( request: ReportOpenBitFunControlResultRequest, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
       "id": "reset_agent_profile_config",
@@ -8118,7 +8118,7 @@
       "visibility": "documented",
       "rustPath": "rollback_session_to_turn",
       "sourceFile": "src/apps/desktop/src/api/snapshot_service.rs",
-      "signature": "fn rollback_session_to_turn( runtime: State<'_, DesktopRuntimeContext>, request: bitfun_runtime_ports::AgentSessionRollbackToTurnRequest, ) -> Result<bitfun_runtime_ports::AgentSessionRollbackToTurnOutcome, String>",
+      "signature": "fn rollback_session_to_turn( runtime: State<'_, DesktopRuntimeContext>, request: openbitfun_runtime_ports::AgentSessionRollbackToTurnRequest, ) -> Result<openbitfun_runtime_ports::AgentSessionRollbackToTurnOutcome, String>",
       "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
@@ -8306,7 +8306,7 @@
       "visibility": "documented",
       "rustPath": "save_web_search_credential",
       "sourceFile": "src/apps/desktop/src/api/config_api.rs",
-      "signature": "fn save_web_search_credential( _state: State<'_, AppState>, request: bitfun_core::service::web_search::SaveWebSearchCredentialRequest, ) -> Result<bitfun_core::service::web_search::WebSearchCredentialStatus, String>",
+      "signature": "fn save_web_search_credential( _state: State<'_, AppState>, request: openbitfun_core::service::web_search::SaveWebSearchCredentialRequest, ) -> Result<openbitfun_core::service::web_search::WebSearchCredentialStatus, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -9675,7 +9675,7 @@
       "visibility": "documented",
       "rustPath": "start_subscription_login",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn start_subscription_login( state: State<'_, AppState>, request: SubscriptionLoginRequest, ) -> Result<bitfun_core::infrastructure::subscription_auth::LoginStartResult, String>",
+      "signature": "fn start_subscription_login( state: State<'_, AppState>, request: SubscriptionLoginRequest, ) -> Result<openbitfun_core::infrastructure::subscription_auth::LoginStartResult, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -10062,7 +10062,7 @@
       "visibility": "documented",
       "rustPath": "test_ai_config_connection",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn test_ai_config_connection( state: State<'_, AppState>, request: TestAIConfigConnectionRequest, ) -> Result<bitfun_core::util::types::ConnectionTestResult, String>",
+      "signature": "fn test_ai_config_connection( state: State<'_, AppState>, request: TestAIConfigConnectionRequest, ) -> Result<openbitfun_core::util::types::ConnectionTestResult, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {

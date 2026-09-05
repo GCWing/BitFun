@@ -7,9 +7,9 @@
       "owner": "src/web-ui/src/app/layout; src/web-ui/src/app/components/NavPanel",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system", "bitfun-monochrome"],
+      "themes": ["dark", "light", "system", "openbitfun-monochrome"],
       "states": ["default", "hover", "focus", "selected", "disabled"],
-      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-component-scene-*", "--bitfun-nav-*"],
+      "tokenFamilies": ["--openbitfun-color-surface-*", "--openbitfun-color-content-*", "--openbitfun-color-border-*", "--openbitfun-color-action-*", "--openbitfun-component-scene-*", "--openbitfun-nav-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -31,9 +31,9 @@
       "owner": "src/web-ui/src/flow_chat; src/web-ui/src/app/scenes/session",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system", "bitfun-monochrome"],
+      "themes": ["dark", "light", "system", "openbitfun-monochrome"],
       "states": ["default", "streaming", "hover", "focus", "selected", "error", "empty"],
-      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-content-*", "--bf-color-accent-*", "--bf-color-action-*", "--bf-color-status-*", "--bf-domain-tool-*"],
+      "tokenFamilies": ["--openbitfun-color-surface-*", "--openbitfun-color-content-*", "--openbitfun-color-accent-*", "--openbitfun-color-action-*", "--openbitfun-color-status-*", "--openbitfun-domain-tool-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -57,7 +57,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "expanded", "collapsed", "hover", "focus", "success", "warning", "error"],
-      "tokenFamilies": ["--bf-color-surface-*", "--bf-color-border-*", "--bf-color-status-*", "--bf-color-action-*", "--bf-domain-tool-*"],
+      "tokenFamilies": ["--openbitfun-color-surface-*", "--openbitfun-color-border-*", "--openbitfun-color-status-*", "--openbitfun-color-action-*", "--openbitfun-domain-tool-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -81,7 +81,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "focus", "selection", "search", "added", "deleted", "changed", "conflict"],
-      "tokenFamilies": ["Monaco palette", "--bf-domain-git-*", "--bf-color-content-*", "--bf-color-surface-*", "--bf-color-status-*"],
+      "tokenFamilies": ["Monaco palette", "--openbitfun-domain-git-*", "--openbitfun-color-content-*", "--openbitfun-color-surface-*", "--openbitfun-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -105,7 +105,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "focus", "selection", "ansi-normal", "ansi-bright", "error"],
-      "tokenFamilies": ["terminal ANSI palette", "--bf-color-content-*", "--bf-color-surface-*", "--bf-color-border-*", "--bf-color-status-*"],
+      "tokenFamilies": ["terminal ANSI palette", "--openbitfun-color-content-*", "--openbitfun-color-surface-*", "--openbitfun-color-border-*", "--openbitfun-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -129,7 +129,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "code", "table", "link", "diagram", "error"],
-      "tokenFamilies": ["--bf-color-content-*", "--bf-color-surface-*", "--bf-domain-mermaid-*", "--bf-domain-prism-*", "Mermaid renderer palette"],
+      "tokenFamilies": ["--openbitfun-color-content-*", "--openbitfun-color-surface-*", "--openbitfun-domain-mermaid-*", "--openbitfun-domain-prism-*", "Mermaid renderer palette"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -153,7 +153,7 @@
       "formFactors": ["iframe", "desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["fallback-before-host-payload", "host-payload", "loading", "error"],
-      "tokenFamilies": ["--bf-color-*", "--bf-shadow-*", "--bf-effect-*", "--bf-opacity-*", "--bf-radius-*", "--bf-space-*"],
+      "tokenFamilies": ["--openbitfun-color-*", "--openbitfun-shadow-*", "--openbitfun-effect-*", "--openbitfun-opacity-*", "--openbitfun-radius-*", "--openbitfun-space-*"],
       "evidence": [
         {
           "type": "boundary-render-review",
@@ -175,9 +175,9 @@
       "owner": "src/web-ui/src/app/scenes/settings; src/web-ui/src/infrastructure/appearance",
       "platforms": ["desktop-webview", "web"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system", "bitfun-monochrome"],
+      "themes": ["dark", "light", "system", "openbitfun-monochrome"],
       "states": ["default", "selected", "hover", "focus", "imported-appearance", "system-appearance"],
-      "tokenFamilies": ["--bf-color-*", "--bf-shadow-*", "--bf-effect-*", "--bf-opacity-*", "--bf-component-config-page-*", "--bf-domain-*"],
+      "tokenFamilies": ["--openbitfun-color-*", "--openbitfun-shadow-*", "--openbitfun-effect-*", "--openbitfun-opacity-*", "--openbitfun-component-config-page-*", "--openbitfun-domain-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -201,7 +201,7 @@
       "formFactors": ["mobile", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "loading", "error", "navigation"],
-      "tokenFamilies": ["@bitfun/theme-bitfun", "--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-color-status-*"],
+      "tokenFamilies": ["@openbitfun/theme-openbitfun", "--openbitfun-color-surface-*", "--openbitfun-color-content-*", "--openbitfun-color-border-*", "--openbitfun-color-action-*", "--openbitfun-color-status-*"],
       "evidence": [
         {
           "type": "mobile-build-review",
@@ -216,12 +216,12 @@
     },
     {
       "key": "installer-shell",
-      "owner": "BitFun-Installer/src/theme; BitFun-Installer/src/pages; BitFun-Installer/src/styles",
+      "owner": "OpenBitFun-Installer/src/theme; OpenBitFun-Installer/src/pages; OpenBitFun-Installer/src/styles",
       "platforms": ["installer"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system", "bitfun-dark", "bitfun-light", "bitfun-midnight", "bitfun-china-style", "bitfun-china-night", "bitfun-cyber", "bitfun-slate", "bitfun-tokyo-night"],
+      "themes": ["dark", "light", "system", "openbitfun-dark", "openbitfun-light", "openbitfun-midnight", "openbitfun-china-style", "openbitfun-china-night", "openbitfun-cyber", "openbitfun-slate", "openbitfun-tokyo-night"],
       "states": ["theme-setup", "language", "options", "loading", "progress", "error", "completed", "hover", "focus"],
-      "tokenFamilies": ["@bitfun/theme-bitfun", "--bf-color-surface-*", "--bf-color-content-*", "--bf-color-border-*", "--bf-color-action-*", "--bf-color-accent-*", "--bf-color-status-*"],
+      "tokenFamilies": ["@openbitfun/theme-openbitfun", "--openbitfun-color-surface-*", "--openbitfun-color-content-*", "--openbitfun-color-border-*", "--openbitfun-color-action-*", "--openbitfun-color-accent-*", "--openbitfun-color-status-*"],
       "evidence": [
         {
           "type": "theme-color-audit",

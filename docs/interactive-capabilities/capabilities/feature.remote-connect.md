@@ -11,9 +11,9 @@ title_en: "Remote Connect & devices"
 
 > 功能 / Feature
 
-从手机、Bot 或另一台 BitFun 设备连接当前主机，远程查看会话、回答权限并继续工作。
+从手机、Bot 或另一台 OpenBitFun 设备连接当前主机，远程查看会话、回答权限并继续工作。
 
-Connect to this host from mobile, a bot, or another BitFun device to inspect sessions, answer permissions, and continue work remotely.
+Connect to this host from mobile, a bot, or another OpenBitFun device to inspect sessions, answer permissions, and continue work remotely.
 
 ## 完整功能清单 / Everything included
 
@@ -33,10 +33,10 @@ Connect to this host from mobile, a bot, or another BitFun device to inspect ses
   - List, connect, inspect online status, and remove same-account devices
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 同步、导出、导入、删除或发送会话到另一台设备
   - Sync, export, import, delete, or send sessions to another device
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在设备间自动或手动同步 BitFun 设置
-  - Synchronize BitFun settings across devices automatically or on demand
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 进入 Peer Device Mode，把另一台 BitFun 设备作为命令与事件数据面
-  - Enter Peer Device Mode and use another BitFun device as the command and event data plane
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在设备间自动或手动同步 OpenBitFun 设置
+  - Synchronize OpenBitFun settings across devices automatically or on demand
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面
+  - Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane
 
 ## 怎么用 / How to use it
 
@@ -47,13 +47,13 @@ Connect to this host from mobile, a bot, or another BitFun device to inspect ses
 3. 按向导连接并确认安全提示
    Follow the connection flow and review its security notice
 
-入口 / Entry: BitFun 内的对应控制界面
+入口 / Entry: OpenBitFun 内的对应控制界面
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

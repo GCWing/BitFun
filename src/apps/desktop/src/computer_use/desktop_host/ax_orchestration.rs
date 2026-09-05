@@ -19,23 +19,23 @@ use super::LINUX_LEGACY_AX_UNAVAILABLE;
 use super::{require_macos_background_input, resolve_pid_macos};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use super::{CachedInteractiveView, CachedVisualMarkView};
+#[cfg(target_os = "macos")]
+use log::debug;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use log::warn;
 #[cfg(any(test, target_os = "macos", target_os = "windows"))]
-use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
+use openbitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
+use openbitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use bitfun_core::agentic::tools::computer_use_host::VisualMark;
-use bitfun_core::agentic::tools::computer_use_host::{
+use openbitfun_core::agentic::tools::computer_use_host::VisualMark;
+use openbitfun_core::agentic::tools::computer_use_host::{
     AppClickParams, AppSelector, AppStateSnapshot, AppWaitPredicate, ClickTarget,
     InteractiveActionResult, InteractiveClickParams, InteractiveScrollParams,
     InteractiveTypeTextParams, InteractiveView, InteractiveViewOpts, VisualActionResult,
     VisualClickParams, VisualMarkView, VisualMarkViewOpts,
 };
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
-#[cfg(target_os = "macos")]
-use log::debug;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use log::warn;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::time::{Duration, Instant};
 
@@ -43,7 +43,7 @@ impl DesktopComputerUseHost {
     pub(super) async fn app_click_impl(
         &self,
         params: AppClickParams,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             let pid = resolve_pid_macos(self, &params.app).await?;
@@ -112,7 +112,7 @@ impl DesktopComputerUseHost {
                     ClickTarget::ImageGrid { screenshot_id, .. } => {
                         let (ix, iy) =
                             Self::image_grid_target_to_xy(&params.target)?.ok_or_else(|| {
-                                BitFunError::tool("invalid image_grid target".to_string())
+                                OpenBitFunError::tool("invalid image_grid target".to_string())
                             })?;
                         self.map_app_image_coords_to_pointer_f64(
                             pid,
@@ -146,7 +146,9 @@ impl DesktopComputerUseHost {
                         };
                         let (ix, iy) =
                             Self::image_grid_target_to_xy(&target)?.ok_or_else(|| {
-                                BitFunError::tool("invalid detected visual_grid target".to_string())
+                                OpenBitFunError::tool(
+                                    "invalid detected visual_grid target".to_string(),
+                                )
                             })?;
                         if let Some(wait) = wait_ms_after_detection {
                             if *wait > 0 {
@@ -169,7 +171,7 @@ impl DesktopComputerUseHost {
                             .get_app_state_inner(params.app.clone(), 32, false, false)
                             .await?;
                         let node = snap.nodes.iter().find(|n| n.idx == *idx).ok_or_else(|| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "AX_NODE_STALE: idx={} no longer present in app state",
                                 idx
                             ))
@@ -179,13 +181,13 @@ impl DesktopComputerUseHost {
                         // icon. The caller must re-snapshot to acquire a
                         // node with a real on-screen frame.
                         let (fx, fy, fw, fh) = node.frame_global.ok_or_else(|| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "AX_NODE_STALE: idx={} has no AXFrame (likely off-screen or window minimised)",
                                 idx
                             ))
                         })?;
                         if fw <= 0.0 || fh <= 0.0 {
-                            return Err(BitFunError::tool(format!(
+                            return Err(OpenBitFunError::tool(format!(
                                 "AX_NODE_STALE: idx={} has zero-size frame ({}x{})",
                                 idx, fw, fh
                             )));
@@ -206,7 +208,7 @@ impl DesktopComputerUseHost {
                                 .unwrap_or(std::cmp::Ordering::Equal)
                         });
                         let m = best.ok_or_else(|| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "NOT_FOUND: no OCR match for needle {:?}",
                                 needle
                             ))
@@ -269,7 +271,7 @@ impl DesktopComputerUseHost {
                         let bounds =
                             crate::computer_use::macos_ax_ui::window_bounds_global_for_pid(pid)
                                 .ok();
-                        Ok::<_, BitFunError>((wid, bounds))
+                        Ok::<_, OpenBitFunError>((wid, bounds))
                     })
                 })
                 .await
@@ -326,10 +328,10 @@ impl DesktopComputerUseHost {
                     })
                 })
                 .await
-                .map_err(|e| BitFunError::tool(e.to_string()))??;
+                .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
                 // Same-process fallback: if `bg_click` left the digest
-                // unchanged AND the target is our own process (bitfun-desktop
+                // unchanged AND the target is our own process (openbitfun-desktop
                 // hosting an embedded mini-app WebView), retry with the
                 // foreground click path. This trades a momentary cursor
                 // movement for actually landing the click in the WebView.
@@ -409,7 +411,7 @@ impl DesktopComputerUseHost {
             let (x, y) = self.resolve_click_target_windows(&params.target).await?;
             let hwnd_raw = crate::computer_use::windows_ax_ui::foreground_window_handle();
             if hwnd_raw == 0 {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "app_click: no foreground window to target on Windows.".to_string(),
                 ));
             }
@@ -433,7 +435,7 @@ impl DesktopComputerUseHost {
                 )
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
             let settle_ms = params.wait_ms_after.unwrap_or(120).min(5_000);
             if settle_ms > 0 {
@@ -444,7 +446,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = params;
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -453,7 +457,7 @@ impl DesktopComputerUseHost {
         app: AppSelector,
         text: &str,
         focus: Option<ClickTarget>,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             let pid = resolve_pid_macos(self, &app).await?;
@@ -505,7 +509,7 @@ impl DesktopComputerUseHost {
                             let _ = crate::computer_use::macos_ax_write::try_ax_focus(r);
                         }
                     }
-                    Ok::<_, BitFunError>(())
+                    Ok::<_, OpenBitFunError>(())
                 })
             })
             .await;
@@ -518,7 +522,7 @@ impl DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(target_os = "windows")]
@@ -542,7 +546,7 @@ impl DesktopComputerUseHost {
             }
             let hwnd_raw = crate::computer_use::windows_ax_ui::foreground_window_handle();
             if hwnd_raw == 0 {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "app_type_text: no foreground window to target on Windows.".to_string(),
                 ));
             }
@@ -557,13 +561,15 @@ impl DesktopComputerUseHost {
                 crate::computer_use::windows_bg_input::inject_text_cloaked(hwnd, &txt)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, text, focus);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -573,7 +579,7 @@ impl DesktopComputerUseHost {
         focus: Option<ClickTarget>,
         dx: i32,
         dy: i32,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             let pid = resolve_pid_macos(self, &app).await?;
@@ -606,14 +612,14 @@ impl DesktopComputerUseHost {
                 macos::catch_objc(|| crate::computer_use::macos_bg_input::bg_scroll(pid, dx, dy))
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(target_os = "windows")]
         {
             let hwnd_raw = crate::computer_use::windows_ax_ui::foreground_window_handle();
             if hwnd_raw == 0 {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "app_scroll: no foreground window to target on Windows.".to_string(),
                 ));
             }
@@ -625,7 +631,7 @@ impl DesktopComputerUseHost {
                 (x.round() as i32, y.round() as i32)
             } else {
                 Self::windows_foreground_window_center(hwnd_raw).ok_or_else(|| {
-                    BitFunError::tool(
+                    OpenBitFunError::tool(
                         "app_scroll: could not resolve foreground window center.".to_string(),
                     )
                 })?
@@ -640,13 +646,15 @@ impl DesktopComputerUseHost {
                 crate::computer_use::windows_bg_input::post_scroll_screen(hwnd, sx, sy, dx, dy)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, focus, dx, dy);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -655,7 +663,7 @@ impl DesktopComputerUseHost {
         app: AppSelector,
         keys: Vec<String>,
         focus_idx: Option<u32>,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             let pid = resolve_pid_macos(self, &app).await?;
@@ -684,7 +692,7 @@ impl DesktopComputerUseHost {
                 })
             })
             .await;
-            tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+            tokio::task::spawn_blocking(move || -> OpenBitFunResult<()> {
                 macos::catch_objc(|| {
                     let (mods, kc) =
                         crate::computer_use::macos_bg_input::parse_key_sequence(&keys)?;
@@ -693,7 +701,7 @@ impl DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(target_os = "windows")]
@@ -713,7 +721,7 @@ impl DesktopComputerUseHost {
             }
             let hwnd_raw = crate::computer_use::windows_ax_ui::foreground_window_handle();
             if hwnd_raw == 0 {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "app_key_chord: no foreground window to target on Windows.".to_string(),
                 ));
             }
@@ -723,20 +731,22 @@ impl DesktopComputerUseHost {
                 "app_key_chord.windows keys={:?}",
                 keys
             );
-            tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+            tokio::task::spawn_blocking(move || -> OpenBitFunResult<()> {
                 let (mods, keycode) =
                     crate::computer_use::windows_bg_input::parse_key_chord(&keys_for_parse)?;
                 let hwnd = windows::Win32::Foundation::HWND(hwnd_raw as *mut std::ffi::c_void);
                 crate::computer_use::windows_bg_input::inject_key_cloaked(hwnd, keycode, &mods)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             self.get_app_state(app, 32, false).await
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, keys, focus_idx);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -746,7 +756,7 @@ impl DesktopComputerUseHost {
         pred: AppWaitPredicate,
         timeout_ms: u32,
         poll_ms: u32,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             let deadline = Instant::now() + Duration::from_millis(timeout_ms as u64);
@@ -855,7 +865,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, pred, timeout_ms, poll_ms);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -863,7 +875,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         opts: InteractiveViewOpts,
-    ) -> BitFunResult<InteractiveView> {
+    ) -> OpenBitFunResult<InteractiveView> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let pid = resolve_pid(self, &app).await?;
@@ -940,7 +952,7 @@ impl DesktopComputerUseHost {
                 let mut s = self
                     .state
                     .lock()
-                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                    .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
                 s.interactive_view_cache.insert(
                     pid,
                     CachedInteractiveView {
@@ -954,7 +966,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, opts);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -962,7 +976,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveClickParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             // Resolve `i → node_idx` against the cached interactive view.
@@ -993,7 +1007,7 @@ impl DesktopComputerUseHost {
                         self.resolve_interactive_index(&app, params.i, Some(&rebuilt.digest))
                             .await?
                     } else {
-                        return Err(BitFunError::tool(format!(
+                        return Err(OpenBitFunError::tool(format!(
                             "INTERACTIVE_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); the UI has changed under you, re-call `build_interactive_view` and pick a fresh `i`",
                             params.i,
                             rebuilt.elements.len()
@@ -1076,7 +1090,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, params);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -1084,7 +1100,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         opts: VisualMarkViewOpts,
-    ) -> BitFunResult<VisualMarkView> {
+    ) -> OpenBitFunResult<VisualMarkView> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let pid = resolve_pid(self, &app).await?;
@@ -1110,7 +1126,7 @@ impl DesktopComputerUseHost {
                 }
             }
             let shot = snap.screenshot.as_ref().ok_or_else(|| {
-                BitFunError::tool(
+                OpenBitFunError::tool(
                     "build_visual_mark_view: app screenshot unavailable; grant Screen Recording permission and retry".to_string(),
                 )
             })?;
@@ -1158,7 +1174,7 @@ impl DesktopComputerUseHost {
                 let mut s = self
                     .state
                     .lock()
-                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                    .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
                 s.visual_mark_cache.insert(
                     pid,
                     CachedVisualMarkView {
@@ -1173,7 +1189,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, opts);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -1181,7 +1199,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: VisualClickParams,
-    ) -> BitFunResult<VisualActionResult> {
+    ) -> OpenBitFunResult<VisualActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let mut auto_rebuilt = false;
@@ -1200,7 +1218,7 @@ impl DesktopComputerUseHost {
                         .build_visual_mark_view(app.clone(), VisualMarkViewOpts::default())
                         .await?;
                     let Some(mark) = rebuilt.marks.iter().find(|m| m.i == params.i).cloned() else {
-                        return Err(BitFunError::tool(format!(
+                        return Err(OpenBitFunError::tool(format!(
                             "VISUAL_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); re-call `build_visual_mark_view` and pick a fresh `i`",
                             params.i,
                             rebuilt.marks.len()
@@ -1217,7 +1235,7 @@ impl DesktopComputerUseHost {
                 let s = self
                     .state
                     .lock()
-                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                    .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
                 s.visual_mark_cache
                     .get(&pid)
                     .and_then(|cached| cached.screenshot_id.clone())
@@ -1259,7 +1277,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, params);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -1267,7 +1287,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveTypeTextParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let focus = if let Some(i) = params.i {
@@ -1297,7 +1317,7 @@ impl DesktopComputerUseHost {
                 #[cfg(target_os = "macos")]
                 {
                     let pid = resolve_pid_macos(self, &app).await?;
-                    tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+                    tokio::task::spawn_blocking(move || -> OpenBitFunResult<()> {
                         macos::catch_objc(|| {
                             let (m1, k1) =
                                 crate::computer_use::macos_bg_input::parse_key_sequence(&[
@@ -1314,7 +1334,7 @@ impl DesktopComputerUseHost {
                         })
                     })
                     .await
-                    .map_err(|e| BitFunError::tool(e.to_string()))??;
+                    .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
                 }
                 #[cfg(target_os = "windows")]
                 {
@@ -1333,7 +1353,7 @@ impl DesktopComputerUseHost {
                 #[cfg(target_os = "macos")]
                 {
                     let pid = resolve_pid_macos(self, &app).await?;
-                    tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+                    tokio::task::spawn_blocking(move || -> OpenBitFunResult<()> {
                         macos::catch_objc(|| {
                             let (m, k) =
                                 crate::computer_use::macos_bg_input::parse_key_sequence(&[
@@ -1344,7 +1364,7 @@ impl DesktopComputerUseHost {
                         })
                     })
                     .await
-                    .map_err(|e| BitFunError::tool(e.to_string()))??;
+                    .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
                 }
                 #[cfg(target_os = "windows")]
                 {
@@ -1375,7 +1395,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, params);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -1383,7 +1405,7 @@ impl DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveScrollParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let focus = if let Some(i) = params.i {
@@ -1417,7 +1439,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, params);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 }
@@ -1434,7 +1458,7 @@ impl DesktopComputerUseHost {
 /// noise.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn compute_interactive_view_digest(
-    elements: &[bitfun_core::agentic::tools::computer_use_host::InteractiveElement],
+    elements: &[openbitfun_core::agentic::tools::computer_use_host::InteractiveElement],
 ) -> String {
     use sha1::{Digest, Sha1};
     const BUCKET: f64 = 8.0;
@@ -1486,7 +1510,7 @@ fn compute_visual_mark_view_digest(marks: &[VisualMark], screenshot_id: Option<&
 fn build_regular_visual_marks(
     shot: &ComputerScreenshot,
     opts: &VisualMarkViewOpts,
-) -> BitFunResult<Vec<VisualMark>> {
+) -> OpenBitFunResult<Vec<VisualMark>> {
     if !opts.include_grid {
         return Ok(Vec::new());
     }
@@ -1546,7 +1570,7 @@ fn build_regular_visual_marks(
     }
 
     if marks.is_empty() {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "build_visual_mark_view: no visual marks generated for the requested region"
                 .to_string(),
         ));
@@ -1557,11 +1581,11 @@ fn build_regular_visual_marks(
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn visual_marks_to_overlay_elements(
     marks: &[VisualMark],
-) -> Vec<bitfun_core::agentic::tools::computer_use_host::InteractiveElement> {
+) -> Vec<openbitfun_core::agentic::tools::computer_use_host::InteractiveElement> {
     marks
         .iter()
         .map(
-            |mark| bitfun_core::agentic::tools::computer_use_host::InteractiveElement {
+            |mark| openbitfun_core::agentic::tools::computer_use_host::InteractiveElement {
                 i: mark.i,
                 node_idx: mark.i,
                 role: "VisualMark".to_string(),
@@ -1582,15 +1606,15 @@ pub(super) fn detect_regular_grid_rect_from_screenshot(
     shot: &ComputerScreenshot,
     rows: u32,
     cols: u32,
-) -> BitFunResult<(i32, i32, u32, u32)> {
+) -> OpenBitFunResult<(i32, i32, u32, u32)> {
     if rows < 2 || cols < 2 {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "visual_grid requires rows and cols >= 2".to_string(),
         ));
     }
 
     let img = image::load_from_memory(&shot.bytes)
-        .map_err(|e| BitFunError::tool(format!("visual_grid: decode screenshot failed: {e}")))?
+        .map_err(|e| OpenBitFunError::tool(format!("visual_grid: decode screenshot failed: {e}")))?
         .to_rgb8();
     let (image_w, image_h) = img.dimensions();
     let (left, top, width, height) = shot
@@ -1601,7 +1625,7 @@ pub(super) fn detect_regular_grid_rect_from_screenshot(
     let right = left.saturating_add(width).min(image_w);
     let bottom = top.saturating_add(height).min(image_h);
     if right <= left + 8 || bottom <= top + 8 {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "visual_grid: screenshot content rect is too small".to_string(),
         ));
     }
@@ -1619,7 +1643,7 @@ pub(super) fn detect_regular_grid_rect_from_screenshot(
 
     let aspect = w as f64 / h.max(1) as f64;
     if !(0.5..=2.0).contains(&aspect) {
-        return Err(BitFunError::tool(format!(
+        return Err(OpenBitFunError::tool(format!(
             "visual_grid: detected grid is implausibly non-square (x0={}, y0={}, width={}, height={}, aspect={:.2}); pass image_grid with an explicit rectangle",
             x0, y0, w, h, aspect
         )));
@@ -1683,9 +1707,9 @@ fn detect_regular_line_sequence(
     projection: &[f64],
     count: u32,
     offset: u32,
-) -> BitFunResult<Vec<u32>> {
+) -> OpenBitFunResult<Vec<u32>> {
     if projection.len() < count as usize {
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "visual_grid: projection is smaller than requested grid count".to_string(),
         ));
     }
@@ -1739,7 +1763,7 @@ fn detect_regular_line_sequence(
         if let Some(fallback) = top_regular_positions(&adjusted, count, offset, min_gap.max(2)) {
             return Ok(fallback);
         }
-        return Err(BitFunError::tool(
+        return Err(OpenBitFunError::tool(
             "visual_grid: could not find enough line peaks".to_string(),
         ));
     }
@@ -1800,7 +1824,7 @@ fn detect_regular_line_sequence(
     best.map(|(_, positions)| positions)
         .or_else(|| top_regular_positions(&adjusted, count, offset, min_gap.max(2)))
         .ok_or_else(|| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "visual_grid: no regular grid sequence detected; pass image_grid with an explicit rectangle or build_visual_mark_view to choose a point"
                     .to_string(),
             )
@@ -1849,15 +1873,15 @@ fn top_regular_positions(
 /// Returns `true` if the error reported by `resolve_interactive_index`
 /// is the recoverable `STALE_INTERACTIVE_VIEW` variant. We match on the
 /// error text rather than introducing a typed error enum because every
-/// `BitFunError::tool` is already string-based throughout the host
+/// `OpenBitFunError::tool` is already string-based throughout the host
 /// surface; adding a new variant would ripple through ~40 callers.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-fn is_stale_interactive_view_error(err: &BitFunError) -> bool {
+fn is_stale_interactive_view_error(err: &OpenBitFunError) -> bool {
     err.to_string().contains("STALE_INTERACTIVE_VIEW")
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-fn is_stale_visual_mark_view_error(err: &BitFunError) -> bool {
+fn is_stale_visual_mark_view_error(err: &OpenBitFunError) -> bool {
     err.to_string().contains("STALE_VISUAL_MARK_VIEW")
 }
 
@@ -1894,14 +1918,14 @@ impl DesktopComputerUseHost {
         app: &AppSelector,
         i: u32,
         before_digest: Option<&str>,
-    ) -> BitFunResult<u32> {
+    ) -> OpenBitFunResult<u32> {
         let pid = resolve_pid(self, app).await?;
         let s = self
             .state
             .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
         let cached = s.interactive_view_cache.get(&pid).ok_or_else(|| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "INTERACTIVE_VIEW_MISSING: call `build_interactive_view` before `interactive_*` actions"
                     .to_string(),
             )
@@ -1915,7 +1939,7 @@ impl DesktopComputerUseHost {
                     want == cached.digest
                 };
                 if !matches {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "STALE_INTERACTIVE_VIEW: before_view_digest={} but current cached digest={}; re-call `build_interactive_view` and reuse the new digest (full or >=8-char prefix)",
                         want, cached.digest
                     )));
@@ -1923,7 +1947,7 @@ impl DesktopComputerUseHost {
             }
         }
         let el = cached.elements.iter().find(|e| e.i == i).ok_or_else(|| {
-            BitFunError::tool(format!(
+            OpenBitFunError::tool(format!(
                 "INTERACTIVE_INDEX_OUT_OF_RANGE: i={} not in cached view (len={})",
                 i,
                 cached.elements.len()
@@ -1938,14 +1962,14 @@ impl DesktopComputerUseHost {
         app: &AppSelector,
         i: u32,
         before_digest: Option<&str>,
-    ) -> BitFunResult<VisualMark> {
+    ) -> OpenBitFunResult<VisualMark> {
         let pid = resolve_pid(self, app).await?;
         let s = self
             .state
             .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
         let cached = s.visual_mark_cache.get(&pid).ok_or_else(|| {
-            BitFunError::tool(
+            OpenBitFunError::tool(
                 "VISUAL_MARK_VIEW_MISSING: call `build_visual_mark_view` before `visual_click`"
                     .to_string(),
             )
@@ -1959,7 +1983,7 @@ impl DesktopComputerUseHost {
                     want == cached.digest
                 };
                 if !matches {
-                    return Err(BitFunError::tool(format!(
+                    return Err(OpenBitFunError::tool(format!(
                         "STALE_VISUAL_MARK_VIEW: before_view_digest={} but current cached digest={}; re-call `build_visual_mark_view` and reuse the new digest (full or >=8-char prefix)",
                         want, cached.digest
                     )));
@@ -1972,7 +1996,7 @@ impl DesktopComputerUseHost {
             .find(|mark| mark.i == i)
             .cloned()
             .ok_or_else(|| {
-                BitFunError::tool(format!(
+                OpenBitFunError::tool(format!(
                     "VISUAL_INDEX_OUT_OF_RANGE: i={} not in cached visual mark view (len={})",
                     i,
                     cached.marks.len()

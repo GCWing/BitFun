@@ -24,7 +24,7 @@ const DEFAULT_ILINK_BOT_TYPE: &str = "3";
 const CHANNEL_VERSION: &str = "2.4.6";
 const ILINK_APP_ID: &str = "bot";
 const ILINK_APP_CLIENT_VERSION: &str = "132102"; // 0x00020406
-const BOT_AGENT: &str = concat!("BitFun/", env!("CARGO_PKG_VERSION"));
+const BOT_AGENT: &str = concat!("OpenBitFun/", env!("CARGO_PKG_VERSION"));
 const API_TIMEOUT_SECS: u64 = 20;
 const QR_POLL_TIMEOUT_SECS: u64 = 36;
 pub const WEIXIN_SESSION_EXPIRED_ERRCODE: i64 = -14;
@@ -336,7 +336,7 @@ impl WeixinProviderClient {
         let msg = json!({
             "from_user_id": "",
             "to_user_id": to_user_id,
-            "client_id": format!("bitfun-wx-{}", uuid::Uuid::new_v4()),
+            "client_id": format!("openbitfun-wx-{}", uuid::Uuid::new_v4()),
             "message_type": 2,
             "message_state": 2,
             "item_list": item_list,
@@ -632,7 +632,7 @@ impl WeixinProviderClient {
         let msg = json!({
             "from_user_id": "",
             "to_user_id": to_user_id,
-            "client_id": format!("bitfun-wx-{}", uuid::Uuid::new_v4()),
+            "client_id": format!("openbitfun-wx-{}", uuid::Uuid::new_v4()),
             "message_type": 2,
             "message_state": 2,
             "item_list": items,
@@ -1526,15 +1526,19 @@ async fn fetch_qr_code(base: &str, local_token_list: &[String]) -> Result<QrCode
 }
 
 fn sync_buf_path(bot_account_id: &str) -> PathBuf {
-    let base =
-        super::super::bitfun_home_dir().unwrap_or_else(|| std::env::temp_dir().join(".bitfun"));
+    let base = super::super::product_home_dir().unwrap_or_else(|| {
+        std::env::temp_dir()
+            .join(openbitfun_services_core::product_identity::hidden_data_directory())
+    });
     base.join("weixin")
         .join(format!("{bot_account_id}_get_updates_buf.txt"))
 }
 
 fn context_tokens_path(bot_account_id: &str) -> PathBuf {
-    let base =
-        super::super::bitfun_home_dir().unwrap_or_else(|| std::env::temp_dir().join(".bitfun"));
+    let base = super::super::product_home_dir().unwrap_or_else(|| {
+        std::env::temp_dir()
+            .join(openbitfun_services_core::product_identity::hidden_data_directory())
+    });
     base.join("weixin")
         .join(format!("{bot_account_id}_context_tokens.json"))
 }

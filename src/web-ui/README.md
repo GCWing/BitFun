@@ -1,10 +1,10 @@
-# BitFun Web UI
+# OpenBitFun Web UI
 
 [中文](./README.zh-CN.md) | English
 
 ## Overview
 
-This directory contains BitFun’s **Web UI** (React + TypeScript). The same frontend codebase is reused by:
+This directory contains OpenBitFun’s **Web UI** (React + TypeScript). The same frontend codebase is reused by:
 
 - **Desktop**: loaded via **Tauri**
 - **Server/Web**: built into static assets and served by the backend

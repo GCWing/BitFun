@@ -1,7 +1,7 @@
 //! Agent tool for making a port on an SSH host reachable from this machine.
 //!
 //! Works from any session, not just a remote-SSH workspace. `target` accepts
-//! whatever the caller already knows the host as — a saved BitFun connection,
+//! whatever the caller already knows the host as — a saved OpenBitFun connection,
 //! a `~/.ssh/config` alias, or `[user@]host[:port]` — because an Agent that
 //! reached a box with `ssh myserver` in a shell should be able to forward its
 //! ports with the same name it just used. When the session *is* bound to a
@@ -16,7 +16,7 @@ use crate::service::remote_ssh::{
     global_port_forward_manager, list_remote_listening_ports, PortForwardRequest, SSHAuthMethod,
     SSHConnectionConfig, SSHConnectionManager, SSHConnectionOptions,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -131,10 +131,10 @@ impl PortForwardTool {
         manager: &SSHConnectionManager,
         target: Option<&str>,
         context: &ToolUseContext,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let Some(target) = target else {
             return Self::workspace_connection_id(context).ok_or_else(|| {
-                BitFunError::tool(
+                OpenBitFunError::tool(
                     "This session is not bound to a remote SSH workspace. Pass `target` with a \
                      saved connection, an ~/.ssh/config host, or [user@]host[:port]. Use \
                      operation \"targets\" to see what is available."
@@ -161,7 +161,7 @@ impl PortForwardTool {
             manager
                 .ensure_connected(&found.id)
                 .await
-                .map_err(|error| BitFunError::tool(format!("{error:#}")))?;
+                .map_err(|error| OpenBitFunError::tool(format!("{error:#}")))?;
             return Ok(found.id.clone());
         }
 
@@ -174,9 +174,12 @@ impl PortForwardTool {
     /// instead of stacking a new one per tool call. Nothing is persisted to the
     /// user's saved connections.
     #[cfg(feature = "remote-workspace")]
-    async fn connect_ad_hoc(manager: &SSHConnectionManager, target: &str) -> BitFunResult<String> {
+    async fn connect_ad_hoc(
+        manager: &SSHConnectionManager,
+        target: &str,
+    ) -> OpenBitFunResult<String> {
         let endpoint = parse_endpoint(target).ok_or_else(|| {
-            BitFunError::tool(format!(
+            OpenBitFunError::tool(format!(
                 "'{target}' is not a saved connection, an ~/.ssh/config host, or [user@]host[:port]"
             ))
         })?;
@@ -236,33 +239,33 @@ impl PortForwardTool {
                 options: SSHConnectionOptions::default(),
             })
             .await
-            .map_err(|error| BitFunError::tool(format!("{error:#}")))?;
+            .map_err(|error| OpenBitFunError::tool(format!("{error:#}")))?;
 
         if !result.success {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "Could not connect to '{target}': {}. Key or agent authentication is required; \
-                 a target that needs a password must be saved in BitFun's SSH connections first.",
+                 a target that needs a password must be saved in OpenBitFun's SSH connections first.",
                 result.error.unwrap_or_else(|| "unknown error".to_string())
             )));
         }
         Ok(connection_id)
     }
 
-    fn require_remote_port(input: &PortForwardToolInput) -> BitFunResult<u16> {
+    fn require_remote_port(input: &PortForwardToolInput) -> OpenBitFunResult<u16> {
         input
             .remote_port
             .filter(|port| *port != 0)
-            .ok_or_else(|| BitFunError::tool("start requires remote_port".to_string()))
+            .ok_or_else(|| OpenBitFunError::tool("start requires remote_port".to_string()))
     }
 
-    fn require_forward_id(input: &PortForwardToolInput) -> BitFunResult<String> {
+    fn require_forward_id(input: &PortForwardToolInput) -> OpenBitFunResult<String> {
         input
             .forward_id
             .as_deref()
             .map(str::trim)
             .filter(|id| !id.is_empty())
             .map(str::to_string)
-            .ok_or_else(|| BitFunError::tool("stop requires forward_id".to_string()))
+            .ok_or_else(|| OpenBitFunError::tool("stop requires forward_id".to_string()))
     }
 }
 
@@ -278,17 +281,17 @@ impl Tool for PortForwardTool {
         "PortForward"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(r#"Make a port listening on an SSH host reachable from the user's machine, so they can open it in a browser.
 
 Operations:
-- "targets": List SSH hosts you can forward from (saved BitFun connections and ~/.ssh/config hosts). Read-only.
+- "targets": List SSH hosts you can forward from (saved OpenBitFun connections and ~/.ssh/config hosts). Read-only.
 - "detect": List TCP ports currently listening on the host. Read-only; forwards nothing.
 - "start": Forward one remote port. Requires remote_port. Returns the local address to give the user.
 - "list": Show forwards currently running for the host.
 - "stop": Stop one forward by forward_id.
 
-`target` names the SSH host: a saved connection (id or name), a ~/.ssh/config Host, or [user@]host[:port]. Omit it only when the session already runs in a remote SSH workspace. Ad-hoc targets authenticate with an SSH agent or a config-declared key; a host needing a password must be saved in BitFun's SSH connections first.
+`target` names the SSH host: a saved connection (id or name), a ~/.ssh/config Host, or [user@]host[:port]. Omit it only when the session already runs in a remote SSH workspace. Ad-hoc targets authenticate with an SSH agent or a config-declared key; a host needing a password must be saved in OpenBitFun's SSH connections first.
 
 The returned local_port is authoritative and is NOT always the port requested: if that local port is in use, a free one is bound instead and requested_local_port records what was asked for. Always report the returned local_address rather than assuming it matches the remote port.
 
@@ -367,9 +370,9 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         let input: PortForwardToolInput = serde_json::from_value(input.clone())
-            .map_err(|error| BitFunError::validation(format!("Invalid input: {error}")))?;
+            .map_err(|error| OpenBitFunError::validation(format!("Invalid input: {error}")))?;
         let target = input.trimmed_target().unwrap_or("workspace").to_string();
         let intent = match input.operation {
             // Reading what exists changes nothing on either machine.
@@ -456,8 +459,8 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
         &self,
         _input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
-        Err(BitFunError::tool(
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
+        Err(OpenBitFunError::tool(
             "This build has no remote SSH support, so ports cannot be forwarded".to_string(),
         ))
     }
@@ -467,9 +470,9 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let input: PortForwardToolInput = serde_json::from_value(input.clone())
-            .map_err(|error| BitFunError::tool(format!("Invalid input: {error}")))?;
+            .map_err(|error| OpenBitFunError::tool(format!("Invalid input: {error}")))?;
         let ssh_manager = resolve_ssh_manager().await?;
         let forwards = global_port_forward_manager();
 
@@ -519,7 +522,7 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
                     Self::resolve_target(&ssh_manager, input.trimmed_target(), context).await?;
                 let ports = list_remote_listening_ports(&ssh_manager, &connection_id)
                     .await
-                    .map_err(|error| BitFunError::tool(format!("{error:#}")))?;
+                    .map_err(|error| OpenBitFunError::tool(format!("{error:#}")))?;
                 json!({
                     "success": true,
                     "operation": "detect",
@@ -542,7 +545,7 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
                         label: input.label.clone(),
                     })
                     .await
-                    .map_err(|error| BitFunError::tool(format!("{error:#}")))?;
+                    .map_err(|error| OpenBitFunError::tool(format!("{error:#}")))?;
                 let moved = forward.requested_local_port.is_some();
                 json!({
                     "success": true,
@@ -576,7 +579,7 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
                 forwards
                     .stop_forward(&forward_id)
                     .await
-                    .map_err(|error| BitFunError::tool(format!("{error:#}")))?;
+                    .map_err(|error| OpenBitFunError::tool(format!("{error:#}")))?;
                 json!({
                     "success": true,
                     "operation": "stop",
@@ -595,13 +598,15 @@ Forwards bind 127.0.0.1 and last until stopped or the connection drops. Set expo
 
 /// Reach the SSH manager that owns this process's connections.
 #[cfg(feature = "remote-workspace")]
-async fn resolve_ssh_manager() -> BitFunResult<SSHConnectionManager> {
+async fn resolve_ssh_manager() -> OpenBitFunResult<SSHConnectionManager> {
     let manager = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
-        .ok_or_else(|| BitFunError::tool("Remote SSH services are not initialized".to_string()))?;
+        .ok_or_else(|| {
+            OpenBitFunError::tool("Remote SSH services are not initialized".to_string())
+        })?;
     manager
         .get_ssh_manager()
         .await
-        .ok_or_else(|| BitFunError::tool("SSH manager is not available".to_string()))
+        .ok_or_else(|| OpenBitFunError::tool("SSH manager is not available".to_string()))
 }
 
 #[cfg(test)]

@@ -1,13 +1,13 @@
 @use './config-page-layout.tokens' as configLayout;
 
 
-.bitfun-config-page-header {
+.openbitfun-config-page-header {
   flex-shrink: 0;
-  padding: var(--bf-space-5) 0 0;
+  padding: var(--openbitfun-space-5) 0 0;
   margin-bottom: 36px;
 }
 
-.bitfun-config-page-header__inner {
+.openbitfun-config-page-header__inner {
   width: min(
     calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
     #{configLayout.$config-page-content-max-width}
@@ -16,89 +16,89 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
 }
 
-.bitfun-config-page-header__left {
+.openbitfun-config-page-header__left {
   display: flex;
   align-items: center;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
   flex: 1;
   min-width: 0;
 }
 
-.bitfun-config-page-header__info {
+.openbitfun-config-page-header__info {
   flex: 1;
   min-width: 0;
 }
 
-.bitfun-config-page-header__title {
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-heading-page-font-size);
-  font-weight: var(--bf-type-heading-page-font-weight);
-  line-height: var(--bf-type-heading-page-line-height);
-  letter-spacing: var(--bf-type-heading-page-letter-spacing);
+.openbitfun-config-page-header__title {
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-heading-page-font-size);
+  font-weight: var(--openbitfun-type-heading-page-font-weight);
+  line-height: var(--openbitfun-type-heading-page-line-height);
+  letter-spacing: var(--openbitfun-type-heading-page-letter-spacing);
   overflow-wrap: break-word;
 }
 
-.bitfun-config-page-header__subtitle {
+.openbitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
-  font-size: var(--bf-type-body-lg-font-size);
-  font-weight: var(--bf-type-body-lg-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-body-lg-line-height);
-  letter-spacing: var(--bf-type-body-lg-letter-spacing);
-  font-family:var(--bf-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-body-lg-font-size);
+  font-weight: var(--openbitfun-type-body-lg-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-body-lg-line-height);
+  letter-spacing: var(--openbitfun-type-body-lg-letter-spacing);
+  font-family:var(--openbitfun-type-body-sm-font-family);
   max-width: 100%;
   overflow-wrap: break-word;
 }
 
-.bitfun-config-page-header__extra {
+.openbitfun-config-page-header__extra {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
 }
 
 @media (max-width: 768px) {
-  .bitfun-config-page-header__inner {
+  .openbitfun-config-page-header__inner {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .bitfun-config-page-header__left {
+  .openbitfun-config-page-header__left {
     width: 100%;
   }
 
-  .bitfun-config-page-header__extra {
+  .openbitfun-config-page-header__extra {
     width: 100%;
     justify-content: flex-end;
   }
 }
 
 @media (max-width: 600px) {
-  .bitfun-config-page-header__left {
-    gap: var(--bf-space-3);
+  .openbitfun-config-page-header__left {
+    gap: var(--openbitfun-space-3);
   }
 }
 
 
-.bitfun-config-page-header-divider {
+.openbitfun-config-page-header-divider {
   flex-shrink: 0;
   height: 1px;
-  background: var(--bf-color-border-subtle);
+  background: var(--openbitfun-color-border-subtle);
   width: min(
     calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
     #{configLayout.$config-page-content-max-width}
   );
-  margin: var(--bf-space-4) auto;
+  margin: var(--openbitfun-space-4) auto;
   display: none;
 }
 
 @container config-panel (max-width: 900px) {
-  .bitfun-config-page-header__inner,
-  .bitfun-config-page-header-divider {
+  .openbitfun-config-page-header__inner,
+  .openbitfun-config-page-header-divider {
     width: min(
       calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
       #{configLayout.$config-page-content-max-width}
@@ -110,41 +110,41 @@
 
 
 @container config-panel (max-width: 520px) {
-  .bitfun-config-page-header {
-    padding-top: var(--bf-space-4);
-    margin-bottom: var(--bf-space-8);
+  .openbitfun-config-page-header {
+    padding-top: var(--openbitfun-space-4);
+    margin-bottom: var(--openbitfun-space-8);
   }
 
-  .bitfun-config-page-header__inner {
-    gap: var(--bf-space-3);
+  .openbitfun-config-page-header__inner {
+    gap: var(--openbitfun-space-3);
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .bitfun-config-page-header__left {
-    gap: var(--bf-space-3);
+  .openbitfun-config-page-header__left {
+    gap: var(--openbitfun-space-3);
     width: 100%;
   }
 
-  .bitfun-config-page-header__subtitle {
-    margin-top: var(--bf-space-1);
+  .openbitfun-config-page-header__subtitle {
+    margin-top: var(--openbitfun-space-1);
     max-width: 100%;
   }
 
-  .bitfun-config-page-header__extra {
+  .openbitfun-config-page-header__extra {
     width: 100%;
     justify-content: flex-start;
-    margin-top: var(--bf-space-2);
+    margin-top: var(--openbitfun-space-2);
   }
 
-  .bitfun-config-page-header-divider {
-    margin: var(--bf-space-3) auto;
+  .openbitfun-config-page-header-divider {
+    margin: var(--openbitfun-space-3) auto;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .bitfun-config-page-header {
-    background: var(--bf-color-surface-scene);
+  .openbitfun-config-page-header {
+    background: var(--openbitfun-color-surface-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

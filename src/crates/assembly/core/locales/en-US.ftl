@@ -1,10 +1,10 @@
-# BitFun English Language Pack
+# OpenBitFun English Language Pack
 # English (US) (en-US) Fluent Translation File
 
 # ==================== General ====================
 app-version = Version { $version }
 loading = Loading...
-welcome = Welcome to BitFun
+welcome = Welcome to OpenBitFun
 
 # ==================== Actions ====================
 action-confirm = Confirm

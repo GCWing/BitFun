@@ -4,45 +4,45 @@
  */
 @use './layout' as markdown;
 
-$inline-code-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-$inline-code-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
-$inline-code-fg: var(--bf-color-content-secondary);
-$inline-code-hover-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-$inline-code-hover-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
-$inline-code-hover-fg: var(--bf-color-content-primary);
+$inline-code-bg: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+$inline-code-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
+$inline-code-fg: var(--openbitfun-color-content-secondary);
+$inline-code-hover-bg: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+$inline-code-hover-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
+$inline-code-hover-fg: var(--openbitfun-color-content-primary);
 
-$pre-bg: var(--bf-color-surface-canvas);
-$pre-border: color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent);
+$pre-bg: var(--openbitfun-color-surface-canvas);
+$pre-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent);
 $pre-shadow: none;
 $pre-padding: markdown.$code-block-pad-y markdown.$code-block-pad-x;
-$pre-hover-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+$pre-hover-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
 $pre-hover-shadow:
-  0 8px 24px color-mix(in srgb, var(--bf-color-content-on-light) 40%, transparent),
-  inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 12%, transparent),
-  inset 0 -1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 8%, transparent);
-$pre-code-fg: var(--bf-color-content-secondary);
+  0 8px 24px color-mix(in srgb, var(--openbitfun-color-content-on-light) 40%, transparent),
+  inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 12%, transparent),
+  inset 0 -1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 8%, transparent);
+$pre-code-fg: var(--openbitfun-color-content-secondary);
 
-$bq-bg: color-mix(in srgb, var(--bf-color-content-on-dark) 4%, transparent);
-$bq-border: color-mix(in srgb, var(--bf-color-content-on-dark) 15%, transparent);
+$bq-bg: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
+$bq-border: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
 $bq-radius: 0 6px 6px 0;
-$bq-fg: color-mix(in srgb, var(--bf-color-content-on-dark) 70%, transparent);
+$bq-fg: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 70%, transparent);
 $bq-padding: 0.58rem 0.72rem;
 $bq-margin: markdown.$blockquote-margin-y 0;
 
-$inline-code-bg-light: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-$inline-code-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
-$inline-code-fg-light: var(--bf-color-content-primary);
-$inline-code-hover-bg-light: color-mix(in srgb, var(--bf-color-content-on-light) 8%, transparent);
-$inline-code-hover-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent);
+$inline-code-bg-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 8%, transparent);
+$inline-code-border-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
+$inline-code-fg-light: var(--openbitfun-color-content-primary);
+$inline-code-hover-bg-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 8%, transparent);
+$inline-code-hover-border-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 20%, transparent);
 $inline-code-hover-fg-light: $inline-code-fg-light;
 
-$pre-bg-light: var(--bf-color-surface-tertiary);
-$pre-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 12%, transparent);
+$pre-bg-light: var(--openbitfun-color-surface-tertiary);
+$pre-border-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 12%, transparent);
 $pre-shadow-light: none;
-$pre-hover-border-light: color-mix(in srgb, var(--bf-color-content-on-light) 15%, transparent);
-$pre-hover-shadow-light: 0 6px 20px color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
-$pre-code-fg-light: var(--bf-color-content-primary);
+$pre-hover-border-light: color-mix(in srgb, var(--openbitfun-color-content-on-light) 15%, transparent);
+$pre-hover-shadow-light: 0 6px 20px color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
+$pre-code-fg-light: var(--openbitfun-color-content-primary);
 
-$bq-bg-light: color-mix(in srgb, var(--bf-color-content-muted) 8%, transparent);
-$bq-border-light: var(--bf-color-border-strong);
-$bq-fg-light: var(--bf-color-content-secondary);
+$bq-bg-light: color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
+$bq-border-light: var(--openbitfun-color-border-strong);
+$bq-fg-light: var(--openbitfun-color-content-secondary);

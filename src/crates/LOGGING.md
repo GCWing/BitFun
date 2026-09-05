@@ -32,10 +32,10 @@
 
 ## Timing And Duration Fields
 
-Use shared timing helpers from `bitfun_core::util::timing` when recording internal durations.
+Use shared timing helpers from `openbitfun_core::util::timing` when recording internal durations.
 
 ```rust
-use bitfun_core::util::{elapsed_ms_u64, TimingCollector};
+use openbitfun_core::util::{elapsed_ms_u64, TimingCollector};
 use std::time::Instant;
 
 let started_at = Instant::now();

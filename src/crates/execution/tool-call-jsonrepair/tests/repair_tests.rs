@@ -1,4 +1,4 @@
-use bitfun_tool_call_jsonrepair::jsonrepair;
+use openbitfun_tool_call_jsonrepair::jsonrepair;
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -1463,7 +1463,7 @@ fn repair_rejects_deeply_nested_input() {
         );
         assert_eq!(
             err.kind,
-            bitfun_tool_call_jsonrepair::JsonRepairErrorKind::MaxDepthExceeded
+            openbitfun_tool_call_jsonrepair::JsonRepairErrorKind::MaxDepthExceeded
         );
     });
 }
@@ -1544,7 +1544,7 @@ fn error_includes_line_and_column() {
 
 #[test]
 fn error_includes_kind() {
-    use bitfun_tool_call_jsonrepair::JsonRepairErrorKind;
+    use openbitfun_tool_call_jsonrepair::JsonRepairErrorKind;
     let err = jsonrepair("").unwrap_err();
     assert_eq!(err.kind, JsonRepairErrorKind::UnexpectedEnd);
 }
@@ -1597,7 +1597,7 @@ fn repeated_repairable_invalid_escapes_are_normalized() {
 
 #[test]
 fn repeated_invalid_unicode_escapes_return_clear_error() {
-    use bitfun_tool_call_jsonrepair::JsonRepairErrorKind;
+    use openbitfun_tool_call_jsonrepair::JsonRepairErrorKind;
 
     let input = format!("\"{}\"", "\\uZ000".repeat(512));
     let err = jsonrepair(&input).unwrap_err();

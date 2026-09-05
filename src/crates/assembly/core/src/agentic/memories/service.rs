@@ -14,11 +14,11 @@ use crate::infrastructure::get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{GlobalConfig, MemoryExternalContextPolicy};
 use crate::service::session::{SessionMemoryMode, SessionMetadata, SessionStatus};
-use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_ai_adapters::Message;
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use chrono::{SecondsFormat, Utc};
 use futures::future::BoxFuture;
 use log::{debug, error, info, warn};
+use openbitfun_ai_adapters::Message;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -35,7 +35,7 @@ const ROLLOUT_SUMMARY_BEGIN_MARKER: &str = "<<<ROLLOUT_SUMMARY_BEGIN>>>";
 const ROLLOUT_SUMMARY_END_MARKER: &str = "<<<ROLLOUT_SUMMARY_END>>>";
 const ROLLOUT_SLUG_BEGIN_MARKER: &str = "<<<ROLLOUT_SLUG_BEGIN>>>";
 const ROLLOUT_SLUG_END_MARKER: &str = "<<<ROLLOUT_SLUG_END>>>";
-const PHASE1_SYSTEM_PROMPT: &str = bitfun_agent_content::memories::PHASE1_SYSTEM;
+const PHASE1_SYSTEM_PROMPT: &str = openbitfun_agent_content::memories::PHASE1_SYSTEM;
 const CLAW_PERSONA_MEMORY_RULES: &str = "\
 assistant_persona_memory_rules:\n\
 - This rollout is from an assistant-persona session. `BOOTSTRAP.md`, `IDENTITY.md`, `USER.md`, and `SOUL.md` are assistant-local persona/profile setup files.\n\
@@ -93,21 +93,21 @@ impl MemoryPhase1RuntimeConfig {
 }
 
 impl MemoryPhase1Service {
-    pub async fn new() -> BitFunResult<Self> {
+    pub async fn new() -> OpenBitFunResult<Self> {
         let path_manager = get_path_manager_arc();
         let db = Arc::new(MemoryDatabase::new(path_manager));
         db.initialize().await?;
         Ok(Self { db })
     }
 
-    pub async fn run_once(&self) -> BitFunResult<MemoryPhase1RunStats> {
+    pub async fn run_once(&self) -> OpenBitFunResult<MemoryPhase1RunStats> {
         self.run_once_excluding_session(None).await
     }
 
     pub async fn prune_stage1_outputs_for_retention(
         &self,
         max_unused_days: i64,
-    ) -> BitFunResult<usize> {
+    ) -> OpenBitFunResult<usize> {
         self.db
             .prune_stage1_outputs_for_retention(max_unused_days, STAGE_ONE_PRUNE_BATCH_SIZE)
             .await
@@ -116,7 +116,7 @@ impl MemoryPhase1Service {
     pub async fn run_once_excluding_session(
         &self,
         excluded_session_id: Option<&str>,
-    ) -> BitFunResult<MemoryPhase1RunStats> {
+    ) -> OpenBitFunResult<MemoryPhase1RunStats> {
         let started_at = Instant::now();
         let config = MemoryPhase1RuntimeConfig::from_global(&load_global_config().await);
         info!(
@@ -158,7 +158,7 @@ impl MemoryPhase1Service {
         }
 
         let ai_factory = get_global_ai_client_factory().await.map_err(|error| {
-            BitFunError::service(format!("Failed to get AI client factory: {}", error))
+            OpenBitFunError::service(format!("Failed to get AI client factory: {}", error))
         })?;
         let ai_client = ai_factory
             .get_client_resolved(&config.extract_model_selector)
@@ -184,7 +184,7 @@ impl MemoryPhase1Service {
         let mut handles = Vec::new();
         for session in sessions {
             let permit = semaphore.clone().acquire_owned().await.map_err(|error| {
-                BitFunError::service(format!("Failed to acquire memories semaphore: {}", error))
+                OpenBitFunError::service(format!("Failed to acquire memories semaphore: {}", error))
             })?;
             let db = self.db.clone();
             let persistence = persistence.clone();
@@ -228,7 +228,7 @@ impl MemoryPhase1Service {
         persistence: &PersistenceManager,
         config: &MemoryPhase1RuntimeConfig,
         excluded_session_id: Option<&str>,
-    ) -> BitFunResult<MemoryPhase1CandidateCollection> {
+    ) -> OpenBitFunResult<MemoryPhase1CandidateCollection> {
         let now_ms = current_unix_ms();
         let cutoff_age_ms =
             now_ms.saturating_sub(config.max_session_age_days * 24 * 60 * 60 * 1000);
@@ -434,10 +434,10 @@ struct MemoryPhase1CandidateCollection {
 async fn process_single_session(
     db: Arc<MemoryDatabase>,
     persistence: Arc<PersistenceManager>,
-    ai_client: Arc<bitfun_ai_adapters::AIClient>,
+    ai_client: Arc<openbitfun_ai_adapters::AIClient>,
     claimed: ClaimedMemorySourceSession,
     config: MemoryPhase1RuntimeConfig,
-) -> BitFunResult<bool> {
+) -> OpenBitFunResult<bool> {
     let ClaimedMemorySourceSession {
         source,
         session_storage_path,
@@ -462,7 +462,7 @@ async fn process_single_session(
                 .load_visible_persisted_session_turns(session_storage_path, &source.session_id)
                 .await
         }
-        None => Err(BitFunError::service(
+        None => Err(OpenBitFunError::service(
             "Core coordinator is unavailable for AI Memory history reads",
         )),
     };
@@ -633,7 +633,7 @@ fn current_unix_secs() -> i64 {
         .as_secs() as i64
 }
 
-fn stage_one_rollout_token_limit(config: &bitfun_ai_adapters::AIConfig) -> usize {
+fn stage_one_rollout_token_limit(config: &openbitfun_ai_adapters::AIConfig) -> usize {
     let context_window = config.context_window as usize;
     if context_window == 0 {
         return DEFAULT_ROLLOUT_TOKEN_LIMIT;
@@ -648,7 +648,7 @@ fn stage_one_rollout_token_limit(config: &bitfun_ai_adapters::AIConfig) -> usize
     (input_window * STAGE_ONE_CONTEXT_WINDOW_PERCENT / 100).max(1)
 }
 
-fn stage_one_output_max_tokens(config: &bitfun_ai_adapters::AIConfig) -> usize {
+fn stage_one_output_max_tokens(config: &openbitfun_ai_adapters::AIConfig) -> usize {
     config
         .max_tokens
         .map(|tokens| tokens as usize)
@@ -711,7 +711,7 @@ rollout_context:\n\
 - rollout_path: {rollout_path}\n\
 - rollout_cwd: {workspace_path}\n\
 {assistant_persona_rules}\n\
-rendered conversation (pre-rendered from BitFun session transcript):\n\
+rendered conversation (pre-rendered from OpenBitFun session transcript):\n\
 <conversation>\n\
 {transcript}\n\
 </conversation>\n\n\
@@ -733,11 +733,11 @@ fn is_candidate_agent_type(agent_type: &str) -> bool {
 }
 
 async fn run_phase1_extraction_attempts(
-    stage_one_client: &bitfun_ai_adapters::AIClient,
+    stage_one_client: &openbitfun_ai_adapters::AIClient,
     source: &MemorySourceSession,
     transcript: &str,
     prompt: &str,
-) -> BitFunResult<MemoryExtractionRecord> {
+) -> OpenBitFunResult<MemoryExtractionRecord> {
     run_phase1_extraction_attempts_with_request(source, transcript, || {
         Box::pin(stage_one_client.send_message(
             vec![
@@ -754,9 +754,9 @@ async fn run_phase1_extraction_attempts_with_request<'a, F>(
     source: &MemorySourceSession,
     transcript: &str,
     mut send_request: F,
-) -> BitFunResult<MemoryExtractionRecord>
+) -> OpenBitFunResult<MemoryExtractionRecord>
 where
-    F: FnMut() -> BoxFuture<'a, anyhow::Result<bitfun_ai_adapters::GeminiResponse>>,
+    F: FnMut() -> BoxFuture<'a, anyhow::Result<openbitfun_ai_adapters::GeminiResponse>>,
 {
     let mut last_error = None;
     for attempt_index in 0..PHASE1_EXTRACTION_MAX_ATTEMPTS {
@@ -766,7 +766,7 @@ where
             Ok(response) => response,
             Err(error) => {
                 let error =
-                    BitFunError::service(format!("Memory phase1 model call failed: {}", error));
+                    OpenBitFunError::service(format!("Memory phase1 model call failed: {}", error));
                 warn!(
                     "Memory phase1 model request attempt failed: session_id={}, workspace_path={}, attempt={}/{}, duration_ms={}, error={}",
                     source.session_id,
@@ -823,7 +823,7 @@ where
     }
 
     Err(last_error.unwrap_or_else(|| {
-        BitFunError::service("Memory phase1 extraction failed without attempts".to_string())
+        OpenBitFunError::service("Memory phase1 extraction failed without attempts".to_string())
     }))
 }
 
@@ -831,7 +831,7 @@ fn parse_extraction_response(
     source: &MemorySourceSession,
     _transcript: &str,
     response_text: &str,
-) -> BitFunResult<MemoryExtractionRecord> {
+) -> OpenBitFunResult<MemoryExtractionRecord> {
     let (raw_memory, next_offset) = extract_framed_section_after(
         source,
         response_text,
@@ -863,7 +863,7 @@ fn extract_rollout_slug_section(
     source: &MemorySourceSession,
     text: &str,
     start_offset: usize,
-) -> BitFunResult<Option<String>> {
+) -> OpenBitFunResult<Option<String>> {
     let (slug, _) = extract_framed_section_after(
         source,
         text,
@@ -876,7 +876,7 @@ fn extract_rollout_slug_section(
         return Ok(None);
     }
     if slug.contains('\n') || slug.contains('\r') {
-        return Err(BitFunError::Deserialization(format!(
+        return Err(OpenBitFunError::Deserialization(format!(
             "Memory phase1 response field `rollout_slug` must be a single line for session {}",
             source.session_id
         )));
@@ -891,17 +891,17 @@ fn extract_framed_section_after(
     begin_marker: &str,
     end_marker: &str,
     start_offset: usize,
-) -> BitFunResult<(String, usize)> {
+) -> OpenBitFunResult<(String, usize)> {
     let (_, content_start) =
         marker_line_bounds_from(text, begin_marker, start_offset).ok_or_else(|| {
-            BitFunError::Deserialization(format!(
+            OpenBitFunError::Deserialization(format!(
                 "Memory phase1 response missing `{}` begin marker for field `{}` in session {}",
                 begin_marker, field, source.session_id
             ))
         })?;
     let (content_end, next_offset) = marker_line_bounds_from(text, end_marker, content_start)
         .ok_or_else(|| {
-            BitFunError::Deserialization(format!(
+            OpenBitFunError::Deserialization(format!(
                 "Memory phase1 response missing `{}` end marker for field `{}` in session {}",
                 end_marker, field, source.session_id
             ))
@@ -910,7 +910,7 @@ fn extract_framed_section_after(
     if marker_line_bounds_from(text, begin_marker, content_start)
         .is_some_and(|(duplicate_start, _)| duplicate_start < content_end)
     {
-        return Err(BitFunError::Deserialization(format!(
+        return Err(OpenBitFunError::Deserialization(format!(
             "Memory phase1 response contains duplicate begin marker `{}` before field `{}` end marker in session {}",
             begin_marker, field, source.session_id
         )));
@@ -949,7 +949,7 @@ async fn record_success_no_output(
     db: &Arc<MemoryDatabase>,
     source: &MemorySourceSession,
     ownership_token: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     db.mark_phase1_job_succeeded_no_output(&source.session_id, ownership_token)
         .await
         .map(|_| ())
@@ -959,7 +959,7 @@ async fn release_claim_without_watermark(
     db: &Arc<MemoryDatabase>,
     source: &MemorySourceSession,
     ownership_token: &str,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     db.release_phase1_claim_without_watermark(&source.session_id, ownership_token)
         .await
         .map(|_| ())
@@ -971,7 +971,7 @@ async fn record_failure(
     ownership_token: &str,
     retry_backoff_seconds: i64,
     error: String,
-) -> BitFunResult<()> {
+) -> OpenBitFunResult<()> {
     db.mark_phase1_job_failed(
         &source.session_id,
         ownership_token,
@@ -985,7 +985,7 @@ async fn record_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_ai_adapters::AIConfig;
+    use openbitfun_ai_adapters::AIConfig;
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
@@ -1014,7 +1014,7 @@ mod tests {
     fn source_session() -> MemorySourceSession {
         MemorySourceSession {
             workspace_path: "E:/workspace".to_string(),
-            rollout_path: "E:/BitFun/sessions/session_1".to_string(),
+            rollout_path: "E:/OpenBitFun/sessions/session_1".to_string(),
             session_id: "session_1".to_string(),
             session_name: "Session 1".to_string(),
             agent_type: "coder".to_string(),
@@ -1136,8 +1136,8 @@ mod tests {
         assert!(!phase1_memory_mode_gate_skips(&metadata));
     }
 
-    fn gemini_response(text: &str) -> bitfun_ai_adapters::GeminiResponse {
-        bitfun_ai_adapters::GeminiResponse {
+    fn gemini_response(text: &str) -> openbitfun_ai_adapters::GeminiResponse {
+        openbitfun_ai_adapters::GeminiResponse {
             text: text.to_string(),
             reasoning_content: None,
             tool_calls: None,

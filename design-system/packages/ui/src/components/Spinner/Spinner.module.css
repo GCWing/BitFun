@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .loadingState,
   .cell,
@@ -7,8 +7,8 @@
   }
 
   .root {
-    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-md);
-    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-md);
+    --_spinner-cell: var(--openbitfun-layout-spinner-matrix-cell-md);
+    --_spinner-gap: var(--openbitfun-layout-spinner-matrix-gap-md);
 
     display: inline-grid;
     flex: 0 0 auto;
@@ -25,26 +25,26 @@
   }
 
   .root[data-variant="matrix"][data-size="xs"] {
-    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-xs);
-    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-sm);
+    --_spinner-cell: var(--openbitfun-layout-spinner-matrix-cell-xs);
+    --_spinner-gap: var(--openbitfun-layout-spinner-matrix-gap-sm);
   }
 
   .root[data-variant="matrix"][data-size="sm"] {
-    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-sm);
-    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-sm);
+    --_spinner-cell: var(--openbitfun-layout-spinner-matrix-cell-sm);
+    --_spinner-gap: var(--openbitfun-layout-spinner-matrix-gap-sm);
   }
 
   .root[data-variant="matrix"][data-size="lg"] {
-    --_spinner-cell: var(--bf-layout-spinner-matrix-cell-lg);
-    --_spinner-gap: var(--bf-layout-spinner-matrix-gap-md);
+    --_spinner-cell: var(--openbitfun-layout-spinner-matrix-cell-lg);
+    --_spinner-gap: var(--openbitfun-layout-spinner-matrix-gap-md);
   }
 
   .root[data-variant="matrix"] .cell {
     inline-size: var(--_spinner-cell);
     block-size: var(--_spinner-cell);
-    border-radius: var(--bf-layout-spinner-matrix-radius);
+    border-radius: var(--openbitfun-layout-spinner-matrix-radius);
     background: currentColor;
-    animation: bf-spinner-matrix-pulse var(--bf-motion-duration-loop) ease-in-out infinite;
+    animation: openbitfun-spinner-matrix-pulse var(--openbitfun-motion-duration-loop) ease-in-out infinite;
     will-change: opacity, transform;
   }
 
@@ -62,18 +62,18 @@
     align-items: center;
     justify-content: center;
     gap: 0.2em;
-    font-size: var(--bf-type-flow-section-title-font-size);
+    font-size: var(--openbitfun-type-flow-section-title-font-size);
   }
 
-  .root[data-variant="bars"][data-size="xs"] { font-size: var(--bf-type-support-font-size); }
-  .root[data-variant="bars"][data-size="sm"] { font-size: var(--bf-type-body-md-font-size); }
-  .root[data-variant="bars"][data-size="lg"] { font-size: var(--bf-type-flow-page-title-font-size); }
+  .root[data-variant="bars"][data-size="xs"] { font-size: var(--openbitfun-type-support-font-size); }
+  .root[data-variant="bars"][data-size="sm"] { font-size: var(--openbitfun-type-body-md-font-size); }
+  .root[data-variant="bars"][data-size="lg"] { font-size: var(--openbitfun-type-flow-page-title-font-size); }
 
   .root[data-variant="bars"] .cell {
     inline-size: 0.22em;
-    border-radius: var(--bf-radius-pill);
+    border-radius: var(--openbitfun-radius-pill);
     background: currentColor;
-    animation: bf-spinner-bars-pulse var(--bf-motion-duration-loop) ease-in-out infinite;
+    animation: openbitfun-spinner-bars-pulse var(--openbitfun-motion-duration-loop) ease-in-out infinite;
   }
 
   .root[data-variant="bars"] .cell:nth-child(1),
@@ -90,26 +90,26 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--bf-space-2);
-    color: var(--bf-color-content-secondary);
+    gap: var(--openbitfun-space-2);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .label {
-    color: var(--bf-color-content-muted);
-    font-family: var(--bf-type-support-font-family);
-    font-size: var(--bf-type-support-font-size);
-    font-weight: var(--bf-type-support-font-weight);
-    line-height: var(--bf-type-support-line-height);
-    letter-spacing: var(--bf-type-support-letter-spacing);
+    color: var(--openbitfun-color-content-muted);
+    font-family: var(--openbitfun-type-support-font-family);
+    font-size: var(--openbitfun-type-support-font-size);
+    font-weight: var(--openbitfun-type-support-font-weight);
+    line-height: var(--openbitfun-type-support-line-height);
+    letter-spacing: var(--openbitfun-type-support-letter-spacing);
     text-align: center;
   }
 
-  @keyframes bf-spinner-matrix-pulse {
+  @keyframes openbitfun-spinner-matrix-pulse {
     0%, 100% { opacity: 0.2; transform: scale(0.82); }
     45%, 60% { opacity: 1; transform: scale(1); }
   }
 
-  @keyframes bf-spinner-bars-pulse {
+  @keyframes openbitfun-spinner-bars-pulse {
     0%, 100% { opacity: 0.35; transform: scaleY(0.7); }
     50% { opacity: 1; transform: scaleY(1); }
   }

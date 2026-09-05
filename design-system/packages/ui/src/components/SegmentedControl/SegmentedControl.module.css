@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root,
   .segment,
   .icon,
@@ -9,11 +9,11 @@
   .root {
     display: inline-flex;
     align-items: center;
-    gap: var(--bf-control-segmented-control-gap);
-    padding: var(--bf-control-segmented-control-padding);
-    border: var(--bf-border-width-default) solid var(--bf-color-border-subtle);
-    border-radius: var(--bf-control-segmented-control-radius);
-    background: var(--bf-color-action-neutral-surface);
+    gap: var(--openbitfun-control-segmented-control-gap);
+    padding: var(--openbitfun-control-segmented-control-padding);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-control-segmented-control-radius);
+    background: var(--openbitfun-color-action-neutral-surface);
   }
 
   .root[data-distribution="fill"] {
@@ -30,48 +30,48 @@
     align-items: center;
     justify-content: center;
     min-inline-size: 0;
-    gap: var(--bf-control-segmented-control-segment-gap);
-    block-size: var(--bf-control-segmented-control-segment-height);
+    gap: var(--openbitfun-control-segmented-control-segment-gap);
+    block-size: var(--openbitfun-control-segmented-control-segment-height);
     margin: 0;
     padding-block: 0;
-    padding-inline: var(--bf-control-segmented-control-segment-padding-inline);
+    padding-inline: var(--openbitfun-control-segmented-control-segment-padding-inline);
     border: 0;
-    border-radius: var(--bf-control-segmented-control-segment-radius);
-    color: var(--bf-color-action-neutral-content);
+    border-radius: var(--openbitfun-control-segmented-control-segment-radius);
+    color: var(--openbitfun-color-action-neutral-content);
     background: transparent;
-    font-family: var(--bf-type-label-md-font-family);
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-md-font-weight);
-    line-height: var(--bf-type-label-md-line-height);
-    letter-spacing: var(--bf-type-label-md-letter-spacing);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     white-space: nowrap;
     cursor: pointer;
     transition:
-      background-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .segment[aria-checked="true"] {
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-raised);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-raised);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .root[data-size="md"] {
-    padding: var(--bf-control-segmented-control-padding-md);
+    padding: var(--openbitfun-control-segmented-control-padding-md);
   }
 
   .root[data-size="md"] .segment {
-    block-size: var(--bf-control-segmented-control-segment-height-md);
+    block-size: var(--openbitfun-control-segmented-control-segment-height-md);
   }
 
   .root[data-size="md"] .icon {
-    inline-size: var(--bf-control-segmented-control-icon-size-md);
-    block-size: var(--bf-control-segmented-control-icon-size-md);
+    inline-size: var(--openbitfun-control-segmented-control-icon-size-md);
+    block-size: var(--openbitfun-control-segmented-control-icon-size-md);
   }
 
   .root[data-variant="pills"] {
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -79,46 +79,46 @@
   }
 
   .root[data-variant="pills"] .segment {
-    block-size: var(--bf-control-segmented-control-pill-segment-height);
-    border: var(--bf-border-width-default) solid var(--bf-color-action-neutral-border);
-    border-radius: var(--bf-control-segmented-control-pill-segment-radius);
-    background: var(--bf-color-surface-raised);
+    block-size: var(--openbitfun-control-segmented-control-pill-segment-height);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-border);
+    border-radius: var(--openbitfun-control-segmented-control-pill-segment-radius);
+    background: var(--openbitfun-color-surface-raised);
   }
 
   .root[data-variant="pills"][data-size="md"] .segment {
-    block-size: var(--bf-control-height-md);
-    padding-inline: var(--bf-space-4);
-    border-radius: var(--bf-radius-pill);
+    block-size: var(--openbitfun-control-height-md);
+    padding-inline: var(--openbitfun-space-4);
+    border-radius: var(--openbitfun-radius-pill);
   }
 
   .root[data-variant="pills"] .segment[aria-checked="true"] {
-    border-color: var(--bf-color-action-primary-background);
-    color: var(--bf-color-action-primary-content);
-    background: var(--bf-color-action-primary-background);
+    border-color: var(--openbitfun-color-action-primary-background);
+    color: var(--openbitfun-color-action-primary-content);
+    background: var(--openbitfun-color-action-primary-background);
   }
 
   .root[data-variant="pills"][data-tone="neutral"] .segment[aria-checked="true"] {
-    border-color: var(--bf-color-action-neutral-surface-pressed);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-action-neutral-surface-pressed);
+    border-color: var(--openbitfun-color-action-neutral-surface-pressed);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .segment:hover:not(:disabled)[aria-checked="false"],
-  .root[data-bf-preview-state="hover"] .segment[aria-checked="false"]:not(:disabled) {
-    background: var(--bf-color-action-neutral-surface-hover);
+  .root[data-openbitfun-preview-state="hover"] .segment[aria-checked="false"]:not(:disabled) {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .segment:active:not(:disabled)[aria-checked="false"] {
-    background: var(--bf-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
   .segment:focus-visible {
-    outline: var(--bf-focus-width) solid var(--bf-color-focus-ring);
-    outline-offset: var(--bf-focus-offset);
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: var(--openbitfun-focus-offset);
   }
 
   .segment:disabled {
-    color: var(--bf-color-action-neutral-content-disabled);
+    color: var(--openbitfun-color-action-neutral-content-disabled);
     cursor: not-allowed;
   }
 
@@ -127,13 +127,13 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--bf-control-segmented-control-icon-size);
-    block-size: var(--bf-control-segmented-control-icon-size);
+    inline-size: var(--openbitfun-control-segmented-control-icon-size);
+    block-size: var(--openbitfun-control-segmented-control-icon-size);
     color: currentColor;
   }
 
   .icon > :where(svg, img),
-  .icon > [data-bf-component="icon"] {
+  .icon > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
@@ -141,7 +141,7 @@
 
   .label {
     min-inline-size: 0;
-    line-height: var(--bf-type-body-sm-line-height);
+    line-height: var(--openbitfun-type-body-sm-line-height);
     overflow: hidden;
     text-overflow: ellipsis;
   }

@@ -21,7 +21,7 @@ import type { SceneTabId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useDialogCompletionNotify } from '../hooks/useDialogCompletionNotify';
-import { Spinner } from '@bitfun/ui';
+import { Spinner } from '@openbitfun/ui';
 import SettingsScene from './settings/SettingsScene';
 import AssistantScene from './assistant/AssistantScene';
 import SessionScene from './session/SessionScene';
@@ -202,18 +202,18 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
 
   return (
     <div
-      className="bitfun-scene-viewport"
+      className="openbitfun-scene-viewport"
       data-testid="scene-viewport"
-      data-bf-scene="workbench"
-      data-bf-part="viewport"
-      data-bf-state={activeRenderedSceneId === EMPTY_SCENE_ID ? 'empty' : undefined}
+      data-openbitfun-scene="workbench"
+      data-openbitfun-part="viewport"
+      data-openbitfun-state={activeRenderedSceneId === EMPTY_SCENE_ID ? 'empty' : undefined}
     >
       <div
-        className="bitfun-scene-viewport__clip"
+        className="openbitfun-scene-viewport__clip"
         data-testid="scene-viewport-clip"
         data-scene-motion-phase={pendingTransition?.phase}
-        data-bf-scene="workbench"
-        data-bf-part="viewportClip"
+        data-openbitfun-scene="workbench"
+        data-openbitfun-part="viewportClip"
       >
         {renderedTabIds.map(tabId => {
           const isEmpty = tabId === EMPTY_SCENE_ID;
@@ -227,33 +227,33 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
             <div
               key={tabId}
               className={[
-                'bitfun-scene-viewport__scene',
-                isEmpty && 'bitfun-scene-viewport__scene--empty',
-                isActive && 'bitfun-scene-viewport__scene--active',
-                isVisible && 'bitfun-scene-viewport__scene--visible',
-                isIncoming && 'bitfun-scene-viewport__scene--incoming',
-                isOutgoing && 'bitfun-scene-viewport__scene--outgoing',
+                'openbitfun-scene-viewport__scene',
+                isEmpty && 'openbitfun-scene-viewport__scene--empty',
+                isActive && 'openbitfun-scene-viewport__scene--active',
+                isVisible && 'openbitfun-scene-viewport__scene--visible',
+                isIncoming && 'openbitfun-scene-viewport__scene--incoming',
+                isOutgoing && 'openbitfun-scene-viewport__scene--outgoing',
               ].filter(Boolean).join(' ')}
               aria-hidden={!isActive || !isVisible}
               {...(!isActive || !isVisible ? { inert: '' } : {})}
               data-testid="scene-viewport-scene"
               data-scene-id={tabId}
               data-scene-active={isActive ? 'true' : 'false'}
-              data-bf-scene="workbench"
-              data-bf-part="scene"
-              data-bf-scene-id={isEmpty ? 'welcome' : tabId}
-              data-bf-state={[
+              data-openbitfun-scene="workbench"
+              data-openbitfun-part="scene"
+              data-openbitfun-scene-id={isEmpty ? 'welcome' : tabId}
+              data-openbitfun-state={[
                 isActive && 'active',
                 isEmpty && 'empty',
               ].filter(Boolean).join(' ') || undefined}
             >
               {isEmpty ? (
                 <div
-                  className="bitfun-scene-viewport__empty"
+                  className="openbitfun-scene-viewport__empty"
                   data-testid="scene-viewport-empty"
-                  data-bf-scene="workbench"
-                  data-bf-part="empty"
-                  data-bf-state="empty"
+                  data-openbitfun-scene="workbench"
+                  data-openbitfun-part="empty"
+                  data-openbitfun-state="empty"
                 >
                   <WelcomeScene />
                 </div>
@@ -262,12 +262,12 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                   fallback={
                     isActive ? (
                       <div
-                        className="bitfun-scene-viewport__lazy-fallback"
+                        className="openbitfun-scene-viewport__lazy-fallback"
                         role="status"
                         aria-busy="true"
                         aria-label={t('loading.scenes')}
-                        data-bf-scene="workbench"
-                        data-bf-part="loading"
+                        data-openbitfun-scene="workbench"
+                        data-openbitfun-part="loading"
                       >
                         <Spinner size="md" />
                       </div>

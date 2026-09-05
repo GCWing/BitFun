@@ -1,9 +1,9 @@
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceCatalogEntry, ExternalSourceDiagnostic,
     ExternalSourceDiagnosticSeverity, ExternalSourceLifecycleState, ExternalSourceProviderError,
     ExternalSourceRecord, ExternalWatchRoot, ProviderId,
 };
-use bitfun_product_domains::external_subagents::{
+use openbitfun_product_domains::external_subagents::{
     ExternalSubagentDefinition, ExternalSubagentDiscoveryInput, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider,
 };
@@ -124,7 +124,7 @@ impl ExternalSubagentDiscoveryResult {
 }
 
 pub struct ExternalSubagentCoordinator {
-    context: bitfun_product_domains::external_sources::ExternalSourceContext,
+    context: openbitfun_product_domains::external_sources::ExternalSourceContext,
     providers: Vec<SubagentProviderGeneration>,
     suppressed_sources: BTreeSet<String>,
     generation: u64,
@@ -145,7 +145,7 @@ impl fmt::Debug for ExternalSubagentCoordinator {
 
 impl ExternalSubagentCoordinator {
     pub fn new(
-        context: bitfun_product_domains::external_sources::ExternalSourceContext,
+        context: openbitfun_product_domains::external_sources::ExternalSourceContext,
         providers: Vec<Arc<dyn ExternalSubagentSourceProvider>>,
     ) -> Result<Self, String> {
         let mut provider_ids = BTreeSet::new();

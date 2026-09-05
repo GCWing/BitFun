@@ -3,7 +3,7 @@ use super::flashgrep::{
     RefreshPolicyConfig, RepoConfig, RepoSession, SearchRequest, FLASHGREP_LOG_TARGET,
 };
 use async_trait::async_trait;
-use bitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchOutcome};
+use openbitfun_services_core::filesystem::{ContentMatchPreviewBuilder, FileSearchOutcome};
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
@@ -731,7 +731,8 @@ impl WorkspaceSearchService {
         if let Err(error) = self.hooks.ensure_workspace_ready(&repo_root).await {
             log::warn!(
                 target: FLASHGREP_LOG_TARGET,
-                "Failed to ensure workspace .gitignore ignores .bitfun before search warmup: path={}, error={}",
+                "Failed to ensure workspace .gitignore ignores {} before search warmup: path={}, error={}",
+                openbitfun_services_core::product_identity::hidden_data_directory(),
                 repo_root.display(),
                 error
             );
@@ -1237,11 +1238,19 @@ fn push_exe_relative_bundle_candidates(
 
     if cfg!(target_os = "linux") {
         for binary_name in binary_names {
-            push_candidate(exe_dir.join("../lib/bitfun/flashgrep").join(binary_name));
-            push_candidate(exe_dir.join("../share/bitfun/flashgrep").join(binary_name));
             push_candidate(
                 exe_dir
-                    .join("../share/com.bitfun.desktop/flashgrep")
+                    .join("../lib/openbitfun/flashgrep")
+                    .join(binary_name),
+            );
+            push_candidate(
+                exe_dir
+                    .join("../share/openbitfun/flashgrep")
+                    .join(binary_name),
+            );
+            push_candidate(
+                exe_dir
+                    .join("../share/com.openbitfun.desktop/flashgrep")
                     .join(binary_name),
             );
         }
@@ -1469,9 +1478,9 @@ mod tests {
         let mut status = serde_json::json!({
             "repo_id": "/repo",
             "repo_path": "/repo",
-            "storage_root": "/repo/.bitfun/search/flashgrep-index",
-            "base_snapshot_root": "/repo/.bitfun/search/flashgrep-index/base-snapshot",
-            "workspace_overlay_root": "/repo/.bitfun/search/flashgrep-index/workspace-overlay",
+            "storage_root": "/repo/.openbitfun/search/flashgrep-index",
+            "base_snapshot_root": "/repo/.openbitfun/search/flashgrep-index/base-snapshot",
+            "workspace_overlay_root": "/repo/.openbitfun/search/flashgrep-index/workspace-overlay",
             "phase": "ready_clean",
             "snapshot_key": "base-git:abc123+cfg:deadbeef",
             "last_probe_unix_secs": null,
@@ -1585,7 +1594,7 @@ mod tests {
 
     #[test]
     fn glob_scope_preprocessing_extracts_static_pattern_prefix() {
-        let repo_root = std::env::temp_dir().join("bitfun-workspace-search-test-repo");
+        let repo_root = std::env::temp_dir().join("openbitfun-workspace-search-test-repo");
         let search_path = repo_root.join("workspace");
         let (walk_root, pattern) = derive_glob_walk_root(&search_path, "src/*.rs");
 
@@ -1599,7 +1608,7 @@ mod tests {
 
     #[test]
     fn glob_results_are_relative_to_effective_walk_root() {
-        let repo_root = std::env::temp_dir().join("bitfun-workspace-search-test-repo");
+        let repo_root = std::env::temp_dir().join("openbitfun-workspace-search-test-repo");
         let walk_root = repo_root.join("src");
 
         assert_eq!(
@@ -1651,9 +1660,9 @@ mod tests {
                 "status": {
                     "repo_id": "/repo",
                     "repo_path": "/repo",
-                    "storage_root": "/repo/.bitfun/search/flashgrep-index",
-                    "base_snapshot_root": "/repo/.bitfun/search/flashgrep-index/base-snapshot",
-                    "workspace_overlay_root": "/repo/.bitfun/search/flashgrep-index/workspace-overlay",
+                    "storage_root": "/repo/.openbitfun/search/flashgrep-index",
+                    "base_snapshot_root": "/repo/.openbitfun/search/flashgrep-index/base-snapshot",
+                    "workspace_overlay_root": "/repo/.openbitfun/search/flashgrep-index/workspace-overlay",
                     "phase": "ready_clean",
                     "snapshot_key": null,
                     "last_probe_unix_secs": null,

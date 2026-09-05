@@ -3,7 +3,7 @@
 //! Commands are executed through the same frontend invoke surface as local UI
 //! (peer webview → `invoke`), so handler signatures stay single-sourced.
 //! Which commands may run here on a controller's behalf is decided by the
-//! Product Operation Registry (`bitfun_product_domains::remote_surface`); this
+//! Product Operation Registry (`openbitfun_product_domains::remote_surface`); this
 //! module only applies its verdict before any bridge call. The frontend and
 //! the CLI peer host derive their tables from the same registry, so the three
 //! surfaces cannot drift apart. See `docs/architecture/remote-surface-contract.md`.
@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use bitfun_product_domains::remote_surface::{
+use openbitfun_product_domains::remote_surface::{
     capability_map, digest as remote_surface_digest, peer_host_verdict, peer_stance,
     retired_reason, PeerHostKind, PeerHostVerdict, PeerStance,
 };
@@ -150,12 +150,14 @@ pub fn disconnect_controllers() -> Vec<String> {
     state.permission_request_ids.drain().collect()
 }
 
-pub fn track_permission_event(event: &bitfun_agent_runtime::sdk::PermissionRequestEvent) -> bool {
+pub fn track_permission_event(
+    event: &openbitfun_agent_runtime::sdk::PermissionRequestEvent,
+) -> bool {
     let Ok(mut state) = peer_control_state().lock() else {
         return false;
     };
     match event {
-        bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } => {
+        openbitfun_agent_runtime::sdk::PermissionRequestEvent::Asked { request } => {
             if !state.controllers.is_empty() {
                 state
                     .permission_request_ids
@@ -165,8 +167,8 @@ pub fn track_permission_event(event: &bitfun_agent_runtime::sdk::PermissionReque
                 false
             }
         }
-        bitfun_agent_runtime::sdk::PermissionRequestEvent::Replied { request_id, .. }
-        | bitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled { request_id, .. } => {
+        openbitfun_agent_runtime::sdk::PermissionRequestEvent::Replied { request_id, .. }
+        | openbitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled { request_id, .. } => {
             let was_tracked = state.permission_request_ids.remove(request_id);
             was_tracked && !state.controllers.is_empty()
         }
@@ -187,7 +189,7 @@ pub async fn fail_closed_permission_requests(
     if request_ids.is_empty() {
         return Ok(());
     }
-    let manager = bitfun_core::product_runtime::core_permission_request_manager()?;
+    let manager = openbitfun_core::product_runtime::core_permission_request_manager()?;
     let mut failures = Vec::new();
     for request_id in request_ids {
         if let Err(error) = manager
@@ -448,7 +450,7 @@ mod tests {
         );
         assert_eq!(
             capabilities.len(),
-            bitfun_product_domains::remote_surface::advertised_by(PeerHostKind::Desktop).len()
+            openbitfun_product_domains::remote_surface::advertised_by(PeerHostKind::Desktop).len()
         );
         assert!(value
             .get("surface_registry_digest")
@@ -530,9 +532,9 @@ mod tests {
     #[test]
     fn product_control_presentation_callbacks_stay_with_the_controller_window() {
         for command in [
-            "mark_bitfun_control_surface_ready",
-            "mark_bitfun_control_surface_unready",
-            "report_bitfun_control_result",
+            "mark_openbitfun_control_surface_ready",
+            "mark_openbitfun_control_surface_unready",
+            "report_openbitfun_control_result",
         ] {
             assert!(is_local_only_command(command), "{command}");
         }
@@ -553,7 +555,7 @@ mod tests {
     /// host and the frontend derive the same control plane.
     #[test]
     fn control_plane_commands_are_host_control_plane_in_registry() {
-        use bitfun_product_domains::remote_surface::operation;
+        use openbitfun_product_domains::remote_surface::operation;
         for command in [
             "peer_control_attach",
             "peer_control_detach",
@@ -599,11 +601,11 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_commands_report_a_host_version_mismatch() {
-        let result = dispatch("not_a_bitfun_command", serde_json::json!({})).await;
+        let result = dispatch("not_an_openbitfun_command", serde_json::json!({})).await;
         assert!(!result.ok);
         let error = result.error.unwrap_or_default();
         assert!(
-            error.contains("is unknown to this BitFun desktop peer host version"),
+            error.contains("is unknown to this OpenBitFun desktop peer host version"),
             "{error}"
         );
     }
@@ -616,7 +618,7 @@ mod tests {
         assert_eq!(
             result.error.as_deref(),
             Some(
-                "command 'lsp_open_workspace' is unsupported because the BitFun LSP runtime has been retired"
+                "command 'lsp_open_workspace' is unsupported because the OpenBitFun LSP runtime has been retired"
             )
         );
     }

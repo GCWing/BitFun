@@ -9,7 +9,7 @@ export const turnFailureNoticeAppearanceDescriptor: AppearanceSurfaceDescriptor 
     { id: 'rawHeader' }, { id: 'copy' }, { id: 'code' },
   ],
   states: [
-    { id: 'open', selector: { kind: 'self', suffix: '[data-bf-state~="open"]' } },
-    { id: 'copied', selector: { kind: 'self', suffix: '[data-bf-state~="copied"]' } },
+    { id: 'open', selector: { kind: 'self', suffix: '[data-openbitfun-state~="open"]' } },
+    { id: 'copied', selector: { kind: 'self', suffix: '[data-openbitfun-state~="copied"]' } },
   ],
 };

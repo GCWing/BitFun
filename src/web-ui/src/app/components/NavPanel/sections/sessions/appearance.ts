@@ -15,10 +15,10 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'toggle' },
   ],
   states: [
-    { id: 'active', selector: { kind: 'self', suffix: '[data-bf-state~="active"]' } },
-    { id: 'editing', selector: { kind: 'self', suffix: '[data-bf-state~="editing"]' } },
-    { id: 'menuOpen', selector: { kind: 'self', suffix: '[data-bf-state~="menuOpen"]' } },
-    { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'partial', selector: { kind: 'self', suffix: '[data-bf-state~="partial"]' } },
+    { id: 'active', selector: { kind: 'self', suffix: '[data-openbitfun-state~="active"]' } },
+    { id: 'editing', selector: { kind: 'self', suffix: '[data-openbitfun-state~="editing"]' } },
+    { id: 'menuOpen', selector: { kind: 'self', suffix: '[data-openbitfun-state~="menuOpen"]' } },
+    { id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } },
+    { id: 'partial', selector: { kind: 'self', suffix: '[data-openbitfun-state~="partial"]' } },
   ],
 };

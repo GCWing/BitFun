@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .sheet {
     inline-size: min(100%, 520px);
   }
@@ -7,17 +7,17 @@
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .cancel {
     min-block-size: 52px;
-    color: var(--bf-color-content-secondary);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   @media (max-width: 359px) {
     .options {
-      gap: var(--bf-space-1);
+      gap: var(--openbitfun-space-1);
     }
   }
 }

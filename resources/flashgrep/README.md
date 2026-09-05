@@ -15,4 +15,4 @@ Expected filenames:
 
 macOS binaries are ad-hoc signed after download so local development can execute them directly.
 
-BitFun dev/build scripts load the daemon from this repository-relative path.
+OpenBitFun dev/build scripts load the daemon from this repository-relative path.

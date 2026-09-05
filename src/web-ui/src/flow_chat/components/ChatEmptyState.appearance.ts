@@ -6,5 +6,5 @@ export const chatEmptyStateAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root' }, { id: 'container' }, { id: 'greeting' },
     { id: 'divider' }, { id: 'prompt' }, { id: 'noWorkspace' },
   ],
-  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } }],
+  states: [{ id: 'loading', selector: { kind: 'self', suffix: '[data-openbitfun-state~="loading"]' } }],
 };

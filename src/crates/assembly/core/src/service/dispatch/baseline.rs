@@ -25,7 +25,7 @@ use super::{
 /// Number of hex characters used to name a target's shared clone.
 const REPO_KEY_CHARS: usize = 16;
 /// Commit written when the user asked to carry uncommitted work along.
-const UNCOMMITTED_COMMIT_MESSAGE: &str = "BitFun dispatch: uncommitted baseline changes";
+const UNCOMMITTED_COMMIT_MESSAGE: &str = "OpenBitFun dispatch: uncommitted baseline changes";
 
 #[derive(Debug, Clone)]
 pub(super) struct PreparedBaseline {
@@ -388,9 +388,9 @@ async fn commit_uncommitted_changes(worktree_path: &str) -> Result<()> {
             "-c",
             "commit.gpgsign=false",
             "-c",
-            "user.name=BitFun Dispatch",
+            "user.name=OpenBitFun Dispatch",
             "-c",
-            "user.email=dispatch@bitfun.local",
+            "user.email=dispatch@openbitfun.local",
             "commit",
             "--no-verify",
             "-m",
@@ -452,7 +452,7 @@ fn finish_bundle(path: PathBuf) -> Result<PreparedBundle> {
     let size = std::fs::symlink_metadata(&path)
         .with_context(|| format!("inspect dispatch bundle {}", path.display()))?
         .len();
-    let sha256 = bitfun_services_core::dispatch_workspace::sha256_file(&path)?;
+    let sha256 = openbitfun_services_core::dispatch_workspace::sha256_file(&path)?;
     Ok(PreparedBundle { path, sha256, size })
 }
 
@@ -542,7 +542,7 @@ fn project_label(project_workspace_path: &str) -> String {
 /// directory keys it instead.
 fn repo_key(remote_url: Option<&str>, common_git_dir: &Path) -> String {
     let mut digest = Sha256::new();
-    digest.update(b"bitfun-dispatch-repo");
+    digest.update(b"openbitfun-dispatch-repo");
     match remote_url {
         Some(url) => {
             digest.update(b"remote:");
@@ -582,8 +582,8 @@ mod tests {
     #[test]
     fn branch_names_are_prefixed_scoped_and_ref_safe() {
         assert_eq!(
-            dispatch_branch_name("bitfun/", "dispatch-1a2b3c"),
-            "bitfun/dispatch/dispatch-1a2b3c"
+            dispatch_branch_name("openbitfun/", "dispatch-1a2b3c"),
+            "openbitfun/dispatch/dispatch-1a2b3c"
         );
         assert_eq!(dispatch_branch_name("", "job1"), "dispatch/job1");
         // A prefix that could be read as a git option or escape a ref namespace
@@ -602,8 +602,8 @@ mod tests {
 
     #[test]
     fn project_labels_come_from_the_workspace_basename() {
-        assert_eq!(project_label("/Users/me/code/BitFun"), "BitFun");
-        assert_eq!(project_label("/Users/me/code/BitFun/"), "BitFun");
+        assert_eq!(project_label("/Users/me/code/OpenBitFun"), "OpenBitFun");
+        assert_eq!(project_label("/Users/me/code/OpenBitFun/"), "OpenBitFun");
         // Nothing recognizable to use; the target falls back on its own side.
         assert_eq!(project_label("/"), "");
     }
@@ -637,13 +637,13 @@ mod tests {
         std::fs::write(repository.join("file.txt"), b"base").expect("seed");
         git(&repository, &["add", "-A"]);
         git(&repository, &["commit", "--quiet", "-m", "base"]);
-        let branch = "bitfun/dispatch/job-1";
+        let branch = "openbitfun/dispatch/job-1";
         git(&repository, &["branch", branch]);
         let base_commit = git(&repository, &["rev-parse", "HEAD"]);
         let store =
             OutboundDispatchStore::new_in_root_for_tests(temp.path().join("dispatch-outbound"));
         let baseline = PreparedBaseline {
-            project_label: "BitFun".to_string(),
+            project_label: "OpenBitFun".to_string(),
             delivery: DispatchWorkspaceDelivery {
                 source_workspace_path: repository.to_string_lossy().to_string(),
                 project_workspace_path: repository.to_string_lossy().to_string(),
@@ -692,25 +692,25 @@ mod tests {
         .expect("record");
         record.baseline_worktree_id = Some("worktree-1".to_string());
         record.base_commit = Some("0123456789abcdef".to_string());
-        record.branch = Some("bitfun/dispatch/job-1".to_string());
+        record.branch = Some("openbitfun/dispatch/job-1".to_string());
 
         assert!(outbound_record_owns_baseline(
             &record,
             "worktree-1",
             "0123456789abcdef",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
         assert!(!outbound_record_owns_baseline(
             &record,
             "different-worktree",
             "0123456789abcdef",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
         assert!(!outbound_record_owns_baseline(
             &record,
             "worktree-1",
             "different-commit",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
         assert!(!outbound_record_owns_baseline(
             &record,
@@ -725,18 +725,18 @@ mod tests {
         assert!(outbound_record_may_own_claim(
             &record,
             "worktree-1",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
         record.base_commit = Some("generated-wip-commit".to_string());
         assert!(outbound_record_may_own_claim(
             &record,
             "worktree-1",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
         assert!(!outbound_record_may_own_claim(
             &record,
             "different-worktree",
-            "bitfun/dispatch/job-1"
+            "openbitfun/dispatch/job-1"
         ));
     }
 
@@ -754,7 +754,7 @@ mod tests {
         std::fs::write(repository.join("file.txt"), b"base").expect("seed");
         git(&repository, &["add", "-A"]);
         git(&repository, &["commit", "--quiet", "-m", "base"]);
-        let branch = "bitfun/dispatch/job-branch";
+        let branch = "openbitfun/dispatch/job-branch";
         git(&repository, &["switch", "--quiet", "-c", branch]);
 
         ensure_baseline_branch(repository.to_str().expect("repository path"), branch)

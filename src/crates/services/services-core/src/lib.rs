@@ -1,7 +1,7 @@
 //! Core service owner crate.
 //!
 //! This crate owns platform-agnostic service building blocks that can be
-//! tested without compiling the full BitFun product runtime.
+//! tested without compiling the full OpenBitFun product runtime.
 
 pub mod bounded_fs;
 #[cfg(feature = "credential-vault")]
@@ -37,6 +37,12 @@ pub mod persistence;
 pub mod process_manager;
 #[cfg(feature = "process-runtime")]
 pub mod process_tree;
+#[cfg(any(
+    feature = "filesystem",
+    feature = "local-storage",
+    feature = "product-identity"
+))]
+pub use openbitfun_core_types::product_identity;
 #[cfg(feature = "runtime-ownership")]
 pub mod runtime_ownership;
 #[cfg(feature = "local-storage")]

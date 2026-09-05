@@ -61,7 +61,7 @@ const PERMISSION_CHOICE = values.reject === true ? 'reject-once' : 'allow-once'
 /** The workspace the session opens against — an IDE passes the user's project. */
 const WORKSPACE = resolve(process.cwd(), values.cwd ?? PACKAGE_ROOT)
 
-// Two launch routes, one composition. `--profile` is what BitFun ships: the
+// Two launch routes, one composition. `--profile` is what OpenBitFun ships: the
 // user's installed `dsh` boots the materialized profile under $DSH_HOME, and
 // every harness package resolves from that installation. Without it, this runs
 // the working copy through tsx, which is the development loop.

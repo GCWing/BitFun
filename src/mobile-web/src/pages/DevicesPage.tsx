@@ -17,7 +17,7 @@ import {
   MobileListRow,
   MobilePageHeader,
   MobileStatus,
-} from '@bitfun/ui/mobile';
+} from '@openbitfun/ui/mobile';
 import {
   RelayHttpClient,
   isDelegatedIdentityChangedError,
@@ -33,7 +33,7 @@ interface DeviceInfo {
   room_route?: boolean;
 }
 
-const PAIRED_ROOM_DEVICE_ID = '__bitfun_paired_room__';
+const PAIRED_ROOM_DEVICE_ID = '__openbitfun_paired_room__';
 
 interface Props {
   client: RelayHttpClient;

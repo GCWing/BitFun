@@ -1,5 +1,5 @@
-use bitfun_external_sources::ExternalToolCoordinator;
-use bitfun_product_domains::external_sources::{
+use openbitfun_external_sources::ExternalToolCoordinator;
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalToolCapability,
     ExternalToolDefinition, ExternalToolProviderIdentity, ExternalToolProviderSnapshot,

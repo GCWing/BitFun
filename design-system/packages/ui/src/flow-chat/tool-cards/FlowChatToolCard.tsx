@@ -189,8 +189,8 @@ function CollapsibleRegion({
       aria-hidden={!open}
       className={styles.collapse}
       data-animate={disableAnimation ? "false" : "true"}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-part={`${part}Collapse`}
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-part={`${part}Collapse`}
       data-open={visuallyOpen ? "true" : "false"}
       data-phase={phase}
       style={{
@@ -200,18 +200,18 @@ function CollapsibleRegion({
       {shouldRender && (
         <div
           className={styles.collapseInner}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="collapseInner"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="collapseInner"
         >
           <div
             className={classNames(
               part === "expanded" ? styles.expanded : styles.error,
               className,
             )}
-            data-bf-component="flow-chat-tool-card"
-            data-bf-part={part}
-            data-bf-state={part === "error" ? "failed" : "expanded"}
-            data-bf-status={status}
+            data-openbitfun-component="flow-chat-tool-card"
+            data-openbitfun-part={part}
+            data-openbitfun-state={part === "error" ? "failed" : "expanded"}
+            data-openbitfun-status={status}
           >
             {children}
           </div>
@@ -298,26 +298,26 @@ export function ProminentToolCard({
         styles.prominentRoot,
         className,
       )}
-      data-bf-attention="prominent"
-      data-bf-component="flow-chat-tool-card"
-      data-bf-expandable={expandable ? "true" : "false"}
-      data-bf-interactive={onToggle ? "true" : "false"}
-      data-bf-part="root"
-      data-bf-state={appearanceState}
-      data-bf-status={status}
+      data-openbitfun-attention="prominent"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-expandable={expandable ? "true" : "false"}
+      data-openbitfun-interactive={onToggle ? "true" : "false"}
+      data-openbitfun-part="root"
+      data-openbitfun-state={appearanceState}
+      data-openbitfun-status={status}
     >
       <div
         className={classNames(
           styles.surface,
           styles.prominentSurface,
         )}
-        data-bf-attention="prominent"
-        data-bf-component="flow-chat-tool-card"
-        data-bf-expandable={expandable ? "true" : "false"}
-        data-bf-interactive={onToggle ? "true" : "false"}
-        data-bf-part="surface"
-        data-bf-state={appearanceState}
-        data-bf-status={status}
+        data-openbitfun-attention="prominent"
+        data-openbitfun-component="flow-chat-tool-card"
+        data-openbitfun-expandable={expandable ? "true" : "false"}
+        data-openbitfun-interactive={onToggle ? "true" : "false"}
+        data-openbitfun-part="surface"
+        data-openbitfun-state={appearanceState}
+        data-openbitfun-status={status}
         data-testid={onToggle ? toggleTestId : undefined}
         onClick={handleSurfaceClick}
       >
@@ -410,7 +410,7 @@ export function AmbientToolCard({
 
     event.preventDefault();
     const surface = event.currentTarget.querySelector<HTMLElement>(
-      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"]',
+      '[data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="surface"]',
     );
     surface?.click();
   };
@@ -423,15 +423,15 @@ export function AmbientToolCard({
         expandedShell && styles.ambientExpandedShell,
         className,
       )}
-      data-bf-attention="ambient"
-      data-bf-component="flow-chat-tool-card"
-      data-bf-direct-action={directAction ? "true" : "false"}
-      data-bf-expandable={expandable ? "true" : "false"}
-      data-bf-interactive={interactive ? "true" : "false"}
-      data-bf-part="root"
-      data-bf-state={appearanceState}
-      data-bf-status={status}
-      data-bf-expanded-shell={expandedShell ? "true" : "false"}
+      data-openbitfun-attention="ambient"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-direct-action={directAction ? "true" : "false"}
+      data-openbitfun-expandable={expandable ? "true" : "false"}
+      data-openbitfun-interactive={interactive ? "true" : "false"}
+      data-openbitfun-part="root"
+      data-openbitfun-state={appearanceState}
+      data-openbitfun-status={status}
+      data-openbitfun-expanded-shell={expandedShell ? "true" : "false"}
       onKeyDown={directAction || onRootKeyDown ? handleDirectActionKeyDown : undefined}
       role={directAction ? "button" : role}
       tabIndex={directAction ? 0 : tabIndex}
@@ -441,13 +441,13 @@ export function AmbientToolCard({
           styles.surface,
           styles.ambientSurface,
         )}
-        data-bf-attention="ambient"
-        data-bf-component="flow-chat-tool-card"
-        data-bf-expandable={expandable ? "true" : "false"}
-        data-bf-interactive={interactive ? "true" : "false"}
-        data-bf-part="surface"
-        data-bf-state={appearanceState}
-        data-bf-status={status}
+        data-openbitfun-attention="ambient"
+        data-openbitfun-component="flow-chat-tool-card"
+        data-openbitfun-expandable={expandable ? "true" : "false"}
+        data-openbitfun-interactive={interactive ? "true" : "false"}
+        data-openbitfun-part="surface"
+        data-openbitfun-state={appearanceState}
+        data-openbitfun-status={status}
         data-testid={interactive ? toggleTestId : undefined}
         onClick={handleSurfaceClick}
       >
@@ -508,21 +508,21 @@ export function ToolCardIconSlot({
         styles.iconSlot,
         className,
       )}
-      data-bf-affordance={resolvedKind}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-expandable={showInlineAffordance ? "true" : "false"}
-      data-bf-part="icon"
+      data-openbitfun-affordance={resolvedKind}
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-expandable={showInlineAffordance ? "true" : "false"}
+      data-openbitfun-part="icon"
       data-divider={showDivider ? "true" : "false"}
     >
       <span
         className={styles.iconMarks}
-        data-bf-component="flow-chat-tool-card"
-        data-bf-part="iconMarks"
+        data-openbitfun-component="flow-chat-tool-card"
+        data-openbitfun-part="iconMarks"
       >
         <span
           className={styles.mainIcon}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="iconGraphic"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="iconGraphic"
         >
           {icon}
         </span>
@@ -530,9 +530,9 @@ export function ToolCardIconSlot({
           <span
             aria-hidden="true"
             className={styles.inlineAffordance}
-            data-bf-affordance={resolvedKind}
-            data-bf-component="flow-chat-tool-card"
-            data-bf-part="iconAffordance"
+            data-openbitfun-affordance={resolvedKind}
+            data-openbitfun-component="flow-chat-tool-card"
+            data-openbitfun-part="iconAffordance"
             data-expanded={resolvedExpanded ? "true" : "false"}
           >
             {isPanelAffordance
@@ -546,9 +546,9 @@ export function ToolCardIconSlot({
           aria-expanded={isPanelAffordance ? undefined : resolvedExpanded}
           aria-label={isPanelAffordance ? "Open details" : resolvedExpanded ? "Collapse details" : "Expand details"}
           className={styles.iconAffordanceHit}
-          data-bf-affordance={resolvedKind}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="iconAffordanceButton"
+          data-openbitfun-affordance={resolvedKind}
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="iconAffordanceButton"
           onClick={(event) => {
             event.stopPropagation();
             handleAffordance(event);
@@ -574,8 +574,8 @@ export function ToolCardStatusIcon({
   return (
     <span
       className={classNames(styles.statusIcon, className)}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-part="status"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-part="status"
       data-divider={withDivider ? "true" : "false"}
     >
       {icon}
@@ -592,8 +592,8 @@ export function ToolCardActions({ children, className }: ToolCardActionsProps) {
   return (
     <span
       className={classNames(styles.toolCardActions, className)}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-part="actions"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-part="actions"
       onClick={(event) => event.stopPropagation()}
     >
       {children}
@@ -625,14 +625,14 @@ export function ToolCardChangeSummary({
     <span
       {...props}
       className={classNames(styles.changeSummary, className)}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-part="changeSummary"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-part="changeSummary"
     >
       {hasAdditions && (
-        <span data-bf-change="added">+{additions}</span>
+        <span data-openbitfun-change="added">+{additions}</span>
       )}
       {hasDeletions && (
-        <span data-bf-change="removed">-{deletions}</span>
+        <span data-openbitfun-change="removed">-{deletions}</span>
       )}
     </span>
   );
@@ -680,10 +680,10 @@ export function ProminentToolCardSummary({
   return (
     <div
       className={classNames(styles.summaryRow, styles.prominentSummary)}
-      data-bf-affordance={resolvedKind}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-expandable={expandable ? "true" : "false"}
-      data-bf-part="summary"
+      data-openbitfun-affordance={resolvedKind}
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-expandable={expandable ? "true" : "false"}
+      data-openbitfun-part="summary"
     >
       {icon !== undefined && icon !== null && icon !== false && icon !== "" && (
         <ToolCardIconSlot icon={icon} />
@@ -692,8 +692,8 @@ export function ProminentToolCardSummary({
         <span
           {...actionDataAttributes}
           className={styles.actionLabel}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="action"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="action"
           data-testid={actionTestId}
         >
           {action}
@@ -702,8 +702,8 @@ export function ProminentToolCardSummary({
       {content !== undefined && content !== null && content !== false && (
         <span
           className={styles.content}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="content"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="content"
         >
           {content}
         </span>
@@ -711,8 +711,8 @@ export function ProminentToolCardSummary({
       {extra !== undefined && extra !== null && extra !== false && (
         <span
           className={styles.extra}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="extra"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="extra"
         >
           {extra}
         </span>
@@ -723,8 +723,8 @@ export function ProminentToolCardSummary({
       {hasActionRegion && (
         <span
           className={styles.actionRegion}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="actionRegion"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="actionRegion"
         >
           {actions}
           {affordanceAction && (
@@ -738,9 +738,9 @@ export function ProminentToolCardSummary({
                     : "Expand details"
               }
               className={styles.affordanceButton}
-              data-bf-affordance={resolvedKind}
-              data-bf-component="flow-chat-tool-card"
-              data-bf-part="affordanceButton"
+              data-openbitfun-affordance={resolvedKind}
+              data-openbitfun-component="flow-chat-tool-card"
+              data-openbitfun-part="affordanceButton"
               onClick={(event) => {
                 event.stopPropagation();
                 affordanceAction(event);
@@ -755,8 +755,8 @@ export function ProminentToolCardSummary({
           {trailingActions !== undefined && trailingActions !== null && trailingActions !== false && (
             <span
               className={styles.trailingActions}
-              data-bf-component="flow-chat-tool-card"
-              data-bf-part="trailingActions"
+              data-openbitfun-component="flow-chat-tool-card"
+              data-openbitfun-part="trailingActions"
               data-divider={affordanceAction ? "true" : "false"}
             >
               {trailingActions}
@@ -813,8 +813,8 @@ export function AmbientToolCardHeader({
       {action !== undefined && action !== null && action !== false && action !== "" && (
         <span
           className={styles.ambientAction}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="action"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="action"
         >
           {action}
         </span>
@@ -822,8 +822,8 @@ export function AmbientToolCardHeader({
       {content !== undefined && content !== null && content !== false && (
         <span
           className={styles.ambientContent}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="content"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="content"
         >
           {content}
         </span>
@@ -831,8 +831,8 @@ export function AmbientToolCardHeader({
       {extra !== undefined && extra !== null && extra !== false && (
         <span
           className={styles.ambientExtra}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="extra"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="extra"
         >
           {extra}
         </span>

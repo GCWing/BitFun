@@ -1,4 +1,4 @@
-//! Mode system for BitFun
+//! Mode system for OpenBitFun
 //!
 //! Provides flexible mode selection with different system prompts and tool sets
 
@@ -9,20 +9,8 @@ mod registry;
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
 use crate::agentic::WorkspaceBinding;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
-pub use bitfun_agent_runtime::agents::{
-    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
-    mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
-    shared_coding_mode_user_context_policy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
-    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
-    SHARED_CODING_MODE_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
-};
-pub use bitfun_agent_runtime::custom_agent::{
-    custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
-    default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
-};
-use bitfun_runtime_ports::PermissionConstraintLayer;
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 #[cfg(feature = "external-sources")]
 pub(crate) use definitions::external::ExternalProvidedAgent;
@@ -37,6 +25,18 @@ pub use definitions::subagents::{
     SwarmReviewerAgent, SwarmWorkerAgent,
 };
 use indexmap::IndexMap;
+pub use openbitfun_agent_runtime::agents::{
+    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
+    mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
+    shared_coding_mode_user_context_policy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
+};
+pub use openbitfun_agent_runtime::custom_agent::{
+    custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
+    default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
+};
+use openbitfun_runtime_ports::PermissionConstraintLayer;
 pub use prompt_builder::{
     build_prompt_context_for_workspace, render_direct_tool_listing_body, PrependedPromptReminders,
     PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RuntimeContextNeeds,
@@ -62,17 +62,17 @@ pub use registry::{
 };
 use std::any::Any;
 
-pub use bitfun_agent_content::EMBEDDED_PROMPTS;
+pub use openbitfun_agent_content::EMBEDDED_PROMPTS;
 
 /// Returns a built-in Agent prompt by its stable compatibility key.
 pub fn get_embedded_prompt(prompt_name: &str) -> Option<&'static str> {
-    bitfun_agent_content::agent_prompt(prompt_name)
+    openbitfun_agent_content::agent_prompt(prompt_name)
 }
 
 /// Returns all built-in Agent prompt keys.
 #[allow(dead_code)]
 pub fn get_all_embedded_prompt_names() -> Vec<&'static str> {
-    bitfun_agent_content::agent_prompt_names()
+    openbitfun_agent_content::agent_prompt_names()
 }
 
 pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
@@ -174,11 +174,11 @@ pub trait Agent: Send + Sync + 'static {
     fn user_context_policy(&self) -> UserContextPolicy;
 
     /// Build the system prompt for this agent
-    async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
+    async fn build_prompt(&self, context: &PromptBuilderContext) -> OpenBitFunResult<String> {
         let prompt_components = PromptBuilder::new(context.clone());
         let template_name = self.prompt_template_name(context.model_name.as_deref());
         let system_prompt_template = get_embedded_prompt(template_name).ok_or_else(|| {
-            BitFunError::Agent(format!("{} not found in embedded files", template_name))
+            OpenBitFunError::Agent(format!("{} not found in embedded files", template_name))
         })?;
 
         let prompt = prompt_components
@@ -192,11 +192,11 @@ pub trait Agent: Send + Sync + 'static {
     async fn get_system_prompt(
         &self,
         context: Option<&PromptBuilderContext>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         if let Some(context) = context {
             self.build_prompt(context).await
         } else {
-            Err(BitFunError::Agent(
+            Err(OpenBitFunError::Agent(
                 "Prompt build context is required".to_string(),
             ))
         }
@@ -211,11 +211,11 @@ pub trait Agent: Send + Sync + 'static {
         &self,
         _previous_agent_type: Option<&str>,
         _workspace: Option<&WorkspaceBinding>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         if let Some(system_reminder_template_name) = self.system_reminder_template_name() {
             let system_reminder =
                 get_embedded_prompt(system_reminder_template_name).ok_or_else(|| {
-                    BitFunError::Agent(format!(
+                    OpenBitFunError::Agent(format!(
                         "{} not found in embedded files",
                         system_reminder_template_name
                     ))

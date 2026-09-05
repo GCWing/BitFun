@@ -1,4 +1,4 @@
-# BitFun 子模块设计：证据包
+# OpenBitFun 子模块设计：证据包
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可呈现、可失效、可回放的证据快照。
@@ -9,7 +9,7 @@
 
 质量数据面记录事件和引用，证据包负责把这些事实整理成一次任务或变更集可消费、可审计、可失效的快照。证据包陈述证据内容、来源、新鲜度、跳过检查、风险接受和安全授权；合入判断由变更就绪度、团队策略、CI、分支保护和人工审查共同决定。
 
-外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要呈现到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
+外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要呈现到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 OpenBitFun 内部规范证据模型。
 
 ## 2. 设计约束
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusPill } from '@bitfun/ui';
+import { Icon, StatusPill } from '@openbitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentDescription } from '../utils';
@@ -42,7 +42,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   const statusLabel = disabledReason ?? t('agentCard.status.connected');
 
   return (
-    <div data-bf-component="core-agent-card" data-bf-part="root"
+    <div data-openbitfun-component="core-agent-card" data-openbitfun-part="root"
       className="core-agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -63,17 +63,17 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       data-agent-kind={agent.agentKind}
     >
       <div className="core-agent-card__icon-rail">
-        <div className="core-agent-card__icon-wrap" data-bf-component="core-agent-card" data-bf-part="icon">
+        <div className="core-agent-card__icon-wrap" data-openbitfun-component="core-agent-card" data-openbitfun-part="icon">
           <AgentGlyph size={21} strokeWidth={1.6} />
         </div>
         <span className="core-agent-card__dot-field" aria-hidden="true" />
       </div>
 
       <div className="core-agent-card__content">
-        <div className="core-agent-card__top" data-bf-component="core-agent-card" data-bf-part="header">
-          <div className="core-agent-card__top-info" data-bf-component="core-agent-card" data-bf-part="headerInfo">
-            <span className="core-agent-card__name" data-bf-component="core-agent-card" data-bf-part="name" data-testid="agent-list-item-title">{agent.name}</span>
-            <span data-bf-component="core-agent-card" data-bf-part="role">
+        <div className="core-agent-card__top" data-openbitfun-component="core-agent-card" data-openbitfun-part="header">
+          <div className="core-agent-card__top-info" data-openbitfun-component="core-agent-card" data-openbitfun-part="headerInfo">
+            <span className="core-agent-card__name" data-openbitfun-component="core-agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+            <span data-openbitfun-component="core-agent-card" data-openbitfun-part="role">
               <StatusPill tone="neutral" className="core-agent-card__role">
                 {meta.role}
               </StatusPill>
@@ -81,9 +81,9 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
           </div>
           <span
             className={`core-agent-card__status${disabledReason ? ' is-disabled' : ''}`}
-            data-bf-component="core-agent-card"
-            data-bf-part="status"
-            data-bf-state={disabledReason ? 'disabled' : 'connected'}
+            data-openbitfun-component="core-agent-card"
+            data-openbitfun-part="status"
+            data-openbitfun-state={disabledReason ? 'disabled' : 'connected'}
             title={statusLabel}
           >
             <Icon className="core-agent-card__status-icon" name="unselected" size="2xs" />
@@ -91,14 +91,14 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
           </span>
         </div>
 
-        <div className="core-agent-card__body" data-bf-component="core-agent-card" data-bf-part="body">
-          <p className="core-agent-card__desc" data-bf-component="core-agent-card" data-bf-part="description" data-testid="agent-list-item-description">
+        <div className="core-agent-card__body" data-openbitfun-component="core-agent-card" data-openbitfun-part="body">
+          <p className="core-agent-card__desc" data-openbitfun-component="core-agent-card" data-openbitfun-part="description" data-testid="agent-list-item-description">
             {getAgentDescription(t, agent)}
           </p>
         </div>
 
-        <div className="core-agent-card__footer" data-bf-component="core-agent-card" data-bf-part="footer">
-          <div className="core-agent-card__meta" data-bf-component="core-agent-card" data-bf-part="meta">
+        <div className="core-agent-card__footer" data-openbitfun-component="core-agent-card" data-openbitfun-part="footer">
+          <div className="core-agent-card__meta" data-openbitfun-component="core-agent-card" data-openbitfun-part="meta">
             <span className="core-agent-card__meta-item">
               <span className="core-agent-card__meta-icon"><Wrench size={11} /></span>
               <span className="core-agent-card__meta-label">{t('agentCard.metrics.tools')}</span>

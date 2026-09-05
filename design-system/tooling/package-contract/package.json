@@ -1,5 +1,5 @@
 {
-  "name": "@bitfun/package-contract",
+  "name": "@openbitfun/package-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",

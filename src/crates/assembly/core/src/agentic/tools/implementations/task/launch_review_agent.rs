@@ -138,30 +138,32 @@ impl LaunchReviewAgentTool {
         })
     }
 
-    fn parse_invocation(input: &Value) -> BitFunResult<LaunchReviewAgentInvocation> {
+    fn parse_invocation(input: &Value) -> OpenBitFunResult<LaunchReviewAgentInvocation> {
         for field in ["action", "fork_context", "agent_id", "run_in_background"] {
             if input.get(field).is_some() {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "{field} is not supported for LaunchReviewAgent"
                 )));
             }
         }
 
-        let required_string = |field: &str| -> BitFunResult<String> {
+        let required_string = |field: &str| -> OpenBitFunResult<String> {
             let value = input
                 .get(field)
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| {
-                    BitFunError::tool(format!("{field} is required for LaunchReviewAgent"))
+                    OpenBitFunError::tool(format!("{field} is required for LaunchReviewAgent"))
                 })?;
             Ok(value.to_string())
         };
         let timeout_seconds = match input.get("timeout_seconds") {
             Some(value) => {
                 let parsed = value.as_u64().ok_or_else(|| {
-                    BitFunError::tool("timeout_seconds must be a non-negative integer".to_string())
+                    OpenBitFunError::tool(
+                        "timeout_seconds must be a non-negative integer".to_string(),
+                    )
                 })?;
                 (parsed > 0).then_some(parsed)
             }
@@ -171,7 +173,7 @@ impl LaunchReviewAgentTool {
             Some(value) => {
                 let value = value
                     .as_str()
-                    .ok_or_else(|| BitFunError::tool("model_id must be a string".to_string()))?
+                    .ok_or_else(|| OpenBitFunError::tool("model_id must be a string".to_string()))?
                     .trim();
                 (!value.is_empty()).then(|| value.to_string())
             }
@@ -181,7 +183,7 @@ impl LaunchReviewAgentTool {
             Some(value) => {
                 let value = value
                     .as_str()
-                    .ok_or_else(|| BitFunError::tool("packet_id must be a string".to_string()))?
+                    .ok_or_else(|| OpenBitFunError::tool("packet_id must be a string".to_string()))?
                     .trim();
                 (!value.is_empty()).then(|| value.to_string())
             }
@@ -246,21 +248,21 @@ Retry rules:
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if Self::is_unsupported_adaptive_remote_context(context) {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Focused Review checks are unavailable for remote workspaces; continue with the primary review"
                     .to_string(),
             ));
         }
         if !TaskTool::is_deep_review_context(Some(context)) {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "LaunchReviewAgent requires a prepared Review run manifest".to_string(),
             ));
         }
         let invocation = Self::parse_invocation(input)?;
         if context.is_remote() && invocation.focused_assignment.is_some() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "Focused Review checks are unavailable for remote workspaces; continue with the primary review"
                     .to_string(),
             ));
@@ -275,18 +277,18 @@ Retry rules:
             let adaptive = is_adaptive_review_manifest(manifest);
             let is_worker = is_review_worker_agent_type(&invocation.subagent_type);
             if invocation.focused_assignment.is_some() && !is_worker {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "focused_assignment may only launch ReviewWorker".to_string(),
                 ));
             }
             if adaptive && is_worker && !managed && invocation.focused_assignment.is_none() {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "focused_assignment is required for adaptive ReviewWorker checks".to_string(),
                 ));
             }
             if let Some(raw_assignment) = invocation.focused_assignment.as_ref() {
                 if invocation.is_retry || invocation.requested_auto_retry {
-                    return Err(BitFunError::tool(
+                    return Err(OpenBitFunError::tool(
                         "Focused Review checks do not retry automatically".to_string(),
                     ));
                 }
@@ -295,7 +297,7 @@ Retry rules:
                     raw_assignment,
                     invocation.packet_id.as_deref(),
                 )
-                .map_err(|violation| BitFunError::tool(violation.to_tool_error_message()))?;
+                .map_err(|violation| OpenBitFunError::tool(violation.to_tool_error_message()))?;
                 let mut child_manifest = manifest.clone();
                 if let Some(object) = child_manifest.as_object_mut() {
                     object.insert("focusedAssignment".to_string(), assignment.to_value());
@@ -343,7 +345,7 @@ Retry rules:
     fn bound_packet_description(
         invocation: &LaunchReviewAgentInvocation,
         context: &ToolUseContext,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let run_manifest = context.custom_data.get("deep_review_run_manifest");
         let managed_plan = run_manifest.and_then(|manifest| {
             manifest
@@ -352,14 +354,14 @@ Retry rules:
         });
         let Some(packet_id) = invocation.packet_id.as_deref() else {
             if managed_plan.is_some() {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "packet_id is required for managed Review packets".to_string(),
                 ));
             }
             return Ok(invocation.description.clone());
         };
         if managed_plan.is_none() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "packet_id is only valid for managed Review packets declared by the run manifest"
                     .to_string(),
             ));
@@ -372,7 +374,7 @@ Retry rules:
         )
         .is_none()
         {
-            return Err(BitFunError::tool(format!(
+            return Err(OpenBitFunError::tool(format!(
                 "packet_id '{packet_id}' is not active for managed reviewer '{}'",
                 invocation.subagent_type
             )));
@@ -405,14 +407,14 @@ impl Tool for LaunchReviewAgentTool {
         true
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(Self::render_description())
     }
 
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let mut description = Self::render_description();
         if let Some(context) = context.filter(|context| {
             !context.is_remote()
@@ -482,13 +484,13 @@ impl Tool for LaunchReviewAgentTool {
         &self,
         input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<crate::agentic::tools::framework::PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<crate::agentic::tools::framework::PermissionIntent>> {
         let subagent_type = input
             .get("subagent_type")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|subagent_type| !subagent_type.is_empty())
-            .ok_or_else(|| BitFunError::validation("subagent_type is required".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::validation("subagent_type is required".to_string()))?;
         Ok(vec![
             crate::agentic::tools::framework::PermissionIntent::new(
                 "task",
@@ -571,7 +573,7 @@ impl Tool for LaunchReviewAgentTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         self.call_launch_review_agent_impl(input, context).await
     }
 }

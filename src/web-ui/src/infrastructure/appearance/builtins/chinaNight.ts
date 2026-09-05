@@ -29,13 +29,13 @@ const CHINA_NIGHT_ERROR = '#e85555';
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
 const chinaNightAccent = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT, alpha);
 
-export const bitfunChinaNightPalette: AppearancePalette = {
+export const openBitFunChinaNightPalette: AppearancePalette = {
 
-  id: 'bitfun-china-night',
+  id: 'openbitfun-china-night',
   name: 'Ink Night',
   type: 'dark',
   description: 'Chinese dark appearance - Starlit ink night, moonlight like water, serene and elegant',
-  author: 'BitFun Team',
+  author: 'OpenBitFun Team',
   version: '1.0.0',
 
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, type IconName } from '@bitfun/ui';
+import { Icon, type IconName } from '@openbitfun/ui';
 import {
   Archive,
   ArchiveRestore,

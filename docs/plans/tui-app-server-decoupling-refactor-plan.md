@@ -82,9 +82,9 @@ Runtime 与 owner/service 调用的边界按行为所有权划分，而不是按
 
 边界规则：
 
-- CLI 不依赖 `bitfun-app-server`、`bitfun-app-server-client` 或共享 TUI management crate。
-- CLI 不得依赖 `bitfun-app-server-protocol` 的 wire DTO；非 Runtime 投影使用 `bitfun-core-types` / `bitfun-product-domains` 中的稳定 DTO。
-- controller 可引用 `bitfun_core` 的稳定 owner/service API；不得引用 Runtime 实现或 `RuntimeIpcOperation`。
+- CLI 不依赖 `openbitfun-app-server`、`openbitfun-app-server-client` 或共享 TUI management crate。
+- CLI 不得依赖 `openbitfun-app-server-protocol` 的 wire DTO；非 Runtime 投影使用 `openbitfun-core-types` / `openbitfun-product-domains` 中的稳定 DTO。
+- controller 可引用 `openbitfun_core` 的稳定 owner/service API；不得引用 Runtime 实现或 `RuntimeIpcOperation`。
 - `surface_services`、service object、owner adapter/facade 等封装层禁止恢复；只允许 DTO/终端投影辅助函数。
 - 新的非 Runtime 能力直接调用对应 owner/service；不得重新引入总括性 TUI backend/client 或统一管理模块。
 - DTO 提取不代表 Runtime owner 迁移。
@@ -108,10 +108,10 @@ Shared Runtime IPC v17 仍是当前显式 `--shared` 的 Runtime transport。它
 
 ```bash
 pnpm run fmt:rs
-cargo check -p bitfun-cli
-cargo test -p bitfun-cli --test cli_command_contracts
-cargo test -p bitfun-cli
-cargo test -p bitfun-cli --bin bitfun dual_backend_behavior_tests
+cargo check -p openbitfun-cli
+cargo test -p openbitfun-cli --test cli_command_contracts
+cargo test -p openbitfun-cli
+cargo test -p openbitfun-cli --bin openbitfun dual_backend_behavior_tests
 pnpm run check:core-boundaries
 git diff --check
 ```

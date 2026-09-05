@@ -30,7 +30,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -251,13 +251,13 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
         <div className="port-forward-dialog__modal">
       <div
         className="port-forward-dialog"
-        data-bf-component="ssh-remote"
-        data-bf-part="portForward"
+        data-openbitfun-component="ssh-remote"
+        data-openbitfun-part="portForward"
       >
         <div
           className="port-forward-dialog__intro"
-          data-bf-component="ssh-remote"
-          data-bf-part="portForwardIntro"
+          data-openbitfun-component="ssh-remote"
+          data-openbitfun-part="portForwardIntro"
         >
           <Network size={18} aria-hidden="true" />
           <p>{t('ssh.portForward.intro')}</p>
@@ -267,8 +267,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
           <div
             className="port-forward-dialog__error"
             role="alert"
-            data-bf-component="ssh-remote"
-            data-bf-part="portForwardError"
+            data-openbitfun-component="ssh-remote"
+            data-openbitfun-part="portForwardError"
           >
             <AlertTriangle size={16} aria-hidden="true" />
             <span>{error}</span>
@@ -337,8 +337,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
 
         <FormSection
           className="port-forward-dialog__section"
-          data-bf-component="ssh-remote"
-          data-bf-part="portForwardTable"
+          data-openbitfun-component="ssh-remote"
+          data-openbitfun-part="portForwardTable"
           title={t('ssh.portForward.activeTitle')}
         >
 
@@ -443,8 +443,8 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
               appearance="plain"
               dividers={false}
               className="port-forward-dialog__form"
-              data-bf-component="ssh-remote"
-              data-bf-part="portForwardForm"
+              data-openbitfun-component="ssh-remote"
+              data-openbitfun-part="portForwardForm"
             >
               <label className="port-forward-dialog__field">
                 <span>{t('ssh.portForward.remotePortLabel')}</span>

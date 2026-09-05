@@ -182,7 +182,7 @@ describe('ExternalMcpOverview', () => {
     expect(container.textContent).toContain('external.status.approvalRequired');
 
     await act(async () => {
-      (container.querySelector('[data-testid="external-mcp-item"] .bitfun-collection-item__details-toggle') as HTMLButtonElement).click();
+      (container.querySelector('[data-testid="external-mcp-item"] .openbitfun-collection-item__details-toggle') as HTMLButtonElement).click();
     });
     expect(container.textContent).toContain('<workspace>/.opencode/opencode.json');
   });
@@ -245,7 +245,7 @@ describe('ExternalMcpOverview', () => {
     const checkbox = importArea.querySelector('input[type="checkbox"]') as HTMLInputElement;
 
     await act(async () => {
-      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      (importArea.querySelector('.openbitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
       await Promise.resolve();
     });
     expect(checkbox.disabled).toBe(true);
@@ -354,7 +354,7 @@ describe('ExternalMcpOverview', () => {
       checkboxes[1].click();
     });
     await act(async () => {
-      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      (importArea.querySelector('.openbitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
       await Promise.resolve();
     });
     expect(applyMcpImportMock).toHaveBeenCalledWith(
@@ -427,7 +427,7 @@ describe('ExternalMcpOverview', () => {
       checkboxes[1].click();
     });
     await act(async () => {
-      (importArea.querySelector('.bitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
+      (importArea.querySelector('.openbitfun-mcp-tools__import-actions button') as HTMLButtonElement).click();
       await Promise.resolve();
     });
 
@@ -525,7 +525,7 @@ describe('ExternalMcpOverview', () => {
     });
 
     expect(Array.from(
-      container.querySelectorAll('[data-testid="external-mcp-item"] .bitfun-collection-item__name'),
+      container.querySelectorAll('[data-testid="external-mcp-item"] .openbitfun-collection-item__name'),
     ).map((node) => node.textContent)).toEqual(['peer-b-docs']);
   });
 
@@ -729,7 +729,7 @@ describe('ExternalMcpOverview', () => {
       await Promise.resolve();
     });
 
-    const stale = container.querySelector('[data-bf-state="stale"]');
+    const stale = container.querySelector('[data-openbitfun-state="stale"]');
     expect(stale?.textContent).toContain('external.status.stale');
     expect(stale?.classList.contains('is-error')).toBe(false);
     expect(stale?.classList.contains('is-pending')).toBe(false);

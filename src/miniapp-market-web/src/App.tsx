@@ -32,9 +32,9 @@ import {
 } from '@phosphor-icons/react';
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate, formatMarketDateTime } from './format';
-import { GetBitfunCta } from './GetBitfunCta';
+import { GetOpenBitFunCta } from './GetOpenBitFunCta';
 import { useLocale, type Locale, type MessageKey } from './i18n';
-import { BITFUN_HOME_URL } from './links';
+import { OPENBITFUN_HOME_URL } from './links';
 import { MiniAppIcon } from './MiniAppIcon';
 import { marketImageSrcSet, marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import { useTheme, type Theme } from './theme';
@@ -190,11 +190,11 @@ function App() {
         <footer>
           <div className="footer-brand">
             <CubeFocus weight="duotone" aria-hidden="true" />
-            <span>BitFun MiniApp Market</span>
+            <span>OpenBitFun MiniApp Market</span>
           </div>
           <span className="footer-note">{t('footerNote')}</span>
-          <a href={BITFUN_HOME_URL} target="_blank" rel="noreferrer">
-            {t('bitfunHome')}
+          <a href={OPENBITFUN_HOME_URL} target="_blank" rel="noreferrer">
+            {t('openbitfunHome')}
             <ArrowSquareOut aria-hidden="true" />
           </a>
         </footer>
@@ -265,7 +265,7 @@ function Header({
             <CubeFocus size={25} weight="duotone" aria-hidden="true" />
           </span>
           <span className="brand-copy">
-            <strong>BitFun</strong>
+            <strong>OpenBitFun</strong>
             <span>{t('market')}</span>
           </span>
         </button>
@@ -455,7 +455,7 @@ function CatalogPage({
           </div>
           <h1>{t('headline')}</h1>
           <p>{t('intro')}</p>
-          <GetBitfunCta placement="catalog" t={t} />
+          <GetOpenBitFunCta placement="catalog" t={t} />
         </div>
         <div className="hero-visual">
           <img src="/miniapp/og.png" alt={t('heroImageAlt')} />
@@ -778,7 +778,7 @@ function DetailPage({
               </button>
             )}
           </div>
-          <GetBitfunCta placement="listing" t={t} />
+          <GetOpenBitFunCta placement="listing" t={t} />
           <div className="rating-control" aria-label={t('ratingLabel')}>
             {[1, 2, 3, 4, 5].map((value) => (
               <button
@@ -844,7 +844,7 @@ function DetailPage({
           <p className="prose">{app.changelog}</p>
         </div>
         <aside className="facts-panel">
-          <Fact label={t('requires')} value={`v${app.minBitfunVersion}+`} />
+          <Fact label={t('requires')} value={`v${app.minOpenBitFunVersion}+`} />
           <Fact
             label={t('downloadsLabel')}
             value={formatCompactNumber(app.downloadCount, locale)}
@@ -1000,7 +1000,7 @@ function SubmitPage({
                 .split(',')
                 .map((tag) => tag.trim())
                 .filter(Boolean),
-              minBitfunVersion: String(form.get('minBitfunVersion')),
+              minOpenBitFunVersion: String(form.get('minOpenBitFunVersion')),
               changelog: String(form.get('changelog')),
               license:
                 licenseKind === 'spdx'
@@ -1060,8 +1060,8 @@ function SubmitPage({
         <fieldset>
           <legend>{t('releaseSection')}</legend>
           <div className="form-grid">
-            <Field label={t('minBitfunVersionLabel')}>
-              <input name="minBitfunVersion" required defaultValue="0.2.15" />
+            <Field label={t('minOpenBitFunVersionLabel')}>
+              <input name="minOpenBitFunVersion" required defaultValue="1.0.0" />
             </Field>
             <Field label={t('publicRepositoryOptional')}>
               <input name="repositoryUrl" type="url" placeholder="https://github.com/…" />
@@ -1341,8 +1341,8 @@ function AdminPage({
                 />
                 <Fact label={t('releaseLabel')} value={`v${selected.submission.releaseNumber}`} />
                 <Fact
-                  label={t('minimumBitfunLabel')}
-                  value={selected.submission.minBitfunVersion}
+                  label={t('minimumOpenBitFunLabel')}
+                  value={selected.submission.minOpenBitFunVersion}
                 />
                 <Fact
                   label={t('licenseLabel')}

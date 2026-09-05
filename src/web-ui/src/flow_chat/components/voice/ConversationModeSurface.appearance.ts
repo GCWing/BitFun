@@ -10,7 +10,7 @@ export const conversationModeSurfaceAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'voiceModeIcon' },
   ],
   states: [
-    { id: 'chat', selector: { kind: 'self', suffix: '[data-bf-state~="chat"]' } },
-    { id: 'voice', selector: { kind: 'self', suffix: '[data-bf-state~="voice"]' } },
+    { id: 'chat', selector: { kind: 'self', suffix: '[data-openbitfun-state~="chat"]' } },
+    { id: 'voice', selector: { kind: 'self', suffix: '[data-openbitfun-state~="voice"]' } },
   ],
 };

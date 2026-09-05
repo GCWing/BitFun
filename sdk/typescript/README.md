@@ -1,4 +1,4 @@
-# BitFun Agent SDK for TypeScript
+# OpenBitFun Agent SDK for TypeScript
 
 This package is a repository-internal vertical slice. It is private, reports
 `not_delivered` through the Host handshake, and must not be published or
@@ -7,7 +7,7 @@ described as a Preview SDK yet.
 The slice validates the intended public object model:
 
 - one application-level `AgentClient` owns one managed native
-  `bitfun-sdk-host` process and one Host connection;
+  `openbitfun-sdk-host` process and one Host connection;
 - `client.query()` uses a Host-managed transient Session;
 - `client.sessions.create()` creates a durable Session whose Turns reuse the
   same connection, while `client.sessions.resume(id)` attaches it to a later
@@ -42,16 +42,16 @@ existing `agent-runtime::sdk` API.
 
 ## Repository usage
 
-Build the private SDK and `bitfun-sdk-host`, then stage that already-built Host
-into the local package. This does not install BitFun or publish anything:
+Build the private SDK and `openbitfun-sdk-host`, then stage that already-built Host
+into the local package. This does not install OpenBitFun or publish anything:
 
 ```bash
-cargo build -p bitfun-sdk-host-app
+cargo build -p openbitfun-sdk-host-app
 pnpm --dir sdk/typescript build
-pnpm --dir sdk/typescript stage:host -- ../../target/debug/bitfun-sdk-host.exe
+pnpm --dir sdk/typescript stage:host -- ../../target/debug/openbitfun-sdk-host.exe
 ```
 
-Use `bitfun-sdk-host` without `.exe` on macOS and Linux. The staging command
+Use `openbitfun-sdk-host` without `.exe` on macOS and Linux. The staging command
 copies only the current platform's executable into the package build under
 `dist/sdk/typescript/native/<platform>-<arch>/`.
 
@@ -59,7 +59,7 @@ The trusted application then supplies one process-lifetime model configuration;
 the SDK finds and manages the staged native Host automatically:
 
 ```typescript
-import { AgentClient } from "@bitfun/agent-sdk";
+import { AgentClient } from "@openbitfun/agent-sdk";
 
 const apiKey = await trustedSecretStore.read("openai");
 await using client = await AgentClient.start({
@@ -145,7 +145,7 @@ locally verified for this slice. Bun uses the same ESM build but remains a
 release-verification target when a Bun runner is available; neither runtime is
 a bundled executable or a final minimum-version policy. `pnpm --dir sdk/typescript pack`
 can produce a local tarball containing the staged Host. An application installs
-that tarball as an ordinary dependency; it does not install BitFun or a CLI
+that tarball as an ordinary dependency; it does not install OpenBitFun or a CLI
 separately. This PR does not publish the package. A future registry release
 still needs platform packages, signing, and release verification.
 

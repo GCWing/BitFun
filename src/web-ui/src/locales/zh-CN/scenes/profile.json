@@ -204,7 +204,7 @@
       },
       "valueYes": "是",
       "valueNo": "否",
-      "officialSource": "BitFun 官方",
+      "officialSource": "OpenBitFun 官方",
       "executableTool": "可执行",
       "readonlyToolHint": "此工具只读取信息，不会修改项目或系统状态。",
       "executableToolHint": "此工具可以执行操作，实际是否需要批准由当前权限规则决定。",

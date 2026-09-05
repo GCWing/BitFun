@@ -1,13 +1,13 @@
 #![cfg(feature = "workspace-instructions")]
 
-use bitfun_services_core::workspace_instructions::{
+use openbitfun_services_core::workspace_instructions::{
     read_workspace_conditional_instruction_sources, read_workspace_instruction_files,
     read_workspace_instruction_sources, WorkspaceInstructionPathMatcher,
 };
 use std::fs;
 
 fn instruction_names(
-    files: &[bitfun_services_core::workspace_instructions::WorkspaceInstructionFile],
+    files: &[openbitfun_services_core::workspace_instructions::WorkspaceInstructionFile],
 ) -> Vec<&str> {
     files.iter().map(|file| file.name.as_str()).collect()
 }
@@ -64,7 +64,7 @@ async fn workspace_instruction_override_replaces_agents_without_hiding_claude() 
 async fn claude_project_files_and_unconditional_rules_have_deterministic_order() {
     let temp = tempfile::tempdir().expect("tempdir");
     fs::create_dir_all(temp.path().join(".claude/rules/nested")).expect("rules dir");
-    fs::write(temp.path().join("AGENTS.md"), "bitfun rules\n").expect("agents");
+    fs::write(temp.path().join("AGENTS.md"), "openbitfun rules\n").expect("agents");
     fs::write(temp.path().join("CLAUDE.md"), "root claude\n").expect("root claude");
     fs::write(temp.path().join(".claude/CLAUDE.md"), "fallback claude\n").expect("fallback claude");
     fs::write(temp.path().join("CLAUDE.local.md"), "local claude\n").expect("local claude");

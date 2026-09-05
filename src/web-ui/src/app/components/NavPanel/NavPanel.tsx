@@ -82,7 +82,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   const updateClipOrigin = useCallback(() => {
     const container = contentRef.current;
     if (!container) return;
-    const anchor = container.querySelector<HTMLElement>('.bitfun-nav-panel__item-slot.is-departing-anchor');
+    const anchor = container.querySelector<HTMLElement>('.openbitfun-nav-panel__item-slot.is-departing-anchor');
     if (anchor) {
       const containerRect = container.getBoundingClientRect();
       const anchorRect = anchor.getBoundingClientRect();
@@ -100,14 +100,14 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   }, [useSplitOpen, updateClipOrigin]);
 
   const contentCls = [
-    'bitfun-nav-panel__content',
+    'openbitfun-nav-panel__content',
     hasMountedSceneNav && 'is-scene',
     useSplitOpen && 'is-split-open',
     (showSceneNav ? mountedSceneMotion : navigationMotion) === 'pointer' && 'has-pointer-motion',
   ].filter(Boolean).join(' ');
 
   const sceneCls = [
-    'bitfun-nav-panel__layer bitfun-nav-panel__layer--scene',
+    'openbitfun-nav-panel__layer openbitfun-nav-panel__layer--scene',
     hasMountedSceneNav && 'is-active',
   ].filter(Boolean).join(' ');
   const appearanceState = [
@@ -117,17 +117,17 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
 
   return (
     <div
-      data-bf-component="nav-panel"
-      data-bf-part="root"
-      data-bf-state={appearanceState}
-      data-bf-theme-scope="chrome"
-      className={`bitfun-nav-panel ${className}`}
+      data-openbitfun-component="nav-panel"
+      data-openbitfun-part="root"
+      data-openbitfun-state={appearanceState}
+      data-openbitfun-theme-scope="chrome"
+      className={`openbitfun-nav-panel ${className}`}
       aria-label={t('nav.aria.mainNav')}
       data-testid="nav-panel"
     >
-      <div ref={contentRef} className={contentCls} data-bf-component="nav-panel" data-bf-part="content">
+      <div ref={contentRef} className={contentCls} data-openbitfun-component="nav-panel" data-openbitfun-part="content">
 
-        <div className="bitfun-nav-panel__layer bitfun-nav-panel__layer--main" data-bf-component="nav-panel" data-bf-part="mainLayer" data-bf-layer="main">
+        <div className="openbitfun-nav-panel__layer openbitfun-nav-panel__layer--main" data-openbitfun-component="nav-panel" data-openbitfun-part="mainLayer" data-openbitfun-layer="main">
           <MainNav
             isDeparting={useSplitOpen}
             anchorNavSceneId={useSplitOpen ? mountedSceneId : null}
@@ -135,15 +135,15 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         </div>
 
         {SceneNavComponent && (
-          <div className={sceneCls} data-bf-component="nav-panel" data-bf-part="sceneLayer" data-bf-layer="scene" data-bf-state={showSceneNav ? 'active' : ''}>
+          <div className={sceneCls} data-openbitfun-component="nav-panel" data-openbitfun-part="sceneLayer" data-openbitfun-layer="scene" data-openbitfun-state={showSceneNav ? 'active' : ''}>
             <Suspense fallback={null}>
               <NavigationTransitionBoundary
                 transitionKey={mountedSceneId ?? 'main'}
                 motion={showSceneNav && mountedSceneMotion === 'pointer' ? 'pointer' : 'none'}
-                className="bitfun-nav-panel__scene-transition"
-                layerClassName="bitfun-nav-panel__scene-inner"
-                data-bf-component="nav-panel"
-                data-bf-part="sceneContent"
+                className="openbitfun-nav-panel__scene-transition"
+                layerClassName="openbitfun-nav-panel__scene-inner"
+                data-openbitfun-component="nav-panel"
+                data-openbitfun-part="sceneContent"
               >
                 <SceneNavComponent />
               </NavigationTransitionBoundary>

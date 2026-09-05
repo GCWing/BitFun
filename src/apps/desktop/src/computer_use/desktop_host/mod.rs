@@ -5,8 +5,10 @@ use screenshot::{ComputerUseNavFocus, PointerMap, ScreenshotCacheEntry};
 
 use async_trait::async_trait;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use bitfun_core::agentic::tools::computer_use_host::VisualMark;
-use bitfun_core::agentic::tools::computer_use_host::{
+use log::debug;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use openbitfun_core::agentic::tools::computer_use_host::VisualMark;
+use openbitfun_core::agentic::tools::computer_use_host::{
     ActionRecord, AppClickParams, AppInfo, AppSelector, AppShortcutsSnapshot, AppStateSnapshot,
     AppWaitPredicate, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo, ComputerUseHost,
     ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseLastMutationKind,
@@ -17,13 +19,11 @@ use bitfun_core::agentic::tools::computer_use_host::{
     VisualClickParams, VisualMarkView, VisualMarkViewOpts,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-use bitfun_core::agentic::tools::computer_use_host::{
+use openbitfun_core::agentic::tools::computer_use_host::{
     ComputerUseForegroundApplication, ComputerUsePointerGlobal,
 };
-use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
-use bitfun_core::util::errors::{BitFunError, BitFunResult};
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-use log::debug;
+use openbitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
+use openbitfun_core::util::errors::{OpenBitFunError, OpenBitFunResult};
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use screenshots::display_info::DisplayInfo;
 use screenshots::Screen;
@@ -119,9 +119,9 @@ fn applescript_quote(s: &str) -> String {
 #[cfg(test)]
 mod visual_grid_tests {
     use super::*;
-    use bitfun_core::agentic::tools::computer_use_host::ComputerUseImageContentRect;
     use image::codecs::jpeg::JpegEncoder;
     use image::{DynamicImage, Rgb, RgbImage};
+    use openbitfun_core::agentic::tools::computer_use_host::ComputerUseImageContentRect;
 
     #[test]
     fn detects_regular_grid_rect_from_synthetic_screenshot() {
@@ -410,7 +410,7 @@ struct ComputerUseSessionMutableState {
 struct CachedInteractiveView {
     digest: String,
     /// `i` → `node_idx` map (dense, indexed by `i`).
-    elements: Vec<bitfun_core::agentic::tools::computer_use_host::InteractiveElement>,
+    elements: Vec<openbitfun_core::agentic::tools::computer_use_host::InteractiveElement>,
 }
 
 #[derive(Debug, Clone)]
@@ -537,7 +537,7 @@ impl DesktopComputerUseHost {
     /// → Accessibility). Without this call, the OS NEVER prompts and AX tree
     /// reads against other apps return only the top-level window structure
     /// (root window + a few descendants) — which is exactly the "shallow tree
-    /// / agent goes blind" symptom we observed against the BitFun WebView.
+    /// / agent goes blind" symptom we observed against the OpenBitFun WebView.
     fn run_background_input_self_check(&self) {
         #[cfg(target_os = "macos")]
         {
@@ -553,7 +553,7 @@ impl DesktopComputerUseHost {
                 // Fire-and-forget. The dialog is async and modal at the macOS
                 // level; we do not block startup waiting for the user to
                 // approve. The next CU invocation will simply succeed once
-                // permission lands. Subsequent BitFun launches skip the
+                // permission lands. Subsequent OpenBitFun launches skip the
                 // prompt because `ax_trusted()` will already be true.
                 macos::request_ax_prompt();
             }
@@ -634,9 +634,9 @@ impl DesktopComputerUseHost {
     #[cfg(target_os = "macos")]
     fn open_app_macos(
         name: String,
-    ) -> BitFunResult<bitfun_core::agentic::tools::computer_use_host::OpenAppResult> {
+    ) -> OpenBitFunResult<openbitfun_core::agentic::tools::computer_use_host::OpenAppResult> {
         use crate::computer_use::macos_bg_input::running_app_identity_macos;
-        use bitfun_core::agentic::tools::computer_use_host::OpenAppResult;
+        use openbitfun_core::agentic::tools::computer_use_host::OpenAppResult;
 
         let failure = |err: String| OpenAppResult {
             app_name: name.clone(),
@@ -677,7 +677,7 @@ Check the app directly, or ask the user to bring it up.",
                     OSASCRIPT_TIMEOUT_MS / 1000
                 )));
             }
-            Err(e) => return Err(BitFunError::tool(format!("open_app osascript: {}", e))),
+            Err(e) => return Err(OpenBitFunError::tool(format!("open_app osascript: {}", e))),
         };
         if !activate.status.success() {
             return Ok(failure(
@@ -899,7 +899,7 @@ Check the app directly, or ask the user to bring it up.",
         {
             let platform_note = if cfg!(debug_assertions) && !macos::ax_trusted() {
                 Some(
-                    "Development build: grant Accessibility to target/debug/bitfun-desktop (path appears in errors if mouse fails)."
+                    "Development build: grant Accessibility to target/debug/openbitfun-desktop (path appears in errors if mouse fails)."
                         .to_string(),
                 )
             } else {
@@ -1023,7 +1023,7 @@ Check the app directly, or ask the user to bring it up.",
             use enigo::Mouse;
             match Self::run_enigo_job(|e| {
                 e.location()
-                    .map_err(|err| BitFunError::tool(format!("pointer location: {}", err)))
+                    .map_err(|err| OpenBitFunError::tool(format!("pointer location: {}", err)))
             }) {
                 Ok((x, y)) => (x as f64, y as f64),
                 Err(_) => (0.0, 0.0),
@@ -1055,7 +1055,7 @@ impl DesktopComputerUseHost {
         max_depth: u32,
         focus_window_only: bool,
         capture_screenshot: bool,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         #[cfg(target_os = "macos")]
         {
             // Pre-flight: without Accessibility trust macOS silently truncates
@@ -1071,7 +1071,7 @@ impl DesktopComputerUseHost {
             let mut snap = tokio::task::spawn_blocking(move || {
                 // Wrap in @try/@catch — AX APIs can throw NSException for
                 // sandboxed / partially-loaded / dying processes, and an
-                // unwound foreign exception aborts the whole bitfun process
+                // unwound foreign exception aborts the whole openbitfun process
                 // (`Rust cannot catch foreign exceptions, aborting`).
                 macos::catch_objc(|| {
                     crate::computer_use::macos_ax_dump::dump_app_ax(
@@ -1085,7 +1085,7 @@ impl DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
             // Auto-attach focused-window screenshot. Failures are non-fatal —
             // worst case the model still has the AX tree.
@@ -1114,7 +1114,7 @@ impl DesktopComputerUseHost {
             // subsequent `app_click` calls can resolve `s{hex}:{idx}`
             // tokens back to this snapshot's element indices.
             let reg_pid = snap.app.pid.unwrap_or(0);
-            let _ = bitfun_agent_tools::element_token::global().register_snapshot(
+            let _ = openbitfun_agent_tools::element_token::global().register_snapshot(
                 reg_pid,
                 0,
                 snap.nodes.len(),
@@ -1132,14 +1132,14 @@ impl DesktopComputerUseHost {
                     let pid = resolve_pid(self, &app).await? as u32;
                     crate::computer_use::windows_list_apps::find_top_window_for_pid(pid)
                         .ok_or_else(|| {
-                            BitFunError::tool(format!(
+                            OpenBitFunError::tool(format!(
                                 "APP_NOT_FOUND: no visible top-level window for pid={pid} (app={app:?})"
                             ))
                         })?
                 };
 
                 if target_hwnd.is_invalid() {
-                    return Err(BitFunError::tool(
+                    return Err(OpenBitFunError::tool(
                         "No target window for get_app_state (invalid HWND).".to_string(),
                     ));
                 }
@@ -1156,7 +1156,7 @@ impl DesktopComputerUseHost {
                 )
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
             let reg_pid = snap.app.pid.unwrap_or(0);
 
@@ -1187,7 +1187,7 @@ impl DesktopComputerUseHost {
             }
 
             // Register snapshot in element-token registry.
-            let _ = bitfun_agent_tools::element_token::global().register_snapshot(
+            let _ = openbitfun_agent_tools::element_token::global().register_snapshot(
                 reg_pid,
                 0,
                 snap.nodes.len(),
@@ -1197,7 +1197,9 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, max_depth, focus_window_only, capture_screenshot);
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 
@@ -1210,13 +1212,13 @@ impl DesktopComputerUseHost {
     pub(crate) async fn get_app_shortcuts_inner(
         &self,
         app: AppSelector,
-    ) -> BitFunResult<AppShortcutsSnapshot> {
+    ) -> OpenBitFunResult<AppShortcutsSnapshot> {
         #[cfg(target_os = "macos")]
         {
             // Same `[PERMISSION_DENIED]` contract as `get_app_state_inner`
             // — without Accessibility trust, `AXMenuBar` silently returns
             // nothing rather than erroring, which would look like "this
-            // app has no shortcuts" instead of "BitFun lacks permission".
+            // app has no shortcuts" instead of "OpenBitFun lacks permission".
             macos::require_ax_trust_for("After granting, retry `desktop.get_app_shortcuts`.")?;
             let pid = resolve_pid_macos(self, &app).await?;
             let (shortcuts, menu_items_without_shortcut) = tokio::task::spawn_blocking(move || {
@@ -1225,7 +1227,7 @@ impl DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
             let captured_at_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1244,7 +1246,7 @@ impl DesktopComputerUseHost {
             let hwnd_isize = crate::computer_use::windows_list_apps::find_top_window_for_pid(pid)
                 .map(|h| h.0 as isize)
                 .ok_or_else(|| {
-                    BitFunError::tool(format!(
+                    OpenBitFunError::tool(format!(
                         "APP_NOT_FOUND: no visible top-level window for pid={} (app={:?})",
                         pid, app
                     ))
@@ -1255,7 +1257,7 @@ impl DesktopComputerUseHost {
                 crate::computer_use::windows_ax_shortcuts::get_app_menu_shortcuts(hwnd)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
 
             let captured_at_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1271,27 +1273,29 @@ impl DesktopComputerUseHost {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = app;
-            Err(BitFunError::tool(LINUX_LEGACY_AX_UNAVAILABLE.to_string()))
+            Err(OpenBitFunError::tool(
+                LINUX_LEGACY_AX_UNAVAILABLE.to_string(),
+            ))
         }
     }
 }
 
 #[cfg(target_os = "macos")]
-fn require_macos_background_input() -> BitFunResult<()> {
+fn require_macos_background_input() -> OpenBitFunResult<()> {
     if crate::computer_use::macos_bg_input::supports_background_input() {
         return Ok(());
     }
-    Err(BitFunError::tool(
-        "[BACKGROUND_INPUT_UNAVAILABLE] macOS Accessibility permission is required for background app input. Grant BitFun in System Settings -> Privacy & Security -> Accessibility, then retry desktop.meta/capabilities or desktop.get_app_state.".to_string(),
+    Err(OpenBitFunError::tool(
+        "[BACKGROUND_INPUT_UNAVAILABLE] macOS Accessibility permission is required for background app input. Grant OpenBitFun in System Settings -> Privacy & Security -> Accessibility, then retry desktop.meta/capabilities or desktop.get_app_state.".to_string(),
     ))
 }
 
 #[async_trait]
 impl ComputerUseHost for DesktopComputerUseHost {
-    async fn permission_snapshot(&self) -> BitFunResult<ComputerUsePermissionSnapshot> {
+    async fn permission_snapshot(&self) -> OpenBitFunResult<ComputerUsePermissionSnapshot> {
         Ok(tokio::task::spawn_blocking(Self::permission_sync)
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?)
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?)
     }
 
     fn computer_use_interaction_state(&self) -> ComputerUseInteractionState {
@@ -1377,24 +1381,24 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    async fn request_accessibility_permission(&self) -> BitFunResult<()> {
+    async fn request_accessibility_permission(&self) -> OpenBitFunResult<()> {
         #[cfg(target_os = "macos")]
         {
             tokio::task::spawn_blocking(macos::request_ax_prompt)
                 .await
-                .map_err(|e| BitFunError::tool(e.to_string()))?;
+                .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         }
         Ok(())
     }
 
-    async fn request_screen_capture_permission(&self) -> BitFunResult<()> {
+    async fn request_screen_capture_permission(&self) -> OpenBitFunResult<()> {
         #[cfg(target_os = "macos")]
         {
             tokio::task::spawn_blocking(|| {
                 let _ = macos::request_screen_capture();
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         }
         Ok(())
     }
@@ -1402,19 +1406,20 @@ impl ComputerUseHost for DesktopComputerUseHost {
     async fn screenshot_display(
         &self,
         params: ComputerUseScreenshotParams,
-    ) -> BitFunResult<ComputerScreenshot> {
+    ) -> OpenBitFunResult<ComputerScreenshot> {
         self.screenshot_display_impl(params).await
     }
 
-    async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
+    async fn screenshot_peek_full_display(&self) -> OpenBitFunResult<ComputerScreenshot> {
         self.screenshot_peek_full_display_impl().await
     }
 
     async fn ocr_find_text_matches(
         &self,
         text_query: &str,
-        region_native: Option<bitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
-    ) -> BitFunResult<Vec<bitfun_core::agentic::tools::computer_use_host::OcrTextMatch>> {
+        region_native: Option<openbitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
+    ) -> OpenBitFunResult<Vec<openbitfun_core::agentic::tools::computer_use_host::OcrTextMatch>>
+    {
         self.ocr_find_text_matches_impl(text_query, region_native)
             .await
     }
@@ -1423,15 +1428,16 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         gx: f64,
         gy: f64,
-    ) -> BitFunResult<Option<bitfun_core::agentic::tools::computer_use_host::OcrAccessibilityHit>>
-    {
+    ) -> OpenBitFunResult<
+        Option<openbitfun_core::agentic::tools::computer_use_host::OcrAccessibilityHit>,
+    > {
         #[cfg(target_os = "macos")]
         {
             let hit = tokio::task::spawn_blocking(move || {
                 crate::computer_use::macos_ax_ui::accessibility_hit_at_global_point(gx, gy)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
             return Ok(hit);
         }
         #[cfg(target_os = "windows")]
@@ -1440,7 +1446,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 crate::computer_use::windows_ax_ui::accessibility_hit_at_global_point(gx, gy)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         }
         #[cfg(target_os = "linux")]
         {
@@ -1459,7 +1465,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         gx: f64,
         gy: f64,
         half_extent_native: u32,
-    ) -> BitFunResult<Vec<u8>> {
+    ) -> OpenBitFunResult<Vec<u8>> {
         self.ocr_preview_crop_jpeg_impl(gx, gy, half_extent_native)
             .await
     }
@@ -1471,7 +1477,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
     async fn locate_ui_element_screen_center(
         &self,
         query: UiElementLocateQuery,
-    ) -> BitFunResult<UiElementLocateResult> {
+    ) -> OpenBitFunResult<UiElementLocateResult> {
         Self::ensure_input_automation_allowed()?;
         #[cfg(target_os = "macos")]
         {
@@ -1479,7 +1485,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 crate::computer_use::macos_ax_ui::locate_ui_element_center(&query)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         }
         #[cfg(target_os = "windows")]
         {
@@ -1487,7 +1493,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 crate::computer_use::windows_ax_ui::locate_ui_element_center(&query)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?;
         }
         #[cfg(target_os = "linux")]
         {
@@ -1495,7 +1501,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
         {
-            Err(BitFunError::tool(
+            Err(OpenBitFunError::tool(
                 "Native UI element (accessibility) lookup is not available on this platform."
                     .to_string(),
             ))
@@ -1532,27 +1538,27 @@ impl ComputerUseHost for DesktopComputerUseHost {
     async fn open_app(
         &self,
         app_name: &str,
-    ) -> BitFunResult<bitfun_core::agentic::tools::computer_use_host::OpenAppResult> {
-        use bitfun_core::agentic::tools::computer_use_host::OpenAppResult;
+    ) -> OpenBitFunResult<openbitfun_core::agentic::tools::computer_use_host::OpenAppResult> {
+        use openbitfun_core::agentic::tools::computer_use_host::OpenAppResult;
         let name = app_name.to_string();
 
         #[cfg(target_os = "macos")]
         {
-            let result = tokio::task::spawn_blocking(move || -> BitFunResult<OpenAppResult> {
+            let result = tokio::task::spawn_blocking(move || -> OpenBitFunResult<OpenAppResult> {
                 Self::open_app_macos(name)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             return Ok(result);
         }
 
         #[cfg(target_os = "windows")]
         {
-            let result = tokio::task::spawn_blocking(move || -> BitFunResult<OpenAppResult> {
-                let output = bitfun_core::util::process_manager::create_command("cmd")
+            let result = tokio::task::spawn_blocking(move || -> OpenBitFunResult<OpenAppResult> {
+                let output = openbitfun_core::util::process_manager::create_command("cmd")
                     .args(["/c", "start", "", &name])
                     .output()
-                    .map_err(|e| BitFunError::tool(format!("open_app: {}", e)))?;
+                    .map_err(|e| OpenBitFunError::tool(format!("open_app: {}", e)))?;
                 Ok(OpenAppResult {
                     app_name: name,
                     success: output.status.success(),
@@ -1575,18 +1581,18 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             return Ok(result);
         }
 
         #[cfg(target_os = "linux")]
         {
-            let result = tokio::task::spawn_blocking(move || -> BitFunResult<OpenAppResult> {
+            let result = tokio::task::spawn_blocking(move || -> OpenBitFunResult<OpenAppResult> {
                 let output = std::process::Command::new("xdg-open")
                     .arg(&name)
                     .output()
                     .or_else(|_| std::process::Command::new(&name).output())
-                    .map_err(|e| BitFunError::tool(format!("open_app: {}", e)))?;
+                    .map_err(|e| OpenBitFunError::tool(format!("open_app: {}", e)))?;
                 Ok(OpenAppResult {
                     app_name: name,
                     success: output.status.success(),
@@ -1607,59 +1613,59 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 })
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))??;
             return Ok(result);
         }
 
         #[allow(unreachable_code)]
-        Err(BitFunError::tool(
+        Err(OpenBitFunError::tool(
             "open_app is not supported on this platform.".to_string(),
         ))
     }
 
-    fn map_image_coords_to_pointer_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
+    fn map_image_coords_to_pointer_f64(&self, x: i32, y: i32) -> OpenBitFunResult<(f64, f64)> {
         self.map_image_coords_to_pointer_f64_impl(x, y)
     }
 
-    fn map_image_coords_to_pointer(&self, x: i32, y: i32) -> BitFunResult<(i32, i32)> {
+    fn map_image_coords_to_pointer(&self, x: i32, y: i32) -> OpenBitFunResult<(i32, i32)> {
         let (gx, gy) = self.map_image_coords_to_pointer_f64(x, y)?;
         Ok((gx.round() as i32, gy.round() as i32))
     }
 
-    fn map_normalized_coords_to_pointer_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
+    fn map_normalized_coords_to_pointer_f64(&self, x: i32, y: i32) -> OpenBitFunResult<(f64, f64)> {
         self.map_normalized_coords_to_pointer_f64_impl(x, y)
     }
 
-    fn map_normalized_coords_to_pointer(&self, x: i32, y: i32) -> BitFunResult<(i32, i32)> {
+    fn map_normalized_coords_to_pointer(&self, x: i32, y: i32) -> OpenBitFunResult<(i32, i32)> {
         let (gx, gy) = self.map_normalized_coords_to_pointer_f64(x, y)?;
         Ok((gx.round() as i32, gy.round() as i32))
     }
 
-    async fn mouse_move_global_f64(&self, gx: f64, gy: f64) -> BitFunResult<()> {
+    async fn mouse_move_global_f64(&self, gx: f64, gy: f64) -> OpenBitFunResult<()> {
         self.mouse_move_global_f64_impl(gx, gy).await
     }
 
-    async fn mouse_move(&self, x: i32, y: i32) -> BitFunResult<()> {
+    async fn mouse_move(&self, x: i32, y: i32) -> OpenBitFunResult<()> {
         self.mouse_move_global_f64(x as f64, y as f64).await
     }
 
-    async fn pointer_move_relative(&self, dx: i32, dy: i32) -> BitFunResult<()> {
+    async fn pointer_move_relative(&self, dx: i32, dy: i32) -> OpenBitFunResult<()> {
         self.pointer_move_relative_impl(dx, dy).await
     }
 
-    async fn mouse_click(&self, button: &str) -> BitFunResult<()> {
+    async fn mouse_click(&self, button: &str) -> OpenBitFunResult<()> {
         self.mouse_click_impl(button).await
     }
 
-    async fn mouse_click_authoritative(&self, button: &str) -> BitFunResult<()> {
+    async fn mouse_click_authoritative(&self, button: &str) -> OpenBitFunResult<()> {
         self.mouse_click_authoritative_impl(button).await
     }
 
-    async fn mouse_down(&self, button: &str) -> BitFunResult<()> {
+    async fn mouse_down(&self, button: &str) -> OpenBitFunResult<()> {
         self.mouse_down_impl(button).await
     }
 
-    async fn mouse_up(&self, button: &str) -> BitFunResult<()> {
+    async fn mouse_up(&self, button: &str) -> OpenBitFunResult<()> {
         self.mouse_up_impl(button).await
     }
 
@@ -1674,23 +1680,23 @@ impl ComputerUseHost for DesktopComputerUseHost {
         to: (f64, f64),
         button: &str,
         duration_ms: u64,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         self.drag_impl(from, to, button, duration_ms).await
     }
 
-    async fn scroll(&self, delta_x: i32, delta_y: i32) -> BitFunResult<()> {
+    async fn scroll(&self, delta_x: i32, delta_y: i32) -> OpenBitFunResult<()> {
         self.scroll_impl(delta_x, delta_y).await
     }
 
-    async fn key_chord(&self, keys: Vec<String>) -> BitFunResult<()> {
+    async fn key_chord(&self, keys: Vec<String>) -> OpenBitFunResult<()> {
         self.key_chord_impl(keys).await
     }
 
-    async fn type_text(&self, text: &str) -> BitFunResult<()> {
+    async fn type_text(&self, text: &str) -> OpenBitFunResult<()> {
         self.type_text_impl(text).await
     }
 
-    async fn wait_ms(&self, ms: u64) -> BitFunResult<()> {
+    async fn wait_ms(&self, ms: u64) -> OpenBitFunResult<()> {
         tokio::time::sleep(Duration::from_millis(ms.max(1))).await;
         ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::Wait);
         Ok(())
@@ -1756,13 +1762,15 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    fn computer_use_guard_click_allowed(&self) -> BitFunResult<()> {
+    fn computer_use_guard_click_allowed(&self) -> OpenBitFunResult<()> {
         let s = self
             .state
             .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            .map_err(|e| OpenBitFunError::tool(format!("lock: {}", e)))?;
         if s.click_needs_fresh_screenshot {
-            return Err(BitFunError::tool(STALE_CAPTURE_TOOL_MESSAGE.to_string()));
+            return Err(OpenBitFunError::tool(
+                STALE_CAPTURE_TOOL_MESSAGE.to_string(),
+            ));
         }
         if s.pointer_trusted_after_ocr_move {
             return Ok(());
@@ -1775,7 +1783,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         Ok(())
     }
 
-    fn computer_use_guard_click_allowed_relaxed(&self) -> BitFunResult<()> {
+    fn computer_use_guard_click_allowed_relaxed(&self) -> OpenBitFunResult<()> {
         // For AX-based click_element: we only require that no pointer mutation
         // happened since the last known state (i.e. we moved the pointer ourselves
         // inside click_element, so the flag is not set). No fine-screenshot needed.
@@ -1817,13 +1825,13 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
+    async fn list_displays(&self) -> OpenBitFunResult<Vec<ComputerUseDisplayInfo>> {
         let preferred = self.state.lock().ok().and_then(|s| s.preferred_display_id);
         let (mx, my) = Self::current_mouse_position();
         Ok(Self::enumerate_displays(preferred, mx, my))
     }
 
-    async fn focus_display(&self, display_id: Option<u32>) -> BitFunResult<()> {
+    async fn focus_display(&self, display_id: Option<u32>) -> OpenBitFunResult<()> {
         if let Some(id) = display_id {
             // Validate against the actual list of attached screens; rejecting
             // unknown ids early gives the model a clean error to recover from
@@ -1832,7 +1840,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 .map(|all| all.iter().any(|s| s.display_info.id == id))
                 .unwrap_or(false);
             if !known {
-                return Err(BitFunError::tool(format!(
+                return Err(OpenBitFunError::tool(format!(
                     "focus_display: unknown display_id {} (call desktop.list_displays first)",
                     id
                 )));
@@ -1893,14 +1901,14 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    async fn list_apps(&self, include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+    async fn list_apps(&self, include_hidden: bool) -> OpenBitFunResult<Vec<AppInfo>> {
         #[cfg(target_os = "macos")]
         {
             tokio::task::spawn_blocking(move || {
                 crate::computer_use::macos_list_apps::list_running_apps(include_hidden)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?
         }
         #[cfg(target_os = "windows")]
         {
@@ -1908,7 +1916,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 crate::computer_use::windows_list_apps::list_running_apps(include_hidden)
             })
             .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?
+            .map_err(|e| OpenBitFunError::tool(e.to_string()))?
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
@@ -1922,7 +1930,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         app: AppSelector,
         max_depth: u32,
         focus_window_only: bool,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         // Public path: always auto-attach a focused-window screenshot so the
         // model is never blind on Canvas / WebView / WebGL surfaces that the
         // AX tree can't describe (Codex parity — its `get_app_state` is the
@@ -1942,11 +1950,11 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    async fn get_app_shortcuts(&self, app: AppSelector) -> BitFunResult<AppShortcutsSnapshot> {
+    async fn get_app_shortcuts(&self, app: AppSelector) -> OpenBitFunResult<AppShortcutsSnapshot> {
         self.get_app_shortcuts_inner(app).await
     }
 
-    async fn app_click(&self, params: AppClickParams) -> BitFunResult<AppStateSnapshot> {
+    async fn app_click(&self, params: AppClickParams) -> OpenBitFunResult<AppStateSnapshot> {
         self.app_click_impl(params).await
     }
 
@@ -1955,7 +1963,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         app: AppSelector,
         text: &str,
         focus: Option<ClickTarget>,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         self.app_type_text_impl(app, text, focus).await
     }
 
@@ -1965,7 +1973,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         focus: Option<ClickTarget>,
         dx: i32,
         dy: i32,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         self.app_scroll_impl(app, focus, dx, dy).await
     }
 
@@ -1974,7 +1982,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         app: AppSelector,
         keys: Vec<String>,
         focus_idx: Option<u32>,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         self.app_key_chord_impl(app, keys, focus_idx).await
     }
 
@@ -1984,7 +1992,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         pred: AppWaitPredicate,
         timeout_ms: u32,
         poll_ms: u32,
-    ) -> BitFunResult<AppStateSnapshot> {
+    ) -> OpenBitFunResult<AppStateSnapshot> {
         self.app_wait_for_impl(app, pred, timeout_ms, poll_ms).await
     }
 
@@ -2000,7 +2008,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         opts: InteractiveViewOpts,
-    ) -> BitFunResult<InteractiveView> {
+    ) -> OpenBitFunResult<InteractiveView> {
         self.build_interactive_view_impl(app, opts).await
     }
 
@@ -2008,7 +2016,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveClickParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         self.interactive_click_impl(app, params).await
     }
 
@@ -2016,7 +2024,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         opts: VisualMarkViewOpts,
-    ) -> BitFunResult<VisualMarkView> {
+    ) -> OpenBitFunResult<VisualMarkView> {
         self.build_visual_mark_view_impl(app, opts).await
     }
 
@@ -2024,7 +2032,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: VisualClickParams,
-    ) -> BitFunResult<VisualActionResult> {
+    ) -> OpenBitFunResult<VisualActionResult> {
         self.visual_click_impl(app, params).await
     }
 
@@ -2032,7 +2040,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveTypeTextParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         self.interactive_type_text_impl(app, params).await
     }
 
@@ -2040,7 +2048,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         app: AppSelector,
         params: InteractiveScrollParams,
-    ) -> BitFunResult<InteractiveActionResult> {
+    ) -> OpenBitFunResult<InteractiveActionResult> {
         self.interactive_scroll_impl(app, params).await
     }
 }
@@ -2061,7 +2069,7 @@ fn app_selector_is_unspecified(app: &AppSelector) -> bool {
 /// macOS: `pid > bundle_id > name`. Windows: `pid > name` (exact, then
 /// substring); empty selector resolves to the foreground window's pid.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-async fn resolve_pid(host: &DesktopComputerUseHost, app: &AppSelector) -> BitFunResult<i32> {
+async fn resolve_pid(host: &DesktopComputerUseHost, app: &AppSelector) -> OpenBitFunResult<i32> {
     #[cfg(target_os = "macos")]
     {
         resolve_pid_macos(host, app).await
@@ -2093,14 +2101,17 @@ async fn resolve_pid(host: &DesktopComputerUseHost, app: &AppSelector) -> BitFun
                 return Ok(p);
             }
         }
-        Err(BitFunError::tool(format!("APP_NOT_FOUND: {:?}", app)))
+        Err(OpenBitFunError::tool(format!("APP_NOT_FOUND: {:?}", app)))
     }
 }
 
 /// Resolve an `AppSelector` to a concrete `pid` on macOS. Resolution
 /// precedence (Codex parity): `pid > bundle_id > name`.
 #[cfg(target_os = "macos")]
-async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> BitFunResult<i32> {
+async fn resolve_pid_macos(
+    host: &DesktopComputerUseHost,
+    app: &AppSelector,
+) -> OpenBitFunResult<i32> {
     if let Some(pid) = app.pid {
         return Ok(pid);
     }
@@ -2123,7 +2134,7 @@ async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> 
     if let Some(name) = app.name.as_deref() {
         let needle = name.to_lowercase();
         // 1) Exact match against the localized application name (what the
-        //    Dock / Spotlight shows, e.g. "BitFun").
+        //    Dock / Spotlight shows, e.g. "OpenBitFun").
         if let Some(p) = apps
             .iter()
             .find(|a| a.name.to_lowercase() == needle)
@@ -2132,8 +2143,8 @@ async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> 
             return Ok(p);
         }
         // 2) Exact match against the bundle id's last segment (e.g. user
-        //    asks for "BitFun" but `list_apps` returned name="bitfun-desktop"
-        //    with bundle_id="ai.bitfun.desktop"). This keeps us aligned with
+        //    asks for "OpenBitFun" but `list_apps` returned name="openbitfun-desktop"
+        //    with bundle_id="ai.openbitfun.desktop"). This keeps us aligned with
         //    Codex, which is robust to "Cursor" vs "com.todesktop....Cursor".
         if let Some(p) = apps
             .iter()
@@ -2166,7 +2177,7 @@ async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> 
             return Ok(p);
         }
     }
-    Err(BitFunError::tool(format!("APP_NOT_FOUND: {:?}", app)))
+    Err(OpenBitFunError::tool(format!("APP_NOT_FOUND: {:?}", app)))
 }
 
 /// Best-effort `AppInfo` for `pid`, looked up from `list_apps`. Falls

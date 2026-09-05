@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 pub const CANVAS_SOURCE_LANGUAGE_TSX: &str = "tsx";
-pub const CANVAS_ARTIFACT_REF_SCHEME: &str = "bitfun-canvas";
+pub const CANVAS_ARTIFACT_REF_SCHEME: &str = "openbitfun-canvas";
 pub const CANVAS_CURRENT_SOURCE_SCHEMA_VERSION: u32 = 1;
 pub const CANVAS_CURRENT_STATE_SCHEMA_VERSION: u32 = 1;
 

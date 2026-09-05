@@ -11,7 +11,7 @@ type ModelIdentitySource = SessionUsageReport['models'][number]['modelIdSource']
 const UNKNOWN_MODEL_ID = 'unknown_model';
 const LEGACY_MODEL_ROUND_LABEL_PATTERN = /^model\s+round\s+\d+$/i;
 const FILE_PATH_MIDDLE_ELLIPSIS_THRESHOLD = 48;
-export const USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY = 'bitfun.sessionUsage.export.redactPaths';
+export const USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY = 'openbitfun.sessionUsage.export.redactPaths';
 type UsageRedactPathsPreferenceListener = (redactPaths: boolean) => void;
 const usageRedactPathsPreferenceListeners = new Set<UsageRedactPathsPreferenceListener>();
 

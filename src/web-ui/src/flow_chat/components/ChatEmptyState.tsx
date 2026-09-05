@@ -40,11 +40,11 @@ export const ChatEmptyState: React.FC = () => {
   }, [currentWorkspace]);
 
   return (
-    <div data-bf-component="chat-empty-state" data-bf-part="root" data-bf-state={loading ? 'loading' : ''} className="fc-chat-empty">
-      <div data-bf-component="chat-empty-state" data-bf-part="container" className="fc-chat-empty__container">
+    <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="root" data-openbitfun-state={loading ? 'loading' : ''} className="fc-chat-empty">
+      <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="container" className="fc-chat-empty__container">
         {!loading && currentWorkspace && (
           <>
-            <div data-bf-component="chat-empty-state" data-bf-part="greeting" className="fc-chat-empty__greeting">
+            <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="greeting" className="fc-chat-empty__greeting">
               <p>{t('emptyState.welcomeBack')}</p>
               <p>
                 {currentBranch ? (
@@ -70,9 +70,9 @@ export const ChatEmptyState: React.FC = () => {
               </p>
             </div>
 
-            <div data-bf-component="chat-empty-state" data-bf-part="divider" className="fc-chat-empty__divider" />
+            <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="divider" className="fc-chat-empty__divider" />
 
-            <div data-bf-component="chat-empty-state" data-bf-part="prompt" className="fc-chat-empty__prompt">
+            <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="prompt" className="fc-chat-empty__prompt">
               <p>{t('emptyState.capabilities')}</p>
               <p>{t('emptyState.capabilities2')}</p>
               <p className="fc-chat-empty__prompt-hint">{t('emptyState.readyToHelp')}</p>
@@ -81,7 +81,7 @@ export const ChatEmptyState: React.FC = () => {
         )}
 
         {!loading && !currentWorkspace && (
-          <div data-bf-component="chat-empty-state" data-bf-part="noWorkspace" className="fc-chat-empty__no-workspace">
+          <div data-openbitfun-component="chat-empty-state" data-openbitfun-part="noWorkspace" className="fc-chat-empty__no-workspace">
             <p>{t('emptyState.noWorkspace')}</p>
             <p className="fc-chat-empty__hint">{t('emptyState.openProject')}</p>
           </div>

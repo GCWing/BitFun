@@ -1,5 +1,5 @@
 import React from 'react';
-import { MobileComposer, MobileIconButton, MobileTextarea } from '@bitfun/ui/mobile';
+import { MobileComposer, MobileIconButton, MobileTextarea } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 
 interface PendingImage {

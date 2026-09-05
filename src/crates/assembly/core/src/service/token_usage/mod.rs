@@ -6,8 +6,8 @@ mod service;
 mod statistics;
 mod subscriber;
 
-pub use bitfun_services_core::token_usage::types;
-pub use bitfun_services_core::token_usage::{
+pub use openbitfun_services_core::token_usage::types;
+pub use openbitfun_services_core::token_usage::{
     aggregate_statistics, ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery,
     TokenUsageRecord, TokenUsageStatisticsRequest, TokenUsageSummary, UsageAttribution,
     UsageAttributionStatus, UsageDimensionAttribution, UsageGranularity, UsageStatistics,

@@ -155,22 +155,22 @@ export function CommandToolCard({
   };
 
   const details = hasDetails ? (
-    <div className={styles.details} data-bf-part="details">
+    <div className={styles.details} data-openbitfun-part="details">
       {hasOutputFrame && (
         <div
           className={styles.outputFrame}
-          data-bf-part="outputFrame"
+          data-openbitfun-part="outputFrame"
           data-density={outputDensity}
           data-sizing={outputSizing}
         >
           {outputAction && <span className={styles.outputActions}>{outputAction}</span>}
           {output
-            ? <div className={styles.output} data-bf-part="output">{output}</div>
-            : <div className={styles.waiting} data-bf-part="waiting">{waitingContent}</div>}
+            ? <div className={styles.output} data-openbitfun-part="output">{output}</div>
+            : <div className={styles.waiting} data-openbitfun-part="waiting">{waitingContent}</div>}
         </div>
       )}
       {hasFooter && (
-        <div className={styles.footer} data-bf-part="footer">
+        <div className={styles.footer} data-openbitfun-part="footer">
           {footerItems.map((item, index) => (
             <span
               className={styles.footerItem}
@@ -194,9 +194,9 @@ export function CommandToolCard({
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="command-tool-card"
-      data-bf-part="root"
-      data-bf-status={status}
+      data-openbitfun-component="command-tool-card"
+      data-openbitfun-part="root"
+      data-openbitfun-status={status}
     >
       <ProminentToolCard
         errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
@@ -214,7 +214,7 @@ export function CommandToolCard({
             content={(
               <code
                 className={styles.command}
-                data-bf-part="command"
+                data-openbitfun-part="command"
                 data-empty={resolvedCommand ? "false" : "true"}
                 data-testid={commandTestId}
                 title={resolvedCommand ?? undefined}
@@ -223,7 +223,7 @@ export function CommandToolCard({
               </code>
             )}
             extra={(statusSummary || statusLabel) ? (
-              <span className={styles.statusSummary} data-bf-part="statusSummary">
+              <span className={styles.statusSummary} data-openbitfun-part="statusSummary">
                 {statusSummary}
                 {statusLabel && (
                   <span className={styles.statusLabel} data-tone={statusTone}>{statusLabel}</span>

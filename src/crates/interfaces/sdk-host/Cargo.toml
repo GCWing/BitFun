@@ -1,19 +1,19 @@
 [package]
-name = "bitfun-sdk-host"
+name = "openbitfun-sdk-host"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Versioned local SDK Host adapter for the BitFun Agent Runtime"
+description = "Versioned local SDK Host adapter for the OpenBitFun Agent Runtime"
 
 [lib]
-name = "bitfun_sdk_host"
+name = "openbitfun_sdk_host"
 
 [dependencies]
 async-trait = { workspace = true }
-bitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
+openbitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+openbitfun-events = { path = "../../contracts/events" }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api"] }
 futures-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -25,10 +25,10 @@ uuid = { workspace = true }
 
 [features]
 default = []
-ts = ["dep:ts-rs", "bitfun-core-types/ts"]
+ts = ["dep:ts-rs", "openbitfun-core-types/ts"]
 
 [dev-dependencies]
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
 
 [lints]
 workspace = true

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use bitfun_ai_adapters::models_dev::{ModelsDevCatalog, ModelsDevModelFacts};
-use bitfun_core_types::{
+use openbitfun_ai_adapters::models_dev::{ModelsDevCatalog, ModelsDevModelFacts};
+use openbitfun_core_types::{
     ProviderCatalog, ProviderCatalogEndpoint, ProviderCatalogModel,
     ProviderCatalogModelCapabilities, ProviderCatalogModelSource, ProviderCatalogProvider,
     ProviderCatalogSource, ProviderCatalogUpstreamProvider,
@@ -100,7 +100,7 @@ pub(crate) fn resolve_builtin_provider_catalog(
     });
     ProviderCatalog {
         revision: resolved_catalog_revision(&revision),
-        source: if has_bound_catalog_data && source == ProviderCatalogSource::Bitfun {
+        source: if has_bound_catalog_data && source == ProviderCatalogSource::OpenBitFun {
             ProviderCatalogSource::Mixed
         } else {
             source
@@ -111,7 +111,7 @@ pub(crate) fn resolve_builtin_provider_catalog(
 
 fn resolved_catalog_revision(source_revision: &str) -> String {
     let mut digest = Sha256::new();
-    digest.update(b"bitfun-provider-catalog-v1\0");
+    digest.update(b"openbitfun-provider-catalog-v1\0");
     digest.update(BUILTIN_PROVIDER_OVERLAY.as_bytes());
     digest.update(b"\0models-dev\0");
     digest.update(source_revision.as_bytes());
@@ -499,7 +499,7 @@ fn curated_model_fallback(
         display_name: None,
         description: None,
         recommended,
-        source: ProviderCatalogModelSource::Bitfun,
+        source: ProviderCatalogModelSource::OpenBitFun,
         catalog_provider_ids: provider.catalog_provider_ids.clone(),
         endpoint_ids: provider
             .endpoints
@@ -535,10 +535,10 @@ fn normalize_base_url(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_core_types::{ProviderCatalogModelSource, ProviderCatalogSource};
+    use openbitfun_core_types::{ProviderCatalogModelSource, ProviderCatalogSource};
 
     use super::{parse_overlay, resolve_builtin_provider_catalog, trusted_models_dev_binding};
-    use bitfun_ai_adapters::models_dev::ModelsDevCatalog;
+    use openbitfun_ai_adapters::models_dev::ModelsDevCatalog;
 
     #[test]
     fn overlay_is_valid_and_keeps_product_endpoint_decisions() {
@@ -681,7 +681,7 @@ mod tests {
         let unavailable = resolve_builtin_provider_catalog(
             None,
             "none".to_string(),
-            ProviderCatalogSource::Bitfun,
+            ProviderCatalogSource::OpenBitFun,
         );
         let qwen = unavailable
             .providers
@@ -694,9 +694,9 @@ mod tests {
                 .map(|model| (model.id.as_str(), model.source))
                 .collect::<Vec<_>>(),
             [
-                ("qwen3.7-plus", ProviderCatalogModelSource::Bitfun),
-                ("qwen3.7-max", ProviderCatalogModelSource::Bitfun),
-                ("qwen3.6-flash", ProviderCatalogModelSource::Bitfun),
+                ("qwen3.7-plus", ProviderCatalogModelSource::OpenBitFun),
+                ("qwen3.7-max", ProviderCatalogModelSource::OpenBitFun),
+                ("qwen3.6-flash", ProviderCatalogModelSource::OpenBitFun),
             ]
         );
 
@@ -718,7 +718,7 @@ mod tests {
         assert!(qwen
             .models
             .iter()
-            .all(|model| model.source == ProviderCatalogModelSource::Bitfun));
+            .all(|model| model.source == ProviderCatalogModelSource::OpenBitFun));
     }
 
     #[test]
@@ -746,7 +746,7 @@ mod tests {
             .models
             .iter()
             .any(|model| model.id == "qwen-early-access"
-                && model.source == ProviderCatalogModelSource::Bitfun
+                && model.source == ProviderCatalogModelSource::OpenBitFun
                 && !model.recommended));
         assert!(!resolved
             .models

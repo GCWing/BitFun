@@ -37,11 +37,11 @@ impl AgenticMode {
     fn load_reminder_template(
         &self,
         template_name: &str,
-    ) -> crate::util::errors::BitFunResult<String> {
+    ) -> crate::util::errors::OpenBitFunResult<String> {
         get_embedded_prompt(template_name)
             .map(str::to_string)
             .ok_or_else(|| {
-                crate::util::errors::BitFunError::Agent(format!(
+                crate::util::errors::OpenBitFunError::Agent(format!(
                     "{} not found in embedded files",
                     template_name
                 ))
@@ -87,7 +87,7 @@ impl Agent for AgenticMode {
         &self,
         previous_agent_type: Option<&str>,
         _workspace: Option<&crate::agentic::WorkspaceBinding>,
-    ) -> crate::util::errors::BitFunResult<String> {
+    ) -> crate::util::errors::OpenBitFunResult<String> {
         if previous_agent_type == Some(self.id()) {
             Ok(String::new())
         } else {

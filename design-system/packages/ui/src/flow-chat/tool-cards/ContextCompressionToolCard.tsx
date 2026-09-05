@@ -42,9 +42,9 @@ export function ContextCompressionToolCard({
     <div
       {...props}
       className={classNames(styles.root, className)}
-      data-bf-component="context-compression-tool-card"
-      data-bf-part="root"
-      data-bf-status={status}
+      data-openbitfun-component="context-compression-tool-card"
+      data-openbitfun-part="root"
+      data-openbitfun-status={status}
     >
       <ProminentToolCard
         errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
@@ -54,7 +54,7 @@ export function ContextCompressionToolCard({
             content={content !== undefined && content !== null ? (
               <span
                 className={summary !== undefined && summary !== null ? styles.summary : styles.processing}
-                data-bf-part={summary !== undefined && summary !== null ? "summary" : "processing"}
+                data-openbitfun-part={summary !== undefined && summary !== null ? "summary" : "processing"}
                 title={typeof summary === "string" ? summary : undefined}
               >
                 {content}

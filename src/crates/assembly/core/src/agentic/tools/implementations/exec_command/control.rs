@@ -1,8 +1,8 @@
 use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
-use bitfun_runtime_ports::{
+use openbitfun_runtime_ports::{
     PortErrorKind, RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest,
     RemoteExecPort, TerminalExecControlAction, TerminalExecControlOrigin,
     TerminalExecControlRequest, TerminalPort,
@@ -44,7 +44,7 @@ pub enum ExecCommandControlError {
     SessionNotFound(i32),
 
     #[error(transparent)]
-    Tool(#[from] BitFunError),
+    Tool(#[from] OpenBitFunError),
 }
 
 pub async fn control_exec_command_session(
@@ -54,7 +54,7 @@ pub async fn control_exec_command_session(
 ) -> Result<ExecCommandControlResponse, ExecCommandControlError> {
     if request.remote {
         let remote_exec_port = remote_exec_port.ok_or_else(|| {
-            ExecCommandControlError::Tool(BitFunError::tool(
+            ExecCommandControlError::Tool(OpenBitFunError::tool(
                 "remote exec runtime service is required for ExecControl".to_string(),
             ))
         })?;
@@ -71,7 +71,7 @@ pub async fn control_exec_command_session(
                 error if error.kind == PortErrorKind::NotFound => {
                     ExecCommandControlError::SessionNotFound(request.session_id)
                 }
-                error => ExecCommandControlError::Tool(BitFunError::tool(format!(
+                error => ExecCommandControlError::Tool(OpenBitFunError::tool(format!(
                     "ExecControl failed: {}",
                     error.message
                 ))),
@@ -91,7 +91,7 @@ pub async fn control_exec_command_session(
     }
 
     let terminal_port = terminal_port.ok_or_else(|| {
-        ExecCommandControlError::Tool(BitFunError::tool(
+        ExecCommandControlError::Tool(OpenBitFunError::tool(
             "terminal runtime service is required for ExecControl".to_string(),
         ))
     })?;
@@ -108,7 +108,7 @@ pub async fn control_exec_command_session(
             error if error.kind == PortErrorKind::NotFound => {
                 ExecCommandControlError::SessionNotFound(request.session_id)
             }
-            error => ExecCommandControlError::Tool(BitFunError::tool(format!(
+            error => ExecCommandControlError::Tool(OpenBitFunError::tool(format!(
                 "ExecControl failed: {}",
                 error.message
             ))),
@@ -188,9 +188,9 @@ impl ExecControlTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if let Some(message) = exec_command_control_tool_input_validation_message(input) {
-            return Err(BitFunError::tool(message.to_string()));
+            return Err(OpenBitFunError::tool(message.to_string()));
         }
         let parsed_input = exec_command_control_tool_input_from_input(input)
             .expect("validated ExecControl input should parse");
@@ -245,7 +245,7 @@ impl Tool for ExecControlTool {
         "ExecControl"
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok(r#"Interrupts or kills a running ExecCommand session.
 
 Pass the session_id returned by ExecCommand.
@@ -319,13 +319,13 @@ Output is only what was produced during this tool call's wait window."#
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
             return self.call_remote_pipe(input, context).await;
         }
 
         if let Some(message) = exec_command_control_tool_input_validation_message(input) {
-            return Err(BitFunError::tool(message.to_string()));
+            return Err(OpenBitFunError::tool(message.to_string()));
         }
         let parsed_input = exec_command_control_tool_input_from_input(input)
             .expect("validated ExecControl input should parse");
@@ -382,7 +382,7 @@ mod tests {
         ExecCommandControlOrigin, ExecCommandControlRequest, ExecControlTool,
     };
     use crate::agentic::tools::framework::ToolResult;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         PortError, PortErrorKind, PortResult, RemoteExecCommandRequest, RemoteExecCommandResponse,
         RemoteExecControlRequest, RemoteExecOneShotCommandRequest,
         RemoteExecOneShotCommandResponse, RemoteExecPort, RemoteExecStreamingOutputSink,
@@ -559,7 +559,7 @@ mod tests {
 
     #[tokio::test]
     async fn control_exec_command_session_returns_structured_session_not_found() {
-        let terminal_port: std::sync::Arc<dyn bitfun_runtime_ports::TerminalPort> =
+        let terminal_port: std::sync::Arc<dyn openbitfun_runtime_ports::TerminalPort> =
             std::sync::Arc::new(MissingSessionTerminalPort);
         let error = control_exec_command_session(
             ExecCommandControlRequest {
@@ -583,7 +583,7 @@ mod tests {
 
     #[tokio::test]
     async fn control_exec_command_session_returns_structured_remote_session_not_found() {
-        let remote_exec_port: std::sync::Arc<dyn bitfun_runtime_ports::RemoteExecPort> =
+        let remote_exec_port: std::sync::Arc<dyn openbitfun_runtime_ports::RemoteExecPort> =
             std::sync::Arc::new(MissingSessionRemoteExecPort);
         let error = control_exec_command_session(
             ExecCommandControlRequest {

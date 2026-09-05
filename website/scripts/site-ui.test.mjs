@@ -39,17 +39,17 @@ function cssBlock(selector) {
 }
 
 test('theme contract defaults to system and exposes all three choices', () => {
-  assert.match(templateSource, /localStorage\.getItem\('bitfun-playbook-theme'\)/u);
+  assert.match(templateSource, /localStorage\.getItem\('openbitfun-playbook-theme'\)/u);
   assert.match(templateSource, /let theme = 'system'/u);
   assert.match(templateSource, /prefers-color-scheme: dark/u);
   assert.match(appSource, /const THEME_CHOICES = \['system', 'light', 'dark'\]/u);
   assert.match(appSource, /data-theme-choice="\$\{theme\}"/u);
   assert.match(appSource, /addEventListener\('change'/u);
-  assert.match(templateSource, /data-bf-design-system-root/u);
+  assert.match(templateSource, /data-openbitfun-design-system-root/u);
   assert.match(templateSource, /root\.dataset\.colorScheme/u);
   assert.match(templateSource, /\/assets\/design-tokens\.css/u);
   assert.match(templateSource, /\/assets\/theme\.css/u);
-  assert.match(appSource, /--bf-color-surface-canvas/u);
+  assert.match(appSource, /--openbitfun-color-surface-canvas/u);
   assert.match(appSource, /documentElement\.dataset\.colorScheme = resolvedTheme\(\)/u);
 });
 
@@ -130,9 +130,9 @@ test('sidebar navigation preserves its scroll position across page loads', () =>
 });
 
 test('callouts and ordinary UI consume canonical semantic color tokens only', () => {
-  assert.match(cssBlock('.detail-aside'), /background:\s*var\(--bf-color-status-success-surface\)/u);
-  assert.match(cssBlock('.detail-aside'), /color:\s*var\(--bf-color-status-success-content\)/u);
-  assert.match(cssBlock('.control-unsupported'), /color:\s*var\(--bf-color-status-danger-content\)/u);
+  assert.match(cssBlock('.detail-aside'), /background:\s*var\(--openbitfun-color-status-success-surface\)/u);
+  assert.match(cssBlock('.detail-aside'), /color:\s*var\(--openbitfun-color-status-success-content\)/u);
+  assert.match(cssBlock('.control-unsupported'), /color:\s*var\(--openbitfun-color-status-danger-content\)/u);
   assert.doesNotMatch(stylesSource, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/iu);
   assert.doesNotMatch(stylesSource, /var\(--(?:paper|ink|muted|line|panel|accent|danger|shadow)\)/u);
 });

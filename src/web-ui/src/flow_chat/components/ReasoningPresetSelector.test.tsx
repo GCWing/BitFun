@@ -127,10 +127,10 @@ describe('ReasoningPresetSelector', () => {
     });
 
     const auto = document.body.querySelector<HTMLButtonElement>(
-      '.bitfun-reasoning-preset-selector__auto-row [data-bf-part="trigger"]',
+      '.openbitfun-reasoning-preset-selector__auto-row [data-openbitfun-part="trigger"]',
     );
     const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
-      '.bitfun-reasoning-preset-selector__options [data-preset-id]',
+      '.openbitfun-reasoning-preset-selector__options [data-preset-id]',
     ));
     expect(auto?.textContent).toBe('Auto');
     expect(options.map(option => option.textContent)).toEqual(['Low', 'Low', 'High']);
@@ -168,13 +168,13 @@ describe('ReasoningPresetSelector', () => {
     expect(trigger?.textContent).toBe('');
     expect(trigger?.getAttribute('aria-label')).toBe('Thinking: auto (Medium)');
     const meter = trigger?.querySelector<HTMLElement>(
-      '.bitfun-reasoning-preset-selector__status-meter',
+      '.openbitfun-reasoning-preset-selector__status-meter',
     );
     expect(meter?.dataset.intensity).toBe('2');
-    expect(meter?.querySelectorAll('.bitfun-reasoning-preset-selector__status-ring'))
+    expect(meter?.querySelectorAll('.openbitfun-reasoning-preset-selector__status-ring'))
       .toHaveLength(2);
-    expect(trigger?.querySelectorAll('.bitfun-reasoning-preset-selector__status-meter')).toHaveLength(1);
-    expect(trigger?.querySelector('.bitfun-reasoning-preset-selector__label')).toBeNull();
+    expect(trigger?.querySelectorAll('.openbitfun-reasoning-preset-selector__status-meter')).toHaveLength(1);
+    expect(trigger?.querySelector('.openbitfun-reasoning-preset-selector__label')).toBeNull();
 
     for (const [presetId, expectedIntensity, expectedRings, hasPeak] of [
       ['low', '1', 1, false],
@@ -191,12 +191,12 @@ describe('ReasoningPresetSelector', () => {
         );
       });
       const updatedMeter = container.querySelector<HTMLElement>(
-        '.bitfun-reasoning-preset-selector__status-meter',
+        '.openbitfun-reasoning-preset-selector__status-meter',
       );
       expect(updatedMeter?.dataset.intensity).toBe(expectedIntensity);
-      expect(updatedMeter?.querySelectorAll('.bitfun-reasoning-preset-selector__status-ring'))
+      expect(updatedMeter?.querySelectorAll('.openbitfun-reasoning-preset-selector__status-ring'))
         .toHaveLength(expectedRings);
-      expect(Boolean(updatedMeter?.querySelector('.bitfun-reasoning-preset-selector__status-peak')))
+      expect(Boolean(updatedMeter?.querySelector('.openbitfun-reasoning-preset-selector__status-peak')))
         .toBe(hasPeak);
     }
 
@@ -233,13 +233,13 @@ describe('ReasoningPresetSelector', () => {
 
     const options = Array.from(
       document.body.querySelectorAll<HTMLButtonElement>(
-        '.bitfun-reasoning-preset-selector__options [data-preset-id]',
+        '.openbitfun-reasoning-preset-selector__options [data-preset-id]',
       ),
     );
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['low', 'medium', 'high', 'xhigh']);
     expect(options.map(option => option.querySelector(
-      '.bitfun-reasoning-preset-selector__option-label',
+      '.openbitfun-reasoning-preset-selector__option-label',
     )?.textContent))
       .toEqual(['Low', 'Medium', 'High', 'Extra high']);
     expect(options.every(option => option.querySelector('small, svg') === null)).toBe(true);
@@ -275,13 +275,13 @@ describe('ReasoningPresetSelector', () => {
 
     const options = Array.from(
       document.body.querySelectorAll<HTMLButtonElement>(
-        '.bitfun-reasoning-preset-selector__options [data-preset-id]',
+        '.openbitfun-reasoning-preset-selector__options [data-preset-id]',
       ),
     );
     expect(options.map(option => option.dataset.presetId))
       .toEqual(['off', 'on', 'low', 'high', 'max']);
     expect(options.map(option => option.querySelector(
-      '.bitfun-reasoning-preset-selector__option-label',
+      '.openbitfun-reasoning-preset-selector__option-label',
     )?.textContent))
       .toEqual(['Off', 'Low', 'Medium', 'High', 'Maximum']);
     expect(options.every(option => option.querySelector('small, svg') === null)).toBe(true);

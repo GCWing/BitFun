@@ -14,7 +14,7 @@ use serde_json::Value;
 use std::sync::{Arc, OnceLock};
 
 use super::encryption;
-use bitfun_services_integrations::remote_connect::{
+use openbitfun_services_integrations::remote_connect::{
     build_remote_image_contexts, cancel_remote_task, generate_remote_initial_sync,
     handle_remote_command, handle_remote_interaction_command, handle_remote_poll_command,
     handle_remote_session_command, handle_remote_workspace_command,
@@ -23,7 +23,7 @@ use bitfun_services_integrations::remote_connect::{
     RemoteDialogSteerRequest, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
     RemoteDialogSubmitOutcome, RemoteImageContext, RemoteSessionTrackerRegistry,
 };
-pub use bitfun_services_integrations::remote_connect::{
+pub use openbitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
     ImageAttachment, RecentWorkspaceEntry, RemoteCommand, RemoteDefaultModelsConfig,
     RemoteModelCatalog, RemoteModelConfig, RemoteResponse, RemoteSessionStateTracker,
@@ -58,7 +58,7 @@ fn remote_image_context_to_core(
 
 /// Shared tracker adapter for remote relay and bot execution paths.
 ///
-/// Command routing lives in `bitfun-services-integrations`; core only keeps the
+/// Command routing lives in `openbitfun-services-integrations`; core only keeps the
 /// global tracker registry adapter needed by concrete session/runtime hosts.
 pub struct RemoteExecutionDispatcher {
     tracker_registry: RemoteSessionTrackerRegistry,
@@ -105,7 +105,7 @@ impl RemoteExecutionDispatcher {
 
     /// Dispatch a SendMessage command through the remote-connect runtime owner.
     ///
-    /// `bitfun-services-integrations` owns the orchestration order; core supplies
+    /// `openbitfun-services-integrations` owns the orchestration order; core supplies
     /// the concrete tracker, session restore, terminal, and scheduler adapters.
     /// When the session is already processing, the message is queued and the current turn
     /// may yield after the current model round for interactive remote sources.
@@ -202,8 +202,8 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
     async fn handle_device_command(&self, command: &RemoteCommand) -> RemoteResponse {
         match command {
             RemoteCommand::DeviceQueryInfo => {
-                use bitfun_runtime_ports::RemoteSessionWorkspaceIdentity;
-                use bitfun_services_integrations::remote_connect::{
+                use openbitfun_runtime_ports::RemoteSessionWorkspaceIdentity;
+                use openbitfun_services_integrations::remote_connect::{
                     RemoteInitialSyncRuntimeHost, RemoteWorkspaceRuntimeHost,
                 };
 
@@ -374,7 +374,7 @@ impl RemoteServer {
 mod tests {
     use super::*;
     use crate::service::remote_connect::encryption::KeyPair;
-    use bitfun_services_integrations::remote_connect::{
+    use openbitfun_services_integrations::remote_connect::{
         remote_session_restore_target, resolve_remote_cancel_decision,
         resolve_remote_execution_image_contexts, RemoteCancelDecision,
         RemoteDialogWorkspaceBinding,

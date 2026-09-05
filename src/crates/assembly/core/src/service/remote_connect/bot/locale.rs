@@ -1,4 +1,4 @@
-pub use bitfun_services_integrations::remote_connect::bot::{
+pub use openbitfun_services_integrations::remote_connect::bot::{
     fmt_count, strings_for, BotLanguage, BotStrings,
 };
 

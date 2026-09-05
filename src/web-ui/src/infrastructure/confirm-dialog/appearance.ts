@@ -11,7 +11,7 @@ export const confirmDialogAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   ],
   facets: [{
     id: 'status',
-    attribute: 'data-bf-status',
+    attribute: 'data-openbitfun-status',
     values: ['info', 'warning', 'danger', 'success'],
   }],
 };

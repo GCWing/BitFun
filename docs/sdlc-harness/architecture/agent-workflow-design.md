@@ -1,4 +1,4 @@
-# BitFun 智能体工作流交互与边界补充设计
+# OpenBitFun 智能体工作流交互与边界补充设计
 
 > 范围：为 [../agent-workflow-staged-plan.md](../agent-workflow-staged-plan.md) 中的场景提供交互和边界补充。
 > 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、runtime events 和质量数据面契约。新受管 work packets 仅服务大目标 L1 Review，历史 packet 继续兼容读取。

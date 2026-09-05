@@ -9,7 +9,7 @@ use crate::service::search::{
     IndexTaskHandle, WorkspaceIndexStatus,
 };
 use async_trait::async_trait;
-use bitfun_services_integrations::remote_ssh::workspace_search::{
+use openbitfun_services_integrations::remote_ssh::workspace_search::{
     RemoteCommandOutput, RemoteWorkspaceSearchProvider,
     RemoteWorkspaceSearchService as ServiceRemoteWorkspaceSearchService,
     RemoteWorkspaceSearchStdioProtocol,
@@ -211,7 +211,7 @@ pub async fn remote_workspace_search_service_for_path(
 
 fn spawn_remote_stdio_owner(
     connection_id: String,
-    transport: bitfun_services_integrations::remote_ssh::WorkspaceStdio,
+    transport: openbitfun_services_integrations::remote_ssh::WorkspaceStdio,
     mut write_rx: mpsc::Receiver<Vec<u8>>,
     protocol: RemoteWorkspaceSearchStdioProtocol,
 ) {

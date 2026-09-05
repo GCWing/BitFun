@@ -1,4 +1,4 @@
-.bitfun-git-scene-branches {
+.openbitfun-git-scene-branches {
   display: flex;
   flex: 1;
   height: 100%;
@@ -10,7 +10,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--bf-color-border-subtle);
+    border-right: 1px solid var(--openbitfun-color-border-subtle);
   }
 
   &__right {
@@ -24,7 +24,7 @@
   &__toolbar {
     flex-shrink: 0;
     padding: 8px;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -56,16 +56,16 @@
     cursor: pointer;
 
     &:hover {
-      background: var(--bf-color-action-quiet-hover);
+      background: var(--openbitfun-color-action-quiet-hover);
     }
 
     &--current {
-      background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
     }
 
     &--selected {
-      background: var(--bf-color-action-quiet-hover);
-      outline: 1px solid var(--bf-color-border-subtle);
+      background: var(--openbitfun-color-action-quiet-hover);
+      outline: 1px solid var(--openbitfun-color-border-subtle);
     }
   }
 
@@ -77,8 +77,8 @@
   }
 
   &__name {
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -86,9 +86,9 @@
 
   &__current-badge {
     flex-shrink: 0;
-    font-size: var(--bf-type-micro-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-accent-default);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-accent-default);
     text-transform: uppercase;
   }
 
@@ -100,8 +100,8 @@
   &__empty {
     padding: 16px;
     text-align: center;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-label-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 
   &__placeholder {
@@ -111,12 +111,12 @@
     justify-content: center;
     flex: 1;
     gap: 8px;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 
   &__hint {
-    font-size: var(--bf-type-label-sm-font-size);
+    font-size: var(--openbitfun-type-label-sm-font-size);
     opacity: 0.8;
   }
 
@@ -124,7 +124,7 @@
   &__history-toolbar {
     flex-shrink: 0;
     padding: 8px;
-    border-bottom: 1px solid var(--bf-color-border-subtle);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -132,9 +132,9 @@
   }
 
   &__history-title {
-    font-size: var(--bf-type-label-md-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
     margin-right: auto;
   }
 
@@ -149,8 +149,8 @@
     border: 1px solid transparent;
 
     &--expanded {
-      background: var(--bf-color-action-quiet-hover);
-      border-color: var(--bf-color-border-subtle);
+      background: var(--openbitfun-color-action-quiet-hover);
+      border-color: var(--openbitfun-color-border-subtle);
     }
   }
 
@@ -168,7 +168,7 @@
     background: none;
     cursor: pointer;
     padding: 0;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   &__commit-info {
@@ -177,16 +177,16 @@
   }
 
   &__commit-message {
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__commit-meta {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
     margin-top: 2px;
   }
 
@@ -197,21 +197,21 @@
 
   &__commit-detail {
     padding: 8px 10px 10px 34px;
-    border-top: 1px solid var(--bf-color-border-subtle);
-    font-size: var(--bf-type-label-sm-font-size);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-label-sm-font-size);
   }
 
   &__commit-body {
     margin: 0 0 8px;
     white-space: pre-wrap;
     word-break: break-word;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-meta-font-size);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-meta-font-size);
   }
 
   &__files {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-content-muted);
 
     ul {
       margin: 4px 0 0;

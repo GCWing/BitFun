@@ -68,13 +68,13 @@ function SearchResultsToolCardBase({
 }: SearchResultsToolCardBaseProps) {
   const hasDetails = details.length > 0 || results.length > 0 || Boolean(resultText);
   const expandedContent = hasDetails ? (
-    <div data-bf-part="searchDetails">
+    <div data-openbitfun-part="searchDetails">
       {details.length > 0 && (
-        <div className={styles.details} data-bf-part="details">
+        <div className={styles.details} data-openbitfun-part="details">
           {details.map((detail, index) => (
             <span
               className={styles.detail}
-              data-bf-part="detail"
+              data-openbitfun-part="detail"
               key={index}
             >
               <span className={styles.detailLabel}>{detail.label}</span>
@@ -85,13 +85,13 @@ function SearchResultsToolCardBase({
       )}
 
       {resultText && (
-        <pre className={styles.resultText} data-bf-part="resultText">{resultText}</pre>
+        <pre className={styles.resultText} data-openbitfun-part="resultText">{resultText}</pre>
       )}
 
       {results.length > 0 && (
-        <div className={styles.results} data-bf-part="results">
+        <div className={styles.results} data-openbitfun-part="results">
           {results.map((result) => (
-            <div className={styles.result} data-bf-part="result" key={result.key}>
+            <div className={styles.result} data-openbitfun-part="result" key={result.key}>
               <span className={styles.resultIcon}><ResultIcon kind={result.icon} /></span>
               <span className={styles.resultBody}>
                 {result.onOpen ? (
@@ -115,7 +115,7 @@ function SearchResultsToolCardBase({
             </div>
           ))}
           {moreResultsLabel && (
-            <div className={styles.overflowLabel} data-bf-part="overflowLabel">
+            <div className={styles.overflowLabel} data-openbitfun-part="overflowLabel">
               {moreResultsLabel}
             </div>
           )}
@@ -127,7 +127,7 @@ function SearchResultsToolCardBase({
   return (
     <AmbientToolCard
       {...props}
-      data-bf-tool-card={toolCard}
+      data-openbitfun-tool-card={toolCard}
       expandedContent={expandedContent}
       header={(
         <AmbientToolCardHeader

@@ -38,22 +38,22 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: var(--bf-color-surface-scene);
+    background: var(--openbitfun-color-surface-scene);
 
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
-      var(--bf-color-overlay-scrim) 40%,
-      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      color-mix(in srgb, var(--openbitfun-color-content-on-light) 20%, transparent) 20%,
+      var(--openbitfun-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent) 60%,
       currentColor 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      color-mix(in srgb, var(--bf-color-content-on-light) 20%, transparent) 20%,
-      var(--bf-color-overlay-scrim) 40%,
-      color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent) 60%,
+      color-mix(in srgb, var(--openbitfun-color-content-on-light) 20%, transparent) 20%,
+      var(--openbitfun-color-overlay-scrim) 40%,
+      color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent) 60%,
       currentColor 85%
     );
     transition: opacity 140ms ease;
@@ -91,9 +91,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-scene);
-    color: var(--bf-color-content-muted);
+    border: 1.5px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-surface-scene);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     pointer-events: none;
     padding: 0;
@@ -115,16 +115,16 @@
     outline: none;
     
     .scroll-to-latest-bar__btn {
-      border-color: var(--bf-color-border-strong);
-      color: var(--bf-color-content-primary);
+      border-color: var(--openbitfun-color-border-strong);
+      color: var(--openbitfun-color-content-primary);
     }
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .scroll-to-latest-bar[data-visible='true']:hover .scroll-to-latest-bar__btn {
-    border-color: var(--bf-color-field-border-hover);
-    color: var(--bf-color-content-primary);
+    border-color: var(--openbitfun-color-field-border-hover);
+    color: var(--openbitfun-color-content-primary);
     transform: translateY(1px);
   }
 }

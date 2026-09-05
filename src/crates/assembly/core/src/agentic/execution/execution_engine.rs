@@ -60,19 +60,19 @@ use crate::service::instruction_context::{
     build_workspace_instruction_files_context_detailed,
     build_workspace_instruction_files_context_with_fs, InstructionContextBuild,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
-use bitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
-use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
-use bitfun_ai_adapters::ModelExchangeTraceConfig;
-use bitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
-use bitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use dashmap::DashMap;
 use log::{debug, error, info, trace, warn};
+use openbitfun_agent_runtime::output_surface::TOOL_CONTEXT_INLINE_MARKDOWN_IMAGE_DISPLAY_KEY;
+use openbitfun_agent_runtime::permission::PERMISSION_MODE_CONTEXT_KEY;
+use openbitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
+use openbitfun_ai_adapters::ModelExchangeTraceConfig;
+use openbitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
+use openbitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -247,10 +247,10 @@ impl ManualCompactionCommitGate {
     }
 }
 
-fn manual_compaction_terminal_error(error: BitFunError) -> BitFunError {
+fn manual_compaction_terminal_error(error: OpenBitFunError) -> OpenBitFunError {
     match error {
-        error @ BitFunError::Cancelled(_) => error,
-        error => BitFunError::Session(error.to_string()),
+        error @ OpenBitFunError::Cancelled(_) => error,
+        error => OpenBitFunError::Session(error.to_string()),
     }
 }
 
@@ -528,7 +528,7 @@ struct TurnPromptScaffoldInput<'a> {
 }
 
 struct FinalizeRoundInput<'a> {
-    permission_constraints: bitfun_runtime_ports::PermissionConstraintLayer,
+    permission_constraints: openbitfun_runtime_ports::PermissionConstraintLayer,
     context_window: usize,
     tool_definitions: Option<Vec<ToolDefinition>>,
     reminder_text: &'a str,
@@ -584,7 +584,7 @@ impl ExecutionEngine {
         ModelRequestContext {
             prompt_cache_route_key: Some(prompt_cache_lineage_id.to_string()),
             output_schema: context
-                .get(bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY)
+                .get(openbitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY)
                 .and_then(|schema| serde_json::from_str(schema).ok()),
         }
     }
@@ -1133,10 +1133,10 @@ impl ExecutionEngine {
         missing_path && missing_data_url && has_redaction_hint
     }
 
-    fn is_recoverable_historical_image_error(err: &BitFunError) -> bool {
+    fn is_recoverable_historical_image_error(err: &OpenBitFunError) -> bool {
         match err {
-            BitFunError::Io(_) | BitFunError::Deserialization(_) => true,
-            BitFunError::Validation(msg) => {
+            OpenBitFunError::Io(_) | OpenBitFunError::Deserialization(_) => true,
+            OpenBitFunError::Validation(msg) => {
                 msg.starts_with("Failed to decode image data")
                     || msg.starts_with("Unsupported or unrecognized image format")
                     || msg.starts_with("Invalid data URL format")
@@ -1148,12 +1148,12 @@ impl ExecutionEngine {
 
     fn can_fallback_to_text_only(
         images: &[ImageContextData],
-        err: &BitFunError,
+        err: &OpenBitFunError,
         is_current_turn_message: bool,
     ) -> bool {
         let is_redacted_payload_error = matches!(
             err,
-            BitFunError::Validation(msg) if msg.starts_with("Image context missing image_path/data_url")
+            OpenBitFunError::Validation(msg) if msg.starts_with("Image context missing image_path/data_url")
         ) && !images.is_empty()
             && images.iter().all(Self::is_redacted_image_context);
 
@@ -1188,7 +1188,7 @@ impl ExecutionEngine {
         ai_config: &crate::service::config::types::AIConfig,
         configured_model_id: &str,
         frozen_model_id: Option<&str>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         if let Some(frozen_model_id) = frozen_model_id
             .map(str::trim)
             .filter(|model_id| !model_id.is_empty())
@@ -1196,7 +1196,7 @@ impl ExecutionEngine {
             return ai_config
                 .resolve_model_reference(frozen_model_id)
                 .ok_or_else(|| {
-                    BitFunError::Validation(format!(
+                    OpenBitFunError::Validation(format!(
                         "Frozen dialog turn model contract is unavailable: {frozen_model_id}"
                     ))
                 });
@@ -1212,7 +1212,7 @@ impl ExecutionEngine {
             .resolve_model_selection(selector)
             .or_else(|| ai_config.resolve_model_selection("primary"))
             .ok_or_else(|| {
-                BitFunError::AIClient(
+                OpenBitFunError::AIClient(
                     "Dialog turn model could not resolve a concrete primary model".to_string(),
                 )
             })
@@ -1221,7 +1221,7 @@ impl ExecutionEngine {
     fn validate_frozen_reasoning_contract(
         context: &ExecutionContext,
         ai_client: &crate::infrastructure::ai::AIClient,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let Some(expected_value) = context
             .context
             .get(INTERRUPTED_TURN_REASONING_PRESET_METADATA_KEY)
@@ -1229,7 +1229,7 @@ impl ExecutionEngine {
             return Ok(());
         };
         let expected = serde_json::from_str::<Option<String>>(expected_value).map_err(|error| {
-            BitFunError::Validation(format!(
+            OpenBitFunError::Validation(format!(
                 "Frozen dialog turn reasoning contract is malformed: {error}"
             ))
         })?;
@@ -1238,7 +1238,7 @@ impl ExecutionEngine {
             .or_else(|| ai_client.model_reasoning_preset());
         let actual = actual_descriptor.map(|preset| preset.id.as_str());
         if actual != expected.as_deref() {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Frozen dialog turn reasoning contract changed before execution: expected={:?}, actual={actual:?}",
                 expected.as_deref(),
             )));
@@ -1247,13 +1247,13 @@ impl ExecutionEngine {
             .context
             .get(INTERRUPTED_TURN_REASONING_FINGERPRINT_METADATA_KEY)
             .ok_or_else(|| {
-                BitFunError::Validation(
+                OpenBitFunError::Validation(
                     "Frozen dialog turn reasoning contract has no runtime fingerprint".to_string(),
                 )
             })?;
         if reasoning_preset_runtime_fingerprint(actual_descriptor) != expected_fingerprint.as_str()
         {
-            return Err(BitFunError::Validation(
+            return Err(OpenBitFunError::Validation(
                 "Frozen dialog turn reasoning contract changed before execution: runtime fingerprint mismatch"
                     .to_string(),
             ));
@@ -1265,13 +1265,13 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         context: &ExecutionContext,
-    ) -> BitFunResult<Option<String>> {
+    ) -> OpenBitFunResult<Option<String>> {
         if let Some(frozen_selection) = context
             .context
             .get(INTERRUPTED_TURN_REASONING_SELECTION_METADATA_KEY)
         {
             return serde_json::from_str::<Option<String>>(frozen_selection).map_err(|error| {
-                BitFunError::Validation(format!(
+                OpenBitFunError::Validation(format!(
                     "Frozen dialog turn reasoning selection is malformed: {error}"
                 ))
             });
@@ -1282,11 +1282,11 @@ impl ExecutionEngine {
             .await
     }
 
-    pub(crate) fn is_frozen_reasoning_contract_error(error: &BitFunError) -> bool {
-        matches!(error, BitFunError::Validation(message) if message.starts_with("Frozen dialog turn reasoning contract changed before execution:"))
+    pub(crate) fn is_frozen_reasoning_contract_error(error: &OpenBitFunError) -> bool {
+        matches!(error, OpenBitFunError::Validation(message) if message.starts_with("Frozen dialog turn reasoning contract changed before execution:"))
     }
 
-    async fn validate_frozen_model_contract(context: &ExecutionContext) -> BitFunResult<()> {
+    async fn validate_frozen_model_contract(context: &ExecutionContext) -> OpenBitFunResult<()> {
         let Some(expected_model_id) = context
             .context
             .get(INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY)
@@ -1297,14 +1297,14 @@ impl ExecutionEngine {
             .context
             .get(INTERRUPTED_TURN_MODEL_BINDING_FINGERPRINT_METADATA_KEY)
             .ok_or_else(|| {
-                BitFunError::Validation(
+                OpenBitFunError::Validation(
                     "Frozen dialog turn model contract has no binding fingerprint".to_string(),
                 )
             })?;
         let ai_config = SessionManager::load_ai_config_for_model_resolution()
             .await
             .ok_or_else(|| {
-                BitFunError::Validation(
+                OpenBitFunError::Validation(
                     "Frozen dialog turn model contract cannot be validated because AI configuration is unavailable"
                         .to_string(),
                 )
@@ -1312,7 +1312,7 @@ impl ExecutionEngine {
         let canonical_model_id = ai_config
             .resolve_model_reference(expected_model_id)
             .ok_or_else(|| {
-                BitFunError::Validation(format!(
+                OpenBitFunError::Validation(format!(
                     "Frozen dialog turn model contract is unavailable: {expected_model_id}"
                 ))
             })?;
@@ -1321,21 +1321,21 @@ impl ExecutionEngine {
             .iter()
             .find(|model| model.enabled && model.id == canonical_model_id)
             .ok_or_else(|| {
-                BitFunError::Validation(format!(
+                OpenBitFunError::Validation(format!(
                     "Frozen dialog turn model contract is unavailable: {expected_model_id}"
                 ))
             })?;
         let actual_fingerprint = model_runtime_binding_fingerprint(model);
         if actual_fingerprint != expected_fingerprint.as_str() {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Frozen dialog turn model contract changed before execution: model_id={expected_model_id}"
             )));
         }
         Ok(())
     }
 
-    pub(crate) fn is_frozen_model_contract_error(error: &BitFunError) -> bool {
-        matches!(error, BitFunError::Validation(message) if message.starts_with("Frozen dialog turn model contract"))
+    pub(crate) fn is_frozen_model_contract_error(error: &OpenBitFunError) -> bool {
+        matches!(error, OpenBitFunError::Validation(message) if message.starts_with("Frozen dialog turn model contract"))
     }
 
     async fn resolve_primary_model_context(
@@ -1460,7 +1460,7 @@ impl ExecutionEngine {
     ) -> (Option<String>, bool) {
         let mut cacheable = true;
         if policy.includes(UserContextSection::WorkspaceInstructions) {
-            let instruction_context: BitFunResult<InstructionContextBuild> =
+            let instruction_context: OpenBitFunResult<InstructionContextBuild> =
                 if let Some(workspace) = workspace {
                     if workspace.is_remote() {
                         if let Some(services) = workspace_services {
@@ -1652,7 +1652,7 @@ impl ExecutionEngine {
         current_agent: &dyn crate::agentic::agents::Agent,
         prompt_context: Option<&PromptBuilderContext>,
         prompt_policy_id: Option<&str>,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let identity = match prompt_policy_id {
             Some(policy_id) => SystemPromptCacheIdentity::new(format!("harness:{policy_id}")),
             None => prompt_context
@@ -1680,10 +1680,10 @@ impl ExecutionEngine {
         );
         let system_prompt = if let Some(policy_id) = prompt_policy_id {
             let context = prompt_context.ok_or_else(|| {
-                BitFunError::Agent("Prompt build context is required".to_string())
+                OpenBitFunError::Agent("Prompt build context is required".to_string())
             })?;
             let template = get_embedded_prompt(policy_id).ok_or_else(|| {
-                BitFunError::Agent(format!("{policy_id} not found in embedded files"))
+                OpenBitFunError::Agent(format!("{policy_id} not found in embedded files"))
             })?;
             PromptBuilder::new(context.clone())
                 .build_prompt_from_template(template)
@@ -1700,7 +1700,7 @@ impl ExecutionEngine {
     async fn resolve_turn_prompt_scaffold(
         &self,
         input: TurnPromptScaffoldInput<'_>,
-    ) -> BitFunResult<TurnPromptScaffold> {
+    ) -> OpenBitFunResult<TurnPromptScaffold> {
         debug!(
             "Resolving turn prompt scaffold: session_id={}, turn_id={}, stage={}, agent={}, model={}",
             input.context.session_id,
@@ -1806,15 +1806,14 @@ impl ExecutionEngine {
         session: &Session,
         agent_type: &str,
         workspace: Option<&WorkspaceBinding>,
-        original_user_input: &str,
         turn_index: usize,
         frozen_model_id: Option<&str>,
         frozen_model_binding_fingerprint: Option<&str>,
-    ) -> BitFunResult<(String, String)> {
+    ) -> OpenBitFunResult<(String, String)> {
         let ai_config = SessionManager::load_ai_config_for_model_resolution()
             .await
             .ok_or_else(|| {
-                BitFunError::AIClient(
+                OpenBitFunError::AIClient(
                     "Failed to get config service for model resolution".to_string(),
                 )
             })?;
@@ -1829,7 +1828,7 @@ impl ExecutionEngine {
                 .map(str::trim)
                 .filter(|model_id| !model_id.is_empty())
                 .ok_or_else(|| {
-                    BitFunError::AIClient(
+                    OpenBitFunError::AIClient(
                         "Approved immutable session has no concrete model id".to_string(),
                     )
                 })?;
@@ -1838,7 +1837,7 @@ impl ExecutionEngine {
                 .model_binding_fingerprint
                 .as_deref()
                 .ok_or_else(|| {
-                    BitFunError::AIClient(
+                    OpenBitFunError::AIClient(
                         "Approved immutable session has no model binding fingerprint".to_string(),
                     )
                 })?;
@@ -1847,7 +1846,7 @@ impl ExecutionEngine {
                 .iter()
                 .filter(|model| model.enabled && model.id == model_id);
             let model = matches.next().ok_or_else(|| {
-                BitFunError::AIClient(format!(
+                OpenBitFunError::AIClient(format!(
                     "Approved model configuration is unavailable: {}",
                     model_id
                 ))
@@ -1855,7 +1854,7 @@ impl ExecutionEngine {
             if matches.next().is_some()
                 || model_runtime_binding_fingerprint(model) != expected_fingerprint
             {
-                return Err(BitFunError::AIClient(format!(
+                return Err(OpenBitFunError::AIClient(format!(
                     "Approved model binding changed before execution: {}",
                     model_id
                 )));
@@ -1867,7 +1866,7 @@ impl ExecutionEngine {
         let fallback_model_id = agent_registry
             .get_model_id_for_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .await
-            .map_err(|e| BitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
+            .map_err(|e| OpenBitFunError::AIClient(format!("Failed to get model ID: {}", e)))?;
         let configured_model_id = session
             .config
             .model_id
@@ -1887,11 +1886,11 @@ impl ExecutionEngine {
             .find(|model| model.enabled && model.id == model_id)
             .ok_or_else(|| {
                 if frozen_model_id.is_some() {
-                    BitFunError::Validation(format!(
+                    OpenBitFunError::Validation(format!(
                         "Frozen dialog turn model contract is unavailable: {model_id}"
                     ))
                 } else {
-                    BitFunError::AIClient(format!(
+                    OpenBitFunError::AIClient(format!(
                         "Dialog turn model configuration is unavailable: {model_id}"
                     ))
                 }
@@ -1900,7 +1899,7 @@ impl ExecutionEngine {
         if frozen_model_binding_fingerprint
             .is_some_and(|expected| expected != model_binding_fingerprint)
         {
-            return Err(BitFunError::Validation(format!(
+            return Err(OpenBitFunError::Validation(format!(
                 "Frozen dialog turn model contract changed before execution: model_id={model_id}"
             )));
         }
@@ -1963,7 +1962,10 @@ impl ExecutionEngine {
             .collect()
     }
 
-    async fn run_finalize_round(&self, input: FinalizeRoundInput<'_>) -> BitFunResult<RoundResult> {
+    async fn run_finalize_round(
+        &self,
+        input: FinalizeRoundInput<'_>,
+    ) -> OpenBitFunResult<RoundResult> {
         // Keep the original tool definitions attached to the finalize request
         // even though finalize forbids tool execution at runtime. Dropping the
         // tools here would change the provider request shape, which breaks
@@ -2048,7 +2050,7 @@ impl ExecutionEngine {
         current_turn_id: &str,
         attach_images: bool,
         prepended_reminders: &[&str],
-    ) -> BitFunResult<Vec<AIMessage>> {
+    ) -> OpenBitFunResult<Vec<AIMessage>> {
         /// Only the last this many **messages** that contain images keep their images for the API.
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
 
@@ -2131,7 +2133,7 @@ impl ExecutionEngine {
                         Ok(processed) => {
                             let next_count = attached_image_count + processed.len();
                             if next_count > limits.max_images_per_request {
-                                return Err(BitFunError::validation(format!(
+                                return Err(OpenBitFunError::validation(format!(
                                     "Too many images in one request: {} > {}",
                                     next_count, limits.max_images_per_request
                                 )));
@@ -2144,7 +2146,7 @@ impl ExecutionEngine {
                             result.extend(multimodal);
                         }
                         Err(err) => {
-                            if matches!(&err, BitFunError::Validation(msg) if msg.starts_with("Too many images in one request"))
+                            if matches!(&err, OpenBitFunError::Validation(msg) if msg.starts_with("Too many images in one request"))
                             {
                                 return Err(err);
                             }
@@ -2177,7 +2179,7 @@ impl ExecutionEngine {
                             if keep_this_message_images {
                                 let next_count = attached_image_count + atts.len();
                                 if next_count > limits.max_images_per_request {
-                                    return Err(BitFunError::validation(format!(
+                                    return Err(OpenBitFunError::validation(format!(
                                         "Too many images in one request: {} > {}",
                                         next_count, limits.max_images_per_request
                                     )));
@@ -2259,7 +2261,7 @@ impl ExecutionEngine {
         provider: &str,
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
-    ) -> BitFunResult<Vec<AIMessage>> {
+    ) -> OpenBitFunResult<Vec<AIMessage>> {
         let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
         let mut compression_messages = Self::build_ai_messages_for_send(
             runtime_messages,
@@ -2284,7 +2286,7 @@ impl ExecutionEngine {
         model_request_context: &ModelRequestContext,
         trace_config: Option<ModelExchangeTraceConfig>,
         max_tries: usize,
-    ) -> BitFunResult<String> {
+    ) -> OpenBitFunResult<String> {
         let mut last_error = None;
         let base_wait_time_ms = 500;
 
@@ -2301,7 +2303,7 @@ impl ExecutionEngine {
             match result {
                 Ok(response) => {
                     if response.tool_calls.is_some() {
-                        return Err(BitFunError::AIClient(
+                        return Err(OpenBitFunError::AIClient(
                             "Compression request returned tool calls instead of a summary"
                                 .to_string(),
                         ));
@@ -2317,7 +2319,7 @@ impl ExecutionEngine {
                 }
                 Err(err) => {
                     let provider_error = err
-                        .downcast_ref::<bitfun_core_types::errors::AiProviderError>()
+                        .downcast_ref::<openbitfun_core_types::errors::AiProviderError>()
                         .cloned();
                     let err_msg = err.to_string();
                     warn!(
@@ -2330,14 +2332,14 @@ impl ExecutionEngine {
                         .as_ref()
                         .map(|error| error.category.clone())
                         .unwrap_or_else(|| {
-                            bitfun_core_types::errors::classify_ai_error_message(&err_msg)
+                            openbitfun_core_types::errors::classify_ai_error_message(&err_msg)
                         });
-                    if category == bitfun_core_types::errors::ErrorCategory::ContextOverflow {
-                        return Err(BitFunError::RecoverableContextOverflow(
+                    if category == openbitfun_core_types::errors::ErrorCategory::ContextOverflow {
+                        return Err(OpenBitFunError::RecoverableContextOverflow(
                             provider_error.unwrap_or_else(|| {
-                                bitfun_core_types::errors::AiProviderError::classified(
+                                openbitfun_core_types::errors::AiProviderError::classified(
                                     err_msg,
-                                    bitfun_core_types::errors::ErrorCategory::ContextOverflow,
+                                    openbitfun_core_types::errors::ErrorCategory::ContextOverflow,
                                 )
                             }),
                         ));
@@ -2357,7 +2359,7 @@ impl ExecutionEngine {
             }
         }
 
-        Err(BitFunError::AIClient(format!(
+        Err(OpenBitFunError::AIClient(format!(
             "Compression summary generation failed after {} attempts: {}",
             max_tries,
             last_error
@@ -2369,7 +2371,7 @@ impl ExecutionEngine {
     async fn generate_compression_model_summary(
         &self,
         input: CompressionModelSummaryInput<'_>,
-    ) -> BitFunResult<Option<String>> {
+    ) -> OpenBitFunResult<Option<String>> {
         let request_messages = self
             .build_compression_request_messages(
                 input.runtime_messages,
@@ -2393,7 +2395,7 @@ impl ExecutionEngine {
             .await?;
         let summary =
             ContextCompressor::normalize_model_summary_output(&raw_summary).ok_or_else(|| {
-                BitFunError::AIClient(
+                OpenBitFunError::AIClient(
                     "Model-based compression returned an empty summary".to_string(),
                 )
             })?;
@@ -2415,7 +2417,7 @@ impl ExecutionEngine {
         primary_supports_image_understanding: bool,
         workspace: Option<&WorkspaceBinding>,
         trace_config: Option<ModelExchangeTraceConfig>,
-    ) -> BitFunResult<Option<crate::agentic::session::CompressionResult>> {
+    ) -> OpenBitFunResult<Option<crate::agentic::session::CompressionResult>> {
         let max_initial_recent = context_window.saturating_div(2).max(1);
         let mut recent_target =
             ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS.min(max_initial_recent);
@@ -2522,7 +2524,7 @@ impl ExecutionEngine {
         &self,
         session: &Session,
         context: &ExecutionContext,
-    ) -> BitFunResult<CompressionRuntimeScaffold> {
+    ) -> OpenBitFunResult<CompressionRuntimeScaffold> {
         let agent_registry = get_agent_registry();
         agent_registry
             .load_custom_agents(
@@ -2542,20 +2544,14 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
             )
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Agent not found: {}", context.agent_type))
+                OpenBitFunError::NotFound(format!("Agent not found: {}", context.agent_type))
             })?;
 
-        let original_user_input = context
-            .context
-            .get("original_user_input")
-            .cloned()
-            .unwrap_or_default();
         let (model_id, _) = self
             .resolve_model_id_for_turn(
                 session,
                 &context.agent_type,
                 context.workspace.as_ref(),
-                &original_user_input,
                 context.turn_index,
                 context
                     .context
@@ -2569,7 +2565,7 @@ impl ExecutionEngine {
             .await?;
 
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
-            BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
+            OpenBitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
         let reasoning_preset = match self
             .resolve_reasoning_selection_for_turn(&session.session_id, context)
@@ -2617,7 +2613,7 @@ impl ExecutionEngine {
                     // remain ordinary execution failures.
                     Self::validate_frozen_model_contract(context).await?;
                 }
-                return Err(BitFunError::AIClient(format!(
+                return Err(OpenBitFunError::AIClient(format!(
                     "Failed to get AI client (model_id={}): {}",
                     model_id, error
                 )));
@@ -2781,11 +2777,13 @@ impl ExecutionEngine {
         primary_supports_image_understanding: bool,
         compression_contract_limit: usize,
         workspace: Option<&WorkspaceBinding>,
-    ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+    ) -> OpenBitFunResult<Option<(usize, Vec<Message>)>> {
         let mut session = self
             .session_manager
             .get_session(session_id)
-            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+            .ok_or_else(|| {
+                OpenBitFunError::NotFound(format!("Session not found: {}", session_id))
+            })?;
 
         // Record start time
         let start_time = std::time::Instant::now();
@@ -3021,7 +3019,7 @@ impl ExecutionEngine {
                 )
                 .await;
 
-                Err(BitFunError::Session(e.to_string()))
+                Err(OpenBitFunError::Session(e.to_string()))
             }
         }
     }
@@ -3039,11 +3037,13 @@ impl ExecutionEngine {
         trigger: &str,
         cancellation_token: CancellationToken,
         commit_gate: Arc<ManualCompactionCommitGate>,
-    ) -> BitFunResult<ContextCompactionOutcome> {
+    ) -> OpenBitFunResult<ContextCompactionOutcome> {
         let mut session = self
             .session_manager
             .get_session(&session_id)
-            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+            .ok_or_else(|| {
+                OpenBitFunError::NotFound(format!("Session not found: {}", session_id))
+            })?;
         let start_time = std::time::Instant::now();
         let scaffold = self
             .resolve_compression_runtime_scaffold(&session, &context)
@@ -3111,7 +3111,7 @@ impl ExecutionEngine {
         let planned_result = tokio::select! {
             biased;
             _ = cancellation_token.cancelled() => {
-                Err(BitFunError::Cancelled("Manual context compaction cancelled".to_string()))
+                Err(OpenBitFunError::Cancelled("Manual context compaction cancelled".to_string()))
             }
             result = self.build_planned_compression_result(
                 &session_id,
@@ -3130,7 +3130,7 @@ impl ExecutionEngine {
         };
         let planned_result = match planned_result {
             Ok(result) if commit_gate.try_begin_commit() => Ok(result),
-            Ok(_) => Err(BitFunError::Cancelled(
+            Ok(_) => Err(OpenBitFunError::Cancelled(
                 "Manual context compaction cancelled".to_string(),
             )),
             Err(error) => Err(error),
@@ -3352,7 +3352,7 @@ impl ExecutionEngine {
         agent_type: String,
         initial_messages: Vec<Message>,
         context: ExecutionContext,
-    ) -> BitFunResult<ExecutionResult> {
+    ) -> OpenBitFunResult<ExecutionResult> {
         let start_time = std::time::Instant::now();
         let dialog_turn_id = context.dialog_turn_id.clone();
         self.generation_messages
@@ -3384,7 +3384,7 @@ impl ExecutionEngine {
         initial_messages: Vec<Message>,
         context: ExecutionContext,
         start_time: std::time::Instant,
-    ) -> BitFunResult<ExecutionResult> {
+    ) -> OpenBitFunResult<ExecutionResult> {
         let dialog_turn_id = context.dialog_turn_id.clone();
         let initial_count = initial_messages.len();
 
@@ -3412,7 +3412,7 @@ impl ExecutionEngine {
                     .as_ref()
                     .map(|workspace| workspace.root_path()),
             )
-            .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
+            .ok_or_else(|| OpenBitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
         info!(
             "Current Agent: {} ({})",
             current_agent.name(),
@@ -3423,7 +3423,7 @@ impl ExecutionEngine {
             .session_manager
             .get_session(&context.session_id)
             .ok_or_else(|| {
-                BitFunError::Session(format!("Session not found: {}", context.session_id))
+                OpenBitFunError::Session(format!("Session not found: {}", context.session_id))
             })?;
 
         // 2. Get AI client
@@ -3477,7 +3477,6 @@ impl ExecutionEngine {
                 &session,
                 &agent_type,
                 context.workspace.as_ref(),
-                &original_user_input,
                 context.turn_index,
                 context
                     .context
@@ -3496,7 +3495,7 @@ impl ExecutionEngine {
         );
 
         let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
-            BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
+            OpenBitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
         })?;
 
         // Get AI client by model ID
@@ -3542,7 +3541,7 @@ impl ExecutionEngine {
                 {
                     Self::validate_frozen_model_contract(&context).await?;
                 }
-                return Err(BitFunError::AIClient(format!(
+                return Err(OpenBitFunError::AIClient(format!(
                     "Failed to get AI client (model_id={}): {}",
                     model_id, error
                 )));
@@ -4838,7 +4837,7 @@ impl ExecutionEngine {
                 }
 
                 // Note: Token will be cleaned up when outer function exits
-                return Err(BitFunError::cancelled("Dialog cancelled"));
+                return Err(OpenBitFunError::cancelled("Dialog cancelled"));
             }
 
             // Continue to next round
@@ -5025,13 +5024,13 @@ impl ExecutionEngine {
         // dialog success) so other agents and failed turns are unaffected.
         #[cfg(feature = "deep-research")]
         {
-            if bitfun_agent_workflows::deep_research::should_post_process_research_report(
+            if openbitfun_agent_workflows::deep_research::should_post_process_research_report(
                 &agent_type,
                 success,
             ) {
                 if let Some(workspace) = context.workspace.as_ref() {
                     if let Some(workspace_services) = context.workspace_services.as_ref() {
-                        bitfun_services_integrations::deep_research::run_for_session_workspace(
+                        openbitfun_services_integrations::deep_research::run_for_session_workspace(
                             workspace_services.fs.as_ref(),
                             &workspace.root_path().to_string_lossy(),
                             &context.session_id,
@@ -5121,7 +5120,7 @@ impl ExecutionEngine {
     }
 
     /// Cancel dialog turn execution
-    pub async fn cancel_dialog_turn(&self, dialog_turn_id: &str) -> BitFunResult<()> {
+    pub async fn cancel_dialog_turn(&self, dialog_turn_id: &str) -> OpenBitFunResult<()> {
         debug!("Cancelling dialog turn: dialog_turn_id={}", dialog_turn_id);
         let result = self.round_executor.cancel_dialog_turn(dialog_turn_id).await;
         if result.is_ok() {
@@ -5195,7 +5194,7 @@ mod tests {
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
-    use bitfun_runtime_ports::{
+    use openbitfun_runtime_ports::{
         PermissionMode, WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind,
     };
     use serde_json::json;
@@ -5381,11 +5380,11 @@ mod tests {
 
     #[test]
     fn manual_compaction_preserves_cancellation_as_a_terminal_cancellation() {
-        let error = manual_compaction_terminal_error(crate::BitFunError::Cancelled(
+        let error = manual_compaction_terminal_error(crate::OpenBitFunError::Cancelled(
             "cancelled by user".to_string(),
         ));
 
-        assert!(matches!(error, crate::BitFunError::Cancelled(_)));
+        assert!(matches!(error, crate::OpenBitFunError::Cancelled(_)));
     }
 
     #[derive(Clone)]
@@ -5723,7 +5722,7 @@ mod tests {
             subagent_parent_info: None,
             permission_delegation: None,
             permission_runtime_ceiling: None,
-            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
+            delegation_policy: openbitfun_runtime_ports::DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: Some(local_workspace_services(
                 workspace_root.to_string_lossy().to_string(),
@@ -5837,7 +5836,7 @@ mod tests {
             .with_round_id(round_id.to_string());
         let tool_result = Message::tool_result(ToolResult {
             tool_id: format!("{round_id}-read"),
-            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            tool_name: openbitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
             effective_tool_name: Some("Read".to_string()),
             result: json!({ "file_path": workspace_root.join("src/lib.rs") }),
             result_for_assistant: Some("source".to_string()),
@@ -6306,7 +6305,7 @@ mod tests {
             subagent_parent_info: None,
             permission_delegation: None,
             permission_runtime_ceiling: None,
-            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
+            delegation_policy: openbitfun_runtime_ports::DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
             terminal_port: None,
@@ -6603,7 +6602,7 @@ mod tests {
         });
         let mut context = HashMap::new();
         context.insert(
-            bitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY.to_string(),
+            openbitfun_runtime_ports::OUTPUT_SCHEMA_CONTEXT_KEY.to_string(),
             schema.to_string(),
         );
 

@@ -1,7 +1,7 @@
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Phone } from 'lucide-react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 
 import { RealtimeVoiceCallPanel } from './RealtimeVoiceCallPanel';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
@@ -51,39 +51,39 @@ export function ConversationModeSurface({
   return (
     <div
       className={[
-        'bitfun-conversation-mode-surface',
+        'openbitfun-conversation-mode-surface',
         className,
       ].filter(Boolean).join(' ')}
-      data-bf-component="conversation-mode-surface"
-      data-bf-part="root"
-      data-bf-state={isVoiceMode ? 'voice' : 'chat'}
+      data-openbitfun-component="conversation-mode-surface"
+      data-openbitfun-part="root"
+      data-openbitfun-state={isVoiceMode ? 'voice' : 'chat'}
     >
       <div
-        className="bitfun-conversation-mode-surface__body"
-        data-bf-component="conversation-mode-surface"
-        data-bf-part="body"
+        className="openbitfun-conversation-mode-surface__body"
+        data-openbitfun-component="conversation-mode-surface"
+        data-openbitfun-part="body"
       >
         {isVoiceMode ? <RealtimeVoiceCallPanel /> : children}
       </div>
 
       <footer
-        className="bitfun-conversation-mode-surface__switch"
-        data-bf-component="conversation-mode-surface"
-        data-bf-part="modeSwitch"
+        className="openbitfun-conversation-mode-surface__switch"
+        data-openbitfun-component="conversation-mode-surface"
+        data-openbitfun-part="modeSwitch"
       >
         <button
           type="button"
-          className={`bitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
+          className={`openbitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
           data-testid={switchTestId}
-          data-bf-component="conversation-mode-surface"
-          data-bf-part="modeSwitchButton"
+          data-openbitfun-component="conversation-mode-surface"
+          data-openbitfun-part="modeSwitchButton"
           aria-pressed={isVoiceMode}
           disabled={phase === 'ending' || (!isVoiceMode && voiceStartDisabled)}
           onClick={handleModeSwitch}
         >
           {isTransitioning ? (
             <Loader2
-              className="bitfun-conversation-mode-surface__switch-spinner"
+              className="openbitfun-conversation-mode-surface__switch-spinner"
               size={15}
               aria-hidden="true"
             />
@@ -107,9 +107,9 @@ export function ConversationModeSurface({
 export function ConversationVoiceModeIcon() {
   return (
     <span
-      className="bitfun-conversation-voice-mode-icon"
-      data-bf-component="conversation-mode-surface"
-      data-bf-part="voiceModeIcon"
+      className="openbitfun-conversation-voice-mode-icon"
+      data-openbitfun-component="conversation-mode-surface"
+      data-openbitfun-part="voiceModeIcon"
       aria-hidden="true"
     >
       <Phone size={14} />

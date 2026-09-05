@@ -53,37 +53,37 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
   return (
     <span
       className={classNames(styles.root, className)}
-      data-bf-component="action-item"
-      data-bf-tone={tone}
+      data-openbitfun-component="action-item"
+      data-openbitfun-tone={tone}
       data-disabled={disabled ? "true" : "false"}
     >
       <button
         {...props}
         className={styles.trigger}
-        data-bf-part="trigger"
+        data-openbitfun-part="trigger"
         disabled={disabled}
         ref={ref}
         type={type}
       >
         {hasLeadingArea && (
-          <span aria-hidden="true" className={styles.leading} data-bf-part="leading">
+          <span aria-hidden="true" className={styles.leading} data-openbitfun-part="leading">
             {leading}
           </span>
         )}
-        <span className={styles.label} data-bf-part="label">{children}</span>
+        <span className={styles.label} data-openbitfun-part="label">{children}</span>
         {metadata !== undefined && metadata !== null && (
-          <span className={styles.metadata} data-bf-part="metadata">
+          <span className={styles.metadata} data-openbitfun-part="metadata">
             {metadata}
           </span>
         )}
         {shortcut !== undefined && shortcut !== null && (
-          <span aria-hidden="true" className={styles.shortcut} data-bf-part="shortcut">
+          <span aria-hidden="true" className={styles.shortcut} data-openbitfun-part="shortcut">
             {shortcut}
           </span>
         )}
       </button>
       {actions.length > 0 && (
-        <span className={styles.actions} data-bf-part="actions">
+        <span className={styles.actions} data-openbitfun-part="actions">
           {actions.map((action) => (
               <IconButton
                 aria-label={action.label}

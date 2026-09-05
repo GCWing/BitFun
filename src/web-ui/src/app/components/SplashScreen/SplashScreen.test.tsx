@@ -35,7 +35,7 @@ describe('SplashScreen', () => {
         <SplashScreen
           isExiting={false}
           onExited={() => {}}
-          delayedMessage="Starting BitFun..."
+          delayedMessage="Starting OpenBitFun..."
           delayedMessageMs={1000}
         />
       );
@@ -52,7 +52,7 @@ describe('SplashScreen', () => {
       vi.advanceTimersByTime(1);
     });
     const message = container.querySelector('.splash-screen__message');
-    expect(message?.textContent).toBe('Starting BitFun...');
+    expect(message?.textContent).toBe('Starting OpenBitFun...');
     expect(message?.classList.contains('splash-screen__message--visible')).toBe(true);
   });
 
@@ -62,7 +62,7 @@ describe('SplashScreen', () => {
         <SplashScreen
           isExiting={false}
           onExited={() => {}}
-          delayedMessage="Starting BitFun..."
+          delayedMessage="Starting OpenBitFun..."
         />
       );
     });
@@ -87,7 +87,7 @@ describe('SplashScreen', () => {
         <SplashScreen
           isExiting={true}
           onExited={() => {}}
-          delayedMessage="Starting BitFun..."
+          delayedMessage="Starting OpenBitFun..."
           delayedMessageMs={1000}
         />
       );

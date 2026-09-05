@@ -3,19 +3,19 @@ use std::process::Output;
 
 fn run_cli(workspace: &Path, user_root: &Path, home_root: &Path, args: &[&str]) -> Output {
     let config_root = user_root.join("host-config");
-    bitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_bitfun"))
+    openbitfun_services_core::process_manager::create_command(env!("CARGO_BIN_EXE_openbitfun"))
         .args(args)
         .current_dir(workspace)
-        .env_remove("BITFUN_USER_ROOT")
-        .env_remove("BITFUN_HOME")
-        .env("BITFUN_E2E_STORAGE_GUARD", "1")
-        .env("BITFUN_E2E_USER_ROOT", user_root)
-        .env("BITFUN_E2E_HOME", home_root)
+        .env_remove("OPENBITFUN_USER_ROOT")
+        .env_remove("OPENBITFUN_HOME")
+        .env("OPENBITFUN_E2E_STORAGE_GUARD", "1")
+        .env("OPENBITFUN_E2E_USER_ROOT", user_root)
+        .env("OPENBITFUN_E2E_HOME", home_root)
         .env("APPDATA", &config_root)
         .env("XDG_CONFIG_HOME", &config_root)
         .env("HOME", home_root)
         .output()
-        .expect("run bitfun")
+        .expect("run openbitfun")
 }
 
 fn stdout(output: &Output) -> String {

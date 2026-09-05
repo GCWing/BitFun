@@ -1,10 +1,10 @@
 //! Types for session persistence
 
-use bitfun_core_types::ToolImageAttachment;
-use bitfun_core_types::{
+use openbitfun_core_types::ToolImageAttachment;
+use openbitfun_core_types::{
     AiErrorDetail, SessionContinuationPolicy, SessionExecutionTarget, SessionKind,
 };
-use bitfun_events::ModelRoundAttemptDiagnostic;
+use openbitfun_events::ModelRoundAttemptDiagnostic;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -392,6 +392,36 @@ pub struct SessionTurnCatalogEntry {
     pub preview: Option<String>,
     #[serde(default)]
     pub preview_truncated: bool,
+    /// Small, read-only projection used to render Turn Rail tooltips without
+    /// copying executable context payloads into the navigation catalog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capsule_preview: Option<TurnRailCapsulePreview>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnRailCapsulePreview {
+    pub segments: Vec<TurnRailCapsuleSegment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TurnRailCapsuleSegment {
+    Text {
+        text: String,
+    },
+    Context {
+        #[serde(rename = "contextType")]
+        context_type: String,
+        label: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+    },
+    InlineToken {
+        #[serde(rename = "tokenType")]
+        token_type: String,
+        label: String,
+    },
 }
 
 /// Lightweight navigation catalog for a persisted Session.
@@ -795,7 +825,7 @@ pub struct ThinkingItemData {
         skip_serializing_if = "Option::is_none",
         alias = "reasoning_kind"
     )]
-    pub reasoning_kind: Option<bitfun_core_types::ReasoningContentKind>,
+    pub reasoning_kind: Option<openbitfun_core_types::ReasoningContentKind>,
     #[serde(alias = "is_streaming")]
     pub is_streaming: bool,
     #[serde(alias = "is_collapsed")]
@@ -1240,7 +1270,7 @@ mod tests {
         SessionRelationshipKind, SessionTurnWindowResponse, TextItemData, ThinkingItemData,
         ToolItemData, UserMessageData,
     };
-    use bitfun_core_types::{SessionContinuationPolicy, SessionKind};
+    use openbitfun_core_types::{SessionContinuationPolicy, SessionKind};
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {

@@ -59,7 +59,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     historyState: 'metadata-only',
     todos: [],
     mode: 'agentic',
-    workspacePath: 'D:/workspace/BitFun',
+    workspacePath: 'D:/workspace/OpenBitFun',
     sessionKind: 'normal',
     ...overrides,
   };

@@ -1,7 +1,7 @@
 # Peer Device Mode
 
 Peer Device Mode switches the desktop (and mobile control target) data plane
-onto another same-account online BitFun device. The React shell stays local;
+onto another same-account online OpenBitFun device. The React shell stays local;
 product invokes and agentic events come from the peer. The peer may be Desktop
 or CLI: both speak the same HostInvoke / DeviceEvent protocol.
 
@@ -9,7 +9,7 @@ or CLI: both speak the same HostInvoke / DeviceEvent protocol.
 
 After login, clicking an online peer device **B** from controller **A** must make
 A's workspace list, sessions, assistants, chat, and tools behave like using
-BitFun on B's machine. The authority is **B's live local BitFun state** via
+OpenBitFun on B's machine. The authority is **B's live local OpenBitFun state** via
 HostInvoke / DeviceEvent fan-out — not a merged cloud session history.
 
 ## Attachment vs rendered surface
@@ -38,9 +38,9 @@ Two rules follow, and both are load-bearing:
 - **Product events are routed by their source device.** The controller re-emits
   peer DeviceEvents under their original event name, so with peers attached in
   the background one bus carries several agent streams. The desktop controller
-  tags each re-emitted payload with `__bitfunSourceDeviceId`
+  tags each re-emitted payload with `__openbitfunSourceDeviceId`
   (`remote_connect_api::PEER_EVENT_SOURCE_KEY`; non-object payloads are wrapped
-  under `__bitfunSourcePayload`), and `deviceSurfaceRouting.ts` — applied inside
+  under `__openbitfunSourcePayload`), and `deviceSurfaceRouting.ts` — applied inside
   `TauriTransportAdapter.listen` — delivers a surface-scoped event only when its
   producing device is the rendered one. Untagged events are local by definition.
   Control-plane events (`account://…`, window chrome, updater) are never scoped
@@ -228,7 +228,7 @@ FS) and must not be mixed with Peer Device Mode.
 - Local-only commands (window chrome, updater, account login/logout, peer
   control plane) never execute on the peer on behalf of a controller. Which
   commands those are is declared once, per command, in the Product Operation
-  Registry (`bitfun_product_domains::remote_surface`); the desktop host, the
+  Registry (`openbitfun_product_domains::remote_surface`); the desktop host, the
   CLI host, and the Web UI transport adapter derive their tables from it. See
   [remote-surface-contract.md](remote-surface-contract.md).
 - Unsupported or denied commands fail loudly; they must not fall back to the

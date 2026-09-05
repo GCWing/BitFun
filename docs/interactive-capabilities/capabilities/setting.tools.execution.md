@@ -37,8 +37,8 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
   - Enable or disable Computer Use after operating-system authorization
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并请求辅助功能与屏幕录制权限
   - Inspect and request accessibility and screen-recording permissions
-- **Agent 可直接控制 / Direct Agent control** · 控制 BitFun 启动时是否自动连接浏览器
-  - Choose whether BitFun reconnects browser control at startup
+- **Agent 可直接控制 / Direct Agent control** · 控制 OpenBitFun 启动时是否自动连接浏览器
+  - Choose whether OpenBitFun reconnects browser control at startup
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 发现并选择浏览器、配置默认 CDP 或按需重启
   - Discover and choose a browser, configure default CDP, or restart it when needed
 - **Agent 可直接控制 / Direct Agent control** · 控制是否在安全边界内修复模型生成的非法工具参数 JSON
@@ -53,13 +53,13 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
 3. 先确认安全影响，再修改权限或执行参数
    Review the security impact before changing permissions or execution controls
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 
@@ -72,7 +72,7 @@ Manage agent tool permissions, concurrency, timeouts, deferred loading, Computer
 | Swarm 最大并发 / Maximum swarm concurrency | `integer` (1–64) | 限制 Swarm 中同时执行的工作单元。 | Limit concurrent work units inside a swarm. |
 | 工具执行超时 / Tool execution timeout | `integer` (1–86400) / `null` | 单次工具调用的超时秒数。 | Timeout in seconds for one tool call. |
 | Computer Use 桌面控制 / Computer Use | `boolean` | 允许 Agent 使用已授权的桌面控制能力。 | Allow agents to use authorized desktop-control capabilities. |
-| 启动时连接浏览器 / Connect browser on startup | `boolean` | BitFun 启动后自动尝试连接浏览器控制。 | Automatically try to connect browser control after BitFun starts. |
+| 启动时连接浏览器 / Connect browser on startup | `boolean` | OpenBitFun 启动后自动尝试连接浏览器控制。 | Automatically try to connect browser control after OpenBitFun starts. |
 | 工具参数 JSON 修复 / Tool-argument JSON repair | `boolean` | 允许在安全边界内修复模型生成的轻微 JSON 格式错误。 | Allow minor model-generated JSON formatting errors to be repaired within the safety boundary. |
 
 ## 可以直接对 Agent 说 / Try saying

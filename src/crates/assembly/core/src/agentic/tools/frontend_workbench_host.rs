@@ -36,7 +36,9 @@ pub async fn invoke_frontend_workbench(
     request: FrontendWorkbenchHostRequest,
 ) -> Result<Value, String> {
     let Some(handler) = FRONTEND_WORKBENCH_HANDLER.get() else {
-        return Err("FrontendWorkbench is available only in the BitFun desktop app".to_string());
+        return Err(
+            "FrontendWorkbench is available only in the OpenBitFun desktop app".to_string(),
+        );
     };
     handler(request).await
 }

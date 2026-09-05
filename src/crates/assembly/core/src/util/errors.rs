@@ -2,16 +2,16 @@
 //!
 //! Provide unified error types and handling for the whole application
 
-use bitfun_core_types::errors::{
+use openbitfun_core_types::errors::{
     ai_error_detail_from_message, classify_ai_error_message, AiErrorDetail, AiProviderError,
     ErrorCategory,
 };
 use serde::Serialize;
 use thiserror::Error;
 
-/// Unified error type for the BitFun application
+/// Unified error type for the OpenBitFun application
 #[derive(Debug, Error, Serialize)]
-pub enum BitFunError {
+pub enum OpenBitFunError {
     #[error("Service error: {0}")]
     Service(String),
 
@@ -100,7 +100,7 @@ pub enum BitFunError {
     Cancelled(String),
 }
 
-pub type BitFunResult<T> = Result<T, BitFunError>;
+pub type OpenBitFunResult<T> = Result<T, OpenBitFunError>;
 
 // Custom serialization functions for non-serializable error types
 fn serialize_io_error<S>(err: &std::io::Error, serializer: S) -> Result<S::Ok, S::Error>
@@ -124,7 +124,7 @@ where
     serializer.serialize_str(&err.to_string())
 }
 
-impl BitFunError {
+impl OpenBitFunError {
     pub fn service<T: Into<String>>(msg: T) -> Self {
         Self::Service(msg.into())
     }
@@ -180,19 +180,19 @@ impl BitFunError {
     /// Infer an error category from this error for frontend-friendly classification.
     pub fn error_category(&self) -> ErrorCategory {
         match self {
-            BitFunError::AIClient(msg) => classify_ai_error_message(msg),
-            BitFunError::AIProvider(error) => error.category.clone(),
-            BitFunError::RecoverableContextOverflow(_) => ErrorCategory::ContextOverflow,
-            BitFunError::Timeout(_) => ErrorCategory::Timeout,
-            BitFunError::Cancelled(_) => ErrorCategory::Unknown,
+            OpenBitFunError::AIClient(msg) => classify_ai_error_message(msg),
+            OpenBitFunError::AIProvider(error) => error.category.clone(),
+            OpenBitFunError::RecoverableContextOverflow(_) => ErrorCategory::ContextOverflow,
+            OpenBitFunError::Timeout(_) => ErrorCategory::Timeout,
+            OpenBitFunError::Cancelled(_) => ErrorCategory::Unknown,
             _ => ErrorCategory::Unknown,
         }
     }
 
     /// Build a structured, provider-agnostic AI error detail for UI recovery.
     pub fn error_detail(&self) -> AiErrorDetail {
-        if let BitFunError::AIProvider(error) | BitFunError::RecoverableContextOverflow(error) =
-            self
+        if let OpenBitFunError::AIProvider(error)
+        | OpenBitFunError::RecoverableContextOverflow(error) = self
         {
             return error.detail();
         }
@@ -207,34 +207,36 @@ impl BitFunError {
 }
 
 #[cfg(feature = "agent-runtime")]
-impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
-    fn from(error: bitfun_agent_stream::StreamProcessorError) -> Self {
+impl From<openbitfun_agent_stream::StreamProcessorError> for OpenBitFunError {
+    fn from(error: openbitfun_agent_stream::StreamProcessorError) -> Self {
         match error {
-            bitfun_agent_stream::StreamProcessorError::AiClient(msg) => Self::AIClient(msg),
-            bitfun_agent_stream::StreamProcessorError::AiProvider(error) => Self::AIProvider(error),
-            bitfun_agent_stream::StreamProcessorError::Cancelled(msg) => Self::Cancelled(msg),
+            openbitfun_agent_stream::StreamProcessorError::AiClient(msg) => Self::AIClient(msg),
+            openbitfun_agent_stream::StreamProcessorError::AiProvider(error) => {
+                Self::AIProvider(error)
+            }
+            openbitfun_agent_stream::StreamProcessorError::Cancelled(msg) => Self::Cancelled(msg),
         }
     }
 }
 
 #[cfg(feature = "agent-runtime")]
-impl From<bitfun_agent_runtime::event_bus::EventBusError> for BitFunError {
-    fn from(error: bitfun_agent_runtime::event_bus::EventBusError) -> Self {
+impl From<openbitfun_agent_runtime::event_bus::EventBusError> for OpenBitFunError {
+    fn from(error: openbitfun_agent_runtime::event_bus::EventBusError) -> Self {
         Self::Agent(error.to_string())
     }
 }
 
 #[cfg(feature = "agent-runtime")]
-impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFunError {
-    fn from(error: bitfun_agent_tools::computer_use::ComputerUseContractError) -> Self {
+impl From<openbitfun_agent_tools::computer_use::ComputerUseContractError> for OpenBitFunError {
+    fn from(error: openbitfun_agent_tools::computer_use::ComputerUseContractError) -> Self {
         Self::Tool(error.to_string())
     }
 }
 
 #[cfg(feature = "mcp-runtime")]
-impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
-    fn from(error: bitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
-        use bitfun_services_integrations::mcp::MCPRuntimeErrorKind;
+impl From<openbitfun_services_integrations::mcp::MCPRuntimeError> for OpenBitFunError {
+    fn from(error: openbitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
+        use openbitfun_services_integrations::mcp::MCPRuntimeErrorKind;
 
         let message = error.message().to_string();
         match error.kind() {
@@ -253,20 +255,20 @@ impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
     }
 }
 
-impl From<BitFunError> for String {
-    fn from(err: BitFunError) -> String {
+impl From<OpenBitFunError> for String {
+    fn from(err: OpenBitFunError) -> String {
         err.to_string()
     }
 }
 
-impl From<String> for BitFunError {
+impl From<String> for OpenBitFunError {
     fn from(error: String) -> Self {
-        BitFunError::Service(error)
+        OpenBitFunError::Service(error)
     }
 }
 
-impl From<&str> for BitFunError {
+impl From<&str> for OpenBitFunError {
     fn from(error: &str) -> Self {
-        BitFunError::Service(error.to_string())
+        OpenBitFunError::Service(error.to_string())
     }
 }

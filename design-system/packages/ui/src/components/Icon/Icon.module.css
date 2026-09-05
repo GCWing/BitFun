@@ -1,4 +1,4 @@
-@layer bf.components {
+@layer openbitfun.components {
   .icon {
     display: inline-block;
     flex: 0 0 auto;
@@ -16,55 +16,55 @@
   }
 
   .icon[data-size="2xs"] {
-    --_icon-size: var(--bf-control-icon-size2xs);
+    --_icon-size: var(--openbitfun-control-icon-size2xs);
   }
 
   .icon[data-size="xs"] {
-    --_icon-size: var(--bf-control-icon-size-xs);
+    --_icon-size: var(--openbitfun-control-icon-size-xs);
   }
 
   .icon[data-size="sm"] {
-    --_icon-size: var(--bf-control-icon-size-sm);
+    --_icon-size: var(--openbitfun-control-icon-size-sm);
   }
 
   .icon[data-size="md"] {
-    --_icon-size: var(--bf-control-icon-size-md);
+    --_icon-size: var(--openbitfun-control-icon-size-md);
   }
 
   .icon[data-size="lg"] {
-    --_icon-size: var(--bf-control-icon-size-lg);
+    --_icon-size: var(--openbitfun-control-icon-size-lg);
   }
 
-  .icon[data-bf-tone="primary"] {
-    color: var(--bf-color-content-primary);
+  .icon[data-openbitfun-tone="primary"] {
+    color: var(--openbitfun-color-content-primary);
   }
 
-  .icon[data-bf-tone="secondary"] {
-    color: var(--bf-color-content-secondary);
+  .icon[data-openbitfun-tone="secondary"] {
+    color: var(--openbitfun-color-content-secondary);
   }
 
-  .icon[data-bf-tone="muted"] {
-    color: var(--bf-color-content-muted);
+  .icon[data-openbitfun-tone="muted"] {
+    color: var(--openbitfun-color-content-muted);
   }
 
-  .icon[data-bf-tone="disabled"] {
-    color: var(--bf-color-content-disabled);
+  .icon[data-openbitfun-tone="disabled"] {
+    color: var(--openbitfun-color-content-disabled);
   }
 
-  .icon[data-bf-tone="info"] {
-    color: var(--bf-color-status-info-content);
+  .icon[data-openbitfun-tone="info"] {
+    color: var(--openbitfun-color-status-info-content);
   }
 
-  .icon[data-bf-tone="success"] {
-    color: var(--bf-color-status-success-content);
+  .icon[data-openbitfun-tone="success"] {
+    color: var(--openbitfun-color-status-success-content);
   }
 
-  .icon[data-bf-tone="warning"] {
-    color: var(--bf-color-status-warning-content);
+  .icon[data-openbitfun-tone="warning"] {
+    color: var(--openbitfun-color-status-warning-content);
   }
 
-  .icon[data-bf-tone="danger"] {
-    color: var(--bf-color-status-danger-content);
+  .icon[data-openbitfun-tone="danger"] {
+    color: var(--openbitfun-color-status-danger-content);
   }
 
   @media (forced-colors: active) {

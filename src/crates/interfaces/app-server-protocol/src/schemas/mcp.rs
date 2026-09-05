@@ -7,7 +7,7 @@
 use agent_client_protocol::{JsonRpcRequest, JsonRpcResponse};
 use serde::{Deserialize, Serialize};
 
-pub use bitfun_product_domains::mcp::{
+pub use openbitfun_product_domains::mcp::{
     McpServerAction, McpServerMutation, McpServerSummary, McpTransport,
 };
 

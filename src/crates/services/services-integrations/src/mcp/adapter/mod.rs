@@ -1,4 +1,4 @@
-//! MCP adapter helpers that do not depend on the BitFun agent runtime.
+//! MCP adapter helpers that do not depend on the OpenBitFun agent runtime.
 
 mod context;
 mod prompt;

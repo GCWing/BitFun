@@ -19,7 +19,7 @@ use crate::runtime_ownership::CoreRuntimeOwnership;
 use crate::service::token_usage::{
     set_global_token_usage_service, TokenUsageService, TokenUsageSubscriber,
 };
-pub use bitfun_product_capabilities::DeliveryProfile;
+pub use openbitfun_product_capabilities::DeliveryProfile;
 
 fn session_manager_config_for_profile(
     delivery_profile: DeliveryProfile,

@@ -15,7 +15,7 @@ Main areas:
 - `src/api/`: Tauri commands
 - `src/api/peer_host_invoke.rs`: Peer Device Mode host-invoke bridge + control attach;
   allow/deny and capabilities come from the Product Operation Registry
-  (`bitfun_product_domains::remote_surface`), not from a local table
+  (`openbitfun_product_domains::remote_surface`), not from a local table
 - `src/api/remote_workspace_policy.rs`: closure test proving every registered Tauri
   command has one registry row
 - `src/lib.rs`, `src/main.rs`: app setup and wiring
@@ -32,7 +32,7 @@ Account login (pending sync choice / finalize) lives in
 cloud vs local settings.
 
 One-click relay deploy: Tauri surface `src/api/relay_deploy_api.rs`, orchestration
-in `bitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
+in `openbitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
 `src/web-ui/src/features/relay-deploy/README.md`.
 
 If a change affects behavior shared by multiple runtimes, place stable contracts,
@@ -69,7 +69,7 @@ required. The default dev profile keeps line tables while reducing PDB size.
 
 ## Target cache GC
 
-`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>` cache generations. Incremental roots keep the latest crate/session. Cargo fingerprint JSON identifies distinct lib, test, bin, and build-script units; GC keeps the latest generation of each unit plus every generation whose Cargo-managed `invoked.timestamp` was refreshed within the last 24 hours, then removes orphaned `deps` files and `build` directories. Busy detection is scoped to Cargo lock files in the selected profile, so an unrelated worktree build does not suppress GC. Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`; adjust the grace window with `BITFUN_TARGET_GC_MIN_AGE_HOURS`.
+`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>` cache generations. Incremental roots keep the latest crate/session. Cargo fingerprint JSON identifies distinct lib, test, bin, and build-script units; GC keeps the latest generation of each unit plus every generation whose Cargo-managed `invoked.timestamp` was refreshed within the last 24 hours, then removes orphaned `deps` files and `build` directories. Busy detection is scoped to Cargo lock files in the selected profile, so an unrelated worktree build does not suppress GC. Manual: `pnpm run target:gc -- --profile debug`. Disable with `OPENBITFUN_TARGET_GC=0`; dry-run with `OPENBITFUN_TARGET_GC_DRY_RUN=1`; adjust the grace window with `OPENBITFUN_TARGET_GC_MIN_AGE_HOURS`.
 
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
 
@@ -90,11 +90,11 @@ The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When
 ## Verification
 
 ```bash
-cargo check -p bitfun-desktop && cargo test -p bitfun-desktop
+cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
 
 If the change affects startup, WebDriver, browser/computer-use, or packaged behavior, also run:
 
 ```bash
-cargo build -p bitfun-desktop
+cargo build -p openbitfun-desktop
 ```

@@ -1,7 +1,7 @@
 .tool-timeout-indicator {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
   font: inherit;
   font-variant-numeric: proportional-nums;
 }
@@ -9,43 +9,43 @@
 .duration-text {
   display: inline-flex;
   align-items: center;
-  gap: var(--bf-control-flow-chat-inline-gap);
-  color: var(--bf-color-content-secondary);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
+  color: var(--openbitfun-color-content-secondary);
   font: inherit;
   font-variant-numeric: proportional-nums;
 
   svg,
-  [data-bf-component='icon'] {
+  [data-openbitfun-component='icon'] {
     flex-shrink: 0;
     opacity: 0.95;
   }
 }
 
 .duration-text--live {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
 }
 
 .duration-text--warning {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
 }
 
 .duration-text--completed-success {
-  color: var(--bf-color-status-success-content);
+  color: var(--openbitfun-color-status-success-content);
 }
 
 .duration-text--completed-error,
 .duration-text--completed-cancelled {
-  color: var(--bf-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-content);
 }
 
 .duration-separator {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   opacity: 0.5;
   margin: 0 1px;
 }
 
 .duration-timeout {
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   opacity: 0.7;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .duration-timeout--warning {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
   opacity: 1;
 }
 
@@ -74,19 +74,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
   height: 22px;
-  padding: 0 var(--bf-control-flow-chat-inline-gap);
-  border: 1px solid var(--bf-color-border-subtle);
+  padding: 0 var(--openbitfun-control-flow-chat-inline-gap);
+  border: 1px solid var(--openbitfun-color-border-subtle);
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   flex-shrink: 0;
-  font-size: var(--bf-type-flow-support-font-size);
-  font-weight: var(--bf-type-label-sm-font-weight);
-  letter-spacing: var(--bf-type-modifier-tracking-subtle-letter-spacing);
-  line-height: var(--bf-type-flow-meta-line-height);
+  font-size: var(--openbitfun-type-flow-support-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  letter-spacing: var(--openbitfun-type-modifier-tracking-subtle-letter-spacing);
+  line-height: var(--openbitfun-type-flow-meta-line-height);
   transition:
     scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 150ms ease,
@@ -105,15 +105,15 @@
   }
 
   &:hover {
-    background: var(--bf-color-action-quiet-hover);
-    color: var(--bf-color-content-secondary);
-    border-color: var(--bf-color-border-default);
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-secondary);
+    border-color: var(--openbitfun-color-border-default);
   }
 
   &.is-active {
-    color: var(--bf-color-accent-default);
-    background: var(--bf-color-surface-subtle);
-    border-color: var(--bf-color-accent-default);
+    color: var(--openbitfun-color-accent-default);
+    background: var(--openbitfun-color-surface-subtle);
+    border-color: var(--openbitfun-color-accent-default);
   }
 
   &:disabled {
@@ -124,7 +124,7 @@
 
 .timeout-extend-popover {
   position: fixed;
-  z-index: var(--bf-layer-popover);
+  z-index: var(--openbitfun-layer-popover);
   width: max-content;
   max-width: min(150px, calc(100vw - 16px));
 }

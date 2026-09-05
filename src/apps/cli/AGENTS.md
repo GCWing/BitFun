@@ -1,4 +1,4 @@
-# BitFun CLI Agent Guide
+# OpenBitFun CLI Agent Guide
 
 Scope: `src/apps/cli`.
 
@@ -50,12 +50,12 @@ behavior and call the existing owner/service APIs directly for the non-Runtime
 operations they use. There is no catch-all TUI client, unified TUI management
 module, domain service interface layer, or owner adapter. Controllers must not
 reference Runtime IPC or Runtime implementation types, and they must not import
-`bitfun-app-server-protocol` wire DTOs. Non-Runtime projections come from the
-stable contracts layer (`bitfun-core-types` / `bitfun-product-domains`) or the
+`openbitfun-app-server-protocol` wire DTOs. Non-Runtime projections come from the
+stable contracts layer (`openbitfun-core-types` / `openbitfun-product-domains`) or the
 existing owner API. Controller-local calls reject Remote workspace scope before
 touching local state. The `server` command is an independent stdio Server Host assembled in
 `server_host.rs`, which is the only module allowed to import the
-`bitfun-app-server` implementation; it injects an explicit method allowlist,
+`openbitfun-app-server` implementation; it injects an explicit method allowlist,
 canonical cwd scope, transport limits, and the stdin EOF disconnect lifecycle.
 App Server wiring is independent and does not constrain
 the TUI path. Side-effecting operations need stable identities, controller/idle
@@ -105,7 +105,7 @@ restrictions remain enforced.
 
 - Assemble CLI through `DeliveryProfile::Cli` and validated product Runtime
   parts. Hiding a command is not a backend capability restriction.
-- The CLI selects the reviewed `bitfun-core` owner-feature closure
+- The CLI selects the reviewed `openbitfun-core` owner-feature closure
   (`agent-runtime`, `external-sources`, `plugin-runtime`, `remote-connect`, and
   `ssh-remote`) plus the Code Agent atomic tool owners. It must not register
   DeepReview, DeepResearch, MiniApp, or Canvas agents/tools. Do not replace the
@@ -138,8 +138,8 @@ pnpm run cli:install
 Run the smallest checks matching the changed path:
 
 ```bash
-cargo check -p bitfun-cli
-cargo test -p bitfun-cli
+cargo check -p openbitfun-cli
+cargo test -p openbitfun-cli
 ```
 
 When a CLI change crosses a shared boundary, use the focused command maintained

@@ -39,8 +39,8 @@ function formatPx(value) {
 
 /**
  * Creates the complete canonical font-size ladder for a user-selected base.
- * Runtime consumers override only the public `--bf-font-size-*` primitives;
- * semantic `--bf-type-*` roles keep following those primitives through CSS refs.
+ * Runtime consumers override only the public `--openbitfun-font-size-*` primitives;
+ * semantic `--openbitfun-type-*` roles keep following those primitives through CSS refs.
  */
 export function createTypographySizeScale(basePx) {
   const normalizedBasePx = normalizeBasePx(basePx);

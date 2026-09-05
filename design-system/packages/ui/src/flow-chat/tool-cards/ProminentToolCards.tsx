@@ -80,22 +80,22 @@ export function GitToolCard({
 }: GitToolCardProps) {
   const hasDetails = Boolean(stdout || stderr || error || footerItems.length > 0);
   const body = hasDetails ? (
-    <div className={styles.output} data-bf-part="details">
-      {stdout && <pre className={styles.outputBlock} data-bf-part="stdout">{stdout}</pre>}
+    <div className={styles.output} data-openbitfun-part="details">
+      {stdout && <pre className={styles.outputBlock} data-openbitfun-part="stdout">{stdout}</pre>}
       {stderr && (
-        <div className={styles.outputGroup} data-bf-part="stderr" data-tone={stderrTone}>
+        <div className={styles.outputGroup} data-openbitfun-part="stderr" data-tone={stderrTone}>
           {stderrLabel && <span className={styles.outputLabel}>{stderrLabel}</span>}
           <pre className={styles.outputBlock}>{stderr}</pre>
         </div>
       )}
       {error && (
-        <div className={styles.error} data-bf-part="error">
+        <div className={styles.error} data-openbitfun-part="error">
           {error}
           {errorMeta && <div className={styles.errorMeta}>{errorMeta}</div>}
         </div>
       )}
       {footerItems.length > 0 && (
-        <div className={styles.footer} data-bf-part="footer">
+        <div className={styles.footer} data-openbitfun-part="footer">
           {footerItems.map((item, index) => (
             <span
               className={styles.footerItem}
@@ -115,7 +115,7 @@ export function GitToolCard({
   return (
     <ProminentToolCard
       {...props}
-      data-bf-tool-card="git"
+      data-openbitfun-tool-card="git"
       errorContent={status === "error" ? body : undefined}
       expandedContent={status === "error" ? undefined : body}
       summary={(
@@ -170,7 +170,7 @@ export function FileDiffToolCard({
   ...props
 }: FileDiffToolCardProps) {
   const body = preview || textPreview || message ? (
-    <div className={styles.diffBody} data-bf-part="details">
+    <div className={styles.diffBody} data-openbitfun-part="details">
       {message && <div className={styles.message}>{message}</div>}
       {preview}
       {textPreview && <pre className={styles.textPreview}>{textPreview}</pre>}
@@ -179,7 +179,7 @@ export function FileDiffToolCard({
   return (
     <ProminentToolCard
       {...props}
-      data-bf-tool-card="file-diff"
+      data-openbitfun-tool-card="file-diff"
       errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
       expandedContent={body}
       summary={(
@@ -189,7 +189,7 @@ export function FileDiffToolCard({
             <span
               className={styles.diffPath}
               data-path={path}
-              data-bf-part="path"
+              data-openbitfun-part="path"
               title={path}
             >
               {pathLabel}
@@ -243,9 +243,9 @@ export function ReviewSummaryToolCard({
   return (
     <ProminentToolCard
       {...props}
-      data-bf-tool-card="review-summary"
+      data-openbitfun-tool-card="review-summary"
       expandedContent={(
-        <div className={styles.reviewDetails} data-bf-part="details">
+        <div className={styles.reviewDetails} data-openbitfun-part="details">
           <p className={styles.reviewSummary}>{summary}</p>
           {changedFiles.length > 0 && (
             <div>
@@ -307,7 +307,7 @@ function PageLifecycleToolCardBase({
 }: PageLifecycleToolCardBaseProps) {
   const hasDetails = fields.length > 0 || Boolean(actions || error);
   const body = hasDetails ? (
-    <div className={styles.lifecycleDetails} data-bf-part="details">
+    <div className={styles.lifecycleDetails} data-openbitfun-part="details">
       {fields.map((field, index) => (
         <div className={styles.field} key={index}>
           <span className={styles.fieldLabel}>{field.label}</span>
@@ -321,7 +321,7 @@ function PageLifecycleToolCardBase({
   return (
     <ProminentToolCard
       {...props}
-      data-bf-tool-card={toolCard}
+      data-openbitfun-tool-card={toolCard}
       errorContent={status === "error" ? body : undefined}
       expandedContent={status === "error" ? undefined : body}
       summary={(
@@ -405,7 +405,7 @@ export function AgentControlToolCard({
   ...props
 }: AgentControlToolCardProps) {
   const expandedContent = details ?? (prompt ? (
-    <div className={styles.agentPrompt} data-bf-part="prompt">{prompt}</div>
+    <div className={styles.agentPrompt} data-openbitfun-part="prompt">{prompt}</div>
   ) : undefined);
   const expandable = Boolean(onToggle && (
     expandedContent || summaryExpandAffordance || isExpanded
@@ -415,10 +415,10 @@ export function AgentControlToolCard({
   const hasExtra = Boolean(statusMeta || statusLabel);
 
   const identity = (
-    <span className={styles.agentIdentity} data-bf-part="agentIdentity">
-      <span className={styles.agentName} data-bf-part="agentName">{agentName}</span>
+    <span className={styles.agentIdentity} data-openbitfun-part="agentIdentity">
+      <span className={styles.agentName} data-openbitfun-part="agentName">{agentName}</span>
       {agentModel !== undefined && agentModel !== null && agentModel !== false && (
-        <span className={styles.agentModel} data-bf-part="agentModel">{agentModel}</span>
+        <span className={styles.agentModel} data-openbitfun-part="agentModel">{agentModel}</span>
       )}
     </span>
   );
@@ -427,7 +427,7 @@ export function AgentControlToolCard({
     <ProminentToolCard
       {...props}
       className={className}
-      data-bf-tool-card="agent-control"
+      data-openbitfun-tool-card="agent-control"
       errorContent={error ? <div className={styles.error}>{error}</div> : undefined}
       expandedContent={expandedContent}
       summary={(
@@ -437,7 +437,7 @@ export function AgentControlToolCard({
             <ToolCardActions>
               <IconButton
                 aria-label={interruptAction!.label}
-                data-bf-part="interruptAgentButton"
+                data-openbitfun-part="interruptAgentButton"
                 disabled={interruptAction!.disabled}
                 icon={interruptAction!.pending
                   ? <ToolProcessingDots size={12} />
@@ -452,22 +452,22 @@ export function AgentControlToolCard({
             </ToolCardActions>
           ) : undefined}
           content={summary !== undefined && summary !== null && summary !== false ? (
-            <span className={styles.agentSummary} data-bf-part="agentSummary">{summary}</span>
+            <span className={styles.agentSummary} data-openbitfun-part="agentSummary">{summary}</span>
           ) : undefined}
           extra={hasExtra ? (
-            <span className={styles.agentExtra} data-bf-part="agentExtra">
+            <span className={styles.agentExtra} data-openbitfun-part="agentExtra">
               {statusMeta !== undefined && statusMeta !== null && statusMeta !== false && (
-                <span className={styles.agentMeta} data-bf-part="agentMeta">{statusMeta}</span>
+                <span className={styles.agentMeta} data-openbitfun-part="agentMeta">{statusMeta}</span>
               )}
               {statusLabel !== undefined && statusLabel !== null && statusLabel !== false && (
-                <span className={styles.agentStatus} data-bf-part="agentStatus" data-tone={statusTone}>
+                <span className={styles.agentStatus} data-openbitfun-part="agentStatus" data-tone={statusTone}>
                   {statusLabel}
                 </span>
               )}
             </span>
           ) : undefined}
           icon={(
-            <span className={styles.agentAvatar} data-bf-part="avatar">
+            <span className={styles.agentAvatar} data-openbitfun-part="avatar">
               {avatar ?? <Bot aria-hidden="true" />}
             </span>
           )}
@@ -478,9 +478,9 @@ export function AgentControlToolCard({
             <ToolCardActions>
               <IconButton
                 aria-label={openAgentLabel!}
-                data-bf-affordance="open-panel-right"
-                data-bf-part="openAgentButton"
-                icon={<ArrowUpRight aria-hidden="true" data-bf-icon="open-panel-right" />}
+                data-openbitfun-affordance="open-panel-right"
+                data-openbitfun-part="openAgentButton"
+                icon={<ArrowUpRight aria-hidden="true" data-openbitfun-icon="open-panel-right" />}
                 onClick={onOpenAgent!}
                 size="sm"
                 data-testid={openAgentTestId}

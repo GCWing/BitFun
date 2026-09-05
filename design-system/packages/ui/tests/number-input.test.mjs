@@ -22,7 +22,7 @@ test("NumberInput exposes a decimal input, unit, and labelled step controls", ()
   assert.match(markup, /aria-label="Less"/);
   assert.match(markup, /aria-label="More"/);
   assert.match(markup, />%<\/span>/);
-  assert.match(markup, /data-bf-component="number-input"/);
+  assert.match(markup, /data-openbitfun-component="number-input"/);
 });
 
 test("NumberInput exposes canonical size names", () => {
@@ -55,5 +55,5 @@ test("NumberInput keeps numeric values, units, and step controls in a stable inl
   assert.match(numberInputStyles, /\.input \{[^}]*flex: 1 1 auto;[^}]*font-variant-numeric: tabular-nums;/s);
   assert.match(numberInputStyles, /\.unit \{[^}]*flex: 0 0 auto;[^}]*white-space: nowrap;/s);
   assert.match(numberInputStyles, /\.buttons \{[^}]*flex: 0 0 auto;/s);
-  assert.match(numberInputStyles, /\.root\[data-disabled="true"\] \.unit \{ color: var\(--bf-color-content-disabled\); \}/);
+  assert.match(numberInputStyles, /\.root\[data-disabled="true"\] \.unit \{ color: var\(--openbitfun-color-content-disabled\); \}/);
 });

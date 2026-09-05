@@ -11,11 +11,11 @@ const WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS = 2000;
 // Full-window DOM surfaces use this contract so the browser can be hidden while
 // they are open and restored without tearing down its page state.
 export const NATIVE_WEBVIEW_OCCLUSION_SELECTOR = [
-  '[data-bf-native-webview-occlusion]',
-  "[data-bf-component='dialog'][data-bf-part='overlay']",
-  "[data-bf-component='sheet'][data-bf-part='overlay']",
+  '[data-openbitfun-native-webview-occlusion]',
+  "[data-openbitfun-component='dialog'][data-openbitfun-part='overlay']",
+  "[data-openbitfun-component='sheet'][data-openbitfun-part='overlay']",
   '.canvas-mission-control',
-  "[data-bf-product-component='context-menu'][data-bf-product-part='root']",
+  "[data-openbitfun-product-component='context-menu'][data-openbitfun-product-part='root']",
 ].join(', ');
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];

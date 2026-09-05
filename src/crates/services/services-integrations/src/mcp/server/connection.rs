@@ -641,7 +641,7 @@ mod tests {
             MCPConnection::new(stdin, rx).with_initialize_timeout(Some(Duration::from_millis(10)));
 
         let error = connection
-            .initialize("BitFunTest", "0.0.0")
+            .initialize("OpenBitFunTest", "0.0.0")
             .await
             .expect_err("initialize should time out");
         assert_eq!(error.kind(), crate::mcp::MCPRuntimeErrorKind::Timeout);
@@ -652,20 +652,20 @@ mod tests {
 
     #[test]
     fn mcp_connection_timeout_child() {
-        if std::env::var_os("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD").is_some() {
+        if std::env::var_os("OPENBITFUN_MCP_CONNECTION_TIMEOUT_CHILD").is_some() {
             std::thread::sleep(Duration::from_secs(30));
         }
     }
 
     #[tokio::test]
     async fn local_catalog_and_execution_timeouts_remove_pending_requests() {
-        let mut child = bitfun_services_core::process_manager::create_tokio_command(
+        let mut child = openbitfun_services_core::process_manager::create_tokio_command(
             std::env::current_exe().unwrap(),
         )
         .arg("--exact")
         .arg("mcp::server::connection::tests::mcp_connection_timeout_child")
         .arg("--nocapture")
-        .env("BITFUN_MCP_CONNECTION_TIMEOUT_CHILD", "1")
+        .env("OPENBITFUN_MCP_CONNECTION_TIMEOUT_CHILD", "1")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

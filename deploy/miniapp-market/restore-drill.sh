@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly BACKUP_ROOT="/srv/bitfun-miniapp-market/backups"
+readonly BACKUP_ROOT="/srv/openbitfun-miniapp-market/backups"
 readonly SOURCE="${1:-}"
 
 if [[ -z "${SOURCE}" || "${SOURCE}" != "${BACKUP_ROOT}/"* || ! -d "${SOURCE}" ]]; then
-  echo "Usage: $0 /srv/bitfun-miniapp-market/backups/{daily|weekly}/<backup>" >&2
+  echo "Usage: $0 /srv/openbitfun-miniapp-market/backups/{daily|weekly}/<backup>" >&2
   exit 2
 fi
 

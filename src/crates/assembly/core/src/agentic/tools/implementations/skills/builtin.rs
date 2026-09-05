@@ -1,10 +1,10 @@
-//! Built-in skills shipped with BitFun.
+//! Built-in skills shipped with OpenBitFun.
 //!
-//! These skills are embedded into the `bitfun-core` binary and installed into a
+//! These skills are embedded into the `openbitfun-core` binary and installed into a
 //! managed `.system` directory under the user skills root on demand.
 
 use crate::infrastructure::get_path_manager_arc;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::OpenBitFunResult;
 use fs2::FileExt;
 use include_dir::{include_dir, Dir};
 use log::{debug, error, warn};
@@ -24,30 +24,6 @@ include!(concat!(env!("OUT_DIR"), "/embedded_builtin_skills.rs"));
 const BUILTIN_SKILLS_MANIFEST_FILE_NAME: &str = ".manifest.json";
 const BUILTIN_SKILLS_INSTALL_LOCK_FILE_NAME: &str = ".system.install.lock";
 const BUILTIN_SKILLS_STAGING_PREFIX: &str = ".system.tmp";
-const LEGACY_BUILTIN_SKILL_DIR_NAMES: &[&str] = &[
-    // Redistribution-restricted upstream skills removed in 2026-08.
-    "docx",
-    "pdf",
-    "pptx",
-    "xlsx",
-    // Historical bundled "Superpowers" skills removed in 2026-04.
-    "brainstorming",
-    "dispatching-parallel-agents",
-    "executing-plans",
-    "finishing-a-development-branch",
-    "receiving-code-review",
-    "requesting-code-review",
-    "subagent-driven-development",
-    "systematic-debugging",
-    "test-driven-development",
-    "using-git-worktrees",
-    "using-superpowers",
-    "verification-before-completion",
-    "writing-plans",
-    // Earlier built-in skill bundled before the Superpowers set.
-    "skill-creator",
-];
-const LEGACY_BUILTIN_ROOT_FILES: &[&str] = &["SUPERPOWERS_LICENSE.txt"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BuiltinSkillsManifest {
@@ -115,7 +91,7 @@ fn builtin_skills_staging_root(parent: &Path) -> PathBuf {
     ))
 }
 
-async fn read_installed_manifest(root: &Path) -> BitFunResult<Option<BuiltinSkillsManifest>> {
+async fn read_installed_manifest(root: &Path) -> OpenBitFunResult<Option<BuiltinSkillsManifest>> {
     let path = builtin_skills_manifest_path(root);
     match fs::read_to_string(&path).await {
         Ok(content) => match serde_json::from_str::<BuiltinSkillsManifest>(&content) {
@@ -134,7 +110,7 @@ async fn read_installed_manifest(root: &Path) -> BitFunResult<Option<BuiltinSkil
     }
 }
 
-async fn write_installed_manifest(root: &Path) -> BitFunResult<()> {
+async fn write_installed_manifest(root: &Path) -> OpenBitFunResult<()> {
     let path = builtin_skills_manifest_path(root);
     let manifest = BuiltinSkillsManifest {
         bundle_hash: builtin_skills_bundle_hash().to_string(),
@@ -144,46 +120,13 @@ async fn write_installed_manifest(root: &Path) -> BitFunResult<()> {
     Ok(())
 }
 
-async fn remove_existing_path(path: &Path) -> BitFunResult<()> {
-    let Ok(metadata) = fs::symlink_metadata(path).await else {
-        return Ok(());
-    };
-
-    if metadata.is_dir() {
-        fs::remove_dir_all(path).await?;
-    } else {
-        fs::remove_file(path).await?;
-    }
-
-    Ok(())
-}
-
-async fn cleanup_legacy_builtin_dirs(legacy_root: &Path) -> BitFunResult<()> {
-    for dir_name in builtin_skill_dir_names() {
-        let path = legacy_root.join(dir_name);
-        remove_existing_path(&path).await?;
-    }
-
-    for dir_name in LEGACY_BUILTIN_SKILL_DIR_NAMES {
-        let path = legacy_root.join(dir_name);
-        remove_existing_path(&path).await?;
-    }
-
-    for file_name in LEGACY_BUILTIN_ROOT_FILES {
-        let path = legacy_root.join(file_name);
-        remove_existing_path(&path).await?;
-    }
-
-    Ok(())
-}
-
-async fn acquire_install_lock(legacy_root: &Path) -> BitFunResult<BuiltinSkillsInstallLock> {
-    let lock_path = builtin_skills_install_lock_path(legacy_root);
+async fn acquire_install_lock(user_skills_root: &Path) -> OpenBitFunResult<BuiltinSkillsInstallLock> {
+    let lock_path = builtin_skills_install_lock_path(user_skills_root);
 
     // Use an OS-backed advisory file lock so parallel test processes and app
     // instances serialize built-in skill installation across the shared
     // `.system` directory.
-    let file = task::spawn_blocking(move || -> BitFunResult<std::fs::File> {
+    let file = task::spawn_blocking(move || -> OpenBitFunResult<std::fs::File> {
         let file = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -195,7 +138,7 @@ async fn acquire_install_lock(legacy_root: &Path) -> BitFunResult<BuiltinSkillsI
     })
     .await
     .map_err(|error| {
-        crate::util::errors::BitFunError::io(format!(
+        crate::util::errors::OpenBitFunError::io(format!(
             "Failed to join built-in skills install lock task: {}",
             error
         ))
@@ -204,7 +147,9 @@ async fn acquire_install_lock(legacy_root: &Path) -> BitFunResult<BuiltinSkillsI
     Ok(BuiltinSkillsInstallLock { file })
 }
 
-async fn install_builtin_skills_to_staging(staging_root: &Path) -> BitFunResult<(usize, usize)> {
+async fn install_builtin_skills_to_staging(
+    staging_root: &Path,
+) -> OpenBitFunResult<(usize, usize)> {
     let mut installed = 0usize;
     let mut updated = 0usize;
 
@@ -223,28 +168,23 @@ async fn install_builtin_skills_to_staging(staging_root: &Path) -> BitFunResult<
     Ok((installed, updated))
 }
 
-pub async fn ensure_builtin_skills_installed() -> BitFunResult<()> {
+pub async fn ensure_builtin_skills_installed() -> OpenBitFunResult<()> {
     let pm = get_path_manager_arc();
-    let legacy_root = pm.user_skills_dir();
+    let user_skills_root = pm.user_skills_dir();
     let dest_root = pm.builtin_skills_dir();
 
     // Create the parent user skills directory before taking the shared install
     // lock so every contender points at the same stable path.
-    if let Err(e) = fs::create_dir_all(&legacy_root).await {
+    if let Err(e) = fs::create_dir_all(&user_skills_root).await {
         error!(
             "Failed to create user skills directory: path={}, error={}",
-            legacy_root.display(),
+            user_skills_root.display(),
             e
         );
         return Err(e.into());
     }
 
-    let _install_lock = acquire_install_lock(&legacy_root).await?;
-    let system_dir_preexisting = fs::symlink_metadata(&dest_root).await.is_ok();
-
-    if !system_dir_preexisting {
-        cleanup_legacy_builtin_dirs(&legacy_root).await?;
-    }
+    let _install_lock = acquire_install_lock(&user_skills_root).await?;
 
     if let Some(manifest) = read_installed_manifest(&dest_root).await? {
         if manifest.bundle_hash == builtin_skills_bundle_hash() {
@@ -252,7 +192,7 @@ pub async fn ensure_builtin_skills_installed() -> BitFunResult<()> {
         }
     }
 
-    let staging_root = builtin_skills_staging_root(&legacy_root);
+    let staging_root = builtin_skills_staging_root(&user_skills_root);
     if let Err(error) = fs::remove_dir_all(&staging_root).await {
         if error.kind() != std::io::ErrorKind::NotFound {
             return Err(error.into());
@@ -302,7 +242,7 @@ struct SyncStats {
     updated: usize,
 }
 
-async fn sync_dir(dir: &Dir<'_>, dest_root: &Path) -> BitFunResult<SyncStats> {
+async fn sync_dir(dir: &Dir<'_>, dest_root: &Path) -> OpenBitFunResult<SyncStats> {
     let mut files: Vec<&include_dir::File<'_>> = Vec::new();
     collect_files(dir, &mut files);
 
@@ -342,9 +282,9 @@ fn collect_files<'a>(dir: &'a Dir<'a>, out: &mut Vec<&'a include_dir::File<'a>>)
     }
 }
 
-fn safe_join(root: &Path, relative: &Path) -> BitFunResult<PathBuf> {
+fn safe_join(root: &Path, relative: &Path) -> OpenBitFunResult<PathBuf> {
     if relative.is_absolute() {
-        return Err(crate::util::errors::BitFunError::validation(format!(
+        return Err(crate::util::errors::OpenBitFunError::validation(format!(
             "Unexpected absolute path in built-in skills: {}",
             relative.display()
         )));
@@ -353,7 +293,7 @@ fn safe_join(root: &Path, relative: &Path) -> BitFunResult<PathBuf> {
     // Prevent `..` traversal even though include_dir should only contain clean relative paths.
     for c in relative.components() {
         if matches!(c, std::path::Component::ParentDir) {
-            return Err(crate::util::errors::BitFunError::validation(format!(
+            return Err(crate::util::errors::OpenBitFunError::validation(format!(
                 "Unexpected parent dir component in built-in skills path: {}",
                 relative.display()
             )));
@@ -366,14 +306,14 @@ fn safe_join(root: &Path, relative: &Path) -> BitFunResult<PathBuf> {
 async fn desired_file_content(
     file: &include_dir::File<'_>,
     _dest_path: &Path,
-) -> BitFunResult<Vec<u8>> {
+) -> OpenBitFunResult<Vec<u8>> {
     Ok(file.contents().to_vec())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BUILTIN_SKILLS_DIR, LEGACY_BUILTIN_SKILL_DIR_NAMES};
-    use bitfun_agent_runtime::skills::{SkillData, SkillLocation};
+    use super::BUILTIN_SKILLS_DIR;
+    use openbitfun_agent_runtime::skills::{SkillData, SkillLocation};
 
     fn embedded_skill_text(path: &str) -> &'static str {
         BUILTIN_SKILLS_DIR
@@ -387,7 +327,7 @@ mod tests {
     fn plan_skill_embeds_a_valid_plan_artifact_workflow() {
         let text = embedded_skill_text("plan/SKILL.md");
         let skill = SkillData::from_markdown(
-            "/bitfun-system/plan".to_string(),
+            "/openbitfun-system/plan".to_string(),
             text,
             SkillLocation::User,
             true,
@@ -397,7 +337,7 @@ mod tests {
         assert_eq!(skill.name, "plan");
         assert!(skill
             .content
-            .contains(".bitfun/plans/<short-kebab-name>.plan.md"));
+            .contains(".openbitfun/plans/<short-kebab-name>.plan.md"));
         assert!(skill.content.contains("status: pending"));
     }
 
@@ -405,7 +345,7 @@ mod tests {
     fn debug_skill_embeds_the_canonical_name_and_log_receiver() {
         let text = embedded_skill_text("debug/SKILL.md");
         let skill = SkillData::from_markdown(
-            "/bitfun-system/debug".to_string(),
+            "/openbitfun-system/debug".to_string(),
             text,
             SkillLocation::User,
             true,
@@ -421,7 +361,7 @@ mod tests {
     #[test]
     fn canvas_skills_keep_internal_artifact_references_out_of_chat() {
         for path in [
-            "bitfun-canvas/SKILL.md",
+            "openbitfun-canvas/SKILL.md",
             "pr-review-canvas/SKILL.md",
             "agent-eval-canvas/SKILL.md",
         ] {
@@ -431,7 +371,7 @@ mod tests {
                 "{path} must tell the agent to leave Canvas URI presentation to the client"
             );
             assert!(
-                !text.contains("give the returned `bitfun-canvas://...` artifact reference"),
+                !text.contains("give the returned `openbitfun-canvas://...` artifact reference"),
                 "{path} still instructs the agent to expose an internal Canvas URI"
             );
         }
@@ -470,7 +410,7 @@ mod tests {
                         "{source}/SKILL.md references missing built-in skill {target}/SKILL.md"
                     );
                 }
-                if let Some(target) = token.strip_prefix("user::bitfun-system::") {
+                if let Some(target) = token.strip_prefix("user::openbitfun-system::") {
                     assert!(
                         BUILTIN_SKILLS_DIR.get_dir(target).is_some(),
                         "{source}/SKILL.md references missing stable skill key {token}"
@@ -481,10 +421,10 @@ mod tests {
     }
 
     #[test]
-    fn gstack_does_not_emit_pseudo_bitfun_browser_commands() {
+    fn gstack_does_not_emit_pseudo_openbitfun_browser_commands() {
         const STALE_BROWSER_GUIDANCE: [&str; 5] = [
-            "BitFun browser/computer-use",
-            "BitFun built-in browser/computer-use",
+            "OpenBitFun browser/computer-use",
+            "OpenBitFun built-in browser/computer-use",
             "external browse binary",
             "use `ComputerUse` for browser inspection",
             "use `ComputerUse` for browser/desktop testing",
@@ -597,23 +537,24 @@ mod tests {
     }
 
     #[test]
-    fn create_bitfun_skin_embeds_authoring_contract_and_example() {
-        let skill = embedded_skill_text("create-bitfun-skin/SKILL.md");
-        assert!(skill.contains("name: create-bitfun-skin"));
+    fn create_openbitfun_skin_embeds_authoring_contract_and_example() {
+        let skill = embedded_skill_text("create-openbitfun-skin/SKILL.md");
+        assert!(skill.contains("name: create-openbitfun-skin"));
 
         let registry =
-            embedded_skill_text("create-bitfun-skin/references/appearance-registry.json");
+            embedded_skill_text("create-openbitfun-skin/references/appearance-registry.json");
         assert!(registry.contains("schemaVersion"));
 
         let example = embedded_skill_text(
-            "create-bitfun-skin/examples/cinematic-animated-wallpaper/SKILL.md",
+            "create-openbitfun-skin/examples/cinematic-animated-wallpaper/SKILL.md",
         );
         assert!(example.contains("cinematic animated-wallpaper"));
 
-        let metadata = embedded_skill_text("create-bitfun-skin/agents/openai.yaml");
-        assert!(metadata.contains("display_name: \"BitFun Appearance Manual\""));
+        let metadata = embedded_skill_text("create-openbitfun-skin/agents/openai.yaml");
+        assert!(metadata.contains("display_name: \"OpenBitFun Appearance Manual\""));
 
-        let workflow = embedded_skill_text("create-bitfun-skin/references/authoring-workflow.md");
+        let workflow =
+            embedded_skill_text("create-openbitfun-skin/references/authoring-workflow.md");
         assert!(workflow.contains("Bump it whenever the manifest"));
     }
 
@@ -623,10 +564,6 @@ mod tests {
             assert!(
                 BUILTIN_SKILLS_DIR.get_dir(skill).is_none(),
                 "redistribution-restricted skill {skill} must not be embedded"
-            );
-            assert!(
-                LEGACY_BUILTIN_SKILL_DIR_NAMES.contains(&skill),
-                "removed skill {skill} must be cleaned from legacy user skill roots"
             );
         }
     }

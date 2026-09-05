@@ -1,6 +1,6 @@
 //! JS Worker — single child process (Bun/Node) with stdin/stderr JSON-RPC.
 
-use bitfun_product_domains::miniapp::runtime::DetectedRuntime;
+use openbitfun_product_domains::miniapp::runtime::DetectedRuntime;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -52,7 +52,7 @@ impl JsWorker {
     ) -> Result<Self, String> {
         let exe = runtime.path.to_string_lossy();
         let host = worker_host_path.to_string_lossy();
-        let mut child = bitfun_services_core::process_manager::create_tokio_command(&*exe)
+        let mut child = openbitfun_services_core::process_manager::create_tokio_command(&*exe)
             .arg(&*host)
             .arg(policy_json)
             .current_dir(app_dir)

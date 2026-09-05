@@ -5,7 +5,7 @@ use crate::agentic::coordination::{
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -34,10 +34,10 @@ impl AgentWaitTool {
         Self
     }
 
-    fn parse_request(input: &Value) -> BitFunResult<AgentWaitRequest> {
-        let object = input
-            .as_object()
-            .ok_or_else(|| BitFunError::tool("AgentWait input must be an object".to_string()))?;
+    fn parse_request(input: &Value) -> OpenBitFunResult<AgentWaitRequest> {
+        let object = input.as_object().ok_or_else(|| {
+            OpenBitFunError::tool("AgentWait input must be an object".to_string())
+        })?;
 
         let task_ids = object
             .get("bg_task_ids")
@@ -48,7 +48,7 @@ impl AgentWaitTool {
             Some(Value::Array(values)) if values.is_empty() => (Vec::new(), false),
             Some(Value::Array(values)) => (values.iter().collect::<Vec<_>>(), true),
             Some(_) => {
-                return Err(BitFunError::tool(
+                return Err(OpenBitFunError::tool(
                     "bg_task_ids must be a string or an array".to_string(),
                 ));
             }
@@ -64,7 +64,7 @@ impl AgentWaitTool {
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
         if require_task_id && bg_task_ids.is_empty() {
-            return Err(BitFunError::tool(
+            return Err(OpenBitFunError::tool(
                 "bg_task_ids must contain at least one non-empty string".to_string(),
             ));
         }
@@ -148,7 +148,7 @@ impl Tool for AgentWaitTool {
         true
     }
 
-    async fn description(&self) -> BitFunResult<String> {
+    async fn description(&self) -> OpenBitFunResult<String> {
         Ok("Wait for background agent results.
 Wait for every selected task to complete. The tool also returns when `timeout_seconds` has elapsed.".to_string())
     }
@@ -184,7 +184,7 @@ Wait for every selected task to complete. The tool also returns when `timeout_se
         &self,
         _input: &Value,
         _context: &ToolUseContext,
-    ) -> BitFunResult<Vec<PermissionIntent>> {
+    ) -> OpenBitFunResult<Vec<PermissionIntent>> {
         Ok(Vec::new())
     }
 
@@ -221,17 +221,16 @@ Wait for every selected task to complete. The tool also returns when `timeout_se
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    ) -> OpenBitFunResult<Vec<ToolResult>> {
         let request = Self::parse_request(input)?;
-        let session_id = context
-            .session_id
-            .as_deref()
-            .ok_or_else(|| BitFunError::tool("session_id is required in context".to_string()))?;
+        let session_id = context.session_id.as_deref().ok_or_else(|| {
+            OpenBitFunError::tool("session_id is required in context".to_string())
+        })?;
         let dialog_turn_id = context.dialog_turn_id.as_deref().ok_or_else(|| {
-            BitFunError::tool("dialog_turn_id is required in context".to_string())
+            OpenBitFunError::tool("dialog_turn_id is required in context".to_string())
         })?;
         let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+            .ok_or_else(|| OpenBitFunError::tool("coordinator not initialized".to_string()))?;
         let result = coordinator
             .wait_for_background_subagent_outcomes(
                 session_id,

@@ -1,6 +1,6 @@
 #![cfg(feature = "local-storage")]
 
-use bitfun_services_core::session::{SessionWriteLock, SessionWriteLockError};
+use openbitfun_services_core::session::{SessionWriteLock, SessionWriteLockError};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use tempfile::tempdir;
@@ -150,9 +150,9 @@ fn abnormal_process_exit_releases_the_writer() {
         .arg("--exact")
         .arg("abnormal_exit_child_holds_writer")
         .arg("--nocapture")
-        .env("BITFUN_SESSION_WRITE_LOCK_CHILD", "1")
-        .env("BITFUN_SESSION_WRITE_STORAGE_ROOT", &storage_root)
-        .env("BITFUN_SESSION_WRITE_READY_PATH", &ready_path)
+        .env("OPENBITFUN_SESSION_WRITE_LOCK_CHILD", "1")
+        .env("OPENBITFUN_SESSION_WRITE_STORAGE_ROOT", &storage_root)
+        .env("OPENBITFUN_SESSION_WRITE_READY_PATH", &ready_path)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -184,14 +184,14 @@ fn abnormal_process_exit_releases_the_writer() {
 
 #[test]
 fn abnormal_exit_child_holds_writer() {
-    if std::env::var_os("BITFUN_SESSION_WRITE_LOCK_CHILD").is_none() {
+    if std::env::var_os("OPENBITFUN_SESSION_WRITE_LOCK_CHILD").is_none() {
         return;
     }
     let storage_root = std::path::PathBuf::from(
-        std::env::var_os("BITFUN_SESSION_WRITE_STORAGE_ROOT").expect("child storage root"),
+        std::env::var_os("OPENBITFUN_SESSION_WRITE_STORAGE_ROOT").expect("child storage root"),
     );
     let ready_path = std::path::PathBuf::from(
-        std::env::var_os("BITFUN_SESSION_WRITE_READY_PATH").expect("child ready path"),
+        std::env::var_os("OPENBITFUN_SESSION_WRITE_READY_PATH").expect("child ready path"),
     );
     let _writer = SessionWriteLock::try_acquire(&storage_root, "abnormal-exit-session")
         .expect("child writer");

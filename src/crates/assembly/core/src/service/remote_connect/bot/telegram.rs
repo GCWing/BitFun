@@ -1,15 +1,15 @@
 //! Telegram bot integration for Remote Connect.
 //!
 //! Users create their own bot via @BotFather, obtain a token, and enter it
-//! in BitFun settings.  The desktop polls for updates via the Telegram Bot
+//! in OpenBitFun settings.  The desktop polls for updates via the Telegram Bot
 //! API (long polling) and routes messages through the shared command router.
 
 use anyhow::{anyhow, Result};
-use bitfun_services_integrations::remote_connect::bot::telegram::TelegramBotApi;
-pub use bitfun_services_integrations::remote_connect::bot::telegram::{
+use log::{error, info, warn};
+use openbitfun_services_integrations::remote_connect::bot::telegram::TelegramBotApi;
+pub use openbitfun_services_integrations::remote_connect::bot::telegram::{
     TelegramConfig, MAX_TELEGRAM_FILE_BYTES,
 };
-use log::{error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -48,9 +48,9 @@ impl TelegramBot {
 
     fn enter_pairing_code_message(language: BotLanguage) -> &'static str {
         if language.is_chinese() {
-            "请输入 BitFun Desktop 中显示的 6 位配对码。"
+            "请输入 OpenBitFun Desktop 中显示的 6 位配对码。"
         } else {
-            "Please enter the 6-digit pairing code from BitFun Desktop."
+            "Please enter the 6-digit pairing code from OpenBitFun Desktop."
         }
     }
 

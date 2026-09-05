@@ -1,6 +1,6 @@
 //! App Server-owned management capability boundary.
 
-use bitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
+use openbitfun_app_server_protocol::app::{CapabilityAvailability, CapabilityDescriptor};
 
 mod owner;
 mod worktree;

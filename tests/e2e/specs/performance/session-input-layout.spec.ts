@@ -27,9 +27,9 @@ async function findSessionItem(sessionId: string) {
 
 async function readInputLayout() {
   return browser.execute(() => {
-    const pane = document.querySelector('.bitfun-chat-pane__content');
+    const pane = document.querySelector('.openbitfun-chat-pane__content');
     const input = document.querySelector('[data-testid="chat-input-container"]');
-    const dropZone = document.querySelector('.bitfun-chat-input-drop-zone');
+    const dropZone = document.querySelector('.openbitfun-chat-input-drop-zone');
     const welcomePanel = document.querySelector('.welcome-panel');
     const historyPlaceholder = document.querySelector('.history-session-placeholder');
 
@@ -63,7 +63,7 @@ async function readInputLayout() {
 
 describe('Session input layout', () => {
   it('keeps the chat input anchored near the bottom while opening a saved session', async function () {
-    const sessionId = process.env.BITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
+    const sessionId = process.env.OPENBITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
     const item = await findSessionItem(sessionId);
     if (!item) {
       console.log(`[Layout] Session ${sessionId} not found; generate it before running this spec.`);

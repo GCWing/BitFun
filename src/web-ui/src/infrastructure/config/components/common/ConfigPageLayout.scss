@@ -3,13 +3,13 @@
 @use './config-page-layout.tokens' as configLayout;
 
 
-.bitfun-config-page-layout {
+.openbitfun-config-page-layout {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bf-color-surface-scene);
-  color: var(--bf-color-content-primary);
-  font-family:var(--bf-type-body-sm-font-family);
+  background: var(--openbitfun-color-surface-scene);
+  color: var(--openbitfun-color-content-primary);
+  font-family:var(--openbitfun-type-body-sm-font-family);
   /* Shared layout contract for settings pages in wide scenes. */
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
@@ -20,14 +20,14 @@
   container-name: config-panel;
 }
 
-.bitfun-config-page-layout__scroll-end-spacer {
+.openbitfun-config-page-layout__scroll-end-spacer {
   flex-shrink: 0;
   width: 100%;
   height: var(--config-page-content-bottom-padding);
   pointer-events: none;
 }
 
-.bitfun-config-page-content {
+.openbitfun-config-page-content {
   /* flex-shrink: 0 — do NOT shrink below natural content height.
    * This ensures the flex layout positions the scroll-end spacer AFTER
    * the actual content, not at the flex-allocated truncated position. */
@@ -40,7 +40,7 @@
   padding: 0;
 }
 
-.bitfun-config-page-content__inner {
+.openbitfun-config-page-content__inner {
   width: min(
     calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
     #{configLayout.$config-page-content-max-width}
@@ -51,76 +51,76 @@
   gap: var(--config-page-section-gap);
 }
 
-.bitfun-config-page-section-stack {
+.openbitfun-config-page-section-stack {
   display: flex;
   flex-direction: column;
   gap: var(--config-page-section-gap);
   min-width: 0;
 }
 
-.bitfun-config-page-section {
+.openbitfun-config-page-section {
   display: flex;
   flex-direction: column;
-  gap: var(--bf-space-4);
+  gap: var(--openbitfun-space-4);
 }
 
-.bitfun-config-page-section__header {
+.openbitfun-config-page-section__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
-.bitfun-config-page-section__heading {
+.openbitfun-config-page-section__heading {
   min-width: 0;
   flex: 1;
 }
 
-.bitfun-config-page-section__title-row {
+.openbitfun-config-page-section__title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--bf-space-2);
+  gap: var(--openbitfun-space-2);
   min-width: 0;
 }
 
-.bitfun-config-page-section__title {
+.openbitfun-config-page-section__title {
   margin: 0;
-  font-size: var(--bf-type-heading-section-font-size);
-  font-weight: var(--bf-type-heading-section-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-heading-section-line-height);
-  letter-spacing: var(--bf-type-heading-section-letter-spacing);
+  font-size: var(--openbitfun-type-heading-section-font-size);
+  font-weight: var(--openbitfun-type-heading-section-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-heading-section-line-height);
+  letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
   overflow-wrap: break-word;
 }
 
-.bitfun-config-page-section__description {
-  margin: var(--bf-space-1) 0 0;
+.openbitfun-config-page-section__description {
+  margin: var(--openbitfun-space-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-type-body-sm-font-size);
-  font-weight: var(--bf-type-body-sm-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-body-sm-line-height);
-  letter-spacing: var(--bf-type-body-sm-letter-spacing);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   overflow-wrap: break-word;
   text-wrap: pretty;
 }
 
-.bitfun-config-page-section__extra {
+.openbitfun-config-page-section__extra {
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--bf-space-3);
+  gap: var(--openbitfun-space-3);
 }
 
-.bitfun-config-page-section__body {
+.openbitfun-config-page-section__body {
   min-width: 0;
 }
 
 // Sections whose children own their own cards should not render a second surface.
-.bitfun-config-page-section__body--flush {
+.openbitfun-config-page-section__body--flush {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -128,151 +128,151 @@
   box-shadow: none;
 }
 
-.bitfun-config-page-row {
+.openbitfun-config-page-row {
   --row-grid-cols: minmax(0, 1fr) minmax(0, 150px);
   display: grid;
   grid-template-columns: var(--row-grid-cols);
   gap: 40px;
-  padding: var(--bf-space-4) var(--bf-space-5);
+  padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
 }
 
-.bitfun-config-page-row + .bitfun-config-page-row {
-  border-top: 1px solid var(--bf-component-config-page-divider);
+.openbitfun-config-page-row + .openbitfun-config-page-row {
+  border-top: 1px solid var(--openbitfun-component-config-page-divider);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bitfun-config-page-row:hover {
-    background: var(--bf-component-config-page-row-hover-background);
+  .openbitfun-config-page-row:hover {
+    background: var(--openbitfun-component-config-page-row-hover-background);
   }
 }
 
-.bitfun-config-page-row--center {
+.openbitfun-config-page-row--center {
   align-items: center;
 }
 
-.bitfun-config-page-row--start {
+.openbitfun-config-page-row--start {
   align-items: flex-start;
 }
 
-.bitfun-config-page-row--balanced {
+.openbitfun-config-page-row--balanced {
   --row-grid-cols: minmax(0, 2fr) minmax(0, 3fr);
 }
 
-.bitfun-config-page-row--wide {
+.openbitfun-config-page-row--wide {
   --row-grid-cols: minmax(0, 2fr) minmax(0, 8fr);
 }
 
-.bitfun-config-page-row--multiline {
-  gap: var(--bf-space-2);
+.openbitfun-config-page-row--multiline {
+  gap: var(--openbitfun-space-2);
 
-  .bitfun-config-page-row__control {
+  .openbitfun-config-page-row__control {
     justify-content: flex-start;
     align-items: stretch;
     justify-self: stretch;
   }
 }
 
-.bitfun-config-page-row--multiline:not(
-  .bitfun-config-page-row--balanced,
-  .bitfun-config-page-row--wide
+.openbitfun-config-page-row--multiline:not(
+  .openbitfun-config-page-row--balanced,
+  .openbitfun-config-page-row--wide
 ) {
   --row-grid-cols: 1fr;
 }
 
-.bitfun-config-page-row--no-control {
+.openbitfun-config-page-row--no-control {
   --row-grid-cols: minmax(0, 1fr);
 
-  .bitfun-config-page-row__meta {
+  .openbitfun-config-page-row__meta {
     grid-column: 1 / -1;
   }
 
-  .bitfun-config-page-row__description {
+  .openbitfun-config-page-row__description {
     max-inline-size: none;
   }
 }
 
 // Ordinary single-field rows share one measure across settings pages. Wide,
 // multiline, and composite controls keep their explicit contextual layout.
-.bitfun-config-page-row:not(
-  .bitfun-config-page-row--multiline,
-  .bitfun-config-page-row--wide
+.openbitfun-config-page-row:not(
+  .openbitfun-config-page-row--multiline,
+  .openbitfun-config-page-row--wide
 ):has(
-  > .bitfun-config-page-row__control > :where(
-    [data-bf-component='input'],
-    [data-bf-component='search-field'],
-    [data-bf-component='number-input'],
-    [data-bf-component='select'],
-    [data-bf-component='combobox'],
-    [data-bf-component='multi-select']
+  > .openbitfun-config-page-row__control > :where(
+    [data-openbitfun-component='input'],
+    [data-openbitfun-component='search-field'],
+    [data-openbitfun-component='number-input'],
+    [data-openbitfun-component='select'],
+    [data-openbitfun-component='combobox'],
+    [data-openbitfun-component='multi-select']
   ):only-child
 ),
-.bitfun-config-page-row:not(
-  .bitfun-config-page-row--multiline,
-  .bitfun-config-page-row--wide
+.openbitfun-config-page-row:not(
+  .openbitfun-config-page-row--multiline,
+  .openbitfun-config-page-row--wide
 ):has(
-  > .bitfun-config-page-row__control > div:only-child > :where(
-    [data-bf-component='input'],
-    [data-bf-component='search-field'],
-    [data-bf-component='number-input'],
-    [data-bf-component='select'],
-    [data-bf-component='combobox'],
-    [data-bf-component='multi-select']
+  > .openbitfun-config-page-row__control > div:only-child > :where(
+    [data-openbitfun-component='input'],
+    [data-openbitfun-component='search-field'],
+    [data-openbitfun-component='number-input'],
+    [data-openbitfun-component='select'],
+    [data-openbitfun-component='combobox'],
+    [data-openbitfun-component='multi-select']
   ):only-child
 ) {
   --row-grid-cols: minmax(0, 1fr) minmax(
     0,
-    var(--bf-overlay-menu-inline-size)
+    var(--openbitfun-overlay-menu-inline-size)
   );
 }
 
-.bitfun-config-page-section__extra > :where(
-  [data-bf-component='input'],
-  [data-bf-component='search-field'],
-  [data-bf-component='number-input'],
-  [data-bf-component='select'],
-  [data-bf-component='combobox'],
-  [data-bf-component='multi-select']
+.openbitfun-config-page-section__extra > :where(
+  [data-openbitfun-component='input'],
+  [data-openbitfun-component='search-field'],
+  [data-openbitfun-component='number-input'],
+  [data-openbitfun-component='select'],
+  [data-openbitfun-component='combobox'],
+  [data-openbitfun-component='multi-select']
 ) {
-  flex: 0 1 var(--bf-overlay-menu-inline-size);
-  inline-size: min(100%, var(--bf-overlay-menu-inline-size));
-  max-inline-size: var(--bf-overlay-menu-inline-size);
+  flex: 0 1 var(--openbitfun-overlay-menu-inline-size);
+  inline-size: min(100%, var(--openbitfun-overlay-menu-inline-size));
+  max-inline-size: var(--openbitfun-overlay-menu-inline-size);
 }
 
-.bitfun-config-page-row__meta {
+.openbitfun-config-page-row__meta {
   min-width: 0;
   max-width: 450px;
 }
 
-.bitfun-config-page-row__label {
+.openbitfun-config-page-row__label {
   margin: 0;
-  font-size: var(--bf-type-label-selected-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  color: var(--bf-color-content-primary);
-  line-height: var(--bf-type-label-selected-line-height);
-  letter-spacing: var(--bf-type-label-selected-letter-spacing);
+  font-size: var(--openbitfun-type-label-selected-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  color: var(--openbitfun-color-content-primary);
+  line-height: var(--openbitfun-type-label-selected-line-height);
+  letter-spacing: var(--openbitfun-type-label-selected-letter-spacing);
   overflow-wrap: break-word;
 }
 
-.bitfun-config-page-row__required {
-  margin-inline-start: var(--bf-space-1);
-  color: var(--bf-color-content-required-indicator);
-  font-size: var(--bf-type-label-selected-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
+.openbitfun-config-page-row__required {
+  margin-inline-start: var(--openbitfun-space-1);
+  color: var(--openbitfun-color-content-required-indicator);
+  font-size: var(--openbitfun-type-label-selected-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
 }
 
-.bitfun-config-page-row__description {
-  margin: var(--bf-space-1) 0 0;
+.openbitfun-config-page-row__description {
+  margin: var(--openbitfun-space-1) 0 0;
   max-inline-size: var(--config-page-description-max-width);
-  font-size: var(--bf-type-support-font-size);
-  font-weight: var(--bf-type-support-font-weight);
-  color: var(--bf-color-content-secondary);
-  line-height: var(--bf-type-modifier-leading-support-line-height);
-  letter-spacing: var(--bf-type-support-letter-spacing);
+  font-size: var(--openbitfun-type-support-font-size);
+  font-weight: var(--openbitfun-type-support-font-weight);
+  color: var(--openbitfun-color-content-secondary);
+  line-height: var(--openbitfun-type-modifier-leading-support-line-height);
+  letter-spacing: var(--openbitfun-type-support-letter-spacing);
   overflow-wrap: break-word;
   text-wrap: pretty;
 }
 
-.bitfun-config-page-row__control {
+.openbitfun-config-page-row__control {
   min-width: 0;
   width: 100%;
   display: flex;
@@ -284,43 +284,43 @@
   // controls such as Switch, Button, Checkbox, and StatusPill keep the
   // geometry owned by their design-system component.
   > :where(
-    [data-bf-component='input'],
-    [data-bf-component='search-field'],
-    [data-bf-component='textarea'],
-    [data-bf-component='combobox'],
-    [data-bf-component='multi-select'],
-    [data-bf-component='select'],
-    [data-bf-component='number-input']
+    [data-openbitfun-component='input'],
+    [data-openbitfun-component='search-field'],
+    [data-openbitfun-component='textarea'],
+    [data-openbitfun-component='combobox'],
+    [data-openbitfun-component='multi-select'],
+    [data-openbitfun-component='select'],
+    [data-openbitfun-component='number-input']
   ),
   > div:has(
     > :where(
-      [data-bf-component='input'],
-      [data-bf-component='search-field'],
-      [data-bf-component='textarea'],
-      [data-bf-component='combobox'],
-      [data-bf-component='multi-select'],
-      [data-bf-component='select'],
-      [data-bf-component='number-input']
+      [data-openbitfun-component='input'],
+      [data-openbitfun-component='search-field'],
+      [data-openbitfun-component='textarea'],
+      [data-openbitfun-component='combobox'],
+      [data-openbitfun-component='multi-select'],
+      [data-openbitfun-component='select'],
+      [data-openbitfun-component='number-input']
     )
   ),
   > div:has(
     > :where(
-      [data-bf-component='input'],
-      [data-bf-component='search-field'],
-      [data-bf-component='textarea'],
-      [data-bf-component='combobox'],
-      [data-bf-component='multi-select'],
-      [data-bf-component='select'],
-      [data-bf-component='number-input']
+      [data-openbitfun-component='input'],
+      [data-openbitfun-component='search-field'],
+      [data-openbitfun-component='textarea'],
+      [data-openbitfun-component='combobox'],
+      [data-openbitfun-component='multi-select'],
+      [data-openbitfun-component='select'],
+      [data-openbitfun-component='number-input']
     )
   ) > :where(
-    [data-bf-component='input'],
-    [data-bf-component='search-field'],
-    [data-bf-component='textarea'],
-    [data-bf-component='combobox'],
-    [data-bf-component='multi-select'],
-    [data-bf-component='select'],
-    [data-bf-component='number-input']
+    [data-openbitfun-component='input'],
+    [data-openbitfun-component='search-field'],
+    [data-openbitfun-component='textarea'],
+    [data-openbitfun-component='combobox'],
+    [data-openbitfun-component='multi-select'],
+    [data-openbitfun-component='select'],
+    [data-openbitfun-component='number-input']
   ) {
     inline-size: 100%;
     min-inline-size: 0;
@@ -328,15 +328,15 @@
 }
 
 @container config-panel (max-width: 900px) {
-  .bitfun-config-page-layout__scroll-end-spacer {
+  .openbitfun-config-page-layout__scroll-end-spacer {
     height: 40px;
   }
 
-  .bitfun-config-page-content {
+  .openbitfun-config-page-content {
     --config-page-section-gap: 36px;
   }
 
-  .bitfun-config-page-content__inner {
+  .openbitfun-config-page-content__inner {
     width: min(
       calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
       #{configLayout.$config-page-content-max-width}
@@ -345,42 +345,42 @@
 }
 
 @container config-panel (max-width: 520px) {
-  .bitfun-config-page-section {
-    gap: var(--bf-space-3);
+  .openbitfun-config-page-section {
+    gap: var(--openbitfun-space-3);
   }
 
-  .bitfun-config-page-section__header {
+  .openbitfun-config-page-section__header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .bitfun-config-page-section__extra {
+  .openbitfun-config-page-section__extra {
     width: 100%;
     justify-content: flex-start;
   }
 
-  .bitfun-config-page-row {
+  .openbitfun-config-page-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--bf-space-2);
-    padding: var(--bf-space-4);
+    gap: var(--openbitfun-space-2);
+    padding: var(--openbitfun-space-4);
   }
 
-  .bitfun-config-page-row__meta {
+  .openbitfun-config-page-row__meta {
     max-width: none;
   }
 
-  .bitfun-config-page-row__control {
+  .openbitfun-config-page-row__control {
     width: 100%;
     justify-self: stretch;
   }
 
-  .bitfun-config-page-section__extra > :where(
-    [data-bf-component='input'],
-    [data-bf-component='search-field'],
-    [data-bf-component='number-input'],
-    [data-bf-component='select'],
-    [data-bf-component='combobox'],
-    [data-bf-component='multi-select']
+  .openbitfun-config-page-section__extra > :where(
+    [data-openbitfun-component='input'],
+    [data-openbitfun-component='search-field'],
+    [data-openbitfun-component='number-input'],
+    [data-openbitfun-component='select'],
+    [data-openbitfun-component='combobox'],
+    [data-openbitfun-component='multi-select']
   ) {
     flex-basis: 100%;
     inline-size: 100%;
@@ -389,13 +389,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-config-page-row {
+  .openbitfun-config-page-row {
     transition: none;
   }
 }
 
 @media (forced-colors: active) {
-  .bitfun-config-page-row__required {
+  .openbitfun-config-page-row__required {
     color: Highlight;
   }
 }

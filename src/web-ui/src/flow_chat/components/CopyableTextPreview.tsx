@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip, Icon } from '@bitfun/ui';
+import { IconButton, Tooltip, Icon } from '@openbitfun/ui';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './CopyableTextPreview.scss';
 
@@ -26,7 +26,7 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   const { t } = useTranslation('flow-chat');
   const content = text?.trim()
     ? text
-    : <span className="copyable-text-preview__empty" data-bf-component="copyable-text-preview" data-bf-part="empty">{emptyText}</span>;
+    : <span className="copyable-text-preview__empty" data-openbitfun-component="copyable-text-preview" data-openbitfun-part="empty">{emptyText}</span>;
   const resolvedClassName = `copyable-text-preview${className ? ` ${className}` : ''}`;
   const copyText = typeof tooltipContent === 'string' && tooltipContent.trim()
     ? tooltipContent
@@ -39,11 +39,11 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   });
   const copyTooltip = copied ? t('toolCards.common.copied') : t('toolCards.common.copy');
   const node = as === 'code' ? (
-    <code ref={ref} className={resolvedClassName} {...restProps} data-bf-component="copyable-text-preview" data-bf-part="root">
+    <code ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
       {content}
     </code>
   ) : (
-    <span ref={ref} className={resolvedClassName} {...restProps} data-bf-component="copyable-text-preview" data-bf-part="root">
+    <span ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
       {content}
     </span>
   );
@@ -55,15 +55,15 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   return (
     <Tooltip
       content={
-        <div className="copyable-text-preview-tooltip-content" data-bf-component="copyable-text-preview" data-bf-part="tooltipContent">
-          <span className="copyable-text-preview-tooltip-content__text" data-bf-component="copyable-text-preview" data-bf-part="tooltipText">{tooltipContent}</span>
+        <div className="copyable-text-preview-tooltip-content" data-openbitfun-component="copyable-text-preview" data-openbitfun-part="tooltipContent">
+          <span className="copyable-text-preview-tooltip-content__text" data-openbitfun-component="copyable-text-preview" data-openbitfun-part="tooltipText">{tooltipContent}</span>
           {copyText && (
             <Tooltip content={copyTooltip}>
               <IconButton
                 className={`copyable-text-preview-tooltip__copy${copied ? ' copied' : ''}`}
-                data-bf-component="copyable-text-preview"
-                data-bf-part="copyAction"
-                data-bf-state={copied ? 'copied' : undefined}
+                data-openbitfun-component="copyable-text-preview"
+                data-openbitfun-part="copyAction"
+                data-openbitfun-state={copied ? 'copied' : undefined}
                 variant="quiet"
                 size="xs"
                 onClick={copy}

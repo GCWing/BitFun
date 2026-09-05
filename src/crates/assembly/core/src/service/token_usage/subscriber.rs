@@ -2,8 +2,8 @@
 
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
 use crate::service::token_usage::TokenUsageService;
-use bitfun_agent_runtime::event_bus::EventSubscriberResult;
 use log::{debug, warn};
+use openbitfun_agent_runtime::event_bus::EventSubscriberResult;
 use std::sync::Arc;
 
 /// Token usage event subscriber

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon } from '@bitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { Package } from 'lucide-react';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import './SkillCard.scss';
@@ -48,7 +48,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
   const openDetails = () => onOpenDetails?.();
 
   return (
-    <div data-bf-component="skill-card" data-bf-part="root"
+    <div data-openbitfun-component="skill-card" data-openbitfun-part="root"
       {...rootProps}
       className={['skill-card', className].filter(Boolean).join(' ')}
       style={{
@@ -56,7 +56,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
         '--surface-stagger-index': index,
         '--skill-card-gradient': getCardGradient(accentSeed ?? name),
       } as React.CSSProperties}
-      data-bf-variant={iconKind}
+      data-openbitfun-variant={iconKind}
       onClick={openDetails}
       tabIndex={0}
       onKeyDown={(e) => {
@@ -68,24 +68,24 @@ const SkillCard: React.FC<SkillCardProps> = ({
       aria-label={name}
     >
       {/* Header: icon + badges */}
-      <div className="skill-card__header" data-bf-component="skill-card" data-bf-part="header">
-        <div className="skill-card__icon-area" data-bf-component="skill-card" data-bf-part="iconArea">
-          <div className="skill-card__icon" data-bf-component="skill-card" data-bf-part="icon">
+      <div className="skill-card__header" data-openbitfun-component="skill-card" data-openbitfun-part="header">
+        <div className="skill-card__icon-area" data-openbitfun-component="skill-card" data-openbitfun-part="iconArea">
+          <div className="skill-card__icon" data-openbitfun-component="skill-card" data-openbitfun-part="icon">
             {glyph}
           </div>
         </div>
-        {badges && <div className="skill-card__badges" data-bf-component="skill-card" data-bf-part="badges">{badges}</div>}
+        {badges && <div className="skill-card__badges" data-openbitfun-component="skill-card" data-openbitfun-part="badges">{badges}</div>}
       </div>
 
       {/* Body: name + trend (meta) on one row, then description */}
-      <div className="skill-card__body" data-bf-component="skill-card" data-bf-part="body">
-        <div className="skill-card__title-row" data-bf-component="skill-card" data-bf-part="titleRow">
-          <span className="skill-card__name" data-bf-component="skill-card" data-bf-part="name">{name}</span>
+      <div className="skill-card__body" data-openbitfun-component="skill-card" data-openbitfun-part="body">
+        <div className="skill-card__title-row" data-openbitfun-component="skill-card" data-openbitfun-part="titleRow">
+          <span className="skill-card__name" data-openbitfun-component="skill-card" data-openbitfun-part="name">{name}</span>
           {meta ? (
             <div
               className="skill-card__meta"
-              data-bf-component="skill-card"
-              data-bf-part="meta"
+              data-openbitfun-component="skill-card"
+              data-openbitfun-part="meta"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
@@ -94,14 +94,14 @@ const SkillCard: React.FC<SkillCardProps> = ({
           ) : null}
         </div>
         {description?.trim() && (
-          <p className="skill-card__desc" data-bf-component="skill-card" data-bf-part="description">{description.trim()}</p>
+          <p className="skill-card__desc" data-openbitfun-component="skill-card" data-openbitfun-part="description">{description.trim()}</p>
         )}
       </div>
 
       {/* Footer: action buttons */}
       {actions.length > 0 && (
-      <div className="skill-card__footer" data-bf-component="skill-card" data-bf-part="footer">
-        <div className="skill-card__actions" data-bf-component="skill-card" data-bf-part="actions" onClick={(e) => e.stopPropagation()}>
+      <div className="skill-card__footer" data-openbitfun-component="skill-card" data-openbitfun-part="footer">
+        <div className="skill-card__actions" data-openbitfun-component="skill-card" data-openbitfun-part="actions" onClick={(e) => e.stopPropagation()}>
             {actions.map((action) => (
               <button
                 key={action.id}
@@ -116,10 +116,10 @@ const SkillCard: React.FC<SkillCardProps> = ({
                 title={action.title ?? action.ariaLabel}
                 data-testid="skills-card-action"
                 data-skill-action={action.id}
-                data-bf-component="skill-card"
-                data-bf-part="action"
-                data-bf-tone={action.tone}
-                data-bf-state={action.disabled ? 'disabled' : undefined}
+                data-openbitfun-component="skill-card"
+                data-openbitfun-part="action"
+                data-openbitfun-tone={action.tone}
+                data-openbitfun-state={action.disabled ? 'disabled' : undefined}
               >
                 {action.icon}
               </button>

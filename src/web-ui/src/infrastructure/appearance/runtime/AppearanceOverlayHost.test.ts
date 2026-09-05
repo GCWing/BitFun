@@ -20,22 +20,22 @@ const systemTokens = JSON.parse(readSource(
 
 /** The host's own rule block, without the child rule that follows it. */
 const hostRule = layerStyles.slice(
-  layerStyles.indexOf('#bitfun-appearance-overlay-host {'),
-  layerStyles.indexOf('}', layerStyles.indexOf('#bitfun-appearance-overlay-host {')),
+  layerStyles.indexOf('#openbitfun-appearance-overlay-host {'),
+  layerStyles.indexOf('}', layerStyles.indexOf('#openbitfun-appearance-overlay-host {')),
 );
 
 describe('appearance overlay host', () => {
   afterEach(() => {
-    document.getElementById('bitfun-appearance-overlay-host')?.remove();
+    document.getElementById('openbitfun-appearance-overlay-host')?.remove();
   });
 
   it('mounts one reusable host on the body', () => {
     const host = getAppearanceOverlayHost();
 
     expect(host.parentElement).toBe(document.body);
-    expect(host.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(host.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(getAppearanceOverlayHost()).toBe(host);
-    expect(document.querySelectorAll('[data-bf-overlay-host]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-openbitfun-overlay-host]')).toHaveLength(1);
   });
 
   // The host is a stacking layer, not just a mount point. Drop either half and
@@ -44,7 +44,7 @@ describe('appearance overlay host', () => {
   // and never receives its clicks.
   it('gives portaled overlays their own stacking context', () => {
     expect(hostRule).toMatch(/position:\s*fixed/);
-    expect(hostRule).toMatch(/z-index:\s*var\(--bf-layer-overlay-host\)/);
+    expect(hostRule).toMatch(/z-index:\s*var\(--openbitfun-layer-overlay-host\)/);
   });
 
   it('stacks above containers that host app UI and below always-on-top chrome', () => {
@@ -62,7 +62,7 @@ describe('appearance overlay host', () => {
   it('keeps the layer itself click-through and its overlays hit-testable', () => {
     expect(hostRule).toMatch(/pointer-events:\s*none/);
     expect(layerStyles).toMatch(
-      /:where\(#bitfun-appearance-overlay-host\)\s*>\s*:where\(\*\)\s*\{\s*pointer-events:\s*auto/,
+      /:where\(#openbitfun-appearance-overlay-host\)\s*>\s*:where\(\*\)\s*\{\s*pointer-events:\s*auto/,
     );
   });
 });

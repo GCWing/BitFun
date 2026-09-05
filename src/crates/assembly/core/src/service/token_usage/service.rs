@@ -8,7 +8,7 @@ use super::types::{
 use crate::infrastructure::PathManager;
 use crate::service::config::types::AIModelConfig;
 use anyhow::Result;
-use bitfun_services_core::token_usage::{
+use openbitfun_services_core::token_usage::{
     TokenUsageStatisticsRequest, UsageGranularity, UsageStatistics, UsageStatisticsFilter,
 };
 use std::collections::{HashMap, HashSet};
@@ -18,7 +18,7 @@ use std::sync::Arc;
 const TOKEN_USAGE_DIR: &str = "token_usage";
 
 pub struct TokenUsageService {
-    inner: bitfun_services_core::token_usage::TokenUsageService,
+    inner: openbitfun_services_core::token_usage::TokenUsageService,
 }
 
 impl TokenUsageService {
@@ -27,7 +27,7 @@ impl TokenUsageService {
     }
 
     pub async fn new_in_base_dir(base_dir: PathBuf) -> Result<Self> {
-        let inner = bitfun_services_core::token_usage::TokenUsageService::new(base_dir)
+        let inner = openbitfun_services_core::token_usage::TokenUsageService::new(base_dir)
             .await
             .map_err(anyhow::Error::msg)?;
         Ok(Self { inner })
@@ -150,7 +150,7 @@ impl TokenUsageService {
         }
 
         Ok(
-            bitfun_services_core::token_usage::aggregate_statistics_with_time_zone(
+            openbitfun_services_core::token_usage::aggregate_statistics_with_time_zone(
                 &records,
                 granularity,
                 time_zone.as_deref(),
@@ -159,7 +159,7 @@ impl TokenUsageService {
         )
     }
 
-    /// Resolve a surface request and aggregate this BitFun host's persisted
+    /// Resolve a surface request and aggregate this OpenBitFun host's persisted
     /// usage. The request is intentionally workspace-agnostic: Peer transport
     /// selects the host, while SSH workspace routing does not change it.
     pub async fn get_statistics_for_request(

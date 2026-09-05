@@ -1,8 +1,10 @@
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
-use crate::util::errors::BitFunResult;
-use bitfun_agent_runtime::permission::{AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY};
-use bitfun_runtime_ports::{
+use crate::util::errors::OpenBitFunResult;
+use openbitfun_agent_runtime::permission::{
+    AUTO_APPROVE_ASK_CONTEXT_KEY, PERMISSION_MODE_CONTEXT_KEY,
+};
+use openbitfun_runtime_ports::{
     resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
     PermissionConstraintLayer, PermissionEffect, PermissionMode, PermissionPolicyLayers,
     PermissionRule, PermissionRuntimeCeiling, ResolvedPermissionPolicy,
@@ -67,7 +69,7 @@ pub(crate) fn derive_parent_permission_runtime_ceiling(
 pub(crate) async fn load_parent_permission_runtime_ceiling(
     agent_type: Option<&str>,
     workspace_root: Option<&std::path::Path>,
-) -> BitFunResult<PermissionRuntimeCeiling> {
+) -> OpenBitFunResult<PermissionRuntimeCeiling> {
     let service = GlobalConfigManager::get_service().await?;
     let global: GlobalConfig = service.get_config(None).await?;
     let profile = agent_type.and_then(|agent_type| {
@@ -138,7 +140,7 @@ pub(crate) fn resolve_effective_permission_policy(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_runtime_ports::{PermissionEvaluator, PermissionPolicyPreset};
+    use openbitfun_runtime_ports::{PermissionEvaluator, PermissionPolicyPreset};
 
     fn rule(action: &str, resource: &str, effect: PermissionEffect) -> PermissionRule {
         PermissionRule::new(action, resource, effect)

@@ -10,8 +10,8 @@ use crate::review_platform_http::{
     send_text_bounded as send_review_text_bounded, ReviewHttpClient, ReviewHttpError,
     ReviewHttpHeaders, ReviewHttpRequest, ReviewJsonResponse, ReviewTextResponse,
 };
-use bitfun_services_core::process_manager;
 use futures::{stream, StreamExt};
+use openbitfun_services_core::process_manager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -23,6 +23,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex as AsyncMutex;
 
 pub const REVIEW_PLATFORM_TOKEN_FILE_NAME: &str = "review-platform-tokens.json";
+const REVIEW_PLATFORM_TOKEN_SCHEMA_VERSION: u16 = 1;
 
 const USER_AGENT_VALUE: &str = "ReviewPlatform";
 const ACCEPT_HEADER: &str = "accept";
@@ -544,7 +545,7 @@ pub struct ReviewPlatformWorkspaceSnapshot {
 ///
 /// Review-platform only touches the workspace for repository discovery
 /// (`git rev-parse --show-toplevel`, `git remote -v`); provider data itself is
-/// fetched over HTTP from the host running BitFun. Remote SSH workspaces are
+/// fetched over HTTP from the host running OpenBitFun. Remote SSH workspaces are
 /// therefore fully supported as long as the product runtime can execute those
 /// Git probes on the remote host, which is what this port injects.
 #[async_trait::async_trait]
@@ -725,15 +726,25 @@ impl ReviewPlatformAuthTokens {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StoredReviewPlatformTokens {
+    schema_version: u16,
     #[serde(default)]
     tokens: HashMap<String, StoredReviewPlatformToken>,
 }
 
+impl Default for StoredReviewPlatformTokens {
+    fn default() -> Self {
+        Self {
+            schema_version: REVIEW_PLATFORM_TOKEN_SCHEMA_VERSION,
+            tokens: HashMap::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StoredReviewPlatformToken {
     token: String,
     updated_at: String,
@@ -1434,7 +1445,7 @@ impl ReviewPlatformService {
     ) -> Result<(), ReviewPlatformError> {
         if platform == ReviewPlatformKind::Github {
             return Err(ReviewPlatformError::Api(format!(
-                "GitHub tokens are not stored by BitFun. Authenticate the local GitHub CLI with `gh auth login --hostname {}`.",
+                "GitHub tokens are not stored by OpenBitFun. Authenticate the local GitHub CLI with `gh auth login --hostname {}`.",
                 normalize_provider_host(host)?
             )));
         }
@@ -1447,11 +1458,8 @@ impl ReviewPlatformService {
         let key = token_key(platform, host)
             .ok_or_else(|| ReviewPlatformError::UnsupportedPlatform(host.to_string()))?;
         let _transaction = self.token_store_lock.lock().await;
-        let (mut stored, _) =
-            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
-        stored.tokens.retain(|stored_key, _| {
-            normalize_stored_token_key(stored_key).as_deref() != Some(key.as_str())
-        });
+        let mut stored = self.load_stored_token_file_unlocked().await?;
+        stored.tokens.remove(&key);
         stored.tokens.insert(
             key,
             StoredReviewPlatformToken {
@@ -1476,11 +1484,8 @@ impl ReviewPlatformService {
         let key = token_key(platform, host)
             .ok_or_else(|| ReviewPlatformError::UnsupportedPlatform(host.to_string()))?;
         let _transaction = self.token_store_lock.lock().await;
-        let (mut stored, _) =
-            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
-        stored.tokens.retain(|stored_key, _| {
-            normalize_stored_token_key(stored_key).as_deref() != Some(key.as_str())
-        });
+        let mut stored = self.load_stored_token_file_unlocked().await?;
+        stored.tokens.remove(&key);
         self.save_stored_token_file_unlocked(&stored).await
     }
 }
@@ -4286,45 +4291,46 @@ fn token_store_lock_registry_entries_for_test(marker: &str) -> usize {
         .count()
 }
 
-fn canonicalize_stored_tokens(
-    stored: StoredReviewPlatformTokens,
-) -> (StoredReviewPlatformTokens, bool) {
-    let original = stored.clone();
-    let mut entries = stored.tokens.into_iter().collect::<Vec<_>>();
-    entries.sort_by(|left, right| left.0.cmp(&right.0));
-    let mut passthrough = HashMap::new();
-    let mut normalized: HashMap<String, (bool, StoredReviewPlatformToken)> = HashMap::new();
-    for (raw_key, mut entry) in entries {
-        let Some(canonical_key) = normalize_stored_token_key(&raw_key) else {
-            passthrough.insert(raw_key, entry);
-            continue;
-        };
+fn validate_current_stored_tokens(
+    stored: &StoredReviewPlatformTokens,
+) -> Result<(), ReviewPlatformError> {
+    if stored.schema_version != REVIEW_PLATFORM_TOKEN_SCHEMA_VERSION {
+        return Err(ReviewPlatformError::Parse(format!(
+            "Review platform token store schema {} is not supported by OpenBitFun 1.0.0; use the explicit data migration tool instead",
+            stored.schema_version
+        )));
+    }
+
+    for (raw_key, entry) in &stored.tokens {
+        let canonical_key = normalize_stored_token_key(raw_key).ok_or_else(|| {
+            ReviewPlatformError::Parse(format!(
+                "Review platform token store contains invalid authority '{raw_key}'"
+            ))
+        })?;
+        if canonical_key != *raw_key {
+            return Err(ReviewPlatformError::Parse(format!(
+                "Review platform token authority '{raw_key}' is not canonical OpenBitFun data; use the explicit data migration tool instead"
+            )));
+        }
         if canonical_key.starts_with("github:") {
-            continue;
+            return Err(ReviewPlatformError::Parse(
+                "The review platform token store contains a pre-OpenBitFun GitHub token; use the explicit data migration tool or authenticate with the GitHub CLI"
+                    .to_string(),
+            ));
         }
-        entry.token = entry.token.trim().to_string();
-        if entry.token.is_empty() {
-            continue;
+        if entry.token.is_empty() || entry.token.trim() != entry.token {
+            return Err(ReviewPlatformError::Parse(format!(
+                "Review platform token authority '{raw_key}' contains a non-canonical token value"
+            )));
         }
-        let is_canonical = raw_key == canonical_key;
-        match normalized.entry(canonical_key) {
-            std::collections::hash_map::Entry::Vacant(slot) => {
-                slot.insert((is_canonical, entry));
-            }
-            std::collections::hash_map::Entry::Occupied(mut slot)
-                if is_canonical && !slot.get().0 =>
-            {
-                slot.insert((true, entry));
-            }
-            std::collections::hash_map::Entry::Occupied(_) => {}
+        if entry.updated_at.trim().is_empty() {
+            return Err(ReviewPlatformError::Parse(format!(
+                "Review platform token authority '{raw_key}' is missing its update timestamp"
+            )));
         }
     }
-    passthrough.extend(normalized.into_iter().map(|(key, (_, entry))| (key, entry)));
-    let canonical = StoredReviewPlatformTokens {
-        tokens: passthrough,
-    };
-    let changed = canonical != original;
-    (canonical, changed)
+
+    Ok(())
 }
 
 async fn get_repository_root(repository_path: &str) -> Result<String, ReviewPlatformError> {
@@ -5021,23 +5027,12 @@ fn normalize_repository_root(root: &str) -> String {
 impl ReviewPlatformService {
     async fn load_stored_tokens(&self) -> Result<ReviewPlatformAuthTokens, ReviewPlatformError> {
         let _transaction = self.token_store_lock.lock().await;
-        let (stored, migrated) =
-            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
-        if migrated {
-            self.save_stored_token_file_unlocked(&stored).await?;
-        }
+        let stored = self.load_stored_token_file_unlocked().await?;
         Ok(ReviewPlatformAuthTokens {
             tokens: stored
                 .tokens
                 .into_iter()
-                .filter_map(|(key, entry)| {
-                    let token = entry.token.trim().to_string();
-                    if token.is_empty() {
-                        None
-                    } else {
-                        normalize_stored_token_key(&key).map(|key| (key, token))
-                    }
-                })
+                .map(|(key, entry)| (key, entry.token))
                 .collect(),
         })
     }
@@ -5047,8 +5042,24 @@ impl ReviewPlatformService {
     ) -> Result<StoredReviewPlatformTokens, ReviewPlatformError> {
         let path = self.token_store_path();
         match fs::read_to_string(path).await {
-            Ok(content) => serde_json::from_str::<StoredReviewPlatformTokens>(&content)
-                .map_err(|error| ReviewPlatformError::Parse(error.to_string())),
+            Ok(content) => {
+                let value = serde_json::from_str::<Value>(&content)
+                    .map_err(|error| ReviewPlatformError::Parse(error.to_string()))?;
+                let schema_version = value
+                    .get("schemaVersion")
+                    .and_then(Value::as_u64)
+                    .and_then(|version| u16::try_from(version).ok());
+                if schema_version != Some(REVIEW_PLATFORM_TOKEN_SCHEMA_VERSION) {
+                    return Err(ReviewPlatformError::Parse(
+                        "Review platform token store is not in the OpenBitFun 1.0.0 format; use the explicit data migration tool instead"
+                            .to_string(),
+                    ));
+                }
+                let stored = serde_json::from_value::<StoredReviewPlatformTokens>(value)
+                    .map_err(|error| ReviewPlatformError::Parse(error.to_string()))?;
+                validate_current_stored_tokens(&stored)?;
+                Ok(stored)
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 Ok(StoredReviewPlatformTokens::default())
             }
@@ -7529,7 +7540,7 @@ mod tests {
             .expect("system clock should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "bitfun-review-platform-{name}-{}-{id}.json",
+            "openbitfun-review-platform-{name}-{}-{id}.json",
             std::process::id()
         ))
     }
@@ -7711,30 +7722,37 @@ mod tests {
         assert!(!path.exists());
     }
 
-    #[test]
-    fn legacy_github_tokens_are_removed_during_canonicalization() {
-        let (stored, changed) = canonicalize_stored_tokens(StoredReviewPlatformTokens {
-            tokens: HashMap::from([
-                (
-                    "github:github.com".to_string(),
-                    StoredReviewPlatformToken {
-                        token: "legacy-github-token".to_string(),
-                        updated_at: "2026-07-14T00:00:00Z".to_string(),
-                    },
-                ),
-                (
-                    "gitlab:gitlab.com".to_string(),
-                    StoredReviewPlatformToken {
-                        token: "gitlab-token".to_string(),
-                        updated_at: "2026-07-14T00:00:00Z".to_string(),
-                    },
-                ),
-            ]),
-        });
+    #[tokio::test]
+    async fn pre_openbitfun_github_token_is_rejected_without_modifying_store() {
+        let path = temp_token_store_path("pre-openbitfun-github-token");
+        let original = serde_json::to_vec(&json!({
+            "schemaVersion": 1,
+            "tokens": {
+                "github:github.com": {
+                    "token": "pre-openbitfun-github-token",
+                    "updatedAt": "2026-07-14T00:00:00Z"
+                },
+                "gitlab:gitlab.com": {
+                    "token": "gitlab-token",
+                    "updatedAt": "2026-07-14T00:00:00Z"
+                }
+            }
+        }))
+        .expect("token fixture should serialize");
+        fs::write(&path, &original)
+            .await
+            .expect("token fixture should be written");
+        let service = ReviewPlatformService::new_local_only(path.clone());
 
-        assert!(changed);
-        assert!(!stored.tokens.contains_key("github:github.com"));
-        assert!(stored.tokens.contains_key("gitlab:gitlab.com"));
+        let error = service
+            .load_stored_tokens()
+            .await
+            .expect_err("pre-OpenBitFun GitHub token must require explicit migration");
+
+        assert!(error.to_string().contains("pre-OpenBitFun"), "{error}");
+        assert!(error.to_string().contains("migration tool"), "{error}");
+        assert_eq!(fs::read(&path).await.expect("read unchanged store"), original);
+        let _ = fs::remove_file(path).await;
     }
 
     #[test]
@@ -7829,45 +7847,42 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn loaded_legacy_token_authorities_are_normalized() {
-        let path = temp_token_store_path("legacy-token-authority");
-        fs::write(
-            &path,
-            serde_json::to_vec(&json!({
+    async fn noncanonical_stored_token_authority_is_rejected_without_modification() {
+        let path = temp_token_store_path("noncanonical-token-authority");
+        let original = serde_json::to_vec(&json!({
+                "schemaVersion": 1,
                 "tokens": {
                     "gitlab:GitLab.COM.": {
-                        "token": "legacy-token",
+                        "token": "noncanonical-token",
                         "updatedAt": "2026-07-11T00:00:00Z"
                     }
                 }
             }))
-            .expect("legacy token fixture should serialize"),
-        )
+            .expect("noncanonical token fixture should serialize");
+        fs::write(&path, &original)
         .await
-        .expect("legacy token fixture should be written");
+        .expect("noncanonical token fixture should be written");
         let service = ReviewPlatformService::new_local_only(path.clone());
 
-        let tokens = service
+        let error = service
             .load_stored_tokens()
             .await
-            .expect("legacy token store should load");
+            .expect_err("noncanonical token authority must require explicit migration");
 
-        assert_eq!(
-            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
-            Some("legacy-token")
-        );
+        assert!(error.to_string().contains("not canonical"), "{error}");
+        assert!(error.to_string().contains("migration tool"), "{error}");
+        assert_eq!(fs::read(&path).await.expect("read unchanged store"), original);
         let _ = fs::remove_file(path).await;
     }
 
     #[tokio::test]
-    async fn canonical_token_wins_legacy_conflict_and_migration_is_persisted() {
-        let path = temp_token_store_path("canonical-token-conflict");
-        fs::write(
-            &path,
-            serde_json::to_vec(&json!({
+    async fn canonical_and_noncanonical_token_conflict_is_not_rewritten() {
+        let path = temp_token_store_path("noncanonical-token-conflict");
+        let original = serde_json::to_vec(&json!({
+                "schemaVersion": 1,
                 "tokens": {
                     "gitlab:GitLab.COM.": {
-                        "token": "legacy-token",
+                        "token": "noncanonical-token",
                         "updatedAt": "2026-07-12T00:00:00Z"
                     },
                     "gitlab:gitlab.com": {
@@ -7876,53 +7891,24 @@ mod tests {
                     }
                 }
             }))
-            .expect("conflicting token fixture should serialize"),
-        )
+            .expect("conflicting token fixture should serialize");
+        fs::write(&path, &original)
         .await
         .expect("conflicting token fixture should be written");
         let service = ReviewPlatformService::new_local_only(path.clone());
 
-        let tokens = service
+        let load_error = service
             .load_stored_tokens()
             .await
-            .expect("conflicting token store should migrate");
-        assert_eq!(
-            tokens.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
-            Some("canonical-token")
-        );
-        let migrated: StoredReviewPlatformTokens = serde_json::from_slice(
-            &fs::read(&path)
-                .await
-                .expect("migrated token file should be readable"),
-        )
-        .expect("migrated token file should parse");
-        assert_eq!(migrated.tokens.len(), 1);
-        assert_eq!(
-            migrated
-                .tokens
-                .get("gitlab:gitlab.com")
-                .map(|entry| entry.token.as_str()),
-            Some("canonical-token")
-        );
+            .expect_err("conflicting token store must not be normalized on load");
+        assert!(load_error.to_string().contains("not canonical"));
 
-        service
+        let update_error = service
             .update_auth_token(ReviewPlatformKind::Gitlab, "GITLAB.COM.", "new-token")
             .await
-            .expect("canonical token update should succeed");
-        let updated: StoredReviewPlatformTokens = serde_json::from_slice(
-            &fs::read(&path)
-                .await
-                .expect("updated token file should be readable"),
-        )
-        .expect("updated token file should parse");
-        assert_eq!(updated.tokens.len(), 1);
-        assert_eq!(
-            updated
-                .tokens
-                .get("gitlab:gitlab.com")
-                .map(|entry| entry.token.as_str()),
-            Some("new-token")
-        );
+            .expect_err("write operations must not repair a noncanonical store");
+        assert!(update_error.to_string().contains("not canonical"));
+        assert_eq!(fs::read(&path).await.expect("read unchanged store"), original);
         let _ = fs::remove_file(path).await;
     }
 
@@ -8054,7 +8040,7 @@ mod tests {
         let service = ReviewPlatformService::new(path, runtime.clone());
 
         let snapshot = service
-            .workspace_context("/srv/projects/bitfun", None)
+            .workspace_context("/srv/projects/openbitfun", None)
             .await
             .expect("remote workspace context should resolve through remote git");
 
@@ -8078,12 +8064,12 @@ mod tests {
             commands,
             vec![
                 (
-                    "/srv/projects/bitfun".to_string(),
-                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects/openbitfun".to_string(),
+                    "/srv/projects/openbitfun".to_string(),
                     vec!["rev-parse".to_string(), "--show-toplevel".to_string()],
                 ),
                 (
-                    "/srv/projects/bitfun".to_string(),
+                    "/srv/projects/openbitfun".to_string(),
                     "/srv/projects".to_string(),
                     vec!["remote".to_string(), "-v".to_string()],
                 ),
@@ -8101,7 +8087,7 @@ mod tests {
         assert!(
             service
                 .repository_trusts_provider_identity(
-                    "/srv/projects/bitfun",
+                    "/srv/projects/openbitfun",
                     ReviewPlatformKind::Gitlab,
                     "gitlab.com",
                     "example/repo",
@@ -8155,7 +8141,7 @@ mod tests {
     #[tokio::test]
     async fn repository_root_accepts_nested_and_file_paths() {
         let root = std::env::temp_dir().join(format!(
-            "bitfun-review-platform-git-root-{}-{}",
+            "openbitfun-review-platform-git-root-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

@@ -14,21 +14,21 @@ pub(crate) struct BuiltinAcpClientPreset {
     pub(crate) command: &'static str,
     pub(crate) args: &'static [&'static str],
     pub(crate) tool_command: &'static str,
-    /// npm package BitFun can install on the user's behalf. `None` means the
-    /// agent is user-managed (BitFun only provides the integration, the user
+    /// npm package OpenBitFun can install on the user's behalf. `None` means the
+    /// agent is user-managed (OpenBitFun only provides the integration, the user
     /// installs the CLI themselves) — the UI then shows no one-click installer.
     pub(crate) install_package: Option<&'static str>,
     pub(crate) adapter_package: Option<&'static str>,
     pub(crate) adapter_bin: Option<&'static str>,
-    /// A profile directory BitFun ships and copies into the agent's own home
+    /// A profile directory OpenBitFun ships and copies into the agent's own home
     /// before launching it. `None` — every preset but dsh — means the CLI is
     /// self-contained and the command runs as-is.
     pub(crate) bundled_profile: Option<&'static str>,
 }
 
-/// The profile directory BitFun materializes for DeepSeek Harness. See
-/// `dsh_profile.rs`: the bridge ships with BitFun, the harness does not.
-pub(crate) const DSH_BUNDLED_PROFILE: &str = "bitfun-acp";
+/// The profile directory OpenBitFun materializes for DeepSeek Harness. See
+/// `dsh_profile.rs`: the bridge ships with OpenBitFun, the harness does not.
+pub(crate) const DSH_BUNDLED_PROFILE: &str = "openbitfun-acp";
 
 const BUILTIN_ACP_CLIENT_PRESETS: &[BuiltinAcpClientPreset] = &[
     BuiltinAcpClientPreset {
@@ -42,9 +42,9 @@ const BUILTIN_ACP_CLIENT_PRESETS: &[BuiltinAcpClientPreset] = &[
         bundled_profile: None,
     },
     // DeepSeek Harness (dsh) — the harness has no ACP entry point of its own,
-    // so BitFun ships one as a dsh PROFILE (packages/dsh-acp) and launches it
+    // so OpenBitFun ships one as a dsh PROFILE (packages/dsh-acp) and launches it
     // through the user's own installation. The model and the API key stay in
-    // dsh, where the user configured them; BitFun stores neither. Installable
+    // dsh, where the user configured them; OpenBitFun stores neither. Installable
     // from npm like codex, hence install_package; native ACP, hence no adapter.
     BuiltinAcpClientPreset {
         id: "dsh",
@@ -59,8 +59,8 @@ const BUILTIN_ACP_CLIENT_PRESETS: &[BuiltinAcpClientPreset] = &[
     // Oh My Pi (omp) — a terminal coding agent that speaks ACP natively via
     // `omp acp` (no adapter needed, like opencode). User-managed: omp targets
     // the bun runtime (installed via `bun install -g @oh-my-pi/pi-coding-agent`
-    // or `curl -fsSL https://omp.sh/install | sh`), which BitFun's npm-based
-    // installer cannot provide — so install_package is None and BitFun only
+    // or `curl -fsSL https://omp.sh/install | sh`), which OpenBitFun's npm-based
+    // installer cannot provide — so install_package is None and OpenBitFun only
     // detects `omp` on PATH and launches it. https://github.com/can1357/oh-my-pi
     BuiltinAcpClientPreset {
         id: "omp",
@@ -171,7 +171,7 @@ mod tests {
         // Native ACP — no adapter package/bin, like opencode.
         assert!(preset.adapter_package.is_none());
         assert!(preset.adapter_bin.is_none());
-        // User-managed: BitFun provides no installer for omp.
+        // User-managed: OpenBitFun provides no installer for omp.
         assert!(preset.install_package.is_none());
 
         let config = default_config_for_builtin_client("omp").expect("omp config");
@@ -181,11 +181,11 @@ mod tests {
     }
 
     #[test]
-    fn dsh_preset_launches_the_bitfun_profile() {
+    fn dsh_preset_launches_the_openbitfun_profile() {
         let preset = builtin_acp_client_preset("dsh").expect("dsh preset registered");
         assert_eq!(preset.command, "dsh");
         assert_eq!(preset.tool_command, "dsh");
-        // The launch IS the profile: BitFun ships the bridge, dsh runs it.
+        // The launch IS the profile: OpenBitFun ships the bridge, dsh runs it.
         assert_eq!(preset.args, &["--profile", DSH_BUNDLED_PROFILE]);
         assert_eq!(preset.bundled_profile, Some(DSH_BUNDLED_PROFILE));
         // Native ACP — the bridge is the profile, not a separate adapter.

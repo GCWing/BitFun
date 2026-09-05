@@ -1,7 +1,7 @@
-use bitfun_services_core::token_usage::{
+use chrono::Utc;
+use openbitfun_services_core::token_usage::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
 };
-use chrono::Utc;
 
 #[test]
 fn token_usage_record_preserves_model_identity_and_cached_availability_default() {

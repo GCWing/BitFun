@@ -6,8 +6,8 @@ export const codePreviewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'line' }, { id: 'lineNumber' }, { id: 'lineContent' }, { id: 'cursor' },
   ],
   states: [
-    { id: 'empty', selector: { kind: 'self', suffix: '[data-bf-state~="empty"]' } },
-    { id: 'streaming', selector: { kind: 'self', suffix: '[data-bf-state~="streaming"]' } },
-    { id: 'highlighted', selector: { kind: 'self', suffix: '[data-bf-state~="highlighted"]' } },
+    { id: 'empty', selector: { kind: 'self', suffix: '[data-openbitfun-state~="empty"]' } },
+    { id: 'streaming', selector: { kind: 'self', suffix: '[data-openbitfun-state~="streaming"]' } },
+    { id: 'highlighted', selector: { kind: 'self', suffix: '[data-openbitfun-state~="highlighted"]' } },
   ],
 };

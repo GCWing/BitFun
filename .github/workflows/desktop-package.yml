@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Release tag (stable: v0.2.18, beta: v0.2.18-beta.1)."
+        description: "Release tag (stable: v1.0.0, beta: v1.0.0-beta.1)."
         required: false
         type: string
       checkout_ref:
@@ -115,7 +115,7 @@ jobs:
 
           git fetch origin main --tags --force
           CHECKOUT_SHA="$(git rev-parse "${CHECKOUT_REF}^{commit}")"
-          if [[ "${GITHUB_REPOSITORY}" == "GCWing/BitFun" ]] && \
+          if [[ "${GITHUB_REPOSITORY}" == "GCWing/OpenBitFun" ]] && \
              ! git merge-base --is-ancestor "${CHECKOUT_SHA}" origin/main; then
             echo "Ref ${CHECKOUT_REF} (${CHECKOUT_SHA}) is not part of the protected main history." >&2
             exit 1
@@ -142,15 +142,15 @@ jobs:
     if: needs.prepare.outputs.relay_image_only != 'true'
     env:
       NODE_OPTIONS: --max-old-space-size=6144
-      BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
-      BITFUN_RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
-      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
-      TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/BitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
+      OPENBITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
+      OPENBITFUN_RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
+      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
+      TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       # Same trust root, compiled into the Desktop binary so one-click relay
       # deploy can verify the signed checksum locally and hand the remote host
       # a hash it does not have to trust the mirror for.
-      BITFUN_RELEASE_PUBKEY: ${{ secrets.BITFUN_RELEASE_PUBKEY || secrets.TAURI_UPDATER_PUBKEY }}
+      OPENBITFUN_RELEASE_PUBKEY: ${{ secrets.OPENBITFUN_RELEASE_PUBKEY || secrets.TAURI_UPDATER_PUBKEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -183,11 +183,11 @@ jobs:
               $ErrorActionPreference = 'Stop'
               pnpm run desktop:build:nsis --target x86_64-pc-windows-msvc --verbose
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-              $desktopExe = "target/x86_64-pc-windows-msvc/release/bitfun-desktop.exe"
+              $desktopExe = "target/x86_64-pc-windows-msvc/release/openbitfun-desktop.exe"
               if (-not (Test-Path $desktopExe)) {
                 throw "Desktop executable was not found after NSIS build: $desktopExe"
               }
-              $env:BITFUN_INSTALLER_APP_EXE = $desktopExe
+              $env:OPENBITFUN_INSTALLER_APP_EXE = $desktopExe
               pnpm run installer:build:only
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -292,7 +292,7 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          BITFUN_REQUIRE_APPLE_SIGNING: ${{ needs.prepare.outputs.upload_to_release }}
+          OPENBITFUN_REQUIRE_APPLE_SIGNING: ${{ needs.prepare.outputs.upload_to_release }}
         run: bash scripts/ci/setup-macos-signing.sh
 
       - name: Project beta build version
@@ -318,13 +318,13 @@ jobs:
       - name: Upload bundles
         uses: actions/upload-artifact@v6
         with:
-          name: bitfun-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}-bundle
+          name: openbitfun-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}-bundle
           if-no-files-found: error
           path: |
             target/*/release/bundle
             target/release/bundle
             src/apps/desktop/target/release/bundle
-            BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
+            OpenBitFun-Installer/src-tauri/target/release/openbitfun-installer.exe
 
   linux-binaries:
     name: Linux CLI and Relay Server
@@ -359,7 +359,7 @@ jobs:
       contents: write
       packages: write
     env:
-      IMAGE: ghcr.io/gcwing/bitfun-relay-server
+      IMAGE: ghcr.io/gcwing/openbitfun-relay-server
 
     steps:
       - name: Checkout
@@ -371,7 +371,7 @@ jobs:
         if: needs.prepare.outputs.relay_image_only != 'true'
         uses: actions/download-artifact@v7
         with:
-          pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
+          pattern: openbitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
           path: linux-release-assets
           merge-multiple: true
 
@@ -385,18 +385,18 @@ jobs:
           set -euo pipefail
           mkdir -p linux-release-assets
           gh release download "${RELEASE_TAG}" \
-            --repo GCWing/BitFun \
+            --repo GCWing/OpenBitFun \
             --dir linux-release-assets \
-            --pattern 'bitfun-relay-server-*.tar.gz' \
-            --pattern 'bitfun-relay-server-*.tar.gz.sha256'
+            --pattern 'openbitfun-relay-server-*.tar.gz' \
+            --pattern 'openbitfun-relay-server-*.tar.gz.sha256'
 
       - name: Verify image inputs
         shell: bash
         run: |
           set -euo pipefail
-          test -f linux-release-assets/bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
-          test -f linux-release-assets/bitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
-          for archive in linux-release-assets/bitfun-relay-server-*.tar.gz; do
+          test -f linux-release-assets/openbitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+          test -f linux-release-assets/openbitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
+          for archive in linux-release-assets/openbitfun-relay-server-*.tar.gz; do
             (cd linux-release-assets && sha256sum --check "$(basename "${archive}").sha256")
           done
           cp src/apps/relay-server/Dockerfile.release linux-release-assets/Dockerfile.release
@@ -433,7 +433,7 @@ jobs:
             if [[ "${IMAGE_ONLY}" == "true" ]]; then
               # Backfilling an older release must not roll the floating tag
               # backwards. GitHub's latest endpoint excludes prereleases.
-              latest_release="$(gh api repos/GCWing/BitFun/releases/latest --jq .tag_name)"
+              latest_release="$(gh api repos/GCWing/OpenBitFun/releases/latest --jq .tag_name)"
               if [[ "${RELEASE_TAG}" == "${latest_release}" ]]; then
                 echo "${IMAGE}:latest"
               fi
@@ -472,9 +472,9 @@ jobs:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
@@ -503,7 +503,7 @@ jobs:
       - name: Upload signed image descriptor
         uses: actions/upload-artifact@v6
         with:
-          name: bitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
+          name: openbitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
           if-no-files-found: error
           retention-days: 7
           path: |
@@ -557,7 +557,7 @@ jobs:
       - name: Download bundled artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: bitfun-${{ needs.prepare.outputs.release_tag }}-*-bundle
+          pattern: openbitfun-${{ needs.prepare.outputs.release_tag }}-*-bundle
           path: release-assets
           merge-multiple: true
 
@@ -565,7 +565,7 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
-          pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
+          pattern: openbitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
           path: linux-release-assets
           merge-multiple: true
 
@@ -573,7 +573,7 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
-          name: bitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
+          name: openbitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
           path: relay-image-assets
 
       - name: List release assets
@@ -599,9 +599,9 @@ jobs:
       - name: Sign versioned Windows installer
         shell: bash
         env:
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: bash scripts/sign-release-assets.sh release-manual-assets/*.exe
 
       - name: Collect updater assets
@@ -638,7 +638,7 @@ jobs:
             --assets-dir linux-release-assets \
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
-            --repo "GCWing/BitFun" \
+            --repo "GCWing/OpenBitFun" \
             --out linux-release-assets/linux-binaries.json
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
@@ -650,9 +650,9 @@ jobs:
       - name: Sign installer packages
         shell: bash
         env:
-          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          OPENBITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPENBITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENBITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           mapfile -t assets < <(
@@ -691,10 +691,10 @@ jobs:
             release-assets/**/*.rpm \
             release-assets/**/*.rpm.sig \
             release-assets/minisign.pub \
-            linux-release-assets/bitfun-cli-*.tar.gz \
-            linux-release-assets/bitfun-cli-*.tar.gz.sha256 \
-            linux-release-assets/bitfun-relay-server-*.tar.gz \
-            linux-release-assets/bitfun-relay-server-*.tar.gz.sha256 \
+            linux-release-assets/openbitfun-cli-*.tar.gz \
+            linux-release-assets/openbitfun-cli-*.tar.gz.sha256 \
+            linux-release-assets/openbitfun-relay-server-*.tar.gz \
+            linux-release-assets/openbitfun-relay-server-*.tar.gz.sha256 \
             linux-release-assets/*.tar.gz.sig \
             linux-release-assets/*.tar.gz.sha256.sig \
             linux-release-assets/linux-binaries.json \
@@ -728,7 +728,7 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           target_commitish: ${{ needs.prepare.outputs.checkout_ref }}
           prerelease: ${{ needs.prepare.outputs.release_channel == 'beta' }}
-          name: ${{ needs.prepare.outputs.release_channel == 'beta' && format('BitFun {0} Beta', needs.prepare.outputs.version) || format('BitFun {0}', needs.prepare.outputs.version) }}
+          name: ${{ needs.prepare.outputs.release_channel == 'beta' && format('OpenBitFun {0} Beta', needs.prepare.outputs.version) || format('OpenBitFun {0}', needs.prepare.outputs.version) }}
           generate_release_notes: true
           files: release-upload-assets/*
           fail_on_unmatched_files: true
@@ -749,7 +749,7 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
           while IFS= read -r cli_url; do
@@ -761,13 +761,13 @@ jobs:
         if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
+            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
             -o relay-image.published.json
           test "$(jq -r '.tag' relay-image.published.json)" = "${{ needs.prepare.outputs.release_tag }}"
-          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/bitfun-relay-server"
+          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/openbitfun-relay-server"
           jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
+            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
             -o /dev/null
 
       - name: Resolve beta channel promotion
@@ -825,7 +825,7 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --target "${CHECKOUT_REF}" \
               --prerelease \
-              --title "BitFun Beta Update Channel" \
+              --title "OpenBitFun Beta Update Channel" \
               --notes "Mutable updater pointer. Installable beta releases use immutable version tags."
           fi
           mkdir -p beta-channel
@@ -846,7 +846,7 @@ jobs:
       # the release. Receiver: scripts/openbitfun-release-sync.sh.
       # Host restore: deploy/openbitfun-host/README.md.
       - name: Request openbitfun mirror sync
-        if: github.repository == 'GCWing/BitFun'
+        if: github.repository == 'GCWing/OpenBitFun'
         continue-on-error: true
         env:
           SYNC_WEBHOOK_URL: ${{ secrets.OPENBITFUN_SYNC_WEBHOOK_URL }}

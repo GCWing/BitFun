@@ -68,7 +68,7 @@ export class MobilePreviewScenarios {
     "DESKTOP-KM3L4UI",
     [new MobilePreviewMessage("user", "三端的组件和样式可以保持一致吗？"), new MobilePreviewMessage("assistant", "可以。共享视觉契约，三端继续使用原生渲染。")],
     "",
-    "向 BitFun 提问",
+    "向 OpenBitFun 提问",
     "connected",
     false
   );

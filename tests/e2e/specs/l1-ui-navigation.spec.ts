@@ -109,7 +109,7 @@ describe('L1 UI Navigation', () => {
         return;
       }
 
-      const headerRight = await $('.bitfun-header-right');
+      const headerRight = await $('.openbitfun-header-right');
       const exists = await headerRight.isExisting();
       
       if (exists) {
@@ -126,7 +126,7 @@ describe('L1 UI Navigation', () => {
         return;
       }
 
-      const headerRight = await $('.bitfun-header-right');
+      const headerRight = await $('.openbitfun-header-right');
       const exists = await headerRight.isExisting();
       
       if (exists) {
@@ -150,7 +150,7 @@ describe('L1 UI Navigation', () => {
       const selectors = [
         '[data-testid="header-config-btn"]',
         '[data-testid="header-settings-btn"]',
-        '.bitfun-header-right button:has(svg.lucide-settings)',
+        '.openbitfun-header-right button:has(svg.lucide-settings)',
       ];
 
       let foundButton = false;
@@ -167,7 +167,7 @@ describe('L1 UI Navigation', () => {
             await btn.click();
             await browser.pause(1000);
             
-            const configPanel = await $('.bitfun-config-center-panel');
+            const configPanel = await $('.openbitfun-config-center-panel');
             const panelVisible = await configPanel.isExisting();
             
             if (panelVisible) {
@@ -176,7 +176,7 @@ describe('L1 UI Navigation', () => {
               
               await browser.pause(500);
               
-              const backdrop = await $('.bitfun-config-center-backdrop');
+              const backdrop = await $('.openbitfun-config-center-backdrop');
               const hasBackdrop = await backdrop.isExisting();
               
               if (hasBackdrop) {
@@ -198,7 +198,7 @@ describe('L1 UI Navigation', () => {
       if (!foundButton) {
         console.log('[L1] Settings button not found (checking alternate locations)');
         
-        const headerRight = await $('.bitfun-header-right');
+        const headerRight = await $('.openbitfun-header-right');
         const headerExists = await headerRight.isExisting();
         
         if (headerExists) {

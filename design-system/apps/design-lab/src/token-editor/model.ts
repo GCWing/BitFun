@@ -1,6 +1,6 @@
-import type { SystemTokenMode } from "@bitfun/design-tokens";
-import type { ThemeDataName } from "@bitfun/theme-bitfun";
-import type { TokenOverrides } from "@bitfun/ui";
+import type { SystemTokenMode } from "@openbitfun/design-tokens";
+import type { ThemeDataName } from "@openbitfun/theme-openbitfun";
+import type { TokenOverrides } from "@openbitfun/ui";
 import {
   editableTokenCatalog,
   type EditableToken,
@@ -22,7 +22,7 @@ export interface TokenSourceChange {
 
 export type TokenDrafts = Readonly<Record<string, string>>;
 
-const STORAGE_KEY = "bitfun.design-lab.token-drafts.v1";
+const STORAGE_KEY = "openbitfun.design-lab.token-drafts.v1";
 
 export function getActiveTokenMode(
   token: EditableToken,

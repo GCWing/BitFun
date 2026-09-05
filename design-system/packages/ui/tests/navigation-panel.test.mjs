@@ -45,11 +45,11 @@ test("NavigationPanel composes independent header, grouped body, and footer regi
   );
 
   assert.match(markup, /<nav[^>]+aria-label="Application navigation"/);
-  assert.match(markup, /data-bf-component="navigation-panel"/);
-  assert.match(markup, /data-bf-part="header"/);
-  assert.match(markup, /data-bf-part="content"/);
-  assert.match(markup, /data-bf-part="footer"/);
-  assert.match(markup, /data-bf-scrollbar-visibility="always"/);
+  assert.match(markup, /data-openbitfun-component="navigation-panel"/);
+  assert.match(markup, /data-openbitfun-part="header"/);
+  assert.match(markup, /data-openbitfun-part="content"/);
+  assert.match(markup, /data-openbitfun-part="footer"/);
+  assert.match(markup, /data-openbitfun-scrollbar-visibility="always"/);
   assert.match(markup, /aria-labelledby="[^"]+"/);
   assert.match(markup, /aria-current="page"/);
   assert.match(markup, /disabled=""/);
@@ -63,11 +63,11 @@ test("NavigationPanel styling reuses shared action and scrollbar contracts", asy
     "utf8",
   );
 
-  assert.match(styles, /--bf-layout-navigation-panel-inline-size/);
-  assert.match(styles, /--bf-layout-navigation-panel-footer-height/);
-  assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--bf-space-1\) \/ 2\)/);
-  assert.match(styles, /--bf-color-surface-chrome/);
-  assert.match(styles, /--bf-color-selection-surface/);
+  assert.match(styles, /--openbitfun-layout-navigation-panel-inline-size/);
+  assert.match(styles, /--openbitfun-layout-navigation-panel-footer-height/);
+  assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--openbitfun-space-1\) \/ 2\)/);
+  assert.match(styles, /--openbitfun-color-surface-chrome/);
+  assert.match(styles, /--openbitfun-color-selection-surface/);
   assert.match(styles, /aria-current/);
   assert.match(styles, /scrollbar-gutter: stable/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
@@ -84,16 +84,16 @@ test("NavigationPanel separates group captions, destinations, and the selected d
   );
   const heading = styles.match(/\.headingLabel\s*\{([^}]+)\}/)?.[1];
   assert.ok(heading);
-  assert.match(heading, /color: color-mix\(in srgb, var\(--bf-color-content-primary\) 40%, transparent\)/);
-  assert.match(heading, /font-family: var\(--bf-type-label-xs-font-family\)/);
-  assert.match(heading, /font-size: var\(--bf-type-label-xs-font-size\)/);
-  assert.match(heading, /font-weight: var\(--bf-type-label-xs-font-weight\)/);
-  assert.match(heading, /line-height: var\(--bf-type-label-xs-line-height\)/);
-  assert.match(styles, /\.item\[data-bf-tone="neutral"\]:not\(\[data-disabled="true"\]\)\s*\{\s*color: var\(--bf-color-content-primary\)/);
-  assert.match(actionStyles, /\.label\s*\{[^}]*font-size: var\(--bf-type-label-md-font-size\)/);
-  assert.match(actionStyles, /\.label\s*\{[^}]*font-weight: var\(--bf-type-label-md-font-weight\)/);
-  assert.match(styles, /\.item > \[data-bf-part="trigger"\]\[aria-current\] > \[data-bf-part="label"\]\s*\{\s*font-weight: var\(--bf-type-label-selected-font-weight\)/);
-  assert.match(styles, /@media \(prefers-contrast: more\)[\s\S]*?color: var\(--bf-color-content-muted\)/);
-  assert.match(styles, /:global\(\[data-contrast="high"\]\) \.headingLabel\s*\{\s*color: var\(--bf-color-content-muted\)/);
+  assert.match(heading, /color: color-mix\(in srgb, var\(--openbitfun-color-content-primary\) 40%, transparent\)/);
+  assert.match(heading, /font-family: var\(--openbitfun-type-label-xs-font-family\)/);
+  assert.match(heading, /font-size: var\(--openbitfun-type-label-xs-font-size\)/);
+  assert.match(heading, /font-weight: var\(--openbitfun-type-label-xs-font-weight\)/);
+  assert.match(heading, /line-height: var\(--openbitfun-type-label-xs-line-height\)/);
+  assert.match(styles, /\.item\[data-openbitfun-tone="neutral"\]:not\(\[data-disabled="true"\]\)\s*\{\s*color: var\(--openbitfun-color-content-primary\)/);
+  assert.match(actionStyles, /\.label\s*\{[^}]*font-size: var\(--openbitfun-type-label-md-font-size\)/);
+  assert.match(actionStyles, /\.label\s*\{[^}]*font-weight: var\(--openbitfun-type-label-md-font-weight\)/);
+  assert.match(styles, /\.item > \[data-openbitfun-part="trigger"\]\[aria-current\] > \[data-openbitfun-part="label"\]\s*\{\s*font-weight: var\(--openbitfun-type-label-selected-font-weight\)/);
+  assert.match(styles, /@media \(prefers-contrast: more\)[\s\S]*?color: var\(--openbitfun-color-content-muted\)/);
+  assert.match(styles, /:global\(\[data-contrast="high"\]\) \.headingLabel\s*\{\s*color: var\(--openbitfun-color-content-muted\)/);
   assert.match(styles, /@media \(forced-colors: active\)[\s\S]*?color: CanvasText/);
 });

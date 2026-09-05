@@ -6,12 +6,12 @@
 /* ========== Tool icon styles ========== */
 .code-review-card {
   /* icon={null}: no left rail; a small nudge so title is not flush to the border. */
-  > [data-bf-part='surface'] > [data-bf-component='flow-chat-tool-card'][data-bf-part='header'] {
+  > [data-openbitfun-part='surface'] > [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='header'] {
     padding-left: 10px;
   }
 
-  [data-bf-part='iconGraphic'].code-review-icon {
-    color: var(--bf-color-accent-default);
+  [data-openbitfun-part='iconGraphic'].code-review-icon {
+    color: var(--openbitfun-color-accent-default);
   }
 
   .code-review-report-actions {
@@ -31,15 +31,15 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     transition:
       background 160ms ease,
       color 160ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--bf-color-action-neutral-surface-hover);
-      color: var(--bf-color-content-primary);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      color: var(--openbitfun-color-content-primary);
     }
 
     &:disabled {
@@ -60,7 +60,7 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--bf-color-content-muted);
+  color: var(--openbitfun-color-content-muted);
   cursor: pointer;
   transition:
     scale 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -69,8 +69,8 @@
   flex-shrink: 0;
 
   &:hover {
-    background: var(--bf-color-action-neutral-surface-hover);
-    color: var(--bf-color-content-primary);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+    color: var(--openbitfun-color-content-primary);
   }
 }
 
@@ -84,13 +84,13 @@
     display: grid;
     gap: 7px;
     padding: 2px 0 8px;
-    border-bottom: 1px dashed var(--bf-color-border-default);
+    border-bottom: 1px dashed var(--openbitfun-color-border-default);
   }
 
   .review-reliability-status__title {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .review-reliability-status__items {
@@ -106,19 +106,19 @@
     gap: 6px;
     max-width: 100%;
     padding: 6px 8px;
-    border-left: 2px solid var(--bf-color-accent-default);
+    border-left: 2px solid var(--openbitfun-color-accent-default);
     border-radius: 4px;
-    background: color-mix(in srgb, var(--bf-color-surface-raised) 70%, transparent);
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-support-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 70%, transparent);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     &--warning {
-      border-left-color: var(--bf-color-status-warning-content);
+      border-left-color: var(--openbitfun-color-status-warning-content);
     }
 
     &--action {
-      border-left-color: var(--bf-color-status-danger-content);
+      border-left-color: var(--openbitfun-color-status-danger-content);
     }
   }
 
@@ -127,7 +127,7 @@
     align-items: center;
     justify-content: center;
     margin-top: 1px;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
   }
 
   .review-reliability-status__text {
@@ -137,24 +137,24 @@
   }
 
   .review-reliability-status__label {
-    color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   .review-reliability-status__detail {
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     overflow-wrap: anywhere;
   }
 
   /* ---------- Summary section — vertical layout ---------- */
   .review-summary {
     padding-bottom: 10px;
-    border-bottom: 1px dashed var(--bf-color-border-default);
+    border-bottom: 1px dashed var(--openbitfun-color-border-default);
 
     .summary-header {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 8px;
     }
 
@@ -162,8 +162,8 @@
       display: flex;
       flex-direction: column;
       gap: 0;
-      background: var(--bf-color-surface-raised);
-      border: 1px solid var(--bf-color-border-default);
+      background: var(--openbitfun-color-surface-raised);
+      border: 1px solid var(--openbitfun-color-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -173,9 +173,9 @@
       align-items: center;
       gap: 12px;
       padding: 7px 10px;
-      font-size: var(--bf-type-flow-control-font-size);
-      line-height: var(--bf-type-flow-support-line-height);
-      border-bottom: 1px dashed var(--bf-color-border-default);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      line-height: var(--openbitfun-type-flow-support-line-height);
+      border-bottom: 1px dashed var(--openbitfun-color-border-default);
 
       &:last-child {
         border-bottom: none;
@@ -190,16 +190,16 @@
     }
 
     .summary-label {
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
       white-space: nowrap;
       flex-shrink: 0;
       min-width: 90px;
     }
 
     .summary-value {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       word-wrap: break-word;
       word-break: break-word;
       min-width: 0;
@@ -207,13 +207,13 @@
       &.risk-level {
         display: inline-flex;
         align-items: center;
-        font-weight: var(--bf-type-label-selected-font-weight);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
         gap: 4px;
         white-space: nowrap;
       }
 
       &.note {
-        color: var(--bf-color-content-muted);
+        color: var(--openbitfun-color-content-muted);
         font-style: italic;
       }
     }
@@ -221,9 +221,9 @@
 
   .review-report-section {
     overflow: hidden;
-    border: 1px solid var(--bf-color-border-default);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 8px;
-    background: color-mix(in srgb, var(--bf-color-surface-raised) 82%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 82%, transparent);
   }
 
   .review-report-section__header {
@@ -235,32 +235,32 @@
     padding: 9px 10px;
     border: 0;
     background: transparent;
-    color: var(--bf-color-content-primary);
+    color: var(--openbitfun-color-content-primary);
     cursor: pointer;
     text-align: left;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }
 
   .review-report-section__title {
     overflow: hidden;
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .review-report-section__summary {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     white-space: nowrap;
   }
 
   .review-report-section__body {
     padding: 10px;
-    border-top: 1px dashed var(--bf-color-border-default);
+    border-top: 1px dashed var(--openbitfun-color-border-default);
   }
 
   .review-report-group {
@@ -270,15 +270,15 @@
     & + .review-report-group {
       margin-top: 10px;
       padding-top: 10px;
-      border-top: 1px dashed var(--bf-color-border-default);
+      border-top: 1px dashed var(--openbitfun-color-border-default);
     }
   }
 
   .review-report-group__title {
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-heading-page-font-weight);
-    letter-spacing: var(--bf-type-modifier-tracking-wider-letter-spacing);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-heading-page-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wider-letter-spacing);
     text-transform: uppercase;
   }
 
@@ -287,9 +287,9 @@
     gap: 5px;
     margin: 0;
     padding-left: 18px;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     li {
       padding: 2px 4px;
@@ -304,7 +304,7 @@
 
   @keyframes review-highlight-fade {
     0% {
-      background-color: color-mix(in srgb, var(--bf-color-accent-default) 18%, transparent);
+      background-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 18%, transparent);
     }
     100% {
       background-color: transparent;
@@ -318,30 +318,30 @@
   }
 
   .review-decision-item__question {
-    color: var(--bf-color-content-primary);
-    font-weight: var(--bf-type-label-sm-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
   .review-decision-item__options {
     margin: 0;
     padding-left: 16px;
-    color: var(--bf-color-content-secondary);
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
 
     li {
       padding: 1px 0;
 
       &.is-recommended {
-        color: var(--bf-color-accent-default);
-        font-weight: var(--bf-type-label-sm-font-weight);
+        color: var(--openbitfun-color-accent-default);
+        font-weight: var(--openbitfun-type-label-sm-font-weight);
       }
     }
   }
 
   .review-decision-item__tradeoffs {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     font-style: italic;
   }
 
@@ -361,20 +361,20 @@
     gap: 3px;
     min-width: 0;
     padding: 8px;
-    border: 1px solid var(--bf-color-border-default);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 6px;
-    background: var(--bf-color-surface-raised);
+    background: var(--openbitfun-color-surface-raised);
 
     span {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
     }
 
     strong {
       overflow: hidden;
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -386,12 +386,12 @@
   }
 
   .run-manifest__group-title {
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
 
     &--warning {
-      color: var(--bf-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-content);
     }
   }
 
@@ -406,24 +406,24 @@
     max-width: 100%;
     gap: 2px;
     padding: 6px 8px;
-    border: 1px solid var(--bf-color-border-default);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 6px;
-    background: var(--bf-color-surface-raised);
+    background: var(--openbitfun-color-surface-raised);
   }
 
   .run-manifest__chip-name {
     overflow: hidden;
-    color: var(--bf-color-content-primary);
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .run-manifest__chip-meta {
     overflow: hidden;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-flow-support-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -442,11 +442,11 @@
       gap: 8px;
       min-width: 0;
       padding: 6px 8px;
-      border: 1px solid var(--bf-color-border-default);
+      border: 1px solid var(--openbitfun-color-border-default);
       border-radius: 6px;
-      background: var(--bf-color-surface-raised);
-      color: var(--bf-color-content-secondary);
-      font-size: var(--bf-type-flow-control-font-size);
+      background: var(--openbitfun-color-surface-raised);
+      color: var(--openbitfun-color-content-secondary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
     }
 
     span {
@@ -457,9 +457,9 @@
     }
 
     strong {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
       white-space: nowrap;
     }
   }
@@ -488,8 +488,8 @@
   .reviewer-item {
     padding: 10px;
     border-radius: 6px;
-    border: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-raised);
+    border: 1px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-surface-raised);
   }
 
   .reviewer-topline {
@@ -509,27 +509,27 @@
   }
 
   .reviewer-name {
-    font-size: var(--bf-type-flow-control-font-size);
-    font-weight: var(--bf-type-label-selected-font-weight);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    color: var(--openbitfun-color-content-primary);
   }
 
   .reviewer-specialty,
   .reviewer-status,
   .reviewer-issues {
-    font-size: var(--bf-type-flow-micro-font-size);
-    color: var(--bf-color-content-muted);
-    border: 1px solid var(--bf-color-border-default);
-    background: var(--bf-color-surface-raised);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    color: var(--openbitfun-color-content-muted);
+    border: 1px solid var(--openbitfun-color-border-default);
+    background: var(--openbitfun-color-surface-raised);
     border-radius: 999px;
     padding: 2px 6px;
     white-space: nowrap;
   }
 
   .reviewer-summary {
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
-    color: var(--bf-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    color: var(--openbitfun-color-content-secondary);
   }
 
   .issues-list {
@@ -539,12 +539,12 @@
   }
 
   .issues-list .review-issue-item {
-    background: var(--bf-color-surface-raised);
-    border: 1px solid var(--bf-color-border-default);
+    background: var(--openbitfun-color-surface-raised);
+    border: 1px solid var(--openbitfun-color-border-default);
     border-radius: 6px;
     padding: 10px;
-    font-size: var(--bf-type-flow-control-font-size);
-    line-height: var(--bf-type-flow-support-line-height);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-support-line-height);
     transition:
       background-color 160ms ease,
       border-color 160ms ease;
@@ -552,28 +552,28 @@
     overflow: hidden;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
-      border-color: var(--bf-color-field-border-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
+      border-color: var(--openbitfun-color-field-border-hover);
     }
 
     &.severity-critical {
-      border-left: 3px solid var(--bf-color-status-danger-content);
+      border-left: 3px solid var(--openbitfun-color-status-danger-content);
     }
 
     &.severity-high {
-      border-left: 3px solid color-mix(in srgb, var(--bf-color-status-warning-content) 55%, var(--bf-color-status-danger-content));
+      border-left: 3px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 55%, var(--openbitfun-color-status-danger-content));
     }
 
     &.severity-medium {
-      border-left: 3px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+      border-left: 3px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
     }
 
     &.severity-low {
-      border-left: 3px solid var(--bf-color-status-info-content);
+      border-left: 3px solid var(--openbitfun-color-status-info-content);
     }
 
     &.severity-info {
-      border-left: 3px solid var(--bf-color-action-secondary-pressed);
+      border-left: 3px solid var(--openbitfun-color-action-secondary-pressed);
     }
 
     .issue-header {
@@ -594,71 +594,71 @@
     }
 
     .issue-category {
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-secondary);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-secondary);
       flex-shrink: 0;
-      font-size: var(--bf-type-flow-micro-font-size);
+      font-size: var(--openbitfun-type-flow-micro-font-size);
       padding: 1px 5px;
-      background: var(--bf-color-surface-raised);
+      background: var(--openbitfun-color-surface-raised);
       border-radius: 3px;
-      border: 1px solid var(--bf-color-border-default);
+      border: 1px solid var(--openbitfun-color-border-default);
     }
 
     .issue-source {
-      font-size: var(--bf-type-flow-micro-font-size);
-      color: var(--bf-color-accent-default);
-      border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
-      background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+      font-size: var(--openbitfun-type-flow-micro-font-size);
+      color: var(--openbitfun-color-accent-default);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 35%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
       border-radius: 999px;
       padding: 1px 6px;
       white-space: nowrap;
     }
 
     .issue-location {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .issue-certainty {
-      font-size: var(--bf-type-flow-micro-font-size);
-      color: var(--bf-color-content-muted);
-      background: var(--bf-color-surface-raised);
+      font-size: var(--openbitfun-type-flow-micro-font-size);
+      color: var(--openbitfun-color-content-muted);
+      background: var(--openbitfun-color-surface-raised);
       padding: 1px 6px;
       border-radius: 3px;
       white-space: nowrap;
       flex-shrink: 0;
-      border: 1px solid var(--bf-color-border-default);
+      border: 1px solid var(--openbitfun-color-border-default);
     }
 
     .issue-title {
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 4px;
-      font-size: var(--bf-type-flow-control-font-size);
+      font-size: var(--openbitfun-type-flow-control-font-size);
     }
 
     .issue-description {
-      color: var(--bf-color-content-secondary);
+      color: var(--openbitfun-color-content-secondary);
       margin-bottom: 6px;
-      line-height: var(--bf-type-flow-support-line-height);
+      line-height: var(--openbitfun-type-flow-support-line-height);
     }
 
     .issue-validation-note {
-      color: var(--bf-color-content-muted);
+      color: var(--openbitfun-color-content-muted);
       margin-bottom: 6px;
       padding: 6px 8px;
       border-radius: 4px;
-      background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 16%, transparent);
-      font-size: var(--bf-type-flow-support-font-size);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-hover) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 16%, transparent);
+      font-size: var(--openbitfun-type-flow-support-font-size);
     }
 
     .issue-suggestion {
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 6%, transparent);
-      border: 1px solid var(--bf-color-status-success-surface);
+      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 6%, transparent);
+      border: 1px solid var(--openbitfun-color-status-success-surface);
       border-radius: 4px;
       padding: 8px;
       display: flex;
@@ -668,16 +668,16 @@
     }
 
     .suggestion-label {
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-status-success-content);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-status-success-content);
       flex-shrink: 0;
-      font-size: var(--bf-type-flow-support-font-size);
+      font-size: var(--openbitfun-type-flow-support-font-size);
     }
 
     .suggestion-text {
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
       flex: 1;
-      line-height: var(--bf-type-flow-support-line-height);
+      line-height: var(--openbitfun-type-flow-support-line-height);
     }
   }
 
@@ -685,9 +685,9 @@
     margin-bottom: 12px;
 
     .team-header {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 8px;
     }
 
@@ -700,8 +700,8 @@
     .reviewer-item {
       padding: 10px;
       border-radius: 6px;
-      border: 1px solid var(--bf-color-border-default);
-      background: var(--bf-color-surface-raised);
+      border: 1px solid var(--openbitfun-color-border-default);
+      background: var(--openbitfun-color-surface-raised);
     }
 
     .reviewer-topline {
@@ -721,27 +721,27 @@
     }
 
     .reviewer-name {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
     }
 
     .reviewer-specialty,
     .reviewer-status,
     .reviewer-issues {
-      font-size: var(--bf-type-flow-micro-font-size);
-      color: var(--bf-color-content-muted);
-      border: 1px solid var(--bf-color-border-default);
-      background: var(--bf-color-surface-raised);
+      font-size: var(--openbitfun-type-flow-micro-font-size);
+      color: var(--openbitfun-color-content-muted);
+      border: 1px solid var(--openbitfun-color-border-default);
+      background: var(--openbitfun-color-surface-raised);
       border-radius: 999px;
       padding: 2px 6px;
       white-space: nowrap;
     }
 
     .reviewer-summary {
-      font-size: var(--bf-type-flow-control-font-size);
-      line-height: var(--bf-type-flow-support-line-height);
-      color: var(--bf-color-content-secondary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      line-height: var(--openbitfun-type-flow-support-line-height);
+      color: var(--openbitfun-color-content-secondary);
     }
   }
 
@@ -752,9 +752,9 @@
     .issues-header {
       display: flex;
       align-items: center;
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 8px;
     }
 
@@ -764,12 +764,12 @@
       gap: 6px;
 
       .review-issue-item {
-        background: var(--bf-color-surface-raised);
-        border: 1px solid var(--bf-color-border-default);
+        background: var(--openbitfun-color-surface-raised);
+        border: 1px solid var(--openbitfun-color-border-default);
         border-radius: 6px;
         padding: 10px;
-        font-size: var(--bf-type-flow-control-font-size);
-        line-height: var(--bf-type-flow-support-line-height);
+        font-size: var(--openbitfun-type-flow-control-font-size);
+        line-height: var(--openbitfun-type-flow-support-line-height);
         transition:
           background-color 160ms ease,
           border-color 160ms ease;
@@ -777,29 +777,29 @@
         overflow: hidden;
 
         &:hover {
-          background: var(--bf-color-action-neutral-surface-hover);
-          border-color: var(--bf-color-field-border-hover);
+          background: var(--openbitfun-color-action-neutral-surface-hover);
+          border-color: var(--openbitfun-color-field-border-hover);
         }
 
         /* Severity left-border indicators */
         &.severity-critical {
-          border-left: 3px solid var(--bf-color-status-danger-content);
+          border-left: 3px solid var(--openbitfun-color-status-danger-content);
         }
 
         &.severity-high {
-          border-left: 3px solid color-mix(in srgb, var(--bf-color-status-warning-content) 55%, var(--bf-color-status-danger-content));
+          border-left: 3px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 55%, var(--openbitfun-color-status-danger-content));
         }
 
         &.severity-medium {
-          border-left: 3px solid color-mix(in srgb, var(--bf-color-accent-default) 40%, transparent);
+          border-left: 3px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
         }
 
         &.severity-low {
-          border-left: 3px solid var(--bf-color-status-info-content);
+          border-left: 3px solid var(--openbitfun-color-status-info-content);
         }
 
         &.severity-info {
-          border-left: 3px solid var(--bf-color-action-secondary-pressed);
+          border-left: 3px solid var(--openbitfun-color-action-secondary-pressed);
         }
 
         .issue-header {
@@ -818,29 +818,29 @@
             min-width: 0;
 
             .issue-category {
-              font-weight: var(--bf-type-label-selected-font-weight);
-              color: var(--bf-color-content-secondary);
+              font-weight: var(--openbitfun-type-label-selected-font-weight);
+              color: var(--openbitfun-color-content-secondary);
               flex-shrink: 0;
-              font-size: var(--bf-type-flow-micro-font-size);
+              font-size: var(--openbitfun-type-flow-micro-font-size);
               padding: 1px 5px;
-              background: var(--bf-color-surface-raised);
+              background: var(--openbitfun-color-surface-raised);
               border-radius: 3px;
-              border: 1px solid var(--bf-color-border-default);
+              border: 1px solid var(--openbitfun-color-border-default);
             }
 
             .issue-source {
-              font-size: var(--bf-type-flow-micro-font-size);
-              color: var(--bf-color-accent-default);
-              border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 35%, transparent);
-              background: color-mix(in srgb, var(--bf-color-accent-default) 10%, transparent);
+              font-size: var(--openbitfun-type-flow-micro-font-size);
+              color: var(--openbitfun-color-accent-default);
+              border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 35%, transparent);
+              background: color-mix(in srgb, var(--openbitfun-color-accent-default) 10%, transparent);
               border-radius: 999px;
               padding: 1px 6px;
               white-space: nowrap;
             }
 
             .issue-location {
-              color: var(--bf-color-content-muted);
-              font-size: var(--bf-type-flow-support-font-size);
+              color: var(--openbitfun-color-content-muted);
+              font-size: var(--openbitfun-type-flow-support-font-size);
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
@@ -848,43 +848,43 @@
           }
 
           .issue-certainty {
-            font-size: var(--bf-type-flow-micro-font-size);
-            color: var(--bf-color-content-muted);
-            background: var(--bf-color-surface-raised);
+            font-size: var(--openbitfun-type-flow-micro-font-size);
+            color: var(--openbitfun-color-content-muted);
+            background: var(--openbitfun-color-surface-raised);
             padding: 1px 6px;
             border-radius: 3px;
             white-space: nowrap;
             flex-shrink: 0;
-            border: 1px solid var(--bf-color-border-default);
+            border: 1px solid var(--openbitfun-color-border-default);
           }
         }
 
         .issue-title {
-          font-weight: var(--bf-type-label-selected-font-weight);
-          color: var(--bf-color-content-primary);
+          font-weight: var(--openbitfun-type-label-selected-font-weight);
+          color: var(--openbitfun-color-content-primary);
           margin-bottom: 4px;
-          font-size: var(--bf-type-flow-control-font-size);
+          font-size: var(--openbitfun-type-flow-control-font-size);
         }
 
         .issue-description {
-          color: var(--bf-color-content-secondary);
+          color: var(--openbitfun-color-content-secondary);
           margin-bottom: 6px;
-          line-height: var(--bf-type-flow-support-line-height);
+          line-height: var(--openbitfun-type-flow-support-line-height);
         }
 
         .issue-validation-note {
-          color: var(--bf-color-content-muted);
+          color: var(--openbitfun-color-content-muted);
           margin-bottom: 6px;
           padding: 6px 8px;
           border-radius: 4px;
-          background: color-mix(in srgb, var(--bf-color-accent-hover) 8%, transparent);
-          border: 1px solid color-mix(in srgb, var(--bf-color-accent-hover) 16%, transparent);
-          font-size: var(--bf-type-flow-support-font-size);
+          background: color-mix(in srgb, var(--openbitfun-color-accent-hover) 8%, transparent);
+          border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 16%, transparent);
+          font-size: var(--openbitfun-type-flow-support-font-size);
         }
 
         .issue-suggestion {
-          background: color-mix(in srgb, var(--bf-color-status-success-content) 6%, transparent);
-          border: 1px solid var(--bf-color-status-success-surface);
+          background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 6%, transparent);
+          border: 1px solid var(--openbitfun-color-status-success-surface);
           border-radius: 4px;
           padding: 8px;
           display: flex;
@@ -893,16 +893,16 @@
           margin-top: 6px;
 
           .suggestion-label {
-            font-weight: var(--bf-type-label-selected-font-weight);
-            color: var(--bf-color-status-success-content);
+            font-weight: var(--openbitfun-type-label-selected-font-weight);
+            color: var(--openbitfun-color-status-success-content);
             flex-shrink: 0;
-            font-size: var(--bf-type-flow-support-font-size);
+            font-size: var(--openbitfun-type-flow-support-font-size);
           }
 
           .suggestion-text {
-            color: var(--bf-color-content-primary);
+            color: var(--openbitfun-color-content-primary);
             flex: 1;
-            line-height: var(--bf-type-flow-support-line-height);
+            line-height: var(--openbitfun-type-flow-support-line-height);
           }
         }
       }
@@ -921,16 +921,16 @@
     }
 
     .remediation-header {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 3px;
     }
 
     .remediation-selection-count {
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
-      line-height: var(--bf-type-flow-meta-line-height);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      line-height: var(--openbitfun-type-flow-meta-line-height);
     }
 
     .remediation-select-all {
@@ -948,18 +948,18 @@
       flex-direction: column;
       gap: 8px;
       padding: 10px;
-      border: 1px solid var(--bf-color-border-default);
+      border: 1px solid var(--openbitfun-color-border-default);
       border-radius: 10px;
-      background: var(--bf-color-surface-raised);
-      color: var(--bf-color-content-primary);
-      font-size: var(--bf-type-flow-control-font-size);
-      line-height: var(--bf-type-flow-support-line-height);
+      background: var(--openbitfun-color-surface-raised);
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      line-height: var(--openbitfun-type-flow-support-line-height);
 
       &.is-selected {
-        border-color: color-mix(in srgb, var(--bf-color-accent-default) 34%, var(--bf-color-border-default));
+        border-color: color-mix(in srgb, var(--openbitfun-color-accent-default) 34%, var(--openbitfun-color-border-default));
         background:
-          linear-gradient(90deg, color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent), transparent 80%),
-          var(--bf-color-surface-raised);
+          linear-gradient(90deg, color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent), transparent 80%),
+          var(--openbitfun-color-surface-raised);
       }
     }
 
@@ -980,7 +980,7 @@
       align-items: flex-start;
       gap: 8px;
       min-width: 0;
-      color: var(--bf-color-content-primary);
+      color: var(--openbitfun-color-content-primary);
     }
 
     .remediation-index {
@@ -990,10 +990,10 @@
       width: 18px;
       height: 18px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
-      color: var(--bf-color-accent-default);
-      font-size: var(--bf-type-flow-micro-font-size);
-      font-weight: var(--bf-type-heading-page-font-weight);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 16%, transparent);
+      color: var(--openbitfun-color-accent-default);
+      font-size: var(--openbitfun-type-flow-micro-font-size);
+      font-weight: var(--openbitfun-type-heading-page-font-weight);
       flex-shrink: 0;
       margin-top: 1px;
     }
@@ -1004,11 +1004,11 @@
       gap: 4px;
       flex-shrink: 0;
       padding: 3px 7px;
-      border: 1px solid var(--bf-color-border-subtle);
+      border: 1px solid var(--openbitfun-color-border-subtle);
       border-radius: 999px;
       background: transparent;
-      color: var(--bf-color-content-muted);
-      font-size: var(--bf-type-flow-support-font-size);
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
       cursor: pointer;
       transition:
         background 160ms ease,
@@ -1016,9 +1016,9 @@
         color 160ms ease;
 
       &:hover {
-        background: var(--bf-color-action-neutral-surface-hover);
-        border-color: var(--bf-color-field-border-hover);
-        color: var(--bf-color-content-primary);
+        background: var(--openbitfun-color-action-neutral-surface-hover);
+        border-color: var(--openbitfun-color-field-border-hover);
+        color: var(--openbitfun-color-content-primary);
       }
     }
 
@@ -1028,13 +1028,13 @@
       gap: 8px;
       padding: 10px;
       border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--bf-color-border-subtle) 84%, var(--bf-color-accent-default) 16%);
-      background: color-mix(in srgb, var(--bf-color-surface-canvas) 72%, transparent);
-      color: var(--bf-color-content-secondary);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-subtle) 84%, var(--openbitfun-color-accent-default) 16%);
+      background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 72%, transparent);
+      color: var(--openbitfun-color-content-secondary);
 
       p {
         margin: 0;
-        line-height: var(--bf-type-flow-support-line-height);
+        line-height: var(--openbitfun-type-flow-support-line-height);
       }
     }
 
@@ -1043,16 +1043,16 @@
       gap: 3px;
 
       span {
-        color: var(--bf-color-content-muted);
-        font-size: var(--bf-type-flow-micro-font-size);
-        font-weight: var(--bf-type-heading-page-font-weight);
-        letter-spacing: var(--bf-type-modifier-tracking-widest-letter-spacing);
+        color: var(--openbitfun-color-content-muted);
+        font-size: var(--openbitfun-type-flow-micro-font-size);
+        font-weight: var(--openbitfun-type-heading-page-font-weight);
+        letter-spacing: var(--openbitfun-type-modifier-tracking-widest-letter-spacing);
         text-transform: uppercase;
       }
 
       strong {
-        color: var(--bf-color-content-primary);
-        font-weight: var(--bf-type-label-selected-font-weight);
+        color: var(--openbitfun-color-content-primary);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
       }
     }
 
@@ -1067,19 +1067,19 @@
         min-width: 0;
         padding: 7px 8px;
         border-radius: 7px;
-        background: color-mix(in srgb, var(--bf-color-surface-raised) 78%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 78%, transparent);
       }
 
       span {
-        color: var(--bf-color-content-muted);
-        font-size: var(--bf-type-flow-micro-font-size);
+        color: var(--openbitfun-color-content-muted);
+        font-size: var(--openbitfun-type-flow-micro-font-size);
       }
 
       strong {
         overflow: hidden;
-        color: var(--bf-color-content-primary);
-        font-size: var(--bf-type-flow-support-font-size);
-        font-weight: var(--bf-type-label-selected-font-weight);
+        color: var(--openbitfun-color-content-primary);
+        font-size: var(--openbitfun-type-flow-support-font-size);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1094,20 +1094,20 @@
     .remediation-item__suggestion {
       display: flex;
       gap: 6px;
-      background: color-mix(in srgb, var(--bf-color-status-success-content) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-status-success-content) 16%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-success-content) 16%, transparent);
 
       span {
-        color: var(--bf-color-status-success-content);
-        font-weight: var(--bf-type-label-selected-font-weight);
+        color: var(--openbitfun-color-status-success-content);
+        font-weight: var(--openbitfun-type-label-selected-font-weight);
         flex-shrink: 0;
       }
     }
 
     .remediation-item__validation {
-      background: color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 16%, transparent);
-      color: var(--bf-color-content-muted);
+      background: color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 16%, transparent);
+      color: var(--openbitfun-color-content-muted);
     }
   }
 
@@ -1117,31 +1117,31 @@
     z-index: 8;
     margin: 12px 0 2px;
     padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--bf-color-accent-default) 24%, var(--bf-color-border-default));
+    border: 1px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 24%, var(--openbitfun-color-border-default));
     border-radius: 12px;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bf-color-surface-raised) 94%, transparent), color-mix(in srgb, var(--bf-color-surface-canvas) 90%, transparent)),
-      color-mix(in srgb, var(--bf-color-accent-default) 8%, var(--bf-color-surface-raised));
+      linear-gradient(180deg, color-mix(in srgb, var(--openbitfun-color-surface-raised) 94%, transparent), color-mix(in srgb, var(--openbitfun-color-surface-canvas) 90%, transparent)),
+      color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, var(--openbitfun-color-surface-raised));
     backdrop-filter: blur(16px) saturate(1.15);
     -webkit-backdrop-filter: blur(16px) saturate(1.15);
     box-shadow:
-      0 14px 34px color-mix(in srgb, var(--bf-color-content-on-light) 24%, transparent),
-      inset 0 1px 0 color-mix(in srgb, var(--bf-color-content-on-dark) 10%, transparent);
+      0 14px 34px color-mix(in srgb, var(--openbitfun-color-content-on-light) 24%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 10%, transparent);
     display: flex;
     flex-direction: column;
     gap: 10px;
 
     &__title {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-heading-page-font-weight);
-      color: var(--bf-color-content-primary);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-heading-page-font-weight);
+      color: var(--openbitfun-color-content-primary);
       margin-bottom: 3px;
     }
 
     &__hint {
-      font-size: var(--bf-type-flow-support-font-size);
-      line-height: var(--bf-type-flow-support-line-height);
-      color: var(--bf-color-content-muted);
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      line-height: var(--openbitfun-type-flow-support-line-height);
+      color: var(--openbitfun-color-content-muted);
     }
 
     &__buttons {
@@ -1152,21 +1152,21 @@
 
     &__empty-selection {
       margin-top: 10px;
-      color: color-mix(in srgb, var(--bf-color-status-warning-content) 80%, var(--bf-color-content-secondary));
-      font-size: var(--bf-type-flow-support-font-size);
-      line-height: var(--bf-type-flow-support-line-height);
+      color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 80%, var(--openbitfun-color-content-secondary));
+      font-size: var(--openbitfun-type-flow-support-font-size);
+      line-height: var(--openbitfun-type-flow-support-line-height);
     }
   }
 
   /* ---------- Positive points section ---------- */
   .review-positive {
     .positive-header {
-      font-size: var(--bf-type-flow-control-font-size);
-      font-weight: var(--bf-type-label-selected-font-weight);
-      color: var(--bf-color-status-success-content);
+      font-size: var(--openbitfun-type-flow-control-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      color: var(--openbitfun-color-status-success-content);
       margin-bottom: 8px;
       padding-bottom: 6px;
-      border-bottom: 1px dashed var(--bf-color-border-default);
+      border-bottom: 1px dashed var(--openbitfun-color-border-default);
     }
 
     .positive-list {
@@ -1178,13 +1178,13 @@
         display: flex;
         align-items: flex-start;
         gap: 8px;
-        color: var(--bf-color-content-primary);
-        font-size: var(--bf-type-flow-control-font-size);
-        line-height: var(--bf-type-flow-support-line-height);
+        color: var(--openbitfun-color-content-primary);
+        font-size: var(--openbitfun-type-flow-control-font-size);
+        line-height: var(--openbitfun-type-flow-support-line-height);
         padding: 6px 8px;
-        background: var(--bf-color-surface-raised);
+        background: var(--openbitfun-color-surface-raised);
         border-radius: 4px;
-        border: 1px solid var(--bf-color-border-default);
+        border: 1px solid var(--openbitfun-color-border-default);
       }
     }
   }

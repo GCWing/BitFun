@@ -1,7 +1,7 @@
 impl ChatView {
     pub(crate) fn show_prompt_command_shell_review(
         &mut self,
-        plan: bitfun_product_domains::external_sources::PromptCommandShellReviewPlan,
+        plan: openbitfun_product_domains::external_sources::PromptCommandShellReviewPlan,
     ) {
         self.prompt_command_shell_review =
             Some(crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt::new(plan));
@@ -59,7 +59,7 @@ impl ChatView {
 
     pub(crate) fn show_workspace_diff(
         &mut self,
-        snapshot: bitfun_agent_runtime::sdk::WorkspaceDiffSnapshot,
+        snapshot: openbitfun_agent_runtime::sdk::WorkspaceDiffSnapshot,
     ) {
         self.workspace_diff.show(snapshot);
         self.popup_stack.push(PopupType::WorkspaceDiff);
@@ -525,7 +525,7 @@ impl ChatView {
 
     pub(crate) fn show_session_lineage_selector(
         &mut self,
-        snapshot: &bitfun_agent_runtime::sdk::AgentSessionLineageSnapshot,
+        snapshot: &openbitfun_agent_runtime::sdk::AgentSessionLineageSnapshot,
     ) {
         self.session_lineage_selector.show(snapshot);
         self.popup_stack.push(PopupType::SessionLineageSelector);
@@ -644,7 +644,7 @@ impl ChatView {
 
     pub(crate) fn show_provider_selector(
         &mut self,
-        provider_catalog: bitfun_core_types::ProviderCatalog,
+        provider_catalog: openbitfun_core_types::ProviderCatalog,
     ) {
         self.provider_selector.show(provider_catalog);
         self.popup_stack.push(PopupType::ProviderSelector);
@@ -766,9 +766,9 @@ impl ChatView {
 
     pub(crate) fn show_account_panel(
         &mut self,
-        info: bitfun_product_domains::account::AccountInfo,
-        devices: Vec<bitfun_product_domains::account::AccountDevice>,
-        sync_progress: bitfun_product_domains::account::SettingsSyncProgress,
+        info: openbitfun_product_domains::account::AccountInfo,
+        devices: Vec<openbitfun_product_domains::account::AccountDevice>,
+        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
     ) {
         self.login_form.show_account(info, devices, sync_progress);
         self.popup_stack.push(PopupType::LoginForm);
@@ -781,8 +781,8 @@ impl ChatView {
 
     pub(crate) fn update_account_panel_progress(
         &mut self,
-        devices: Option<Vec<bitfun_product_domains::account::AccountDevice>>,
-        sync_progress: bitfun_product_domains::account::SettingsSyncProgress,
+        devices: Option<Vec<openbitfun_product_domains::account::AccountDevice>>,
+        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
     ) {
         self.login_form
             .update_account_progress(devices, sync_progress);

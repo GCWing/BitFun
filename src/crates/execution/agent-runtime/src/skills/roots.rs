@@ -1,14 +1,16 @@
 use std::path::{Path, PathBuf};
 
+use openbitfun_core_types::product_identity::hidden_data_directory;
+
 use super::types::SkillSourceDialect;
 
 pub const USER_SKILL_KEY_PREFIX: &str = "user";
 pub const PROJECT_SKILL_KEY_PREFIX: &str = "project";
-pub const BITFUN_USER_SKILL_SLOT: &str = "bitfun";
-pub const BITFUN_SYSTEM_SKILL_SLOT: &str = "bitfun-system";
-pub const BITFUN_SYSTEM_SKILL_DIR: &str = ".system";
-pub const BITFUN_SKILL_SOURCE_ID: &str = "bitfun";
-pub const BITFUN_SKILL_SOURCE_LABEL: &str = "BitFun";
+pub const OPENBITFUN_USER_SKILL_SLOT: &str = "openbitfun";
+pub const OPENBITFUN_SYSTEM_SKILL_SLOT: &str = "openbitfun-system";
+pub const OPENBITFUN_SYSTEM_SKILL_DIR: &str = ".system";
+pub const OPENBITFUN_SKILL_SOURCE_ID: &str = "openbitfun";
+pub const OPENBITFUN_SKILL_SOURCE_LABEL: &str = "OpenBitFun";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SkillRootSpec {
@@ -23,11 +25,11 @@ pub struct SkillRootSpec {
 
 pub const PROJECT_SKILL_ROOTS: &[SkillRootSpec] = &[
     SkillRootSpec {
-        parent: ".bitfun",
+        parent: hidden_data_directory(),
         subdir: "skills",
-        slot: "bitfun",
-        source_id: BITFUN_SKILL_SOURCE_ID,
-        source_label: BITFUN_SKILL_SOURCE_LABEL,
+        slot: "openbitfun",
+        source_id: OPENBITFUN_SKILL_SOURCE_ID,
+        source_label: OPENBITFUN_SKILL_SOURCE_LABEL,
     },
     SkillRootSpec {
         parent: ".claude",

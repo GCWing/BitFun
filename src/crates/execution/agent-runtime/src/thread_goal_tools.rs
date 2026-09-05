@@ -1,7 +1,7 @@
 //! Portable contracts for persisted thread-goal tool handlers.
 
 use crate::thread_goal::goal_tool_response;
-use bitfun_runtime_ports::{ThreadGoal, ThreadGoalStatus};
+use openbitfun_runtime_ports::{ThreadGoal, ThreadGoalStatus};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fmt;

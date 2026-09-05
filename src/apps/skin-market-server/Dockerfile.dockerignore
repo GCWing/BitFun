@@ -9,6 +9,27 @@
 !patches/
 !patches/**
 
+!design-system/
+!design-system/LICENSE
+!design-system/packages/
+!design-system/packages/design-tokens/
+!design-system/packages/design-tokens/package.json
+!design-system/packages/design-tokens/scripts/
+!design-system/packages/design-tokens/scripts/**
+!design-system/packages/design-tokens/src/
+!design-system/packages/design-tokens/src/**
+!design-system/packages/theme-openbitfun/
+!design-system/packages/theme-openbitfun/package.json
+!design-system/packages/theme-openbitfun/scripts/
+!design-system/packages/theme-openbitfun/scripts/**
+!design-system/packages/theme-openbitfun/src/
+!design-system/packages/theme-openbitfun/src/**
+!design-system/tooling/
+!design-system/tooling/token-engine/
+!design-system/tooling/token-engine/package.json
+!design-system/tooling/token-engine/src/
+!design-system/tooling/token-engine/src/**
+
 !src/
 !src/**/
 !src/**/Cargo.toml

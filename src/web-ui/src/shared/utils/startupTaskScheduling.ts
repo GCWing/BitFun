@@ -87,7 +87,7 @@ export function scheduleAfterStartupSignal(
   task: () => void | Promise<void>,
   options: StartupSignalSchedulingOptions = {}
 ): () => void {
-  const signalName = options.signalName ?? 'bitfun:main-window-shown';
+  const signalName = options.signalName ?? 'openbitfun:main-window-shown';
   const signalTarget =
     options.signalTarget ?? (typeof window !== 'undefined' ? window : undefined);
   const fallbackTimeoutMs = Math.max(0, options.fallbackTimeoutMs ?? 2000);

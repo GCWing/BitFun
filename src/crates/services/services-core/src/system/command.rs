@@ -203,7 +203,7 @@ fn dedup_existing_dirs(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 ///
 /// # Example
 /// ```rust
-/// use bitfun_services_core::system::check_command;
+/// use openbitfun_services_core::system::check_command;
 ///
 /// let result = check_command("git");
 /// if result.exists {

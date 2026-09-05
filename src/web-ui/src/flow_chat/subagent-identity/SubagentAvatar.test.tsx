@@ -35,11 +35,11 @@ describe('SubagentAvatar', () => {
       );
     });
 
-    const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
+    const avatar = container.querySelector('[data-openbitfun-component="subagent-avatar"]');
     const presentation = resolveSubagentAvatarPresentation('child');
-    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe(presentation.avatarId);
-    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe(presentation.colorId);
-    expect(avatar?.getAttribute('data-bf-state')).toBe('running');
+    expect(avatar?.getAttribute('data-openbitfun-avatar-id')).toBe(presentation.avatarId);
+    expect(avatar?.getAttribute('data-openbitfun-avatar-color-id')).toBe(presentation.colorId);
+    expect(avatar?.getAttribute('data-openbitfun-state')).toBe('running');
     expect(avatar?.getAttribute('style')).toContain('28px');
     expect(container.querySelector('img')?.getAttribute('src')).toContain(presentation.avatarId);
   });
@@ -55,13 +55,13 @@ describe('SubagentAvatar', () => {
       );
     });
 
-    const avatar = container.querySelector('[data-bf-component="subagent-avatar"]');
+    const avatar = container.querySelector('[data-openbitfun-component="subagent-avatar"]');
     const presentation = resolveSubagentAvatarPresentation('restored-child-session');
-    expect(avatar?.getAttribute('data-bf-avatar-id')).toBe(presentation.avatarId);
-    expect(avatar?.getAttribute('data-bf-avatar-color-id')).toBe(presentation.colorId);
+    expect(avatar?.getAttribute('data-openbitfun-avatar-id')).toBe(presentation.avatarId);
+    expect(avatar?.getAttribute('data-openbitfun-avatar-color-id')).toBe(presentation.colorId);
     expect(avatar?.getAttribute('style')).toContain(
       `--subagent-avatar-hue-shift: ${presentation.hueShiftDegrees}deg`,
     );
-    expect(avatar?.hasAttribute('data-bf-name-id')).toBe(false);
+    expect(avatar?.hasAttribute('data-openbitfun-name-id')).toBe(false);
   });
 });

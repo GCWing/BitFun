@@ -9,12 +9,12 @@ export const skillCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'action' },
   ],
   facets: [
-    { id: 'variant', attribute: 'data-bf-variant', values: ['skill', 'market'] },
-    { id: 'tone', attribute: 'data-bf-tone', values: ['primary', 'danger', 'success', 'muted'] },
+    { id: 'variant', attribute: 'data-openbitfun-variant', values: ['skill', 'market'] },
+    { id: 'tone', attribute: 'data-openbitfun-tone', values: ['primary', 'danger', 'success', 'muted'] },
   ],
   states: [
     { id: 'hover', selector: { kind: 'self', suffix: ':hover' } },
     { id: 'focusVisible', selector: { kind: 'self', suffix: ':focus-visible' } },
-    { id: 'disabled', selector: { kind: 'self', suffix: '[data-bf-state~="disabled"]' } },
+    { id: 'disabled', selector: { kind: 'self', suffix: '[data-openbitfun-state~="disabled"]' } },
   ],
 };

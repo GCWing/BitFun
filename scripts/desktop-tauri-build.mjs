@@ -49,7 +49,7 @@ async function main() {
   console.log(`[product] ${resolution.assembly.member} ${resolution.assembly.assemblyDigest}`);
   const fontProfile = configureDesktopWebFontProfile(forward);
   console.log(`[font-profile] ${fontProfile}`);
-  const releaseChannel = resolveReleaseChannel(process.env.BITFUN_RELEASE_CHANNEL);
+  const releaseChannel = resolveReleaseChannel(process.env.OPENBITFUN_RELEASE_CHANNEL);
   console.log(`[release] channel=${releaseChannel.channel}`);
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
@@ -277,27 +277,27 @@ export function prepareTauriConfig(
   injectExternalFrontendResource(config);
 
   const release = releaseChannel
-    ?? resolveReleaseChannel(process.env.BITFUN_RELEASE_CHANNEL);
+    ?? resolveReleaseChannel(process.env.OPENBITFUN_RELEASE_CHANNEL);
   const primaryEndpoint =
     process.env.TAURI_UPDATER_ENDPOINT || release.primaryUpdaterEndpoint;
   const fallbackEndpoint =
     process.env.TAURI_UPDATER_FALLBACK_ENDPOINT || release.fallbackUpdaterEndpoint;
-  process.env.BITFUN_RELEASE_CHANNEL = release.channel;
-  process.env.BITFUN_UPDATER_PRIMARY_ENDPOINT = primaryEndpoint;
-  process.env.BITFUN_UPDATER_FALLBACK_ENDPOINT = fallbackEndpoint;
+  process.env.OPENBITFUN_RELEASE_CHANNEL = release.channel;
+  process.env.OPENBITFUN_UPDATER_PRIMARY_ENDPOINT = primaryEndpoint;
+  process.env.OPENBITFUN_UPDATER_FALLBACK_ENDPOINT = fallbackEndpoint;
 
   const enabled = ['1', 'true', 'yes'].includes(
-    String(process.env.BITFUN_ENABLE_UPDATER_ARTIFACTS || '').toLowerCase()
+    String(process.env.OPENBITFUN_ENABLE_UPDATER_ARTIFACTS || '').toLowerCase()
   );
 
   if (enabled) {
     const pubkey = process.env.TAURI_UPDATER_PUBKEY;
     if (!pubkey) {
-      console.error('BITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_UPDATER_PUBKEY is missing.');
+      console.error('OPENBITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_UPDATER_PUBKEY is missing.');
       process.exit(1);
     }
     if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
-      console.error('BITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_SIGNING_PRIVATE_KEY is missing.');
+      console.error('OPENBITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_SIGNING_PRIVATE_KEY is missing.');
       process.exit(1);
     }
 

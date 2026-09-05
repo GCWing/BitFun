@@ -4,12 +4,12 @@
 
 适用范围：`src/crates/contracts/product-domains`。
 
-`bitfun-product-domains` 承载可脱离完整 core runtime 编译的平台无关产品领域契约。这里应聚焦纯状态、DTO、策略和窄
+`openbitfun-product-domains` 承载可脱离完整 core runtime 编译的平台无关产品领域契约。这里应聚焦纯状态、DTO、策略和窄
 ports；具体 runtime 行为不属于本 crate。
 
 ## 护栏
 
-- 不要让 `bitfun-product-domains` 依赖 `bitfun-core`。
+- 不要让 `openbitfun-product-domains` 依赖 `openbitfun-core`。
 - 保持 default feature 轻量。默认构建不得引入 runtime、service、desktop、network、process、AI 或 tool-runtime 依赖。
 - 本 crate 可以承载纯 DTO、枚举、序列化契约、搜索计划、命令选择决策、storage-shape parser、领域策略和产品领域 port trait。
 - 真正执行 IO、进程、AI 调用、Git service 调用、平台集成、tool exposure 或 desktop/Tauri 工作的 concrete adapter 属于本 crate 外部。
@@ -22,12 +22,12 @@ ports；具体 runtime 行为不属于本 crate。
   seed-plan facts、marker wire format、host primitive call plan 和窄 port。
 - `function-agents` 可以拥有 function-agent DTO、prompt/domain policy、response parsing/repair rule、file-shape analysis
   和 Git/AI port trait。
-- `plugin-source` 可以拥有 BitFun 插件包清单数据结构、来源标识、工作区信任记录和纯信任版本变更规则。
+- `plugin-source` 可以拥有 OpenBitFun 插件包清单数据结构、来源标识、工作区信任记录和纯信任版本变更规则。
 - `remote_surface`（默认 feature）拥有 Product Operation Registry：每个可跨宿主边界的产品操作一行，
   声明远程工作区立场、Peer Device 立场、CLI peer host 支持情况，以及类型化的 peer 能力列表和
   `src/generated/` 下的导出产物。宿主与 Web UI 从它派生各自的表，它本身不执行任何操作。
   设计见 `docs/architecture/remote-surface-contract.md`；聚焦检查：
-  `cargo test -p bitfun-product-domains --no-default-features remote_surface`，之后运行
+  `cargo test -p openbitfun-product-domains --no-default-features remote_surface`，之后运行
   `pnpm run capabilities:generate` 刷新生成投影。
 - `external-sources` 可以拥有开放生态/来源标识、类型化能力 provider 端口、目录 DTO 与版本敏感冲突指纹；
   也可以拥有可执行插件 adapter 输出的生态无关 Agent、Tool 引用与 Skill 根贡献 DTO。这些 DTO 不定义来源格式、
@@ -40,10 +40,10 @@ ports；具体 runtime 行为不属于本 crate。
 按改动范围选择最小验证：
 
 ```bash
-cargo test -p bitfun-product-domains --no-default-features
-cargo test -p bitfun-product-domains --features product-full
+cargo test -p openbitfun-product-domains --no-default-features
+cargo test -p openbitfun-product-domains --features product-full
 node scripts/check-core-boundaries.mjs
-cargo check -p bitfun-core --features product-full
+cargo check -p openbitfun-core --features product-full
 ```
 
 仅改文档时运行 `git diff --check`。

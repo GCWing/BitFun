@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BitFun</string>
+    <string name="app_name">OpenBitFun</string>
     <string name="navigation_general_chat">Chat</string>
     <string name="navigation_remote">Remote</string>
     <string name="navigation_account">Account</string>
@@ -18,22 +18,22 @@
     <string name="settings_general_chat_section">General chat</string>
     <string name="settings_about_section">About</string>
     <string name="settings_about_product">Product</string>
-    <string name="settings_about_product_value">BitFun for Android</string>
+    <string name="settings_about_product_value">OpenBitFun for Android</string>
     <string name="settings_about_version">Version</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_system">System default</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="account_title">Account</string>
-    <string name="account_login_title">Sign in to BitFun</string>
+    <string name="account_login_title">Sign in to OpenBitFun</string>
     <string name="account_login_body">Sign in to sync devices, sessions, and remote control status.</string>
     <string name="account_login_server">Sign-in server</string>
-    <string name="account_username_placeholder">BitFun username</string>
-    <string name="account_password_placeholder">BitFun password</string>
+    <string name="account_username_placeholder">OpenBitFun username</string>
+    <string name="account_password_placeholder">OpenBitFun password</string>
     <string name="account_relay_url_placeholder">Relay URL, for example https://relay.example.com</string>
     <string name="account_signing_in">Signing in…</string>
     <string name="account_profile_title">Profile</string>
-    <string name="account_bitfun_account">BitFun account</string>
+    <string name="account_openbitfun_account">OpenBitFun account</string>
     <string name="account_signed_in_body">This connection is verified by account %1$s. Your password is not stored on this phone.</string>
     <string name="account_connect">Connect</string>
     <string name="account_device_current_control">Controlling</string>
@@ -120,7 +120,7 @@
     <string name="common_cancel">Cancel</string>
 
     <string name="pairing_title">Connect to a desktop</string>
-    <string name="pairing_subtitle">Paste the pairing link shown by BitFun on your computer.</string>
+    <string name="pairing_subtitle">Paste the pairing link shown by OpenBitFun on your computer.</string>
     <string name="pairing_url_label">Pairing link</string>
     <string name="pairing_user_label">User ID (optional)</string>
     <string name="pairing_password_label">Account password</string>
@@ -130,8 +130,8 @@
     <string name="pairing_dismiss">Dismiss</string>
     <string name="pairing_disconnect">Disconnect</string>
     <string name="connect_title">Get a pairing code</string>
-    <string name="connect_body">Make sure BitFun on your computer is open on the workspace you want to use.</string>
-    <string name="connect_steps">In the BitFun sidebar on your computer, open Settings › Remote control to show the code.</string>
+    <string name="connect_body">Make sure OpenBitFun on your computer is open on the workspace you want to use.</string>
+    <string name="connect_steps">In the OpenBitFun sidebar on your computer, open Settings › Remote control to show the code.</string>
     <string name="connect_scan_action">Scan the QR code</string>
     <string name="connect_scan_title">Scan the desktop QR code</string>
     <string name="connect_have_pair_code">I have a pairing code</string>
@@ -229,7 +229,7 @@
     <string name="common_back">Back</string>
     <string name="common_open">Open</string>
     <string name="session_messages_title">Messages</string>
-    <string name="message_input_label">Ask BitFun</string>
+    <string name="message_input_label">Ask OpenBitFun</string>
     <string name="message_send">Send</string>
     <string name="message_stop">Stop</string>
     <string name="message_attach_image">Attach image</string>
@@ -342,7 +342,7 @@
     <string name="sidebar_untitled">Untitled session</string>
     <string name="sidebar_new_chat">Chat</string>
     <string name="sidebar_signed_out_new_chat">New chat</string>
-    <string name="sidebar_sign_in">Sign in to BitFun account</string>
+    <string name="sidebar_sign_in">Sign in to OpenBitFun account</string>
     <string name="sidebar_scan_to_connect">Scan to connect</string>
     <string name="connect_choose_connection">Choose how to connect</string>
     <string name="shell_open_sidebar">Open sidebar</string>
@@ -357,7 +357,7 @@
     <string name="connection_waiting">Waiting to connect</string>
     <string name="chat_status_messages_synced">Messages synced</string>
     <string name="chat_status_restoring_connection">Restoring connection</string>
-    <string name="chat_status_executing">BitFun is working...</string>
+    <string name="chat_status_executing">OpenBitFun is working...</string>
     <string name="connection_checking">Checking the connection…</string>
     <string name="connection_lost_detail">The desktop stopped answering. The pairing is still here, so try again — or disconnect and pair afresh.</string>
     <string name="connection_check_again">Check again</string>
@@ -365,7 +365,7 @@
     <string name="sessions_failed_network">Could not reach the relay.</string>
     <string name="sessions_failed_timeout">The desktop did not answer in time.</string>
     <string name="sessions_failed_rate_limited">Too many requests; try again shortly.</string>
-    <string name="sessions_failed_protocol_mismatch">The desktop answered in a format this app does not understand. Update BitFun on the desktop.</string>
+    <string name="sessions_failed_protocol_mismatch">The desktop answered in a format this app does not understand. Update OpenBitFun on the desktop.</string>
     <string name="sessions_failed_session_not_found">That session is no longer on the desktop.</string>
     <!-- 8.3 conversation surface -->
     <string name="conversation_back">Back to sessions</string>
@@ -421,7 +421,7 @@
     <string name="tool_op_ask_confirmation">Ask for confirmation</string>
     <string name="create_title">New task</string>
     <string name="create_back">Back</string>
-    <string name="create_placeholder">Tell BitFun what to do</string>
+    <string name="create_placeholder">Tell OpenBitFun what to do</string>
     <string name="create_chat">Chat</string>
     <string name="create_workspace_picker">Choose a workspace</string>
     <string name="create_no_workspaces">No recent workspaces. Open one on the desktop first.</string>
@@ -434,7 +434,7 @@
     <string name="remote_settings_source_account_device">Account device</string>
     <string name="remote_settings_source_qr">QR pairing</string>
     <string name="remote_settings_source_none">Not connected</string>
-    <string name="remote_settings_desktop_product">BitFun Desktop</string>
+    <string name="remote_settings_desktop_product">OpenBitFun Desktop</string>
     <string name="remote_settings_no_desktop">No desktop connected yet</string>
     <string name="remote_settings_disconnect">Disconnect</string>
     <string name="remote_settings_reconnect">Reconnect</string>
@@ -444,6 +444,6 @@
     <string name="remote_settings_profile_details">Details</string>
     <string name="remote_settings_user_id">User ID</string>
     <string name="remote_settings_device_id">This device ID</string>
-    <string name="remote_settings_bitfun_user">BitFun user</string>
+    <string name="remote_settings_openbitfun_user">OpenBitFun user</string>
     <string name="remote_settings_account_signed_in">Authenticated</string>
 </resources>

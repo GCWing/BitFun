@@ -1,9 +1,9 @@
-use bitfun_opencode_adapter::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
-use bitfun_product_domains::external_hook_catalog::{
+use openbitfun_opencode_adapter::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
+use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookProjectionStatus, ExternalHookSourceProvider,
 };
-use bitfun_product_domains::external_hook_contributions::ExternalHookPoint;
-use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
+use openbitfun_product_domains::external_hook_contributions::ExternalHookPoint;
+use openbitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 use std::fs;
 use tempfile::tempdir;
 

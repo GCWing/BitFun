@@ -30,7 +30,7 @@ test("Dialog and Sheet compose the shared overlay kernel and compound anatomy", 
     "body",
     "footer",
   ]) {
-    assert.match(source, new RegExp(`data-bf-part=\\"${part}\\"`));
+    assert.match(source, new RegExp(`data-openbitfun-part=\\"${part}\\"`));
   }
   assert.match(source, /aria-describedby=\{ariaDescribedBy \?\? \(hasDescription \? descriptionId : undefined\)\}/);
   assert.match(source, /aria-labelledby=\{ariaLabelledBy \?\? \(!ariaLabel && hasTitle \? titleId : undefined\)\}/);
@@ -52,17 +52,17 @@ test("Dialog geometry and typography use public design tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   for (const token of [
-    "--bf-overlay-dialog-viewport-gutter",
-    "--bf-overlay-dialog-backdrop-blur",
-    "--bf-overlay-dialog-surface-radius",
-    "--bf-overlay-dialog-header-padding-inline",
-    "--bf-overlay-dialog-footer-padding-inline",
-    "--bf-overlay-dialog-max-inline-size-xxlarge",
-    "--bf-type-heading-dialog-font-size",
-    "--bf-type-heading-dialog-font-weight",
-    "--bf-color-overlay-scrim",
-    "--bf-color-surface-raised",
-    "--bf-shadow-overlay",
+    "--openbitfun-overlay-dialog-viewport-gutter",
+    "--openbitfun-overlay-dialog-backdrop-blur",
+    "--openbitfun-overlay-dialog-surface-radius",
+    "--openbitfun-overlay-dialog-header-padding-inline",
+    "--openbitfun-overlay-dialog-footer-padding-inline",
+    "--openbitfun-overlay-dialog-max-inline-size-xxlarge",
+    "--openbitfun-type-heading-dialog-font-size",
+    "--openbitfun-type-heading-dialog-font-weight",
+    "--openbitfun-color-overlay-scrim",
+    "--openbitfun-color-surface-raised",
+    "--openbitfun-shadow-overlay",
   ]) {
     assert.match(styles, new RegExp(token));
   }
@@ -83,8 +83,8 @@ test("DialogFooter exposes a centered opaque floating action layer", async () =>
   assert.match(markup, /data-appearance="floating"/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*position:absolute/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*justify-content:center/);
-  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:var\(--bf-color-surface-raised\)/);
+  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:var\(--openbitfun-color-surface-raised\)/);
   assert.doesNotMatch(styles, /\[data-appearance=floating\]\{[^}]*background:transparent/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*pointer-events:auto/);
-  assert.match(styles, /--bf-overlay-dialog-footer-action-min-width/);
+  assert.match(styles, /--openbitfun-overlay-dialog-footer-action-min-width/);
 });

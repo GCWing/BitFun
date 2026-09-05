@@ -25,22 +25,23 @@ test('stable and beta channels resolve to isolated updater feeds', () => {
 });
 
 test('channel promotion follows SemVer including beta precedence', () => {
-  assert.equal(compareReleaseVersions('0.2.18-beta.2', '0.2.18-beta.1'), 1);
-  assert.equal(compareReleaseVersions('0.2.18', '0.2.18-beta.9'), 1);
-  assert.equal(compareReleaseVersions('0.2.19-beta.1', '0.2.18'), 1);
-  assert.equal(compareReleaseVersions('0.2.18', '0.2.19-beta.1'), -1);
-  assert.equal(compareReleaseVersions('0.2.18-beta.2', '0.2.18-beta.2'), 0);
+  assert.equal(compareReleaseVersions('1.0.0-beta.2', '1.0.0-beta.1'), 1);
+  assert.equal(compareReleaseVersions('1.0.0', '1.0.0-beta.9'), 1);
+  assert.equal(compareReleaseVersions('1.0.1-beta.1', '1.0.0'), 1);
+  assert.equal(compareReleaseVersions('1.0.0', '1.0.1-beta.1'), -1);
+  assert.equal(compareReleaseVersions('1.0.0-beta.2', '1.0.0-beta.2'), 0);
 });
 
 test('release versions must match their channel', () => {
-  assert.equal(validateReleaseVersion('stable', '0.2.18'), '0.2.18');
-  assert.equal(validateReleaseVersion('beta', '0.2.18-beta.1'), '0.2.18-beta.1');
-  assert.throws(() => validateReleaseVersion('stable', '0.2.18-beta.1'));
-  assert.throws(() => validateReleaseVersion('beta', '0.2.18'));
-  assert.throws(() => validateReleaseVersion('beta', '0.2.18-beta.0'));
+  assert.equal(validateReleaseVersion('stable', '1.0.0'), '1.0.0');
+  assert.equal(validateReleaseVersion('beta', '1.0.0-beta.1'), '1.0.0-beta.1');
+  assert.throws(() => validateReleaseVersion('stable', '1.0.0-beta.1'));
+  assert.throws(() => validateReleaseVersion('beta', '1.0.0'));
+  assert.throws(() => validateReleaseVersion('beta', '1.0.0-beta.0'));
+  assert.throws(() => validateReleaseVersion('stable', '0.2.19'));
   assert.equal(
-    validateReleaseVersion('nightly', '0.2.18-nightly.20260811'),
-    '0.2.18-nightly.20260811',
+    validateReleaseVersion('nightly', '1.0.0-nightly.20260811'),
+    '1.0.0-nightly.20260811',
   );
 });
 
@@ -55,12 +56,17 @@ test('release public key export accepts raw and legacy base64 values', () => {
 });
 
 test('build version projection updates every release-owned version file', () => {
-  const root = mkdtempSync(path.join(tmpdir(), 'bitfun-build-version-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-build-version-'));
   const jsonFiles = [
     'package.json',
     'package-lock.json',
-    'BitFun-Installer/package.json',
-    'BitFun-Installer/package-lock.json',
+    'OpenBitFun-Installer/package.json',
+    'OpenBitFun-Installer/package-lock.json',
+    'src/web-ui/package.json',
+    'src/mobile-web/package.json',
+    'src/mobile-web/package-lock.json',
+    'src/miniapp-market-web/package.json',
+    'src/skin-market-web/package.json',
   ];
   for (const relative of jsonFiles) {
     const file = path.join(root, relative);
@@ -77,7 +83,7 @@ edition = "2021"
 
 [workspace]
 members = []
-exclude = ["src/apps/relay-server", "BitFun-Installer/src-tauri"]
+exclude = ["src/apps/relay-server", "OpenBitFun-Installer/src-tauri"]
 `,
   );
   writeFixture(root, 'src/lib.rs', 'pub fn fixture() {}\n');
@@ -86,7 +92,28 @@ exclude = ["src/apps/relay-server", "BitFun-Installer/src-tauri"]
     'src/apps/relay-server/Cargo.toml',
     'version = "1.0.0" # x-release-please-version\n',
   );
-  writeFixture(root, 'BitFun-Installer/src-tauri/Cargo.toml', 'version = "1.0.0"\n');
+  writeFixture(root, 'OpenBitFun-Installer/src-tauri/Cargo.toml', 'version = "1.0.0"\n');
+  writeFixture(root, 'src/crates/services/relay-service/Cargo.toml', 'version = "1.0.0"\n');
+  writeFixture(
+    root,
+    'src/crates/services/page-function-runtime/Cargo.toml',
+    'version = "1.0.0"\n',
+  );
+  writeFixture(
+    root,
+    'src/apps/mobile/android/app/build.gradle.kts',
+    '        versionName = "1.0.0"\n',
+  );
+  writeFixture(
+    root,
+    'src/apps/mobile/ios/OpenBitFun/Info.plist',
+    '<key>CFBundleShortVersionString</key>\n<string>1.0.0</string>\n',
+  );
+  writeFixture(
+    root,
+    'src/apps/mobile/harmonyos/AppScope/app.json5',
+    '{\n  "app": {\n    "versionName": "1.0.0"\n  }\n}\n',
+  );
   const initialLock = spawnSync('cargo', ['generate-lockfile'], {
     cwd: root,
     encoding: 'utf8',
@@ -104,6 +131,26 @@ exclude = ["src/apps/relay-server", "BitFun-Installer/src-tauri"]
   assert.match(
     readFileSync(path.join(root, 'src/apps/relay-server/Cargo.toml'), 'utf8'),
     /1\.1\.0-beta\.2/,
+  );
+  assert.match(
+    readFileSync(path.join(root, 'src/crates/services/relay-service/Cargo.toml'), 'utf8'),
+    /1\.1\.0-beta\.2/,
+  );
+  assert.match(
+    readFileSync(path.join(root, 'src/crates/services/page-function-runtime/Cargo.toml'), 'utf8'),
+    /1\.1\.0-beta\.2/,
+  );
+  assert.match(
+    readFileSync(path.join(root, 'src/apps/mobile/android/app/build.gradle.kts'), 'utf8'),
+    /versionName = "1\.1\.0-beta\.2"/,
+  );
+  assert.match(
+    readFileSync(path.join(root, 'src/apps/mobile/ios/OpenBitFun/Info.plist'), 'utf8'),
+    /<string>1\.1\.0-beta\.2<\/string>/,
+  );
+  assert.match(
+    readFileSync(path.join(root, 'src/apps/mobile/harmonyos/AppScope/app.json5'), 'utf8'),
+    /"versionName": "1\.1\.0-beta\.2"/,
   );
   assert.match(
     readFileSync(path.join(root, 'Cargo.lock'), 'utf8'),

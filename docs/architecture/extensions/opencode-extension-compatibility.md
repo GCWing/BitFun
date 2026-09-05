@@ -1,6 +1,6 @@
 # OpenCode 扩展兼容总览
 
-本文是 BitFun 适配 OpenCode 扩展生态的总入口。它只回答三件事：BitFun 与每类 OpenCode 能力差在哪里、能否适配、需要补什么。实现细节分别放在配置、服务插件、终端插件和插件运行时/Plugin Host 设计中。
+本文是 OpenBitFun 适配 OpenCode 扩展生态的总入口。它只回答三件事：OpenBitFun 与每类 OpenCode 能力差在哪里、能否适配、需要补什么。实现细节分别放在配置、服务插件、终端插件和插件运行时/Plugin Host 设计中。
 
 本文描述目标设计与当前差距，不代表矩阵中的目标能力已经实现。只有通过固定版本样例和端到端验证的能力才能标记为已实现。
 矩阵是兼容审计库存，不是默认开发路线图；`OC-R*` 只表示该能力依赖的成熟度分区，近期执行顺序以
@@ -13,8 +13,8 @@
 | JS/TS 工具、软件包插件、稳定 Hook、`client`、`serverUrl`、`$` | [服务插件运行时适配](opencode-plugin-runtime-adapter-design.md) |
 | TUI 插件入口、Route、Command、Keymap、Dialog、Slot、Theme、State、KV | [终端界面插件适配](opencode-tui-plugin-adapter-design.md) |
 | SDK、Server、ACP、IDE、Web、GitHub、GitLab、Slack | [外部集成适配](opencode-external-integration-adapter-design.md) |
-| 进程、调用、超时、恢复、状态与 BitFun 归属模块边界 | [插件运行时与 Plugin Host](plugin-runtime-design.md) |
-| BitFun 能力输出到外部宿主、能力组合、通用状态/事件/并发/冲突边界 | [能力装配与宿主集成](capability-runtime-integration-design.md) |
+| 进程、调用、超时、恢复、状态与 OpenBitFun 归属模块边界 | [插件运行时与 Plugin Host](plugin-runtime-design.md) |
+| OpenBitFun 能力输出到外部宿主、能力组合、通用状态/事件/并发/冲突边界 | [能力装配与宿主集成](capability-runtime-integration-design.md) |
 | 交付顺序和阶段退出条件 | [粗粒度计划](../../plans/opencode-extension-compatibility-plan.md) |
 
 ## 1. 基线与判断方法
@@ -35,18 +35,18 @@
 
 ### 1.1 差异类型
 
-矩阵用以下六种类型说明 BitFun 真正要做的工作。一个扩展项可以同时包含两种类型。
+矩阵用以下六种类型说明 OpenBitFun 真正要做的工作。一个扩展项可以同时包含两种类型。
 
 | 差异类型 | 含义 |
 |---|---|
-| 补基础能力 | BitFun 还没有可承接该行为的真实产品能力，必须先补归属模块和消费方。 |
-| 补扩展接口 | BitFun 有基础能力，但没有供插件调用的稳定接口或 Hook。 |
+| 补基础能力 | OpenBitFun 还没有可承接该行为的真实产品能力，必须先补归属模块和消费方。 |
+| 补扩展接口 | OpenBitFun 有基础能力，但没有供插件调用的稳定接口或 Hook。 |
 | 融合现有能力 | 两边都有相近能力，但加载顺序、状态、权限或最终归属不同，需要统一语义。 |
 | 转换参数 | 基础行为一致，只需转换格式、字段、使用范围、错误或生命周期。 |
-| 直接桥接 | BitFun 已有窄接口，增加少量兼容接口即可。 |
+| 直接桥接 | OpenBitFun 已有窄接口，增加少量兼容接口即可。 |
 | 明确降级 | 组件运行时、产品边界或接口稳定性使完整等价不合理；必须给出替代行为。 |
 
-“BitFun 有类似模块”不等于“OpenCode 已兼容”。可实现性只使用以下结论：
+“OpenBitFun 有类似模块”不等于“OpenCode 已兼容”。可实现性只使用以下结论：
 
 | 结论 | 含义 |
 |---|---|
@@ -57,16 +57,16 @@
 
 ## 2. 总体方案
 
-本文件只定义 OpenCode 特有来源、顺序、参数和兼容承诺。跨宿主共用的是 BitFun 能力归属模块、类型明确的贡献、权限/
-副作用事实、当前能力版本和对外能力接口，不是 OpenCode 原始对象。BitFun 能力作为 MCP、Plugin 或 SDK 能力进入
-OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向，不能用任一方向完成证明另一方向已经兼容。
+本文件只定义 OpenCode 特有来源、顺序、参数和兼容承诺。跨宿主共用的是 OpenBitFun 能力归属模块、类型明确的贡献、权限/
+副作用事实、当前能力版本和对外能力接口，不是 OpenCode 原始对象。OpenBitFun 能力作为 MCP、Plugin 或 SDK 能力进入
+OpenCode，和 OpenCode 配置/插件进入 OpenBitFun 是两个独立验收方向，不能用任一方向完成证明另一方向已经兼容。
 
-- BitFun 实现自己的插件兼容链路、脚本执行、OpenCode 兼容接口和 Rust 能力转发；不启动完整
+- OpenBitFun 实现自己的插件兼容链路、脚本执行、OpenCode 兼容接口和 Rust 能力转发；不启动完整
   OpenCode Agent Runtime，也不把 Bun 或物理进程拓扑固化进插件内部 ABI。
 - 用户和项目 OpenCode 内容默认作为持续兼容来源被后台发现。低风险声明式内容可以无感应用并给出可撤销的
   非阻塞摘要；可执行内容在首次启用或能力扩大时等待来源、插件身份和执行域确认，但不阻塞项目和无关会话。
 - 设置中的统一外部来源视图负责解释全局/项目使用范围、当前支持范围、待处理项和变更结果；显式导入只是把
-  非执行内容转为 BitFun 原生配置的可选快照，不是 OpenCode 项目可用或插件执行的前置条件。
+  非执行内容转为 OpenBitFun 原生配置的可选快照，不是 OpenCode 项目可用或插件执行的前置条件。
 - Desktop、TUI、Peer Host 与只读 Server 使用同一组版本化控制 DTO。这组 DTO 只包含彼此独立的生命周期、Host 能力、恢复动作、
   `Refresh/SetSourceEnabled/SetSafeMode`，不携带 OpenCode 私有数据；审批和冲突仍归 Tool/Subagent/MCP 等能力归属模块。
 - 第一条执行完整流程已覆盖官方复数目录和源码验证过的单数目录中的受支持单文件 `.js` standalone tool；`.ts`、模块依赖、
@@ -74,11 +74,11 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
   一个 JS fixture 宣称 OpenCode runtime 完整兼容。
 - 当前 standalone Tool 使用本机 Node.js 验证受限 JS 子集，并在 Desktop 与交互式 TUI（ChatMode）显示运行时和无 OS 沙箱边界；
   脚本 worker 与 local stdio MCP 已共享跨平台进程树回收。OpenCode v2 的 Node SEA 前瞻证明 Node 是可行执行路线，但其
-  Bun 编译路径仍存在；BitFun 后续 TypeScript/Zod、`$` 与包依赖必须按固定样例选择脚本执行后端，不能提前把 Bun 或 Node 固化进插件内部 ABI。HarmonyOS PC 原生 CLI/TUI 必须按
+  Bun 编译路径仍存在；OpenBitFun 后续 TypeScript/Zod、`$` 与包依赖必须按固定样例选择脚本执行后端，不能提前把 Bun 或 Node 固化进插件内部 ABI。HarmonyOS PC 原生 CLI/TUI 必须按
   [平台专题](../platform-portability-design.md)独立取证，不包含 HarmonyOS 手机 Remote App。
 - 扩展调用必须有期限、取消、有界队列、大小检查和可观察的崩溃降级；更细的权限、沙箱和组织策略沿用现有控制点并延期
   单独设计，不在首条完整流程扩大接口。
-- BitFun 归属模块负责最终业务状态；适配器只保留 OpenCode 的格式、顺序、参数和错误语义。
+- OpenBitFun 归属模块负责最终业务状态；适配器只保留 OpenCode 的格式、顺序、参数和错误语义。
 
 近期优先级：
 
@@ -98,7 +98,7 @@ Session 不在控制机回退执行插件。一个物理 Host 可以承载多个
 
 Desktop、CLI 和 app-server 的标准开发/构建命令都会先构建 `extension-host.js`；Desktop 包、CLI 产品包和
 app-server release 输出都把它放入 `resources/ext-host`。当前分发仍要求系统提供兼容的 `bun`（也可通过
-`BITFUN_BUN_COMMAND` 显式指定）；签名 Bun
+`OPENBITFUN_BUN_COMMAND` 显式指定）；签名 Bun
 sidecar 尚未交付，因此安装包还不能宣称插件运行时完全自包含。恢复 Session 和 Host 崩溃后的同 Session 下一次提交
 都会重新 ensure 实际 execution root；Remote Session 继续保持不在控制机执行本地插件。
 
@@ -136,25 +136,25 @@ output 作为模型展示结果，后续有真实消费方时再扩展小型展�
 
 ## 3. 能力矩阵
 
-`当前状态`只表示 OpenCode 兼容行为是否已经进入 BitFun 生产路径，不把“BitFun 有相似基础模块”算成已兼容。
+`当前状态`只表示 OpenCode 兼容行为是否已经进入 OpenBitFun 生产路径，不把“OpenBitFun 有相似基础模块”算成已兼容。
 `成熟度依赖（非执行顺序）`表示该能力在完整兼容成熟度中的依赖位置，不代表近期执行顺序、承诺版本或必须实现。实际立项还必须有
 真实样例/消费方，并满足 OC-E 阶段与产品架构总计划的退出条件。
 
 这些表是差异审计库存，不是实施说明。快速阅读只需关注“扩展项、当前状态、目标可实现性、成熟度依赖、细节”；
-“BitFun 差异”和“需要完成的工作”用于解释为何不能直接桥接。实际实现范围以链接的专题设计和 OC-E 计划为准，
+“OpenBitFun 差异”和“需要完成的工作”用于解释为何不能直接桥接。实际实现范围以链接的专题设计和 OC-E 计划为准，
 不能把一整张表放进同一阶段。
 
 ### 3.1 配置与声明式资产
 
-| OpenCode 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
+| OpenCode 扩展项 | OpenBitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | OpenBitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
 | 配置层级与合并 | 融合现有能力 | 已实现：runtime-free 本地来源计划 | 可完整适配 | OC-R1 | Adapter 私有来源计划统一 user global、`OPENCODE_CONFIG`、project、`.opencode`/`OPENCODE_CONFIG_DIR` 与 `OPENCODE_CONFIG_CONTENT` 的顺序和监听根；Command、Subagent、MCP、Skills、Instructions、References 仅消费各自字段并保留原有合并语义，Tool/静态 Hook 仅消费无需运行插件的目录或声明。remote、managed 与 organization 配置不在当前范围 | [来源与合并](opencode-config-assets-adapter-design.md#3-配置层级与来源) |
 | JSON、JSONC、环境变量、文件引用 | 转换参数 + 明确降级 | 主要本地来源已实现 | 可主要适配 | OC-R1 | 已支持全局/项目 JSON/JSONC、`XDG_CONFIG_HOME`、`OPENCODE_CONFIG`、`OPENCODE_CONFIG_DIR`、`OPENCODE_CONFIG_CONTENT` 与项目配置禁用；inline 内容有界且使用脱敏虚拟来源标识。完整配置 schema、配置变量替换、remote/managed 来源仍未实现 | [解析与鲁棒性](opencode-config-assets-adapter-design.md#4-解析与鲁棒性) |
 | 独立 `tui.json/jsonc` | 融合现有能力 + 转换参数 | 未实现 | 可完整适配 | OC-R1 | 按 global、`OPENCODE_TUI_CONFIG`、project、`.opencode` 独立顺序加载，不能复用主配置优先级 | [TUI 来源](opencode-config-assets-adapter-design.md#32-tui-独立来源顺序) |
 | Rules / Instructions | 转换参数 | 部分实现：完整本地配置顺序下的文件与 glob | 可完整适配 | OC-R1 | OpenCode adapter 已读取用户全局 `AGENTS.md`/Claude fallback，并按 OpenCode 的全局文件覆盖、后续本地来源去重追加规则合并 `instructions`；相对路径从 opened directory 向 project boundary 查找，禁用项目配置时回到用户配置根。Product Assembly 在 Codex/Claude 用户来源与项目来源之前合成并去重。远程 URL 与 managed/organization policy 仍未实现 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | Agents / Modes | 融合现有能力 + 转换参数 | 部分实现：静态 Agent 安全子集、role 投影、模型/profile 绑定与 Agent-local 权限约束 | 可主要适配 | OC-R1 | 已支持当前生产 V1 与 Core V2 的已验证安全子集、全局/项目 Markdown 和 JSON/JSONC、`primary/subagent/all`、description、模型/variant 意图和工具映射；同一 workspace route/generation registry 向 Web/TUI 主选择器和 fresh Task 投影，复用审批、冲突、更新、撤下与调用租约。未声明模型继承当前/父 Session，显式模型作为新主 Session 默认值且之后可修改；不维护厂商别名、质量推断或自动 fallback。V1/V2 生命周期与有序权限规则保持原语义，主 Agent 的外部 ask/deny 约束也进入子委派 ceiling。legacy mode、root ambient permission、V1 歧义 pattern、OpenCode task target 过滤、options、采样与续接仍明确阻断或降级 | [Agents 与 Skills](opencode-config-assets-adapter-design.md#52-agentsmodes-与-skills) |
-| Skills | 转换参数 | 部分实现：标准根、本地配置根与标准用户根变化失效 | 可完整适配 | OC-R2 | 现有 Registry 除标准用户/项目根外，也通过 `bitfun-core/external_sources` 组合边界按 OpenCode 配置来源顺序累加 V1 `skills.paths` 与当前迁移后的本地字符串数组；仅接受项目根/用户目录内的本地目录并做有界递归发现。与 workspace 无关的标准用户根复用版本化快照，文件变化使其失效并在下一次发现时重建；OpenCode 配置根因作用域依赖当前 workspace 而保持按请求统一发现，标准项目根与 Remote 项目来源也仍按请求读取。同 scope 配置根覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源。URL、下载/缓存、完整 allow/deny/ask 顺序及外部来源策略仍未实现 | [Agents 与 Skills](opencode-config-assets-adapter-design.md#52-agentsmodes-与-skills) |
-| References | 融合现有能力 + 转换参数 | 部分实现：本地目录与既有 Workspace 消费点 | 可主要适配 | OC-R2 | 已按统一的 OpenCode 本地配置来源顺序解析 `references`/旧 `reference` 的本地 path、description/hidden，相同 alias 后者覆盖；通过独立生命周期协调器与 BitFun 原生关联目录合成 native-first 有效快照，接入关联目录弹窗和既有 `@` 目录选择器。外部声明不自动进入 Prompt、不授予文件权限；Git、Remote、下载/缓存明确不支持且不做临时实现 | [References](opencode-config-assets-adapter-design.md#521-references) |
+| Skills | 转换参数 | 部分实现：标准根、本地配置根与标准用户根变化失效 | 可完整适配 | OC-R2 | 现有 Registry 除标准用户/项目根外，也通过 `openbitfun-core/external_sources` 组合边界按 OpenCode 配置来源顺序累加 V1 `skills.paths` 与当前迁移后的本地字符串数组；仅接受项目根/用户目录内的本地目录并做有界递归发现。与 workspace 无关的标准用户根复用版本化快照，文件变化使其失效并在下一次发现时重建；OpenCode 配置根因作用域依赖当前 workspace 而保持按请求统一发现，标准项目根与 Remote 项目来源也仍按请求读取。同 scope 配置根覆盖标准 OpenCode 根，但不重排更早的 OpenBitFun/Claude/Codex/Cursor 来源。URL、下载/缓存、完整 allow/deny/ask 顺序及外部来源策略仍未实现 | [Agents 与 Skills](opencode-config-assets-adapter-design.md#52-agentsmodes-与-skills) |
+| References | 融合现有能力 + 转换参数 | 部分实现：本地目录与既有 Workspace 消费点 | 可主要适配 | OC-R2 | 已按统一的 OpenCode 本地配置来源顺序解析 `references`/旧 `reference` 的本地 path、description/hidden，相同 alias 后者覆盖；通过独立生命周期协调器与 OpenBitFun 原生关联目录合成 native-first 有效快照，接入关联目录弹窗和既有 `@` 目录选择器。外部声明不自动进入 Prompt、不授予文件权限；Git、Remote、下载/缓存明确不支持且不做临时实现 | [References](opencode-config-assets-adapter-design.md#521-references) |
 | Commands | 补扩展接口 + 转换参数 | 部分实现：prompt、本地文本文件、经审阅的 shell 上下文与显式 Subagent 委派 | 可完整适配 | OC-R2 | 已支持全局/项目 JSON、JSONC、Markdown 命令、参数展开、动态目录、刷新和显式冲突选择；模板中的静态 workspace 相对 `@file` 可在调用时有界读取，`!shell` 经精确计划审阅后仅把 stdout 加入 Prompt，静态计划可记住、参数相关计划仅可单次运行。仅 `agent` 加缺省/`true` 的 `subtask` 可委派给同 workspace、同 OpenCode 生态、已审批且仍有效的精确 Subagent，并复用现有 fresh Task 生命周期；shell 与委派的组合、`model`、`variant`、`subtask: false`、隐式默认 Agent、Remote 与附件上下文保持受限，不回退到当前 Agent 或本机执行 | [Commands](opencode-config-assets-adapter-design.md#53-commands) |
 | Models / Providers 配置 | 融合现有能力 | 未实现 | 可主要适配 | OC-R1 | 静态字段进入模型归属模块；动态模型、鉴权和请求头交给插件运行时 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | MCP | 转换参数 | 部分实现：local stdio 与 HTTPS remote | 可完整适配 | OC-R2 | 已接入发现、审批、冲突、workspace 隔离、更新和启动反馈；SSE、OAuth、完整 timeout/Agent 范围仍不支持；Remote 不回退本机实例 | [MCP、LSP 与 Formatter](opencode-config-assets-adapter-design.md#54-mcplsp-与-formatter) |
@@ -164,14 +164,14 @@ output 作为模型展示结果，后续有真实消费方时再扩展小型展�
 | Keybinds | 补扩展接口 + 转换参数 | 未实现 | 可主要适配 | OC-R1 | 为运行时 TUI 输入增加 `tui.json` 兼容入口，处理 leader、组合键、禁用和冲突 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | Shell / Tools / Attachments / Share / Snapshot / Compaction / Watcher | 融合现有能力 + 转换参数 | 部分实现：Command shell 偏好仅供经审阅的 Prompt 上下文 | 可主要适配 | OC-R2 | Command 的窄 shell 语义已接到 Terminal owner；通用 shell 环境、工具调用、附件、分享、快照、压缩和 watcher 仍未实现，不从 Command 路径外推通用能力 | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
 | Log / Username / Enterprise / Tool output / 旧字段迁移 | 转换参数或补基础能力 | 未实现 | 可主要适配 | OC-R1 | 覆盖 `logLevel`、`username`、`enterprise`、`tool_output` 及 `reference/autoshare/layout/mode` 迁移 | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
-| `server` | 明确降级 | 未实现 | 明确降级 | OC-R4-P | 只供显式外部协议兼容服务使用，不改变普通 BitFun 启动方式 | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
-| `autoupdate` | 明确降级 | 不适用 | 明确降级 | 不安排 | 不控制 BitFun 产品更新；保留来源并显示“不适用于 BitFun 更新” | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
+| `server` | 明确降级 | 未实现 | 明确降级 | OC-R4-P | 只供显式外部协议兼容服务使用，不改变普通 OpenBitFun 启动方式 | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
+| `autoupdate` | 明确降级 | 不适用 | 明确降级 | 不安排 | 不控制 OpenBitFun 产品更新；保留来源并显示“不适用于 OpenBitFun 更新” | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
 
 本类整体风险是来源优先级错误、相似能力语义不一致和远程执行域错配。控制点集中在有序来源事实、字段级诊断、归属模块校验和官方配置样例，不在每个配置项内重复设计，也不为概念完整性新增公共 Graph 对象。
 
 ### 3.2 工具与服务插件
 
-| OpenCode 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
+| OpenCode 扩展项 | OpenBitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | OpenBitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
 | `.opencode/tools/*.js` | 补基础能力 | 受支持单文件子集已接入 Tool Runtime | 可完整适配 | OC-R2 | 当前 Node worker 支持基础 schema、默认值、字符串结果、取消/超时/撤下；完整 Zod、模块依赖、`metadata`/`ask` 和附件结果继续走类型化进程通信扩展 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
 | `.opencode/tools/*.ts` | 补基础能力 | 已识别，执行不支持 | 可完整适配 | OC-R2 | 当前静态显示不 import；后续由固定样例选择 Node 转译或 Bun/TypeScript worker，保留真实 schema 与 execute，不在 Rust 猜测 TS 语义 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
@@ -196,7 +196,7 @@ output 作为模型展示结果，后续有真实消费方时再扩展小型展�
 package plugin 则由受管 Host import，并通过类型化 `HookFunctionRuntime` 执行。两条路径的状态必须分别显示，静态
 发现不能冒充运行可用，运行 Host 也不能反向接管其他生态的静态目录。
 
-| Hook | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 |
+| Hook | OpenBitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | OpenBitFun 需要完成的工作 |
 |---|---|---|---|---|---|
 | `dispose` | 直接桥接 | 已实现：有界清理；drain/dispose 超时使 Host 代际失效并回收进程树 | 可完整适配 | OC-R3 | 补真实阻塞插件的跨平台 Host 重启样例。 |
 | `event` | 补扩展接口 | 静态目录可见，运行未实现 | 可完整适配 | OC-R3 | 提供版本化事件代理并隔离插件异常。 |
@@ -218,12 +218,12 @@ Hook 的共同风险是把变换误做成通知、并行调用破坏顺序或插
 
 ### 3.4 终端界面插件
 
-| OpenCode 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
+| OpenCode 扩展项 | OpenBitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | OpenBitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
 | 独立 TUI 插件入口、options、meta、lifecycle | 补基础能力 | 未实现 | 可完整适配 | OC-R4-T | 独立解析 `tui.json`，加载只导出 `tui` 的模块并维护启停、取消和清理 | [发现与生命周期](opencode-tui-plugin-adapter-design.md#4-发现加载和生命周期) |
 | `app`、`tuiConfig`、`keys`、`mode` | 补扩展接口 + 转换参数 | 未实现 | 可主要适配 | OC-R4-T | 提供版本、实时配置、按键格式化和模式栈兼容接口 | [能力映射](opencode-tui-plugin-adapter-design.md#5-能力映射) |
 | Command 与 slash alias | 补扩展接口 | 未实现 | 可完整适配 | OC-R4-T | 声明注册到 CLI action registry，保持来源顺序，并由既有 controller 执行 | [Command](opencode-tui-plugin-adapter-design.md#54-command-与-slash-alias) |
-| Route 身份与导航 | 融合现有能力 | 未实现 | 可主要适配 | OC-R4-T | 保留 route id、覆盖顺序和 navigate/current；渲染降级页由 BitFun 提供退出动作 | [Route](opencode-tui-plugin-adapter-design.md#53-route-与导航) |
+| Route 身份与导航 | 融合现有能力 | 未实现 | 可主要适配 | OC-R4-T | 保留 route id、覆盖顺序和 navigate/current；渲染降级页由 OpenBitFun 提供退出动作 | [Route](opencode-tui-plugin-adapter-design.md#53-route-与导航) |
 | Keys、Keymap、Layer、Binding、Mode | 转换参数 + 明确降级 | 未实现 | 可主要适配 | OC-R4-T | 转换公开键位和分发语义；依赖 OpenTUI Renderable 的方法明确不支持 | [Keymap](opencode-tui-plugin-adapter-design.md#55-keyskeymaplayerbinding-与-mode) |
 | Alert / Confirm / Prompt / Select / Toast | 转换参数 | 未实现 | 可主要适配 | OC-R4-T | 把已知属性和返回值映射到 Ratatui 宿主交互 | [Dialog](opencode-tui-plugin-adapter-design.md#56-dialogtoast-与-prompt) |
 | Theme、Attention、通知、声音 | 转换参数 | 未实现 | 可主要适配 | OC-R4-T | 接到主题与平台通知能力，无系统能力时降级到文本 | [Theme 与通知](opencode-tui-plugin-adapter-design.md#58-theme) |
@@ -237,16 +237,16 @@ Hook 的共同风险是把变换误做成通知、并行调用破坏顺序或插
 
 ### 3.5 外部接口与实验能力
 
-| 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
+| 扩展项 | OpenBitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | OpenBitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
 | OpenCode 开发工具包客户端 | 补扩展接口 | 未实现 | 可主要适配 | OC-R4-P | 先实现真实消费的方法；未知读接口稳定失败，未知写接口绝不伪造成功 | [外部集成设计](opencode-external-integration-adapter-design.md) |
 | HTTP / OpenAPI / SSE | 融合现有能力 + 明确降级 | 未实现 | 可主要适配 | OC-R4-P | 插件回环服务复用处理器；完整外部协议独立验收 | [显式兼容服务](opencode-external-integration-adapter-design.md#41-显式兼容服务) |
 | ACP | 转换参数 | 未实现 | 可主要适配 | OC-R4-P | 映射工具、命令、MCP、规则、Formatter、Agent 和权限 | [能力结论](opencode-external-integration-adapter-design.md#2-能力与产品结论) |
-| IDE 扩展（VS Code/Cursor/Windsurf/VSCodium） | 补基础能力 + 融合现有能力 | 未实现 | 可主要适配 | OC-R4-P | BitFun 扩展实现启动/聚焦与上下文；原扩展直连须另装 `opencode` 兼容启动器并精确覆盖环境变量、`GET /app` 和 `POST /tui/append-prompt` | [IDE](opencode-external-integration-adapter-design.md#42-ide) |
-| Web 与 attach 客户端 | 补基础能力 + 明确降级 | 未实现 | 明确降级 | OC-R5 | 优先使用 BitFun Web/Remote；原始客户端直连另行实现 Server 协议 | [能力结论](opencode-external-integration-adapter-design.md#2-能力与产品结论) |
-| GitHub Action / App | 融合现有能力 + 明确降级 | 未实现 | 明确降级 | OC-R4-C | 提供 BitFun GitHub 工作流，不冒充 `opencode` 二进制 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
-| GitLab CI / Duo | 融合现有能力 + 明确降级 | 未实现 | 明确降级 | OC-R4-C | 提供 BitFun CI/触发器，不把 runner/CLI 计入插件兼容 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
-| Slack | 补基础能力 + 转换参数 | 未实现 | 可主要适配 | OC-R4-C | 实现 BitFun Slack 连接器；原 `@opencode-ai/slack` 直连取决于 SDK/Server 覆盖 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
+| IDE 扩展（VS Code/Cursor/Windsurf/VSCodium） | 补基础能力 + 融合现有能力 | 未实现 | 可主要适配 | OC-R4-P | OpenBitFun 扩展实现启动/聚焦与上下文；原扩展直连须另装 `opencode` 兼容启动器并精确覆盖环境变量、`GET /app` 和 `POST /tui/append-prompt` | [IDE](opencode-external-integration-adapter-design.md#42-ide) |
+| Web 与 attach 客户端 | 补基础能力 + 明确降级 | 未实现 | 明确降级 | OC-R5 | 优先使用 OpenBitFun Web/Remote；原始客户端直连另行实现 Server 协议 | [能力结论](opencode-external-integration-adapter-design.md#2-能力与产品结论) |
+| GitHub Action / App | 融合现有能力 + 明确降级 | 未实现 | 明确降级 | OC-R4-C | 提供 OpenBitFun GitHub 工作流，不冒充 `opencode` 二进制 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
+| GitLab CI / Duo | 融合现有能力 + 明确降级 | 未实现 | 明确降级 | OC-R4-C | 提供 OpenBitFun CI/触发器，不把 runner/CLI 计入插件兼容 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
+| Slack | 补基础能力 + 转换参数 | 未实现 | 可主要适配 | OC-R4-C | 实现 OpenBitFun Slack 连接器；原 `@opencode-ai/slack` 直连取决于 SDK/Server 覆盖 | [代码托管与 Slack](opencode-external-integration-adapter-design.md#43-githubgitlab-与-slack) |
 | `experimental.chat.messages.transform` | 补扩展接口 | 未实现 | 暂不承诺 | OC-R5 | 保留前瞻样例，稳定后复用消息变换路径 | 本节 |
 | `experimental.chat.system.transform` | 补扩展接口 + 融合现有能力 | 未实现 | 暂不承诺 | OC-R5 | 稳定后接入系统提示归属模块 | 本节 |
 | `experimental.provider.small_model` | 转换参数 | 未实现 | 暂不承诺 | OC-R5 | 只做版本差异监控 | 本节 |
@@ -267,7 +267,7 @@ OpenCode 发布新稳定版时按以下顺序升级：
 
 1. 比较稳定版的配置 schema、服务 Hook、TUI API、事件和加载规则。
 2. 用第 1.1 节的差异类型标记新增或变化项，先判断是参数转换还是语义变化。
-3. 优先只更新版本化适配层；只有 OpenCode 增加了 BitFun 完全没有的产品行为时才补基础能力。
+3. 优先只更新版本化适配层；只有 OpenCode 增加了 OpenBitFun 完全没有的产品行为时才补基础能力。
 4. 旧兼容版本继续可用，直到新版本的官方样例、顺序、失败和恢复测试通过。
 5. 测试通过后再推进默认兼容版本；开发分支变化只产生前瞻告警。
 
@@ -301,7 +301,7 @@ OpenCode 发布新稳定版时按以下顺序升级：
 
 ### 4.3 插件变化、旧进程保留与恢复
 
-来源变化后，BitFun 先检查来源更新策略和 import 前可见的运行条件，再进入安全重启：
+来源变化后，OpenBitFun 先检查来源更新策略和 import 前可见的运行条件，再进入安全重启：
 
 ```mermaid
 flowchart LR
@@ -341,7 +341,7 @@ Node 进程永久累积；这不是 package-plugin 的 workspace-scoped runtime 
 |---|---|
 | 已激活项目中的同一本地文件变化，更新策略允许且运行条件未扩大 | 后台完成静态检查，再短暂停止插件并安全重启；一级状态显示“更新中”。 |
 | 软件包版本/完整性、远程内容或更新策略未覆盖的来源变化 | 不加载新代码；显示差异并等待确认。 |
-| bare `latest` 软件包可能有新版本 | 固定源码的缓存命中不会主动刷新；BitFun 以“检查更新/更新”增强显示候选版本和影响范围，不静默换包。 |
+| bare `latest` 软件包可能有新版本 | 固定源码的缓存命中不会主动刷新；OpenBitFun 以“检查更新/更新”增强显示候选版本和影响范围，不静默换包。 |
 | import 前可判断的文件/网络/进程权限、凭据、环境变量、依赖安装行为或执行位置扩大 | 不加载新代码并显示差异；确认前健康且仍合规的旧版本可继续服务。 |
 | 新 Host import 后发现新增工具、Hook 或其他受管贡献 | 停止新 Host，不注册贡献，显示真实差异并等待确认；已经产生的直接副作用不能宣称已撤销。 |
 | 仅删除部分贡献且来源仍存在 | 按安全重启替换完整 Host 插件组；能力范围收窄不额外要求确认，但保留一次变更摘要。 |
@@ -364,7 +364,7 @@ Agent、Tool 引用和 workspace Skill 根转换成 `product-domains` 的生态�
 因此一个生态更新或撤销时不会覆盖另一个生态的 Skill 贡献。
 
 这条公共边界只覆盖当前已经存在的能力提交语义。DeepSeek Harness 当前仍是静态投影，不执行 Cordis 插件；后续增加
-可执行适配时，可以为已经验证过 BitFun owner 语义的能力输出同一贡献类型，但必须保留独立的 Cordis 来源解析、Host
+可执行适配时，可以为已经验证过 OpenBitFun owner 语义的能力输出同一贡献类型，但必须保留独立的 Cordis 来源解析、Host
 协议、执行句柄和生命周期，也不得进入 OpenCode 的 Config Hook、Hook dispatch 或 Plugin Host 组装路径。当前配置型
 Skill 根的扫描、优先级锚点和合并仍属于 OpenCode consumer；DeepSeek Harness 的 Skill 发布要等真实来源与优先级语义确定后
 再扩展该 owner。本边界不定义统一 Plugin Host、统一插件协议或跨生态配置模型。
@@ -384,14 +384,14 @@ Skill 根的扫描、优先级锚点和合并仍属于 OpenCode consumer；DeepS
 
 | 能力 | 结论 | 原因 | 替代行为 |
 |---|---|---|---|
-| 原始 `CliRenderer` 和 Solid/OpenTUI 组件树 | 暂不承诺完整兼容 | BitFun Ratatui 与 OpenCode 组件树、布局和生命周期不共用运行时 | 适配导航、命令、公开键位、已知对话、主题和通知；原始组件显示明确不支持。 |
-| `api.app.version` 无法表达 renderer 降级 | 协议限制 | 插件只能读取兼容版本，没有能力协商字段，可能在懒路径选择 BitFun 不支持的组件能力 | 初始化依赖 renderer 时拒绝整个插件入口；懒路径返回 `unsupported(renderer-required)`，不能宣称仅凭版本检查即可兼容。 |
+| 原始 `CliRenderer` 和 Solid/OpenTUI 组件树 | 暂不承诺完整兼容 | OpenBitFun Ratatui 与 OpenCode 组件树、布局和生命周期不共用运行时 | 适配导航、命令、公开键位、已知对话、主题和通知；原始组件显示明确不支持。 |
+| `api.app.version` 无法表达 renderer 降级 | 协议限制 | 插件只能读取兼容版本，没有能力协商字段，可能在懒路径选择 OpenBitFun 不支持的组件能力 | 初始化依赖 renderer 时拒绝整个插件入口；懒路径返回 `unsupported(renderer-required)`，不能宣称仅凭版本检查即可兼容。 |
 | 完整 OpenCode HTTP Server 协议 | 不作为插件兼容前置目标 | 会形成第二套产品协议、会话和错误模型 | 为插件实现所需 Client/回环路由；外部协议按独立产品需求扩展。 |
-| 原始 IDE/Web/attach/GitHub/GitLab 客户端或流程直接连接 BitFun | 不承诺直接替换 | 这些入口依赖 OpenCode CLI、Server、会话和产品流程，不是插件接口 | 提供 BitFun 原生集成；IDE `/tui` 子集和外部协议按真实需求单独兼容。 |
+| 原始 IDE/Web/attach/GitHub/GitLab 客户端或流程直接连接 OpenBitFun | 不承诺直接替换 | 这些入口依赖 OpenCode CLI、Server、会话和产品流程，不是插件接口 | 提供 OpenBitFun 原生集成；IDE `/tui` 子集和外部协议按真实需求单独兼容。 |
 | 插件间 `globalThis`、进程环境和模块单例共享 | 不作为稳定承诺 | package plugin 默认共享 Plugin Host，但必要的后端/安全拆分、安全重启和崩溃恢复都会重建进程状态 | 保留官方 PluginInput、Hook 顺序和显式接口；未文档化全局副作用可能可见，但不作为兼容契约。 |
-| `server` / `autoupdate` 在普通 BitFun 启动中的行为 | 明确降级 | 两者分别属于 OpenCode 服务进程和 OpenCode 自身更新 | 显式兼容服务可映射 `server`；`autoupdate` 只保留来源并说明不适用。 |
+| `server` / `autoupdate` 在普通 OpenBitFun 启动中的行为 | 明确降级 | 两者分别属于 OpenCode 服务进程和 OpenCode 自身更新 | 显式兼容服务可映射 `server`；`autoupdate` 只保留来源并说明不适用。 |
 | 未文档化内部接口 | 不承诺 | 没有稳定版本和契约 | 返回稳定不支持并进入版本前瞻报告。 |
-| `experimental_workspace.register` | 暂不承诺 | 接口未稳定且会改变工作区与远程连接归属 | 继续使用 BitFun Workspace/Remote 归属模块，稳定后重评。 |
+| `experimental_workspace.register` | 暂不承诺 | 接口未稳定且会改变工作区与远程连接归属 | 继续使用 OpenBitFun Workspace/Remote 归属模块，稳定后重评。 |
 | 受限策略下拦截任意脚本副作用 | 只能部分控制 | 插件可以直接调用脚本运行时，绕过细粒度能力代理 | 来源激活后默认兼容策略放开；用户收紧时明确列出被禁用或无法拦截的能力。 |
 | 无硬资源限制平台上的系统资源耗尽 | 不能保证完全隔离 | 已有进程树可回收受管后代，但仍不能阻止内存、CPU、网络或逃逸进程拖慢整机 | 在真实需求下增加 cgroup/rlimit/容器等平台额度；缺少硬限制时显示残余风险。 |
 | Plugin Tool 通用附件消费 | 后续产品 PR | 当前已保留 OpenCode attachment 的 mime/url/filename，尚无跨模型、文件 UI 与持久化共同认可的消费合同 | 本 PR 不把已完成的副作用误报为失败；后续由真实消费方定义文件授权、下载/读取、Remote 和模型可见规则。 |

@@ -3,7 +3,7 @@ use crate::service::session::{
     DialogTurnData, ModelRoundData, SessionTranscriptExportOptions, SessionTranscriptIndexEntry,
     ToolItemData, ToolItemIdentityExt, TranscriptLineRange,
 };
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -344,7 +344,7 @@ pub(crate) fn transcript_fingerprint(
     session_id: &str,
     turns: &[DialogTurnData],
     options: &SessionTranscriptExportOptions,
-) -> BitFunResult<String> {
+) -> OpenBitFunResult<String> {
     let payload = TranscriptFingerprintPayload {
         session_id: session_id.to_string(),
         tools: options.tools,
@@ -358,7 +358,7 @@ pub(crate) fn transcript_fingerprint(
     };
 
     let bytes = serde_json::to_vec(&payload).map_err(|e| {
-        BitFunError::serialization(format!("Failed to serialize transcript fingerprint: {}", e))
+        OpenBitFunError::serialization(format!("Failed to serialize transcript fingerprint: {}", e))
     })?;
     let mut hasher = Sha256::new();
     hasher.update(bytes);

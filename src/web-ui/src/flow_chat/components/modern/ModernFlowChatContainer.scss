@@ -3,19 +3,19 @@
  */
 
 .modern-flowchat-container.flow-chat-typography {
-  font-family:var(--bf-type-body-sm-font-family);
-  font-size: var(--bf-type-flow-body-font-size);
-  line-height: var(--bf-type-flow-body-line-height);
+  font-family:var(--openbitfun-type-body-sm-font-family);
+  font-size: var(--openbitfun-type-flow-body-font-size);
+  line-height: var(--openbitfun-type-flow-body-line-height);
 }
 
 .modern-flowchat-container {
-  --modern-flowchat-input-bg: var(--bf-color-surface-panel);
+  --modern-flowchat-input-bg: var(--openbitfun-color-surface-panel);
 
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   position: relative; // Positioning context for the permission panel and overlays.
 
   &__messages {
@@ -36,9 +36,9 @@
 
   &__input {
     flex-shrink: 0;
-    padding: var(--bf-control-flow-chat-card-expanded-padding-inline);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
     background: var(--modern-flowchat-input-bg);
-    border-top: 1px solid var(--bf-color-border-default);
+    border-top: 1px solid var(--openbitfun-color-border-default);
   }
 }
 
@@ -50,9 +50,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--bf-control-flow-chat-control-gap);
-  padding: var(--bf-space-8);
-  color: var(--bf-color-content-secondary);
+  gap: var(--openbitfun-control-flow-chat-control-gap);
+  padding: var(--openbitfun-space-8);
+  color: var(--openbitfun-color-content-secondary);
   text-align: center;
 }
 
@@ -62,7 +62,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--bf-color-accent-default);
+  color: var(--openbitfun-color-accent-default);
 
   svg {
     animation: history-placeholder-spin 1.1s linear infinite;
@@ -70,7 +70,7 @@
 }
 
 .history-session-placeholder__icon--failed {
-  color: var(--bf-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-content);
 
   svg {
     animation: none;
@@ -85,16 +85,16 @@
 
 .history-session-placeholder__title {
   margin: 0;
-  color: var(--bf-color-content-primary);
-  font-size: var(--bf-type-flow-title-font-size);
-  font-weight: var(--bf-type-label-selected-font-weight);
-  line-height: var(--bf-type-flow-support-line-height);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-flow-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .history-session-placeholder__description {
   margin: 0;
-  font-size: var(--bf-type-flow-control-font-size);
-  line-height: var(--bf-type-flow-support-line-height);
+  font-size: var(--openbitfun-type-flow-control-font-size);
+  line-height: var(--openbitfun-type-flow-support-line-height);
 }
 
 .modern-flowchat-container__history-overlay {
@@ -102,7 +102,7 @@
   inset: 0;
   z-index: 10;
   pointer-events: none;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
 }
 
 .modern-flowchat-container__history-open-intent-shield {
@@ -114,7 +114,7 @@
   justify-content: center;
   padding-top: 40px;
   pointer-events: auto;
-  background: var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
   contain: paint;
 }
 
@@ -130,10 +130,10 @@
   border-radius: 8px;
   opacity: 0.72;
   background:
-    linear-gradient(90deg, transparent 0 4%, var(--bf-color-action-neutral-surface-hover) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 9%, var(--bf-color-action-neutral-surface-hover) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 6%, var(--bf-color-action-neutral-surface-hover) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 12%, var(--bf-color-action-neutral-surface-hover) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
+    linear-gradient(90deg, transparent 0 4%, var(--openbitfun-color-action-neutral-surface-hover) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 9%, var(--openbitfun-color-action-neutral-surface-hover) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 6%, var(--openbitfun-color-action-neutral-surface-hover) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 12%, var(--openbitfun-color-action-neutral-surface-hover) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
 }
 
 .modern-flowchat-container__history-open-intent-spinner {
@@ -141,11 +141,11 @@
   z-index: 1;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--bf-color-border-default);
-  border-top-color: var(--bf-color-accent-default);
+  border: 2px solid var(--openbitfun-color-border-default);
+  border-top-color: var(--openbitfun-color-accent-default);
   border-radius: 50%;
-  background: var(--bf-color-surface-scene);
-  box-shadow: 0 0 0 6px var(--bf-color-surface-scene);
+  background: var(--openbitfun-color-surface-scene);
+  box-shadow: 0 0 0 6px var(--openbitfun-color-surface-scene);
   animation: history-placeholder-spin 0.9s linear infinite;
 }
 

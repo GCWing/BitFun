@@ -2,11 +2,11 @@
 
 此文档定义生成或修改 MiniApp 时可用的 API，供实现时直接参考。
 
-> **实际全局对象为 `window.app`**（非 `window.__BITFUN__`），以下各节均基于 `window.app`。
+> **实际全局对象为 `window.app`**（非 `window.__OPENBITFUN__`），以下各节均基于 `window.app`。
 
 ## 能力边界
 
-MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"。生成代码前请先确认你需要的能力在表内：
+MiniApp **能且只能**用以下 API，没有任何"通用 OpenBitFun 后端通道"。生成代码前请先确认你需要的能力在表内：
 
 - `app.fs.*` —— 文件系统（受 `permissions.fs.read/write` 限制）
 - `app.shell.exec` —— 子进程命令行（受 `permissions.shell.allow` 命令名白名单限制）
@@ -20,9 +20,9 @@ MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"
 - `app.call('xxx', ...)` + `worker.js` —— 自定义 Node 后端（仅 `node.enabled = true` 时）
 - `app.appearanceMode / locale / on*` —— 主题与 i18n
 
-MiniApp 不提供通用 BitFun 后端通道。不要假设这些接口存在：
+MiniApp 不提供通用 OpenBitFun 后端通道。不要假设这些接口存在：
 
-- `app.bitfun.*`
+- `app.openbitfun.*`
 - `app.workspace.*`
 - `app.git.*`
 - `app.session.*`
@@ -102,7 +102,7 @@ const crypto = require('crypto');
 ## 标准浏览器 API
 
 MiniApp 运行在 iframe 中，完整支持:
-- DOM、CSS（含 CSS 变量 `--bitfun-bg`, `--bitfun-text`, `--bitfun-accent` 等）
+- DOM、CSS（含 CSS 变量 `--openbitfun-bg`, `--openbitfun-text`, `--openbitfun-accent` 等）
 - Canvas 2D / WebGL
 - Web Audio
 - LocalStorage / SessionStorage（iframe 级隔离）
@@ -325,7 +325,7 @@ const text = await app.clipboard.readText();
 app.onActivate(() => { /* Tab 变为活跃状态 */ });
 app.onDeactivate(() => { /* Tab 切走 */ });
 app.onAppearanceChange((payload) => {
-  // payload: { mode: 'dark'|'light', vars: { '--bitfun-bg': '...', ... } }
+  // payload: { mode: 'dark'|'light', vars: { '--openbitfun-bg': '...', ... } }
 });
 app.onLocaleChange((locale) => {
   // locale: 新的语言 ID 字符串（如 'zh-CN' / 'en-US'）

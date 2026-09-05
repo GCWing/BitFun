@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 const USER_CONFIG_KEY: &str = "mcp_servers";
-const IMPORT_METADATA_KEY: &str = "_bitfunImport";
+const IMPORT_METADATA_KEY: &str = "_openbitfunImport";
 const MAX_IMPORT_SERVERS: usize = 256;
 const MAX_IMPORT_ID_BYTES: usize = 512;
 const MAX_IMPORT_TEXT_BYTES: usize = 4096;

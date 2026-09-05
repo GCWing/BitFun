@@ -19,7 +19,7 @@
 # the harness the user already installed and configured: `$DSH_HOME/settings.yaml`
 # (what dsh's web Models page writes) and `$DSH_HOME/.credentials.yaml`, read
 # through the two provider rows below. Nothing about an account is stored in
-# this repository, and BitFun never asks for a key of its own. The bridge offers
+# this repository, and OpenBitFun never asks for a key of its own. The bridge offers
 # those same routes to the client as the `model` session config option, so an
 # IDE picks per session out of the catalog dsh already holds.
 

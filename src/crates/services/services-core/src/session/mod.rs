@@ -4,12 +4,10 @@ mod lineage;
 mod memory_workspace;
 mod metadata;
 mod metadata_store;
-mod migration;
 pub mod page;
 pub mod types;
 mod write_lock;
 
-pub use bitfun_core_types::{SessionKind, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 pub use layout::SessionStorageLayout;
 pub use lineage::{
     apply_session_lineage, build_branched_session_metadata, build_session_lineage_snapshot,
@@ -32,10 +30,7 @@ pub use metadata::{
     SessionMetadataBuildFacts,
 };
 pub use metadata_store::{SessionMetadataStore, SessionMetadataStoreError};
-pub use migration::{
-    merge_legacy_session_store, move_legacy_path, SessionStoreMigrationError,
-    SessionStoreMigrationRecord,
-};
+pub use openbitfun_core_types::{SessionKind, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 pub use page::{build_session_metadata_page, empty_session_metadata_page, SessionMetadataPage};
 pub use types::*;
 pub use write_lock::{SessionWriteLock, SessionWriteLockError};

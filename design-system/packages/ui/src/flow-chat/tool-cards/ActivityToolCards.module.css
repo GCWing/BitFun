@@ -1,14 +1,14 @@
-@layer bf.components {
+@layer openbitfun.components {
   .summary {
     display: block;
     min-inline-size: 0;
     overflow: hidden;
-    color: var(--bf-color-content-muted);
+    color: var(--openbitfun-color-content-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .summary[data-tone="danger"] {
-    color: var(--bf-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-content);
   }
 }

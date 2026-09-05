@@ -13,9 +13,9 @@ export default function nativeCryptoLoadTest() {
       const startedAt = Date.now();
 
       const results = await Promise.all([
-        CloudAccountCrypto.derivePasswordHash('bitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 }),
-        CloudAccountCrypto.derivePasswordHash('bitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 }),
-        CloudAccountCrypto.derivePasswordHash('bitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 })
+        CloudAccountCrypto.derivePasswordHash('openbitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 }),
+        CloudAccountCrypto.derivePasswordHash('openbitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 }),
+        CloudAccountCrypto.derivePasswordHash('openbitfun-device-load', salt, { m: 16 * 1024, t: 2, p: 1 })
       ]);
       clearInterval(heartbeatId);
 

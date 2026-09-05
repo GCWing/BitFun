@@ -67,15 +67,15 @@ export function ToolCardStatusSlot({
   return (
     <span
       className={classNames(styles.root, className)}
-      data-bf-component="flow-chat-tool-card"
-      data-bf-part="statusSlot"
+      data-openbitfun-component="flow-chat-tool-card"
+      data-openbitfun-part="statusSlot"
       data-default-icon={resolvedDefaultIcon}
     >
       {hasStatusGlyph && (
         <span
           className={styles.statusLayer}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="statusLayer"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="statusLayer"
         >
           <StatusGlyph size={size} status={status} />
         </span>
@@ -84,8 +84,8 @@ export function ToolCardStatusSlot({
         <span
           aria-hidden="true"
           className={styles.iconLayer}
-          data-bf-component="flow-chat-tool-card"
-          data-bf-part="toolIconLayer"
+          data-openbitfun-component="flow-chat-tool-card"
+          data-openbitfun-part="toolIconLayer"
         >
           {toolIcon}
         </span>

@@ -1,13 +1,13 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     display: flex;
     min-inline-size: 0;
     inline-size: 100%;
     flex-direction: column;
-    border-radius: var(--bf-radius-2xl);
-    color: var(--bf-color-content-primary);
+    border-radius: var(--openbitfun-radius-2xl);
+    color: var(--openbitfun-color-content-primary);
     background: transparent;
-    font-family:var(--bf-type-body-md-font-family);
+    font-family:var(--openbitfun-type-body-md-font-family);
   }
 
   .root[data-has-context="true"] {
@@ -15,17 +15,17 @@
        dark themes and darker in light themes. */
     background: color-mix(
       in srgb,
-      var(--bf-color-surface-panel) 94%,
-      var(--bf-color-content-primary) 6%
+      var(--openbitfun-color-surface-panel) 94%,
+      var(--openbitfun-color-content-primary) 6%
     );
   }
 
   .context {
     display: flex;
     min-inline-size: 0;
-    min-block-size: var(--bf-space-8);
+    min-block-size: var(--openbitfun-space-8);
     align-items: center;
-    padding-inline: var(--bf-space-2);
+    padding-inline: var(--openbitfun-space-2);
   }
 
   .body {
@@ -33,7 +33,7 @@
     min-inline-size: 0;
     inline-size: 100%;
     flex-direction: column;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .queue {
@@ -47,51 +47,51 @@
     display: grid;
     min-inline-size: 0;
     inline-size: 100%;
-    min-block-size: var(--bf-control-height-md);
+    min-block-size: var(--openbitfun-control-height-md);
     box-sizing: border-box;
     align-items: center;
-    gap: var(--bf-space-3);
-    padding: var(--bf-space-2);
-    border: var(--bf-border-width-default) solid var(--bf-color-action-neutral-border);
-    border-radius: var(--bf-radius-2xl);
-    color: var(--bf-color-content-primary);
-    background: var(--bf-color-surface-panel);
-    box-shadow: var(--bf-shadow-base);
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-2);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-border);
+    border-radius: var(--openbitfun-radius-2xl);
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-base);
     transition:
-      border-color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
-      box-shadow var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  .surface[data-bf-layout="compact"] {
-    block-size: var(--bf-control-chat-composer-compact-height);
-    gap: var(--bf-control-chat-composer-compact-gap);
+  .surface[data-openbitfun-layout="compact"] {
+    block-size: var(--openbitfun-control-chat-composer-compact-height);
+    gap: var(--openbitfun-control-chat-composer-compact-gap);
     grid-template-areas: "start content end";
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: var(--bf-control-chat-composer-compact-track-height);
-    min-block-size: var(--bf-control-chat-composer-compact-height);
+    grid-template-rows: var(--openbitfun-control-chat-composer-compact-track-height);
+    min-block-size: var(--openbitfun-control-chat-composer-compact-height);
     align-content: center;
     align-items: center;
-    padding-block: var(--bf-control-chat-composer-compact-padding-block);
-    padding-inline: var(--bf-control-chat-composer-compact-padding-inline);
-    border-radius: var(--bf-radius-pill);
+    padding-block: var(--openbitfun-control-chat-composer-compact-padding-block);
+    padding-inline: var(--openbitfun-control-chat-composer-compact-padding-inline);
+    border-radius: var(--openbitfun-radius-pill);
   }
 
-  .surface[data-bf-layout="expanded"] {
+  .surface[data-openbitfun-layout="expanded"] {
     grid-template-areas:
       "content content"
       "start end";
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: minmax(var(--bf-space-12), 1fr) auto;
+    grid-template-rows: minmax(var(--openbitfun-space-12), 1fr) auto;
     min-block-size: calc(
-      var(--bf-control-height-md) +
-      var(--bf-control-height-md) +
-      var(--bf-control-height-md)
+      var(--openbitfun-control-height-md) +
+      var(--openbitfun-control-height-md) +
+      var(--openbitfun-control-height-md)
     );
     align-items: end;
   }
 
   .surface:focus-within {
-    border-color: var(--bf-color-border-default);
+    border-color: var(--openbitfun-color-border-default);
   }
 
   .content {
@@ -101,18 +101,18 @@
     min-inline-size: 0;
     align-self: stretch;
     align-items: center;
-    padding: var(--bf-space-1);
-    font-size: var(--bf-type-body-sm-font-size);
-    font-weight: var(--bf-type-body-md-font-weight);
-    line-height: var(--bf-type-body-md-line-height);
+    padding: var(--openbitfun-space-1);
+    font-size: var(--openbitfun-type-body-sm-font-size);
+    font-weight: var(--openbitfun-type-body-md-font-weight);
+    line-height: var(--openbitfun-type-body-md-line-height);
   }
 
-  .surface[data-bf-layout="expanded"] .content {
+  .surface[data-openbitfun-layout="expanded"] .content {
     align-items: flex-start;
   }
 
-  .surface[data-bf-layout="compact"] .content {
-    block-size: var(--bf-control-chat-composer-compact-track-height);
+  .surface[data-openbitfun-layout="compact"] .content {
+    block-size: var(--openbitfun-control-chat-composer-compact-track-height);
     align-self: center;
     padding: 0;
   }
@@ -122,49 +122,49 @@
     box-sizing: border-box;
     display: inline-flex;
     min-inline-size: 0;
-    min-block-size: var(--bf-control-chat-composer-control-height);
+    min-block-size: var(--openbitfun-control-chat-composer-control-height);
     align-items: center;
   }
 
   .startActions {
     grid-area: start;
     justify-self: start;
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   .endActions {
     grid-area: end;
     justify-self: end;
-    gap: var(--bf-space-1);
+    gap: var(--openbitfun-space-1);
   }
 
-  .actionButton[data-bf-component="icon-button"] {
-    inline-size: var(--bf-control-chat-composer-control-height);
-    block-size: var(--bf-control-chat-composer-control-height);
-    min-inline-size: var(--bf-control-chat-composer-control-height);
-    min-block-size: var(--bf-control-chat-composer-control-height);
-    border-radius: var(--bf-radius-pill);
+  .actionButton[data-openbitfun-component="icon-button"] {
+    inline-size: var(--openbitfun-control-chat-composer-control-height);
+    block-size: var(--openbitfun-control-chat-composer-control-height);
+    min-inline-size: var(--openbitfun-control-chat-composer-control-height);
+    min-block-size: var(--openbitfun-control-chat-composer-control-height);
+    border-radius: var(--openbitfun-radius-pill);
   }
 
-  .actionButton[data-bf-component="icon-button"] [data-bf-part="icon"] {
-    inline-size: var(--bf-control-chat-composer-action-icon-size);
-    block-size: var(--bf-control-chat-composer-action-icon-size);
+  .actionButton[data-openbitfun-component="icon-button"] [data-openbitfun-part="icon"] {
+    inline-size: var(--openbitfun-control-chat-composer-action-icon-size);
+    block-size: var(--openbitfun-control-chat-composer-action-icon-size);
   }
 
-  .actionButton[data-bf-variant="fill"][aria-expanded="true"] {
-    background: var(--bf-color-action-neutral-surface-hover);
+  .actionButton[data-openbitfun-variant="fill"][aria-expanded="true"] {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
-  .surface[data-bf-layout="compact"] .startActions,
-  .surface[data-bf-layout="compact"] .endActions {
-    block-size: var(--bf-control-chat-composer-compact-track-height);
+  .surface[data-openbitfun-layout="compact"] .startActions,
+  .surface[data-openbitfun-layout="compact"] .endActions {
+    block-size: var(--openbitfun-control-chat-composer-compact-track-height);
     min-block-size: 0;
     align-self: center;
   }
 
-  .root[data-bf-state~="disabled"] .surface {
+  .root[data-openbitfun-state~="disabled"] .surface {
     cursor: not-allowed;
-    opacity: var(--bf-opacity-disabled);
+    opacity: var(--openbitfun-opacity-disabled);
   }
 
   @media (prefers-reduced-motion: reduce) {

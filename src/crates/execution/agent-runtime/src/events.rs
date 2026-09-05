@@ -1,7 +1,7 @@
 //! Runtime event owner facts.
 
 use crate::scheduler::{TurnOutcome, TurnOutcomeStatus};
-use bitfun_runtime_ports::{DialogSessionStateFact, DialogTurnOutcomeKind};
+use openbitfun_runtime_ports::{DialogSessionStateFact, DialogTurnOutcomeKind};
 use std::fmt;
 
 /// Why a dialog execution or model round finished.

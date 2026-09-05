@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, IconButton } from '@bitfun/ui';
+import { Icon, IconButton } from '@openbitfun/ui';
 ;
 import { useI18n } from '@/infrastructure/i18n';
 

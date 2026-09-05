@@ -30,8 +30,8 @@ pub fn create_initialize_request(
         client_info: MCPServerInfo {
             name: client_name.into(),
             version: client_version.into(),
-            description: Some("BitFun MCP Client".to_string()),
-            vendor: Some("BitFun".to_string()),
+            description: Some("OpenBitFun MCP Client".to_string()),
+            vendor: Some("OpenBitFun".to_string()),
         },
     };
 

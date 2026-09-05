@@ -1,21 +1,21 @@
 [package]
-name = "bitfun-agent-runtime-ipc"
+name = "openbitfun-agent-runtime-ipc"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 publish = false
-description = "Private pre-integration IPC seam for a shared BitFun Agent Runtime"
+description = "Private pre-integration IPC seam for a shared OpenBitFun Agent Runtime"
 
 [lib]
-name = "bitfun_agent_runtime_ipc"
+name = "openbitfun_agent_runtime_ipc"
 crate-type = ["rlib"]
 
 [dependencies]
 async-trait = { workspace = true }
-bitfun-transport = { path = "../transport" }
-bitfun-events = { path = "../../contracts/events" }
-bitfun-product-domains = { path = "../../contracts/product-domains" }
-bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
+openbitfun-transport = { path = "../transport" }
+openbitfun-events = { path = "../../contracts/events" }
+openbitfun-product-domains = { path = "../../contracts/product-domains" }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["agent-api", "git-port"] }
 dunce = { workspace = true }
 fs2 = { workspace = true }
 serde = { workspace = true }

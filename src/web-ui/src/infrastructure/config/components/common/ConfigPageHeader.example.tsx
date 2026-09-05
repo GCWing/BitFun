@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import { ConfigPageHeader } from './ConfigPageHeader';
 import { ConfigPageLayout, ConfigPageContent } from './ConfigPageLayout';
 

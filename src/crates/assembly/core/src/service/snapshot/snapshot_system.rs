@@ -4,9 +4,9 @@ use crate::service::snapshot::types::{
     StorageStats,
 };
 use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
-use bitfun_runtime_ports::{WorkspaceFileSystem, WorkspaceMetadata, WorkspacePathKind};
-use bitfun_services_core::workspace::LocalWorkspaceFs;
 use log::{debug, error, info, warn};
+use openbitfun_runtime_ports::{WorkspaceFileSystem, WorkspaceMetadata, WorkspacePathKind};
+use openbitfun_services_core::workspace::LocalWorkspaceFs;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
@@ -989,7 +989,7 @@ mod tests {
 
     fn test_runtime_context() -> WorkspaceRuntimeContext {
         let runtime_root =
-            std::env::temp_dir().join(format!("bitfun_snapshot_test_{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("openbitfun_snapshot_test_{}", Uuid::new_v4()));
         WorkspaceRuntimeContext::new(
             WorkspaceRuntimeTarget::LocalWorkspace {
                 workspace_root: runtime_root.join("workspace"),

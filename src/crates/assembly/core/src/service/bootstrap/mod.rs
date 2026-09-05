@@ -7,5 +7,5 @@ pub(crate) use bootstrap_impl::{
     is_workspace_bootstrap_pending,
 };
 pub(crate) use bootstrap_impl::{
-    ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
+    ensure_workspace_gitignore_ignores_openbitfun, initialize_workspace_persona_files,
 };

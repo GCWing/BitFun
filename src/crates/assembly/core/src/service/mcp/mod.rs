@@ -52,7 +52,7 @@ impl MCPService {
     /// Creates a new MCP service instance.
     pub fn new(
         config_service: Arc<crate::service::config::ConfigService>,
-    ) -> crate::util::errors::BitFunResult<Self> {
+    ) -> crate::util::errors::OpenBitFunResult<Self> {
         let mcp_config_service = Arc::new(MCPConfigService::new(config_service)?);
         // Keep service startup compatible when strict path initialization is
         // unavailable; OAuth operations retain the existing lazy error path.

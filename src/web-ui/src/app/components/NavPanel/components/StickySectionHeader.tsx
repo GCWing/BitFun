@@ -42,14 +42,14 @@ const StickySectionHeader: React.FC<StickySectionHeaderProps> = ({
     <>
       <span
         ref={sentinelRef}
-        className="bitfun-nav-panel__sticky-section-sentinel"
+        className="openbitfun-nav-panel__sticky-section-sentinel"
         aria-hidden="true"
       />
       <div
-        className={`bitfun-nav-panel__sticky-section-header${isStuck ? ' is-stuck' : ''}`}
-        data-bf-component="nav-panel"
-        data-bf-part="stickySectionHeader"
-        data-bf-state={isStuck ? 'stuck' : undefined}
+        className={`openbitfun-nav-panel__sticky-section-header${isStuck ? ' is-stuck' : ''}`}
+        data-openbitfun-component="nav-panel"
+        data-openbitfun-part="stickySectionHeader"
+        data-openbitfun-state={isStuck ? 'stuck' : undefined}
         data-testid="nav-sessions-sticky-header"
       >
         {children}

@@ -59,7 +59,7 @@ import { ComputerUseToolCard } from './ComputerUseToolCard';
 import { ViewImageToolCard } from './ViewImageToolCard';
 
 /**
- * Standard tool adapters backed by concrete `@bitfun/ui/flow-chat` views.
+ * Standard tool adapters backed by concrete `@openbitfun/ui/flow-chat` views.
  *
  * These components may translate product data, localization, host callbacks,
  * and heavyweight renderer slots, but they must not own a second card anatomy.
@@ -110,7 +110,7 @@ export const STANDARD_TOOL_CARD_ADAPTERS = {
   'WriteStdin': WriteStdinToolCard,
   'ExecControl': ExecControlToolCard,
 
-  // BitFun Page (session-only publish)
+  // OpenBitFun Page (session-only publish)
   'PageDeploy': PageDeployDisplay,
   'PagePublish': PagePublishDisplay,
 
@@ -136,7 +136,7 @@ export const PRODUCT_OWNED_TOOL_CARD_COMPONENTS = {
   'GenerativeUI': GenerativeWidgetToolCard,
   'ComputerUse': ComputerUseToolCard,
 
-  // BitFun Canvas tools
+  // OpenBitFun Canvas tools
   'CreateCanvas': CanvasToolCard,
   'ReadCanvas': CanvasToolCard,
   'UpdateCanvas': CanvasToolCard,

@@ -1,41 +1,41 @@
-@layer bf.components {
+@layer openbitfun.components {
   .root {
     min-inline-size: 0;
     min-block-size: 0;
     overscroll-behavior: contain;
-    scrollbar-color: var(--bf-color-scrollbar-thumb) transparent;
+    scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
     scrollbar-width: thin;
   }
 
-  .root[data-bf-orientation="vertical"] {
+  .root[data-openbitfun-orientation="vertical"] {
     overflow-x: hidden;
     overflow-y: auto;
   }
 
-  .root[data-bf-orientation="horizontal"] {
+  .root[data-openbitfun-orientation="horizontal"] {
     overflow-x: auto;
     overflow-y: hidden;
   }
 
-  .root[data-bf-orientation="both"] {
+  .root[data-openbitfun-orientation="both"] {
     overflow: auto;
   }
 
-  .root[data-bf-orientation="vertical"][data-bf-scrollbar-visibility="always"] {
+  .root[data-openbitfun-orientation="vertical"][data-openbitfun-scrollbar-visibility="always"] {
     overflow-y: scroll;
   }
 
-  .root[data-bf-orientation="horizontal"][data-bf-scrollbar-visibility="always"] {
+  .root[data-openbitfun-orientation="horizontal"][data-openbitfun-scrollbar-visibility="always"] {
     overflow-x: scroll;
   }
 
-  .root[data-bf-orientation="both"][data-bf-scrollbar-visibility="always"] {
+  .root[data-openbitfun-orientation="both"][data-openbitfun-scrollbar-visibility="always"] {
     overflow: scroll;
   }
 
   .root::-webkit-scrollbar {
-    inline-size: var(--bf-scrollbar-width);
-    block-size: var(--bf-scrollbar-width);
+    inline-size: var(--openbitfun-scrollbar-width);
+    block-size: var(--openbitfun-scrollbar-width);
   }
 
   .root::-webkit-scrollbar-track {
@@ -43,19 +43,19 @@
   }
 
   .root::-webkit-scrollbar-thumb {
-    border-radius: var(--bf-scrollbar-radius);
-    background: var(--bf-color-scrollbar-thumb);
+    border-radius: var(--openbitfun-scrollbar-radius);
+    background: var(--openbitfun-color-scrollbar-thumb);
   }
 
   .root::-webkit-scrollbar-thumb:hover {
-    background: var(--bf-color-scrollbar-thumb-hover);
+    background: var(--openbitfun-color-scrollbar-thumb-hover);
   }
 
-  .root[data-bf-scrollbar-visibility="hidden"] {
+  .root[data-openbitfun-scrollbar-visibility="hidden"] {
     scrollbar-width: none;
   }
 
-  .root[data-bf-scrollbar-visibility="hidden"]::-webkit-scrollbar {
+  .root[data-openbitfun-scrollbar-visibility="hidden"]::-webkit-scrollbar {
     display: none;
   }
 

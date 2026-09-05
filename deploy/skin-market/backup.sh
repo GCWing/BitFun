@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly MARKET_ROOT="/srv/bitfun-skin-market"
+readonly MARKET_ROOT="/srv/openbitfun-skin-market"
 readonly DATA_ROOT="${MARKET_ROOT}/data"
 readonly ARTIFACT_ROOT="${MARKET_ROOT}/artifacts"
 readonly BACKUP_ROOT="${MARKET_ROOT}/backups"
@@ -12,7 +12,7 @@ readonly WEEK="$(date -u +%G-W%V)"
 readonly DAILY_TARGET="${DAILY_ROOT}/${TODAY}"
 readonly DATABASE="${DATA_ROOT}/market.sqlite"
 
-if [[ "${MARKET_ROOT}" != "/srv/bitfun-skin-market" ]]; then
+if [[ "${MARKET_ROOT}" != "/srv/openbitfun-skin-market" ]]; then
   echo "Unexpected backup root" >&2
   exit 1
 fi

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitfun_opencode_plugin_host::{
+use openbitfun_opencode_plugin_host::{
     BackendDiagnosticError, BackendDiagnosticEvent, BackendRouteFailure, BackendRouteRequest,
     OpenCodeBackendHandler, PluginHostBackendBridge, PluginHostClient,
 };
@@ -69,7 +69,7 @@ fn validate_instance_directory(
 
 pub(crate) async fn register_plugin_host_backend_handlers(
     client: PluginHostClient,
-) -> crate::BitFunResult<Arc<PluginHostBackendBridge>> {
+) -> crate::OpenBitFunResult<Arc<PluginHostBackendBridge>> {
     let previous = PLUGIN_HOST_BACKEND_BRIDGE
         .get_or_init(|| RwLock::new(None))
         .read()
@@ -77,18 +77,18 @@ pub(crate) async fn register_plugin_host_backend_handlers(
         .clone();
     if let Some(previous) = previous {
         if !previous.begin_draining().await {
-            return Err(crate::BitFunError::ProcessError(
+            return Err(crate::OpenBitFunError::ProcessError(
                 "Previous plugin Host backend requests did not stop before replacement".to_string(),
             ));
         }
     }
-    let bridge = bitfun_opencode_plugin_host::register_backend_handlers(
+    let bridge = openbitfun_opencode_plugin_host::register_backend_handlers(
         client,
         Arc::new(CoreOpenCodeBackend),
     )
     .await
     .map_err(|error| {
-        crate::BitFunError::ProcessError(format!(
+        crate::OpenBitFunError::ProcessError(format!(
             "Failed to register plugin host backend handler: {error}"
         ))
     })?;

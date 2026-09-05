@@ -24,9 +24,7 @@ if (-not $OutputDir) {
 $ReleaseDir = [IO.Path]::GetFullPath($ReleaseDir)
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 
-$primary = Join-Path $ReleaseDir 'bitfun.exe'
-$legacy = Join-Path $ReleaseDir 'bitfun-cli.exe'
-$deprecation = 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.'
+$primary = Join-Path $ReleaseDir 'openbitfun.exe'
 $pluginHostDist = Join-Path $repoRoot 'src\apps\extension-host\dist'
 $pluginHostResourceRelative = 'resources\ext-host'
 
@@ -42,26 +40,6 @@ function Assert-PluginHostResources([string]$Directory) {
 function Assert-LastExitCode([string]$Description) {
     if ($LASTEXITCODE -ne 0) {
         throw "$Description failed with exit code $LASTEXITCODE"
-    }
-}
-
-function Assert-LegacyEntrypoint([string]$Executable) {
-    $id = [guid]::NewGuid().ToString('N')
-    $stdout = Join-Path ([IO.Path]::GetTempPath()) "bitfun-cli-$id.out"
-    $stderr = Join-Path ([IO.Path]::GetTempPath()) "bitfun-cli-$id.err"
-    try {
-        $process = Start-Process -FilePath $Executable -ArgumentList '--version' -Wait -PassThru -NoNewWindow `
-            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        if ($process.ExitCode -ne 0) {
-            throw "Deprecated bitfun-cli entrypoint failed with exit code $($process.ExitCode)"
-        }
-        $warning = (Get-Content -LiteralPath $stderr -Raw).TrimEnd("`r", "`n")
-        if ($warning -cne $deprecation) {
-            throw "Unexpected deprecated entrypoint warning: $warning"
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -88,19 +66,16 @@ function Assert-NoRedistributableRuntime([string]$Executable) {
 }
 
 & $primary --version
-Assert-LastExitCode 'bitfun --version'
+Assert-LastExitCode 'openbitfun --version'
 & $primary --help | Out-Null
-Assert-LastExitCode 'bitfun --help'
-Assert-LegacyEntrypoint $legacy
+Assert-LastExitCode 'openbitfun --help'
 Assert-NoRedistributableRuntime $primary
-Assert-NoRedistributableRuntime $legacy
 Assert-PluginHostResources $pluginHostDist
 
-$stageName = "bitfun-cli-$Version-$Target"
+$stageName = "openbitfun-cli-$Version-$Target"
 $stageDir = Join-Path (Join-Path $OutputDir 'dist-cli') $stageName
 New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
 Copy-Item -LiteralPath $primary -Destination $stageDir -Force
-Copy-Item -LiteralPath $legacy -Destination $stageDir -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $stageDir -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath (Join-Path $repoRoot 'src\apps\cli\README.md') `
     -Destination (Join-Path $stageDir 'README.md') -Force
@@ -139,13 +114,12 @@ if ($recordedHash -cne $hash) {
     throw 'Packaged archive checksum mismatch'
 }
 
-$extractDir = Join-Path ([IO.Path]::GetTempPath()) "bitfun-cli-package-$([guid]::NewGuid().ToString('N'))"
+$extractDir = Join-Path ([IO.Path]::GetTempPath()) "openbitfun-cli-package-$([guid]::NewGuid().ToString('N'))"
 try {
     Expand-Archive -LiteralPath $archive -DestinationPath $extractDir
-    $primaryCandidates = @(Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'bitfun.exe')
-    $legacyCandidates = @(Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'bitfun-cli.exe')
-    if ($primaryCandidates.Count -ne 1 -or $legacyCandidates.Count -ne 1) {
-        throw 'Expected exactly one of each CLI entrypoint in the packaged archive'
+    $primaryCandidates = @(Get-ChildItem -LiteralPath $extractDir -Recurse -Filter 'openbitfun.exe')
+    if ($primaryCandidates.Count -ne 1) {
+        throw 'Expected exactly one OpenBitFun CLI entrypoint in the packaged archive'
     }
     foreach ($requiredFile in @(
         'README.md',
@@ -161,10 +135,9 @@ try {
     }
 
     & $primaryCandidates[0].FullName --version
-    Assert-LastExitCode 'packaged bitfun --version'
+    Assert-LastExitCode 'packaged openbitfun --version'
     & $primaryCandidates[0].FullName --help | Out-Null
-    Assert-LastExitCode 'packaged bitfun --help'
-    Assert-LegacyEntrypoint $legacyCandidates[0].FullName
+    Assert-LastExitCode 'packaged openbitfun --help'
 }
 finally {
     Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue

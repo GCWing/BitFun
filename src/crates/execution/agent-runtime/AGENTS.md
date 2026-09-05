@@ -2,10 +2,10 @@
 
 Scope: this guide applies to `src/crates/execution/agent-runtime`.
 
-`bitfun-agent-runtime` owns portable agent runtime decisions,
+`openbitfun-agent-runtime` owns portable agent runtime decisions,
 session/config/context facts, lifecycle helper state, and the narrow
 port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
-`bitfun-core`.
+`openbitfun-core`.
 
 ## Feature Boundaries
 
@@ -21,7 +21,7 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 
 ## Guardrails
 
-- Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
+- Do not depend on `openbitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
 - The `sdk` module may re-export only stable runtime request/response types,
   runtime-port contracts, and the service/tool/agent/hook registry types needed
@@ -35,12 +35,12 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   state, filesystem, terminal, MCP, remote, or AI clients.
 - The `runtime` module is internal / Product Assembly facing. Do not route
   client-facing SDK, Server/API, app, Web, mobile, or installer entrypoints
-  through `bitfun_agent_runtime::runtime`; those surfaces must use `sdk` or
+  through `openbitfun_agent_runtime::runtime`; those surfaces must use `sdk` or
   projected Server/API DTOs.
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
   event emitter wiring, workspace/remote permission-scope projection, native
   permission Hook ordering, permission UI presentation, and product `Tool`
-  adapter execution in `bitfun-core` until a reviewed owner migration proves
+  adapter execution in `openbitfun-core` until a reviewed owner migration proves
   behavior equivalence. Provider-neutral permission policy/grant planning,
   confirmation gate/wait-channel, and user-question state may live here.
 - Prefer pure facts and decisions first: queue policy, background delivery,
@@ -110,9 +110,9 @@ Use the focused contract form by default. Run the package-wide form only when a
 change crosses several runtime targets:
 
 ```bash
-cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime --lib --tests
-cargo test --locked -p bitfun-agent-runtime --no-default-features --features native-hook-settings --test native_hook_settings_contracts
-cargo test --locked -p bitfun-agent-runtime --no-default-features --features agent-runtime --test <target> <module>::<test>
+cargo test --locked -p openbitfun-agent-runtime --no-default-features --features agent-runtime --lib --tests
+cargo test --locked -p openbitfun-agent-runtime --no-default-features --features native-hook-settings --test native_hook_settings_contracts
+cargo test --locked -p openbitfun-agent-runtime --no-default-features --features agent-runtime --test <target> <module>::<test>
 ```
 
 Run `pnpm run check:core-boundaries` only when Cargo dependencies, explicit test

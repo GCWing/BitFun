@@ -38,7 +38,7 @@ vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 
-vi.mock('@bitfun/ui', () => ({
+vi.mock('@openbitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) => (
     open ? <div role="dialog">{children}</div> : null

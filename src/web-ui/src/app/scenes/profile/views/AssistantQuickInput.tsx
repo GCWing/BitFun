@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { Composer, ComposerToolbar, Icon, IconButton } from '@bitfun/ui';
+import { Composer, ComposerToolbar, Icon, IconButton } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -100,7 +100,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
     : t('input.placeholder');
 
   return (
-    <div data-bf-component="assistant-quick-input" data-bf-part="root" className="aqi">
+    <div data-openbitfun-component="assistant-quick-input" data-openbitfun-part="root" className="aqi">
       <Composer
         aria-label={placeholder}
         className="aqi__composer"
@@ -110,14 +110,14 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
             leading={(
               <div
                 className="aqi__footer-left"
-                data-bf-component="assistant-quick-input"
-                data-bf-part="footerLeft"
+                data-openbitfun-component="assistant-quick-input"
+                data-openbitfun-part="footerLeft"
               >
                 <ModelSelector currentMode="Claw" className="aqi__model" />
                 <span
                   className="aqi__hint"
-                  data-bf-component="assistant-quick-input"
-                  data-bf-part="hint"
+                  data-openbitfun-component="assistant-quick-input"
+                  data-openbitfun-part="hint"
                 >
                   {t('input.sendHint')}
                 </span>

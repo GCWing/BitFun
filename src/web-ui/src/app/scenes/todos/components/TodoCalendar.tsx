@@ -7,7 +7,7 @@
  * Jobs with nothing left to run are the only ones left out.
  */
 
-import { ScrollArea } from '@bitfun/ui';
+import { ScrollArea } from '@openbitfun/ui';
 import React, { useMemo } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -54,26 +54,26 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
 
   return (
     <ScrollArea
-      className="bf-todos__calendar"
+      className="openbitfun-todos__calendar"
       aria-label={t('calendar.title')}
-      data-bf-scene="todos"
-      data-bf-part="calendar"
+      data-openbitfun-scene="todos"
+      data-openbitfun-part="calendar"
       data-testid="todos-calendar"
     >
-      <header className="bf-todos__calendar-head" data-bf-scene="todos" data-bf-part="calendarHead">
-        <div className="bf-todos__calendar-heading">
-          <h3 className="bf-todos__pane-title">{t('calendar.title')}</h3>
-          <p className="bf-todos__pane-hint">{t('calendar.hint')}</p>
+      <header className="openbitfun-todos__calendar-head" data-openbitfun-scene="todos" data-openbitfun-part="calendarHead">
+        <div className="openbitfun-todos__calendar-heading">
+          <h3 className="openbitfun-todos__pane-title">{t('calendar.title')}</h3>
+          <p className="openbitfun-todos__pane-hint">{t('calendar.hint')}</p>
         </div>
       </header>
 
-      <div className="bf-todos__calendar-weekdays" aria-hidden="true">
+      <div className="openbitfun-todos__calendar-weekdays" aria-hidden="true">
         {weekdayLabels.map((label, index) => (
-          <span key={index} className="bf-todos__calendar-weekday">{label}</span>
+          <span key={index} className="openbitfun-todos__calendar-weekday">{label}</span>
         ))}
       </div>
 
-      <div className="bf-todos__calendar-grid" role="grid" data-bf-scene="todos" data-bf-part="calendarGrid">
+      <div className="openbitfun-todos__calendar-grid" role="grid" data-openbitfun-scene="todos" data-openbitfun-part="calendarGrid">
         {grid.map((day) => {
           const dayKey = localDayKey(day.getTime());
           const dayOccurrences = byDay.get(dayKey) ?? [];
@@ -92,15 +92,15 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
               type="button"
               role="gridcell"
               className={[
-                'bf-todos__calendar-cell',
-                isCurrentMonth ? '' : 'bf-todos__calendar-cell--outside',
-                isToday ? 'bf-todos__calendar-cell--today' : '',
-                isSelected ? 'bf-todos__calendar-cell--selected' : '',
-                dayOccurrences.length > 0 ? 'bf-todos__calendar-cell--has-items' : '',
+                'openbitfun-todos__calendar-cell',
+                isCurrentMonth ? '' : 'openbitfun-todos__calendar-cell--outside',
+                isToday ? 'openbitfun-todos__calendar-cell--today' : '',
+                isSelected ? 'openbitfun-todos__calendar-cell--selected' : '',
+                dayOccurrences.length > 0 ? 'openbitfun-todos__calendar-cell--has-items' : '',
               ].filter(Boolean).join(' ')}
-              data-bf-scene="todos"
-              data-bf-part="calendarCell"
-              data-bf-state={cellState || undefined}
+              data-openbitfun-scene="todos"
+              data-openbitfun-part="calendarCell"
+              data-openbitfun-state={cellState || undefined}
               data-testid="todos-calendar-cell"
               data-day-key={dayKey}
               aria-pressed={isSelected}
@@ -109,22 +109,22 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
               }`}
               onClick={() => onSelectDay(isSelected ? null : dayKey)}
             >
-              <span className="bf-todos__calendar-daynum">{day.getDate()}</span>
-              <span className="bf-todos__calendar-chips">
+              <span className="openbitfun-todos__calendar-daynum">{day.getDate()}</span>
+              <span className="openbitfun-todos__calendar-chips">
                 {dayOccurrences.slice(0, MAX_CHIPS_PER_DAY).map((occurrence, index) => (
                   <span
                     key={`${occurrence.job.id}-${occurrence.atMs}-${index}`}
-                    className="bf-todos__calendar-chip"
+                    className="openbitfun-todos__calendar-chip"
                     title={`${formatTimeOfDay(occurrence.atMs, formatDate)} ${occurrence.job.name}`}
                   >
-                    <span className="bf-todos__calendar-chip-time">
+                    <span className="openbitfun-todos__calendar-chip-time">
                       {formatTimeOfDay(occurrence.atMs, formatDate)}
                     </span>
-                    <span className="bf-todos__calendar-chip-name">{occurrence.job.name}</span>
+                    <span className="openbitfun-todos__calendar-chip-name">{occurrence.job.name}</span>
                   </span>
                 ))}
                 {dayOccurrences.length > MAX_CHIPS_PER_DAY ? (
-                  <span className="bf-todos__calendar-more">
+                  <span className="openbitfun-todos__calendar-more">
                     {t('calendar.moreCount', { total: dayOccurrences.length - MAX_CHIPS_PER_DAY })}
                   </span>
                 ) : null}

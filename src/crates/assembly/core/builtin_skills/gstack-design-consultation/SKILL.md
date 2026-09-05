@@ -16,9 +16,9 @@ You are a senior product designer with strong opinions about typography, color, 
 
 **Your posture:** Design consultant, not form wizard. You propose a complete coherent system, explain why it works, and invite the user to adjust. At any point the user can just talk to you about any of this — it's a conversation, not a rigid flow.
 
-## BitFun Dispatch
+## OpenBitFun Dispatch
 
-When this skill is invoked by BitFun, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main session.
+When this skill is invoked by OpenBitFun, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main session.
 
 - Do not assume a Design Partner sub-agent exists. Choose only from the Task tool's available agents.
 - Prefer matching custom design/research/frontend sub-agents if available; otherwise use `Explore` for product/UI surface mapping, design docs, themes, screenshots, and component libraries.
@@ -51,7 +51,7 @@ Look for office-hours output:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
 SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
-ls $HOME/.bitfun/team/projects/$SLUG/*office-hours* 2>/dev/null | head -5
+ls $HOME/.openbitfun/team/projects/$SLUG/*office-hours* 2>/dev/null | head -5
 ls .context/*office-hours* .context/attachments/*office-hours* 2>/dev/null | head -5
 ```
 
@@ -65,26 +65,26 @@ Once per skill invocation, before the first browser command, run `agent-browser 
 
 If browse is not available, that's fine — visual research is optional. The skill works without it using WebSearch and your built-in design knowledge.
 
-**Find the BitFun image/design capability (optional — enables AI mockup generation):**
+**Find the OpenBitFun image/design capability (optional — enables AI mockup generation):**
 
 ## DESIGN SETUP
 
-Use BitFun's built-in image/design capabilities and agent-browser for live-page work. Do not install or build external `design` binaries. If visual generation is unavailable, fall back to HTML wireframes and code-level design review.
+Use OpenBitFun's built-in image/design capabilities and agent-browser for live-page work. Do not install or build external `design` binaries. If visual generation is unavailable, fall back to HTML wireframes and code-level design review.
 
 **CRITICAL PATH RULE:** All design artifacts (mockups, comparison boards, approved.json)
-MUST be saved to `$HOME/.bitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
+MUST be saved to `$HOME/.openbitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
 `docs/designs/`, `/tmp/`, or any project-local directory. Design artifacts are USER
 data, not project files. They persist across branches, conversations, and workspaces.
 
-If `BitFun image/design capability is available`: Phase 5 will generate AI mockups of your proposed design system applied to real screens, instead of just an HTML preview page. Much more powerful — the user sees what their product could actually look like.
+If `OpenBitFun image/design capability is available`: Phase 5 will generate AI mockups of your proposed design system applied to real screens, instead of just an HTML preview page. Much more powerful — the user sees what their product could actually look like.
 
-If `BitFun image/design capability is unavailable`: Phase 5 falls back to the HTML preview page (still good).
+If `OpenBitFun image/design capability is unavailable`: Phase 5 falls back to the HTML preview page (still good).
 
 ---
 
 ## Prior Learnings
 
-Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
+Use only OpenBitFun in-session memory, project docs, `.openbitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior OpenBitFun context applied: <source>`.
 
 ## Phase 1: Product Context
 
@@ -163,13 +163,13 @@ If user chooses B, skip this step and continue.
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-**If a suitable BitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
+**If a suitable OpenBitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
 
 1. **outside-voice sub-agent design voice** (via ExecCommand):
 ```bash
 TMPERR_DESIGN=$(mktemp /tmp/codex-design-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
+Use the OpenBitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 - Visual thesis: one sentence describing mood, material, and energy
 - Typography: specific font names (not defaults — no Inter/Roboto/Arial/system) + hex colors
 - Color system: CSS variables for background, surface, primary text, muted text, accent
@@ -184,7 +184,7 @@ Use a 5-minute timeout (`timeout: 300000`). After the command completes, read st
 cat "$TMPERR_DESIGN" && rm -f "$TMPERR_DESIGN"
 ```
 
-2. **Independent design subagent** (via BitFun Task tool):
+2. **Independent design subagent** (via OpenBitFun Task tool):
 Dispatch a subagent with this prompt:
 "Given this product context, propose a design direction that would SURPRISE. What would the cool indie studio do that the enterprise UI team wouldn't?
 - Propose an aesthetic direction, typography stack (specific font names), color palette (hex values)
@@ -203,14 +203,14 @@ Be bold. Be specific. No hedging."
 Present outside-voice sub-agent output under a `CODEX SAYS (design direction):` header.
 Present subagent output under a `INDEPENDENT SUBAGENT (design direction):` header.
 
-**Synthesis:** BitFun main references both outside-voice sub-agent and subagent proposals in the Phase 3 proposal. Present:
-- Areas of agreement between all three voices (BitFun main + outside-voice sub-agent + subagent)
+**Synthesis:** OpenBitFun main references both outside-voice sub-agent and subagent proposals in the Phase 3 proposal. Present:
+- Areas of agreement between all three voices (OpenBitFun main + outside-voice sub-agent + subagent)
 - Genuine divergences as creative alternatives for the user to choose from
 - "outside-voice sub-agent and I agree on X. outside-voice sub-agent suggested Y where I'm proposing Z — here's why..."
 
 **Log the result:**
 ```bash
-true # BitFun has no external review-log helper
+true # OpenBitFun has no external review-log helper
 ```
 Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "codex-only", "subagent-only", or "unavailable".
 
@@ -318,15 +318,15 @@ Each drill-down is one focused AskUserQuestion. After the user decides, re-check
 
 ## Phase 5: Design System Preview (default ON)
 
-This phase generates visual previews of the proposed design system. Two paths depending on whether the BitFun image/design capability is available.
+This phase generates visual previews of the proposed design system. Two paths depending on whether the OpenBitFun image/design capability is available.
 
-### Path A: AI Mockups (if BitFun image/design capability is available)
+### Path A: AI Mockups (if OpenBitFun image/design capability is available)
 
 Generate AI-rendered mockups showing the proposed design system applied to realistic screens for this product. This is far more powerful than an HTML preview — the user sees what their product could actually look like.
 
 ```bash
 SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
-_DESIGN_DIR=$HOME/.bitfun/team/projects/$SLUG/designs/design-system-$(date +%Y%m%d)
+_DESIGN_DIR=$HOME/.openbitfun/team/projects/$SLUG/designs/design-system-$(date +%Y%m%d)
 mkdir -p "$_DESIGN_DIR"
 echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
@@ -334,13 +334,13 @@ echo "DESIGN_DIR: $_DESIGN_DIR"
 Construct a design brief from the Phase 3 proposal (aesthetic, colors, typography, spacing, layout) and the product context from Phase 1:
 
 ```bash
-BitFun image/design capability variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir "$_DESIGN_DIR/"
+OpenBitFun image/design capability variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 Run quality check on each variant:
 
 ```bash
-BitFun image/design capability check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
+OpenBitFun image/design capability check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
 Show each variant inline (Read tool on each PNG) for instant preview.
@@ -352,7 +352,7 @@ Tell the user: "I've generated 3 visual directions applying your design system t
 Create the comparison board and serve it over HTTP:
 
 ```bash
-BitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
+OpenBitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
 This command generates the board HTML, starts an HTTP server on a random port,
@@ -414,8 +414,8 @@ the approved variant.
 1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
    `"remix"`, or custom text)
 2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
-3. Generate new variants with `BitFun image/design capability iterate` or `BitFun image/design capability variants` using updated brief
-4. Create new board: `BitFun image/design capability compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
+3. Generate new variants with `OpenBitFun image/design capability iterate` or `OpenBitFun image/design capability variants` using updated brief
+4. Create new board: `OpenBitFun image/design capability compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
 5. Reload the board in the user's browser (same tab):
    `curl -s -X POST http://127.0.0.1:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
 6. The board auto-refreshes. **AskUserQuestion again** with the same board URL to
@@ -425,7 +425,7 @@ the approved variant.
 AskUserQuestion response instead of using the board. Use their text response
 as the feedback.
 
-**POLLING FALLBACK:** Only use polling if `BitFun image/design capability serve` fails (no port available).
+**POLLING FALLBACK:** Only use polling if `OpenBitFun image/design capability serve` fails (no port available).
 In that case, show each variant inline using the Read tool (so the user can see them),
 then use AskUserQuestion:
 "The comparison board server failed to start. I've shown the variants above.
@@ -451,14 +451,14 @@ echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%
 
 After the user picks a direction:
 
-- Use `BitFun image/design capability extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
-- If the user wants to iterate further: `BitFun image/design capability iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
+- Use `OpenBitFun image/design capability extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
+- If the user wants to iterate further: `OpenBitFun image/design capability iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
 
 **Plan mode vs. implementation mode:**
 - **If in plan mode:** Add the approved mockup path (the full `$_DESIGN_DIR` path) and extracted tokens to the plan file under an "## Approved Design Direction" section. The design system gets written to DESIGN.md when the plan is implemented.
 - **If NOT in plan mode:** Proceed directly to Phase 6 and write DESIGN.md with the extracted tokens.
 
-### Path B: HTML Preview Page (fallback if BitFun image/design capability is unavailable)
+### Path B: HTML Preview Page (fallback if OpenBitFun image/design capability is unavailable)
 
 Generate a polished HTML preview page and open it in the user's browser. This page is the first visual artifact the skill produces — it should look beautiful.
 
@@ -507,7 +507,7 @@ If the user says skip the preview, go directly to Phase 6.
 
 ## Phase 6: Write DESIGN.md & Confirm
 
-If `BitFun image/design capability extract` was used in Phase 5 (Path A), use the extracted tokens as the primary source for DESIGN.md values — colors, typography, and spacing grounded in the approved mockup rather than text descriptions alone. Merge extracted tokens with the Phase 3 proposal (the proposal provides rationale and context; the extraction provides exact values).
+If `OpenBitFun image/design capability extract` was used in Phase 5 (Path A), use the extracted tokens as the primary source for DESIGN.md values — colors, typography, and spacing grounded in the approved mockup rather than text descriptions alone. Merge extracted tokens with the Phase 3 proposal (the proposal provides rationale and context; the extraction provides exact values).
 
 **If in plan mode:** Write the DESIGN.md content into the plan file as a "## Proposed DESIGN.md" section. Do NOT write the actual file — that happens at implementation time.
 
@@ -596,7 +596,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-true # BitFun has no external telemetry helper
+true # OpenBitFun has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -604,7 +604,7 @@ true # BitFun has no external telemetry helper
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
+`inferred` (AI deduction), `cross-model` (both OpenBitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

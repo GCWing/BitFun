@@ -3,7 +3,7 @@ use super::types::{
     InstalledSpeechModelArtifactRecord, InstalledSpeechModelFileRecord, InstalledSpeechModelRecord,
     SpeechModelArtifact, SpeechModelInstallState, SpeechModelManifest, SpeechModelStatus,
 };
-use super::{BitFunError, BitFunResult, SpeechStoragePaths};
+use super::{OpenBitFunError, OpenBitFunResult, SpeechStoragePaths};
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 
-const INSTALL_RECORD_FILE: &str = "bitfun-model-install.json";
+const INSTALL_RECORD_FILE: &str = "openbitfun-model-install.json";
 
 #[derive(Deserialize)]
 struct SpeechModelInstallEnvelope {
@@ -61,7 +61,7 @@ impl SpeechModelStore {
             .with_file_name(format!("{}.partial", artifact.file_name))
     }
 
-    pub(super) async fn list_statuses(&self) -> BitFunResult<Vec<SpeechModelStatus>> {
+    pub(super) async fn list_statuses(&self) -> OpenBitFunResult<Vec<SpeechModelStatus>> {
         let mut statuses = Vec::new();
         for manifest in builtin_speech_model_manifests() {
             statuses.push(self.status_for_manifest(&manifest).await?);
@@ -72,7 +72,7 @@ impl SpeechModelStore {
     pub(super) async fn status_for_manifest(
         &self,
         manifest: &SpeechModelManifest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let model_dir = self.model_dir(manifest);
         let installed_bytes = dir_size(&model_dir).await?;
         let installed = self.has_required_files(manifest).await;
@@ -115,7 +115,7 @@ impl SpeechModelStore {
     pub(super) async fn verify_model(
         &self,
         manifest: &SpeechModelManifest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let mut status = self.status_for_manifest(manifest).await?;
         if !self.has_required_files(manifest).await {
             status.state = SpeechModelInstallState::Corrupt;
@@ -207,7 +207,7 @@ impl SpeechModelStore {
         &self,
         manifest: &SpeechModelManifest,
         model_dir: &Path,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let mut files = Vec::with_capacity(manifest.required_files.len());
         for relative in &manifest.required_files {
             let path = model_dir.join(relative);
@@ -253,7 +253,7 @@ impl SpeechModelStore {
     pub(super) async fn delete_model(
         &self,
         manifest: &SpeechModelManifest,
-    ) -> BitFunResult<SpeechModelStatus> {
+    ) -> OpenBitFunResult<SpeechModelStatus> {
         let root = self.paths.models_dir().to_path_buf();
         let target = self.model_dir(manifest);
         if !target.exists() {
@@ -262,10 +262,10 @@ impl SpeechModelStore {
 
         let root = canonical_or_create(&root).await?;
         let resolved = target.canonicalize().map_err(|e| {
-            BitFunError::service(format!("Failed to resolve speech model path: {e}"))
+            OpenBitFunError::service(format!("Failed to resolve speech model path: {e}"))
         })?;
         if !resolved.starts_with(&root) {
-            return Err(BitFunError::validation(
+            return Err(OpenBitFunError::validation(
                 "Refusing to delete path outside managed speech models directory",
             ));
         }
@@ -278,7 +278,7 @@ impl SpeechModelStore {
     pub(super) async fn cleanup_download(
         &self,
         manifest: &SpeechModelManifest,
-    ) -> BitFunResult<()> {
+    ) -> OpenBitFunResult<()> {
         let dir = self
             .paths
             .downloads_dir()
@@ -291,7 +291,7 @@ impl SpeechModelStore {
     }
 }
 
-async fn sha256_file(path: &Path) -> BitFunResult<String> {
+async fn sha256_file(path: &Path) -> OpenBitFunResult<String> {
     let mut file = fs::File::open(path).await?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
@@ -305,14 +305,14 @@ async fn sha256_file(path: &Path) -> BitFunResult<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-pub(super) fn validate_relative_archive_path(path: &Path) -> BitFunResult<PathBuf> {
+pub(super) fn validate_relative_archive_path(path: &Path) -> OpenBitFunResult<PathBuf> {
     let mut sanitized = PathBuf::new();
     for component in path.components() {
         match component {
             Component::Normal(part) => sanitized.push(part),
             Component::CurDir => {}
             _ => {
-                return Err(BitFunError::validation(format!(
+                return Err(OpenBitFunError::validation(format!(
                     "Archive entry contains unsafe path: {}",
                     path.display()
                 )));
@@ -320,15 +320,16 @@ pub(super) fn validate_relative_archive_path(path: &Path) -> BitFunResult<PathBu
         }
     }
     if sanitized.as_os_str().is_empty() {
-        return Err(BitFunError::validation("Archive entry path is empty"));
+        return Err(OpenBitFunError::validation("Archive entry path is empty"));
     }
     Ok(sanitized)
 }
 
-pub(super) async fn dir_size(path: &Path) -> BitFunResult<u64> {
+pub(super) async fn dir_size(path: &Path) -> OpenBitFunResult<u64> {
     fn inner(
         path: &Path,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = BitFunResult<u64>> + Send + '_>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = OpenBitFunResult<u64>> + Send + '_>>
+    {
         Box::pin(async move {
             if !path.exists() {
                 return Ok(0);
@@ -350,10 +351,10 @@ pub(super) async fn dir_size(path: &Path) -> BitFunResult<u64> {
     inner(path).await
 }
 
-async fn canonical_or_create(path: &Path) -> BitFunResult<PathBuf> {
+async fn canonical_or_create(path: &Path) -> OpenBitFunResult<PathBuf> {
     fs::create_dir_all(path).await?;
     path.canonicalize()
-        .map_err(|e| BitFunError::service(format!("Failed to resolve directory: {e}")))
+        .map_err(|e| OpenBitFunError::service(format!("Failed to resolve directory: {e}")))
 }
 
 #[cfg(test)]
@@ -365,7 +366,7 @@ mod tests {
     #[tokio::test]
     async fn verify_model_detects_same_size_file_corruption() {
         let root = std::env::temp_dir().join(format!(
-            "bitfun-speech-model-verify-test-{}",
+            "openbitfun-speech-model-verify-test-{}",
             Uuid::new_v4().simple()
         ));
         let paths = SpeechStoragePaths::new(

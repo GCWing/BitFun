@@ -3,16 +3,16 @@ use crate::local_source_paths::{
     local_source_plan, local_source_watch_roots, normalize_path_lexically, path_identity,
     LocalConfigDocument, LocalSourcePlanItem, OpenCodeLocalConfigOptions,
 };
-use bitfun_product_domains::external_sources::{
+use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceDiagnosticSeverity, ExternalSourceHealth, ExternalSourceProviderError,
     ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, SourceKey,
 };
-use bitfun_product_domains::workspace_references::{
+use openbitfun_product_domains::workspace_references::{
     ExternalWorkspaceReferenceDefinition, ExternalWorkspaceReferenceProviderIdentity,
     ExternalWorkspaceReferenceProviderSnapshot, ExternalWorkspaceReferenceSourceProvider,
 };
-use bitfun_services_core::bounded_fs::BoundedTextRead;
+use openbitfun_services_core::bounded_fs::BoundedTextRead;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -591,7 +591,7 @@ mod tests {
     use crate::local_source_paths::{
         LocalConfigDocument, LocalConfigDocumentKind, LocalConfigDocumentSource,
     };
-    use bitfun_product_domains::external_sources::ExternalSourceScope;
+    use openbitfun_product_domains::external_sources::ExternalSourceScope;
 
     #[test]
     fn unreadable_configuration_is_classified_as_transient() {

@@ -1,31 +1,31 @@
 /* styles/tokens.css */
-/* Git Graph MiniApp — theme tokens (host --bitfun-* when running in BitFun) */
+/* Git Graph MiniApp — theme tokens (host --openbitfun-* when running in OpenBitFun) */
 :root {
-  --bg:          var(--bitfun-bg);
-  --bg-surface:  var(--bitfun-bg-secondary);
-  --bg-hover:    var(--bitfun-element-hover);
-  --bg-active:   var(--bitfun-element-bg);
-  --border:      var(--bitfun-border);
-  --border-light: var(--bitfun-border-subtle);
-  --text:        var(--bitfun-text);
-  --text-sec:    var(--bitfun-text-secondary);
-  --text-dim:    var(--bitfun-text-muted);
-  --accent:      var(--bitfun-accent);
-  --accent-dim:  var(--bitfun-accent-hover);
-  --green:       var(--bitfun-success);
-  --red:         var(--bitfun-error);
-  --orange:      var(--bitfun-warning);
-  --purple:      var(--bitfun-accent-secondary);
-  --branch-1:    var(--bitfun-accent);
-  --branch-2:    var(--bitfun-success);
-  --branch-3:    var(--bitfun-accent-secondary);
-  --branch-4:    var(--bitfun-warning);
+  --bg:          var(--openbitfun-bg);
+  --bg-surface:  var(--openbitfun-bg-secondary);
+  --bg-hover:    var(--openbitfun-element-hover);
+  --bg-active:   var(--openbitfun-element-bg);
+  --border:      var(--openbitfun-border);
+  --border-light: var(--openbitfun-border-subtle);
+  --text:        var(--openbitfun-text);
+  --text-sec:    var(--openbitfun-text-secondary);
+  --text-dim:    var(--openbitfun-text-muted);
+  --accent:      var(--openbitfun-accent);
+  --accent-dim:  var(--openbitfun-accent-hover);
+  --green:       var(--openbitfun-success);
+  --red:         var(--openbitfun-error);
+  --orange:      var(--openbitfun-warning);
+  --purple:      var(--openbitfun-accent-secondary);
+  --branch-1:    var(--openbitfun-accent);
+  --branch-2:    var(--openbitfun-success);
+  --branch-3:    var(--openbitfun-accent-secondary);
+  --branch-4:    var(--openbitfun-warning);
   --branch-5:    #f778ba;
   --branch-6:    #79c0ff;
   --branch-7:    #56d364;
-  --radius:      var(--bitfun-radius);
-  --radius-lg:   var(--bitfun-radius-lg);
-  --graph-node-stroke: var(--bitfun-bg);
+  --radius:      var(--openbitfun-radius);
+  --radius-lg:   var(--openbitfun-radius-lg);
+  --graph-node-stroke: var(--openbitfun-bg);
   --graph-uncommitted: var(--text-dim);
   --graph-lane-width: 18px;
   --graph-row-height: 28px;
@@ -34,7 +34,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--bitfun-font-sans);
+  font-family: var(--openbitfun-font-sans);
   font-size: 13px;
   color: var(--text);
   background: var(--bg);
@@ -70,7 +70,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 280px;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
 }
 .toolbar__branch-filter { position: relative; }
 .toolbar__branch-filter .chevron { margin-left: 4px; opacity: .8; }
@@ -85,7 +85,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
   z-index: 200;
   padding: 4px 0;
 }
@@ -121,7 +121,7 @@ body {
 }
 .btn--primary {
   background: var(--accent-dim);
-  color: var(--bitfun-text-on-accent);
+  color: var(--openbitfun-text-on-accent);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn--primary:hover { background: var(--accent); }
@@ -289,7 +289,7 @@ body {
 }
 .commit-row__hash {
   flex-shrink: 0;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   color: var(--accent);
   width: 56px;
@@ -350,7 +350,7 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   text-align: right;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
 }
 
 /* styles/graph.css */
@@ -392,7 +392,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--bitfun-shadow-card);
+  box-shadow: var(--openbitfun-shadow-card);
 }
 .detail-panel-resizer {
   width: 6px;
@@ -485,7 +485,7 @@ body {
   flex-shrink: 0;
 }
 .detail-code-preview__filename {
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 12px;
   color: var(--text);
   overflow: hidden;
@@ -513,7 +513,7 @@ body {
 .detail-code-preview__error { color: var(--red); }
 .detail-code-preview__diff {
   margin: 0;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   line-height: 1.6;
   white-space: pre;
@@ -541,7 +541,7 @@ body {
   margin-bottom: 8px;
 }
 .detail-hash {
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 12px;
   color: var(--accent);
   word-break: break-all;
@@ -588,7 +588,7 @@ body {
   background: var(--bg);
   border-radius: var(--radius);
   border: 1px solid var(--border-light);
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -606,7 +606,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--bitfun-font-mono);
+  font-family: var(--openbitfun-font-mono);
   color: var(--text-sec);
 }
 .detail-file__stat { display: flex; gap: 6px; flex-shrink: 0; font-size: 11px; }
@@ -651,7 +651,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
 }
 .find-widget__input {
   width: 220px;
@@ -680,7 +680,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
   font-size: 12px;
 }
 .context-menu[aria-hidden="true"] { display: none; }
@@ -722,7 +722,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--bitfun-shadow-overlay);
+  box-shadow: var(--openbitfun-shadow-overlay);
 }
 .modal-dialog__header {
   display: flex;

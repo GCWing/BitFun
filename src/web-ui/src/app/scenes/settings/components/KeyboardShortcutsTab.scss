@@ -23,9 +23,9 @@
     padding: 8px 12px;
     margin-bottom: 16px;
     border-radius: 6px;
-    background: var(--bf-color-status-danger-surface);
-    color: var(--bf-color-status-danger-content);
-    font-size: var(--bf-type-label-md-font-size);
+    background: var(--openbitfun-color-status-danger-surface);
+    color: var(--openbitfun-color-status-danger-content);
+    font-size: var(--openbitfun-type-label-md-font-size);
   }
 
   &__list {
@@ -42,15 +42,15 @@
     border-radius: 6px;
 
     &:hover {
-      background: var(--bf-color-action-neutral-surface-hover);
+      background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
     &--recording {
-      background: var(--bf-color-action-secondary-background);
+      background: var(--openbitfun-color-action-secondary-background);
     }
 
     &--conflict {
-      background: var(--bf-color-status-warning-surface);
+      background: var(--openbitfun-color-status-warning-surface);
     }
 
     &--modified .kb-shortcuts__item-name {
@@ -67,25 +67,25 @@
   }
 
   &__item-name {
-    font-size: var(--bf-type-label-md-font-size);
-    color: var(--bf-color-content-primary);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   &__item-hint {
-    font-size: var(--bf-type-micro-font-size);
-    line-height: var(--bf-type-meta-line-height);
-    color: var(--bf-color-content-muted);
-    font-weight: var(--bf-type-body-sm-font-weight);
+    font-size: var(--openbitfun-type-micro-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
+    color: var(--openbitfun-color-content-muted);
+    font-weight: var(--openbitfun-type-body-sm-font-weight);
     white-space: normal;
     opacity: 0.62;
   }
 
   &__item-conflict-hint {
-    font-size: var(--bf-type-meta-font-size);
-    color: var(--bf-color-status-warning-content);
+    font-size: var(--openbitfun-type-meta-font-size);
+    color: var(--openbitfun-color-status-warning-content);
   }
 
   &__item-key {
@@ -103,7 +103,7 @@
   &__empty {
     padding: 32px;
     text-align: center;
-    color: var(--bf-color-content-muted);
-    font-size: var(--bf-type-body-md-font-size);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-body-md-font-size);
   }
 }

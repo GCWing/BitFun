@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from '@bitfun/ui';
+import { Button } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   ConfigFieldStatus,
@@ -40,13 +40,13 @@ export const ConfigActionBar: React.FC<ConfigActionBarProps> = ({
   return (
     <div
       {...props}
-      className={['bitfun-config-action-bar', className].filter(Boolean).join(' ')}
-      data-bf-component="config"
-      data-bf-part="actionBar"
+      className={['openbitfun-config-action-bar', className].filter(Boolean).join(' ')}
+      data-openbitfun-component="config"
+      data-openbitfun-part="actionBar"
     >
       <ConfigFieldStatus status={status} message={statusMessage} />
       {status !== 'saved' ? (
-        <div className="bitfun-config-action-bar__actions">
+        <div className="openbitfun-config-action-bar__actions">
           <Button
             size="sm"
             variant="outline"

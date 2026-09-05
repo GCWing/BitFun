@@ -143,13 +143,13 @@ describe('ExecProcessToolCardView', () => {
       root.render(<ExecProcessToolCardView toolItem={toolItem('pending_confirmation', true)} model={model} />);
     });
 
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="ambient"]')).toBeNull();
     expect(container.textContent).toContain('Waiting for confirmation');
     expect(container.textContent).not.toContain('Receiving parameters...');
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="output"] pre')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="outputFrame"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="footer"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="output"] pre')).toBeNull();
   });
 
   it('retains a just-completed tail result during the grace period', () => {
@@ -168,8 +168,8 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="ambient"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -181,10 +181,10 @@ describe('ExecProcessToolCardView', () => {
       );
     });
 
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="ambient"]')).toBeNull();
     expect(container.textContent).toContain('All tests passed');
-    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
+    expect(container.querySelector('[data-openbitfun-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
 
     act(() => {
       root.render(
@@ -197,10 +197,10 @@ describe('ExecProcessToolCardView', () => {
     });
 
     // Collapsed cards keep the prominent framework shell and animate height closed.
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"]')).not.toBeNull();
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeNull();
-    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"][data-openbitfun-state~="expanded"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="ambient"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="output"] pre')?.getAttribute('data-max-rows')).toBe('4');
   });
 
   it('uses the expanded output preview after a completed card is manually expanded', () => {
@@ -220,13 +220,13 @@ describe('ExecProcessToolCardView', () => {
 
     act(() => {
       container
-        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        .querySelector<HTMLElement>('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')
         ?.click();
     });
 
-    expect(container.querySelector('[data-bf-part="output"] pre')?.getAttribute('data-max-rows')).toBe('15');
-    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
-    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
+    expect(container.querySelector('[data-openbitfun-part="output"] pre')?.getAttribute('data-max-rows')).toBe('15');
+    expect(container.querySelector('[data-openbitfun-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
+    expect(container.querySelector('[data-openbitfun-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
   });
 
   it('content-sizes a manually expanded completed card with no output', () => {
@@ -241,13 +241,13 @@ describe('ExecProcessToolCardView', () => {
 
     act(() => {
       container
-        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        .querySelector<HTMLElement>('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')
         ?.click();
     });
 
     expect(container.textContent).toContain('No output');
-    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
-    expect(container.querySelector('[data-bf-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
+    expect(container.querySelector('[data-openbitfun-part="outputFrame"]')?.getAttribute('data-density')).toBe('expanded');
+    expect(container.querySelector('[data-openbitfun-part="outputFrame"]')?.getAttribute('data-sizing')).toBe('content');
   });
 
   it('pushes WriteStdin session and execution metadata to the footer end', () => {
@@ -270,11 +270,11 @@ describe('ExecProcessToolCardView', () => {
 
     act(() => {
       container
-        .querySelector<HTMLElement>('[data-bf-part="surface"][data-bf-attention="prominent"]')
+        .querySelector<HTMLElement>('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')
         ?.click();
     });
 
-    const footerItems = Array.from(container.querySelectorAll('[data-bf-part="footer"] > span'));
+    const footerItems = Array.from(container.querySelectorAll('[data-openbitfun-part="footer"] > span'));
     expect(footerItems).toHaveLength(3);
     expect(footerItems[0]?.getAttribute('data-push-to-end')).toBe('true');
     expect(footerItems[0]?.textContent).toContain('#42');
@@ -300,19 +300,19 @@ describe('ExecProcessToolCardView', () => {
     act(() => {
       root.render(<ExecProcessToolCardView toolItem={toolItem('running')} model={model} />);
     });
-    const frameBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]');
-    const footerBeforeOutput = container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]');
+    const frameBeforeOutput = container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="outputFrame"]');
+    const footerBeforeOutput = container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="footer"]');
     expect(frameBeforeOutput?.getAttribute('data-density')).toBe('compact');
     expect(frameBeforeOutput?.getAttribute('data-sizing')).toBe('fixed');
     expect(footerBeforeOutput?.textContent).toBe('');
-    expect(container.querySelector('[data-bf-part="output"] pre')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="output"] pre')).toBeNull();
 
     act(() => {
       root.render(<ExecProcessToolCardView toolItem={streamingItem} model={model} />);
     });
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).toBe(frameBeforeOutput);
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).toBe(footerBeforeOutput);
-    expect(container.querySelector('[data-bf-part="output"] pre')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="outputFrame"]')).toBe(frameBeforeOutput);
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="footer"]')).toBe(footerBeforeOutput);
+    expect(container.querySelector('[data-openbitfun-part="output"] pre')).not.toBeNull();
 
     act(() => {
       root.render(
@@ -323,10 +323,10 @@ describe('ExecProcessToolCardView', () => {
         />,
       );
     });
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')).toBe(frameBeforeOutput);
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="footer"]')).toBe(footerBeforeOutput);
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="outputFrame"]')).toBe(frameBeforeOutput);
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="footer"]')).toBe(footerBeforeOutput);
     expect(footerBeforeOutput?.textContent).toContain('E:/workspace');
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="outputFrame"]')?.getAttribute('data-density')).toBe('compact');
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="outputFrame"]')?.getAttribute('data-density')).toBe('compact');
   });
 
   it('collapses a completed tail result when the grace period expires', () => {
@@ -360,22 +360,22 @@ describe('ExecProcessToolCardView', () => {
     act(() => {
       vi.advanceTimersByTime(799);
     });
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"][data-openbitfun-state~="expanded"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"][data-openbitfun-state~="expanded"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="details"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(299);
     });
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="details"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(container.querySelector('[data-bf-component="command-tool-card"] [data-bf-part="details"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-component="command-tool-card"] [data-openbitfun-part="details"]')).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 //! Desktop adapter for local speech input.
 
 use crate::api::AppState;
-use bitfun_core_types::speech::{
+use openbitfun_core_types::speech::{
     SpeechAppendAudioChunkRequest, SpeechAppendAudioChunkResponse,
     SpeechAppendRealtimeAudioRequest, SpeechCancelInputSessionRequest,
     SpeechCancelModelDownloadRequest, SpeechDeleteModelRequest, SpeechDownloadModelRequest,
@@ -12,10 +12,10 @@ use bitfun_core_types::speech::{
     SpeechStartInputSessionRequest, SpeechStartRealtimeSessionRequest, SpeechTranscriptionResult,
     SpeechVerifyModelRequest,
 };
-use bitfun_events::{
+use openbitfun_events::{
     SPEECH_MODEL_PROGRESS_EVENT, SPEECH_MODEL_STATUS_CHANGED_EVENT, SPEECH_REALTIME_EVENT,
 };
-use bitfun_services_integrations::speech::VolcengineRealtimeSpeechConfig;
+use openbitfun_services_integrations::speech::VolcengineRealtimeSpeechConfig;
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
@@ -148,7 +148,7 @@ pub async fn speech_start_realtime_session(
     app: AppHandle,
     request: SpeechStartRealtimeSessionRequest,
 ) -> Result<SpeechRealtimeSession, String> {
-    let global_config: bitfun_core::service::config::GlobalConfig = state
+    let global_config: openbitfun_core::service::config::GlobalConfig = state
         .config_service
         .get_config(None)
         .await
@@ -263,7 +263,7 @@ pub async fn speech_get_realtime_config(
     request: SpeechGetRealtimeConfigRequest,
 ) -> Result<SpeechRealtimeConfig, String> {
     let _ = request;
-    let global_config: bitfun_core::service::config::GlobalConfig = state
+    let global_config: openbitfun_core::service::config::GlobalConfig = state
         .config_service
         .get_config(None)
         .await
@@ -299,7 +299,7 @@ pub async fn speech_save_realtime_config(
     if !(-50..=100).contains(&request.speed) || !(-50..=100).contains(&request.loudness) {
         return Err("Realtime speech speed and loudness must be between -50 and 100".to_string());
     }
-    let config = bitfun_core::service::config::VoiceCallConfig {
+    let config = openbitfun_core::service::config::VoiceCallConfig {
         enabled: request.enabled,
         provider: "volcengine".to_string(),
         api_key,

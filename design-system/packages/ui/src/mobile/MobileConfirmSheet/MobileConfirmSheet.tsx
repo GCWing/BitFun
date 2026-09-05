@@ -46,7 +46,7 @@ export function MobileConfirmSheet({
     <MobileSheet
       {...sheetProps}
       footer={(
-        <div className={styles.actions} data-bf-part="actions">
+        <div className={styles.actions} data-openbitfun-part="actions">
           <MobileButton autoFocus disabled={pending} onClick={close}>{cancelLabel}</MobileButton>
           <MobileButton
             appearance={confirmTone}
@@ -61,9 +61,9 @@ export function MobileConfirmSheet({
       onKeyDown={handleKeyDown}
       onOpenChange={() => close()}
     >
-      <div className={styles.content} data-bf-component="mobile-confirm-sheet" data-bf-part="content">
+      <div className={styles.content} data-openbitfun-component="mobile-confirm-sheet" data-openbitfun-part="content">
         {icon !== undefined && icon !== null && (
-          <span aria-hidden="true" className={styles.icon} data-bf-part="icon">{icon}</span>
+          <span aria-hidden="true" className={styles.icon} data-openbitfun-part="icon">{icon}</span>
         )}
         {children}
       </div>

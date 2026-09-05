@@ -127,8 +127,8 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
         {...props}
         aria-disabled={disabled || undefined}
         className={classNames(styles.root, className)}
-        data-bf-component="segmented-control"
-        data-bf-part="root"
+        data-openbitfun-component="segmented-control"
+        data-openbitfun-part="root"
         data-disabled={disabled ? "true" : "false"}
         data-distribution={distribution}
         data-size={size}
@@ -143,8 +143,8 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
             <button
               aria-checked={selected}
               className={styles.segment}
-              data-bf-part="segment"
-              data-bf-value={option.value}
+              data-openbitfun-part="segment"
+              data-openbitfun-value={option.value}
               disabled={disabled || option.disabled}
               key={option.value}
               onClick={() => selectOption(option)}
@@ -157,11 +157,11 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
               type="button"
             >
               {option.icon && (
-                <span aria-hidden="true" className={styles.icon} data-bf-part="icon">
+                <span aria-hidden="true" className={styles.icon} data-openbitfun-part="icon">
                   {option.icon}
                 </span>
               )}
-              <span className={styles.label} data-bf-part="label">{option.label}</span>
+              <span className={styles.label} data-openbitfun-part="label">{option.label}</span>
             </button>
           );
         })}

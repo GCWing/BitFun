@@ -64,7 +64,7 @@ describe('PlanBuildStateService', () => {
 
   function target(name: string): PlanFileRef {
     const value = {
-      planFilePath: `/workspace/.bitfun/plans/${name}.plan.md`,
+      planFilePath: `/workspace/.openbitfun/plans/${name}.plan.md`,
       workspacePath: '/workspace',
     };
     trackedTargets.push(value);
@@ -97,7 +97,7 @@ describe('PlanBuildStateService', () => {
       todoIds: ['shared-todo'],
     });
 
-    window.dispatchEvent(new CustomEvent('bitfun:dialog-cancelled', {
+    window.dispatchEvent(new CustomEvent('openbitfun:dialog-cancelled', {
       detail: { sessionId: 'session-a' },
     }));
 
@@ -119,7 +119,7 @@ describe('PlanBuildStateService', () => {
       todoIds: ['shared-todo'],
     });
 
-    window.dispatchEvent(new CustomEvent('bitfun:todowrite-update', {
+    window.dispatchEvent(new CustomEvent('openbitfun:todowrite-update', {
       detail: {
         sessionId: 'session-a',
         turnId: firstTurnId,

@@ -1,0 +1,18 @@
+{
+  "$schema": "../schemas/product-definition.schema.json",
+  "schemaVersion": 1,
+  "productId": "openbitfun",
+  "dataNamespace": "openbitfun",
+  "localeRoot": "./locales",
+  "members": {
+    "desktop": {
+      "displayNameKey": "product.desktop.name",
+      "binaryName": "openbitfun-desktop",
+      "bundleId": "com.openbitfun.desktop"
+    },
+    "cli": {
+      "displayNameKey": "product.cli.name",
+      "binaryName": "openbitfun"
+    }
+  }
+}

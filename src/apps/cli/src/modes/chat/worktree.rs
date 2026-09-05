@@ -36,12 +36,14 @@ impl ChatMode {
         let repository = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
                 let repository =
-                    bitfun_core::service::git::GitService::resolve_worktree_repository(
+                    openbitfun_core::service::git::GitService::resolve_worktree_repository(
                         &workspace_path,
                     )
                     .await?;
-                bitfun_core::service::git::GitService::get_repository_basic(repository.query_path)
-                    .await
+                openbitfun_core::service::git::GitService::get_repository_basic(
+                    repository.query_path,
+                )
+                .await
             })
         });
         match repository {
@@ -101,8 +103,8 @@ impl ChatMode {
         }
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(
-                bitfun_core::service::worktree::WorktreeService::bind_session(
-                    bitfun_core::service::worktree::WorktreeSessionBindingRequest {
+                openbitfun_core::service::worktree::WorktreeService::bind_session(
+                    openbitfun_core::service::worktree::WorktreeSessionBindingRequest {
                         request_id: format!("tui-worktree-{}", uuid::Uuid::new_v4()),
                         session_id: chat_state.core_session_id.clone(),
                         project_workspace_path,
@@ -115,7 +117,7 @@ impl ChatMode {
             format!(
                 "Worktree isolation could not be prepared: {}: {}",
                 match error.code {
-                    bitfun_runtime_ports::WorktreeErrorCode::RemoteUnsupported => {
+                    openbitfun_runtime_ports::WorktreeErrorCode::RemoteUnsupported => {
                         "remote_unsupported"
                     }
                     _ => error.code.as_str(),
@@ -125,7 +127,7 @@ impl ChatMode {
         })?;
 
         let execution_target = result.execution_target.clone();
-        let binding = bitfun_runtime_ports::AgentSessionWorkspaceBinding {
+        let binding = openbitfun_runtime_ports::AgentSessionWorkspaceBinding {
             workspace_id: result.workspace_id,
             workspace_path: result.workspace_path,
             project_workspace_path: Some(result.project_workspace_path),

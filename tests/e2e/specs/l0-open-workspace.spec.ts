@@ -46,7 +46,7 @@ describe('L0 Workspace Opening', () => {
 
       const state = await getWorkspaceState();
       const navLabels = state.workspaceLabels.length;
-      const sceneBar = await $('.bitfun-scene-bar');
+      const sceneBar = await $('.openbitfun-scene-bar');
       const hasSceneBar = await sceneBar.isExisting();
 
       console.log('[L0] Workspace state:', state);

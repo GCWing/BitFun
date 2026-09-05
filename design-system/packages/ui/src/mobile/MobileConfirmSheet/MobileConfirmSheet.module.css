@@ -1,10 +1,10 @@
-@layer bf.components {
+@layer openbitfun.components {
   .content {
     display: flex;
     min-inline-size: 0;
     flex-direction: column;
     align-items: center;
-    gap: var(--bf-space-3);
+    gap: var(--openbitfun-space-3);
     text-align: center;
   }
 
@@ -13,15 +13,15 @@
     inline-size: 52px;
     block-size: 52px;
     place-items: center;
-    border-radius: var(--bf-radius-pill);
-    color: var(--bf-color-content-secondary);
-    background: var(--bf-color-surface-tertiary);
+    border-radius: var(--openbitfun-radius-pill);
+    color: var(--openbitfun-color-content-secondary);
+    background: var(--openbitfun-color-surface-tertiary);
   }
 
   .actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--bf-space-2);
+    gap: var(--openbitfun-space-2);
   }
 
   @media (max-width: 359px) {

@@ -5,7 +5,7 @@ use std::fmt;
 /// Stable identifier for the backend that actually executed a web search.
 ///
 /// This is a string newtype rather than a closed enum so persisted results from
-/// a newer BitFun build remain readable by older code.
+/// a newer OpenBitFun build remain readable by older code.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct WebSearchProviderId(String);
@@ -14,7 +14,7 @@ impl WebSearchProviderId {
     pub const EXA_MCP_FREE: &'static str = "exa_mcp_free";
     pub const EXA_SEARCH_API: &'static str = "exa_search_api";
     pub const TAVILY: &'static str = "tavily";
-    pub const BITFUN_SEARCH_HTTP: &'static str = "bitfun_search_http";
+    pub const OPENBITFUN_SEARCH_HTTP: &'static str = "openbitfun_search_http";
 
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())

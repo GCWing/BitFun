@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "BitFun default capabilities",
+  "description": "OpenBitFun default capabilities",
   "windows": ["main", "agent-companion-pet", "spotlight", "frontend-update-confirm"],
   "permissions": [
     "log:default",

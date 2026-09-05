@@ -41,7 +41,7 @@ export const MobileListRow = forwardRef<HTMLButtonElement, MobileListRowProps>(
         aria-current={selected && role !== "radio" ? "true" : undefined}
         className={classNames(styles.root, className)}
         data-appearance={appearance}
-        data-bf-component="mobile-list-row"
+        data-openbitfun-component="mobile-list-row"
         data-selected={selected ? "true" : "false"}
         data-tone={tone}
         ref={ref}
@@ -49,18 +49,18 @@ export const MobileListRow = forwardRef<HTMLButtonElement, MobileListRowProps>(
         type={type}
       >
         {leading !== undefined && leading !== null && (
-          <span className={styles.leading} data-bf-part="leading">{leading}</span>
+          <span className={styles.leading} data-openbitfun-part="leading">{leading}</span>
         )}
-        <span className={styles.copy} data-bf-part="copy">
-          <span className={styles.label} data-bf-part="label">{label}</span>
+        <span className={styles.copy} data-openbitfun-part="copy">
+          <span className={styles.label} data-openbitfun-part="label">{label}</span>
           {supportingText !== undefined && supportingText !== null && (
-            <span className={styles.supportingText} data-bf-part="supporting-text">
+            <span className={styles.supportingText} data-openbitfun-part="supporting-text">
               {supportingText}
             </span>
           )}
         </span>
         {trailing !== undefined && trailing !== null && (
-          <span className={styles.trailing} data-bf-part="trailing">{trailing}</span>
+          <span className={styles.trailing} data-openbitfun-part="trailing">{trailing}</span>
         )}
       </button>
     );

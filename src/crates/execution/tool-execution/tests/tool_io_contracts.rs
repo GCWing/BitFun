@@ -26,7 +26,7 @@ fn make_temp_dir(name: &str) -> PathBuf {
     let sequence = NEXT_TEMP_DIR_ID.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();
     let dir = std::env::temp_dir().join(format!(
-        "bitfun-tool-io-{name}-{process_id}-{unique}-{sequence}"
+        "openbitfun-tool-io-{name}-{process_id}-{unique}-{sequence}"
     ));
     fs::create_dir(&dir).expect("isolated temp dir should be created");
     dir
@@ -319,10 +319,10 @@ fn remote_glob_commands_preprocess_static_pattern_prefix() {
     assert!(!rg_command.contains("--hidden"));
     assert!(!rg_command.contains("--sort"));
 
-    let bitfun_rg_command = build_remote_rg_command("/home/user/repo", ".bitfun/**/*.json");
-    assert!(bitfun_rg_command.contains("--no-ignore"));
-    assert!(bitfun_rg_command.contains("--hidden"));
-    assert!(!bitfun_rg_command.contains("--sort"));
+    let openbitfun_rg_command = build_remote_rg_command("/home/user/repo", ".openbitfun/**/*.json");
+    assert!(openbitfun_rg_command.contains("--no-ignore"));
+    assert!(openbitfun_rg_command.contains("--hidden"));
+    assert!(!openbitfun_rg_command.contains("--sort"));
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn shell_single_quote_preserves_existing_remote_escape_style() {
 fn noninteractive_terminal_env_preserves_agent_session_contract() {
     let env = noninteractive_terminal_env();
     assert_eq!(
-        env.get("BITFUN_NONINTERACTIVE").map(String::as_str),
+        env.get("OPENBITFUN_NONINTERACTIVE").map(String::as_str),
         Some("1")
     );
     assert_eq!(env.get("GIT_PAGER").map(String::as_str), Some("cat"));

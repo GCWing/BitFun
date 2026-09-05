@@ -1,7 +1,7 @@
 //! Time-window coalescing of streamed text chunks before transport emit.
 //!
 //! The agent stream emits one `TextChunk` / `ThinkingChunk` event per provider
-//! chunk ([`bitfun_events::AgenticEvent`]). Forwarding every chunk to the
+//! chunk ([`openbitfun_events::AgenticEvent`]). Forwarding every chunk to the
 //! WebView costs one Tauri IPC message (JSON serialization, WebView2 boundary
 //! crossing, JS parse + dispatch) and, when peer devices are attached, one
 //! end-to-end encrypted relay message. This module merges chunks of the same
@@ -24,8 +24,8 @@
 //!   emits thinking chunks before text chunks, and `flush` therefore emits the
 //!   merged thinking event before the merged text event.
 
-use bitfun_core_types::ReasoningContentKind;
-use bitfun_events::AgenticEvent;
+use openbitfun_core_types::ReasoningContentKind;
+use openbitfun_events::AgenticEvent;
 use std::collections::HashMap;
 use std::time::Duration;
 

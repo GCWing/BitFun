@@ -2,7 +2,7 @@ import type { CloudAccountSession } from './CloudAccountClient';
 import { fromB64, toB64 } from './E2EEncryption';
 import { normalizeRelayUrl } from './pairingLink';
 
-const ACCOUNT_SESSION_STORAGE_KEY = 'bitfun.mobile.account_session.v1';
+const ACCOUNT_SESSION_STORAGE_KEY = 'openbitfun.mobile.account_session.v1';
 const ACCOUNT_SESSION_VERSION = 1;
 
 interface PersistedAccountSessionV1 {

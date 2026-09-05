@@ -11,8 +11,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@bitfun/ui', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@bitfun/ui')>(),
+vi.mock('@openbitfun/ui', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@openbitfun/ui')>(),
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
   FormSection: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => <section {...props}>{children}</section>,
   FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
@@ -68,7 +68,7 @@ describe('AppearanceSettingsPage', () => {
     document.body.innerHTML = renderToStaticMarkup(<AppearanceSettingsPage />);
 
     const interfaceSection = document.querySelector(
-      '[data-testid="appearance-settings-section"] .bitfun-config-page-section',
+      '[data-testid="appearance-settings-section"] .openbitfun-config-page-section',
     );
     const packageManagement = document.querySelector('[data-testid="appearance-package-config"]');
 
@@ -76,7 +76,7 @@ describe('AppearanceSettingsPage', () => {
     expect(document.querySelector('[data-testid="appearance-language-select"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="appearance-palette-select"]')).toBeNull();
     expect(document.querySelector('[data-testid="appearance-package-select"]')).toBeNull();
-    expect(packageManagement?.closest('.bitfun-config-page-section')).toBeNull();
+    expect(packageManagement?.closest('.openbitfun-config-page-section')).toBeNull();
     expect(packageManagement?.closest('.appearance-settings__content')).not.toBeNull();
   });
 });

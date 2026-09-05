@@ -254,7 +254,7 @@ fn route_for(plan: OpenCodePlan, format: &str) -> Result<OpenCodeRoute> {
         },
         _ => {
             return Err(anyhow!(
-                "OpenCode {:?} does not support BitFun request format '{}'",
+                "OpenCode {:?} does not support OpenBitFun request format '{}'",
                 plan,
                 format.trim()
             ));
@@ -389,7 +389,7 @@ fn offerings_from_remote_config(config: RemoteConfig) -> Vec<SubscriptionApiOffe
                 .and_then(|item| item.api.as_deref())
                 .or(provider.api.as_deref());
             let Some(format) = format_for_remote_model(npm, api) else {
-                // BitFun does not currently have a compatible adapter for
+                // OpenBitFun does not currently have a compatible adapter for
                 // every AI SDK package returned by OpenCode (for example its
                 // Google-native gateway shape). Do not offer a model with an
                 // endpoint we cannot faithfully reproduce.
@@ -675,7 +675,7 @@ pub(crate) async fn begin_login(
         method: super::SubscriptionLoginMethod::Device,
         authorization_url,
         user_code: Some(user_code),
-        instructions: "Open the verification link and enter the code, then return to BitFun."
+        instructions: "Open the verification link and enter the code, then return to OpenBitFun."
             .to_string(),
         runner: Box::pin(runner),
     })

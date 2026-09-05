@@ -3,10 +3,10 @@
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
-use bitfun_core::infrastructure::try_get_path_manager_arc;
-use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
 use log::{debug, error, warn};
+use openbitfun_core::infrastructure::try_get_path_manager_arc;
+use openbitfun_core::service::config::types::GlobalConfig;
 use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WebviewUrl};
 
@@ -310,21 +310,21 @@ impl AppearanceConfig {
     fn startup_messages_json(locale: &str) -> String {
         let messages = match locale {
             "en-US" | "en" => serde_json::json!({
-                "loadingApp": "Starting BitFun...",
+                "loadingApp": "Starting OpenBitFun...",
                 "minimize": "Minimize",
                 "maximize": "Maximize",
                 "close": "Close",
                 "petLoading": "Loading companion..."
             }),
             "zh-TW" | "zh-Hant-TW" => serde_json::json!({
-                "loadingApp": "正在啟動 BitFun...",
+                "loadingApp": "正在啟動 OpenBitFun...",
                 "minimize": "最小化",
                 "maximize": "最大化",
                 "close": "關閉",
                 "petLoading": "正在載入助手..."
             }),
             _ => serde_json::json!({
-                "loadingApp": "正在启动 BitFun...",
+                "loadingApp": "正在启动 OpenBitFun...",
                 "minimize": "最小化",
                 "maximize": "最大化",
                 "close": "关闭",
@@ -353,10 +353,11 @@ impl AppearanceConfig {
         ))
         .unwrap_or_else(|_| "\"warn\"".to_string());
         let perf_trace_enabled = cfg!(debug_assertions)
-            || ((cfg!(feature = "devtools") || std::env::var_os("BITFUN_PERF_TRACE").is_some())
-                && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some());
+            || ((cfg!(feature = "devtools")
+                || std::env::var_os("OPENBITFUN_PERF_TRACE").is_some())
+                && std::env::var_os("OPENBITFUN_WEBDRIVER_PORT").is_some());
         let bootstrap_appearance_id_json =
-            serde_json::to_string(&self.id).unwrap_or_else(|_| "\"bitfun-light\"".to_string());
+            serde_json::to_string(&self.id).unwrap_or_else(|_| "\"openbitfun-light\"".to_string());
         let bootstrap_appearance_selection_json = self
             .selection_id
             .as_ref()
@@ -365,47 +366,49 @@ impl AppearanceConfig {
         let bootstrap_keybindings_assignment = serde_json::to_string(&bootstrap_config.keybindings)
             .ok()
             .filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)
-            .map(|json| format!("window.__BITFUN_BOOTSTRAP_KEYBINDINGS__ = {json};"))
+            .map(|json| format!("window.__OPENBITFUN_BOOTSTRAP_KEYBINDINGS__ = {json};"))
             .unwrap_or_default();
         let bootstrap_workspace_startup_state_assignment = workspace_startup_state
             .and_then(|state| serde_json::to_string(state).ok())
             .filter(|json| json.len() <= MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES)
-            .map(|json| format!("window.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = {json};"))
+            .map(|json| {
+                format!("window.__OPENBITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = {json};")
+            })
             .unwrap_or_default();
 
         format!(
             r#"
             (function() {{
-                window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
-                window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
-                window.__BITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
-                window.__BITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
-                window.__BITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
-                window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
-                window.__BITFUN_BOOTSTRAP_APPEARANCE_ID__ = {bootstrap_appearance_id_json};
-                window.__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__ = {bootstrap_appearance_selection_json};
+                window.__OPENBITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
+                window.__OPENBITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
+                window.__OPENBITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
+                window.__OPENBITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
+                window.__OPENBITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
+                window.__OPENBITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
+                window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__ = {bootstrap_appearance_id_json};
+                window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__ = {bootstrap_appearance_selection_json};
                 {bootstrap_keybindings_assignment}
                 {bootstrap_workspace_startup_state_assignment}
                 function applyAppearance() {{
                     var root = document.documentElement;
                     if (!root) return false;
                     
-                    root.setAttribute('data-bf-appearance', '{id}');
-                    root.setAttribute('data-bf-appearance-mode', '{appearance_mode}');
-                    root.setAttribute('data-bf-design-system-root', '');
+                    root.setAttribute('data-openbitfun-appearance', '{id}');
+                    root.setAttribute('data-openbitfun-appearance-mode', '{appearance_mode}');
+                    root.setAttribute('data-openbitfun-design-system-root', '');
                     root.setAttribute('data-color-scheme', '{appearance_mode}');
                     root.setAttribute('data-contrast', 'standard');
                     root.setAttribute('data-density', 'compact');
                     
-                    root.style.setProperty('--bf-color-surface-canvas', '{bg_primary}');
-                    root.style.setProperty('--bf-color-surface-panel', '{bg_secondary}');
-                    root.style.setProperty('--bf-color-surface-tertiary', '{bg_primary}');
-                    root.style.setProperty('--bf-color-surface-workbench', '{bg_primary}');
-                    root.style.setProperty('--bf-color-surface-scene', '{bg_scene}');
-                    root.style.setProperty('--bf-color-surface-chrome', '{bg_primary}');
-                    root.style.setProperty('--bf-color-content-primary', '{text_primary}');
-                    root.style.setProperty('--bf-color-content-muted', '{text_muted}');
-                    root.style.setProperty('--bf-color-accent-default', '{accent_color}');
+                    root.style.setProperty('--openbitfun-color-surface-canvas', '{bg_primary}');
+                    root.style.setProperty('--openbitfun-color-surface-panel', '{bg_secondary}');
+                    root.style.setProperty('--openbitfun-color-surface-tertiary', '{bg_primary}');
+                    root.style.setProperty('--openbitfun-color-surface-workbench', '{bg_primary}');
+                    root.style.setProperty('--openbitfun-color-surface-scene', '{bg_scene}');
+                    root.style.setProperty('--openbitfun-color-surface-chrome', '{bg_primary}');
+                    root.style.setProperty('--openbitfun-color-content-primary', '{text_primary}');
+                    root.style.setProperty('--openbitfun-color-content-muted', '{text_muted}');
+                    root.style.setProperty('--openbitfun-color-accent-default', '{accent_color}');
                     root.style.backgroundColor = '{bg_primary}';
                     
                     if (document.body) {{
@@ -482,19 +485,19 @@ mod startup_appearance_tests {
 
         let script = appearance.generate_init_script("trace-id", &bootstrap, None);
 
-        assert!(script.contains("__BITFUN_BOOTSTRAP_APPEARANCE_ID__"));
-        assert!(script.contains("__BITFUN_BOOTSTRAP_APPEARANCE_SELECTION__"));
-        assert!(script.contains("data-bf-appearance"));
-        assert!(script.contains("data-bf-appearance-mode"));
-        assert!(script.contains("data-bf-design-system-root"));
+        assert!(script.contains("__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__"));
+        assert!(script.contains("__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__"));
+        assert!(script.contains("data-openbitfun-appearance"));
+        assert!(script.contains("data-openbitfun-appearance-mode"));
+        assert!(script.contains("data-openbitfun-design-system-root"));
         assert!(script.contains("data-color-scheme"));
-        assert!(script.contains("--bf-color-surface-canvas"));
-        assert!(script.contains("--bf-color-surface-scene"));
-        assert!(script.contains("--bf-color-content-primary"));
-        assert!(script.contains("--bf-color-content-muted"));
-        assert!(script.contains("--bf-color-accent-default"));
-        assert!(!script.contains("--bf-appearance-token-"));
-        let retired_bootstrap_global = ["__BITFUN_BOOTSTRAP", "THEME"].join("_");
+        assert!(script.contains("--openbitfun-color-surface-canvas"));
+        assert!(script.contains("--openbitfun-color-surface-scene"));
+        assert!(script.contains("--openbitfun-color-content-primary"));
+        assert!(script.contains("--openbitfun-color-content-muted"));
+        assert!(script.contains("--openbitfun-color-accent-default"));
+        assert!(!script.contains("--openbitfun-appearance-token-"));
+        let retired_bootstrap_global = ["__OPENBITFUN_BOOTSTRAP", "THEME"].join("_");
         let retired_background_token = ["--", "color-bg-"].concat();
         let retired_text_token = ["--", "color-text-"].concat();
         assert!(!script.contains(&retired_bootstrap_global));
@@ -567,7 +570,7 @@ pub fn create_main_window(
     let materialization_workbench = Arc::clone(&frontend_workbench);
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
-        .title("BitFun")
+        .title("OpenBitFun")
         .inner_size(
             crate::MAIN_WINDOW_DEFAULT_WIDTH,
             crate::MAIN_WINDOW_DEFAULT_HEIGHT,
@@ -646,7 +649,7 @@ pub fn create_main_window(
             );
             #[cfg(any(debug_assertions, feature = "devtools"))]
             {
-                if std::env::var("BITFUN_OPEN_DEVTOOLS")
+                if std::env::var("OPENBITFUN_OPEN_DEVTOOLS")
                     .map(|v| v == "1")
                     .unwrap_or(false)
                 {
@@ -907,9 +910,9 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         return Ok(());
     }
 
-    let url = app_url("?bitfunWindow=agent-companion");
+    let url = app_url("?openbitfunWindow=agent-companion");
     let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
-        .title("BitFun Agent Companion")
+        .title("OpenBitFun Agent Companion")
         .inner_size(
             AGENT_COMPANION_WINDOW_MIN_SIZE,
             AGENT_COMPANION_WINDOW_MIN_SIZE,

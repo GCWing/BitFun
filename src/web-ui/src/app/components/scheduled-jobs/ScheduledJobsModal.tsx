@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogHeading,
   DialogTitle,
-} from '@bitfun/ui';
+} from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import ScheduledJobsView from '@/app/components/scheduled-jobs/ScheduledJobsView';
 import type { CronJobTargetKind } from '@/infrastructure/api';
@@ -59,7 +59,7 @@ const ScheduledJobsModal: React.FC<ScheduledJobsModalProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody inset="none">
-      <div data-bf-component="scheduled-jobs-modal" data-bf-part="body" className="scheduled-jobs-modal__body">
+      <div data-openbitfun-component="scheduled-jobs-modal" data-openbitfun-part="body" className="scheduled-jobs-modal__body">
         <ScheduledJobsView
           workspacePath={workspacePath}
           workspaceId={workspaceId}

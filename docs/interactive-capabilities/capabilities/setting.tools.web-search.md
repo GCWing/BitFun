@@ -17,14 +17,14 @@ Choose the search provider used by the WebSearch tool at runtime and configure c
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在免费 Exa MCP、Exa Search API、Tavily 与 BitFun Search HTTP Protocol 之间选择运行时服务
-  - Choose free Exa MCP, Exa Search API, Tavily, or BitFun Search HTTP Protocol as the runtime provider
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为 BitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header
-  - Configure the endpoint, authentication mode, and restricted credential header for BitFun Search HTTP Protocol
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在免费 Exa MCP、Exa Search API、Tavily 与 OpenBitFun Search HTTP Protocol 之间选择运行时服务
+  - Choose free Exa MCP, Exa Search API, Tavily, or OpenBitFun Search HTTP Protocol as the runtime provider
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 为 OpenBitFun Search HTTP Protocol 配置端点、认证方式和受限凭据 Header
+  - Configure the endpoint, authentication mode, and restricted credential header for OpenBitFun Search HTTP Protocol
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看当前执行主机的凭据状态，并保存、替换或清除 API Key/Secret
   - Inspect credential status on the current execution host and save, replace, or clear an API key or secret
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并复制 BitFun Search HTTP Protocol v1 的请求、响应和传输限制
-  - Inspect and copy the request, response, and transport limits for BitFun Search HTTP Protocol v1
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看并复制 OpenBitFun Search HTTP Protocol v1 的请求、响应和传输限制
+  - Inspect and copy the request, response, and transport limits for OpenBitFun Search HTTP Protocol v1
 
 ## 怎么用 / How to use it
 
@@ -35,13 +35,13 @@ Choose the search provider used by the WebSearch tool at runtime and configure c
 3. 选择搜索服务，完成所需配置并保存
    Choose a provider, complete its required configuration, and save
 
-入口 / Entry: BitFun 设置
+入口 / Entry: OpenBitFun 设置
 
 ## Agent 可替你做什么 / What an agent can do for you
 
 | 操作 / Action | 中文说明 | English description |
 | --- | --- | --- |
-| 打开对应界面 / Open the UI | 进入 BitFun 中对应的功能界面。 | Open the matching feature in BitFun. |
+| 打开对应界面 / Open the UI | 进入 OpenBitFun 中对应的功能界面。 | Open the matching feature in OpenBitFun. |
 
 ## 可配置选项 / Configurable options
 

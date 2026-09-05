@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LoadingState } from '@bitfun/ui';
+import { LoadingState } from '@openbitfun/ui';
 import './ConfigPageState.scss';
 
 /**
@@ -42,9 +42,9 @@ export const ConfigLoadingState: React.FC<ConfigLoadingStateProps> = ({
 
   return (
     <div
-      className={['bitfun-config-loading-state', className].filter(Boolean).join(' ')}
-      data-bf-component="config"
-      data-bf-part="loadingState"
+      className={['openbitfun-config-loading-state', className].filter(Boolean).join(' ')}
+      data-openbitfun-component="config"
+      data-openbitfun-part="loadingState"
     >
       <LoadingState size="sm">{label}</LoadingState>
     </div>

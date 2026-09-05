@@ -26,7 +26,7 @@ import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
 import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx';
 import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
-import { MobileButton, MobileIconButton, MobileLink } from '@bitfun/ui/mobile';
+import { MobileButton, MobileIconButton, MobileLink } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useTheme } from '../theme';
 
@@ -278,22 +278,22 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    border: '1px solid var(--bf-color-border-subtle)',
+    border: '1px solid var(--openbitfun-color-border-subtle)',
     borderRadius: '10px',
-    background: 'var(--bf-color-surface-subtle)',
+    background: 'var(--openbitfun-color-surface-subtle)',
     cursor: state.status === 'ready' || state.status === 'done' ? 'pointer' : 'default',
     maxWidth: '300px',
     verticalAlign: 'middle',
     transition: 'background 0.15s',
   };
 
-  const iconColor = 'var(--bf-color-content-muted)';
+  const iconColor = 'var(--openbitfun-color-content-muted)';
 
   if (state.status === 'loading') {
     return (
       <span className="file-card" style={cardStyle}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
+        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)', opacity: 0.5 }}>{t('chat.fileLoading')}</span>
       </span>
     );
   }
@@ -301,7 +301,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     return (
       <span className="file-card" style={{ ...cardStyle, cursor: 'default', opacity: 0.5 }} title={state.message}>
         <FileTextIcon size={20} style={{ color: iconColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 'var(--bf-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
+        <span style={{ fontSize: 'var(--openbitfun-type-body-xs-font-size)' }}>{t('chat.fileUnavailable')}</span>
       </span>
     );
   }
@@ -322,19 +322,19 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       <span style={{ minWidth: 0, overflow: 'hidden' }}>
         <span style={{
           display: 'block',
-          fontSize: 'var(--bf-type-body-xs-font-size)',
-          fontWeight: 'var(--bf-type-label-lg-font-weight)',
+          fontSize: 'var(--openbitfun-type-body-xs-font-size)',
+          fontWeight: 'var(--openbitfun-type-label-lg-font-weight)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: 'var(--bf-color-content-primary)',
+          color: 'var(--openbitfun-color-content-primary)',
         }}>
           {name}
         </span>
         <span style={{
           display: 'block',
-          fontSize: 'var(--bf-type-support-font-size)',
-          color: 'var(--bf-color-content-muted)',
+          fontSize: 'var(--openbitfun-type-support-font-size)',
+          color: 'var(--openbitfun-color-content-muted)',
           marginTop: '2px',
         }}>
           {formatFileSize(size)}
@@ -342,8 +342,8 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       </span>
       <span style={{
         flexShrink: 0,
-        fontSize: 'var(--bf-type-support-font-size)',
-        color: isDone ? 'var(--bf-color-status-success-content)' : 'var(--bf-color-content-muted)',
+        fontSize: 'var(--openbitfun-type-support-font-size)',
+        color: isDone ? 'var(--openbitfun-color-status-success-content)' : 'var(--openbitfun-color-content-muted)',
       }}>
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
       </span>
@@ -385,16 +385,16 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
             customStyle={{
               margin: 0,
               borderRadius: '8px',
-              fontSize: 'var(--bf-type-code-sm-font-size)',
-              lineHeight: 'var(--bf-type-body-md-line-height)',
+              fontSize: 'var(--openbitfun-type-code-sm-font-size)',
+              lineHeight: 'var(--openbitfun-type-body-md-line-height)',
             }}
             codeTagProps={{
               style: {
-                fontFamily: 'var(--bf-type-code-md-font-family)',
+                fontFamily: 'var(--openbitfun-type-code-md-font-family)',
               },
             }}
             lineNumberStyle={{
-              color: 'var(--bf-color-content-muted)',
+              color: 'var(--openbitfun-color-content-muted)',
               paddingRight: '1em',
               textAlign: 'right' as const,
               userSelect: 'none' as const,
@@ -432,7 +432,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
             type="button"
             style={{
               cursor: 'pointer',
-              color: 'var(--bf-color-accent-default)',
+              color: 'var(--openbitfun-color-accent-default)',
               textDecoration: 'underline',
               background: 'none',
               border: 'none',

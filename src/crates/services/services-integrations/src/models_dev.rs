@@ -1,12 +1,12 @@
 //! models.dev source loading and last-valid snapshot persistence.
 //!
 //! This module deliberately exposes the source document as JSON text. The
-//! provider-specific interpretation belongs to `bitfun-ai-adapters`, which is
+//! provider-specific interpretation belongs to `openbitfun-ai-adapters`, which is
 //! above this integration layer in the repository dependency graph.
 //!
-//! `BITFUN_MODELS_DEV_PATH` selects a local JSON file as the runtime refresh
+//! `OPENBITFUN_MODELS_DEV_PATH` selects a local JSON file as the runtime refresh
 //! source for development and testing. When it is not set,
-//! `BITFUN_MODELS_DEV_URL` selects the HTTP source.
+//! `OPENBITFUN_MODELS_DEV_URL` selects the HTTP source.
 
 use log::{debug, warn};
 use std::path::PathBuf;
@@ -21,8 +21,8 @@ const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 const MIN_REFRESH_ATTEMPT_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const MAX_REFRESH_ATTEMPTS: usize = 3;
 const BUNDLED_MODELS_DEV_SNAPSHOT: &str = include_str!("../assets/models-dev.json");
-const MODELS_DEV_PATH_ENV: &str = "BITFUN_MODELS_DEV_PATH";
-const MODELS_DEV_URL_ENV: &str = "BITFUN_MODELS_DEV_URL";
+const MODELS_DEV_PATH_ENV: &str = "OPENBITFUN_MODELS_DEV_PATH";
+const MODELS_DEV_URL_ENV: &str = "OPENBITFUN_MODELS_DEV_URL";
 
 #[derive(Debug, Default)]
 struct RefreshState {

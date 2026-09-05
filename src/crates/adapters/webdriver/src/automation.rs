@@ -1,8 +1,8 @@
-//! Native WebView adapter for BitFun's shared browser-action contract.
+//! Native WebView adapter for OpenBitFun's shared browser-action contract.
 //!
 //! This module translates browser-engine primitives only. Snapshot refs,
 //! selector resolution, click guards, waits, and every other product action
-//! remain in `bitfun-core::BrowserActions` and are therefore identical for
+//! remain in `openbitfun-core::BrowserActions` and are therefore identical for
 //! CDP and built-in browser targets.
 
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -73,7 +73,7 @@ impl EmbeddedWebviewAutomation {
 
     async fn perform_actions(&self, actions: Value) -> Result<(), String> {
         self.run_script(
-            "async (actions) => { await window.__bitfunWd.performActions(actions); return null; }",
+            "async (actions) => { await window.__openbitfunWd.performActions(actions); return null; }",
             vec![actions],
         )
         .await?;
@@ -130,7 +130,7 @@ impl EmbeddedWebviewAutomation {
             "Input.insertText" => {
                 let text = required_string(&params, "text", method)?;
                 self.run_script(
-                    "(text) => { const target = document.activeElement; if (!target) throw new Error('No focused element'); window.__bitfunWd.insertText(target, text); return null; }",
+                    "(text) => { const target = document.activeElement; if (!target) throw new Error('No focused element'); window.__openbitfunWd.insertText(target, text); return null; }",
                     vec![Value::String(text.to_string())],
                 )
                 .await?;
@@ -230,7 +230,7 @@ impl EmbeddedWebviewAutomation {
             .round() as i64;
         let actions = match event_type {
             "mousePressed" => json!([{
-                "type": "pointer", "id": "bitfun-mouse",
+                "type": "pointer", "id": "openbitfun-mouse",
                 "parameters": { "pointerType": "mouse" },
                 "actions": [
                     { "type": "pointerMove", "x": x, "y": y, "duration": 0, "origin": "viewport" },
@@ -238,7 +238,7 @@ impl EmbeddedWebviewAutomation {
                 ]
             }]),
             "mouseReleased" => json!([{
-                "type": "pointer", "id": "bitfun-mouse",
+                "type": "pointer", "id": "openbitfun-mouse",
                 "parameters": { "pointerType": "mouse" },
                 "actions": [
                     { "type": "pointerMove", "x": x, "y": y, "duration": 0, "origin": "viewport" },
@@ -246,14 +246,14 @@ impl EmbeddedWebviewAutomation {
                 ]
             }]),
             "mouseMoved" => json!([{
-                "type": "pointer", "id": "bitfun-mouse",
+                "type": "pointer", "id": "openbitfun-mouse",
                 "parameters": { "pointerType": "mouse" },
                 "actions": [
                     { "type": "pointerMove", "x": x, "y": y, "duration": 0, "origin": "viewport" }
                 ]
             }]),
             "mouseWheel" => json!([{
-                "type": "wheel", "id": "bitfun-wheel",
+                "type": "wheel", "id": "openbitfun-wheel",
                 "actions": [{
                     "type": "scroll", "x": x, "y": y,
                     "deltaX": params.get("deltaX").and_then(Value::as_i64).unwrap_or(0),
@@ -277,7 +277,7 @@ impl EmbeddedWebviewAutomation {
             other => return Err(format!("Unsupported key event type: {other}")),
         };
         self.perform_actions(json!([{
-            "type": "key", "id": "bitfun-keyboard",
+            "type": "key", "id": "openbitfun-keyboard",
             "actions": [{ "type": action_type, "value": value }]
         }]))
         .await?;

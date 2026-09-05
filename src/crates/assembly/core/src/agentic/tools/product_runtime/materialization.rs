@@ -4,11 +4,11 @@ use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
 use crate::agentic::tools::product_runtime::CallDeferredTool;
 use crate::agentic::tools::registry::ProductToolDecoratorRef;
-use bitfun_agent_tools::{
+use openbitfun_agent_tools::{
     StaticToolMaterializationError, StaticToolProviderFactory, ToolRegistry as AgentToolRegistry,
     ToolRuntimeAssembly,
 };
-use bitfun_tool_packs::{
+use openbitfun_tool_packs::{
     tool_feature_group, unavailable_feature_groups, ToolPackFeatureGroup, ToolProviderGroupPlan,
 };
 use std::collections::{HashMap, HashSet};
@@ -48,7 +48,7 @@ const PRODUCT_TOOL_REGISTRATION_ORDER: &[&str] = &[
     "submit_code_review",
     "GetToolSpec",
     "CallDeferredTool",
-    "BitFunControl",
+    "OpenBitFunControl",
     "GetFileDiff",
     "CreateCanvas",
     "ReadCanvas",
@@ -120,7 +120,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ExecControl" => Some(Arc::new(ExecControlTool::new())),
             "GetTime" => Some(Arc::new(GetTimeTool::new())),
             "ListModels" => Some(Arc::new(ListModelsTool::new())),
-            "BitFunControl" => Some(Arc::new(BitFunControlTool::new())),
+            "OpenBitFunControl" => Some(Arc::new(OpenBitFunControlTool::new())),
             "Task" => Some(Arc::new(TaskTool::new())),
             "AgentSpawn" => Some(Arc::new(AgentSpawnTool::new())),
             "AgentSendInput" => Some(Arc::new(AgentSendInputTool::new())),
@@ -254,7 +254,7 @@ pub(in crate::agentic::tools) fn create_product_tool_registry_from_plan(
 mod tests {
     use super::*;
     use crate::agentic::tools::framework::ToolExposure;
-    use bitfun_tool_packs::product_tool_provider_group_plan;
+    use openbitfun_tool_packs::product_tool_provider_group_plan;
 
     /// Every tool name the provider plan advertises must materialize.
     ///

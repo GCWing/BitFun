@@ -1,4 +1,4 @@
-# Cache-Friendly Message Structure In BitFun
+# Cache-Friendly Message Structure In OpenBitFun
 
 This document owns the model-visible request ordering and the rules for keeping
 that prefix stable. Session cache identity, persistence, cloning, invalidation,
@@ -6,7 +6,7 @@ and observability are owned by
 [`model-request-cache-reuse.md`](model-request-cache-reuse.md); changes should
 update the owning document instead of duplicating the same contract in both.
 
-This note explains the cache-friendly request shape BitFun tries to preserve
+This note explains the cache-friendly request shape OpenBitFun tries to preserve
 for long-running agent sessions, where each layer is stored, and which kinds
 of changes tend to preserve or break provider-side prefix cache reuse.
 
@@ -14,7 +14,7 @@ The implementation is mostly in `src/crates/assembly/core/src/agentic/`.
 
 ## Request Shape
 
-BitFun's model requests are intentionally assembled in a stable order:
+OpenBitFun's model requests are intentionally assembled in a stable order:
 
 1. `system prompt`
 2. `tool definitions`
@@ -100,7 +100,7 @@ Relevant code:
   `src/crates/assembly/core/src/agentic/session/session_manager.rs`
 
 The old core path `src/crates/assembly/core/src/agentic/session/prompt_cache.rs` is now
-a compatibility facade that re-exports the owner types from `bitfun-agent-runtime`.
+a compatibility facade that re-exports the owner types from `openbitfun-agent-runtime`.
 
 ### 2. Tool definitions
 
@@ -185,7 +185,7 @@ Why there is an override file:
 - the child's later diff calculations should still use the child's own fork-time
   baseline
 
-So BitFun can keep:
+So OpenBitFun can keep:
 
 - `skill-agent-baseline-override.json` as the prompt/full-listing baseline
 - child `turn-0 skill-agent snapshot` as the diff baseline for later child turns
@@ -203,7 +203,7 @@ What usually breaks reuse:
 
 Special rewrite path:
 
-- when BitFun rebuilds the listing baseline to the latest snapshot, it also
+- when OpenBitFun rebuilds the listing baseline to the latest snapshot, it also
   removes old skill/agent diff reminders from live context and from pre-rebuild
   persisted context snapshots
 - this is the main non-compression exception to the normal append-only message
@@ -282,7 +282,7 @@ Important exceptions:
 
 ## Session Storage Layout
 
-Persisted session artifacts live under `.bitfun/sessions/{session_id}/`
+Persisted session artifacts live under `.openbitfun/sessions/{session_id}/`
 (or the session's effective storage mirror for remote workspaces).
 
 The cache-relevant files are:

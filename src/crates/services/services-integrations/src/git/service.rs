@@ -1534,7 +1534,7 @@ mod review_path_tests {
     use std::{fs, path::Path};
 
     fn git(root: &Path, args: &[&str], commit_date: Option<&str>) {
-        let mut command = bitfun_services_core::process_manager::create_command("git");
+        let mut command = openbitfun_services_core::process_manager::create_command("git");
         command.current_dir(root).args(args);
         if let Some(commit_date) = commit_date {
             command
@@ -1557,9 +1557,9 @@ mod review_path_tests {
             root,
             &[
                 "-c",
-                "user.name=BitFun Tests",
+                "user.name=OpenBitFun Tests",
                 "-c",
-                "user.email=bitfun@example.com",
+                "user.email=openbitfun@example.com",
                 "commit",
                 "-m",
                 message,

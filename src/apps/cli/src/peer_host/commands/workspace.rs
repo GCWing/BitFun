@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use bitfun_runtime_ports::SessionStoragePathRequest;
+use openbitfun_runtime_ports::SessionStoragePathRequest;
 use serde_json::{json, Value};
 
 use crate::peer_host::args::{get_string, request_value};
@@ -79,7 +79,7 @@ pub(crate) async fn open_workspace(state: &PeerHostState, args: &Value) -> Resul
 }
 
 pub(crate) async fn reload_config() -> Result<Value, String> {
-    bitfun_core::service::config::reload_global_config()
+    openbitfun_core::service::config::reload_global_config()
         .await
         .map_err(|e| format!("Failed to reload config: {e}"))?;
     Ok(json!("Configuration reloaded successfully"))
