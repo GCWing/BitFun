@@ -1,11 +1,17 @@
 {
   "title": "网页搜索",
-  "subtitle": "配置 WebSearch 工具运行时使用的搜索服务",
+  "subtitle": "选择 Agent 联网查找资料时使用的搜索服务",
   "providers": {
-    "exaMcpFree": "Exa MCP（免费，无需 API Key）",
+    "exaMcpFree": "Exa MCP（免费）",
     "exaSearchApi": "Exa Search API",
     "tavily": "Tavily Search API",
-    "openbitfunSearchHttp": "OpenBitFun Search HTTP Protocol"
+    "openbitfunSearchHttp": "自定义 HTTP 服务"
+  },
+  "providerDescriptions": {
+    "exaMcpFree": "使用 Exa 提供的免费搜索服务，无需 API Key 或额外配置。",
+    "exaSearchApi": "使用你的 Exa API Key 访问搜索服务，请在下方填写并保存凭据。",
+    "tavily": "使用你的 Tavily API Key 访问搜索服务，请在下方填写并保存凭据。",
+    "openbitfunSearchHttp": "连接实现 OpenBitFun 搜索协议的自建或企业内部服务，请在下方填写服务地址，并按需配置认证。"
   },
   "auth": {
     "none": "无需认证",
@@ -30,6 +36,15 @@
     }
   },
   "fields": {
+    "provider": {
+      "label": "服务提供方",
+      "description": "切换服务后，保存配置即可生效",
+      "placeholder": "选择搜索服务"
+    },
+    "providerHelp": {
+      "label": "接入说明",
+      "description": "选择搜索服务后，这里会显示所需的配置。"
+    },
     "endpoint": {
       "label": "端点",
       "description": "必须使用 HTTPS；仅 localhost 或回环 IP 可使用明文 HTTP",

@@ -466,7 +466,7 @@ const SkillsSuiteView: React.FC = () => {
           onClick={() => { void resetMode(currentMode); }}
           title={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}
           aria-label={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}
-          icon={<RotateCcw size={13} />}
+          icon={<Icon glyph={RotateCcw} />}
         />
       </div>
 
@@ -479,14 +479,14 @@ const SkillsSuiteView: React.FC = () => {
 
       {!loading && error && (
         <div className="skills-main__empty skills-main__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
-          <Package size={28} strokeWidth={1.2} />
+          <Icon glyph={Package} size="lg" />
           <span>{error}</span>
         </div>
       )}
 
       {!loading && !error && suiteGroups.length === 0 && (
         <div className="skills-main__empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
-          <Package size={28} strokeWidth={1.2} />
+          <Icon glyph={Package} size="lg" />
           <span>{t('suite.empty')}</span>
         </div>
       )}
@@ -612,9 +612,9 @@ const SkillsSuiteView: React.FC = () => {
                             >
                               <span className="skills-suite__skill-chip-name" data-openbitfun-scene="skills" data-openbitfun-part="suiteSkillName">{skill.name}</span>
                               {draftEnabled && !shadowed ? (
-                                <ShieldCheck size={11} />
+                                <Icon glyph={ShieldCheck} size="xs" />
                               ) : (
-                                <ShieldAlert size={11} />
+                                <Icon glyph={ShieldAlert} size="xs" />
                               )}
                               {shadowed && (
                                 <span className="skills-suite__skill-chip-status" data-openbitfun-scene="skills" data-openbitfun-part="suiteSkillStatus">

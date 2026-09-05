@@ -1,18 +1,18 @@
 /**
- * NavBar — navigation history controls + window chrome.
+ * NavBar — navigation controls and the current left-panel title.
  *
  * Sits at the top of the left column on the shared 45px workbench chrome row.
- * Layout: [←][→]  <drag-region>  [_][□][×]
+ * Layout: [panel][←][→] [scene title / drag region]
  *
  * - Back/Forward buttons mirror IDE navigation history.
- * - The centre strip is a drag region for moving the window.
- * - WindowControls (minimize/maximize/close) replace the old TitleBar chrome.
+ * - The title follows left-panel navigation, independently of the right scene.
+ * - Non-interactive space remains a drag region for moving the window.
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';
-;
 
 import { useNavSceneStore } from '../../stores/navSceneStore';
+import { getSceneNavTitleKey } from '../../scenes/nav-registry';
 import { useI18n } from '../../../infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
@@ -48,6 +48,8 @@ const NavBar: React.FC<NavBarProps> = ({
   const goForward    = useNavSceneStore(s => s.goForward);
   const canGoBack    = showSceneNav && !!navSceneId;
   const canGoForward = !showSceneNav && !!navSceneId;
+  const titleKey = showSceneNav && navSceneId ? getSceneNavTitleKey(navSceneId) : null;
+  const title = titleKey ? t(titleKey) : null;
   const lastMouseDownTimeRef = useRef<number>(0);
 
   const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
@@ -145,6 +147,16 @@ const NavBar: React.FC<NavBarProps> = ({
         </button>
       </Tooltip>
 
+      {title && (
+        <span
+          className="openbitfun-nav-bar__title"
+          data-openbitfun-component="nav-bar"
+          data-openbitfun-part="title"
+          title={title}
+        >
+          {title}
+        </span>
+      )}
     </div>
   );
 };

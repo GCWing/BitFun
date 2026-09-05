@@ -40,26 +40,6 @@
     padding-inline-end: var(--openbitfun-space-2);
   }
 
-  // ── Header: title (back/forward lives in NavBar) ──────
-
-  &__header {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    min-height: 18px;
-  }
-
-  &__title {
-    @include nav-font.nav-panel-text-heading;
-
-    font-size: var(--openbitfun-type-body-lg-font-size);
-    font-weight: var(--openbitfun-type-label-selected-font-weight);
-    line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   // ── Search ───────────────────────────────────────────────
 
   &__search {

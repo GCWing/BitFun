@@ -168,11 +168,27 @@ const WebSearchSettingsPage: React.FC = () => {
   const [draftMessage, setDraftMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [operationMessage, setOperationMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const providerOptions = useMemo<SelectOption[]>(() => [
-    { value: 'exa_mcp_free', label: t('providers.exaMcpFree') },
-    { value: 'exa_search_api', label: t('providers.exaSearchApi') },
-    { value: 'tavily', label: t('providers.tavily') },
-    { value: 'openbitfun_search_http', label: t('providers.openbitfunSearchHttp') },
+  const providerOptions = useMemo<(SelectOption & { description: string })[]>(() => [
+    {
+      value: 'exa_mcp_free',
+      label: t('providers.exaMcpFree'),
+      description: t('providerDescriptions.exaMcpFree'),
+    },
+    {
+      value: 'exa_search_api',
+      label: t('providers.exaSearchApi'),
+      description: t('providerDescriptions.exaSearchApi'),
+    },
+    {
+      value: 'tavily',
+      label: t('providers.tavily'),
+      description: t('providerDescriptions.tavily'),
+    },
+    {
+      value: 'openbitfun_search_http',
+      label: t('providers.openbitfunSearchHttp'),
+      description: t('providerDescriptions.openbitfunSearchHttp'),
+    },
   ], [t]);
   const authOptions = useMemo<SelectOption[]>(() => [
     { value: 'none', label: t('auth.none') },
@@ -417,20 +433,37 @@ const WebSearchSettingsPage: React.FC = () => {
         />
         <ConfigPageSection
           title={t('sections.provider.title')}
-          extra={(
+        >
+          <ConfigPageRow
+            label={t('fields.provider.label')}
+            description={t('fields.provider.description')}
+            align="center"
+          >
             <Select
               value={config.provider}
               options={providerOptions}
               size="sm"
+              aria-label={t('fields.provider.label')}
+              aria-describedby="web-search-provider-help"
+              placeholder={t('fields.provider.placeholder')}
               disabled={mutationBusy}
               onValueChange={(value) => setConfig(previous => ({
                 ...previous,
                 provider: normalizeSelectValue(value),
               }))}
             />
-          )}
-        >
-          {null}
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('fields.providerHelp.label')}
+            description={(
+              <span id="web-search-provider-help">
+                {providerOptions.find(option => option.value === selectedProvider)?.description
+                  ?? t('fields.providerHelp.description')}
+              </span>
+            )}
+          >
+            {null}
+          </ConfigPageRow>
         </ConfigPageSection>
 
         {selectedProvider === 'openbitfun_search_http' ? (

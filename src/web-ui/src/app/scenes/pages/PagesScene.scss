@@ -16,7 +16,7 @@ $pages-gutter: clamp(24px, 4vw, 56px);
   .gallery-empty {
     min-height: 280px;
 
-    > span {
+    > .gallery-empty__message {
       display: flex;
       flex-direction: column;
       align-items: center;

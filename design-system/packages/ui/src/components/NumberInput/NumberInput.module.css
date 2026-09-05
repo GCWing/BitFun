@@ -3,10 +3,10 @@
   .root[data-size="sm"] { --_height: var(--openbitfun-control-height-sm); }
   .root[data-size="lg"] { --_height: var(--openbitfun-control-height-lg); }
   .label { font-family: var(--openbitfun-type-label-md-font-family); font-size: var(--openbitfun-type-label-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); line-height: var(--openbitfun-type-label-md-line-height); letter-spacing: var(--openbitfun-type-label-md-letter-spacing); }
-  .control { display: inline-flex; align-items: stretch; min-inline-size: 0; block-size: var(--_height); overflow: hidden; border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); border-radius: var(--openbitfun-radius-base); background: var(--openbitfun-color-field-background); transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard); }
+  .control { display: inline-flex; align-items: stretch; min-inline-size: 0; block-size: var(--_height); overflow: hidden; border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); border-radius: var(--openbitfun-radius-base); background: var(--openbitfun-color-field-background); transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard); }
   .root[data-field-surface="ambient"] .control { background: transparent; }
-  .root:not([data-disabled="true"]) .control:hover { border-color: var(--openbitfun-color-field-border-hover); }
-  .control:focus-within { border-color: var(--openbitfun-color-field-border-focus); box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring); }
+  .root:where(:not([data-disabled="true"])) .control:hover { border-color: var(--openbitfun-color-field-border-hover); }
+  .root .control:focus-within { border-color: var(--openbitfun-color-field-border-focus); box-shadow: none; }
   .input { flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; padding-inline: var(--openbitfun-space-3); border: 0; outline: 0; color: inherit; background: transparent; font-family: var(--openbitfun-type-label-md-font-family); font-size: var(--openbitfun-type-label-md-font-size); font-weight: var(--openbitfun-type-label-md-font-weight); font-variant-numeric: tabular-nums; line-height: var(--openbitfun-type-label-md-line-height); letter-spacing: var(--openbitfun-type-label-md-letter-spacing); text-align: end; }
   .input:has(+ .unit) { padding-inline-end: var(--openbitfun-space-1); }
   .unit { display: inline-flex; flex: 0 0 auto; box-sizing: content-box; min-inline-size: 2ch; align-items: center; justify-content: flex-end; padding-inline-end: var(--openbitfun-space-2); color: var(--openbitfun-color-content-muted); font-family: var(--openbitfun-type-code-sm-font-family); font-size: var(--openbitfun-type-support-font-size); font-weight: var(--openbitfun-type-support-font-weight); line-height: var(--openbitfun-type-support-line-height); letter-spacing: var(--openbitfun-type-support-letter-spacing); white-space: nowrap; }
@@ -19,5 +19,5 @@
   .root[data-variant="default"] .buttons button { min-inline-size: 20px; font-size: var(--openbitfun-type-meta-font-size); line-height: var(--openbitfun-type-meta-line-height); }
   .root[data-variant="default"] .buttons button + button { border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border); }
   @media (prefers-reduced-motion: reduce) { .control { transition: none; } }
-  @media (forced-colors: active) { .control { border-color: ButtonText; } .control:focus-within { border-color: Highlight; box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight; } }
+  @media (forced-colors: active) { .control { border-color: ButtonText; } .root .control:focus-within { border-color: Highlight; } }
 }

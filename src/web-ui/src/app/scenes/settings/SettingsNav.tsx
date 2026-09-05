@@ -233,35 +233,35 @@ const SettingsNav: React.FC = () => {
     <NavigationPanel
       className="openbitfun-settings-nav"
       data-testid="settings-nav"
+      aria-label={t('shared:features.settings')}
       data-openbitfun-component="settings-nav"
       data-openbitfun-part="root"
     >
-      <NavigationPanelHeader className="openbitfun-settings-nav__panel-header">
-        <>
-          <div className="openbitfun-settings-nav__header" data-openbitfun-component="settings-nav" data-openbitfun-part="header">
-            <span className="openbitfun-settings-nav__title">{t('shared:features.settings')}</span>
-          </div>
-          <div className="openbitfun-settings-nav__search" data-openbitfun-component="settings-nav" data-openbitfun-part="search">
-            <SearchField
-              ref={searchInputRef}
-              className="openbitfun-settings-nav__search-field"
-              size="sm"
-              value={draftQuery}
-              onValueChange={setDraftQuery}
-              onClear={draftQuery ? () => {
-                clearSearch();
-                searchInputRef.current?.focus();
-              } : undefined}
-              clearLabel={draftQuery ? tComponents('search.clear') : undefined}
-              onKeyDown={handleSearchKeyDown}
-              leadingIcon={<Icon name="search" size="sm" />}
-              placeholder={t('navigation.search.placeholder')}
-              aria-label={t('navigation.search.placeholder')}
-              aria-controls="settings-nav-results"
-              aria-expanded={isSearchMode}
-            />
-          </div>
-        </>
+      <NavigationPanelHeader
+        className="openbitfun-settings-nav__panel-header"
+        data-openbitfun-component="settings-nav"
+        data-openbitfun-part="header"
+      >
+        <div className="openbitfun-settings-nav__search" data-openbitfun-component="settings-nav" data-openbitfun-part="search">
+          <SearchField
+            ref={searchInputRef}
+            className="openbitfun-settings-nav__search-field"
+            size="sm"
+            value={draftQuery}
+            onValueChange={setDraftQuery}
+            onClear={draftQuery ? () => {
+              clearSearch();
+              searchInputRef.current?.focus();
+            } : undefined}
+            clearLabel={draftQuery ? tComponents('search.clear') : undefined}
+            onKeyDown={handleSearchKeyDown}
+            leadingIcon={<Icon name="search" size="sm" />}
+            placeholder={t('navigation.search.placeholder')}
+            aria-label={t('navigation.search.placeholder')}
+            aria-controls="settings-nav-results"
+            aria-expanded={isSearchMode}
+          />
+        </div>
       </NavigationPanelHeader>
       <NavigationPanelBody>
         <NavigationPanelContent className="openbitfun-settings-nav__content">

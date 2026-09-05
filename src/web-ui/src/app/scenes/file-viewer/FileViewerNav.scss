@@ -27,63 +27,10 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: var(--openbitfun-space-2);
+    justify-content: flex-end;
+    flex-shrink: 0;
     height: 32px;
-    padding: 0 var(--openbitfun-space-2) 0 var(--openbitfun-space-3);
-    border: none;
-    cursor: pointer;
-    width: calc(100% - var(--openbitfun-space-2) * 2);
-    text-align: left;
-    transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-  &__back-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    opacity: 1;
-    color: var(--openbitfun-color-content-muted);
-    opacity: 0.7;
-    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-    .openbitfun-file-viewer-nav__header:hover & {
-      opacity: 1;
-    }
-  }
-
-
-    &:hover {
-      background: var(--openbitfun-color-action-neutral-surface-hover);
-    }
-
-    &:active {
-      background: var(--openbitfun-color-action-neutral-surface-pressed);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--openbitfun-color-accent-default);
-      outline-offset: -1px;
-    }
-    border-radius: var(--openbitfun-radius-base);
-    background: var(--openbitfun-color-action-quiet-hover);
-    margin: 0 var(--openbitfun-space-2);
-    color: var(--openbitfun-color-content-primary);
-    font-size: var(--openbitfun-type-label-md-font-size);
-    font-weight: var(--openbitfun-type-label-sm-font-weight);
-    flex-shrink: 0;
-  }
-
-  &__icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    color: var(--openbitfun-color-accent-default);
-  }
-
-  &__label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    padding: 0 var(--openbitfun-space-2);
   }
 
   &__actions {

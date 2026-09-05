@@ -394,8 +394,8 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
         <GalleryEmpty
           icon={
             apps.length === 0
-              ? <Icon name="spark" size="lg" />
-              : <LayoutGrid size={36} strokeWidth={1.2} />
+              ? { name: 'spark' }
+              : { glyph: LayoutGrid }
           }
           message={apps.length === 0
             ? t('empty.generate')

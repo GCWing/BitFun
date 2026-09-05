@@ -10,7 +10,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 import './EditorBreadcrumb.scss';
-import { Icon, Menu, MenuItem, MenuSection, Tooltip } from '@openbitfun/ui';
+import { Icon, Menu, MenuItem, MenuSection, Tooltip, type IconSize } from '@openbitfun/ui';
 
 const log = createLogger('EditorBreadcrumb');
 
@@ -36,7 +36,7 @@ interface FileItem {
 }
 
 /** Get icon component based on file name */
-const getFileIconComponent = (fileName: string, size: number = 12): React.ReactElement => {
+const getFileIconComponent = (fileName: string, size: IconSize = 'xs'): React.ReactElement => {
   const iconType = getFileIconType({ name: fileName, isDirectory: false } as any);
   
   switch (iconType) {
@@ -53,9 +53,9 @@ const getFileIconComponent = (fileName: string, size: number = 12): React.ReactE
     case 'css':
     case 'sass':
     case 'code':
-      return <Code size={size} />;
+      return <Icon glyph={Code} size={size} />;
     default:
-      return <Icon name="files" size={size <= 11 ? '2xs' : size <= 13 ? 'xs' : size <= 15 ? 'sm' : size <= 17 ? 'md' : 'lg'} />;
+      return <Icon name="files" size={size} />;
   }
 };
 
@@ -218,7 +218,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
                 key={item.path}
                 leading={item.isDirectory
                   ? <Icon name="folder" size="sm" />
-                  : getFileIconComponent(item.name, 14)}
+                  : getFileIconComponent(item.name, 'sm')}
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelect(item);

@@ -1,7 +1,8 @@
 import React from 'react';
+import { Icon, type IconSource } from '@openbitfun/ui';
 
 interface GalleryEmptyProps extends React.HTMLAttributes<HTMLDivElement> {
-  icon: React.ReactNode;
+  icon: IconSource;
   message: React.ReactNode;
   isError?: boolean;
   action?: React.ReactNode;
@@ -23,8 +24,10 @@ const GalleryEmpty: React.FC<GalleryEmptyProps> = ({
     className={['gallery-empty', isError && 'gallery-empty--error', className].filter(Boolean).join(' ')}
     data-testid={testId}
   >
-    {icon}
-    <span>{message}</span>
+    <span className="gallery-empty__icon" aria-hidden="true">
+      <Icon {...icon} />
+    </span>
+    <span className="gallery-empty__message">{message}</span>
     {action}
   </div>
 );

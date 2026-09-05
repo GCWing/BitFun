@@ -251,6 +251,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
         </Field>
         <Field label={t('package.market.submissions.manual.licenseType')} controlWidth="fill">
           <Select
+            size="sm"
             value={manualDraft.licenseKind}
             options={[
               { value: 'spdx', label: t('package.market.submissions.manual.spdx') },

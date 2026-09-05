@@ -42,4 +42,21 @@ describe('Application settings presentation', () => {
       loggingSection.slice(settingsSectionStart, settingsSectionEnd),
     ).not.toContain('previousUnexpectedExit');
   });
+
+  it('keeps the command-shell fallback notice outside the terminal settings section', () => {
+    const terminalSection = source.match(
+      /function TerminalSection\(\)[\s\S]*?\r?\n}\r?\n\r?\nfunction WindowBehaviorSetting/,
+    )?.[0] ?? '';
+    const noticeStart = terminalSection.indexOf('{shouldShowCmdFallbackNotice && (');
+    const settingsSectionStart = terminalSection.indexOf('<ConfigPageSection');
+    const settingsSectionEnd = terminalSection.indexOf('</ConfigPageSection>');
+
+    expect(terminalSection).not.toBe('');
+    expect(noticeStart).toBeGreaterThanOrEqual(0);
+    expect(settingsSectionStart).toBeGreaterThan(noticeStart);
+    expect(settingsSectionEnd).toBeGreaterThan(settingsSectionStart);
+    expect(
+      terminalSection.slice(settingsSectionStart, settingsSectionEnd),
+    ).not.toContain('cmdFallbackMessage');
+  });
 });

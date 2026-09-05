@@ -18,8 +18,13 @@
     background: transparent;
   }
 
-  .root .field:not([data-invalid="true"]):focus-within {
-    border-color: var(--openbitfun-color-content-primary);
+  .root[data-variant="embedded"] .field,
+  .root[data-variant="embedded"] .field:is(:hover, :focus-within, [data-invalid="true"]) {
+    block-size: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
   }
 
@@ -43,10 +48,4 @@
     white-space: nowrap;
   }
 
-  @media (forced-colors: active) {
-    .root .field:not([data-invalid="true"]):focus-within {
-      border-color: Highlight;
-      box-shadow: none;
-    }
-  }
 }

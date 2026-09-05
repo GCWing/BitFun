@@ -1,10 +1,9 @@
-import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconName, type IconSize } from '@openbitfun/ui';
+import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconSource } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
   FolderTree,
   Minus,
-  type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -27,14 +26,6 @@ import { ToolGroupPicker, ToolGroupSummary } from './ToolGroupPicker';
 import { useUserToolGroups } from './useUserToolGroups';
 import '../AgentsView.scss';
 import './CreateAgentPage.scss';
-
-function catalogLucide(name: IconName): LucideIcon {
-  return function CatalogLucide({ size }: { size?: number | string }) {
-    const n = typeof size === 'number' ? size : 14;
-    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return <Icon name={name} size={mapped} />;
-  } as LucideIcon;
-}
 
 const ID_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 const DEFAULT_MODE_POLICY: UserContextSection[] = [
@@ -71,10 +62,10 @@ const VISIBLE_CONTEXT_SECTIONS: UserContextSection[] = [
   'workspace_instructions',
   'project_layout',
 ];
-const CONTEXT_SECTION_ICONS: Record<UserContextSection, LucideIcon> = {
-  workspace_context: catalogLucide('terminal'),
-  workspace_instructions: FileText,
-  project_layout: FolderTree,
+const CONTEXT_SECTION_ICONS: Record<UserContextSection, IconSource> = {
+  workspace_context: { name: 'terminal' },
+  workspace_instructions: { glyph: FileText },
+  project_layout: { glyph: FolderTree },
 };
 const TOOL_SUMMARY_MIN_HEIGHT = 96;
 const TOOL_SUMMARY_MAX_HEIGHT = 360;
@@ -863,7 +854,7 @@ const CreateAgentPage: React.FC = () => {
                     {VISIBLE_CONTEXT_SECTIONS.map((section) => {
                       const label = contextSectionLabels[section];
                       const tooltipContent = contextSectionTooltips[section];
-                      const ContextIcon = CONTEXT_SECTION_ICONS[section];
+                      const contextIcon = CONTEXT_SECTION_ICONS[section];
                       const isSelected = userContextPolicy.has(section);
                       return (
                         <Tooltip
@@ -882,7 +873,7 @@ const CreateAgentPage: React.FC = () => {
                             aria-label={`${label}: ${tooltipContent}`}
                             aria-pressed={isSelected}
                           >
-                            <ContextIcon size={14} strokeWidth={1.9} aria-hidden="true" />
+                            <Icon {...contextIcon} size="sm" />
                             <span>{label}</span>
                           </button>
                         </Tooltip>
@@ -913,13 +904,13 @@ const CreateAgentPage: React.FC = () => {
                       {selectedContextSections.length > 0 ? (
                         <span className="th-create-panel__prompt-context-items">
                           {selectedContextSections.map((section) => {
-                            const ContextIcon = CONTEXT_SECTION_ICONS[section];
+                            const contextIcon = CONTEXT_SECTION_ICONS[section];
                             return (
                               <span
                                 key={section}
                                 className="th-create-panel__prompt-context-item"
                               >
-                                <ContextIcon size={12} strokeWidth={1.9} aria-hidden="true" />
+                                <Icon {...contextIcon} size="xs" />
                                 <span>{contextSectionLabels[section]}</span>
                               </span>
                             );

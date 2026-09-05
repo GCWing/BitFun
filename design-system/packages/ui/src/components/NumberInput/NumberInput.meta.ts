@@ -11,5 +11,5 @@ export const numberInputMeta = {
     { name: "unit", type: "string" }, { name: "variant", type: "default | compact | stepper", defaultValue: "default" },
   ],
   states: ["default", "hover", "focus-visible", "disabled"],
-  tokens: ["color.content.primary", "color.content.muted", "color.content.disabled", "color.field.background", "color.field.border", "color.field.borderFocus", "color.focus.ring", "control.height.sm", "control.height.md", "control.height.lg"],
+  tokens: ["color.content.primary", "color.content.muted", "color.content.disabled", "color.field.background", "color.field.border", "color.field.borderFocus", "control.height.sm", "control.height.md", "control.height.lg"],
 } as const satisfies ComponentMeta;

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption } from '@openbitfun/ui';
+import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption, type IconSource } from '@openbitfun/ui';
 import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
@@ -20,15 +20,15 @@ const log = createLogger('InsightsScene');
 
 // Report section ids for TOC / scroll targets
 const SECTIONS = [
-  { id: 'overview', labelKey: 'overview', icon: Target },
-  { id: 'stats', labelKey: 'stats', icon: BarChart3 },
-  { id: 'work-on', labelKey: 'workOn', icon: Target },
-  { id: 'usage', labelKey: 'usage', icon: Zap },
-  { id: 'wins', labelKey: 'wins', icon: Trophy },
-  { id: 'friction', labelKey: 'friction', icon: AlertCircle },
-  { id: 'suggestions', labelKey: 'suggestions', icon: Lightbulb },
-  { id: 'horizon', labelKey: 'horizon', icon: Rocket },
-] as const;
+  { id: 'overview', labelKey: 'overview', icon: { glyph: Target } },
+  { id: 'stats', labelKey: 'stats', icon: { glyph: BarChart3 } },
+  { id: 'work-on', labelKey: 'workOn', icon: { glyph: Target } },
+  { id: 'usage', labelKey: 'usage', icon: { glyph: Zap } },
+  { id: 'wins', labelKey: 'wins', icon: { glyph: Trophy } },
+  { id: 'friction', labelKey: 'friction', icon: { glyph: AlertCircle } },
+  { id: 'suggestions', labelKey: 'suggestions', icon: { glyph: Lightbulb } },
+  { id: 'horizon', labelKey: 'horizon', icon: { glyph: Rocket } },
+] as const satisfies ReadonlyArray<{ id: string; labelKey: string; icon: IconSource }>;
 
 const DAY_OPTIONS = [7, 14, 30, 90] as const;
 
@@ -37,41 +37,44 @@ const GENERATION_STEPS = [
     id: 'collect',
     titleKey: 'insights.generationStageCollect',
     detailKey: 'insights.generationStageCollectDetail',
-    icon: Database,
+    icon: { glyph: Database },
     stages: ['starting', 'data_collection'],
   },
   {
     id: 'sessions',
     titleKey: 'insights.generationStageSessions',
     detailKey: 'insights.generationStageSessionsDetail',
-    icon: ScanSearch,
+    icon: { glyph: ScanSearch },
     stages: ['facet_extraction', 'facet_retry'],
   },
   {
     id: 'patterns',
     titleKey: 'insights.generationStagePatterns',
     detailKey: 'insights.generationStagePatternsDetail',
-    icon: Layers3,
+    icon: { glyph: Layers3 },
     stages: ['aggregation', 'analysis', 'analysis_retry'],
   },
   {
     id: 'summary',
     titleKey: 'insights.generationStageSummary',
     detailKey: 'insights.generationStageSummaryDetail',
-    icon: function SparkIcon({ size }: { size?: number }) {
-      const n = typeof size === 'number' ? size : 13;
-      return <Icon name="spark" size={n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg'} />;
-    },
+    icon: { name: 'spark' },
     stages: ['synthesis'],
   },
   {
     id: 'save',
     titleKey: 'insights.generationStageSave',
     detailKey: 'insights.generationStageSaveDetail',
-    icon: FileCheck2,
+    icon: { glyph: FileCheck2 },
     stages: ['assembly', 'complete'],
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: string;
+  titleKey: string;
+  detailKey: string;
+  icon: IconSource;
+  stages: readonly string[];
+}>;
 
 interface GenerationProgress {
   stage: string;
@@ -135,12 +138,11 @@ const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress 
 
       <div className="insights-generation__steps">
         {GENERATION_STEPS.map((step, index) => {
-          const StepIcon = step.icon;
           const state = index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending';
           return (
             <div key={step.id} className={`insights-generation__step insights-generation__step--${state}`}>
               <span className="insights-generation__step-icon">
-                {state === 'complete' ? <Icon name="check-line" size="xs" /> : <StepIcon size={13} />}
+                {state === 'complete' ? <Icon name="check-line" size="xs" /> : <Icon {...step.icon} size="xs" />}
               </span>
               <span className="insights-generation__step-label">{t(step.titleKey)}</span>
             </div>
@@ -269,7 +271,7 @@ const InsightsScene: React.FC = () => {
 
       {error && (
         <div className="insights-scene__error" data-openbitfun-scene="insights" data-openbitfun-part="error">
-          <AlertTriangle size={14} />
+          <Icon glyph={AlertTriangle} size="sm" />
           <span>{error}</span>
           <IconButton
             size="sm"
@@ -360,7 +362,7 @@ const ReportMetaCard: React.FC<{
           className={`insights-meta-card__metric insights-meta-card__metric--session-tokens${sessionUsagePartial ? ' insights-meta-card__metric--partial' : ''}`}
           title={sessionTokenTitle}
         >
-          <Gauge size={14} />
+          <Icon glyph={Gauge} size="sm" />
           <span>
             <strong>
               {hasSessionUsage
@@ -371,7 +373,7 @@ const ReportMetaCard: React.FC<{
           </span>
         </span>
         <span className="insights-meta-card__metric">
-          <BarChart3 size={14} />
+          <Icon glyph={BarChart3} size="sm" />
           <span>
             <strong>{formatNumber(meta.analyzed_sessions)} / {formatNumber(meta.total_sessions)}</strong>
             {t('insights.analyzedSessions')}
@@ -387,7 +389,7 @@ const ReportMetaCard: React.FC<{
           <Icon name="clock" size="2xs" /> {meta.total_hours.toFixed(1)} {t('insights.hours')}
         </span>
         <span>
-          <Calendar size={11} /> {formatNumber(meta.days_covered)} {t('insights.days')}
+          <Icon glyph={Calendar} size="2xs" /> {formatNumber(meta.days_covered)} {t('insights.days')}
         </span>
       </div>
       {(meta.top_goals?.length > 0 || meta.languages?.length > 0) && (
@@ -504,7 +506,7 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
   return (
     <nav className="insights-report-nav">
       {visibleSections.map((section) => {
-        const SectionIcon = SECTIONS.find(s => s.id === section.id)?.icon || Target;
+        const sectionIcon = SECTIONS.find(s => s.id === section.id)?.icon ?? { glyph: Target };
         return (
           <button
             key={section.id}
@@ -512,7 +514,7 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
             onClick={() => scrollToSection(section.id)}
             title={section.label}
           >
-            <SectionIcon size={14} />
+            <Icon {...sectionIcon} size="sm" />
             <span className="insights-report-nav__label">{section.label}</span>
           </button>
         );
@@ -555,8 +557,8 @@ const ReportView: React.FC<{ report: InsightsReport; onBack: () => void }> = ({ 
         </Button>
         <div className="insights-report-header__meta">
           <span><Icon name="side-chat" size="2xs" /> {report.total_messages} {t('insights.messages')}</span>
-          <span><BarChart3 size={11} /> {report.total_sessions} {t('insights.sessions')}</span>
-          <span><Calendar size={11} /> {dateStart} ~ {dateEnd}</span>
+          <span><Icon glyph={BarChart3} size="2xs" /> {report.total_sessions} {t('insights.sessions')}</span>
+          <span><Icon glyph={Calendar} size="2xs" /> {dateStart} ~ {dateEnd}</span>
         </div>
         <div className="insights-report-header__actions">
           <Button

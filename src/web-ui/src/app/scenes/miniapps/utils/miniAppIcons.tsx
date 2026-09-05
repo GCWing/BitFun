@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, type IconName, type IconSize } from '@openbitfun/ui';
+import { Icon, type IconName, type IconSource } from '@openbitfun/ui';
 import codingFootprintIcon from '@/assets/miniapps/catalog/coding-footprint.png';
 import dailyDivinationIcon from '@/assets/miniapps/catalog/daily-divination.png';
 import gomokuIcon from '@/assets/miniapps/catalog/gomoku.png';
@@ -36,14 +36,6 @@ const MINI_APP_CATALOG: Record<string, IconName> = {
   Sparkles: 'spark',
   Terminal: 'terminal',
 };
-
-function catalogSize(size: number): IconSize {
-  if (size <= 11) return '2xs';
-  if (size <= 13) return 'xs';
-  if (size <= 15) return 'sm';
-  if (size <= 17) return 'md';
-  return 'lg';
-}
 
 const ICON_GRADIENTS = [
   'linear-gradient(135deg, color-mix(in srgb, var(--openbitfun-color-accent-hover) 35%, transparent) 0%, color-mix(in srgb, var(--openbitfun-color-accent-secondary) 25%, transparent) 100%)',
@@ -101,20 +93,18 @@ export function renderMiniAppIcon(name: string, size = 28): React.ReactNode {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join('') as keyof typeof MINI_APP_ICONS;
   const catalogName = MINI_APP_CATALOG[key];
-  if (catalogName) {
-    return (
-      <Icon
-        name={catalogName}
-        size={catalogSize(size)}
-        style={{ width: size, height: size }}
-      />
-    );
-  }
   const LucideGlyph = MINI_APP_ICONS[key];
+  const iconSource: IconSource = catalogName
+    ? { name: catalogName }
+    : { glyph: LucideGlyph ?? Box };
 
-  return LucideGlyph
-    ? <LucideGlyph size={size} strokeWidth={1.5} />
-    : <Box size={size} strokeWidth={1.5} />;
+  return (
+    <Icon
+      {...iconSource}
+      size="lg"
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 export function getMiniAppIconGradient(icon: string): string {

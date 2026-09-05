@@ -47,26 +47,26 @@ function DeviceIcon({
   kind: DeviceOverviewDeviceKind;
   size?: number;
 }) {
-  const catalogSize = size <= 11 ? '2xs' : size <= 13 ? 'xs' : size <= 15 ? 'sm' : size <= 17 ? 'md' : 'lg';
+  const iconStyle = { width: size, height: size };
   switch (kind) {
     case 'mobile':
-      return <Smartphone size={size} aria-hidden="true" />;
+      return <Icon glyph={Smartphone} size="lg" style={iconStyle} />;
     case 'execution-host':
-      return <Server size={size} aria-hidden="true" />;
+      return <Icon glyph={Server} size="lg" style={iconStyle} />;
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
       if (chatApp) return <ChatAppBrandIcon app={chatApp} size={size} />;
-      return <Icon name="side-chat" size={catalogSize} aria-hidden="true" />;
+      return <Icon name="side-chat" size="lg" style={iconStyle} />;
     }
     default:
-      return <Monitor size={size} aria-hidden="true" />;
+      return <Icon glyph={Monitor} size="lg" style={iconStyle} />;
   }
 }
 
 function ConnectionServiceIcon({ service }: { service: DeviceOverviewConnectionService }) {
   return service.kind === 'self-hosted' || service.kind === 'device-service'
-    ? <Server size={15} aria-hidden="true" />
-    : <Cloud size={15} aria-hidden="true" />;
+    ? <Icon glyph={Server} size="sm" />
+    : <Icon glyph={Cloud} size="sm" />;
 }
 
 const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
@@ -377,7 +377,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   className="openbitfun-device-overview__action"
                   variant="outline"
                   size="sm"
-                  leadingIcon={<Undo2 />}
+                  leadingIcon={<Icon glyph={Undo2} />}
                   onClick={() => { void handleReturnLocal(); }}
                   disabled={returningLocal}
                   data-testid="nav-device-status-return-local"

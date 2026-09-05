@@ -334,7 +334,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
       <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="root" className="workspace-session-batch-modal">
         <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="hero" className="workspace-session-batch-modal__hero">
           <div className="workspace-session-batch-modal__hero-icon">
-            <FolderKanban size={18} />
+            <Icon glyph={FolderKanban} size="md" />
           </div>
           <div className="workspace-session-batch-modal__hero-copy">
             <div className="workspace-session-batch-modal__workspace">{workspaceLabel}</div>
@@ -396,7 +396,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
               const isSelected = selectedSessionIds.has(metadata.sessionId);
               const sessionPresentation = resolveSessionPresentation(metadata.agentType);
               const sessionGlyph = sessionPresentation === 'assistant'
-                ? <Bot size={15} />
+                ? <Icon glyph={Bot} size="sm" />
                 : <Icon name="session" size="sm" />;
               return (
                 <label data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="row"
@@ -456,7 +456,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
             onClick={() => { void handleArchiveSelected(); }}
             disabled={isBusy || selectedCount === 0}
             loading={actionKind === 'archive'}
-            leadingIcon={<Archive size={14} />}
+            leadingIcon={<Icon glyph={Archive} />}
           >
 
             <span>{t('nav.sessions.archiveSelected')}</span>

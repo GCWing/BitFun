@@ -65,7 +65,7 @@ $compatibility-sidebar-width: 236px;
       white-space: nowrap;
     }
 
-    > svg {
+    > :where(svg, [data-openbitfun-component='icon']) {
       color: var(--openbitfun-color-content-muted);
     }
   }
@@ -127,7 +127,7 @@ $compatibility-sidebar-width: 236px;
       outline-offset: -2px;
     }
 
-    > svg {
+    > :where(svg, [data-openbitfun-component='icon']) {
       color: var(--openbitfun-color-content-muted);
     }
   }
@@ -228,7 +228,7 @@ $compatibility-sidebar-width: 236px;
     font-size: var(--openbitfun-type-micro-font-size);
     line-height: var(--openbitfun-type-body-lg-line-height);
 
-    svg {
+    > :where(svg, [data-openbitfun-component='icon']) {
       margin-top: 1px;
       flex: none;
     }
@@ -479,7 +479,7 @@ $compatibility-sidebar-width: 236px;
     border-radius: var(--openbitfun-radius-base);
     background: var(--openbitfun-color-surface-subtle);
 
-    > svg {
+    > :where(svg, [data-openbitfun-component='icon']) {
       flex: none;
       color: var(--openbitfun-color-content-muted);
     }

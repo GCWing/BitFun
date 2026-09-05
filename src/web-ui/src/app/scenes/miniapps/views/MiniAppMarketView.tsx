@@ -332,7 +332,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
           ) : null}
           {!loading && error ? (
             <GalleryEmpty
-              icon={<AlertTriangle size={34} />}
+              icon={{ glyph: AlertTriangle }}
               isError
               message={t('market.messages.catalogFailed', { error })}
               action={(
@@ -344,7 +344,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             />
           ) : null}
           {!loading && !error && items.length === 0 ? (
-            <GalleryEmpty icon={<PackageCheck size={34} />} message={t('market.empty')} />
+            <GalleryEmpty icon={{ glyph: PackageCheck }} message={t('market.empty')} />
           ) : null}
           {!loading && items.length > 0 ? (
             <>

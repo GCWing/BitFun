@@ -751,7 +751,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           <GalleryEmpty
             data-openbitfun-scene="pages"
             data-openbitfun-part="empty"
-            icon={<PanelsTopLeft size={36} />}
+            icon={{ glyph: PanelsTopLeft }}
             message={<>{t('signInRequired')}<small>{t('signInHint')}</small></>}
             action={(
               <Button variant="fill" size="sm" onClick={() => setShowAccountDialog(true)}>
@@ -764,7 +764,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           <GalleryEmpty
             data-openbitfun-scene="pages"
             data-openbitfun-part="error"
-            icon={<PanelsTopLeft size={36} />}
+            icon={{ glyph: PanelsTopLeft }}
             message={<>{t('loadFailed')}<small>{loadError}</small></>}
             isError
             action={<Button variant="outline" size="sm" onClick={() => void loadPages()}>{t('actions.retry')}</Button>}
@@ -774,7 +774,7 @@ const PagesScene: React.FC<PagesSceneProps> = ({ isActive = true }) => {
           <GalleryEmpty
             data-openbitfun-scene="pages"
             data-openbitfun-part="empty"
-            icon={<PanelsTopLeft size={36} />}
+            icon={{ glyph: PanelsTopLeft }}
             message={<>{t('empty')}<small>{t('emptyHint')}</small></>}
             testId="pages-empty"
           />

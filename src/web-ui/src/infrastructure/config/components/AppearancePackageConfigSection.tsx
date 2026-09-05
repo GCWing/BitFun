@@ -303,16 +303,18 @@ export function AppearancePackageConfigSection() {
     {
       value: SYSTEM_APPEARANCE_ID,
       label: tApplication('appearance.systemAppearance'),
+      group: t('package.builtinTheme'),
       testId: 'appearance-builtin-theme-option',
       testAttributes: { 'data-appearance-id': SYSTEM_APPEARANCE_ID },
     },
     ...builtinAppearances.map(appearance => ({
       value: appearance.id,
       label: builtinAppearanceDisplayName(appearance, tApplication),
+      group: t('package.builtinTheme'),
       testId: 'appearance-builtin-theme-option',
       testAttributes: { 'data-appearance-id': appearance.id },
     })),
-  ], [builtinAppearances, tApplication]);
+  ], [builtinAppearances, t, tApplication]);
   const selectedBuiltinThemeId = defaultPackageSelected ? selectedAppearanceId : '';
   const busy = loading || !initialized || status === 'applying';
 

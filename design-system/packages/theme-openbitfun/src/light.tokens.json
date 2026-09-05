@@ -161,7 +161,7 @@
       "backgroundHover": { "$type": "color", "$value": "{color.field.background}" },
       "border": { "$type": "color", "$value": "rgba(16, 26, 39, 0.15)" },
       "borderHover": { "$type": "color", "$value": "rgba(16, 26, 39, 0.24)" },
-      "borderFocus": { "$type": "color", "$value": "{ref.color.navy.950}" }
+      "borderFocus": { "$type": "color", "$value": "{ref.color.neutral.550}" }
     },
     "control": {
       "highlight": {

@@ -1,9 +1,8 @@
 /**
  * FileViewerNav — scene-specific navigation for the file viewer scene.
  *
- * Header mirrors the directory NavItem (Folder icon + label, same font-size /
- * height / padding) so the transition from MainNav feels like the item
- * "expanded in-place". Navigation back is handled by NavBar's back button.
+ * NavBar owns the scene title and navigation controls. This panel keeps the
+ * workspace-specific file actions above the file tree or search results.
  */
 
 import React, { useState, useCallback } from 'react';
@@ -42,60 +41,61 @@ const FileViewerNav: React.FC = () => {
       data-openbitfun-component="file-viewer-nav"
       data-openbitfun-part="root"
       className="openbitfun-file-viewer-nav"
+      aria-label={t('nav.items.project')}
     >
-      <NavigationPanelHeader className="openbitfun-file-viewer-nav__panel-header">
-        <div className="openbitfun-file-viewer-nav__header" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="header">
-        <span className="openbitfun-file-viewer-nav__icon" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="icon" aria-hidden="true">
-          <Icon name="folder" size="sm" />
-        </span>
-        <span className="openbitfun-file-viewer-nav__label" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="label">
-          {t('nav.items.project')}
-        </span>
-        {currentWorkspace?.rootPath && (
-        <span className="openbitfun-file-viewer-nav__actions" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="actions">
-            {viewMode === 'tree' && explorerToolbar && (
-              <>
-                <Tooltip content={tTools('fileTree.newFile')} placement="bottom">
-                  <IconButton
-                    size="sm"
-                    aria-label={tTools('fileTree.newFile')}
-                    icon={<FilePlus />}
-                    onClick={explorerToolbar.onNewFile}
-                  />
-                </Tooltip>
-                <Tooltip content={tTools('fileTree.newFolder')} placement="bottom">
-                  <IconButton
-                    size="sm"
-                    aria-label={tTools('fileTree.newFolder')}
-                    icon={<FolderPlus />}
-                    onClick={explorerToolbar.onNewFolder}
-                  />
-                </Tooltip>
-                <Tooltip content={tTools('fileTree.refresh')} placement="bottom">
-                  <IconButton
-                    size="sm"
-                    aria-label={tTools('fileTree.refresh')}
-                    icon={<Icon name="refresh" size="lg" />}
-                    onClick={explorerToolbar.onRefresh}
-                  />
-                </Tooltip>
-              </>
-            )}
-            <Tooltip
-              content={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
-              placement="bottom"
-            >
-              <IconButton
-                size="sm"
-                aria-label={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
-                icon={viewMode === 'tree' ? <Icon name="search" size="sm" /> : <List />}
-                onClick={handleToggleViewMode}
-              />
-            </Tooltip>
-          </span>
-        )}
-        </div>
-      </NavigationPanelHeader>
+      {currentWorkspace?.rootPath && (
+        <NavigationPanelHeader className="openbitfun-file-viewer-nav__panel-header">
+          <div
+            className="openbitfun-file-viewer-nav__header"
+            data-openbitfun-component="file-viewer-nav"
+            data-openbitfun-part="header"
+            role="toolbar"
+            aria-label={t('nav.items.project')}
+          >
+            <span className="openbitfun-file-viewer-nav__actions" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="actions">
+              {viewMode === 'tree' && explorerToolbar && (
+                <>
+                  <Tooltip content={tTools('fileTree.newFile')} placement="bottom">
+                    <IconButton
+                      size="sm"
+                      aria-label={tTools('fileTree.newFile')}
+                      icon={<FilePlus />}
+                      onClick={explorerToolbar.onNewFile}
+                    />
+                  </Tooltip>
+                  <Tooltip content={tTools('fileTree.newFolder')} placement="bottom">
+                    <IconButton
+                      size="sm"
+                      aria-label={tTools('fileTree.newFolder')}
+                      icon={<FolderPlus />}
+                      onClick={explorerToolbar.onNewFolder}
+                    />
+                  </Tooltip>
+                  <Tooltip content={tTools('fileTree.refresh')} placement="bottom">
+                    <IconButton
+                      size="sm"
+                      aria-label={tTools('fileTree.refresh')}
+                      icon={<Icon name="refresh" size="lg" />}
+                      onClick={explorerToolbar.onRefresh}
+                    />
+                  </Tooltip>
+                </>
+              )}
+              <Tooltip
+                content={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
+                placement="bottom"
+              >
+                <IconButton
+                  size="sm"
+                  aria-label={viewMode === 'tree' ? tFiles('actions.switchToSearch') : tFiles('actions.switchToTree')}
+                  icon={viewMode === 'tree' ? <Icon name="search" size="sm" /> : <List />}
+                  onClick={handleToggleViewMode}
+                />
+              </Tooltip>
+            </span>
+          </div>
+        </NavigationPanelHeader>
+      )}
       <NavigationPanelBody className="openbitfun-file-viewer-nav__body">
         <NavigationPanelContent className="openbitfun-file-viewer-nav__content">
           <FilesPanel

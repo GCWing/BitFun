@@ -3,6 +3,7 @@ import {
   type CSSProperties,
   type HTMLAttributes,
 } from "react";
+import type { LucideIcon } from "lucide-react";
 import { classNames } from "../../internal/classNames";
 import arrowLeftUrl from "./assets/arrow-left.svg";
 import arrowRightUrl from "./assets/arrow-right.svg";
@@ -156,6 +157,10 @@ export type IconTone =
   | "warning"
   | "danger";
 
+export type IconSource =
+  | { glyph: LucideIcon; name?: never }
+  | { glyph?: never; name: IconName };
+
 const iconSources = {
   "arrow-down": downloadUrl,
   unselected: circleUrl,
@@ -225,16 +230,20 @@ const iconSources = {
   xmark: xmarkUrl,
 } as const satisfies Record<IconName, string>;
 
-export interface IconProps
+interface IconBaseProps
   extends Omit<HTMLAttributes<HTMLSpanElement>, "aria-label" | "children"> {
   label?: string;
-  name: IconName;
   size?: IconSize;
   tone?: IconTone;
 }
 
+export type IconProps = IconBaseProps & IconSource;
+
+const LINE_ICON_STROKE_WIDTH = 1.6;
+
 export const Icon = forwardRef<HTMLSpanElement, IconProps>(function Icon({
   className,
+  glyph: LineGlyph,
   label,
   name,
   size = "lg",
@@ -242,12 +251,14 @@ export const Icon = forwardRef<HTMLSpanElement, IconProps>(function Icon({
   tone = "inherit",
   ...props
 }, ref) {
-  const iconSource = `url("${iconSources[name]}")`;
-  const iconStyle: CSSProperties = {
-    ...style,
-    WebkitMaskImage: iconSource,
-    maskImage: iconSource,
-  };
+  const catalogSource = name ? `url("${iconSources[name]}")` : undefined;
+  const iconStyle: CSSProperties = catalogSource
+    ? {
+        ...style,
+        WebkitMaskImage: catalogSource,
+        maskImage: catalogSource,
+      }
+    : style ?? {};
 
   return (
     <span
@@ -257,11 +268,20 @@ export const Icon = forwardRef<HTMLSpanElement, IconProps>(function Icon({
       className={classNames(styles.icon, className)}
       data-openbitfun-component="icon"
       data-openbitfun-name={name}
+      data-openbitfun-source={name ? "catalog" : "line"}
       data-openbitfun-tone={tone}
       data-size={size}
       ref={ref}
       role={label ? "img" : undefined}
       style={iconStyle}
-    />
+    >
+      {LineGlyph ? (
+        <LineGlyph
+          aria-hidden="true"
+          focusable="false"
+          strokeWidth={LINE_ICON_STROKE_WIDTH}
+        />
+      ) : null}
+    </span>
   );
 });

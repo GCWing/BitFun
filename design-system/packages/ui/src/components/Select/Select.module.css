@@ -1,53 +1,67 @@
 @layer openbitfun.components {
   .root,
-  .select,
+  .native,
+  .trigger,
   .leading,
-  .indicator {
+  .value,
+  .placeholder,
+  .indicator,
+  .popover,
+  .popoverHeader,
+  .divider,
+  .options {
     box-sizing: border-box;
   }
 
-  .root {
+  .root,
+  .popover {
     --_select-height: var(--openbitfun-control-height-md);
-    --_select-leading-space: 0px;
+  }
 
+  .root {
     position: relative;
-    display: inline-grid;
-    min-inline-size: 0;
-    inline-size: 100%;
-    color: var(--openbitfun-color-content-primary);
-  }
-
-  .root[data-size="sm"] {
-    --_select-height: var(--openbitfun-control-height-sm);
-  }
-
-  .root[data-size="lg"] {
-    --_select-height: var(--openbitfun-control-height-lg);
-  }
-
-  .root[data-has-leading="true"] {
-    --_select-leading-space: calc(
-      var(--openbitfun-control-select-indicator-size)
-      + var(--openbitfun-control-select-content-gap)
-    );
-  }
-
-  .select {
-    grid-area: 1 / 1;
+    /* A full-width field must not add a text line box in wrapper elements. */
+    display: grid;
     min-inline-size: 0;
     inline-size: 100%;
     block-size: var(--_select-height);
+    color: var(--openbitfun-color-content-primary);
+  }
+
+  .root[data-size="sm"],
+  .popover[data-size="sm"] {
+    --_select-height: var(--openbitfun-control-height-sm);
+  }
+
+  .root[data-size="lg"],
+  .popover[data-size="lg"] {
+    --_select-height: var(--openbitfun-control-height-lg);
+  }
+
+  .native {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .trigger {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    inline-size: 100%;
+    block-size: var(--_select-height);
+    gap: var(--openbitfun-control-select-content-gap);
     margin: 0;
     padding-block: 0;
-    padding-inline-start: calc(
-      var(--openbitfun-control-select-padding-inline)
-      + var(--_select-leading-space)
-    );
-    padding-inline-end: calc(
-      var(--openbitfun-control-select-trailing-inset)
-      + var(--openbitfun-control-select-indicator-size)
-      + var(--openbitfun-control-select-content-gap)
-    );
+    padding-inline: var(--openbitfun-control-select-padding-inline);
     border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border);
     border-radius: var(--openbitfun-control-select-radius);
     outline: 0;
@@ -58,7 +72,7 @@
     font-weight: var(--openbitfun-type-label-md-font-weight);
     line-height: var(--openbitfun-type-label-md-line-height);
     letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
-    appearance: none;
+    text-align: start;
     cursor: pointer;
     transition:
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
@@ -66,26 +80,31 @@
       box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  .select:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+  .trigger:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
     border-color: var(--openbitfun-color-field-border-hover);
     background: var(--openbitfun-color-field-background-hover);
   }
 
-  .root[data-field-surface="ambient"] .select,
-  .root[data-field-surface="ambient"] .select:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+  .root[data-field-surface="ambient"] .trigger,
+  .root[data-field-surface="ambient"] .trigger:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
     background: transparent;
   }
 
-  .select:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+  .trigger:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
     border-color: var(--openbitfun-color-field-border-focus);
     box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
   }
 
-  .root[data-invalid="true"] .select {
+  .root[data-open="true"] > .trigger {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .root[data-invalid="true"] .trigger {
     border-color: var(--openbitfun-color-status-danger-border);
   }
 
-  .root[data-invalid="true"] .select:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+  .root[data-invalid="true"] .trigger:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
     box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-status-danger-surface);
   }
 
@@ -94,16 +113,14 @@
     opacity: var(--openbitfun-opacity-disabled);
   }
 
-  .select:disabled {
+  .trigger:disabled {
     cursor: not-allowed;
   }
 
   .leading,
   .indicator {
-    z-index: 1;
-    grid-area: 1 / 1;
     display: inline-flex;
-    align-self: center;
+    flex: 0 0 var(--openbitfun-control-select-indicator-size);
     align-items: center;
     justify-content: center;
     inline-size: var(--openbitfun-control-select-indicator-size);
@@ -112,40 +129,187 @@
     pointer-events: none;
   }
 
-  .leading {
-    justify-self: start;
-    margin-inline-start: var(--openbitfun-control-select-leading-inset);
-  }
-
-  .indicator {
-    justify-self: end;
-    margin-inline-end: var(--openbitfun-control-select-trailing-inset);
-  }
-
   .leading > :where(svg, img),
   .leading > [data-openbitfun-component="icon"],
+  .indicator > :where(svg, img),
   .indicator > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: 100%;
     block-size: 100%;
   }
 
+  .value,
+  .placeholder {
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .placeholder {
+    color: var(--openbitfun-color-content-muted);
+  }
+
+  .indicator {
+    margin-inline-start: auto;
+    transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  .popoverHeader .indicator {
+    transform: rotate(180deg);
+  }
+
+  .popover {
+    position: fixed;
+    z-index: var(--openbitfun-layer-popover);
+    display: flex;
+    min-inline-size: 0;
+    max-inline-size: calc(100vw - var(--openbitfun-space-4));
+    min-block-size: 0;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border-radius: var(--openbitfun-overlay-menu-surface-radius);
+    color: var(--openbitfun-color-action-neutral-content);
+    background: var(--openbitfun-color-surface-panel);
+    box-shadow: var(--openbitfun-shadow-menu);
+    transform-origin: top center;
+    animation: openbitfun-select-popover-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-enter);
+  }
+
+  .popover[data-invalid="true"] {
+    border-color: var(--openbitfun-color-status-danger-border);
+  }
+
+  .popover[data-placement="top"] {
+    flex-direction: column-reverse;
+    transform-origin: bottom center;
+    animation-name: openbitfun-select-popover-in-top;
+  }
+
+  .popoverHeader {
+    flex: 0 0 calc(
+      var(--_select-height)
+      - var(--openbitfun-border-width-default)
+      - var(--openbitfun-border-width-default)
+    );
+    block-size: calc(
+      var(--_select-height)
+      - var(--openbitfun-border-width-default)
+      - var(--openbitfun-border-width-default)
+    );
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .popoverHeader:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
+    border-color: transparent;
+    background: var(--openbitfun-color-field-background-hover);
+  }
+
+  .popoverHeader:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {
+    border-color: transparent;
+    box-shadow: inset 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
+  }
+
+  .divider {
+    flex: 0 0 var(--openbitfun-border-width-default);
+    block-size: var(--openbitfun-border-width-default);
+    background: var(--openbitfun-color-border-subtle);
+  }
+
+  .options {
+    display: flex;
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: var(--openbitfun-overlay-menu-surface-padding);
+  }
+
+  .listbox {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .listbox [data-openbitfun-part="list"],
+  .listbox [data-openbitfun-part="group-options"] {
+    gap: calc(var(--openbitfun-space-1) / 2);
+  }
+
+  .listbox [data-openbitfun-part="group"] {
+    gap: var(--openbitfun-overlay-menu-section-gap);
+  }
+
+  .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="label"] {
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+  }
+
+  .listbox [data-openbitfun-listbox-option][data-selected="true"] {
+    background: var(--openbitfun-color-selection-surface);
+  }
+
+  .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="indicator"] {
+    color: var(--openbitfun-color-control-highlight-background);
+  }
+
+  @keyframes openbitfun-select-popover-in {
+    from {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes openbitfun-select-popover-in-top {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .select {
+    .trigger,
+    .indicator,
+    .popover,
+    .popoverHeader {
       transition: none;
+      animation: none;
     }
   }
 
   @media (forced-colors: active) {
-    .select,
-    .root[data-invalid="true"] .select {
+    .trigger,
+    .popover,
+    .root[data-invalid="true"] .trigger {
       border-color: ButtonText;
       background: Field;
     }
 
-    .select:focus-visible {
+    .popoverHeader {
+      border: 0;
+    }
+
+    .trigger:focus-visible {
       border-color: Highlight;
       box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight;
+    }
+
+    .listbox [data-openbitfun-listbox-option][data-selected="true"] [data-openbitfun-part="indicator"] {
+      color: Highlight;
     }
   }
 }

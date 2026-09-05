@@ -61,14 +61,14 @@ interface CategoryInfo {
 const CATEGORIES: CategoryInfo[] = [
   {
     id: 'all',
-    icon: <Layers size={15} strokeWidth={1.6} />,
+    icon: <Icon glyph={Layers} size="sm" />,
     labelKey: 'filters.all',
     titleKey: 'installed.titleListAll',
     descKey: 'categories.all',
   },
   {
     id: 'builtin',
-    icon: <ShieldCheck size={15} strokeWidth={1.6} />,
+    icon: <Icon glyph={ShieldCheck} size="sm" />,
     labelKey: 'filters.builtin',
     titleKey: 'installed.titleBuiltin',
     descKey: 'categories.builtin',
@@ -82,14 +82,14 @@ const CATEGORIES: CategoryInfo[] = [
   },
   {
     id: 'project',
-    icon: <FolderOpen size={15} strokeWidth={1.6} />,
+    icon: <Icon glyph={FolderOpen} size="sm" />,
     labelKey: 'filters.project',
     titleKey: 'installed.titleProject',
     descKey: 'categories.project',
   },
   {
     id: 'suite',
-    icon: <Zap size={15} strokeWidth={1.6} />,
+    icon: <Icon glyph={Zap} size="sm" />,
     labelKey: 'filters.suite',
     titleKey: 'suite.title',
     descKey: 'categories.suite',
@@ -319,7 +319,7 @@ const SkillsScene: React.FC = () => {
             <div className="skills-main" data-openbitfun-scene="skills" data-openbitfun-part="main">
               {!desktopConfigAvailable ? (
                 <div className="skills-main__empty" data-testid="skills-management-unavailable" data-openbitfun-scene="skills" data-openbitfun-part="empty">
-                  <Package size={28} strokeWidth={1.2} />
+                  <Icon glyph={Package} size="lg" />
                   <span>{t(remoteConnectionActive ? 'list.remoteUnavailable' : 'list.desktopUnavailable')}</span>
                 </div>
               ) : installedFilter === 'suite' ? (
@@ -408,7 +408,7 @@ const SkillsScene: React.FC = () => {
 
                     {!installed.loading && installed.error && (
                       <div className="skills-main__empty skills-main__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
-                        <Package size={28} strokeWidth={1.2} />
+                        <Icon glyph={Package} size="lg" />
                         <span>{t('list.loadFailed')}</span>
                         <Button
                           variant="outline"
@@ -422,7 +422,7 @@ const SkillsScene: React.FC = () => {
 
                     {!installed.loading && !installed.error && installedFiltered.length === 0 && (
                       <div className="skills-main__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
-                        <Package size={28} strokeWidth={1.2} />
+                        <Icon glyph={Package} size="lg" />
                         <span>
                           {installed.skills.length === 0
                             ? t('list.empty.noSkills')
@@ -485,7 +485,7 @@ const SkillsScene: React.FC = () => {
                               </div>
                               <div className="skills-card__status-badges">
                                 {skill.isBuiltin && (
-                                  <StatusPill tone="accent" leading={<ShieldCheck size={10} />}>
+                                  <StatusPill tone="accent" leading={<Icon glyph={ShieldCheck} />}>
                                     {t('list.item.builtin')}
                                   </StatusPill>
                                 )}
@@ -500,7 +500,7 @@ const SkillsScene: React.FC = () => {
                                     source: coverageSourceBySkillKey.get(skill.key)
                                       ?? t('list.item.unknownSource'),
                                   })}>
-                                    <StatusPill tone="warning" leading={<ShieldAlert size={10} />}>
+                                    <StatusPill tone="warning" leading={<Icon glyph={ShieldAlert} />}>
                                       {t('list.item.shadowed')}
                                     </StatusPill>
                                   </span>
@@ -531,7 +531,7 @@ const SkillsScene: React.FC = () => {
                             >
                               {skill.level === 'user'
                                 ? <Icon name="user" size="xs" />
-                                : <FolderOpen size={12} strokeWidth={1.6} />}
+                                : <Icon glyph={FolderOpen} size="xs" />}
                               <span>
                                 {market.isRemoteWorkspace
                                   ? skill.level === 'user'
@@ -651,7 +651,7 @@ const SkillsScene: React.FC = () => {
 
               {!market.marketLoading && market.marketError && (
                 <div className="skills-discover__empty skills-discover__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
-                  <Package size={28} strokeWidth={1.5} />
+                  <Icon glyph={Package} size="lg" />
                   <span>{market.marketError}</span>
                 </div>
               )}
@@ -672,7 +672,7 @@ const SkillsScene: React.FC = () => {
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
                 <div className="skills-discover__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
-                  <Package size={28} strokeWidth={1.5} />
+                  <Icon glyph={Package} size="lg" />
                   <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
                 </div>
               )}
@@ -711,7 +711,7 @@ const SkillsScene: React.FC = () => {
                           ) : null}
                           meta={(
                             <span className="openbitfun-skills-scene__market-meta">
-                              <TrendingUp size={12} />
+                              <Icon glyph={TrendingUp} size="xs" />
                               {skill.installs ?? 0}
                             </span>
                           )}
@@ -779,7 +779,7 @@ const SkillsScene: React.FC = () => {
       <GalleryDetailModal
         isOpen={desktopConfigAvailable && Boolean(selectedDetail)}
         onClose={() => setSelectedDetail(null)}
-        icon={selectedMarketSkill ? <Package size={24} strokeWidth={1.6} /> : <Icon name="extension" size="lg" />}
+        icon={selectedMarketSkill ? <Icon glyph={Package} size="lg" /> : <Icon name="extension" size="lg" />}
         iconGradient={getCardGradient(
           selectedInstalledSkill?.name
           ?? selectedMarketSkill?.installId
@@ -794,7 +794,7 @@ const SkillsScene: React.FC = () => {
                 source: coverageSourceBySkillKey.get(selectedInstalledSkill.key)
                   ?? t('list.item.unknownSource'),
               })}>
-                <StatusPill tone="warning" leading={<ShieldAlert size={11} />}>
+                <StatusPill tone="warning" leading={<Icon glyph={ShieldAlert} />}>
                   {t('list.item.shadowed')}
                 </StatusPill>
               </span>
@@ -827,7 +827,7 @@ const SkillsScene: React.FC = () => {
         closeButtonTestId="skill-detail-close"
         meta={selectedMarketSkill ? (
           <span className="openbitfun-skills-scene__market-meta">
-            <TrendingUp size={12} />
+            <Icon glyph={TrendingUp} size="xs" />
             {selectedMarketSkill.installs ?? 0}
           </span>
         ) : null}
@@ -997,7 +997,7 @@ const SkillsScene: React.FC = () => {
               onClick={installed.handleBrowse}
               aria-label={t('form.path.browseTooltip')}
               title={t('form.path.browseTooltip')}
-              icon={<FolderOpen size={15} />}
+              icon={<Icon glyph={FolderOpen} size="sm" />}
             />
           </div>
           <div className="openbitfun-skills-scene__path-hint">

@@ -203,6 +203,8 @@ $content-max: 936px;
 }
 
 .gallery-empty {
+  --_gallery-empty-icon-size: calc(var(--openbitfun-control-icon-size-lg) + var(--openbitfun-space-2));
+
   min-height: 220px;
   display: flex;
   flex-direction: column;
@@ -223,6 +225,20 @@ $content-max: 936px;
 
   &--error {
     color: var(--openbitfun-color-status-danger-content);
+  }
+
+  &__icon {
+    display: inline-flex;
+    width: var(--_gallery-empty-icon-size);
+    height: var(--_gallery-empty-icon-size);
+    flex: 0 0 var(--_gallery-empty-icon-size);
+    align-items: center;
+    justify-content: center;
+
+    > :where(svg, img, [data-openbitfun-component='icon']) {
+      width: 100%;
+      height: 100%;
+    }
   }
 }
 

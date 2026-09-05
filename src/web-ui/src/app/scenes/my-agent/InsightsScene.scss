@@ -836,7 +836,7 @@ $ins-r-lg: 12px;
       opacity: 0;
     }
 
-    svg { display: none; }
+    > :where(svg, [data-openbitfun-component='icon']) { display: none; }
 
     &:hover {
       color: var(--openbitfun-color-content-secondary);

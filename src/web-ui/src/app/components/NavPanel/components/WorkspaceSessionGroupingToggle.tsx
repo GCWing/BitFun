@@ -1,6 +1,6 @@
 import React from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { IconButton, Tooltip } from '@openbitfun/ui';
+import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { List, ListTree } from 'lucide-react';
 import {
   getNextWorkspaceSessionGrouping,
@@ -26,9 +26,8 @@ const WorkspaceSessionGroupingToggle: React.FC = () => {
         aria-label={actionTooltip}
         aria-pressed={isAll}
         icon={(
-          <ViewIcon
-            size={16}
-            aria-hidden="true"
+          <Icon
+            glyph={ViewIcon}
             data-session-view-icon={grouping}
           />
         )}

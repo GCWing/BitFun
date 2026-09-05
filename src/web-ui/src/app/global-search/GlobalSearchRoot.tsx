@@ -14,13 +14,12 @@ import {
   Icon,
   KeyHint,
   SearchField,
-  type IconName,
-  type IconSize,
+  type IconSource,
   ScrollArea,
   Dialog,
   DialogBody,
 } from '@openbitfun/ui';
-import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, Blocks, Bot, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, Users } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -56,14 +55,6 @@ import {
 } from './types';
 import './GlobalSearchRoot.scss';
 
-function catalogLucide(name: IconName): LucideIcon {
-  return function CatalogLucide({ size }: { size?: number | string }) {
-    const n = typeof size === 'number' ? size : 20;
-    const mapped: IconSize = n <= 11 ? '2xs' : n <= 13 ? 'xs' : n <= 15 ? 'sm' : n <= 17 ? 'md' : 'lg';
-    return <Icon name={name} size={mapped} style={{ width: n, height: n }} />;
-  } as LucideIcon;
-}
-
 const log = createLogger('GlobalSearch');
 const SEARCH_DEBOUNCE_MS = 90;
 const SEARCH_LIMIT_PER_GROUP = 20;
@@ -77,21 +68,21 @@ const EMPTY_SNAPSHOT: GlobalSearchSnapshot = {
   truncated: false,
 };
 
-const ACTION_ICONS: Record<ProductActionIcon, LucideIcon> = {
-  'message-circle': catalogLucide('side-chat'),
-  folder: catalogLucide('folder'),
-  plus: catalogLucide('plus'),
-  globe: catalogLucide('browser'),
-  terminal: catalogLucide('terminal'),
-  files: FileText,
-  users: Users,
-  puzzle: catalogLucide('extension'),
-  blocks: Blocks,
-  'check-square': CheckSquare2,
-  chart: BarChart3,
-  gear: catalogLucide('gear'),
-  keyboard: Keyboard,
-  network: Network,
+const ACTION_ICONS: Record<ProductActionIcon, IconSource> = {
+  'message-circle': { name: 'side-chat' },
+  folder: { name: 'folder' },
+  plus: { name: 'plus' },
+  globe: { name: 'browser' },
+  terminal: { name: 'terminal' },
+  files: { glyph: FileText },
+  users: { glyph: Users },
+  puzzle: { name: 'extension' },
+  blocks: { glyph: Blocks },
+  'check-square': { glyph: CheckSquare2 },
+  chart: { glyph: BarChart3 },
+  gear: { name: 'gear' },
+  keyboard: { glyph: Keyboard },
+  network: { glyph: Network },
 };
 
 type GlobalSearchActionIconRole =
@@ -115,24 +106,27 @@ const GLOBAL_SEARCH_ACTION_ICON_ROLES: Partial<Record<ProductActionId, GlobalSea
   'surface.files.open': 'open-files',
 };
 
-const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, LucideIcon> = {
-  messages: MessageSquareText,
-  sessions: MessagesSquare,
-  files: FileText,
-  workspaces: catalogLucide('folder'),
-  assistants: Bot,
-  capabilities: Blocks,
-  settings: catalogLucide('gear'),
+const GROUP_ICONS: Record<Exclude<GlobalSearchGroupId, 'actions'>, IconSource> = {
+  messages: { glyph: MessageSquareText },
+  sessions: { glyph: MessagesSquare },
+  files: { glyph: FileText },
+  workspaces: { name: 'folder' },
+  assistants: { glyph: Bot },
+  capabilities: { glyph: Blocks },
+  settings: { name: 'gear' },
 };
 
-function iconForItem(item: GlobalSearchItem): LucideIcon {
+const SEARCH_ICON: IconSource = { name: 'search' };
+const USER_ICON: IconSource = { name: 'user' };
+
+function iconForItem(item: GlobalSearchItem): IconSource {
   if (item.target.kind === 'action') {
     const actionId = item.target.actionId;
     const action = PRODUCT_ACTION_CATALOG.find((candidate) => candidate.id === actionId);
-    return action ? ACTION_ICONS[action.icon] : catalogLucide('search');
+    return action ? ACTION_ICONS[action.icon] : SEARCH_ICON;
   }
-  if (item.target.kind === 'assistant') return catalogLucide('user');
-  return GROUP_ICONS[item.group as Exclude<GlobalSearchGroupId, 'actions'>] ?? catalogLucide('search');
+  if (item.target.kind === 'assistant') return USER_ICON;
+  return GROUP_ICONS[item.group as Exclude<GlobalSearchGroupId, 'actions'>] ?? SEARCH_ICON;
 }
 
 function resultVariant(group: GlobalSearchGroupId): 'action' | 'entity' | 'standard' {
@@ -522,7 +516,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 )}
                 <div className="global-search__group-items">
                   {groupItems.map((item) => {
-                    const ItemIcon = iconForItem(item);
+                    const itemIcon = iconForItem(item);
                     const selected = item.id === activeId;
                     const itemVariant = resultVariant(item.group);
                     const entity = itemVariant === 'entity';
@@ -554,13 +548,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           data-openbitfun-state={selected ? 'selected' : undefined}
                           description={item.subtitle && !defaultActionGroup ? item.subtitle : undefined}
                           leading={(
-                            <span
+                            <Icon
+                              {...itemIcon}
                               className="global-search__action-icon"
                               data-icon-role={actionIconRole}
-                              aria-hidden="true"
-                            >
-                              <ItemIcon size={20} strokeWidth={1.75} />
-                            </span>
+                            />
                           )}
                           selected={selected}
                           size="sm"
@@ -585,7 +577,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                           onClick={() => void activateItem(item)}
                           data-openbitfun-state={selected ? 'selected' : undefined}
                           description={item.subtitle}
-                          leading={<ItemIcon size={20} strokeWidth={1.65} />}
+                          leading={<Icon {...itemIcon} />}
                           selected={selected}
                           size="md"
                         >
@@ -612,7 +604,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         data-openbitfun-state={selected ? 'selected' : undefined}
                       >
                         <span className="global-search__result-icon" aria-hidden="true">
-                          <ItemIcon size={16} strokeWidth={1.65} />
+                          <Icon {...itemIcon} size="md" />
                         </span>
                         {resultCopy}
                         {item.context ? (

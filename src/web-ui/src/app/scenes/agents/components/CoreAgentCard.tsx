@@ -36,7 +36,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   disabledReason,
 }) => {
   const { t } = useTranslation('scenes/agents');
-  const AgentGlyph = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
+  const agentIcon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? { glyph: Bot };
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);
   const statusLabel = disabledReason ?? t('agentCard.status.connected');
@@ -64,7 +64,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
     >
       <div className="core-agent-card__icon-rail">
         <div className="core-agent-card__icon-wrap" data-openbitfun-component="core-agent-card" data-openbitfun-part="icon">
-          <AgentGlyph size={21} strokeWidth={1.6} />
+          <Icon {...agentIcon} size="lg" />
         </div>
         <span className="core-agent-card__dot-field" aria-hidden="true" />
       </div>
@@ -100,19 +100,19 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
         <div className="core-agent-card__footer" data-openbitfun-component="core-agent-card" data-openbitfun-part="footer">
           <div className="core-agent-card__meta" data-openbitfun-component="core-agent-card" data-openbitfun-part="meta">
             <span className="core-agent-card__meta-item">
-              <span className="core-agent-card__meta-icon"><Wrench size={11} /></span>
+              <span className="core-agent-card__meta-icon"><Icon glyph={Wrench} size="xs" /></span>
               <span className="core-agent-card__meta-label">{t('agentCard.metrics.tools')}</span>
               <strong>{totalTools}</strong>
             </span>
             {agent.agentKind === 'mode' ? (
               <>
                 <span className="core-agent-card__meta-item">
-                  <span className="core-agent-card__meta-icon"><Icon name="extension" size="2xs" /></span>
+                  <span className="core-agent-card__meta-icon"><Icon name="extension" size="xs" /></span>
                   <span className="core-agent-card__meta-label">{t('agentCard.metrics.skills')}</span>
                   <strong>{skillCount}</strong>
                 </span>
                 <span className="core-agent-card__meta-item">
-                  <span className="core-agent-card__meta-icon"><UsersRound size={11} /></span>
+                  <span className="core-agent-card__meta-icon"><Icon glyph={UsersRound} size="xs" /></span>
                   <span className="core-agent-card__meta-label">{t('agentCard.metrics.collaboration')}</span>
                   <strong>{subagentCount}</strong>
                 </span>
@@ -120,7 +120,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             ) : null}
             {agent.agentKind === 'subagent' && agent.subagentModelDisplayName ? (
               <span className="core-agent-card__meta-item">
-                <span className="core-agent-card__meta-icon"><Cpu size={11} /></span>
+                <span className="core-agent-card__meta-icon"><Icon glyph={Cpu} size="xs" /></span>
                 <span className="core-agent-card__meta-label">{t('agentCard.metrics.model')}</span>
                 <strong className="core-agent-card__meta-value--text" title={agent.subagentModelDisplayName}>
                   {agent.subagentModelDisplayName}

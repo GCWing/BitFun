@@ -27,7 +27,6 @@ test("Combobox consumes host localization and canonical invalid state", () => {
 
 test("MultiSelect exposes an explicit multi-value trigger contract", () => {
   const markup = renderToStaticMarkup(createElement(MultiSelect, {
-    defaultOpen: true,
     defaultValue: ["one"],
     options: [
       { label: "One", value: "one" },
@@ -39,7 +38,7 @@ test("MultiSelect exposes an explicit multi-value trigger contract", () => {
 
   assert.match(markup, /data-openbitfun-component="multi-select"/);
   assert.match(markup, /role="combobox"/);
-  assert.match(markup, /aria-expanded="true"/);
+  assert.match(markup, /aria-expanded="false"/);
   assert.match(markup, /aria-label="Models"/);
   assert.match(markup, />One</);
 });
@@ -84,7 +83,7 @@ test("Combobox styling uses public field, overlay, action, and motion tokens", a
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 
-test("Combobox search and option geometry follows the standard menu rhythm", async () => {
+test("Combobox embeds search and scrollable options in one token-driven surface", async () => {
   const source = await readFile(
     new URL("../src/components/Combobox/Combobox.tsx", import.meta.url),
     "utf8",
@@ -95,14 +94,40 @@ test("Combobox search and option geometry follows the standard menu rhythm", asy
   );
 
   assert.match(source, /clearLabel=\{query \? designSystem\.messages\.clearSelection : undefined\}/);
-  assert.match(source, /leadingIcon=\{<Icon name="search" \/>\}/);
-  assert.match(styles, /\.popover\s*\{[^}]*gap:\s*var\(--openbitfun-space-1\)/s);
+  assert.match(source, /leadingIcon=\{<Icon name="search" size="sm" \/>\}/);
+  assert.match(source, /variant="embedded"/);
+  assert.match(source, /overlapAnchor: true/);
+  assert.match(source, /data-openbitfun-part="divider"/);
+  assert.match(source, /data-openbitfun-part="options"/);
+  assert.match(styles, /\.popover\s*\{[^}]*min-inline-size:\s*0[^}]*padding:\s*0/s);
   assert.match(
     styles,
-    /\.searchField \[data-openbitfun-component="input"\]\s*\{[^}]*border-radius:\s*var\(--openbitfun-control-select-radius\)/s,
+    /\.popover\[data-placement="top"\]\s*\{[^}]*flex-direction:\s*column-reverse/s,
   );
+  assert.match(styles, /\.search\s*\{[^}]*--_combobox-height[^}]*--openbitfun-border-width-default/s);
+  assert.match(styles, /\.options\s*\{[^}]*min-block-size:\s*0[^}]*--openbitfun-overlay-menu-surface-padding/s);
+  assert.match(styles, /\.root\[data-open="true"\] \.control\s*\{[^}]*visibility:\s*hidden/s);
+  assert.doesNotMatch(styles, /scale\(/);
   assert.match(
     styles,
     /\.listbox \[data-openbitfun-part="list"\],[^}]*gap:\s*calc\(var\(--openbitfun-space-1\) \/ 2\)/s,
   );
+});
+
+test("Combobox and MultiSelect keep the field height independent of text, tags, and clear actions", async () => {
+  const styles = await readFile(
+    new URL("../src/components/Combobox/Combobox.module.css", import.meta.url),
+    "utf8",
+  );
+  const control = styles.match(/\.control\s*\{([^}]+)\}/)?.[1] ?? "";
+  const trigger = styles.match(/\.trigger\s*\{([^}]+)\}/)?.[1] ?? "";
+
+  assert.match(control, /block-size:\s*var\(--_combobox-height\)/);
+  assert.match(control, /grid-template-rows:\s*minmax\(0, 1fr\)/);
+  assert.match(trigger, /block-size:\s*100%/);
+  assert.match(trigger, /min-block-size:\s*0/);
+  assert.match(trigger, /padding-block:\s*0/);
+  for (const size of ["sm", "md", "lg"]) {
+    assert.ok(styles.includes(`var(--openbitfun-control-height-${size})`));
+  }
 });

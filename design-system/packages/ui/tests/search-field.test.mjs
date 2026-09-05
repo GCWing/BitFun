@@ -33,6 +33,25 @@ test("SearchField source preserves consumer key handling before Enter submission
   assert.match(source, /onSearch\?\.\(event\.currentTarget\.value\)/);
 });
 
+test("SearchField supports embedded composition without leaking its variant onto the input", async () => {
+  const markup = renderToStaticMarkup(createElement(SearchField, {
+    "aria-label": "Search modes",
+    size: "sm",
+    variant: "embedded",
+  }));
+  assert.match(markup, /data-openbitfun-component="search-field" data-variant="embedded"/);
+  assert.doesNotMatch(markup, /<input[^>]*variant=/);
+  assert.match(markup, /type="search"/);
+
+  const styles = await readFile(new URL("../src/components/SearchField/SearchField.module.css", import.meta.url), "utf8");
+  const embedded = styles.match(/\.root\[data-variant="embedded"\][^{]+\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(embedded, /block-size:\s*100%/);
+  assert.match(embedded, /padding:\s*0/);
+  assert.match(embedded, /border:\s*0/);
+  assert.match(embedded, /background:\s*transparent/);
+  assert.match(embedded, /box-shadow:\s*none/);
+});
+
 test("SearchField renders custom trailing content before the clear action", () => {
   const markup = renderToStaticMarkup(
     createElement(SearchField, {
@@ -92,17 +111,18 @@ test("SearchField owns pill composition while reusing Input behavior", async () 
   assert.match(styles, /--openbitfun-type-meta-font-size/);
 });
 
-test("SearchField focus changes only the existing border color", async () => {
-  const styles = await readFile(
-    new URL("../src/components/SearchField/SearchField.module.css", import.meta.url),
-    "utf8",
-  );
-  const focusRule = styles.match(
-    /\.root \.field:not\(\[data-invalid="true"\]\):focus-within\s*\{([^}]+)\}/,
+test("SearchField shares Input's single-border focus presentation", async () => {
+  const [styles, inputStyles] = await Promise.all([
+    readFile(new URL("../src/components/SearchField/SearchField.module.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/Input/Input.module.css", import.meta.url), "utf8"),
+  ]);
+  const focusRule = inputStyles.match(
+    /\.field:focus-within\s*\{([^}]+)\}/,
   )?.[1];
 
+  assert.doesNotMatch(styles, /border-color:|\.field[^{}]*:focus-within\s*\{/);
   assert.ok(focusRule);
-  assert.match(focusRule, /border-color: var\(--openbitfun-color-content-primary\)/);
+  assert.match(focusRule, /border-color: var\(--openbitfun-color-field-border-focus\)/);
   assert.match(focusRule, /box-shadow: none/);
   assert.doesNotMatch(focusRule, /border-width|outline/);
 });

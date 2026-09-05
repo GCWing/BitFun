@@ -39,7 +39,6 @@ describe('SettingsNav typography and layout ownership', () => {
     expect(stylesheet).toContain("@use '../../styles/nav-panel-font-scope.scss' as nav-font;");
     expect(stylesheet).not.toContain('nav-panel-font-token-scope');
     expect(stylesheet).toContain('@include nav-font.nav-panel-text-body;');
-    expect(stylesheet).toContain('@include nav-font.nav-panel-text-heading;');
     expect(stylesheet).toContain('@include nav-font.nav-panel-text-meta;');
     // typography-audit: negative-test-start -- verifies Appearance no longer owns the navigation font scale
     expect(stylesheet).not.toContain('--openbitfun-appearance-token-font-size-');
@@ -49,7 +48,7 @@ describe('SettingsNav typography and layout ownership', () => {
     expect(stylesheet).not.toContain('text-transform: uppercase;');
   });
 
-  it('keeps title, search, and body separated by the navigation spacing token', () => {
+  it('keeps search and body separated by the navigation spacing token', () => {
     const root = declarations('.openbitfun-settings-nav');
     const header = declarations('.openbitfun-settings-nav__panel-header');
     expect(root.getPropertyValue('gap')).toBe('var(--openbitfun-layout-navigation-panel-content-gap)');

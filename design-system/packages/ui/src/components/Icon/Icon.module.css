@@ -15,6 +15,16 @@
     mask-size: contain;
   }
 
+  .icon[data-openbitfun-source="line"] {
+    background-color: transparent;
+  }
+
+  .icon[data-openbitfun-source="line"] > svg {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
   .icon[data-size="2xs"] {
     --_icon-size: var(--openbitfun-control-icon-size2xs);
   }

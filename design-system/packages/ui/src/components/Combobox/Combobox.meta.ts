@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const comboboxMeta = {
   category: "form",
-  description: "An anchored searchable single-value selector with grouped, clearable, and explicit value-creation support.",
+  description: "A searchable single-value selector with an embedded search header and grouped options on one anchored surface, plus clearing and explicit value creation.",
   maturity: "stable",
   name: "Combobox",
   props: [
@@ -13,7 +13,7 @@ export const comboboxMeta = {
     { defaultValue: "false", name: "clearable", type: "boolean" },
     { defaultValue: "md", name: "size", type: "sm | md | lg" },
   ],
-  states: ["default", "open", "searching", "custom", "invalid", "disabled", "loading"],
+  states: ["default", "open", "searching", "custom", "invalid", "disabled", "loading", "empty"],
   tokens: [
     "color.field.background",
     "color.field.backgroundHover",
@@ -24,6 +24,7 @@ export const comboboxMeta = {
     "color.content.secondary",
     "color.content.muted",
     "color.content.disabled",
+    "color.control.highlight.background",
     "color.action.neutral.content",
     "color.action.neutral.surface",
     "color.border.subtle",
@@ -37,10 +38,13 @@ export const comboboxMeta = {
     "control.select.radius",
     "control.select.indicatorSize",
     "control.select.contentGap",
+    "control.select.trailingInset",
+    "control.iconButton.xsSize",
     "overlay.menu.inlineSize",
     "overlay.menu.surfacePadding",
     "overlay.menu.surfaceRadius",
     "overlay.menu.itemIconSize",
     "shadow.menu",
+    "type.label.selected.fontWeight",
   ],
 } as const satisfies ComponentMeta;

@@ -88,4 +88,22 @@ describe('NotificationCenter header', () => {
     }
     expect(service.toggleCenter).toHaveBeenCalledWith(false);
   });
+
+  it('moves the message preview into the details when expanded', () => {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      '.notification-center__item-disclosure button[aria-expanded]',
+    );
+
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      document.querySelector('[data-openbitfun-part="description"]')?.textContent,
+    ).toBe('Notification message');
+
+    act(() => trigger!.click());
+
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[data-openbitfun-part="description"]')).toBeNull();
+    expect(document.querySelector('.notification-center__item-detail-message')?.textContent)
+      .toBe('Notification message');
+  });
 });

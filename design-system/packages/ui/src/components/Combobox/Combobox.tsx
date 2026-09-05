@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { LoaderCircle } from "lucide-react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
@@ -28,6 +30,8 @@ import {
 } from "../Listbox";
 import { SearchField } from "../SearchField";
 import styles from "./Combobox.module.css";
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export type ComboboxValue = ListboxValue;
 export type ComboboxSize = "sm" | "md" | "lg";
@@ -182,9 +186,11 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const restoreFocusAfterCloseRef = useRef(false);
   const dismissibleBranches = useMemo(() => [rootRef], []);
-  const resolvedOpen = open ?? uncontrolledOpen;
+  const resolvedOpen = !disabled && (open ?? uncontrolledOpen);
   const selectedValues = useMemo<ComboboxValue[]>(() => {
     if (multiple) {
       const values = controlledValue as readonly ComboboxValue[] | undefined;
@@ -207,6 +213,13 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
     if (open === undefined) setUncontrolledOpen(nextOpen);
     onOpenChange?.(nextOpen);
   }, [onOpenChange, open, resolvedOpen]);
+
+  const closeListbox = useCallback((restoreFocus: boolean) => {
+    restoreFocusAfterCloseRef.current = restoreFocus;
+    updateOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+  }, [updateOpen]);
 
   const commitValues = useCallback((nextValues: ComboboxValue[]) => {
     if (controlledValue === undefined) setUncontrolledValues(nextValues);
@@ -269,10 +282,8 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       return;
     }
     commitValues([option.value]);
-    setQuery("");
-    updateOpen(false);
-    triggerRef.current?.focus();
-  }, [commitValues, disabled, loading, multiple, selectedValues, updateOpen]);
+    closeListbox(true);
+  }, [closeListbox, commitValues, disabled, loading, multiple, selectedValues]);
 
   const submitCreateValue = useCallback((candidate: string) => {
     if (!onCreateValue || disabled || loading) return;
@@ -284,11 +295,10 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       }
     } else {
       commitValues([createdValue]);
-      updateOpen(false);
-      triggerRef.current?.focus();
+      closeListbox(true);
     }
     setQuery("");
-  }, [commitValues, disabled, loading, multiple, onCreateValue, selectedValues, updateOpen]);
+  }, [closeListbox, commitValues, disabled, loading, multiple, onCreateValue, selectedValues]);
 
   const toggleSelectAll = useCallback(() => {
     if (!multiple || disabled || loading) return;
@@ -312,6 +322,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
 
   const openListbox = useCallback((direction: 1 | -1 = 1, keyboard = false) => {
     if (disabled) return;
+    restoreFocusAfterCloseRef.current = false;
     setKeyboardOpen(keyboard);
     updateOpen(true);
     if (!keyboard) {
@@ -327,13 +338,6 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       ? selectedIndex
       : firstEnabledIndex(navigationItems, direction));
   }, [disabled, navigationItems, selectedValues, updateOpen]);
-
-  const closeListbox = useCallback((restoreFocus: boolean) => {
-    updateOpen(false);
-    setQuery("");
-    setActiveIndex(-1);
-    if (restoreFocus) triggerRef.current?.focus();
-  }, [updateOpen]);
 
   const handleTriggerKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
@@ -392,9 +396,13 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
             || option.label.toLocaleLowerCase() === candidate.toLocaleLowerCase()
           ))
         : undefined;
-      if (exactOption && !exactOption.disabled) selectOption(exactOption);
-      else if (createCandidate) submitCreateValue(createCandidate);
-      closeListbox(false);
+      // Restore the in-flow trigger before native Tab/Shift+Tab traversal.
+      // Otherwise removing the focused portal input loses the field's tab position.
+      flushSync(() => {
+        if (exactOption && !exactOption.disabled) selectOption(exactOption);
+        else if (createCandidate) submitCreateValue(createCandidate);
+        closeListbox(true);
+      });
     }
   }, [activateItem, activeIndex, closeListbox, createCandidate, moveActive, navigationItems, options, query, selectOption, submitCreateValue]);
 
@@ -412,8 +420,19 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
     layerRef: popoverRef,
     placement,
     matchWidth: true,
+    overlapAnchor: true,
     revision: `${query}:${filteredOptions.length}:${loading}`,
   });
+
+  const positioned = layout !== null;
+  useIsomorphicLayoutEffect(() => {
+    if (resolvedOpen) {
+      if (positioned) searchRef.current?.focus({ preventScroll: true });
+    } else if (restoreFocusAfterCloseRef.current) {
+      restoreFocusAfterCloseRef.current = false;
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+  }, [positioned, resolvedOpen]);
 
   useEffect(() => {
     if (!resolvedOpen || activeIndex < 0) return;
@@ -492,7 +511,9 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       data-openbitfun-component={multiple ? "multi-select-popup" : "combobox-popup"}
       data-openbitfun-part="popover"
       data-keyboard-open={keyboardOpen ? "true" : "false"}
+      data-invalid={invalid ? "true" : "false"}
       data-placement={layout?.placement ?? placement}
+      data-size={size}
       ref={popoverRef}
       style={layout?.style ?? { position: "fixed", visibility: "hidden" }}
     >
@@ -501,12 +522,18 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           aria-activedescendant={activeDescendant}
           aria-autocomplete="list"
           aria-controls={listboxId}
+          aria-describedby={resolvedDescribedBy}
           aria-expanded={resolvedOpen}
-          aria-label={designSystem.messages.searchOptions}
+          aria-label={resolvedTriggerLabel ?? (providedId || resolvedLabelledBy ? undefined : designSystem.messages.searchOptions)}
+          aria-labelledby={resolvedLabelledBy}
+          aria-required={required || undefined}
+          aria-busy={loading || undefined}
           autoComplete="off"
           className={styles.searchField}
           clearLabel={query ? designSystem.messages.clearSelection : undefined}
-          leadingIcon={<Icon name="search" />}
+          id={id}
+          invalid={invalid}
+          leadingIcon={<Icon name="search" size="sm" />}
           onClear={query
             ? () => {
                 setQuery("");
@@ -519,67 +546,78 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
             setActiveIndex(-1);
           }}
           placeholder={designSystem.messages.searchOptions}
-          ref={(node) => {
-            if (node && resolvedOpen) node.focus();
-          }}
+          ref={searchRef}
           role="combobox"
           size={size}
           value={query}
+          variant="embedded"
+        />
+        <IconButton
+          aria-label={designSystem.messages.dialogClose}
+          className={styles.collapse}
+          data-openbitfun-part="collapse"
+          icon={<Icon name="chevron-up" />}
+          onClick={() => closeListbox(true)}
+          size="xs"
+          variant="quiet"
         />
       </div>
-      <Listbox
-        aria-label={ariaLabel ?? (typeof label === "string" ? label : "Options")}
-        className={styles.listbox}
-        focusMode="virtual"
-        id={listboxId}
-        multiple={multiple}
-      >
-        {loading && filteredOptions.length === 0 ? (
-          <ListboxEmpty className={styles.message}>
-            <LoaderCircle aria-hidden="true" className={styles.spinner} />
-            <span>{designSystem.messages.loading}</span>
-          </ListboxEmpty>
-        ) : navigationItems.length === 0 ? (
-          <ListboxEmpty>{designSystem.messages.noOptions}</ListboxEmpty>
-        ) : (
-          <>
-            {navigationItems[0]?.kind === "all" && (
-              <ListboxOption
-                active={activeIndex === 0}
-                id={optionId(0)}
-                indicator={allFilteredSelected ? <Icon name="check-line" /> : null}
-                onClick={toggleSelectAll}
-                onMouseDown={(event) => event.preventDefault()}
-                selected={allFilteredSelected}
-              >
-                {designSystem.messages.selectAll}
-              </ListboxOption>
-            )}
-            {groupedOptions.ungrouped.map(renderListboxOption)}
-            {[...groupedOptions.groups].map(([groupLabel, groupOptions]) => (
-              <ListboxGroup key={groupLabel} label={groupLabel}>
-                {groupOptions.map(renderListboxOption)}
-              </ListboxGroup>
-            ))}
-            {createCandidate && (() => {
-              const createIndex = navigationItems.findIndex((item) => item.kind === "create");
-              return (
+      <div aria-hidden="true" className={styles.divider} data-openbitfun-part="divider" />
+      <div className={styles.options} data-openbitfun-part="options">
+        <Listbox
+          aria-label={ariaLabel ?? (typeof label === "string" ? label : "Options")}
+          className={styles.listbox}
+          focusMode="virtual"
+          id={listboxId}
+          multiple={multiple}
+        >
+          {loading && filteredOptions.length === 0 ? (
+            <ListboxEmpty className={styles.message}>
+              <LoaderCircle aria-hidden="true" className={styles.spinner} />
+              <span>{designSystem.messages.loading}</span>
+            </ListboxEmpty>
+          ) : navigationItems.length === 0 ? (
+            <ListboxEmpty>{designSystem.messages.noOptions}</ListboxEmpty>
+          ) : (
+            <>
+              {navigationItems[0]?.kind === "all" && (
                 <ListboxOption
-                  active={activeIndex === createIndex}
-                  id={optionId(createIndex)}
-                  leading={<Icon name="plus" />}
-                  onClick={() => submitCreateValue(createCandidate)}
+                  active={activeIndex === 0}
+                  id={optionId(0)}
+                  indicator={allFilteredSelected ? <Icon name="check-line" /> : null}
+                  onClick={toggleSelectAll}
                   onMouseDown={(event) => event.preventDefault()}
-                  selected={selectedValues.includes(createCandidate)}
-                  value={createCandidate}
+                  selected={allFilteredSelected}
                 >
-                  {designSystem.messages.createValue}: {createCandidate}
+                  {designSystem.messages.selectAll}
                 </ListboxOption>
-              );
-            })()}
-          </>
-        )}
-      </Listbox>
+              )}
+              {groupedOptions.ungrouped.map(renderListboxOption)}
+              {[...groupedOptions.groups].map(([groupLabel, groupOptions]) => (
+                <ListboxGroup key={groupLabel} label={groupLabel}>
+                  {groupOptions.map(renderListboxOption)}
+                </ListboxGroup>
+              ))}
+              {createCandidate && (() => {
+                const createIndex = navigationItems.findIndex((item) => item.kind === "create");
+                return (
+                  <ListboxOption
+                    active={activeIndex === createIndex}
+                    id={optionId(createIndex)}
+                    leading={<Icon name="plus" />}
+                    onClick={() => submitCreateValue(createCandidate)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    selected={selectedValues.includes(createCandidate)}
+                    value={createCandidate}
+                  >
+                    {designSystem.messages.createValue}: {createCandidate}
+                  </ListboxOption>
+                );
+              })()}
+            </>
+          )}
+        </Listbox>
+      </div>
     </div>
   ) : null;
 
@@ -603,6 +641,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
         </label>
       )}
       <div
+        aria-hidden={resolvedOpen || undefined}
         className={styles.control}
         data-openbitfun-part="control"
         data-tags={multiple && hasValue ? "true" : "false"}
@@ -623,6 +662,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
                   onMouseDown={(event) => event.preventDefault()}
                   shape="circle"
                   size="xs"
+                  tabIndex={resolvedOpen ? -1 : undefined}
                   variant="quiet"
                 />
               </span>
@@ -633,9 +673,9 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           </span>
         )}
         <button
-          aria-controls={resolvedOpen ? listboxId : undefined}
+          aria-controls={resolvedOpen ? undefined : listboxId}
           aria-describedby={resolvedDescribedBy}
-          aria-expanded={resolvedOpen}
+          aria-expanded={resolvedOpen ? undefined : false}
           aria-haspopup="listbox"
           aria-invalid={invalid || undefined}
           aria-label={resolvedTriggerLabel}
@@ -645,14 +685,15 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           className={styles.trigger}
           data-openbitfun-part="trigger"
           disabled={disabled}
-          id={id}
+          id={resolvedOpen ? undefined : id}
           onClick={() => {
             if (resolvedOpen) closeListbox(false);
             else openListbox(1, false);
           }}
           onKeyDown={handleTriggerKeyDown}
           ref={triggerRef}
-          role="combobox"
+          role={resolvedOpen ? undefined : "combobox"}
+          tabIndex={resolvedOpen ? -1 : undefined}
           type="button"
         >
           <span className={styles.value} data-openbitfun-part="value">
@@ -681,6 +722,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
               setQuery("");
             }}
             size="sm"
+            tabIndex={resolvedOpen ? -1 : undefined}
             variant="quiet"
           />
         )}

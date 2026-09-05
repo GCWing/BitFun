@@ -134,6 +134,43 @@ describe('catalog icon consumer integration', () => {
     expect(leftovers).toEqual([]);
   });
 
+  it('keeps pixel-to-token and Lucide line-weight adaptation inside the shared Icon boundary', () => {
+    const localAdapters = filesIn(sourceRoot).flatMap(file => {
+      const contents = readFileSync(file, 'utf8');
+      const hasPixelMapping = contents.includes("<= 11")
+        && contents.includes("'2xs'")
+        && contents.includes("'xs'")
+        && contents.includes("'sm'")
+        && contents.includes("'md'")
+        && contents.includes("'lg'");
+      return hasPixelMapping
+        ? [path.relative(sourceRoot, file).replaceAll('\\', '/')]
+        : [];
+    });
+
+    expect(localAdapters).toEqual([]);
+    expect(source('app/components/NavPanel/MainNav.tsx')).toContain('<Icon glyph={Users} size="sm" />');
+    expect(source('app/components/NavPanel/MainNav.tsx')).toContain('<Icon glyph={Network} size="sm" />');
+    expect(source('app/scenes/agents/agentsIcons.ts')).toContain('Record<AgentIconKey, IconSource>');
+    expect(source('app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx'))
+      .toContain('Record<EcosystemImportItemKind, IconSource>');
+
+    const galleryEmpty = source('app/components/GalleryLayout/GalleryEmpty.tsx');
+    expect(galleryEmpty).toContain('icon: IconSource');
+    expect(galleryEmpty).toContain('<Icon {...icon} />');
+    expect(source('app/components/GalleryLayout/GalleryLayout.scss'))
+      .toContain('--_gallery-empty-icon-size:');
+
+    for (const normalizedSurface of [
+      'app/components/NavPanel/MainNav.tsx',
+      'app/scenes/agents/AgentsScene.tsx',
+      'app/scenes/skills/SkillsScene.tsx',
+      'app/scenes/skills/components/SkillsSuiteView.tsx',
+    ]) {
+      expect(source(normalizedSurface)).not.toContain('strokeWidth=');
+    }
+  });
+
   it('keeps the shared refresh action compact and disables it while loading', () => {
     const props = { tooltip: 'Refresh', onClick: () => {} };
     const idle = renderToStaticMarkup(createElement(ConfigRefreshButton, props));

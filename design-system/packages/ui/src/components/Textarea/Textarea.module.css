@@ -21,22 +21,22 @@
     font-weight: var(--openbitfun-type-body-sm-font-weight);
     line-height: var(--openbitfun-type-body-sm-line-height);
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
-    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+    transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard), border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
   .root[data-auto-resize="true"] .textarea { overflow: hidden; resize: none; }
   .root[data-font="mono"] .textarea { font-family: var(--openbitfun-type-code-md-font-family); font-size: var(--openbitfun-type-code-md-font-size); font-weight: var(--openbitfun-type-code-md-font-weight); line-height: var(--openbitfun-type-code-md-line-height); letter-spacing: var(--openbitfun-type-code-md-letter-spacing); }
   .root[data-layout="fill"] .textarea { flex: 1 1 auto; min-block-size: 0; }
   .root[data-resize="none"] .textarea { resize: none; }
   .root[data-variant="filled"] .textarea { border-color: transparent; }
-  .textarea:hover:not(:disabled) { border-color: var(--openbitfun-color-field-border-hover); background: var(--openbitfun-color-field-background-hover); }
+  .textarea:hover:where(:not(:disabled)) { border-color: var(--openbitfun-color-field-border-hover); background: var(--openbitfun-color-field-background-hover); }
   .root[data-field-surface="ambient"] .textarea,
   .root[data-field-surface="ambient"] .textarea:hover:not(:disabled) { background: transparent; }
-  .textarea:focus { border-color: var(--openbitfun-color-field-border-focus); box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring); }
+  .root .textarea:focus { border-color: var(--openbitfun-color-field-border-focus); box-shadow: none; }
   .root[data-invalid="true"] .textarea { border-color: var(--openbitfun-color-status-danger-border); }
   .textarea:disabled { color: var(--openbitfun-color-content-disabled); cursor: not-allowed; }
   .textarea::placeholder, .hint, .count { color: var(--openbitfun-color-content-muted); }
   .support { display: flex; justify-content: space-between; gap: var(--openbitfun-space-3); font-family: var(--openbitfun-type-support-font-family); font-size: var(--openbitfun-type-support-font-size); font-weight: var(--openbitfun-type-support-font-weight); line-height: var(--openbitfun-type-support-line-height); letter-spacing: var(--openbitfun-type-support-letter-spacing); }
   .count { margin-inline-start: auto; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .textarea { transition: none; } }
-  @media (forced-colors: active) { .textarea { border-color: ButtonText; } .textarea:focus { border-color: Highlight; box-shadow: 0 0 0 var(--openbitfun-focus-width) Highlight; } }
+  @media (forced-colors: active) { .textarea { border-color: ButtonText; } .root .textarea:focus { border-color: Highlight; } }
 }

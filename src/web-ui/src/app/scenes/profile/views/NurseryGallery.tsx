@@ -236,13 +236,13 @@ const NurseryGallery: React.FC = () => {
                 </>
               ) : templateStatsStatus === 'error' ? (
                 <span className="nursery-defaults__stat nursery-defaults__stat--error">
-                  <CircleAlert size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <Icon glyph={CircleAlert} size="xs" />
                   {t('nursery.template.statsUnavailable')}
                 </span>
               ) : templateStats ? (
                 <>
                   <span className="nursery-defaults__stat">
-                    <Wrench size={13} strokeWidth={1.8} aria-hidden="true" />
+                    <Icon glyph={Wrench} size="xs" />
                     {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
                   </span>
                   <span className="nursery-defaults__stat">
@@ -284,7 +284,7 @@ const NurseryGallery: React.FC = () => {
             />
           ) : workspaceError && sortedAssistantWorkspacesList.length === 0 ? (
             <GalleryEmpty
-              icon={<CircleAlert size={32} strokeWidth={1.5} aria-hidden="true" />}
+              icon={{ glyph: CircleAlert }}
               message={t('nursery.gallery.loadFailed')}
               isError
               className="nursery-gallery__empty"
@@ -292,7 +292,7 @@ const NurseryGallery: React.FC = () => {
             />
           ) : sortedAssistantWorkspacesList.length === 0 ? (
             <GalleryEmpty
-              icon={<Bot size={32} strokeWidth={1.5} aria-hidden="true" />}
+              icon={{ glyph: Bot }}
               message={(
                 <>
                   <strong>{t('nursery.gallery.emptyTitle')}</strong>
