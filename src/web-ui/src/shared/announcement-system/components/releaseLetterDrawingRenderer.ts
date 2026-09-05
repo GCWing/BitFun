@@ -35,9 +35,11 @@ export function createLetterDrawing(svg: SVGSVGElement) {
     return node;
   };
   const trace = (node: Element, value: number) => {
-    attribute(node, 'stroke-dasharray', '1 1');
-    attribute(node, 'stroke-dashoffset', 1 - clamp(value));
-    attribute(node, 'opacity', value <= 0 ? 0 : 1);
+    const progress = clamp(value);
+    // A completed contour must not retain a dash mask during the later scale.
+    attribute(node, 'stroke-dasharray', progress === 1 ? 'none' : '1 1');
+    attribute(node, 'stroke-dashoffset', 1 - progress);
+    attribute(node, 'opacity', progress <= 0 ? 0 : 1);
   };
   const compass = (circle: string, pen: string, radius: number, value: number) => {
     trace(get(circle), value);

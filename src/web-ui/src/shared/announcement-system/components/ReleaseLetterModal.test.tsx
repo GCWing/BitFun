@@ -6,7 +6,9 @@ import { announcementService } from '../services/AnnouncementService';
 import type { AnnouncementCard } from '../types';
 import { useAnnouncementStore } from '../store/announcementStore';
 import ReleaseLetterModal from './ReleaseLetterModal';
-import { CONTENT_AT, INTRO_MS, LETTER_END, SIGNATURE_AT } from './releaseLetterMotion';
+import AnnouncementProvider from './AnnouncementProvider';
+import { configAPI } from '@/infrastructure/api';
+import { CONTENT_AT, HANDOFF_MS, INTRO_MS, LETTER_END, SIGNATURE_AT } from './releaseLetterMotion';
 
 function releaseLetter(): AnnouncementCard {
   return {
@@ -107,6 +109,21 @@ describe('ReleaseLetterModal', () => {
     expect(announcementService.markSeen).toHaveBeenCalledWith(card.id);
   });
 
+  it('waits for the app startup handoff even on a slow launch, then waits two paint frames', async () => {
+    const pending = vi.spyOn(announcementService, 'getPendingAnnouncements').mockResolvedValue([]);
+    vi.spyOn(configAPI, 'getConfig').mockResolvedValue(true);
+    act(() => root.render(<AnnouncementProvider ready={false} />));
+    act(() => vi.advanceTimersByTime(30000));
+    expect(pending).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    act(() => root.render(<AnnouncementProvider ready />));
+    renderFrame(0);
+    expect(pending).not.toHaveBeenCalled();
+    renderFrame(16);
+    await act(async () => { await Promise.resolve(); });
+    expect(pending).toHaveBeenCalledOnce();
+  });
+
   it('renders authored copy as escaped DOM text with semantic emphasis', () => {
     useAnnouncementStore.getState().loadQueue([releaseLetter()]);
     vi.advanceTimersByTime(0);
@@ -138,6 +155,52 @@ describe('ReleaseLetterModal', () => {
     expect(frames.size).toBe(0);
   });
 
+  it('keeps the authored intro viewport through handoff and releases it only at the endpoint', () => {
+    openLetter();
+    const box = document.querySelector<HTMLElement>('.release-letter__drawing-box')!;
+    for (const time of [0, INTRO_MS, INTRO_MS + HANDOFF_MS - 1]) {
+      renderFrame(time);
+      expect(box.style.left).not.toBe('');
+      expect(box.style.top).not.toBe('');
+      expect(box.style.width).not.toBe('');
+      expect(box.style.transform).not.toContain('NaN');
+    }
+    renderFrame(INTRO_MS + HANDOFF_MS);
+    expect(box.style.length).toBe(0);
+    expect(document.querySelector('.release-letter__intro-status')).toBeNull();
+  });
+
+  it('follows the HTML outline-to-material timing and leaves no mask on completed strokes', () => {
+    openLetter();
+    const material = document.querySelector('[data-drawing="material"]')!;
+    const outline = document.querySelector('[data-drawing="outlineEdge"]')!;
+    const clip = document.querySelector('[data-drawing="startupClipPath"]')!;
+    renderFrame(INTRO_MS * .72);
+    expect(outline.getAttribute('stroke-dasharray')).toBe('none');
+    expect(material.getAttribute('opacity')).toBe('0');
+    renderFrame(INTRO_MS * .73);
+    const completedShape = clip.getAttribute('d');
+    for (const progress of [.73, .74, .75]) {
+      renderFrame(INTRO_MS * progress);
+      expect(material.getAttribute('opacity')).toBe('0');
+      expect(outline.getAttribute('stroke-dashoffset')).toBe('0');
+      expect(outline.getAttribute('stroke-dasharray')).toBe('none');
+      expect(Number(outline.parentElement!.getAttribute('opacity'))).toBeGreaterThan(0);
+      const path = outline.getAttribute('d')!;
+      expect(path.match(/M/g)).toHaveLength(2);
+      expect(path.match(/A/g)).toHaveLength(12);
+      expect(path.match(/Z/g)).toHaveLength(2);
+      expect(clip.getAttribute('d')).toBe(completedShape);
+    }
+    renderFrame(INTRO_MS * .8);
+    expect(Number(material.getAttribute('opacity'))).toBeGreaterThan(0);
+    expect(clip.getAttribute('d')).toBe(completedShape);
+    expect(outline.getAttribute('stroke-dasharray')).toBe('none');
+    const fillets = document.querySelectorAll('.fillet-arc');
+    expect(fillets).toHaveLength(6);
+    fillets.forEach(arc => expect(arc.getAttribute('stroke-dasharray')).toBe('none'));
+  });
+
   it('replays the connected mascot on hover and activation without replaying the letter or persisting again', () => {
     openLetter();
     renderFrame(LETTER_END);
@@ -162,6 +225,7 @@ describe('ReleaseLetterModal', () => {
     openLetter();
     act(() => document.querySelector<HTMLButtonElement>('.release-letter__skip')!.click());
     expect(document.querySelectorAll('[data-typed="true"]')).toHaveLength(15);
+    renderFrame(LETTER_END + 1); // Flush the real Dialog's focus reconciliation.
     expect(frames.size).toBe(0);
     act(() => document.querySelector<HTMLButtonElement>('.release-letter__version-mark')!.click());
     expect(document.querySelector('.release-letter-scene')?.getAttribute('data-motion-state')).toBe('intro');
@@ -177,6 +241,7 @@ describe('ReleaseLetterModal', () => {
     expect(document.querySelectorAll('[data-typed="true"]')).toHaveLength(15);
     expect(document.querySelectorAll('[data-cursor="true"]')).toHaveLength(0);
     act(() => document.querySelector<HTMLButtonElement>('.release-letter__mascot-button')!.click());
+    renderFrame(LETTER_END + 1);
     expect(frames.size).toBe(0);
   });
 

@@ -60,7 +60,7 @@ async function listTsxFiles(directory) {
 async function readProductSources() {
   const files = await listTsxFiles(sourceDirectory);
   const sources = await Promise.all(files.map(async (file) => ({
-    file: path.relative(sourceDirectory, file),
+    file: path.relative(sourceDirectory, file).split(path.sep).join('/'),
     source: await readFile(file, 'utf8'),
   })));
   return sources;

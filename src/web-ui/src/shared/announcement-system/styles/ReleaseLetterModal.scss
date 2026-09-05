@@ -284,21 +284,6 @@
   background: var(--openbitfun-color-accent-default);
   opacity: 0;
 }
-.release-letter__intro-status {
-  position: absolute;
-  inset-inline-start: 50%;
-  inset-block-end: 34px;
-  inline-size: min(350px, calc(100% - 48px));
-  transform: translateX(-50%);
-  color: var(--openbitfun-color-content-muted);
-  font-family: var(--openbitfun-type-code-sm-font-family);
-  font-size: var(--openbitfun-type-overline-sm-font-size);
-  letter-spacing: var(--openbitfun-type-modifier-tracking-caps-letter-spacing);
-  pointer-events: none;
-}
-.release-letter__intro-status-row { display: flex; justify-content: space-between; gap: 20px; margin-block-end: 11px; }
-.release-letter__intro-track { block-size: 1px; overflow: hidden; background: var(--openbitfun-color-border-default); }
-.release-letter__intro-progress { block-size: 100%; background: var(--openbitfun-color-content-muted); transform: scaleX(0); transform-origin: left center; }
 .release-letter__sr-only {
   position: absolute;
   inline-size: 1px;

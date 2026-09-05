@@ -6,7 +6,7 @@ import FeatureModal from './FeatureModal';
 import ReleaseLetterModal from './ReleaseLetterModal';
 import { configAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
 
 const log = createLogger('AnnouncementProvider');
 
@@ -34,7 +34,7 @@ const ENV_PREVIEW_CARD_ID = import.meta.env.DEV
  * cards from the backend scheduler and passes them to the store, which then
  * drives the Toast and Modal rendering.
  *
- * The provider also renders the two global UI surfaces:
+ * The provider also renders the global UI surfaces:
  *   - <AnnouncementToastStack>  (bottom-left)
  *   - <FeatureModal>            (standard centre-screen presentation)
  *   - <ReleaseLetterModal>      (release-letter presentation)
@@ -45,12 +45,12 @@ const ENV_PREVIEW_CARD_ID = import.meta.env.DEV
  * backend filter logic.  This lets you preview the full UI flow without
  * clearing persisted state.
  */
-const AnnouncementProvider: React.FC = () => {
+const AnnouncementProvider: React.FC<{ ready: boolean }> = ({ ready }) => {
   const { loadQueue, markInitialised, initialised, forceShowCards } = useAnnouncementStore();
 
   // ── Normal load path ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (initialised) return;
+    if (!ready || initialised) return;
     let cancelled = false;
 
     const load = async () => {
@@ -89,11 +89,9 @@ const AnnouncementProvider: React.FC = () => {
       }
     };
 
-    const cancelStartupSchedule = scheduleAfterStartupSignal(() => {
+    const cancelStartupSchedule = scheduleAfterStartupPaint(() => {
       void load();
     }, {
-      signalName: 'openbitfun:interactive-shell-ready',
-      fallbackTimeoutMs: 10000,
       frameCount: 2,
       onError: error => {
         log.error('Failed to schedule announcement load after startup', error);
@@ -104,7 +102,7 @@ const AnnouncementProvider: React.FC = () => {
       cancelled = true;
       cancelStartupSchedule();
     };
-  }, [forceShowCards, initialised, loadQueue, markInitialised]);
+  }, [forceShowCards, initialised, loadQueue, markInitialised, ready]);
 
   // ── Debug trigger ─────────────────────────────────────────────────────────
   const handleDebugTrigger = useCallback(async () => {
@@ -123,7 +121,7 @@ const AnnouncementProvider: React.FC = () => {
   }, [forceShowCards]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!import.meta.env.DEV || !ready) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Shift+Alt+D (all platforms)
@@ -135,7 +133,9 @@ const AnnouncementProvider: React.FC = () => {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleDebugTrigger]);
+  }, [handleDebugTrigger, ready]);
+
+  if (!ready) return null;
 
   return (
     <>

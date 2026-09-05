@@ -971,7 +971,7 @@ function App() {
               <SessionUsageModal />
 
               {/* Announcement / feature-demo / tips system */}
-              <AnnouncementProvider />
+              <AnnouncementProvider ready={interactiveShellReady && !startupOverlayVisible} />
 
               {/* AskUserQuestion waiting-state aria-live announcer.
                   Mounted here (inside ToolbarModeProvider, outside LazyAppLayout)

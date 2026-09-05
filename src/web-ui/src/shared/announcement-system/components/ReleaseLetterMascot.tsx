@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 import artwork from '../../../../../../assets/brand/source/release-letter-mascot.svg?no-inline';
 
 export default function ReleaseLetterMascot() {

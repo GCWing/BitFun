@@ -1894,8 +1894,8 @@
 
 .chat-page {
   // Mobile reading uses the existing body role at the larger system size.
-  --openbitfun-type-body-md-font-size: var(--openbitfun-font-size-xl);
-  --openbitfun-type-body-md-line-height: var(--openbitfun-line-height-reading);
+  --openbitfun-type-body-md-font-size: var(--openbitfun-type-flow-title-font-size);
+  --openbitfun-type-body-md-line-height: var(--openbitfun-type-flow-body-line-height);
   background: var(--harmony-page);
 }
 

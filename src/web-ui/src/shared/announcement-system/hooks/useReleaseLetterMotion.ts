@@ -3,7 +3,7 @@ import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
 import { createLetterDrawing } from '../components/releaseLetterDrawingRenderer';
 import {
   CHARACTER_TIMES, CONTENT_AT, HANDOFF_MS, INTRO_MS, LETTER_END, MASCOT_AT,
-  MASCOT_MS, SIGNATURE_AT, clamp, formatMatrix, round, sampleHandoffBox, sampleMascot, segment,
+  MASCOT_MS, SIGNATURE_AT, clamp, formatMatrix, localLetterViewport, round, sampleHandoffBox, sampleMascot, segment,
   type LetterBox,
 } from '../components/releaseLetterMotion';
 
@@ -21,9 +21,6 @@ export function useReleaseLetterMotion() {
     const scroller = find<HTMLElement>('.release-letter-scroll');
     const wordmark = find<HTMLElement>('.release-letter__intro-wordmark');
     const brandRule = find<HTMLElement>('.release-letter__intro-rule');
-    const status = find<HTMLElement>('.release-letter__intro-status');
-    const phases = Array.from(scene.querySelectorAll<HTMLElement>('[data-phase]'));
-    const progressBar = find<HTMLElement>('.release-letter__intro-progress');
     const skipButton = find<HTMLButtonElement>('.release-letter__skip');
     const versionButton = find<HTMLButtonElement>('.release-letter__version-mark');
     const signature = find<HTMLElement>('.release-letter__signature');
@@ -45,14 +42,17 @@ export function useReleaseLetterMotion() {
 
     function measure() {
       const hostRect = background.getBoundingClientRect();
-      const viewport = scene!.getBoundingClientRect();
+      const hostStyle = getComputedStyle(background);
+      const width = parseFloat(hostStyle.width) || background.clientWidth;
+      const height = parseFloat(hostStyle.height) || background.clientHeight;
+      const viewport = localLetterViewport(scene!.getBoundingClientRect(), hostRect, { width, height });
       const mobile = window.innerWidth <= 760;
       const size = Math.min(mobile ? 410 : 520, window.innerWidth * (mobile ? .92 : .68), window.innerHeight * (mobile ? .62 : .66), viewport.width * .92, viewport.height * .66);
-      const targetSize = hostRect.width * 640 / 544;
+      const targetSize = width * 640 / 544;
       geometry = {
-        from: { left: viewport.left + (viewport.width - size) / 2 - hostRect.left,
-          top: viewport.top + (viewport.height - size) / 2 - size * .04 - hostRect.top, width: size },
-        to: { left: (hostRect.width - targetSize) / 2, top: (hostRect.height - targetSize) / 2, width: targetSize },
+        from: { left: viewport.left + (viewport.width - size) / 2,
+          top: viewport.top + (viewport.height - size) / 2 - size * .04, width: size },
+        to: { left: (width - targetSize) / 2, top: (height - targetSize) / 2, width: targetSize },
       };
       geometryDirty = false;
     }
@@ -81,10 +81,13 @@ export function useReleaseLetterMotion() {
         if (geometryDirty || !geometry) measure();
         const { from, to } = geometry!;
         const box = sampleHandoffBox(handoff, from, to);
+        // Keep the authored small SVG viewport while drawing, then enlarge it.
+        // A background-sized SVG scaled down first changes normalized strokes
+        // and also shrinks the wordmark. All positions here are local CSS units.
         logo.style.left = `${from.left}px`;
         logo.style.top = `${from.top}px`;
         logo.style.width = `${from.width}px`;
-        logo.style.transform = `translate(${box.left - from.left}px, ${box.top - from.top}px) scale(${box.width / from.width})`;
+        logo.style.transform = `translate(${box.left - from.left}px, ${box.top - from.top}px) scale(${from.width > 0 ? box.width / from.width : 1})`;
       } else {
         logo.removeAttribute('style');
       }
@@ -92,10 +95,7 @@ export function useReleaseLetterMotion() {
       wordmark.style.opacity = String(brand);
       wordmark.style.transform = `translate(-50%, ${round((1 - segment(intro, .845, .99)) * 10)}px)`;
       brandRule.style.opacity = String(brand * .72);
-      status.style.opacity = String(1 - segment(handoff, 0, .22));
-      progressBar.style.transform = `scaleX(${intro})`;
-      const phase = [0, .14, .32, .51, .70, .76].filter(start => intro >= start).length - 1;
-      phases.forEach((node, i) => { node.hidden = i !== phase; });
+      brandRule.style.transform = `translateX(-50%) scaleX(${round(.3 + segment(intro, .845, .99) * .7)})`;
       reveals.forEach(node => {
         const start = CONTENT_AT + Number(node.dataset.reveal) * 115;
         const p = reduced ? 1 : segment(elapsed, start, start + 900);

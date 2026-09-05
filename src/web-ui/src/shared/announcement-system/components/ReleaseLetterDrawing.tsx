@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 
 /** One vector is drawn, rounded, and then moved into the letter background. */
 export default function ReleaseLetterDrawing() {

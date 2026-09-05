@@ -22,13 +22,28 @@ export const LETTER_END = MASCOT_AT + MASCOT_MS;
 
 export interface Point { x: number; y: number }
 export interface LetterBox { left: number; top: number; width: number }
+export interface LetterRect extends LetterBox { height: number }
 export type Matrix = [number, number, number, number, number, number];
 type Beat = [number, number];
 
 export function sampleHandoffBox(progress: number, from: LetterBox, to: LetterBox): LetterBox {
   const t = clamp(progress);
+  if (t === 0) return { ...from };
+  if (t === 1) return { ...to };
   const eased = t * t * t * (t * (t * 6 - 15) + 10);
   return { left: mix(from.left, to.left, eased), top: mix(from.top, to.top, eased), width: mix(from.width, to.width, eased) };
+}
+
+/** Remove the dialog's entrance scale before using screen rectangles in local CSS. */
+export function localLetterViewport(viewport: LetterRect, host: LetterRect, layout: { width: number; height: number }): LetterRect {
+  const scaleX = layout.width > 0 && host.width > 0 ? host.width / layout.width : 1;
+  const scaleY = layout.height > 0 && host.height > 0 ? host.height / layout.height : 1;
+  return {
+    left: (viewport.left - host.left) / scaleX,
+    top: (viewport.top - host.top) / scaleY,
+    width: viewport.width / scaleX,
+    height: viewport.height / scaleY,
+  };
 }
 
 const beats = {

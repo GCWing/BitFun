@@ -90,20 +90,6 @@ function ReleaseLetterScene({ title, body, titleId, descriptionId, closable }: {
         <button type="button" className="release-letter__skip" onClick={skip}>{t('announcements.release_letter.skip')}</button>
         {closable && <DialogClose className="release-letter__close" aria-label={t('announcements.common.close')} />}
       </div>
-      <div className="release-letter__intro-status" aria-hidden="true">
-        <div className="release-letter__intro-status-row">
-          <span>
-            <span data-phase="0">{t('announcements.release_letter.phase_center')}</span>
-            <span data-phase="1" hidden>{t('announcements.release_letter.phase_circles')}</span>
-            <span data-phase="2" hidden>{t('announcements.release_letter.phase_frame')}</span>
-            <span data-phase="3" hidden>{t('announcements.release_letter.phase_corners')}</span>
-            <span data-phase="4" hidden>{t('announcements.release_letter.phase_outline')}</span>
-            <span data-phase="5" hidden>{t('announcements.release_letter.phase_light')}</span>
-          </span>
-          <span>4.8 S</span>
-        </div>
-        <div className="release-letter__intro-track"><div className="release-letter__intro-progress" /></div>
-      </div>
     </div>
   );
 }

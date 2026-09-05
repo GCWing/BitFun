@@ -53,13 +53,7 @@
     "release_letter": {
       "skip": "Read letter",
       "replay": "Replay the release letter animation",
-      "replay_mascot": "Replay the OpenBitFun character jump",
-      "phase_center": "01 / FIND THE CENTER",
-      "phase_circles": "02 / DRAW THE CIRCLES",
-      "phase_frame": "03 / SET THE FRAME",
-      "phase_corners": "04 / ROUND THE CORNERS",
-      "phase_outline": "05 / COMPLETE THE OUTLINE",
-      "phase_light": "06 / SOFT LIGHT"
+      "replay_mascot": "Replay the OpenBitFun character jump"
     },
     "common": {
       "learn_more": "Learn more",

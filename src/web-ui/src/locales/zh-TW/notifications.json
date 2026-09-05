@@ -53,13 +53,7 @@
     "release_letter": {
       "skip": "直接閱讀",
       "replay": "重播發佈信動畫",
-      "replay_mascot": "重播 OpenBitFun 角色跳動動畫",
-      "phase_center": "01 / 定位中心",
-      "phase_circles": "02 / 圓規起筆",
-      "phase_frame": "03 / 骨架落位",
-      "phase_corners": "04 / 圓角成立",
-      "phase_outline": "05 / 線稿成形",
-      "phase_light": "06 / 柔光成形"
+      "replay_mascot": "重播 OpenBitFun 角色跳動動畫"
     },
     "common": {
       "learn_more": "查看詳情",
