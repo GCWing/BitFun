@@ -26,7 +26,9 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(editorDialog).toContain('className="openbitfun-model-settings__editor-dialog"');
     expect(editorDialog).toContain('size="xl"');
     expect(editorDialog).not.toContain('size="2xl"');
-    expect(editorDialog).toContain('<DialogFooter appearance="floating">');
+    expect(editorDialog).toMatch(
+      /\{!reasoningPanelDraft && \(\s*<DialogFooter appearance="floating">/,
+    );
     expect(editorDialog).toContain(
       '<Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
     );
