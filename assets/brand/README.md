@@ -1,38 +1,35 @@
 # OpenBitFun application brand assets
 
-`source/openbitfun-mark.svg` is the transparent vector master for the fine-line
-Logo. Its fifteen rounded hexagonal contours match the About dialog's static
-geometry. Motion and moving highlights are intentionally absent from icon files.
-The SVG uses `currentColor`, with a light default for dark backgrounds.
-The outer contour is opaque and heavier than the interior filaments so the
-white rim remains legible when the master is reduced by an application host.
+`source/openbitfun-mark.svg` is the transparent vector master for the current
+fine-line Logo used by startup and in-product brand surfaces. Its fifteen rounded
+hexagonal contours match the About dialog's static geometry. Motion and moving
+highlights are intentionally absent from static files. The SVG uses
+`currentColor`, with a light default for dark backgrounds.
 
 The generator also maintains the existing transparent PNG paths:
 
 - `openbitfun-mark-dark.png` is the dark mark for light surfaces.
 - `openbitfun-mark-light.png` is the light mark for dark surfaces.
 
-The application icon uses the light mark on the existing black rounded-square
-background, with transparent corners. The 1024 px master is rendered directly
-from the vector before generating Windows ICO and macOS ICNS containers.
+`source/openbitfun-app-mark.png` preserves the originally submitted silver
+hexagonal application mark. Application, window, taskbar, Dock, tray, browser,
+installer, and mobile launcher icons use this artwork on the black rounded-square
+background with transparent corners. It is intentionally independent from the
+current startup Logo, so regenerating either family cannot replace the other.
 
 `exports/` contains the SVG, ICO, ICNS, and PNGs at 16, 24, 32, 48, 64, 96,
 128, 192, 256, 512, 1024, and 2048 px. Each PNG size includes a dark transparent
-mark, a light transparent mark, and the application icon. PNG exports are
-rendered directly from the SVG rather than enlarged from a small bitmap.
-At 16–24 px, 32–48 px, and 64–96 px, PNGs use 3, 5, and 7 contours respectively
-with a minimum 1.35 px opaque outer rim, a 0.85 px inner contour, and 0.65 px
-interior filaments. Larger PNGs and the SVG retain all 15 contours.
-Windows ICO frames and Linux icons use the same size-specific renders; macOS
-PNG representations do too. Tauri encodes the legacy 16/32 px ICNS representations
-from their corresponding optical renders.
+mark, a light transparent mark, and the application icon. Fine-line mark exports
+are rendered directly from the SVG with size-specific optical treatments at
+small sizes. Application icons are resized from the preserved application artwork.
+Windows ICO frames, Linux icons, and macOS PNG representations use the matching
+size-specific application exports. Tauri encodes the legacy 16/32 px ICNS
+representations from the same artwork.
 
-Browser entry points select explicit 16/32 px favicons. The macOS menu bar uses
-`src/apps/desktop/icons/openbitfun-tray-template.png`, a transparent 32 px template
-drawn for a 16 pt display, so the system can tint it for light and dark menus.
-Windows and Linux trays use the 32 px application icon.
+Browser entry points select explicit 16/32 px favicons. The system tray reuses
+the configured application/window icon on every desktop platform.
 
-Run `pnpm run generate-brand-assets` after changing the SVG master. The
+Run `pnpm run generate-brand-assets` after changing either source master. The
 generator is the single owner of the derived desktop, web, installer, Android,
 iOS, and HarmonyOS files.
 
