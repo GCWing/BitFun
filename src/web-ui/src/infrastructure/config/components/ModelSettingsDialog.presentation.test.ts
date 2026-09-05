@@ -27,10 +27,11 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(editorDialog).toContain('size="xl"');
     expect(editorDialog).not.toContain('size="2xl"');
     expect(editorDialog).toMatch(
-      /\{!reasoningPanelDraft && \(\s*<DialogFooter appearance="floating">/,
+      /\{!reasoningPanelDraft && \(\s*<DialogFooter>/,
     );
+    expect(editorDialog).not.toContain('appearance="floating"');
     expect(editorDialog).toContain(
-      '<Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
+      '<Button variant="outline" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
     );
     expect(editorDialog).toContain('<DialogClose disabled={isEditorSaving} />');
     expect(editorDialog).toContain('loading={isEditorSaving}');
@@ -42,8 +43,8 @@ describe('ModelSettingsPage dialog presentation', () => {
     );
     expect(styles).not.toContain('&__editor-dialog-footer');
     expect(styles).not.toContain('&__editor-dialog-cancel');
-    expect(styles).toMatch(/&__selected-model-row\s*{[\s\S]*?background:\s*var\(--openbitfun-color-surface-raised\);/);
-    expect(styles).toMatch(/&__reasoning-summary\s*{[\s\S]*?background:\s*var\(--openbitfun-color-surface-tertiary\);/);
+    expect(styles).toMatch(/&__selected-model-row\s*{[\s\S]*?background:\s*var\(--openbitfun-color-surface-tertiary\);/);
+    expect(styles).toMatch(/&__reasoning-summary\s*{[\s\S]*?background:\s*transparent;/);
   });
 
   it('keeps unsaved editor state behind an explicit draft decision', () => {
