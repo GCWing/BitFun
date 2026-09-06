@@ -1722,6 +1722,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     const frameId = window.requestAnimationFrame(() => {
       const menu = portalDropdownRef.current;
+      // The user may already have entered or returned from a submenu before
+      // this initial focus frame runs. Preserve that more recent navigation.
+      if (
+        menu?.contains(document.activeElement)
+        || nativeSubmenuRef.current?.contains(document.activeElement)
+      ) return;
       const selectedItem = menu?.querySelector<HTMLButtonElement>(
         'button[role="menuitemradio"][aria-checked="true"], button[role="menuitem"][data-selected="true"]',
       );

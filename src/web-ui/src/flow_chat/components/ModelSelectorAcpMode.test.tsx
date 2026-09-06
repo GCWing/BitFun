@@ -136,6 +136,7 @@ describe('ModelSelector ACP mode picker', () => {
     act(() => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -309,7 +310,8 @@ describe('ModelSelector ACP mode picker', () => {
     expect(container.querySelector('[data-testid="chat-acp-mode-selector-btn"]')).not.toBeNull();
   });
 
-  it('navigates the shared ACP reasoning submenu with the keyboard and restores focus', async () => {
+  it.each(['submenu', 'parent'] as const)('preserves keyboard focus when the opening frame runs in the %s menu', async (frameTarget) => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] });
     await renderWithOptions([reasoningOption], modelOptions);
     await click('chat-model-selector-btn');
     const row = document.body.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-settings-reasoning"]')!;
@@ -318,9 +320,17 @@ describe('ModelSelector ACP mode picker', () => {
       row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
     expect(document.activeElement?.getAttribute('data-preset-id')).toBe('medium');
+    if (frameTarget === 'submenu') {
+      await act(async () => { vi.advanceTimersToNextFrame(); });
+      expect(document.activeElement?.getAttribute('data-preset-id')).toBe('medium');
+    }
     await act(async () => {
       document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     });
+    expect(document.activeElement).toBe(row);
+    // Deliver the initial menu-focus frame after the user has already returned
+    // from the submenu, as can happen under a busy browser or CI runner.
+    await act(async () => { vi.advanceTimersToNextFrame(); });
     expect(document.activeElement).toBe(row);
     await act(async () => {
       row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
