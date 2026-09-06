@@ -420,7 +420,27 @@
   background: var(--openbitfun-color-surface-tertiary);
 
   &--compact {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+
+    .openbitfun-remote-connect__pairing-visual {
+      padding: var(--openbitfun-space-5) var(--openbitfun-space-5) 0;
+      border: 0;
+    }
+
+    .openbitfun-remote-connect__pairing-details {
+      align-items: center;
+      gap: var(--openbitfun-space-3);
+      text-align: center;
+    }
+
+    .openbitfun-remote-connect__pairing-status {
+      align-self: center;
+      margin-bottom: 0;
+    }
+
+    .openbitfun-remote-connect__hint {
+      margin: 0;
+    }
   }
 }
 
@@ -429,8 +449,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 11px;
-  padding: 22px;
+  gap: var(--openbitfun-space-3);
+  min-width: 0;
+  padding: var(--openbitfun-space-5);
   border-right: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   background: transparent;
 }
@@ -480,6 +501,13 @@
   padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
 }
 
+.openbitfun-remote-connect__pairing-status {
+  display: flex;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-bottom: var(--openbitfun-space-4);
+}
+
 .openbitfun-remote-connect__pairing-label {
   margin-bottom: 7px;
   color: var(--openbitfun-color-content-muted);
@@ -493,7 +521,7 @@
   gap: 10px;
   padding-bottom: 18px;
 
-  code {
+  > span {
     min-width: 0;
     flex: 1;
     overflow: hidden;
@@ -531,23 +559,19 @@
   justify-content: flex-end;
 }
 
-.openbitfun-remote-connect__pairing-code-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
 .openbitfun-remote-connect__pairing-code {
-  padding: 14px 18px;
-  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-default);
-  border-radius: var(--openbitfun-radius-lg);
-  background: var(--openbitfun-color-surface-panel);
+  max-width: 100%;
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-5);
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-surface-canvas);
   color: var(--openbitfun-color-content-primary);
   font-family: var(--openbitfun-type-body-sm-font-family);
-  font-size: var(--openbitfun-type-heading-dialog-font-size);
-  font-weight: var(--openbitfun-type-heading-page-font-weight);
-  letter-spacing: var(--openbitfun-type-modifier-tracking-expanded-letter-spacing);
+  font-size: var(--openbitfun-type-flow-section-title-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
   user-select: all;
 }
 

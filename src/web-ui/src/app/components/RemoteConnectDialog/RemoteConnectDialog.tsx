@@ -15,7 +15,6 @@ import {
   Button,
   Field,
   Icon,
-  IconButton,
   Input,
   PageHeader,
   ScrollArea,
@@ -65,6 +64,7 @@ import {
   updateIfOperationCurrent,
 } from './remoteConnectOperationCleanup';
 import { ChatAppBrandIcon } from './ChatAppBrandIcon';
+import { RemotePairingCard } from './RemotePairingCard';
 import './RemoteConnectDialog.scss';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -998,83 +998,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         data-openbitfun-part="body"
         className="openbitfun-remote-connect__body openbitfun-remote-connect__body--pairing"
       >
-        <div
-          className={`openbitfun-remote-connect__pairing-card${connectionResult.qr_url ? '' : ' openbitfun-remote-connect__pairing-card--compact'}`}
-          data-openbitfun-component="remote-connect-dialog"
-          data-openbitfun-part="pairingCard"
-        >
-          {(connectionResult.qr_url || connectionResult.bot_pairing_code) && (
-            <div className="openbitfun-remote-connect__pairing-visual">
-              {connectionResult.qr_url && (
-                <button
-                  type="button"
-                  className="openbitfun-remote-connect__qr-box"
-                  title={t('remoteConnect.copyUrl')}
-                  aria-label={t('remoteConnect.copyUrl')}
-                  onClick={() => void handleCopyPairingUrl()}
-                >
-                  <QRCodeSVG value={connectionResult.qr_url} size={180} level="M" includeMargin />
-                </button>
-              )}
-              {connectionResult.bot_pairing_code && (
-                <div className="openbitfun-remote-connect__pairing-code-box">
-                  <div className="openbitfun-remote-connect__pairing-code">
-                    {connectionResult.bot_pairing_code}
-                  </div>
-                </div>
-              )}
-              <StatusPill tone={qrCopied ? 'success' : 'warning'}>
-                {qrCopied
-                  ? t('remoteConnect.urlCopied')
-                  : connectionOwner === 'bot'
-                    ? t('remoteConnect.stateWaitingBot')
-                    : t('remoteConnect.stateWaiting')}
-              </StatusPill>
-            </div>
-          )}
-          <div className="openbitfun-remote-connect__pairing-details">
-            {connectionResult.qr_url && (
-              <>
-                <span className="openbitfun-remote-connect__pairing-label">
-                  {t('remoteConnect.workspaceAddress')}
-                </span>
-                <div className="openbitfun-remote-connect__pairing-url-row">
-                  <code title={connectionResult.qr_url}>{connectionResult.qr_url}</code>
-                  <IconButton
-                    aria-label={t('remoteConnect.copyUrl')}
-                    title={t('remoteConnect.copyUrl')}
-                    icon={qrCopied ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
-                    onClick={() => void handleCopyPairingUrl()}
-                    size="sm"
-                    variant="quiet"
-                  />
-                </div>
-                <div className="openbitfun-remote-connect__pairing-instruction">
-                  <Smartphone size={19} aria-hidden="true" />
-                  <p>{t('remoteConnect.scanHint')}</p>
-                </div>
-                <div className="openbitfun-remote-connect__pairing-instruction">
-                  <Icon name="browser" size="lg" aria-hidden="true" />
-                  <p>{t('remoteConnect.mobileBrowserDescription')}</p>
-                </div>
-              </>
-            )}
-            {!connectionResult.qr_url && (
-              <>
-                <StatusPill tone="warning">
-                  {connectionOwner === 'bot'
-                    ? t('remoteConnect.stateWaitingBot')
-                    : t('remoteConnect.stateWaiting')}
-                </StatusPill>
-                <p className="openbitfun-remote-connect__hint">
-                  {connectionOwner === 'bot'
-                    ? t('remoteConnect.botHint')
-                    : t('remoteConnect.stateWaiting')}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+        <RemotePairingCard
+          qrUrl={connectionResult.qr_url}
+          pairingCode={connectionResult.bot_pairing_code}
+          owner={connectionOwner === 'bot' ? 'bot' : 'network'}
+          copied={qrCopied}
+          onCopyUrl={handleCopyPairingUrl}
+        />
         <div className="openbitfun-remote-connect__pairing-actions">
           <Button variant="outline" size="sm" onClick={handleCancelConnect}>
             {t('remoteConnect.cancel')}
