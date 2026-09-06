@@ -10,7 +10,7 @@ function readSource(relativePath: string): string {
 }
 
 describe('ModelSelector portal layer', () => {
-  it('keeps the body-portaled menu above overlay-hosted chat surfaces', () => {
+  it('keeps the shared menu above overlay-hosted chat surfaces', () => {
     const component = readSource('./ModelSelector.tsx');
     const stylesheet = readSource('./ModelSelector.scss');
     const dropdownBlock = stylesheet.match(
@@ -18,15 +18,15 @@ describe('ModelSelector portal layer', () => {
     )?.groups?.body;
 
     expect(component).toContain('createPortal(');
-    expect(component).toContain('document.body');
+    expect(component).not.toContain('document.body');
     expect(dropdownBlock).toContain('z-index: var(--openbitfun-layer-popover);');
     expect(dropdownBlock).not.toContain('z-index: var(--openbitfun-layer-dropdown);');
   });
 
-  it('keeps native model and reasoning flyouts in the shared overlay host', () => {
+  it('keeps every model and reasoning menu in the shared overlay host', () => {
     const component = readSource('./ModelSelector.tsx');
 
-    expect(component).toContain('data-testid="chat-model-selector-submenu"');
-    expect(component.match(/getAppearanceOverlayHost\(\)/g)).toHaveLength(3);
+    expect(component).toContain("'chat-model-selector-submenu'");
+    expect(component.match(/getAppearanceOverlayHost\(\)/g)).toHaveLength(2);
   });
 });

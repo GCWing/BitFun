@@ -24,6 +24,8 @@ const aiApiMocks = vi.hoisted(() => ({
 const flowChatStoreMocks = vi.hoisted(() => {
   type TestSession = {
     workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
     config: { agentType?: string; modelName?: string; workspacePath?: string };
   };
   const sessions = new Map<string, TestSession>();
@@ -148,7 +150,7 @@ describe('ModelSelector ACP mode picker', () => {
       configOptions,
     } as never);
     await act(async () => {
-      root.render(<ModelSelector currentMode="acp:dsh" sessionId="acp-session" />);
+      root.render(<ModelSelector currentMode="acp:dsh" sessionId="acp-session" reasoningTriggerPresentation="label" />);
       await Promise.resolve();
     });
     await act(async () => { await Promise.resolve(); });
@@ -252,4 +254,127 @@ describe('ModelSelector ACP mode picker', () => {
     });
     expect(ACPClientAPI.setSessionConfigOption).not.toHaveBeenCalled();
   });
+
+  const reasoningOption = {
+    id: 'reasoning-effort', name: 'Reasoning', category: 'thought_level',
+    type: 'select' as const, currentValue: 'medium',
+    options: [{ value: 'medium', name: 'Medium' }, { value: 'high', name: 'High' }],
+  };
+  const modelOptions = {
+    availableModels: [{ id: 'remote-model', name: 'Remote Model' }],
+    currentModelId: 'remote-model',
+  };
+  const click = async (testId: string) => {
+    const button = document.body.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+    expect(button).not.toBeNull();
+    await act(async () => { button?.click(); });
+  };
+
+  it('shares model and reasoning settings and writes the selected value through the remote ACP adapter', async () => {
+    Object.assign(flowChatStoreMocks.sessions.get('acp-session')!, {
+      remoteConnectionId: 'ssh-connection', remoteSshHost: 'a100',
+    });
+    await renderWithOptions([MODE_OPTION, reasoningOption], modelOptions);
+    expect(container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
+      .toContain('reasoningSelector.levels.medium');
+    await click('chat-model-selector-btn');
+    expect(document.body.querySelector('[data-testid="chat-model-selector-settings-model"]')).not.toBeNull();
+    await click('chat-model-selector-settings-model');
+    expect(document.body.querySelectorAll('[data-testid="chat-model-selector-option"]')).toHaveLength(1);
+    await click('chat-model-selector-settings-reasoning');
+    expect(document.body.querySelector('[data-preset-id="auto"]')).toBeNull();
+    vi.mocked(ACPClientAPI.setSessionConfigOption).mockResolvedValue({
+      ...modelOptions, configOptions: [MODE_OPTION, { ...reasoningOption, currentValue: 'high' }],
+    } as never);
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
+    });
+    expect(ACPClientAPI.setSessionConfigOption).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'acp-session', clientId: 'dsh', configId: 'reasoning-effort',
+      remoteConnectionId: 'ssh-connection', remoteSshHost: 'a100',
+      value: { type: 'select', value: 'high' },
+    }));
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
+      .toContain('reasoningSelector.levels.high');
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps reasoning accessible when ACP advertises no model list', async () => {
+    await renderWithOptions([MODE_OPTION, reasoningOption]);
+    await click('chat-model-selector-btn');
+    expect(document.body.querySelector('[data-testid="chat-model-selector-settings-model"]')).toBeNull();
+    await click('chat-model-selector-settings-reasoning');
+    expect(document.body.querySelectorAll('[data-testid="chat-model-selector-reasoning-option"]')).toHaveLength(2);
+    expect(container.querySelector('[data-testid="chat-acp-mode-selector-btn"]')).not.toBeNull();
+  });
+
+  it('navigates the shared ACP reasoning submenu with the keyboard and restores focus', async () => {
+    await renderWithOptions([reasoningOption], modelOptions);
+    await click('chat-model-selector-btn');
+    const row = document.body.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-settings-reasoning"]')!;
+    await act(async () => {
+      row.focus();
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(document.activeElement?.getAttribute('data-preset-id')).toBe('medium');
+    await act(async () => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(row);
+    await act(async () => {
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(container.querySelector('[data-testid="chat-model-selector-btn"]'));
+  });
+
+  it('retains the current reasoning value after an ACP update fails', async () => {
+    await renderWithOptions([reasoningOption], modelOptions);
+    vi.mocked(ACPClientAPI.setSessionConfigOption).mockRejectedValueOnce(new Error('Host offline'));
+    await click('chat-model-selector-btn');
+    await click('chat-model-selector-settings-reasoning');
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
+    });
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
+      .toContain('reasoningSelector.levels.medium');
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.disabled).toBe(false);
+  });
+
+  it('keeps the advertised fast mode available in the shared settings menu', async () => {
+    const fastMode = { id: 'fast-mode', name: 'Fast', type: 'boolean', currentValue: false };
+    await renderWithOptions([reasoningOption, fastMode], modelOptions);
+    await click('chat-model-selector-btn');
+    const fastRow = document.body.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]');
+    expect(fastRow).not.toBeNull();
+    vi.mocked(ACPClientAPI.setSessionConfigOption).mockResolvedValue({
+      ...modelOptions, configOptions: [reasoningOption, { ...fastMode, currentValue: true }],
+    } as never);
+    await act(async () => { fastRow?.click(); });
+    expect(ACPClientAPI.setSessionConfigOption).toHaveBeenCalledWith(expect.objectContaining({
+      configId: 'fast-mode', value: { type: 'boolean', value: true },
+    }));
+  });
+
+
+  it('uses an advertised ACP auto value instead of synthesizing a local reset', async () => {
+    const withAuto = { ...reasoningOption, options: [...reasoningOption.options, { value: 'auto', name: 'Auto' }] };
+    await renderWithOptions([withAuto], modelOptions);
+    await click('chat-model-selector-btn');
+    await click('chat-model-selector-settings-reasoning');
+    expect(document.body.querySelectorAll('[data-preset-id="auto"]')).toHaveLength(1);
+    vi.mocked(ACPClientAPI.setSessionConfigOption).mockResolvedValue({
+      ...modelOptions, configOptions: [{ ...withAuto, currentValue: 'auto' }],
+    } as never);
+    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-preset-id="auto"]')?.click(); });
+    expect(ACPClientAPI.setSessionConfigOption).toHaveBeenCalledWith(expect.objectContaining({
+      configId: 'reasoning-effort', value: { type: 'select', value: 'auto' },
+    }));
+  });
+
+  it('shows an advertised model when an older ACP payload omits the current model id', async () => {
+    await renderWithOptions([reasoningOption], { availableModels: modelOptions.availableModels });
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent).toContain('Remote Model');
+  });
+
 });
