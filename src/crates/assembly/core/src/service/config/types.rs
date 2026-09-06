@@ -25,6 +25,37 @@ where
         .collect())
 }
 
+fn deserialize_datetime_millis_or_rfc3339<'de, D>(
+    deserializer: D,
+) -> Result<chrono::DateTime<chrono::Utc>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum CompatibleTimestamp {
+        Milliseconds(i64),
+        Rfc3339(String),
+    }
+
+    match CompatibleTimestamp::deserialize(deserializer)? {
+        CompatibleTimestamp::Milliseconds(value) => {
+            chrono::DateTime::<chrono::Utc>::from_timestamp_millis(value).ok_or_else(|| {
+                <D::Error as serde::de::Error>::custom(format!(
+                    "last_modified timestamp is out of range: {value}"
+                ))
+            })
+        }
+        CompatibleTimestamp::Rfc3339(value) => chrono::DateTime::parse_from_rfc3339(&value)
+            .map(|timestamp| timestamp.with_timezone(&chrono::Utc))
+            .map_err(|error| {
+                <D::Error as serde::de::Error>::custom(format!(
+                    "last_modified must be Unix milliseconds or RFC3339: {error}"
+                ))
+            }),
+    }
+}
+
 /// Web UI font preferences (settings → basics). Keys match `FontPreference` in the frontend (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,7 +107,10 @@ pub struct GlobalConfig {
     /// independent from the OpenBitFun application version stored in `version`.
     pub schema_version: u32,
     pub version: String,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
+    #[serde(
+        serialize_with = "chrono::serde::ts_milliseconds::serialize",
+        deserialize_with = "deserialize_datetime_millis_or_rfc3339"
+    )]
     pub last_modified: chrono::DateTime<chrono::Utc>,
 }
 
@@ -2327,6 +2361,25 @@ mod tests {
     }
 
     #[test]
+    fn legacy_global_config_accepts_rfc3339_last_modified() {
+        let legacy_timestamp = "2026-08-26T11:24:58.7496147Z";
+        let expected = chrono::DateTime::parse_from_rfc3339(legacy_timestamp)
+            .expect("fixture timestamp should be valid")
+            .with_timezone(&chrono::Utc);
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "last_modified": legacy_timestamp
+        }))
+        .expect("legacy RFC3339 last_modified should deserialize");
+
+        assert_eq!(config.last_modified, expected);
+        let serialized = serde_json::to_value(config).expect("config should serialize");
+        assert_eq!(
+            serialized["last_modified"],
+            serde_json::json!(expected.timestamp_millis())
+        );
+    }
+
+    #[test]
     fn user_tool_groups_default_to_version_one_without_persisted_groups() {
         let mut value = current_global_config_with(serde_json::json!({}));
         value["app"]
@@ -2719,6 +2772,40 @@ mod tests {
         .expect("config without inline_think_in_text should deserialize");
 
         assert!(config.inline_think_in_text);
+    }
+
+    #[test]
+    fn deserializes_empty_string_custom_headers_as_absent() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true,
+            "custom_headers": ""
+        }))
+        .expect("legacy empty custom_headers should deserialize");
+
+        assert!(config.custom_headers.is_none());
+    }
+
+    #[test]
+    fn default_chat_category_supports_text_generation_without_capability_tags() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true
+        }))
+        .expect("model without capability tags should deserialize");
+
+        assert!(config.capabilities.is_empty());
+        assert!(config.supports_text_generation());
     }
 
     #[test]

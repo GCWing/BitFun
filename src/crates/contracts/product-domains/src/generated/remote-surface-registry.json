@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:66d9fd8002bf016a",
+  "digest": "fnv1a64:daf992d31bd98293",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -4505,6 +4505,90 @@
       "cliPeer": {
         "kind": "unsupported",
         "reason": "the CLI peer host has no handler for this command"
+      }
+    },
+    {
+      "id": "miniapp_loopx_action",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_attach",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_create_task",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_events_since",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_list_models",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_resolve_intake",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "miniapp_loopx_turn_output_since",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteUnsupported",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
       }
     },
     {
