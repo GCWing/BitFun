@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
 import React, { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { compileString } from 'sass';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PermissionRequest } from '@/infrastructure/api/service-api/AgentAPI';
@@ -23,7 +27,8 @@ const TRANSLATIONS: Record<string, string> = {
   'permission.scopeAll': 'All',
 };
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async importOriginal => ({
+  ...await importOriginal<typeof import('react-i18next')>(),
   useTranslation: () => ({
     t: (key: string, values?: Record<string, string>) => {
       if (key === 'permission.subagentOwner') return `${values?.subagent} subagent`;
@@ -43,11 +48,6 @@ vi.mock('@openbitfun/ui', async importOriginal => ({
   Tooltip: ({ children }: { children: React.ReactElement }) => <>{children}</>,
 }));
 
-vi.mock('./CopyableTextPreview', () => ({
-  CopyableTextPreview: ({ text, className }: { text: string; className?: string }) => (
-    <code className={className}>{text}</code>
-  ),
-}));
 
 function request(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
   return {
@@ -70,8 +70,15 @@ function request(overrides: Partial<PermissionRequest> = {}): PermissionRequest 
 describe('ChatInputApprovalBand', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let stylesheet: HTMLStyleElement;
 
   beforeEach(() => {
+    stylesheet = document.createElement('style');
+    const filename = 'ChatInputApprovalBand.scss';
+    stylesheet.textContent = compileString(readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), filename), 'utf8',
+    )).css;
+    document.head.appendChild(stylesheet);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -80,14 +87,16 @@ describe('ChatInputApprovalBand', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    stylesheet.remove();
     vi.clearAllMocks();
   });
 
   const click = async (testId: string) => {
     await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const button = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+      expect(button).not.toBeNull();
+      expect(button!.disabled).toBe(false);
+      button!.click();
     });
   };
 
@@ -152,7 +161,7 @@ describe('ChatInputApprovalBand', () => {
     });
 
     // A lone request has nothing to scope, so the toggle stays out of the way.
-    expect(container.querySelector('[data-testid="chat-input-approval-scope-all"]')).toBeNull();
+    expect(container.querySelector('[role="radio"][data-openbitfun-value="all"]')).toBeNull();
     expect(container.querySelector('[data-testid="chat-input-approval-pending-count"]')).toBeNull();
 
     await click('chat-input-approval-allow');
@@ -182,7 +191,15 @@ describe('ChatInputApprovalBand', () => {
         ?.dataset.approvalScope,
     ).toBe('this');
 
-    await click('chat-input-approval-scope-all');
+    const currentScope = container.querySelector<HTMLButtonElement>(
+      '[role="radio"][data-openbitfun-value="this"]',
+    );
+    expect(currentScope).not.toBeNull();
+    await act(async () => {
+      currentScope!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(container.querySelector('[role="radio"][data-openbitfun-value="all"]')
+      ?.getAttribute('aria-checked')).toBe('true');
     const band = container.querySelector<HTMLElement>('[data-testid="chat-input-approval-band"]');
     expect(band?.dataset.approvalScope).toBe('all');
     expect(band?.textContent).toContain('Reject all');
@@ -268,6 +285,56 @@ describe('ChatInputApprovalBand', () => {
     expect(
       container.querySelector<HTMLButtonElement>('[data-testid="chat-input-approval-allow"]')?.disabled,
     ).toBe(false);
+  });
+
+  it.each([
+    ['unbroken command', `printf '${'x'.repeat(40000)}'`],
+    ['multiline command', Array.from({ length: 300 }, (_, index) => `printf 'line ${index}\n'`).join('\n')],
+  ])('keeps the full %s separate from answer controls and copies it intact', async (_, command) => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const onRespond = vi.fn(async () => undefined);
+    await act(async () => {
+      root.render(
+        <ChatInputApprovalBand
+          requests={[request({ action: 'bash', resources: [command] })]}
+          onRespond={onRespond}
+          onRespondBatch={vi.fn(async () => undefined)}
+        />,
+      );
+    });
+
+    const band = container.querySelector<HTMLElement>('[data-testid="chat-input-approval-band"]')!;
+    const resource = band.querySelector<HTMLElement>('[role="region"]')!;
+    const actions = band.querySelector<HTMLElement>('[data-openbitfun-part="actions"]')!;
+    expect(resource.textContent).toBe(command);
+    expect(resource.tabIndex).toBe(0);
+    expect(resource.contains(actions)).toBe(false);
+    expect(band.querySelector('[data-openbitfun-component="card"]')?.getAttribute('data-appearance'))
+      .toBe('subtle');
+
+    // jsdom checks the compiled containment rules; real viewport layout is a
+    // separate manual check, since jsdom does not calculate element geometry.
+    const bandStyle = getComputedStyle(band);
+    expect(bandStyle.width).toBe('100%');
+    expect(bandStyle.maxWidth).toBe('100%');
+    expect(bandStyle.minWidth).toBe('0px');
+    const resourceStyle = getComputedStyle(resource);
+    expect(resourceStyle.whiteSpace).toBe('pre-wrap');
+    expect(resourceStyle.overflowWrap).toBe('anywhere');
+    expect(resourceStyle.overflow).toBe('auto');
+    expect(resourceStyle.maxHeight).toBe('min(10rem, 25dvh)');
+    expect(getComputedStyle(actions).flexWrap).toBe('wrap');
+
+    await click('chat-input-approval-copy');
+    expect(writeText).toHaveBeenCalledWith(command);
+    await click('chat-input-approval-allow');
+    expect(onRespond).toHaveBeenLastCalledWith('request-1', 'once', undefined);
+    await click('chat-input-approval-reject');
+    expect(onRespond).toHaveBeenLastCalledWith('request-1', 'reject', undefined);
   });
 
   it('renders nothing when there is nothing to approve', async () => {
