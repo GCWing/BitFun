@@ -298,13 +298,13 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     const devices = element('[data-testid="nav-device-status-connected-devices"]');
     expect(devices.querySelector('[data-openbitfun-device-kind="mobile"] strong')?.textContent).toBe('remoteConnect.mobileBrowserTitle');
     expect(devices.querySelector('[data-openbitfun-device-kind="message-app"] strong')?.textContent).toBe('remoteConnect.weixin');
-    const service = element('[data-testid="nav-device-connection-service"]');
-    expect(service.getAttribute('data-openbitfun-service-kind')).toBe('self-hosted');
-    expect(service.textContent).toContain('relay.example.test');
-    await click(element('[data-testid="nav-footer-device-status"]'));
-    await click(element('[data-testid="reopen-remote-connect"]'));
+    expect(document.querySelector('[data-testid="nav-device-connection-service"]')).toBeNull();
+    await click(element('[data-testid="nav-device-status-manage"]'));
+    expect(document.querySelector('[data-testid="nav-device-status-popover"]')).toBeNull();
     expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
     await openNetwork();
+    expect(element('#remote-connect-network-tab-custom_server').getAttribute('aria-selected')).toBe('true');
+    expect((element('input[type="url"]') as HTMLInputElement).value).toBe(relayA);
     expect(cardStatus()).toBe('remoteConnect.stateConnected');
     expect(dialog().textContent).not.toContain('remoteConnect.disconnect');
     await clickText('remoteConnect.showConnectionCode');
