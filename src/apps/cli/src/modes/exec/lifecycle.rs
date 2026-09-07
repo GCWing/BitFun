@@ -1311,6 +1311,12 @@ impl ExecMode {
     }
 
     async fn record_resolved_model_config_id(&self, session_id: &str, model_config_id: &str) {
+        // A routed round reports the model that actually executed that round. It
+        // must not replace the session's admitted primary model with the fast
+        // candidate merely because the latest round happened to be simple.
+        if std::env::var_os("OPENBITFUN_ROUND_ROUTER_URL").is_some() {
+            return;
+        }
         let trimmed = model_config_id.trim();
         if trimmed.is_empty() || matches!(trimmed, "default" | "primary" | "fast") {
             return;

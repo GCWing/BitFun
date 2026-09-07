@@ -137,13 +137,26 @@ pub async fn init_agentic_system_for_profile_with_runtime_ownership(
     ));
 
     let execution_config = execution::execution_engine_config_from_global_config().await;
-    let execution_engine = Arc::new(execution::ExecutionEngine::new(
+    let mut execution_engine = execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
         execution_config,
-    ));
+    );
+    if let Some(router_config) = execution::HttpRoundModelRouterConfig::from_env()? {
+        info!(
+            "Enabling per-round model routing: endpoint={}, model={}, recent_rounds={}, timeout_ms={}",
+            router_config.endpoint,
+            router_config.model,
+            router_config.recent_rounds,
+            router_config.timeout.as_millis()
+        );
+        execution_engine = execution_engine.with_round_model_router(Arc::new(
+            execution::HttpRoundModelRouter::new(router_config)?,
+        ));
+    }
+    let execution_engine = Arc::new(execution_engine);
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(
         session_manager,

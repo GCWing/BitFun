@@ -143,7 +143,9 @@ impl AIClientFactory {
             .await
     }
 
-    async fn resolve_model_id(&self, model_id: &str) -> Result<String> {
+    /// Resolve a model selector such as `primary` or `fast` to its canonical
+    /// configured model ID.
+    pub async fn resolve_model_id(&self, model_id: &str) -> Result<String> {
         let ai_config = self.config_service.get_effective_ai_config().await?;
         resolve_required_model_selector(
             model_id,

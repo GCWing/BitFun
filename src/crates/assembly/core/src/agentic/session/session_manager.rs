@@ -2028,6 +2028,20 @@ impl SessionManager {
             .select_latest_matching(session_id, messages)
     }
 
+    pub async fn select_latest_matching_token_anchor_for_model(
+        &self,
+        session_id: &str,
+        messages: &[Message],
+        model_id: &str,
+    ) -> TokenAnchorSelection {
+        self.ensure_token_anchors_loaded(session_id).await;
+        self.token_anchor_store.select_latest_matching_for_model(
+            session_id,
+            messages,
+            Some(model_id),
+        )
+    }
+
     pub async fn prune_token_anchors_to_messages(&self, session_id: &str, messages: &[Message]) {
         self.ensure_token_anchors_loaded(session_id).await;
         self.token_anchor_store
