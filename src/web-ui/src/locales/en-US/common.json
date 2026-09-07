@@ -378,6 +378,7 @@
       "batchChildSession": "Child session",
       "batchTurnsLabel": "{{count}} turns",
       "archive": "Archive",
+      "assistantBootstrapDraft": "Please follow BOOTSTRAP.md and help me set up this assistant.",
       "archiveAll": "Archive All Sessions",
       "archiveSelected": "Archive Selected",
       "unarchive": "Restore",

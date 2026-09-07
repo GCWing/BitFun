@@ -92,7 +92,7 @@ struct SessionActionSurface: View {
         }
         if canArchive {
             actionRow(
-                session.status.lowercased() == "archived" ? "取消归档" : "归档会话",
+                session.status.lowercased() == "archived" ? "取消归档" : "归档",
                 icon: "archivebox"
             ) {
                 onArchive()
@@ -100,7 +100,7 @@ struct SessionActionSurface: View {
             }
         }
         if canExport {
-            actionRow("导出会话", icon: "cloud") {
+            actionRow("复制 Markdown", icon: "cloud") {
                 onExport()
                 onClose()
             }
@@ -272,7 +272,9 @@ struct SessionDetailsView: View {
         }
         .padding(.vertical, 8)
         .frame(minHeight: 52)
-        .overlay(alignment: .bottom) { Divider().overlay(OpenBitFunTheme.line) }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
+        }
     }
 
     private func pathRow(_ path: String) -> some View {
@@ -292,6 +294,8 @@ struct SessionDetailsView: View {
                 .textSelection(.enabled)
         }
         .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Divider().overlay(OpenBitFunTheme.line) }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
+        }
     }
 }

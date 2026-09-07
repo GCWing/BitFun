@@ -4,7 +4,7 @@ import {
   Select,
   type SelectOption,
 } from '@openbitfun/ui';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigPageRow, ConfigPageSection } from '@/infrastructure/config/components/common';
 import { useFontPreference } from '../hooks/useFontPreference';
@@ -20,6 +20,10 @@ export function FontPreferencePanel() {
   const { level, customPx } = preference.uiSize;
   const [customInput, setCustomInput] = useState<string>(String(customPx ?? 14));
   const [previewText, setPreviewText] = useState('');
+
+  useEffect(() => {
+    setCustomInput(String(customPx ?? PRESET_UI_BASE_PX.default));
+  }, [customPx]);
 
   /** Baseline px currently applied in the UI (preset level or custom). */
   const getEffectiveUiBasePx = useCallback((): number => {

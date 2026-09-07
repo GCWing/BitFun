@@ -264,27 +264,18 @@ export class FlowChatManager {
       // runs its own bootstrap.
       scope.assertCurrent('initializeWorkspace');
 
-      const sessionMatchesWorkspace = (session: {
-        workspacePath?: string;
-        remoteConnectionId?: string;
-        remoteSshHost?: string;
-      }) => {
-        const sp = session.workspacePath || workspacePath;
+      const sessionMatchesWorkspace = (session: Session) => {
         return sessionBelongsToWorkspaceNavRow(
-          {
-            workspacePath: sp,
-            remoteConnectionId: session.remoteConnectionId,
-            remoteSshHost: session.remoteSshHost,
-          },
+          session,
           workspacePath,
           remoteConnectionId,
           remoteSshHost
         );
       };
       const isAutoSelectableWorkspaceSession = (
-        session: Pick<Session, 'isTransient' | 'sessionKind' | 'parentSessionId' | 'btwOrigin'>
+        session: Pick<Session, 'isTransient' | 'persistedStatus' | 'sessionKind' | 'parentSessionId' | 'btwOrigin'>
       ) => {
-        if (session.isTransient) {
+        if (session.isTransient || session.persistedStatus === 'archived') {
           return false;
         }
         return !resolveSessionRelationship(session).displayAsChild;
@@ -333,8 +324,18 @@ export class FlowChatManager {
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;
       const activeSessionBelongsToWorkspace =
-        !!activeSession && sessionMatchesWorkspace(activeSession);
+        !!activeSession && activeSession.persistedStatus !== 'archived' && sessionMatchesWorkspace(activeSession);
       const activeSessionIdAtAutoSelectStart = state.activeSessionId;
+      const clearUnavailableSelection = () => {
+        if (!isCurrentInitializationRequest() || activeSessionIdAtAutoSelectStart === null) {
+          return;
+        }
+        this.context.flowChatStore.setState(current =>
+          current.activeSessionId === activeSessionIdAtAutoSelectStart
+            ? { ...current, activeSessionId: null }
+            : current
+        );
+      };
 
       // History is only restored on the auto-select path below. A session that
       // is already active — restored by the nav list after a Peer Device
@@ -375,6 +376,7 @@ export class FlowChatManager {
           // surface with no active session and no new one, so report no history
           // and let the caller create against the live workspace instead.
           this.context.currentWorkspacePath = workspacePath;
+          clearUnavailableSelection();
           log.warn('Session metadata reported history with nothing selectable for this workspace', {
             workspacePath,
             metadataSessionCount: initialMetadataPage.sessions.length,
@@ -406,7 +408,7 @@ export class FlowChatManager {
           ? currentState.sessions.get(currentState.activeSessionId) ?? null
           : null;
         const currentActiveSessionBelongsToWorkspace =
-          !!currentActiveSession && sessionMatchesWorkspace(currentActiveSession);
+          !!currentActiveSession && currentActiveSession.persistedStatus !== 'archived' && sessionMatchesWorkspace(currentActiveSession);
         const activeSessionChangedDuringAutoSelect =
           currentState.activeSessionId !== activeSessionIdAtAutoSelectStart &&
           currentState.activeSessionId !== null;
@@ -418,11 +420,23 @@ export class FlowChatManager {
           return hasHistoricalSessions;
         }
 
+        // Archive/delete can finish while history is loading. Do not activate
+        // the old catalog entry after that mutation removed it.
+        const candidate = currentState.sessions.get(latestSession.sessionId);
+        if (!candidate || !sessionMatchesWorkspace(candidate) || !isAutoSelectableWorkspaceSession(candidate)) {
+          this.context.currentWorkspacePath = workspacePath;
+          clearUnavailableSelection();
+          return false;
+        }
+
         await switchChatSessionModule(this.context, latestSession.sessionId);
       }
 
       if (isCurrentInitializationRequest()) {
         this.context.currentWorkspacePath = workspacePath;
+        if (!hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
+          clearUnavailableSelection();
+        }
       }
 
       return hasHistoricalSessions;
@@ -756,8 +770,6 @@ export class FlowChatManager {
     options?: {
       reinitialize?: boolean;
       preferredMode?: string;
-      /** After reinit, ask core to run assistant bootstrap if BOOTSTRAP.md is present (e.g. workspace reset). */
-      ensureAssistantBootstrap?: boolean;
     }
   ): Promise<void> {
     const workspacePath = workspace.rootPath;
@@ -809,24 +821,6 @@ export class FlowChatManager {
         },
         options.preferredMode
       );
-    }
-
-    if (options?.ensureAssistantBootstrap) {
-      const sid = this.context.flowChatStore.getState().activeSessionId;
-      if (sid) {
-        try {
-          const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
-          await agentAPI.ensureAssistantBootstrap({
-            sessionId: sid,
-            workspacePath,
-          });
-        } catch (error) {
-          log.warn('ensureAssistantBootstrap after resetWorkspaceSessions failed', {
-            workspacePath,
-            error,
-          });
-        }
-      }
     }
   }
 

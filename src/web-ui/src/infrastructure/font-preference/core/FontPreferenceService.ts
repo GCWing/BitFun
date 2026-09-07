@@ -79,6 +79,14 @@ export class FontPreferenceService {
     await this.setPreference(DEFAULT_FONT_PREFERENCE);
   }
 
+  async adjustUiSize(delta: -1 | 1): Promise<void> {
+    const currentPx = parseFloat(resolveFontSizeTokens(this.preference.uiSize).base);
+    const nextPx = Math.max(12, Math.min(20, currentPx + delta));
+    if (nextPx !== currentPx) {
+      await this.setUiSize('custom', nextPx);
+    }
+  }
+
   // ---- CSS Application ----
 
   applyPreference(pref: FontPreference): void {

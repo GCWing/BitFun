@@ -82,7 +82,7 @@ describe('McpToolsConfig remote behavior', () => {
       jsonConfig: '{"mcpServers":{}}',
       fingerprint: 'sha256:test',
     });
-    saveJsonConfigMock.mockReset().mockResolvedValue(undefined);
+    saveJsonConfigMock.mockReset().mockResolvedValue({ runtimeApplied: true });
     initializeServersMock.mockReset().mockResolvedValue(undefined);
     startServerMock.mockReset().mockResolvedValue(undefined);
     startRemoteOAuthMock.mockReset().mockResolvedValue({
@@ -257,6 +257,66 @@ describe('McpToolsConfig remote behavior', () => {
 
     expect(saveJsonConfigMock).toHaveBeenCalledWith(editedJson, 'sha256:test');
     expect(initializeServersMock).not.toHaveBeenCalled();
+  });
+
+  it('clears a persisted draft and reloads its fingerprint when runtime application fails', async () => {
+    peerState.active = false;
+    saveJsonConfigMock.mockResolvedValue({ runtimeApplied: false });
+    await act(async () => { root.render(<McpToolsConfig />); });
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-toggle"]') as HTMLButtonElement).click();
+    });
+    const editedJson = '{"mcpServers":{"offline":{"url":"http://127.0.0.1:9999/mcp"}}}';
+    await act(async () => {
+      const textarea = container.querySelector('textarea')!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, editedJson);
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    loadJsonConfigMock.mockResolvedValue({ jsonConfig: editedJson, fingerprint: 'sha256:saved' });
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-save"]') as HTMLButtonElement).click();
+    });
+    expect(notificationMocks.error).not.toHaveBeenCalled();
+    expect(notificationMocks.success).not.toHaveBeenCalled();
+    expect(notificationMocks.warning).toHaveBeenCalledWith('messages.partialStartFailed', expect.anything());
+    expect(loadJsonConfigMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('textarea')).toBeNull();
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-toggle"]') as HTMLButtonElement).click();
+    });
+    expect(container.querySelector('textarea')!.value).toBe(editedJson);
+    expect((container.querySelector('[data-testid="mcp-json-save"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      const textarea = container.querySelector('textarea')!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, editedJson + '\n');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-save"]') as HTMLButtonElement).click();
+    });
+    expect(saveJsonConfigMock).toHaveBeenLastCalledWith(editedJson + '\n', 'sha256:saved');
+  });
+
+  it('retains the editor and draft when persistence fails', async () => {
+    peerState.active = false;
+    saveJsonConfigMock.mockRejectedValue(new Error('Failed to save config: permission denied'));
+    await act(async () => { root.render(<McpToolsConfig />); });
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-toggle"]') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      const textarea = container.querySelector('textarea')!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '{"mcpServers":{}}\n');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      (container.querySelector('[data-testid="mcp-json-save"]') as HTMLButtonElement).click();
+    });
+    expect(notificationMocks.error).toHaveBeenCalled();
+    expect(notificationMocks.warning).not.toHaveBeenCalled();
+    expect(notificationMocks.success).not.toHaveBeenCalled();
+    expect(container.querySelector('textarea')!.value).toBe('{"mcpServers":{}}\n');
+    expect(loadJsonConfigMock).toHaveBeenCalledTimes(1);
   });
 
   it('offers start rather than stop for an uninitialized server', async () => {

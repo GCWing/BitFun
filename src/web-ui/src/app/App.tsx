@@ -32,7 +32,8 @@ import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/Toolba
 import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/RealtimeVoiceCallContext';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
-import { shouldBlockBrowserShortcut } from './browserShortcutPolicy';
+import { handleBrowserShortcut } from './browserShortcutPolicy';
+import { fontPreferenceService } from '@/infrastructure/font-preference/core/FontPreferenceService';
 import { activateCreationRuntime } from '@/infrastructure/creation/creationRuntime';
 import { attachCreationRuntime, recordCreationActivationError } from '@/infrastructure/creation/creationBridge';
 import { createCreationUiApi } from './creation/creationUiApi';
@@ -852,17 +853,14 @@ function App() {
     };
   }, []);
 
-  // Always block browser-native find. Page reload remains available while the
+  // Control typography and block browser-native find/print. Reload remains available while the
   // frontend runs in dev mode and is blocked in release builds. The desktop
   // host independently applies the matching Rust build-profile policy.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const primary = e.ctrlKey || e.metaKey;
-      if (!primary) return;
-      if (shouldBlockBrowserShortcut(e.key, import.meta.env.DEV)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      handleBrowserShortcut(e, import.meta.env.DEV, delta => {
+        void fontPreferenceService.adjustUiSize(delta);
+      });
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });

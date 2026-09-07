@@ -69,6 +69,7 @@ import {
   type PendingLargePasteMap,
 } from '../store/sessionComposerStore';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+import { useAssistantBootstrap } from '@/app/hooks/useAssistantBootstrap';
 import {
   clearComposerForSubmission,
   failedSubmissionRecoveryTarget,
@@ -1837,6 +1838,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       selectedIndex: 0,
     });
   }, [deviceSurfaceScope.epoch, effectiveTargetSessionId, replaceContexts]);
+
+  const applyAssistantBootstrapDraft = useCallback((value: string) => {
+    dispatchInput({ type: 'SET_VALUE', payload: value });
+  }, [dispatchInput]);
+  useAssistantBootstrap(effectiveTargetSession, applyAssistantBootstrapDraft);
 
   useEffect(() => {
     let previousContexts = useContextStore.getState().contexts;

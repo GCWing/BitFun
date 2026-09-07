@@ -84,6 +84,27 @@ describe('FontPreferencePanel', () => {
     expect(numberInput?.value).toBe('18');
     expect(previewInput?.style.fontSize).toBe('18px');
   });
+  it('updates the custom stepper and preview when a shortcut changes the preference', async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    fontPreferenceState.level = 'custom';
+    fontPreferenceState.customPx = 16;
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(<FontPreferencePanel />));
+      fontPreferenceState.customPx = 17;
+      await act(async () => root.render(<FontPreferencePanel />));
+      expect(container.querySelector<HTMLInputElement>(
+        '[data-testid="appearance-ui-font-custom-controls"] input',
+      )?.value).toBe('17');
+      expect(container.querySelector<HTMLInputElement>(
+        '[data-testid="appearance-ui-font-preview-input"]',
+      )?.style.fontSize).toBe('17px');
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
   it('applies presets and initializes custom sizing from the current preset', async () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');

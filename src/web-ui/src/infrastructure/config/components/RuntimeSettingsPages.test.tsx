@@ -2,12 +2,12 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BrowserDesktopControlSettingsPage } from './RuntimeSettingsPages';
+import { BrowserDesktopControlSettingsPage, ExecutionSettingsPage } from './RuntimeSettingsPages';
 
 const mocks = vi.hoisted(() => {
   Object.defineProperty(window, '__TAURI__', { configurable: true, value: {} });
   return {
-    invoke: vi.fn(), setConfig: vi.fn(), setEnabled: vi.fn(),
+    invoke: vi.fn(), setConfig: vi.fn(), setEnabled: vi.fn(), getConfig: vi.fn(), error: vi.fn(),
     t: (key: string) => key,
   };
 });
@@ -16,15 +16,18 @@ vi.mock('@/infrastructure/i18n', () => ({ i18nService: { formatNumber: String } 
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({ api: { invoke: mocks.invoke } }));
 vi.mock('@/infrastructure/api/service-api/SystemAPI', () => ({ systemAPI: { getSystemInfo: async () => ({ platform: 'macos' }) } }));
 vi.mock('../services/ConfigManager', () => ({ configManager: {
-  getConfig: async () => false, setConfig: mocks.setConfig,
+  getConfig: mocks.getConfig, getOptionalConfig: async () => true, setConfig: mocks.setConfig,
 } }));
 vi.mock('../hooks/useComputerUseEnabled', () => ({ useComputerUseEnabled: () => ({ computerUseEnabled: false, setComputerUseEnabled: mocks.setEnabled }) }));
 vi.mock('../services/AIExperienceConfigService', () => ({ aiExperienceConfigService: {} }));
 vi.mock('../services/AgentCompanionPetService', () => ({ DEFAULT_AGENT_COMPANION_PET: 'default' }));
-vi.mock('../services/PermissionConfigService', () => ({ DEFAULT_TOOL_PERMISSION_CONFIG: {}, permissionConfigService: {} }));
+vi.mock('../services/PermissionConfigService', async (original) => ({
+  ...await original<typeof import('../services/PermissionConfigService')>(),
+  permissionConfigService: { getConfig: async () => ({}) },
+}));
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => null }));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmDanger: vi.fn() }));
-vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({}), notificationService: { dismiss: vi.fn(), success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
+vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({}), notificationService: { dismiss: vi.fn(), success: vi.fn(), error: mocks.error, info: vi.fn(), warning: vi.fn() } }));
 vi.mock('./GlobalPermissionRulesDialog', () => ({ GlobalPermissionRulesDialog: () => null }));
 vi.mock('./SessionTitleConfig', () => ({ default: () => null }));
 vi.mock('./ReviewCapacitySection', () => ({ default: () => null }));
@@ -46,6 +49,9 @@ const render = async () => { await act(async () => root.render(<BrowserDesktopCo
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   status = { ...readyStatus };
+  mocks.getConfig.mockReset().mockResolvedValue(null);
+  mocks.setConfig.mockReset().mockResolvedValue(undefined);
+  mocks.error.mockReset();
   mocks.invoke.mockReset().mockImplementation(async (command: string) => {
     if (command === 'computer_use_get_status') return { computerUseEnabled: false, accessibilityGranted: true, screenCaptureGranted: false, platformNote: null };
     if (command === 'browser_control_get_status') return { ...status };
@@ -55,6 +61,54 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+});
+
+describe('Tool execution concurrency settings', () => {
+  const concurrencyInput = (label: string) => Array.from(container.querySelectorAll('[data-openbitfun-part="row"]'))
+    .find(row => row.textContent?.includes(label))!.querySelector('input')!;
+
+  async function editAndBlur(input: HTMLInputElement, value: string) {
+    await act(async () => input.focus());
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => input.blur());
+  }
+
+  it.each([
+    ['config.subagentMaxConcurrency', 'ai.subagent_max_concurrency', '50', 32],
+    ['config.swarmMaxConcurrency', 'ai.swarm_max_concurrency', '100', 64],
+    ['config.subagentMaxConcurrency', 'ai.subagent_max_concurrency', '20', 20],
+    ['config.subagentMaxConcurrency', 'ai.subagent_max_concurrency', '5.5', 6],
+    ['config.swarmMaxConcurrency', 'ai.swarm_max_concurrency', '0', 1],
+  ])('saves a supported integer for %s when entering %s / %s', async (label, path, draft, expected) => {
+    await act(async () => root.render(<ExecutionSettingsPage />));
+    const input = concurrencyInput(label);
+    await editAndBlur(input, draft);
+    expect(mocks.setConfig).toHaveBeenCalledWith(path, expected);
+    expect(input.value).toBe(String(expected));
+    expect(mocks.error).not.toHaveBeenCalled();
+  });
+
+  it('preserves an existing value outside the current save range until it is edited', async () => {
+    mocks.getConfig.mockImplementation(async (path: string) => path === 'ai.subagent_max_concurrency' ? 50 : null);
+    await act(async () => root.render(<ExecutionSettingsPage />));
+    expect(concurrencyInput('config.subagentMaxConcurrency').value).toBe('50');
+    expect(mocks.setConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['config.subagentMaxConcurrency', 5],
+    ['config.swarmMaxConcurrency', 16],
+  ])('restores the saved value and exposes the host error for %s', async (label, previous) => {
+    mocks.setConfig.mockRejectedValue(new Error('Host rejected the concurrency setting'));
+    await act(async () => root.render(<ExecutionSettingsPage />));
+    const input = concurrencyInput(label);
+    await editAndBlur(input, '20');
+    expect(input.value).toBe(String(previous));
+    expect(mocks.error).toHaveBeenCalledWith('messages.saveFailed: Host rejected the concurrency setting');
+  });
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 

@@ -6,6 +6,11 @@
   flex-direction: column;
   gap: 5px;
   box-sizing: border-box;
+  // The composer centers its children, so constrain the band before laying out
+  // long resources; otherwise its intrinsic width can exceed the composer.
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 6px;
   padding: 8px 10px;
   border: 1px solid var(--openbitfun-color-status-warning-border);
@@ -37,13 +42,15 @@
     color: var(--openbitfun-color-content-secondary);
   }
 
-  // The resource is the part worth the remaining width: which file, which
-  // command. Identity and owner are context and yield first.
-  &__resource {
+  // Keep the full command readable without letting it widen the composer or
+  // push the approval actions out of view. Only the resource body scrolls.
+  .openbitfun-chat-input-approval__resource {
+    flex: none;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-height: min(160px, 25vh);
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   &__owner {
@@ -70,6 +77,7 @@
 
   &__note {
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--openbitfun-color-status-warning-content);
     font-size: var(--openbitfun-type-flow-support-font-size);
 

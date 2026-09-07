@@ -7,6 +7,7 @@ struct AccountSettingsView: View {
     @State private var relayURL = AccountDefaults.shared.CLOUD_RELAY_URL
     @State private var username = ""
     @State private var password = ""
+    @State private var advancedOpen = false
 
     var body: some View {
         Group {
@@ -23,68 +24,168 @@ struct AccountSettingsView: View {
     }
 
     private var loginPage: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button { close() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 19, weight: .medium))
+        VStack(spacing: 0) {
+            OpenBitFunModalHeader(title: "", onClose: close)
+                .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Text(model.localized("登录 OpenBitFun 账号"))
+                        .font(MobileDesignTypography.displayMedium.font)
                         .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.localized("返回"))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    Text(model.localized("登录后可查看并连接账号下的桌面设备。"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
 
-                Text(model.localized("登录 OpenBitFun 账号"))
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(OpenBitFunTheme.ink)
-                Text(model.localized("登录后可查看并连接账号下的桌面设备。"))
-                    .font(.system(size: 15))
-                    .foregroundStyle(OpenBitFunTheme.muted)
-                    .lineSpacing(4)
-                    .padding(.top, 12)
-                    .padding(.bottom, 42)
+                    VStack(spacing: 0) {
+                        accountCredentialRow(
+                            icon: "person",
+                            placeholder: model.localized("用户名"),
+                            text: $username,
+                            secure: false
+                        )
+                        Divider()
+                            .overlay(OpenBitFunTheme.line)
+                            .padding(.leading, 54)
+                            .padding(.trailing, 16)
+                        accountCredentialRow(
+                            icon: "lock",
+                            placeholder: model.localized("密码"),
+                            text: $password,
+                            secure: true
+                        )
+                    }
+                    .background(OpenBitFunTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(OpenBitFunTheme.line, lineWidth: 1))
+                    .shadow(color: MobileDesignColors.shadowFaint, radius: 16, y: 5)
 
-                accountField(model.localized("用户名"), text: $username, secure: false, height: 58)
-                accountField(model.localized("密码"), text: $password, secure: true, height: 58)
+                    VStack(spacing: 0) {
+                        Button { advancedOpen.toggle() } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 21, weight: .regular))
+                                    .foregroundStyle(OpenBitFunTheme.muted)
+                                    .frame(width: 24, height: 24)
+                                Text(model.localized("高级选项"))
+                                    .font(MobileDesignTypography.titleSmall.font)
+                                    .foregroundStyle(OpenBitFunTheme.ink)
+                                Spacer(minLength: 8)
+                                Image(systemName: advancedOpen ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(OpenBitFunTheme.muted)
+                            }
+                            .padding(.horizontal, 18)
+                            .frame(height: 58)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if advancedOpen {
+                            Divider().overlay(OpenBitFunTheme.line).padding(.horizontal, 18)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(model.localized("登录服务器"))
+                                    .font(MobileDesignTypography.labelSmall.font)
+                                    .foregroundStyle(OpenBitFunTheme.muted)
+                                accountRelayField
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.top, 14)
+                            .padding(.bottom, 18)
+                        }
+                    }
+                    .background(OpenBitFunTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(OpenBitFunTheme.line, lineWidth: 1))
                     .padding(.top, 14)
 
-                Text(model.localized("登录服务器"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(OpenBitFunTheme.muted)
-                    .padding(.leading, 4)
-                    .padding(.top, 26)
-                    .padding(.bottom, 8)
-                accountField(model.localized("Relay 地址"), text: $relayURL, secure: false, height: 52)
-
-                if let error = model.coreErrorMessage, !error.isEmpty {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundStyle(OpenBitFunTheme.statusDanger)
-                        .padding(.top, 12)
-                }
-
-                Button {
-                    model.loginAccount(relayURL: relayURL, username: username, password: password)
-                    password = ""
-                } label: {
-                    HStack(spacing: 8) {
-                        if model.accountBusy { ProgressView().tint(OpenBitFunTheme.contentOnAction) }
-                        Text(model.localized(model.accountBusy ? "正在登录" : "登录"))
+                    if let error = model.coreErrorMessage, !error.isEmpty {
+                        Text(error)
+                            .font(MobileDesignTypography.bodySmall.font)
+                            .foregroundStyle(OpenBitFunTheme.statusDanger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                            .padding(.top, 12)
                     }
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(OpenBitFunTheme.contentOnAction)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .background(canLogin ? OpenBitFunTheme.accent : OpenBitFunTheme.muted.opacity(0.35))
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
-                .buttonStyle(.plain)
-                .disabled(!canLogin)
-                .padding(.top, model.coreErrorMessage == nil ? 30 : 22)
+                .frame(maxWidth: 520)
+                .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+                .padding(.bottom, 34)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 22)
-            .padding(.bottom, 44)
+
+            Button {
+                model.loginAccount(relayURL: relayURL, username: username, password: password)
+                password = ""
+            } label: {
+                HStack(spacing: 8) {
+                    if model.accountBusy { ProgressView().tint(OpenBitFunTheme.contentOnAction) }
+                    Text(model.localized(model.accountBusy ? "正在登录" : "登录"))
+                }
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(OpenBitFunTheme.contentOnAction)
+                .frame(maxWidth: 520, minHeight: MobileDesignGeometry.sheetActionHeight)
+                .background(canLogin ? OpenBitFunTheme.accent : OpenBitFunTheme.muted.opacity(0.35))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canLogin)
+            .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+            .padding(.top, 10)
+            .padding(.bottom, 24)
         }
+    }
+
+    private var accountRelayField: some View {
+        TextField(model.localized("Relay 地址"), text: $relayURL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(.URL)
+            .font(MobileDesignTypography.bodyMedium.font)
+            .foregroundStyle(OpenBitFunTheme.ink)
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .background(OpenBitFunTheme.soft)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(OpenBitFunTheme.line, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func accountCredentialRow(
+        icon: String,
+        placeholder: String,
+        text: Binding<String>,
+        secure: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(OpenBitFunTheme.muted)
+                .frame(width: 24, height: 24)
+            Group {
+                if secure {
+                    SecureField(placeholder, text: text)
+                        .textContentType(.password)
+                } else {
+                    TextField(placeholder, text: text)
+                        .textContentType(.username)
+                }
+            }
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .font(MobileDesignTypography.bodyLarge.font)
+            .foregroundStyle(OpenBitFunTheme.ink)
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
+        .frame(height: 60)
     }
 
     private var deviceListRetryPage: some View {
@@ -173,8 +274,8 @@ struct AccountSettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
                     .background(OpenBitFunTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
-                        .padding(.bottom, 24)
+                    .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsProminentCardRadius))
+                    .padding(.bottom, 24)
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -194,33 +295,41 @@ struct AccountSettingsView: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 16)
                     .background(OpenBitFunTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsCardRadius))
                     .padding(.bottom, 24)
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text(model.localized("设备管理"))
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundStyle(OpenBitFunTheme.ink)
+                                .font(MobileDesignTypography.titleSmall.font)
+                                .foregroundStyle(OpenBitFunTheme.muted)
                             Spacer()
-                            Button { model.refreshRemoteDevices() } label: {
-                                Text(model.localized(model.accountRefreshing ? "正在刷新" : "刷新"))
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(model.accountRefreshing ? OpenBitFunTheme.muted : OpenBitFunTheme.ink)
+                            Button(action: model.refreshRemoteDevices) {
+                                Group {
+                                    if model.accountRefreshing {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 18, weight: .regular))
+                                    }
+                                }
+                                .foregroundStyle(model.accountRefreshing ? OpenBitFunTheme.muted : OpenBitFunTheme.ink)
+                                .frame(width: MobileDesignGeometry.controlTouchSize, height: MobileDesignGeometry.controlTouchSize)
                             }
                             .buttonStyle(.plain)
                             .disabled(model.accountRefreshing)
+                            .accessibilityLabel(model.localized("刷新"))
                         }
-                        VStack(spacing: 0) {
-                            ForEach(Array(model.accountDevices.enumerated()), id: \.offset) { index, device in
+                        VStack(spacing: 4) {
+                            ForEach(model.accountDevices) { device in
                                 Button { model.selectRemoteDevice(device) } label: {
-                                    SettingsDeviceRow(device: device)
+                                    SettingsDeviceRow(
+                                        device: device,
+                                        connected: device.selected && model.connectionPhase == .connected
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(!device.online && !device.selected)
-                                if index < model.accountDevices.count - 1 {
-                                    Divider().overlay(OpenBitFunTheme.line).padding(.horizontal, 20)
-                                }
                             }
                             if model.accountDevices.isEmpty {
                                 Text(model.localized("暂无可连接的桌面设备"))
@@ -230,15 +339,14 @@ struct AccountSettingsView: View {
                                     .padding(.vertical, 12)
                             }
                         }
+                        .padding(8)
+                        .background(OpenBitFunTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsCardRadius))
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                    .background(OpenBitFunTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
                     .padding(.bottom, 24)
 
                     Text(model.localized("个人资料详情"))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(MobileDesignTypography.titleSmall.font.weight(.bold))
                         .foregroundStyle(OpenBitFunTheme.muted)
                         .padding(.leading, 18)
                         .padding(.bottom, 8)
@@ -252,20 +360,28 @@ struct AccountSettingsView: View {
                         )
                     }
                     .background(OpenBitFunTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
+                    .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsCardRadius))
 
                     Button(role: .destructive) {
                         model.logoutAccount()
                     } label: {
-                        Text(model.localized("退出账号"))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(OpenBitFunTheme.statusDanger)
-                            .frame(maxWidth: .infinity, minHeight: 54)
-                            .background(OpenBitFunTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        HStack(spacing: 14) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 22, weight: .regular))
+                                .frame(width: 24, height: 24)
+                            Text(model.localized("退出账号"))
+                                .font(MobileDesignTypography.titleMedium.font)
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(OpenBitFunTheme.statusDanger)
+                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity, minHeight: 62)
+                        .background(OpenBitFunTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsCardRadius))
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 18)
+                    .padding(.top, 32)
+                    .padding(.bottom, 8)
                 }
                 .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
                 .padding(.top, 20)
@@ -279,20 +395,21 @@ struct AccountSettingsView: View {
     }
 
     private func profileDetailRow(label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             Text(label)
-                .font(.system(size: 16))
+                .font(MobileDesignTypography.bodyLarge.font)
                 .foregroundStyle(OpenBitFunTheme.ink)
             Spacer(minLength: 8)
             Text(value)
-                .font(.system(size: 16))
+                .font(MobileDesignTypography.bodyMedium.font)
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .multilineTextAlignment(.trailing)
         }
-        .frame(minHeight: 56)
         .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .frame(minHeight: 58)
     }
 
     private var canLogin: Bool {
@@ -306,58 +423,48 @@ struct AccountSettingsView: View {
         if let onClose { onClose() } else { model.accountSheetOpen = false }
     }
 
-    @ViewBuilder
-    private func accountField(
-        _ placeholder: String,
-        text: Binding<String>,
-        secure: Bool,
-        height: CGFloat
-    ) -> some View {
-        Group {
-            if secure { SecureField(placeholder, text: text) }
-            else { TextField(placeholder, text: text) }
-        }
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .font(.system(size: height == 58 ? 17 : 14))
-        .foregroundStyle(OpenBitFunTheme.ink)
-        .padding(.horizontal, 20)
-        .frame(height: height)
-        .background(OpenBitFunTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: height == 58 ? 18 : 16))
-    }
 }
 
 struct SettingsDeviceRow: View {
     let device: MobileAccountDevice
+    let connected: Bool
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Image(systemName: "desktopcomputer")
-                .font(.system(size: 21, weight: .regular))
-                .foregroundStyle(OpenBitFunTheme.muted)
-                .frame(width: 42, height: 42)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(connected ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 3) {
                 Text(device.name)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MobileDesignTypography.titleSmall.font)
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .lineLimit(1)
-                Text(MobileLocalization.text(device.online ? "在线" : "离线"))
-                    .font(.system(size: 12))
+                Text(deviceStatus)
+                    .font(MobileDesignTypography.bodySmall.font)
                     .foregroundStyle(device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted)
             }
-            Spacer(minLength: 12)
-            if device.selected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(OpenBitFunTheme.statusSuccess)
-            } else {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(OpenBitFunTheme.muted)
+            Spacer(minLength: 0)
+            if device.online && !connected {
+                Text(MobileLocalization.text("连接"))
+                    .font(MobileDesignTypography.bodyMedium.font)
+                    .foregroundStyle(OpenBitFunTheme.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(OpenBitFunTheme.soft)
+                    .clipShape(Capsule())
             }
         }
-        .padding(.horizontal, 20)
-        .frame(minHeight: 76)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .frame(minHeight: 62)
+        .background(connected ? OpenBitFunTheme.soft : OpenBitFunTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.settingsCompactCardRadius))
+        .opacity(device.online ? 1 : 0.48)
+    }
+
+    private var deviceStatus: String {
+        let presence = MobileLocalization.text(device.online ? "在线" : "离线")
+        return connected ? "\(MobileLocalization.text("当前控制")) · \(presence)" : presence
     }
 }

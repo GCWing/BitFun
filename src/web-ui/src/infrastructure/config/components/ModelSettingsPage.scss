@@ -313,7 +313,10 @@
     border-radius: 999px;
     margin-left: 4px;
     flex-shrink: 0;
-    background: var(--openbitfun-color-content-muted);
+
+    &.is-testing {
+      background: var(--openbitfun-color-status-warning-emphasis);
+    }
 
     &.is-success {
       background: var(--openbitfun-color-status-success-emphasis);

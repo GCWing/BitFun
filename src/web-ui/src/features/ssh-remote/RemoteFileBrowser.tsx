@@ -549,9 +549,11 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                     }}
                     className="remote-file-browser__row remote-file-browser__row--parent"
                   >
-                    <td colSpan={3}>
-                      <Icon name="folder" size="md" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
-                      <span>..</span>
+                    <td colSpan={3} className="remote-file-browser__td remote-file-browser__td--name">
+                      <div className="remote-file-browser__name-cell">
+                        <Icon name="folder" size="md" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
+                        <span className="remote-file-browser__name">..</span>
+                      </div>
                     </td>
                   </tr>
                 )}

@@ -24,6 +24,7 @@ fn builtin_skill(dir_name: &str) -> SkillInfo {
         source_slot: "openbitfun-system".to_string(),
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
+        installation_source: None,
         dir_name: dir_name.to_string(),
         is_builtin: true,
         group_key: builtin_skill_group_key(dir_name).map(str::to_string),
@@ -45,6 +46,7 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         source_slot: "openbitfun".to_string(),
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
+        installation_source: None,
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,
@@ -54,6 +56,20 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         allow_user_invocation: true,
         argument_hint: None,
     }
+}
+
+#[test]
+fn skill_installation_source_is_optional_for_legacy_payloads_and_round_trips() {
+    let original = custom_user_skill("eli5");
+    let legacy = serde_json::to_value(&original).unwrap();
+    assert!(legacy.get("installationSource").is_none());
+    let mut decoded: SkillInfo = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(decoded.installation_source.is_none());
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), legacy);
+    decoded.installation_source = Some("first/skills".into());
+    let current: SkillInfo =
+        serde_json::from_value(serde_json::to_value(decoded).unwrap()).unwrap();
+    assert_eq!(current.installation_source.as_deref(), Some("first/skills"));
 }
 
 #[test]
@@ -267,6 +283,7 @@ fn project_skill(dir_name: &str) -> SkillInfo {
         source_slot: "openbitfun".to_string(),
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
+        installation_source: None,
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,

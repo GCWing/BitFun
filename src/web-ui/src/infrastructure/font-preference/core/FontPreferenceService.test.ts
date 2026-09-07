@@ -48,4 +48,33 @@ describe('FontPreferenceService', () => {
     expect(document.documentElement.style.getPropertyValue('--openbitfun-appearance-token-flowchat-font-size-base')).toBe('');
     // typography-audit: negative-test-end
   });
+
+  it('adjusts a saved preset, applies typography, and persists the existing config shape', async () => {
+    configMocks.getConfig.mockResolvedValue({ uiSize: { level: 'large' } });
+    const service = new FontPreferenceService();
+    await service.initialize();
+    await service.adjustUiSize(1);
+    expect(document.documentElement.style.getPropertyValue('--openbitfun-font-size-base')).toBe('17px');
+    expect(configMocks.setConfig).toHaveBeenLastCalledWith('font', {
+      uiSize: { level: 'custom', customPx: 17 },
+    });
+    await service.adjustUiSize(-1);
+    expect(service.getPreference().uiSize.customPx).toBe(16);
+  });
+
+  it.each([[12, -1], [20, 1]] as const)('keeps the %ipx boundary without redundant writes', async (customPx, delta) => {
+    const service = new FontPreferenceService();
+    await service.setUiSize('custom', customPx);
+    configMocks.setConfig.mockClear();
+    await service.adjustUiSize(delta);
+    expect(service.getPreference().uiSize.customPx).toBe(customPx);
+    expect(configMocks.setConfig).not.toHaveBeenCalled();
+  });
+
+  it('uses the latest size for repeated key presses before persistence completes', async () => {
+    configMocks.setConfig.mockImplementation(() => new Promise<void>(resolve => setTimeout(resolve, 0)));
+    const service = new FontPreferenceService();
+    await Promise.all([service.adjustUiSize(1), service.adjustUiSize(1), service.adjustUiSize(-1)]);
+    expect(service.getPreference().uiSize.customPx).toBe(15);
+  });
 });

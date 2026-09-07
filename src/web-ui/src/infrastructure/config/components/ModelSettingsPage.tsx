@@ -3230,6 +3230,9 @@ const ModelSettingsPage: React.FC = () => {
     const providerDisplayName = getProviderDisplayName(config);
     const modelDisplayName = getModelDisplayName(config);
     const modelLabel = config.model_name || modelDisplayName;
+    const testStatusLabel = isTesting
+      ? t('messages.testing')
+      : testResult?.message.split('\n', 1)[0];
 
     const badge = (
       <>
@@ -3240,15 +3243,18 @@ const ModelSettingsPage: React.FC = () => {
         >
           {t(`category.${config.category}`)}
         </span>
-        {testResult && (
+        {(isTesting || testResult) && (
           <span
             data-testid="settings-model-test-status"
             data-config-id={config.id || ''}
             data-model-id={config.model_name}
             data-model-name={config.model_name}
-            data-status={testResult.success ? 'success' : 'error'}
-            className={`openbitfun-model-settings__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
-            title={testResult.message}
+            data-status={isTesting ? 'testing' : testResult?.success ? 'success' : 'error'}
+            className={`openbitfun-model-settings__status-dot ${isTesting ? 'is-testing' : testResult?.success ? 'is-success' : 'is-error'}`}
+            role="status"
+            aria-live="polite"
+            aria-label={testStatusLabel}
+            title={isTesting ? testStatusLabel : testResult?.message}
           />
         )}
       </>

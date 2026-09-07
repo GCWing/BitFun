@@ -55,8 +55,10 @@ export function useSideAnchoredPopoverPosition({
 
     const anchorBounds = anchor.getBoundingClientRect();
     const popoverBounds = popover.getBoundingClientRect();
-    const popoverWidth = popoverBounds.width || popover.offsetWidth || popover.scrollWidth;
-    const popoverHeight = popoverBounds.height || popover.offsetHeight || popover.scrollHeight;
+    // Opening animations can scale the painted bounds. Position against the
+    // layout dimensions so the fully expanded menu still clears the viewport.
+    const popoverWidth = popover.offsetWidth || popoverBounds.width || popover.scrollWidth;
+    const popoverHeight = popover.offsetHeight || popoverBounds.height || popover.scrollHeight;
     const rightLeft = anchorBounds.right + gap;
     const leftLeft = anchorBounds.left - gap - popoverWidth;
     const fitsRight = rightLeft + popoverWidth <= window.innerWidth - padding;

@@ -11,11 +11,19 @@ struct ConversationHeader: View {
     @State private var editing = false
     @State private var renameDraft = ""
 
+    private var resolvedTitle: String {
+        if let title = model.selectedSession?.title, !title.isEmpty { return title }
+        if model.surface == .remote { return model.localized("远程") }
+        return "OpenBitFun"
+    }
+
     private var resolvedSubtitle: String? {
         if let contextTitle, !contextTitle.isEmpty { return contextTitle }
         if model.surface == .local && model.localSessionSelected { return model.localized("本地会话") }
-        if model.remoteConnected && model.remoteSessionSelected {
-            return model.accountDeviceName ?? model.localized("已连接桌面端")
+        if model.remoteConnected {
+            return model.accountDeviceName
+                ?? model.directPairingDeviceName
+                ?? model.localized("已连接桌面端")
         }
         return nil
     }
@@ -49,7 +57,7 @@ struct ConversationHeader: View {
                 }
 
                 VStack(spacing: 3) {
-                    Text(model.selectedSession?.title ?? "OpenBitFun")
+                    Text(resolvedTitle)
                         .font(
                             (resolvedSubtitle == nil
                                 ? MobileDesignTypography.titleMedium
@@ -196,7 +204,7 @@ struct ConversationActionsPopover: View {
                 .padding(.leading, 8)
             if model.surface == .local {
                 action(
-                    model.selectedSession?.pinned == true ? "取消置顶" : "置顶会话",
+                    model.selectedSession?.pinned == true ? "取消置顶" : "置顶",
                     icon: "checkmark.circle",
                     selected: model.selectedSession?.pinned == true,
                     perform: model.togglePinSelectedSession
@@ -205,7 +213,7 @@ struct ConversationActionsPopover: View {
             action("已上传文件", icon: "cloud", perform: model.showUploadedFiles)
             if model.surface == .local {
                 Divider().overlay(OpenBitFunTheme.line).padding(.vertical, 8)
-                action("归档会话", icon: "folder", perform: model.archiveSelectedSession)
+                action("归档", icon: "folder", perform: model.archiveSelectedSession)
                 action("删除", icon: "gearshape", perform: model.deleteSelectedSession)
             } else if model.isSending {
                 Divider().overlay(OpenBitFunTheme.line).padding(.vertical, 8)

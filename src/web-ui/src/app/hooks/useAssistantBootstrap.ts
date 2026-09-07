@@ -1,206 +1,53 @@
-import { useCallback, useEffect, useRef } from 'react';
-import {
-  agentAPI,
-  type EnsureAssistantBootstrapResponse,
-} from '@/infrastructure/api/service-api/AgentAPI';
+import { useEffect } from 'react';
+import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { useI18n } from '@/infrastructure/i18n';
-import { notificationService } from '@/shared/notification-system';
+import { sessionComposerStore } from '@/flow_chat/store/sessionComposerStore';
+import { isProjectedSessionEmpty } from '@/flow_chat/utils/flowChatTurnIdentity';
+import type { Session } from '@/flow_chat/types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
-import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 const log = createLogger('AssistantBootstrap');
 
-interface BootstrapRequest {
-  workspacePath: string;
-  sessionId: string;
-}
-
-interface ActiveBootstrapAttempt extends BootstrapRequest {
-  turnId: string;
-}
-
-export function useAssistantBootstrap() {
-  const { t } = useI18n('notifications');
-  const activeAttemptRef = useRef<ActiveBootstrapAttempt | null>(null);
-  const pendingRequestRef = useRef<BootstrapRequest | null>(null);
-  const latestWorkspacePathRef = useRef<string | null>(null);
-  const inFlightWorkspacePathRef = useRef<string | null>(null);
-  const blockedNoticeShownRef = useRef<Set<string>>(new Set());
-  const requestBootstrapRef = useRef<(request: BootstrapRequest) => void>(() => {});
-
-  const drainPendingRequest = useCallback(() => {
-    const pending = pendingRequestRef.current;
-    if (!pending) {
-      return;
-    }
-
-    if (latestWorkspacePathRef.current !== pending.workspacePath) {
-      pendingRequestRef.current = null;
-      return;
-    }
-
-    pendingRequestRef.current = null;
-    requestBootstrapRef.current(pending);
-  }, []);
-
-  const clearActiveAttempt = useCallback(
-    (event: { sessionId?: string; turnId?: string }) => {
-      const activeAttempt = activeAttemptRef.current;
-      if (!activeAttempt) {
-        return;
-      }
-
-      if (event.sessionId !== activeAttempt.sessionId || event.turnId !== activeAttempt.turnId) {
-        return;
-      }
-
-      activeAttemptRef.current = null;
-      drainPendingRequest();
-    },
-    [drainPendingRequest]
-  );
+/** Offer bootstrap as an editable draft. Only the composer may submit it. */
+export function useAssistantBootstrap(
+  session: Session | undefined,
+  onDraftReady: (value: string) => void,
+): void {
+  const { t } = useI18n('common');
+  const scope = getActiveSurfaceScope();
+  const sessionId = session?.sessionId;
+  const workspacePath = session?.workspacePath;
+  const remoteConnectionId = session?.remoteConnectionId;
+  const isEmptyClaw = session?.mode?.toLowerCase() === 'claw'
+    && isProjectedSessionEmpty(session)
+    && !session.lastSubmittedMode
+    && !session.config.dispatchTarget
+    && !session.config.dispatchJobId;
 
   useEffect(() => {
-    const unlistenCompleted = agentAPI.onDialogTurnCompleted(clearActiveAttempt);
-    const unlistenFailed = agentAPI.onDialogTurnFailed(clearActiveAttempt);
-    const unlistenCancelled = agentAPI.onDialogTurnCancelled(clearActiveAttempt);
+    if (!isEmptyClaw || !sessionId || !workspacePath) return;
+    const composer = sessionComposerStore.getState();
+    const draft = composer.getDraft(sessionId);
+    // An edited or explicitly cleared draft belongs to the user, including on reopen.
+    if (draft.updatedAt || draft.value || draft.contexts.length) return;
 
-    return () => {
-      unlistenCompleted();
-      unlistenFailed();
-      unlistenCancelled();
-    };
-  }, [clearActiveAttempt]);
-
-  const handleEnsureResponse = useCallback(
-    (request: BootstrapRequest, response: EnsureAssistantBootstrapResponse): void => {
-      switch (response.status) {
-        case 'started':
-          if (!response.turnId) {
-            log.warn('Assistant bootstrap started without turnId', { request, response });
-            return;
-          }
-          activeAttemptRef.current = {
-            ...request,
-            sessionId: response.sessionId,
-            turnId: response.turnId,
-          };
-          blockedNoticeShownRef.current.delete(request.workspacePath);
-          log.info('Assistant bootstrap started', {
-            workspacePath: request.workspacePath,
-            sessionId: response.sessionId,
-            turnId: response.turnId,
-          });
-          return;
-        case 'blocked':
-          if (
-            response.reason === 'model_unavailable' &&
-            !blockedNoticeShownRef.current.has(request.workspacePath)
-          ) {
-            blockedNoticeShownRef.current.add(request.workspacePath);
-            notificationService.info(t('info.assistantBootstrapWaitingForModelConfiguration'), {
-              duration: 5000,
-            });
-          }
-          log.info('Assistant bootstrap blocked', {
-            workspacePath: request.workspacePath,
-            sessionId: request.sessionId,
-            reason: response.reason,
-            detail: response.detail,
-          });
-          return;
-        case 'skipped':
-          if (response.reason === 'bootstrap_not_required') {
-            blockedNoticeShownRef.current.delete(request.workspacePath);
-          }
-          log.debug('Assistant bootstrap skipped', {
-            workspacePath: request.workspacePath,
-            sessionId: request.sessionId,
-            reason: response.reason,
-          });
-          return;
-        default:
-          return;
+    let cancelled = false;
+    const requestScope = getActiveSurfaceScope();
+    const bootstrapPath = `${workspacePath.replace(/[\\/]+$/, '')}/BOOTSTRAP.md`;
+    void workspaceAPI.readFileContent(bootstrapPath, undefined, remoteConnectionId).then(() => {
+      if (cancelled || !requestScope.isCurrent()) return;
+      const latest = sessionComposerStore.getState().getDraft(sessionId);
+      if (latest.updatedAt !== draft.updatedAt || latest.value || latest.contexts.length) return;
+      onDraftReady(t('nav.sessions.assistantBootstrapDraft'));
+    }).catch(error => {
+      if (cancelled || !requestScope.isCurrent()) return;
+      // Completed assistants no longer have BOOTSTRAP.md. Other failures remain diagnosable.
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/does not exist|no such file|not found/i.test(message)) {
+        log.warn('Failed to prepare assistant bootstrap draft', { sessionId, workspacePath, error });
       }
-    },
-    [t]
-  );
-
-  const requestBootstrap = useCallback(
-    async (request: BootstrapRequest): Promise<void> => {
-      const activeAttempt = activeAttemptRef.current;
-      if (activeAttempt) {
-        if (activeAttempt.workspacePath === request.workspacePath) {
-          return;
-        }
-        pendingRequestRef.current = request;
-        return;
-      }
-
-      const inFlightWorkspacePath = inFlightWorkspacePathRef.current;
-      if (inFlightWorkspacePath) {
-        if (inFlightWorkspacePath === request.workspacePath) {
-          return;
-        }
-        pendingRequestRef.current = request;
-        return;
-      }
-
-      inFlightWorkspacePathRef.current = request.workspacePath;
-
-      try {
-        const response = await agentAPI.ensureAssistantBootstrap({
-          sessionId: request.sessionId,
-          workspacePath: request.workspacePath,
-        });
-        handleEnsureResponse(request, response);
-      } catch (error) {
-        log.error('Failed to ensure assistant bootstrap', {
-          workspacePath: request.workspacePath,
-          sessionId: request.sessionId,
-          error,
-        });
-      } finally {
-        if (inFlightWorkspacePathRef.current === request.workspacePath) {
-          inFlightWorkspacePathRef.current = null;
-        }
-
-        if (!activeAttemptRef.current) {
-          drainPendingRequest();
-        }
-      }
-    },
-    [drainPendingRequest, handleEnsureResponse]
-  );
-
-  useEffect(() => {
-    requestBootstrapRef.current = (request: BootstrapRequest) => {
-      void requestBootstrap(request);
-    };
-  }, [requestBootstrap]);
-
-  const ensureForWorkspace = useCallback(
-    (workspace: WorkspaceInfo | null | undefined, sessionId?: string | null): void => {
-      latestWorkspacePathRef.current = workspace?.rootPath ?? null;
-
-      if (
-        !workspace ||
-        workspace.workspaceKind !== WorkspaceKind.Assistant ||
-        !sessionId
-      ) {
-        pendingRequestRef.current = null;
-        return;
-      }
-
-      void requestBootstrap({
-        workspacePath: workspace.rootPath,
-        sessionId,
-      });
-    },
-    [requestBootstrap]
-  );
-
-  return {
-    ensureForWorkspace,
-  };
+    });
+    return () => { cancelled = true; };
+  }, [isEmptyClaw, onDraftReady, remoteConnectionId, scope.epoch, sessionId, t, workspacePath]);
 }

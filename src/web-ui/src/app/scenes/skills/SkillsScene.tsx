@@ -24,6 +24,7 @@ import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { GalleryDetailModal, GalleryPageHeader } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
+import { installedSkillMarketIds, isSkillMarketItemInstalled } from '@/infrastructure/config/skillMarketInstallation';
 import {
   buildSkillCoverageSourceMap,
   canDeleteSkill,
@@ -132,8 +133,8 @@ const SkillsScene: React.FC = () => {
     enabled: desktopConfigAvailable,
   });
 
-  const installedSkillNames = useMemo(
-    () => new Set(installed.skills.map((skill) => skill.name)),
+  const installedMarketIds = useMemo(
+    () => installedSkillMarketIds(installed.skills),
     [installed.skills],
   );
   const coverageSourceBySkillKey = useMemo(
@@ -167,7 +168,7 @@ const SkillsScene: React.FC = () => {
 
   const market = useSkillMarket({
     searchQuery: marketQuery,
-    installedSkillNames,
+    installedMarketIds,
     pageSize: 15,
     enabled: desktopConfigAvailable,
     onInstalledChanged: async () => {
@@ -689,7 +690,7 @@ const SkillsScene: React.FC = () => {
 
                   <div className="skills-discover__grid" data-testid="skill-list" data-openbitfun-scene="skills" data-openbitfun-part="list">
                     {market.marketSkills.map((skill, index) => {
-                      const isInstalled = installedSkillNames.has(skill.name);
+                      const isInstalled = isSkillMarketItemInstalled(skill, installedMarketIds);
                       const isDownloading = market.downloadingPackage === skill.installId;
                       return (
                         <SkillCard
@@ -815,7 +816,7 @@ const SkillsScene: React.FC = () => {
                   : t('list.item.project')}
             </StatusPill>
           </>
-        ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
+        ) : selectedMarketSkill && isSkillMarketItemInstalled(selectedMarketSkill, installedMarketIds) ? (
           <StatusPill tone="success" leading={<Icon name="check-circle" size="2xs" />}>
             {t('market.item.installed')}
           </StatusPill>
@@ -847,7 +848,7 @@ const SkillsScene: React.FC = () => {
           </Button>
         ) : selectedMarketSkill ? (
           <>
-            {installedSkillNames.has(selectedMarketSkill.name) ? (
+            {isSkillMarketItemInstalled(selectedMarketSkill, installedMarketIds) ? (
               <Button variant="outline" size="sm" disabled>
                 {t('market.item.installed')}
               </Button>

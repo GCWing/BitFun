@@ -407,6 +407,20 @@ extension MobileAppModel {
         coreAdapter?.selectRemoteAssistant(path: assistant.path)
     }
 
+    /// Compact Remote Home follows HarmonyOS by creating an empty conversation
+    /// immediately, then letting the normal composer own the first message.
+    func createRemoteSessionFromHome() {
+        guard remoteCreateInteraction.canSubmit else {
+            showToast(localized("远程会话当前不可创建，请重试"))
+            return
+        }
+        if let workspace = remoteWorkspaces.first(where: \.selected) ?? remoteWorkspaces.first {
+            createRemoteSession(in: workspace, agentType: "code")
+        } else {
+            createRemoteAssistantSession()
+        }
+    }
+
     func selectRemoteAssistant(_ assistant: MobileAssistantOption) {
         guard remoteConnected, remoteCreateInteraction.canSelectWorkspace else { return }
         workspaceSelectionBusy = true

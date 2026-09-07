@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
+import { isSkillMarketItemInstalled } from '@/infrastructure/config/skillMarketInstallation';
 import type { SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
@@ -13,7 +14,7 @@ const MAX_TOTAL_SKILLS = 500;
 
 interface UseSkillMarketOptions {
   searchQuery: string;
-  installedSkillNames: Set<string>;
+  installedMarketIds: Set<string>;
   onInstalledChanged?: () => Promise<void> | void;
   pageSize?: number;
   enabled?: boolean;
@@ -21,7 +22,7 @@ interface UseSkillMarketOptions {
 
 export function useSkillMarket({
   searchQuery,
-  installedSkillNames,
+  installedMarketIds,
   onInstalledChanged,
   pageSize = DEFAULT_PAGE_SIZE,
   enabled = true,
@@ -119,7 +120,7 @@ export function useSkillMarket({
     const entries = marketSkills.map((skill, index) => ({
       skill,
       index,
-      installed: installedSkillNames.has(skill.name),
+      installed: isSkillMarketItemInstalled(skill, installedMarketIds),
     }));
 
     entries.sort((a, b) => {
@@ -134,7 +135,7 @@ export function useSkillMarket({
     });
 
     return entries.map((entry) => entry.skill);
-  }, [installedSkillNames, marketSkills]);
+  }, [installedMarketIds, marketSkills]);
 
   const loadedPages = Math.ceil(displayMarketSkills.length / pageSize);
   const totalPages = hasMore ? loadedPages + 1 : Math.max(1, loadedPages);

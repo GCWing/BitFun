@@ -39,6 +39,7 @@ struct SidebarView: View {
     @State private var expandedWorkspacePaths: Set<String> = []
     @State private var expandedDeviceWorkspaceLists: Set<String> = []
     @State private var compactActionSession: ChatSession?
+    @State private var workspacePickerDevice: MobileDeviceDirectoryEntry?
     @State private var workspaceCreatePath: String?
     @State private var remoteChatsCollapsed = false
 
@@ -65,6 +66,18 @@ struct SidebarView: View {
             entries.insert(direct, at: 0)
         }
         return entries
+    }
+
+    private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
+        if model.directPairingConnected,
+           let direct = directoryEntries.first(where: { $0.id == model.directPairingSidebarDeviceID }) {
+            return direct
+        }
+        if let selectedID = model.accountSelectedDeviceID,
+           let selected = directoryEntries.first(where: { $0.id == selectedID }) {
+            return selected
+        }
+        return directoryEntries.first(where: \.online) ?? directoryEntries.first
     }
 
     var body: some View {
@@ -119,6 +132,18 @@ struct SidebarView: View {
                 surface
             }
         }
+        .sheet(item: $workspacePickerDevice) { device in
+            SidebarWorkspacePickerSheet(
+                device: device,
+                onClose: { workspacePickerDevice = nil },
+                onSelect: { workspace in
+                    workspacePickerDevice = nil
+                    model.selectDirectoryWorkspace(workspace)
+                }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+        }
         .overlayPreferenceValue(SidebarWorkspaceCreateAnchorKey.self) { anchors in
             GeometryReader { proxy in
                 if let path = workspaceCreatePath,
@@ -143,7 +168,12 @@ struct SidebarView: View {
             }
         }
         .task {
-            if ProcessInfo.processInfo.arguments.contains("--project-create-menu"),
+            if ProcessInfo.processInfo.arguments.contains("--workspace-picker"),
+               workspacePickerDevice == nil,
+               let device = selectedDirectoryEntry {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                workspacePickerDevice = device
+            } else if ProcessInfo.processInfo.arguments.contains("--project-create-menu"),
                workspaceCreatePath == nil,
                let workspace = model.remoteWorkspaces.first {
                 try? await Task.sleep(nanoseconds: 450_000_000)
@@ -339,36 +369,75 @@ struct SidebarView: View {
             }
 
             ForEach(directoryEntries) { device in
-                directoryDevice(device)
+                directoryDeviceSelector(device)
             }
 
+            if let selectedDirectoryEntry {
+                HStack {
+                    Text(model.localized("工作区"))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                    Spacer(minLength: 0)
+                    Button { workspacePickerDevice = selectedDirectoryEntry } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(selectedDirectoryEntry.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!selectedDirectoryEntry.online)
+                    .opacity(selectedDirectoryEntry.online ? 1 : 0.38)
+                    .accessibilityLabel(Text(model.localized("添加工作区")))
+                }
+                .frame(height: 48)
+                .padding(.top, 16)
+
+                directoryDeviceBody(selectedDirectoryEntry)
+            }
         }
     }
 
     @ViewBuilder
-    private func directoryDevice(_ device: MobileDeviceDirectoryEntry) -> some View {
-        let current = model.accountSelectedDeviceID == device.id || device.id == model.directPairingSidebarDeviceID
-        VStack(alignment: .leading, spacing: 0) {
-            Button { model.toggleDeviceDirectory(device) } label: {
-                HStack(spacing: 10) {
-                    ReferenceImage(assetName: "SidebarDeviceGlyph", width: 22, height: 18)
-                    Text(device.name).font(.system(size: 15, weight: current ? .medium : .regular))
-                        .foregroundStyle(OpenBitFunTheme.ink).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Circle().fill(device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted).frame(width: 7, height: 7)
-                    if current { Text(model.localized("当前控制")).font(.system(size: 11)).foregroundStyle(OpenBitFunTheme.statusSuccess) }
-                    if device.status == "LOADING" { ProgressView().controlSize(.small) }
-                    Image(systemName: device.expanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(OpenBitFunTheme.muted)
+    private func directoryDeviceSelector(_ device: MobileDeviceDirectoryEntry) -> some View {
+        let selected = selectedDirectoryEntry?.id == device.id
+        Button { selectDirectoryDevice(device) } label: {
+            HStack(spacing: 8) {
+                ReferenceImage(assetName: "SidebarDeviceGlyph", width: 24, height: 20)
+                Text(device.name)
+                    .font(.system(size: 15, weight: selected ? .medium : .regular))
+                    .foregroundStyle(device.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if device.status == "LOADING" {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Circle()
+                        .fill(device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted)
+                        .frame(width: 8, height: 8)
                 }
-                .padding(.horizontal, 10).frame(minHeight: 46).contentShape(Rectangle())
+                Image(systemName: selected ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(device.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                    .frame(width: 20, height: 24)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("sidebar.device.\(device.id)")
-            .accessibilityLabel(Text(device.name))
-            .accessibilityValue(Text(device.online ? model.localized("在线") : model.localized("离线")))
-            if device.expanded { directoryDeviceBody(device) }
+            .padding(.leading, 8)
+            .padding(.trailing, 4)
+            .frame(height: 52)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!device.online || selected)
+        .opacity(device.online ? 1 : 0.58)
+        .accessibilityIdentifier("sidebar.device.\(device.id)")
+        .accessibilityLabel(Text(device.name))
+        .accessibilityValue(Text(device.online ? model.localized("在线") : model.localized("离线")))
+    }
+
+    private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
+        guard device.online, selectedDirectoryEntry?.id != device.id else { return }
+        guard device.id != model.directPairingSidebarDeviceID,
+              let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
+        model.selectRemoteDevice(accountDevice)
     }
 
     @ViewBuilder
@@ -882,8 +951,22 @@ private struct SidebarWorkspaceRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: onOpenWorkspace) {
+            HStack(spacing: 6) {
+                Button(action: onToggle) {
+                    ReferenceImage(
+                        assetName: expanded ? "SidebarDownGlyph" : "SidebarChevronGlyph",
+                        width: 14,
+                        height: 14
+                    )
+                    .opacity(0.62)
+                    .frame(width: 24, height: 46)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    MobileLocalization.text(expanded ? "收起工作区" : "展开工作区")
+                )
+
+                Button(action: onToggle) {
                     HStack(spacing: 10) {
                         ReferenceImage(assetName: "SidebarFolderGlyph", width: 24, height: 20)
                         Text(workspace.name)
@@ -894,14 +977,15 @@ private struct SidebarWorkspaceRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onLongPressGesture(perform: onOpenWorkspace)
                 .accessibilityIdentifier("sidebar.workspace.\(workspace.deviceKey ?? "unknown").\(workspace.path)")
                 .accessibilityValue(Text(workspace.path))
                 Spacer(minLength: 0)
                 Button(action: onToggleCreate) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(OpenBitFunTheme.muted)
-                        .frame(width: 32, height: 40)
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .frame(width: 30, height: 40)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(MobileLocalization.text("新建远程会话"))
@@ -911,23 +995,10 @@ private struct SidebarWorkspaceRow: View {
                     value: .bounds,
                     transform: { [workspace.path: $0] }
                 )
-                Button(action: onToggle) {
-                    ReferenceImage(
-                        assetName: expanded ? "SidebarDownGlyph" : "SidebarChevronGlyph",
-                        width: 14,
-                        height: 14
-                    )
-                    .opacity(0.62)
-                    .frame(width: 32, height: 40)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    MobileLocalization.text(expanded ? "收起工作区" : "展开工作区")
-                )
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 6)
+            .padding(.trailing, 6)
             .frame(height: 46)
-            .background(workspace.selected ? OpenBitFunTheme.soft.opacity(0.75) : OpenBitFunTheme.transparent)
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             if expanded {
@@ -1008,5 +1079,107 @@ private struct SidebarWorkspaceRow: View {
                 }
             }
         }
+    }
+}
+
+private struct SidebarWorkspacePickerSheet: View {
+    let device: MobileDeviceDirectoryEntry
+    let onClose: () -> Void
+    let onSelect: (MobileWorkspaceGroup) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MobileLocalization.text("选择工作区"))
+                        .font(MobileDesignTypography.headlineMedium.font.weight(.bold))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .lineLimit(1)
+                    Text(device.name)
+                        .font(MobileDesignTypography.bodySmall.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .frame(width: 40, height: 40)
+                        .background(OpenBitFunTheme.soft)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(MobileLocalization.text("关闭")))
+            }
+            .frame(height: 66)
+
+            Divider().overlay(OpenBitFunTheme.line)
+
+            if device.status == "LOADING" && device.workspaces.isEmpty {
+                VStack(spacing: 12) {
+                    ProgressView().controlSize(.regular)
+                    Text(MobileLocalization.text("正在加载"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if device.workspaces.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 30, weight: .regular))
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                    Text(MobileLocalization.text("这台电脑还没有工作区"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 4) {
+                        ForEach(device.workspaces) { workspace in
+                            Button { onSelect(workspace) } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 20, weight: .regular))
+                                        .foregroundStyle(OpenBitFunTheme.ink)
+                                        .frame(width: 34, height: 34)
+                                        .background(OpenBitFunTheme.card)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(workspace.name)
+                                            .font(MobileDesignTypography.bodyLarge.font.weight(workspace.selected ? .medium : .regular))
+                                            .foregroundStyle(OpenBitFunTheme.ink)
+                                            .lineLimit(1)
+                                        Text(workspace.path)
+                                            .font(MobileDesignTypography.labelSmall.font)
+                                            .foregroundStyle(OpenBitFunTheme.muted)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Image(systemName: workspace.selected ? "checkmark" : "chevron.right")
+                                        .font(.system(size: workspace.selected ? 17 : 15, weight: .regular))
+                                        .foregroundStyle(workspace.selected ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                                        .frame(width: 40, height: 40)
+                                }
+                                .padding(.leading, 10)
+                                .padding(.trailing, 8)
+                                .frame(height: 68)
+                                .background(workspace.selected ? OpenBitFunTheme.soft : OpenBitFunTheme.page)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 10)
+                    .padding(.bottom, 18)
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .background(OpenBitFunTheme.page)
     }
 }

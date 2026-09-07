@@ -56,6 +56,7 @@ import {
 } from '../../utils/composerPresentation';
 import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
 import { UserMessagePresentationContent } from './UserMessagePresentationContent';
+import { UserMessageImage } from './UserMessageImage';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -633,14 +634,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
         {message.images && message.images.length > 0 && (
           <div className="user-message-item__images" data-openbitfun-component="user-message-item" data-openbitfun-part="images">
-            {message.images.map(img => {
-              const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
-              return src ? (
-                <div data-openbitfun-component="user-message-item" data-openbitfun-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
-                  <img src={src} alt={img.name} />
-                </div>
-              ) : null;
-            })}
+            {message.images.map(img => (
+              <UserMessageImage key={img.id} image={img} onPreview={setLightboxImage} />
+            ))}
           </div>
         )}
 

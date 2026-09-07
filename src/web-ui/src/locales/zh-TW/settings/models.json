@@ -517,6 +517,7 @@
     "referenceCheckFailed": "無法確認此模型是否仍被其他設定引用，已取消刪除",
     "providerReferenceCheckFailed": "無法確認該服務商的模型是否仍被其他設定引用，已取消刪除",
     "loadFailed": "載入AI設定失敗",
+    "testing": "測試中…",
     "testSuccess": "測試成功",
     "testFailed": "測試失敗",
     "testUnsupportedOnHost": "設定已儲存，目前 CLI 裝置不支援模型連接測試",

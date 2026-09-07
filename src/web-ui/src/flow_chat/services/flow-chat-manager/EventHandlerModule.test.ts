@@ -21,6 +21,8 @@ import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Sessio
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { localSessionDriver } from '../../session-drivers/local/LocalSessionDriver';
 
 const {
   buildBuiltInBrowserTabOptions,
@@ -39,6 +41,42 @@ vi.mock('../../../shared/notification-system/services/NotificationService', () =
 describe('isAppWindowFocused', () => {
   it('returns true when no document is available', () => {
     expect(isAppWindowFocused()).toBe(true);
+  });
+});
+
+describe('Claw bootstrap cancellation', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('stops a backend-started bootstrap using its actual session and turn identities', async () => {
+    const interrupt = vi.spyOn(agentAPI, 'interruptDialogTurn').mockResolvedValue(undefined);
+    const store = FlowChatStore.getInstance();
+    store.setState(() => ({
+      sessions: new Map([['claw-1', {
+        sessionId: 'claw-1', title: 'Claw', mode: 'Claw', sessionKind: 'normal',
+        workspacePath: '/assistants/default', config: { agentType: 'Claw' },
+        dialogTurns: [], status: 'idle', createdAt: 1, lastActiveAt: 1, error: null,
+      } as Session]]),
+      activeSessionId: 'claw-1',
+    }));
+    const context = createFlowChatContext();
+    __test_only__.handleDialogTurnStarted(context, {
+      sessionId: 'claw-1', turnId: 'assistant-bootstrap-1', turnIndex: 0,
+      userInput: 'Please start bootstrap',
+      userMessageMetadata: { assistant_bootstrap: { system_generated: true } },
+    });
+
+    expect(await localSessionDriver.cancel(context, 'claw-1')).toBe(true);
+    expect(interrupt).toHaveBeenCalledExactlyOnceWith('claw-1', 'assistant-bootstrap-1');
+    expect(context.userCancelledSessionIds.has('claw-1')).toBe(true);
+    expect(stateMachineManager.getCurrentState('claw-1')).toBe(SessionExecutionState.FINISHING);
   });
 });
 

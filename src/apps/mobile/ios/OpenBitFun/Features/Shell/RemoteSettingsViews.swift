@@ -26,79 +26,61 @@ struct RemoteViewSettingsView: View {
             Divider().overlay(OpenBitFunTheme.line)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
                     sectionTitle("分组方式")
-                    SettingsCard {
-                        choiceRow("按项目", value: "PROJECT", selected: model.remoteGroupMode)
-                        settingsDivider
-                        choiceRow("按时间倒序排列", value: "TIME", selected: model.remoteGroupMode)
-                        settingsDivider
-                        choiceRow("聊天优先", value: "CHAT", selected: model.remoteGroupMode)
-                    }
+                    choiceRow("按项目", value: "PROJECT", selected: model.remoteGroupMode)
+                    choiceRow("按时间倒序排列", value: "TIME", selected: model.remoteGroupMode)
+                    choiceRow("聊天优先", value: "CHAT", selected: model.remoteGroupMode)
 
                     sectionTitle("筛选")
                     filterLabel("工作区")
-                    SettingsCard {
+                    filterRow(
+                        "所有工作区",
+                        selected: model.remoteWorkspaceFilter.isEmpty,
+                        action: { model.remoteWorkspaceFilter = "" }
+                    )
+                    ForEach(workspaces) { workspace in
                         filterRow(
-                            "所有工作区",
-                            selected: model.remoteWorkspaceFilter.isEmpty,
-                            action: { model.remoteWorkspaceFilter = "" }
+                            workspace.name,
+                            selected: normalizedPath(model.remoteWorkspaceFilter) == normalizedPath(workspace.path),
+                            action: { model.remoteWorkspaceFilter = workspace.path }
                         )
-                        ForEach(workspaces) { workspace in
-                            settingsDivider
-                            filterRow(
-                                workspace.name,
-                                selected: normalizedPath(model.remoteWorkspaceFilter) == normalizedPath(workspace.path),
-                                action: { model.remoteWorkspaceFilter = workspace.path }
-                            )
-                        }
                     }
 
                     filterLabel("Agent 类型")
-                    SettingsCard {
+                    filterRow(
+                        "所有 Agent 类型",
+                        selected: model.remoteViewAgentFilter.isEmpty,
+                        action: { model.remoteViewAgentFilter = "" }
+                    )
+                    ForEach(agentGroups, id: \.self) { group in
                         filterRow(
-                            "所有 Agent 类型",
-                            selected: model.remoteViewAgentFilter.isEmpty,
-                            action: { model.remoteViewAgentFilter = "" }
+                            agentLabel(group),
+                            selected: model.remoteViewAgentFilter == group,
+                            action: { model.remoteViewAgentFilter = group }
                         )
-                        ForEach(agentGroups, id: \.self) { group in
-                            settingsDivider
-                            filterRow(
-                                agentLabel(group),
-                                selected: model.remoteViewAgentFilter == group,
-                                action: { model.remoteViewAgentFilter = group }
-                            )
-                        }
                     }
 
                     filterLabel("状态")
-                    SettingsCard {
+                    filterRow(
+                        "所有状态",
+                        selected: model.remoteStatusFilter.isEmpty,
+                        action: { model.remoteStatusFilter = "" }
+                    )
+                    ForEach(statuses, id: \.self) { status in
                         filterRow(
-                            "所有状态",
-                            selected: model.remoteStatusFilter.isEmpty,
-                            action: { model.remoteStatusFilter = "" }
+                            statusLabel(status),
+                            selected: model.remoteStatusFilter == status,
+                            action: { model.remoteStatusFilter = status }
                         )
-                        ForEach(statuses, id: \.self) { status in
-                            settingsDivider
-                            filterRow(
-                                statusLabel(status),
-                                selected: model.remoteStatusFilter == status,
-                                action: { model.remoteStatusFilter = status }
-                            )
-                        }
                     }
 
                     sectionTitle("显示信息")
-                    SettingsCard {
-                        metadataToggle("工作区", isOn: $model.remoteShowWorkspaceMetadata)
-                        settingsDivider
-                        metadataToggle("更新时间", isOn: $model.remoteShowUpdatedMetadata)
-                        settingsDivider
-                        metadataToggle("状态", isOn: $model.remoteShowStatusMetadata)
-                    }
+                    metadataToggle("工作区", isOn: $model.remoteShowWorkspaceMetadata)
+                    metadataToggle("更新时间", isOn: $model.remoteShowUpdatedMetadata)
+                    metadataToggle("状态", isOn: $model.remoteShowStatusMetadata)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
                 .padding(.bottom, 34)
             }
         }
@@ -107,22 +89,22 @@ struct RemoteViewSettingsView: View {
 
     private func sectionTitle(_ title: String) -> some View {
         Text(model.localized(title))
-            .font(MobileDesignTypography.labelLarge.font)
+            .font(MobileDesignTypography.labelSmall.font.weight(.medium))
             .foregroundStyle(OpenBitFunTheme.muted)
-            .padding(.top, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 4)
+            .padding(.top, 12)
+            .frame(height: 38, alignment: .topLeading)
     }
 
     private func filterLabel(_ title: String) -> some View {
         Text(model.localized(title))
             .font(MobileDesignTypography.labelSmall.font)
             .foregroundStyle(OpenBitFunTheme.muted)
-            .padding(.top, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 10)
-    }
-
-    private var settingsDivider: some View {
-        Divider().overlay(OpenBitFunTheme.line).padding(.horizontal, 20)
+            .padding(.top, 10)
+            .frame(height: 34, alignment: .topLeading)
     }
 
     private func choiceRow(_ title: String, value: String, selected: String) -> some View {
@@ -132,33 +114,42 @@ struct RemoteViewSettingsView: View {
     private func filterRow(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(selected ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
+                    .frame(width: 22)
                 Text(model.localized(title))
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MobileDesignTypography.titleSmall.font)
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                if selected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(OpenBitFunTheme.accent)
-                }
             }
-            .padding(.horizontal, 20)
-            .frame(minHeight: 52)
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+            .frame(maxWidth: .infinity)
+            .background(selected ? OpenBitFunTheme.card : OpenBitFunTheme.transparent)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 
     private func metadataToggle(_ title: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(model.localized(title))
-                .font(.system(size: 16, weight: .medium))
+                .font(MobileDesignTypography.titleSmall.font)
                 .foregroundStyle(OpenBitFunTheme.ink)
         }
-        .tint(OpenBitFunTheme.accent)
-        .padding(.horizontal, 20)
-        .frame(minHeight: 56)
+        .tint(OpenBitFunTheme.ink)
+        .padding(.leading, 10)
+        .padding(.trailing, 6)
+        .frame(height: 52)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
+        }
     }
 
     private func agentLabel(_ group: String) -> String {
@@ -214,17 +205,18 @@ struct RemoteControlSettingsView: View {
     }
 
     private var controlPage: some View {
-        ZStack(alignment: .topTrailing) {
+        VStack(spacing: 0) {
+            OpenBitFunModalHeader(
+                title: "远程控制",
+                onClose: { model.remoteControlSettingsOpen = false }
+            )
+            .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+            Divider().overlay(OpenBitFunTheme.line)
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(model.localized("远程控制"))
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
-                        .padding(.bottom, 30)
-
                     Button { page = .account } label: {
-                        SettingsCard {
+                        remoteCard(radius: 28) {
                             HStack(spacing: 12) {
                                 Image(systemName: "person.crop.circle")
                                     .font(.system(size: 28, weight: .regular))
@@ -248,64 +240,54 @@ struct RemoteControlSettingsView: View {
                     remoteSectionTitle("当前远程控制")
                     currentControlCard
 
-                    remoteSectionTitle("其他连接方式")
-                        .padding(.top, 16)
-                    Button {
-                        model.remoteControlSettingsOpen = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                            model.connectRemote()
-                        }
-                    } label: {
-                        SettingsCard {
-                            HStack(spacing: 12) {
-                                Image(systemName: "link")
-                                    .font(.system(size: 20, weight: .regular))
-                                    .foregroundStyle(OpenBitFunTheme.muted)
-                                    .frame(width: 24, height: 24)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(model.localized("扫描二维码连接"))
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(OpenBitFunTheme.ink)
-                                    Text(model.localized("适用于临时配对或未登录账号的桌面端。"))
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(OpenBitFunTheme.muted)
-                                        .lineLimit(2)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(OpenBitFunTheme.muted.opacity(0.72))
+                    VStack(alignment: .leading, spacing: 10) {
+                        remoteSectionTitle("其他连接方式")
+                        Button {
+                            model.remoteControlSettingsOpen = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                                model.connectRemote()
                             }
-                            .padding(.horizontal, 18)
-                            .frame(minHeight: 78)
+                        } label: {
+                            remoteCard(radius: 24) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "link")
+                                        .font(.system(size: 20, weight: .regular))
+                                        .foregroundStyle(OpenBitFunTheme.muted)
+                                        .frame(width: 24, height: 24)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(model.localized("扫描二维码连接"))
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(OpenBitFunTheme.ink)
+                                        Text(model.localized("适用于临时配对或未登录账号的桌面端。"))
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(OpenBitFunTheme.muted)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(OpenBitFunTheme.muted.opacity(0.72))
+                                }
+                                .padding(.horizontal, 18)
+                                .frame(minHeight: 78)
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
 
                     permissionSection
-                        .padding(.top, 20)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 20)
+                .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+                .padding(.top, 22)
                 .padding(.bottom, 42)
             }
-
-            Button { model.remoteControlSettingsOpen = false } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(OpenBitFunTheme.ink)
-                    .frame(width: 40, height: 40)
-                    .background(OpenBitFunTheme.card)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.localized("关闭"))
-            .padding(.top, 16).padding(.trailing, 16)
         }
     }
 
     private var currentControlCard: some View {
-        SettingsCard {
+        remoteCard(radius: 28) {
             HStack(spacing: 14) {
                 Image(systemName: "desktopcomputer")
                     .font(.system(size: 23, weight: .regular))
@@ -362,7 +344,7 @@ struct RemoteControlSettingsView: View {
                         .disabled(model.busy)
                 }
             }
-            SettingsCard {
+            remoteCard(radius: 28) {
                 Text(model.localized("控制桌面端执行工具时采用的确认方式。"))
                     .font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,10 +423,17 @@ struct RemoteControlSettingsView: View {
 
     private func remoteSectionTitle(_ title: String) -> some View {
         Text(model.localized(title))
-            .font(.system(size: 18, weight: .bold))
+            .font(MobileDesignTypography.titleSmall.font)
             .foregroundStyle(OpenBitFunTheme.muted)
             .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
             .padding(.horizontal, 18)
+    }
+
+    private func remoteCard<Content: View>(
+        radius: CGFloat,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        OpenBitFunModalCard(radius: radius, bordered: false, content: content)
     }
 
     private func remoteChip(_ title: String, action: @escaping () -> Void) -> some View {

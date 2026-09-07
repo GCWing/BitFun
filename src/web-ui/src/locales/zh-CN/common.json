@@ -378,6 +378,7 @@
       "batchChildSession": "子会话",
       "batchTurnsLabel": "{{count}} 轮",
       "archive": "归档",
+      "assistantBootstrapDraft": "请按照 BOOTSTRAP.md 的说明，和我一起完成助理初始化。",
       "archiveAll": "归档所有会话",
       "archiveSelected": "归档所选",
       "unarchive": "恢复",

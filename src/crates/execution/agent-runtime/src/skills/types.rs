@@ -55,6 +55,9 @@ pub struct SkillInfo {
     /// Stable product name supplied by the source definition.
     #[serde(default)]
     pub source_label: String,
+    /// Repository recorded by the installer, distinct from the discovery ecosystem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installation_source: Option<String>,
     pub dir_name: String,
     #[serde(default)]
     pub is_builtin: bool,

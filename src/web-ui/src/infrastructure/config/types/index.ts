@@ -408,6 +408,8 @@ export interface SkillInfo {
   sourceId?: string;
   /** Stable product name supplied by the skill source definition. */
   sourceLabel?: string;
+  /** Repository recorded by the installer; absent for legacy or untracked skills. */
+  installationSource?: string | null;
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;

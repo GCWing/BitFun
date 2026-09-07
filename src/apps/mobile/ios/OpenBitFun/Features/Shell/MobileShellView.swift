@@ -335,7 +335,9 @@ struct MobileShellView: View {
                 sidebarAction: sidebarAction,
                 sidebarActionLabel: sidebarActionLabel
             )
-            if model.connectionPhase != .connected {
+            if model.surface == .remote,
+               model.remoteSessionSelected,
+               model.connectionPhase != .connected {
                 ConnectionStatusBar(
                     phase: model.connectionPhase,
                     detail: model.coreErrorMessage,

@@ -160,7 +160,7 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
     }
   };
 
-  const resourceSummary = request.resources.join(', ');
+  const resourceSummary = request.resources.join('\n');
   const answersAll = effectiveScope === 'all';
   const allowLabel = answersAll
     ? t('permission.allowCurrentAndFollowing')
@@ -195,14 +195,6 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           {permissionActionLabel(request.action, t)}
         </span>
         <span className="openbitfun-chat-input-approval__separator" aria-hidden>·</span>
-        <CopyableTextPreview
-          as="code"
-          text={resourceSummary}
-          emptyText=""
-          className="openbitfun-chat-input-approval__resource copyable-text-preview--theme-font"
-          tooltipContent={request.resources.join('\n') || undefined}
-          tooltipPlacement="top"
-        />
         {request.delegation ? (
           <span className="openbitfun-chat-input-approval__owner">
             {t('permission.subagentOwner', { subagent: request.delegation.subagentType })}
@@ -221,6 +213,16 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
           </Tooltip>
         ) : null}
       </div>
+
+      <CopyableTextPreview
+        as="code"
+        text={resourceSummary}
+        emptyText=""
+        className="openbitfun-chat-input-approval__resource copyable-text-preview--theme-font"
+        tooltipContent={resourceSummary || undefined}
+        tooltipPlacement="top"
+        tabIndex={0}
+      />
 
       {/* The risk is the reason to read the band at all, so it keeps its own
           line rather than hiding in a tooltip. */}

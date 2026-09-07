@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { FolderOpen, TrendingUp } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { installedSkillMarketIds, isSkillMarketItemInstalled } from '@/infrastructure/config/skillMarketInstallation';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -428,7 +429,7 @@ const SkillsConfig: React.FC = () => {
       <div className="openbitfun-skills-config__market-list" data-openbitfun-component="skills-config" data-openbitfun-part="marketList">
         {displayMarketSkills.map((skill) => {
           const isDownloading = downloadingPackage === skill.installId;
-          const isInstalled = installedSkillNames.has(skill.name);
+          const isInstalled = isSkillMarketItemInstalled(skill, installedMarketIds);
           const sourceLabel = formatMarketSource(skill.source);
           const projectTooltipText = !hasWorkspace
             ? t('messages.noWorkspace')
@@ -571,8 +572,8 @@ const SkillsConfig: React.FC = () => {
     </>
   );
 
-  const installedSkillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.name)),
+  const installedMarketIds = useMemo(
+    () => installedSkillMarketIds(skills),
     [skills]
   );
 
@@ -600,7 +601,7 @@ const SkillsConfig: React.FC = () => {
     const entries = marketSkills.map((skill, index) => ({
       skill,
       index,
-      installed: installedSkillNames.has(skill.name),
+      installed: isSkillMarketItemInstalled(skill, installedMarketIds),
     }));
 
     entries.sort((a, b) => {
@@ -617,7 +618,7 @@ const SkillsConfig: React.FC = () => {
     });
 
     return entries.map((entry) => entry.skill);
-  }, [marketSkills, installedSkillNames]);
+  }, [marketSkills, installedMarketIds]);
 
   const handleMarketSearch = useCallback(() => {
     loadMarketSkills(marketKeyword);
