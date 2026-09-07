@@ -29,8 +29,6 @@ pub mod event_source;
 pub mod events;
 #[cfg(feature = "agent-runtime")]
 pub mod evidence_ledger;
-#[cfg(feature = "agent-runtime")]
-pub mod file_read_state;
 #[cfg(feature = "native-hook-settings")]
 pub mod native_hooks;
 #[cfg(feature = "agent-runtime")]
@@ -47,6 +45,8 @@ pub mod prompt_cache;
 pub mod prompt_markup;
 #[cfg(feature = "agent-runtime")]
 pub mod remote_file_delivery;
+#[cfg(feature = "agent-runtime")]
+pub mod review_read_receipt;
 #[cfg(feature = "agent-runtime")]
 pub mod runtime;
 #[cfg(feature = "agent-runtime")]

@@ -21,7 +21,7 @@ the product tool runtime.
   registration stay outside this crate until a reviewed owner move proves
   behavior equivalence.
 - Do not move `ToolUseContext`, concrete tools, workspace services, cancellation
-  tokens, session file-read state storage, tool-result filesystem writes,
+  tokens, code-review read receipt storage, tool-result filesystem writes,
   state update side effects, snapshot decoration, collapsed unlock state,
   product registry snapshot access, or concrete `GetToolSpecTool` execution
   here without an owner design and equivalence tests.
@@ -39,7 +39,6 @@ the product tool runtime.
 
 ```bash
 cargo test --locked -p openbitfun-agent-tools --no-default-features
-cargo test --locked -p openbitfun-agent-tools --no-default-features --test tool_contracts file_read_freshness_
 cargo test --locked -p openbitfun-agent-tools --no-default-features --features acp-bridge --test tool_contracts acp_external_agent_bridge_preserves_tool_contract
 cargo test --locked -p openbitfun-agent-tools --no-default-features --features mcp-bridge --test tool_contracts mcp_tool_bridge
 cargo test --locked -p openbitfun-agent-tools --no-default-features --features computer-use-contract --lib computer_use::

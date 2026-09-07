@@ -1,10 +1,4 @@
 use crate::agentic::tools::file_permissions::file_permission_intents_allowing_managed_plan_edits;
-use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_modification_time_ms, file_mutation_timestamp_ms,
-    get_stored_file_read_state, read_current_file_content, read_state_tracking_enabled,
-    update_file_read_state_after_mutation, validate_edit_against_read_state,
-    validate_edit_has_prior_read, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
-};
 use crate::agentic::tools::file_tool_guidance::file_tool_guidance_message;
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolPathResolution, ToolResult, ToolUseContext, ValidationResult,
@@ -22,7 +16,7 @@ pub struct FileEditTool;
 const EDIT_TOOL_PROMPT: &str = r#"Performs exact string replacements in files.
 
 Usage:
-- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
+- You must read the current file contents before editing.
 - The `file_path` parameter must be a workspace-relative path, an absolute path inside the current workspace, or an exact `openbitfun://...` URI returned by another tool.
 - When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
 - Copy `old_string` verbatim from your latest Read of this file. Do not reformat HTML/CSS/JS, do not normalize indentation, and do not reconstruct the block from memory.
@@ -54,50 +48,20 @@ impl FileEditTool {
         }
     }
 
-    fn format_edit_freshness_guidance(logical_path: &str, error: String) -> String {
-        if error == FILE_UNEXPECTEDLY_MODIFIED_ERROR || error.contains("unexpectedly modified") {
-            format!(
-                "The file {} changed since it was last read. Use Read again, then retry Edit.",
-                logical_path
-            )
-        } else {
-            error
-        }
-    }
-
-    async fn edit_read_state_guardrail_error(
+    async fn read_current_file_content(
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
-    ) -> Option<String> {
-        if let Some(message) = validate_edit_has_prior_read(context, resolved) {
-            return Some(message);
-        }
-
-        validate_edit_against_read_state(context, resolved).await
-    }
-
-    async fn assert_edit_freshness(
-        context: &ToolUseContext,
-        resolved: &ToolPathResolution,
-        content: &str,
-    ) -> OpenBitFunResult<()> {
-        if !read_state_tracking_enabled(context) {
-            return Ok(());
-        }
-
-        let read_state = get_stored_file_read_state(context, resolved);
-        let current_mtime_ms = file_modification_time_ms(context, resolved).await;
-
-        if let Some(error) =
-            assert_file_not_unexpectedly_modified(read_state.as_ref(), content, current_mtime_ms)
-                .err()
-        {
-            return Err(OpenBitFunError::tool(file_tool_guidance_message(
-                Self::format_edit_freshness_guidance(&resolved.logical_path, error),
-            )));
-        }
-
-        Ok(())
+    ) -> OpenBitFunResult<String> {
+        context
+            .file_system_for_path(resolved)?
+            .read_file_text(&resolved.resolved_path)
+            .await
+            .map_err(|error| {
+                OpenBitFunError::tool(format!(
+                    "Failed to read file {}: {:#}",
+                    resolved.logical_path, error
+                ))
+            })
     }
 }
 
@@ -254,11 +218,7 @@ impl Tool for FileEditTool {
                 };
             }
 
-            if let Some(message) = Self::edit_read_state_guardrail_error(ctx, &resolved).await {
-                return Self::guidance_failure(message);
-            }
-
-            let file_content = match read_current_file_content(ctx, &resolved).await {
+            let file_content = match Self::read_current_file_content(ctx, &resolved).await {
                 Ok(content) => content,
                 Err(error) => {
                     return ValidationResult {
@@ -351,8 +311,7 @@ impl Tool for FileEditTool {
             .await?;
 
         let file_system = context.file_system_for_path(&resolved)?;
-        let content = read_current_file_content(context, &resolved).await?;
-        Self::assert_edit_freshness(context, &resolved, &content).await?;
+        let content = Self::read_current_file_content(context, &resolved).await?;
         let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
             .map_err(|error| {
                 if is_edit_content_guardrail_error(&error) {
@@ -371,13 +330,6 @@ impl Tool for FileEditTool {
                 ))
             })?;
 
-        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-        update_file_read_state_after_mutation(
-            context,
-            &resolved,
-            &edit_result.new_content,
-            timestamp_ms,
-        );
         crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
             context,
             "Edit",
@@ -409,21 +361,6 @@ mod tests {
     use super::{FileEditTool, EDIT_TOOL_PROMPT};
     use crate::agentic::tools::framework::Tool;
     use serde_json::{json, Value};
-
-    #[tokio::test]
-    async fn edit_tool_prompt_matches_claude_style() {
-        let description = FileEditTool::new()
-            .description()
-            .await
-            .expect("description");
-
-        assert_eq!(description, EDIT_TOOL_PROMPT);
-        assert!(description.contains("You must use your `Read` tool"));
-        assert!(description.contains("spaces + line number + tab"));
-        assert!(description.contains("verbatim from your latest Read"));
-        assert!(description.contains("NEVER write new files unless explicitly required"));
-        assert!(!description.contains("auto-strip"));
-    }
 
     #[test]
     fn edit_tool_schema_describes_exact_copy_from_read() {

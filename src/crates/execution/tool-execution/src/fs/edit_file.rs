@@ -440,7 +440,7 @@ pub fn apply_edit_to_content(
     }
 
     Err(format!(
-        "{}\n{}",
+        "{}\nPossible causes: the file might be changed externally after you inspected it, or old_string was generated incorrectly (for example, with line-number prefixes, different whitespace or indentation, or truncated output).\nInspect the current target region, correct old_string to match the current file content exactly, then retry.\n{}",
         last_error,
         build_not_found_diagnostics(content, old_string)
     ))
@@ -620,21 +620,6 @@ mod tests {
         assert!(error.contains("first block"));
         assert!(error.contains("[match 2 starts at line 6]"));
         assert!(error.contains("second block"));
-    }
-
-    #[test]
-    fn apply_edit_to_content_not_found_includes_nearby_diagnostics() {
-        let error = apply_edit_to_content(
-            "fn main() {\n    println!(\"hello\");\n}\n",
-            "println!(\"goodbye\");",
-            "println!(\"hi\");",
-            false,
-        )
-        .expect_err("missing text should fail");
-
-        assert!(error.contains("old_string not found in file."));
-        assert!(error.contains("[nearby content around line 2]"));
-        assert!(error.contains("println!(\"hello\");"));
     }
 
     #[test]

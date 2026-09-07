@@ -1665,22 +1665,27 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/review_read_receipt.rs',
     patterns: [
       {
-        regex: /\bpub struct FileReadState\b/,
+        regex: /\bpub struct FileRevision\b/,
         message:
-          'core file_read_state must not own file-read state DTOs; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own file revision DTOs; use openbitfun-agent-runtime review_read_receipt',
       },
       {
-        regex: /\bpub struct FileReadStateStore\b/,
+        regex: /\bpub struct ReviewReadCoverage\b/,
         message:
-          'core file_read_state must not own in-memory file-read state store; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own review coverage DTOs; use openbitfun-agent-runtime review_read_receipt',
+      },
+      {
+        regex: /\bpub struct ReviewReadReceiptStore\b/,
+        message:
+          'core review_read_receipt must not own the receipt store; use openbitfun-agent-runtime review_read_receipt',
       },
       {
         regex: /\bDashMap\b/,
         message:
-          'core file_read_state must not own file-read state storage maps; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own receipt storage maps; use openbitfun-agent-runtime review_read_receipt',
       },
     ],
   },
@@ -2715,12 +2720,12 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/review_read_receipt_runtime.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
         message:
-          'file read-state runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+          'review read receipt runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
       },
     ],
   },
@@ -3044,16 +3049,6 @@ export const forbiddenContentRules = [
         regex: /\bdynamic_tools\s*:\s*IndexMap\b/,
         message:
           'core tool registry must not own the dynamic tool map; use openbitfun-agent-tools ToolRegistry',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
-    patterns: [
-      {
-        regex: /\bnormalize_string\b/,
-        message:
-          'core file read-state runtime must delegate pure freshness normalization to openbitfun-agent-tools',
       },
     ],
   },

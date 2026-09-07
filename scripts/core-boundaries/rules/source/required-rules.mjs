@@ -975,29 +975,29 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/file_read_state.rs',
+    path: 'src/crates/execution/agent-runtime/src/review_read_receipt.rs',
     reason:
-      'agent-runtime must own provider-neutral file-read state facts and session-scoped in-memory store',
+      'agent-runtime must own provider-neutral code-review read receipts and their session-scoped in-memory store',
     patterns: [
       {
-        regex: /\bpub struct FileReadState\b/,
-        message: 'missing agent-runtime file-read state DTO',
+        regex: /\bpub struct FileRevision\b/,
+        message: 'missing agent-runtime file revision DTO',
       },
       {
-        regex: /\bpub fn is_full_file_read\b/,
-        message: 'missing agent-runtime file-read completeness policy',
+        regex: /\bpub struct ReviewReadCoverage\b/,
+        message: 'missing agent-runtime review read coverage DTO',
       },
       {
-        regex: /\bpub struct FileReadStateStore\b/,
-        message: 'missing agent-runtime file-read state store',
+        regex: /\bpub struct ReviewReadReceiptStore\b/,
+        message: 'missing agent-runtime review read receipt store',
       },
       {
-        regex: /\bfile_read_state_accepts_nonempty_whole_file\b/,
-        message: 'missing agent-runtime file-read completeness regression',
+        regex: /\breview_read_receipt_store_scopes_entries_by_session\b/,
+        message: 'missing review read receipt session scoping regression',
       },
       {
-        regex: /\bfile_read_state_store_scopes_entries_by_session\b/,
-        message: 'missing agent-runtime file-read state session scoping regression',
+        regex: /\breview_read_receipt_covers_only_previously_returned_lines\b/,
+        message: 'missing review read receipt coverage regression',
       },
     ],
   },
@@ -2853,14 +2853,17 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/review_read_receipt.rs',
     reason:
-      'core file_read_state path must stay a compatibility facade over agent-runtime',
+      'core review_read_receipt path must stay a compatibility facade over agent-runtime',
     patterns: [
       {
-        regex:
-          /pub use openbitfun_agent_runtime::file_read_state::\{FileReadState, FileReadStateStore\};/,
-        message: 'missing agent-runtime file-read state compatibility re-export',
+        regex: /openbitfun_agent_runtime::review_read_receipt::\{/,
+        message: 'missing agent-runtime review read receipt compatibility re-export',
+      },
+      {
+        regex: /\bReviewReadReceiptStore\b/,
+        message: 'missing review read receipt store compatibility re-export',
       },
     ],
   },
@@ -5626,28 +5629,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn is_file_tool_guidance_message\b/,
         message: 'missing file tool guidance classifier',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/execution/tool-contracts/src/file_read_freshness.rs',
-    reason: 'agent-tools owns pure file-read freshness policy for Read/Edit/Write guardrails',
-    patterns: [
-      {
-        regex: /\bpub struct FileReadFreshnessFacts\b/,
-        message: 'missing file-read freshness facts contract',
-      },
-      {
-        regex: /\bpub fn normalize_tool_file_content\b/,
-        message: 'missing provider-neutral file content normalization helper',
-      },
-      {
-        regex: /\bpub fn file_read_facts_content_matches\b/,
-        message: 'missing file-read content equivalence helper',
-      },
-      {
-        regex: /\bpub fn file_read_facts_are_fresh\b/,
-        message: 'missing file-read freshness policy helper',
       },
     ],
   },

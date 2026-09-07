@@ -18,9 +18,9 @@ use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
     prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
     CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
-    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
-    FileRevision, PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
-    PromptCacheRestoreDecision, PromptCacheScope, ReviewReadCoverage, SessionContextStore,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileRevision, PromptCacheLookup,
+    PromptCachePersistenceWriteAction, PromptCachePolicy, PromptCacheRestoreDecision,
+    PromptCacheScope, ReviewReadCoverage, ReviewReadReceiptStore, SessionContextStore,
     SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
     TokenAnchor, TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore,
     UserContextCacheIdentity,
@@ -391,7 +391,7 @@ pub struct SessionManager {
     /// restore and fork paths preserve both constraints and extraction evidence.
     edit_constraints_store:
         Arc<DashMap<String, crate::agentic::execution::edit_constraint_guard::EditConstraintState>>,
-    file_read_state_store: Arc<FileReadStateStore>,
+    review_read_receipt_store: Arc<ReviewReadReceiptStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     evidence_ledger_operation_locks: Arc<KeyedAsyncLock>,
     persistence_manager: Arc<PersistenceManager>,
@@ -414,7 +414,7 @@ fn clear_session_runtime_stores(
     token_anchor_store: &TokenAnchorStore,
     turn_skill_agent_snapshot_store: &TurnSkillAgentSnapshotStore,
     skill_agent_baseline_override_snapshot_store: &DashMap<String, TurnSkillAgentSnapshot>,
-    file_read_state_store: &FileReadStateStore,
+    review_read_receipt_store: &ReviewReadReceiptStore,
     evidence_ledger: &SessionEvidenceLedger,
 ) {
     context_store.delete_session(session_id);
@@ -422,7 +422,7 @@ fn clear_session_runtime_stores(
     token_anchor_store.delete_session(session_id);
     turn_skill_agent_snapshot_store.delete_session(session_id);
     skill_agent_baseline_override_snapshot_store.remove(session_id);
-    file_read_state_store.delete_session(session_id);
+    review_read_receipt_store.delete_session(session_id);
     evidence_ledger.delete_session(session_id);
 }
 
@@ -2064,7 +2064,7 @@ impl SessionManager {
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
             edit_constraints_store: Arc::new(DashMap::new()),
-            file_read_state_store: Arc::new(FileReadStateStore::new()),
+            review_read_receipt_store: Arc::new(ReviewReadReceiptStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             evidence_ledger_operation_locks: Arc::new(KeyedAsyncLock::default()),
             persistence_manager,
@@ -2567,7 +2567,7 @@ impl SessionManager {
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
         let edit_constraints_store = self.edit_constraints_store.clone();
-        let file_read_state_store = self.file_read_state_store.clone();
+        let review_read_receipt_store = self.review_read_receipt_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let evidence_ledger_operation_locks = self.evidence_ledger_operation_locks.clone();
         let persistence_manager = self.persistence_manager.clone();
@@ -2603,7 +2603,7 @@ impl SessionManager {
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
                 edit_constraints_store,
-                file_read_state_store,
+                review_read_receipt_store,
                 evidence_ledger,
                 evidence_ledger_operation_locks,
                 persistence_manager,
@@ -2894,7 +2894,7 @@ impl SessionManager {
         self.token_anchor_store.create_session(&session_id);
         self.turn_skill_agent_snapshot_store
             .create_session(&session_id);
-        self.file_read_state_store.create_session(&session_id);
+        self.review_read_receipt_store.create_session(&session_id);
         self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
         self.commit_active_session_reservation(&session_id, active_session_permit);
         if let Some(write_lock) = session_write_lock {
@@ -5039,7 +5039,7 @@ impl SessionManager {
             self.token_anchor_store.as_ref(),
             self.turn_skill_agent_snapshot_store.as_ref(),
             self.skill_agent_baseline_override_snapshot_store.as_ref(),
-            self.file_read_state_store.as_ref(),
+            self.review_read_receipt_store.as_ref(),
             self.evidence_ledger.as_ref(),
         );
         self.release_session_write_lock(session_id);
@@ -5082,7 +5082,7 @@ impl SessionManager {
             self.token_anchor_store.as_ref(),
             self.turn_skill_agent_snapshot_store.as_ref(),
             self.skill_agent_baseline_override_snapshot_store.as_ref(),
-            self.file_read_state_store.as_ref(),
+            self.review_read_receipt_store.as_ref(),
             self.evidence_ledger.as_ref(),
         );
 
@@ -6278,7 +6278,7 @@ impl SessionManager {
                 self.token_anchor_store.as_ref(),
                 self.turn_skill_agent_snapshot_store.as_ref(),
                 self.skill_agent_baseline_override_snapshot_store.as_ref(),
-                self.file_read_state_store.as_ref(),
+                self.review_read_receipt_store.as_ref(),
                 self.evidence_ledger.as_ref(),
             );
         }
@@ -6410,7 +6410,7 @@ impl SessionManager {
         };
 
         self.context_store.replace_context(session_id, messages);
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         let fallback_agent_type = self
             .sessions
             .get(session_id)
@@ -6572,7 +6572,7 @@ impl SessionManager {
         // 2) Restore the in-memory context cache.
         self.context_store
             .replace_context(session_id, messages.clone());
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
 
@@ -9253,24 +9253,11 @@ impl SessionManager {
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
         self.context_store
             .replace_context(session_id, messages.clone());
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
-    }
-
-    pub fn set_file_read_state(&self, session_id: &str, logical_path: &str, state: FileReadState) {
-        self.file_read_state_store
-            .set(session_id, logical_path, state);
-    }
-
-    pub fn get_file_read_state(
-        &self,
-        session_id: &str,
-        logical_path: &str,
-    ) -> Option<FileReadState> {
-        self.file_read_state_store.get(session_id, logical_path)
     }
 
     pub fn record_review_read(
@@ -9282,7 +9269,7 @@ impl SessionManager {
         end_line: usize,
         total_lines: usize,
     ) {
-        self.file_read_state_store.record_review_read(
+        self.review_read_receipt_store.record_review_read(
             session_id,
             logical_path,
             revision,
@@ -9300,7 +9287,7 @@ impl SessionManager {
         start_line: usize,
         limit: usize,
     ) -> Option<ReviewReadCoverage> {
-        self.file_read_state_store.review_read_coverage(
+        self.review_read_receipt_store.review_read_coverage(
             session_id,
             logical_path,
             revision,
@@ -9631,7 +9618,7 @@ impl SessionManager {
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
         let edit_constraints_store = self.edit_constraints_store.clone();
-        let file_read_state_store = self.file_read_state_store.clone();
+        let review_read_receipt_store = self.review_read_receipt_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
 
         tokio::spawn(async move {
@@ -9728,7 +9715,7 @@ impl SessionManager {
                             token_anchor_store.as_ref(),
                             turn_skill_agent_snapshot_store.as_ref(),
                             skill_agent_baseline_override_snapshot_store.as_ref(),
-                            file_read_state_store.as_ref(),
+                            review_read_receipt_store.as_ref(),
                             evidence_ledger.as_ref(),
                         );
                         edit_constraints_store.remove(&candidate.session_id);

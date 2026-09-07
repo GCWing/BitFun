@@ -1,14 +1,14 @@
 use crate::agentic::tools::file_permissions::file_permission_intents;
-use crate::agentic::tools::file_read_state_runtime::{
-    file_modification_time_ms, file_revision, get_review_read_coverage, record_file_read_state,
-    record_review_read_receipt, review_read_receipts_enabled,
-};
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 #[cfg(feature = "tools-miniapp")]
 use crate::agentic::tools::miniapp_context_runtime::{
     is_virtual_context_path, requires_virtual_context_path, virtual_context_file,
+};
+use crate::agentic::tools::review_read_receipt_runtime::{
+    file_revision, get_review_read_coverage, record_review_read_receipt,
+    review_read_receipts_enabled,
 };
 use crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri;
 use crate::agentic::tools::ToolPathOperation;
@@ -767,12 +767,6 @@ Usage:
             (result, None)
         };
 
-        if document_metadata.is_none() {
-            let timestamp_ms = file_modification_time_ms(context, &resolved)
-                .await
-                .unwrap_or(0);
-            record_file_read_state(context, &resolved, &read_file_result, timestamp_ms);
-        }
         if let Some(revision_before) = revision_before_read {
             if let Some(revision_after) = file_revision(context, &resolved).await {
                 if revision_before == revision_after {
@@ -1033,41 +1027,6 @@ mod tests {
         context.runtime_handles = ToolRuntimeHandles::default();
         let error = tool.call(&input, &context).await.unwrap_err();
         assert!(error.to_string().contains("unavailable"), "{error}");
-    }
-
-    #[tokio::test]
-    async fn long_line_read_is_explicit_but_cannot_claim_full_content_freshness() {
-        use openbitfun_agent_runtime::file_read_state::{
-            assert_file_not_unexpectedly_modified, validate_prior_read_state, FileMutationKind,
-            FileReadState,
-        };
-        use tool_runtime::util::read_line_prefix::read_tool_output_to_file_content;
-        let content = format!("{}\n", "a".repeat(3_000));
-        let context = remote_context(content.as_bytes().to_vec(), Arc::new(AtomicUsize::new(0)));
-        let results = FileReadTool::new()
-            .call(&json!({"file_path":"long.txt"}), &context)
-            .await
-            .unwrap();
-        let ToolResult::Result { data, .. } = &results[0] else {
-            panic!("result");
-        };
-        assert_eq!(data["total_lines"], 1);
-        assert_eq!(data["content_truncated"], true);
-        let state = FileReadState::from_read_tool_content_with_truncation(
-            read_tool_output_to_file_content(data["content"].as_str().unwrap()),
-            100,
-            data["start_line"].as_u64().unwrap() as usize,
-            data["lines_read"].as_u64().unwrap() as usize,
-            data["total_lines"].as_u64().unwrap() as usize,
-            data["content_truncated"].as_bool().unwrap(),
-        );
-        assert!(!state.is_full_file_read());
-        assert!(!state.is_partial_view);
-        assert!(
-            validate_prior_read_state("long.txt", Some(&state), FileMutationKind::Edit).is_none()
-        );
-        assert!(assert_file_not_unexpectedly_modified(Some(&state), &content, Some(100)).is_ok());
-        assert!(assert_file_not_unexpectedly_modified(Some(&state), &content, Some(200)).is_err());
     }
 
     #[test]

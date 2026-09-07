@@ -12,7 +12,6 @@ pub mod deferred_tool;
 pub mod element_token;
 pub mod execution_gate;
 pub mod file_guidance;
-pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
 #[cfg(feature = "mcp-bridge")]
@@ -44,10 +43,6 @@ pub use execution_gate::{
 };
 pub use file_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message, FILE_TOOL_GUIDANCE_PREFIX,
-};
-pub use file_read_freshness::{
-    file_read_facts_are_fresh, file_read_facts_content_matches, normalize_tool_file_content,
-    FileReadFreshnessFacts,
 };
 pub use framework::{
     build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,

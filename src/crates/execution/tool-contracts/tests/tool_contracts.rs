@@ -65,10 +65,6 @@ use openbitfun_agent_tools::{
     FILE_TOOL_GUIDANCE_PREFIX, PERSISTED_OUTPUT_TAG, TOOL_RESULT_PREVIEW_CHARS,
 };
 use openbitfun_agent_tools::{
-    file_read_facts_are_fresh, file_read_facts_content_matches, normalize_tool_file_content,
-    FileReadFreshnessFacts,
-};
-use openbitfun_agent_tools::{
     materialize_static_tool_provider_groups, ContextualToolManifestItem, DynamicToolDescriptor,
     DynamicToolProvider, GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider,
     StaticToolMaterializationError, StaticToolProvider, StaticToolProviderFactory,
@@ -940,98 +936,6 @@ fn file_tool_guidance_marker_is_provider_neutral() {
     assert_eq!(message, "[guidance] Read the file first");
     assert!(is_file_tool_guidance_message(&message));
     assert!(!is_file_tool_guidance_message("Read the file first"));
-}
-
-#[test]
-fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
-    let full_read = FileReadFreshnessFacts {
-        content: "alpha\r\n",
-        timestamp_ms: 100,
-        is_full_file_read: true,
-    };
-
-    assert_eq!(normalize_tool_file_content("alpha\r\n"), "alpha");
-    assert!(file_read_facts_content_matches(full_read, "alpha\n"));
-    assert!(file_read_facts_are_fresh(full_read, "alpha\n", Some(200)));
-    assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(200)));
-    assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(50)));
-    assert!(!file_read_facts_are_fresh(full_read, "beta\n", None));
-
-    let partial_read = FileReadFreshnessFacts {
-        content: "middle\n",
-        timestamp_ms: 100,
-        is_full_file_read: false,
-    };
-    assert!(!file_read_facts_content_matches(partial_read, "middle\n"));
-    assert!(!file_read_facts_are_fresh(
-        partial_read,
-        "full file\n",
-        Some(200)
-    ));
-    assert!(file_read_facts_are_fresh(partial_read, "full file\n", None));
-}
-
-#[test]
-fn file_read_freshness_full_read_rejects_same_tick_and_restored_mtime_changes() {
-    let read = FileReadFreshnessFacts {
-        content: "alpha\nbeta",
-        timestamp_ms: 1_700_000_000_000,
-        is_full_file_read: true,
-    };
-    for modified in [
-        Some(read.timestamp_ms),
-        Some(read.timestamp_ms - 1_000),
-        None,
-    ] {
-        assert!(!file_read_facts_are_fresh(read, "alpha\nzeta\n", modified));
-        assert!(file_read_facts_are_fresh(
-            read,
-            "alpha\r\nbeta\r\n",
-            modified
-        ));
-    }
-    let partial = FileReadFreshnessFacts {
-        is_full_file_read: false,
-        ..read
-    };
-    assert!(file_read_facts_are_fresh(
-        partial,
-        "unobserved content",
-        Some(read.timestamp_ms)
-    ));
-    assert!(!file_read_facts_are_fresh(
-        partial,
-        "unobserved content",
-        Some(read.timestamp_ms + 1_000)
-    ));
-}
-
-#[test]
-fn file_read_freshness_tolerates_read_tool_trailing_newline_reconstruction_gap() {
-    // The cached "last Read result" content is rebuilt from cat -n-style
-    // output via a line-split/join, which drops a trailing newline even when
-    // the file on disk ends with one. Every full-file Edit/Write on a
-    // trailing-newline file must still be considered fresh.
-    let cached_without_trailing_newline = FileReadFreshnessFacts {
-        content: "alpha\nbeta",
-        timestamp_ms: 100,
-        is_full_file_read: true,
-    };
-
-    assert!(file_read_facts_content_matches(
-        cached_without_trailing_newline,
-        "alpha\nbeta\n"
-    ));
-    assert!(file_read_facts_are_fresh(
-        cached_without_trailing_newline,
-        "alpha\nbeta\n",
-        None
-    ));
-    assert!(!file_read_facts_are_fresh(
-        cached_without_trailing_newline,
-        "alpha\ngamma\n",
-        None
-    ));
 }
 
 #[test]
