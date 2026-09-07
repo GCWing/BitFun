@@ -37,16 +37,19 @@ struct PairingSheet: View {
             }
         }
         .fullScreenCover(isPresented: $scannerOpen) {
-            QRCodeScannerView { code in
-                pairingURL = code
-                scannerOpen = false
-                if PairingLinkHintsKt.inspectPairingLink(url: code).requiresAccount {
-                    manualOpen = true
-                    focused = true
-                } else {
-                    model.submitPairing(url: code)
-                }
-            }
+            QRCodeScannerView(
+                onCode: { code in
+                    pairingURL = code
+                    scannerOpen = false
+                    if PairingLinkHintsKt.inspectPairingLink(url: code).requiresAccount {
+                        manualOpen = true
+                        focused = true
+                    } else {
+                        model.submitPairing(url: code)
+                    }
+                },
+                onCancel: { scannerOpen = false }
+            )
             .ignoresSafeArea()
         }
     }
