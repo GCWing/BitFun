@@ -49,6 +49,7 @@ struct MergeOutcome {
     imported: u64,
     skipped: u64,
     conflicts: Vec<MigrationConflict>,
+    rejected: Vec<String>,
 }
 
 impl LegacyDomainAdapter for SettingsAdapter {
@@ -65,8 +66,8 @@ impl LegacyDomainAdapter for SettingsAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: "legacy_settings_supported".to_string(),
-                severity: FindingSeverity::Info,
+                code: if outcome.rejected.is_empty() { "legacy_settings_supported" } else { "settings_items_skipped" }.to_string(),
+                severity: if outcome.rejected.is_empty() { FindingSeverity::Info } else { FindingSeverity::Warning },
                 entity_count: outcome.imported + outcome.skipped,
                 logical_bytes: bytes.len() as u64,
                 source_schema: Some(SOURCE_SCHEMA.to_string()),
@@ -101,6 +102,19 @@ impl LegacyDomainAdapter for SettingsAdapter {
             imported: staged.imported,
             skipped: staged.skipped,
             conflicts: staged.conflicts,
+            warnings: outcome
+                .rejected
+                .iter()
+                .map(|path| MigrationDiagnostic {
+                    code: "setting_field_skipped".to_string(),
+                    severity: FindingSeverity::Warning,
+                    domain: Some(self.domain()),
+                    relative_path: Some(path.clone()),
+                    message: "An incompatible setting or model was preserved in the source."
+                        .to_string(),
+                    ..Default::default()
+                })
+                .collect(),
             ..MigrationDomainResult::default()
         })
     }
@@ -227,17 +241,11 @@ impl LegacyDomainAdapter for CredentialsAdapter {
             LegacyMigrationError::InvalidRequest(format!("credential stage is invalid: {error}"))
         })?;
         let source = read_source_config(context.roots)?;
-        let mut secret_values = Vec::new();
-        collect_secret_values(&source, &mut secret_values);
-        for secret in secret_values.into_iter().filter(|secret| secret.len() >= 4) {
-            if bytes
-                .windows(secret.len())
-                .any(|window| window == secret.as_bytes())
-            {
-                return Err(LegacyMigrationError::InvalidRequest(
-                    "credential staging contains a prohibited secret value".to_string(),
-                ));
-            }
+        let expected = credential_manifest(&source, manifest.target_existed);
+        if serde_json::to_value(&manifest).ok() != serde_json::to_value(expected).ok() {
+            return Err(LegacyMigrationError::InvalidRequest(
+                "credential manifest differs from source selection".to_string(),
+            ));
         }
         if manifest.model_ids.iter().any(|id| id.trim().is_empty()) {
             return Err(LegacyMigrationError::InvalidRequest(
@@ -265,12 +273,11 @@ impl LegacyDomainAdapter for CredentialsAdapter {
                 if !manifest.model_ids.iter().any(|candidate| candidate == id) {
                     continue;
                 }
-                let source_model = serde_json::from_value::<AIModelConfig>(source_model.clone())
-                    .map_err(|error| {
-                        LegacyMigrationError::UnsupportedSource(format!(
-                            "legacy model credential owner record is invalid: {error}"
-                        ))
-                    })?;
+                let Ok(source_model) =
+                    serde_json::from_value::<AIModelConfig>(source_model.clone())
+                else {
+                    continue;
+                };
                 if let Some(target_model) = target.ai.models.iter_mut().find(|model| model.id == id)
                 {
                     if target_model.api_key.is_empty() {
@@ -329,13 +336,7 @@ impl LegacyDomainAdapter for CredentialsAdapter {
                         .find(|model| model.get("id").and_then(Value::as_str) == Some(id.as_str()))
                 })
                 .cloned()
-                .map(serde_json::from_value::<AIModelConfig>)
-                .transpose()
-                .map_err(|error| {
-                    LegacyMigrationError::UnsupportedSource(format!(
-                        "legacy model credential owner record is invalid: {error}"
-                    ))
-                })?;
+                .and_then(|value| serde_json::from_value::<AIModelConfig>(value).ok());
             let target_model = target.ai.models.iter().find(|model| model.id == *id);
             let Some(source_model) = source_model else {
                 continue;
@@ -426,9 +427,13 @@ fn merge_settings(
     source: &Value,
     target: GlobalConfig,
 ) -> LegacyMigrationResult<(GlobalConfig, MergeOutcome)> {
-    let (mut source_config, mut source_value) = convert_source_config(source)?;
+    let (mut source_config, mut source_value, rejected) = convert_source_config(source)?;
     let defaults = GlobalConfig::default();
-    let mut outcome = MergeOutcome::default();
+    let mut outcome = MergeOutcome {
+        skipped: rejected.len() as u64,
+        rejected,
+        ..Default::default()
+    };
     let source_models = std::mem::take(&mut source_config.ai.models);
     let mut target_value = serde_json::to_value(&target)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
@@ -457,7 +462,9 @@ fn merge_settings(
     Ok((merged, outcome))
 }
 
-fn convert_source_config(source: &Value) -> LegacyMigrationResult<(GlobalConfig, Value)> {
+fn convert_source_config(
+    source: &Value,
+) -> LegacyMigrationResult<(GlobalConfig, Value, Vec<String>)> {
     validate_source_version(source)?;
     let defaults = GlobalConfig::default();
     let mut normalized_source = source.clone();
@@ -474,52 +481,91 @@ fn convert_source_config(source: &Value) -> LegacyMigrationResult<(GlobalConfig,
 
     let mut converted = serde_json::to_value(&defaults)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
-    overlay_compatible_value(&mut converted, &normalized_source);
-    let root = converted.as_object_mut().ok_or_else(|| {
-        LegacyMigrationError::InvalidRequest(
-            "legacy configuration root is not an object".to_string(),
-        )
-    })?;
-    root.insert(
-        "product_id".to_string(),
-        Value::String(defaults.product_id.clone()),
-    );
-    root.insert(
-        "schema_version".to_string(),
-        Value::from(defaults.schema_version),
-    );
-    root.insert(
-        "version".to_string(),
-        Value::String(defaults.version.clone()),
-    );
-    root.insert(
-        "last_modified".to_string(),
-        Value::from(chrono::Utc::now().timestamp_millis()),
-    );
-    let config: GlobalConfig = serde_json::from_value(converted).map_err(|error| {
-        LegacyMigrationError::UnsupportedSource(format!(
-            "legacy configuration cannot be represented by the current owner model: {error}"
-        ))
-    })?;
+    let mut rejected = Vec::new();
+    let accepted = accept_config_patch(&mut converted, "", &normalized_source, &mut rejected)
+        .unwrap_or_else(|| serde_json::json!({}));
+    let config: GlobalConfig = serde_json::from_value(converted)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
     let mut compatible_source = serde_json::to_value(&config)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
-    retain_source_fields(&mut compatible_source, &normalized_source);
-    Ok((config, compatible_source))
+    retain_source_fields(&mut compatible_source, &accepted);
+    Ok((config, compatible_source, rejected))
 }
 
-fn overlay_compatible_value(target: &mut Value, source: &Value) {
-    match (target, source) {
-        (Value::Object(target_fields), Value::Object(source_fields)) => {
-            for (name, source_value) in source_fields {
-                if let Some(target_value) = target_fields.get_mut(name) {
-                    overlay_compatible_value(target_value, source_value);
-                } else {
-                    target_fields.insert(name.clone(), source_value.clone());
-                }
+// Validate candidate patches against the real owner type. Invalid leaves keep
+// the default; arrays are admitted one complete entry at a time.
+fn accept_config_patch(
+    root: &mut Value,
+    pointer: &str,
+    source: &Value,
+    rejected: &mut Vec<String>,
+) -> Option<Value> {
+    let before = root.clone();
+    let mut candidate = before.clone();
+    let mut applied = false;
+    if pointer.is_empty() {
+        if let (Some(target), Some(fields)) = (candidate.as_object_mut(), source.as_object()) {
+            for (key, value) in fields {
+                target.insert(key.clone(), value.clone());
+            }
+            applied = true;
+        }
+    } else if let Some((parent, key)) = pointer.rsplit_once('/') {
+        if let Some(fields) = candidate.pointer_mut(parent).and_then(Value::as_object_mut) {
+            fields.insert(key.replace("~1", "/").replace("~0", "~"), source.clone());
+            applied = true;
+        }
+    }
+    if applied
+        && serde_json::from_value::<GlobalConfig>(candidate.clone()).is_ok()
+        && (!pointer.is_empty() || source.is_object())
+    {
+        *root = candidate;
+        return Some(source.clone());
+    }
+    if let Some(fields) = source.as_object() {
+        let mut accepted = serde_json::Map::new();
+        for (key, value) in fields {
+            let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
+            if let Some(value) = accept_config_patch(root, &child, value, rejected) {
+                accepted.insert(key.clone(), value);
             }
         }
-        (target, source) => *target = source.clone(),
+        return Some(Value::Object(accepted));
     }
+    if let Some(values) = source.as_array() {
+        let mut accepted = Vec::new();
+        let mut empty = root.clone();
+        let Some(slot) = empty.pointer_mut(pointer) else {
+            rejected.push(pointer.to_string());
+            return None;
+        };
+        *slot = Value::Array(Vec::new());
+        if serde_json::from_value::<GlobalConfig>(empty.clone()).is_err() {
+            rejected.push(pointer.to_string());
+            return None;
+        }
+        *root = empty;
+        for (index, value) in values.iter().enumerate() {
+            let mut next = accepted.clone();
+            next.push(value.clone());
+            let mut test = root.clone();
+            let Some(slot) = test.pointer_mut(pointer) else {
+                rejected.push(format!("{pointer}/{index}"));
+                continue;
+            };
+            *slot = Value::Array(next.clone());
+            if serde_json::from_value::<GlobalConfig>(test.clone()).is_ok() {
+                *root = test;
+                accepted = next;
+            } else {
+                rejected.push(format!("{pointer}/{index}"));
+            }
+        }
+        return Some(Value::Array(accepted));
+    }
+    rejected.push(pointer.to_string());
+    None
 }
 
 fn retain_source_fields(value: &mut Value, source: &Value) {
@@ -704,7 +750,10 @@ fn credential_manifest(source: &Value, target_existed: bool) -> CredentialManife
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter(|model| model_has_portable_credentials(model))
+        .filter(|model| {
+            model_has_portable_credentials(model)
+                && serde_json::from_value::<AIModelConfig>((*model).clone()).is_ok()
+        })
         .filter_map(|model| model.get("id").and_then(Value::as_str))
         .filter(|id| !id.trim().is_empty())
         .map(str::to_string)
@@ -721,6 +770,15 @@ fn credential_manifest(source: &Value, target_existed: bool) -> CredentialManife
     let mut unsupported_secret_fields = Vec::new();
     collect_unsupported_secret_fields(source, "", &mut unsupported_secret_fields);
     unsupported_secret_fields.retain(|path| !is_portable_credential_path(path));
+    if let Some(models) = source.pointer("/ai/models").and_then(Value::as_array) {
+        for (index, model) in models.iter().enumerate() {
+            if model_has_portable_credentials(model)
+                && serde_json::from_value::<AIModelConfig>(model.clone()).is_err()
+            {
+                unsupported_secret_fields.push(format!("/ai/models/{index}"));
+            }
+        }
+    }
     unsupported_secret_fields.sort();
     unsupported_secret_fields.dedup();
     CredentialManifest {
@@ -778,28 +836,6 @@ fn collect_unsupported_secret_fields(value: &Value, path: &str, output: &mut Vec
         Value::Array(items) => {
             for (index, value) in items.iter().enumerate() {
                 collect_unsupported_secret_fields(value, &format!("{path}.{index}"), output);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn collect_secret_values(value: &Value, output: &mut Vec<String>) {
-    match value {
-        Value::Object(fields) => {
-            for (name, value) in fields {
-                let lower = name.to_ascii_lowercase();
-                if matches!(lower.as_str(), "password" | "token" | "secret" | "api_key") {
-                    if let Some(secret) = value.as_str().filter(|secret| !secret.is_empty()) {
-                        output.push(secret.to_string());
-                    }
-                }
-                collect_secret_values(value, output);
-            }
-        }
-        Value::Array(items) => {
-            for value in items {
-                collect_secret_values(value, output);
             }
         }
         _ => {}
@@ -879,6 +915,28 @@ mod tests {
     use sha2::{Digest, Sha256};
     use std::collections::BTreeSet;
     use std::path::Path;
+
+    #[test]
+    fn malformed_fields_and_models_do_not_discard_valid_siblings() {
+        let source = serde_json::json!({"schema_version":1,"version":"0.2.19","ai":{
+            "subagent_max_concurrency": 3, "stream_idle_timeout_secs":"broken", "enable_deferred_tool_loading": [],
+            "models":[{"id":"valid","name":"Valid"},{"id":"bad","temperature":[]}]
+        }});
+        let (config, _, rejected) = convert_source_config(&source).unwrap();
+        assert_eq!(config.ai.subagent_max_concurrency, 3);
+        assert_eq!(config.ai.models.len(), 1);
+        assert_eq!(config.ai.models[0].id, "valid");
+        assert!(rejected.iter().any(|p| p == "/ai/stream_idle_timeout_secs"));
+        assert!(rejected.iter().any(|p| p == "/ai/models/1"));
+        let mut root = serde_json::to_value(GlobalConfig::default()).unwrap();
+        assert!(accept_config_patch(
+            &mut root,
+            "/missing/field",
+            &serde_json::json!(true),
+            &mut Vec::new()
+        )
+        .is_none());
+    }
 
     #[test]
     fn settings_and_credentials_convert_without_staging_secrets() {

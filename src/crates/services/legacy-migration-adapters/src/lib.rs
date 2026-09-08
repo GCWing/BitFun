@@ -58,7 +58,13 @@ pub fn adapters_for_groups(selection: &MigrationSelection) -> Vec<Box<dyn Legacy
         adapters.push(Box::new(remote_ssh::RemoteSshAdapter));
     }
     if selected.contains(&MigrationDomainId::CrossReferenceRepair) {
-        adapters.push(Box::new(CrossReferenceAdapter));
+        adapters.push(Box::new(CrossReferenceAdapter {
+            dependencies: selected
+                .iter()
+                .copied()
+                .filter(|domain| *domain == MigrationDomainId::AgentCoordination)
+                .collect(),
+        }));
     }
     adapters
 }
@@ -79,7 +85,9 @@ pub fn validate_target(roots: &MigrationRoots) -> LegacyMigrationResult<()> {
         .map_err(LegacyMigrationError::UnsupportedTarget)
 }
 
-struct CrossReferenceAdapter;
+struct CrossReferenceAdapter {
+    dependencies: Vec<MigrationDomainId>,
+}
 
 impl LegacyDomainAdapter for CrossReferenceAdapter {
     fn domain(&self) -> MigrationDomainId {
@@ -99,7 +107,7 @@ impl LegacyDomainAdapter for CrossReferenceAdapter {
             },
             conflicts: Vec::new(),
             target_schema: Some("openbitfun.cross-references.current".to_string()),
-            dependencies: Vec::new(),
+            dependencies: self.dependencies.clone(),
         })
     }
 
@@ -131,7 +139,7 @@ fn validate_selected_cross_references(context: &DomainContext<'_>) -> LegacyMigr
         .groups
         .contains(&MigrationGroupId::WorkspacesSessionsAndTasks)
     {
-        agent_coordination::validate_committed_coordination_cross_references(context)?;
+        agent_coordination::validate_committed_coordination_storage(context)?;
     }
     Ok(())
 }

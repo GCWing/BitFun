@@ -290,12 +290,12 @@ pub fn classify_memory_workspace_file(path: &Path) -> Option<MemoryWorkspaceFile
             _ => None,
         };
     }
-    if components.len() == 4
+    if components.len() >= 4
         && components[0].as_os_str() == MEMORY_EXTENSIONS_DIR_NAME
         && components[1].as_os_str() == AD_HOC_EXTENSION_NAME
         && components[2].as_os_str() == AD_HOC_NOTES_DIR_NAME
     {
-        let file_name = components[3].as_os_str().to_str()?;
+        let file_name = components.last()?.as_os_str().to_str()?;
         if !file_name.is_empty() && file_name.ends_with(".md") {
             return Some(MemoryWorkspaceFileKind::AdHocNote);
         }
@@ -395,6 +395,18 @@ const UPSERT_STAGE1_OUTPUT_SQL: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_user_notes_keep_owner_classification_without_path_escape() {
+        assert!(classify_memory_workspace_file(Path::new(
+            "extensions/ad_hoc/notes/project/note.md"
+        ))
+        .is_some());
+        assert!(
+            classify_memory_workspace_file(Path::new("extensions/ad_hoc/notes/../note.md"))
+                .is_none()
+        );
+    }
 
     #[test]
     fn owner_schema_round_trips_records_and_keeps_jobs_separate() {

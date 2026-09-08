@@ -171,7 +171,7 @@ function render(view) {
 
   const findings = document.getElementById('findings');
   findings.replaceChildren(...view.findings.map((finding) =>
-    row(finding.code, `${finding.entityCount} item(s), ${finding.logicalBytes} byte(s)`)));
+    row(finding.domain, `${text[finding.code] || finding.code} · ${finding.entityCount} item(s), ${finding.logicalBytes} byte(s)`)));
   show('scan-card', view.findings.length > 0 && !view.plan);
 
   const planSummary = document.getElementById('plan-summary');
@@ -179,6 +179,7 @@ function render(view) {
     planSummary.replaceChildren(
       row(text.steps.replace('{count}', view.plan.steps.length), view.plan.selection.groups.map(groupLabel).join(' · ')),
       row(text.conflicts.replace('{count}', view.plan.conflicts.length), text.confirmHelp),
+      ...view.plan.findings.filter((finding) => finding.severity !== 'info').map((finding) => row(finding.domain, text[finding.code] || finding.code)),
       ...view.plan.conflicts.map((conflict) => row(conflict.domain, conflict.code || conflict.resolution || '')),
     );
   }
@@ -201,8 +202,11 @@ function render(view) {
 
   const reportSummary = document.getElementById('report-summary');
   if (view.report) {
-    reportSummary.replaceChildren(...view.report.domainResults.map((result) =>
-      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`)));
+    reportSummary.replaceChildren(...view.report.domainResults.flatMap((result) => [
+      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`),
+      ...[...new Set(result.warnings.filter((item) => item.severity !== 'info').map((item) => item.code))]
+        .map((code) => row(result.domain, text[code] || code)),
+    ]));
   }
   show('report-card', !view.running && (Boolean(view.report) || view.status === 'cancelled'));
   const canExportDiagnostics = ['failed_recoverable', 'failed_manual_action_required'].includes(view.status);

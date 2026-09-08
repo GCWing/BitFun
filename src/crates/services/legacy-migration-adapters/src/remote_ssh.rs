@@ -46,6 +46,7 @@ enum VaultHealth {
 }
 
 struct SshState {
+    omitted: Vec<String>,
     files: BTreeMap<String, String>,
     connections: Vec<SavedConnectionRecord>,
     workspaces: Vec<RemoteWorkspaceRecord>,
@@ -70,6 +71,8 @@ struct VaultSource {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RemoteSshManifest {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    omitted: Vec<String>,
     source_files: BTreeMap<String, String>,
     target_before: BTreeMap<String, Option<String>>,
     staged_files: BTreeMap<String, String>,
@@ -122,12 +125,15 @@ impl LegacyDomainAdapter for RemoteSshAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: if source.files.is_empty() {
+                code: if !source.omitted.is_empty() {
+                    "remote_items_skipped".to_string()
+                } else if source.files.is_empty() {
                     "legacy_remote_ssh_absent".to_string()
                 } else {
                     "legacy_remote_ssh_supported".to_string()
                 },
                 severity: if merged.conflicts.is_empty()
+                    && source.omitted.is_empty()
                     && source.vault_health != VaultHealth::Invalid
                 {
                     FindingSeverity::Info
@@ -182,6 +188,7 @@ impl LegacyDomainAdapter for RemoteSshAdapter {
             .map(|relative| (relative.to_string(), target.files.get(relative).cloned()))
             .collect();
         let manifest = RemoteSshManifest {
+            omitted: source.omitted,
             source_files: source.files,
             target_before,
             staged_files,
@@ -199,6 +206,11 @@ impl LegacyDomainAdapter for RemoteSshAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: manifest
+                .omitted
+                .iter()
+                .map(|path| skipped_warning(path))
+                .collect(),
             ..MigrationDomainResult::default()
         })
     }
@@ -279,6 +291,11 @@ impl LegacyDomainAdapter for RemoteSshAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: manifest
+                .omitted
+                .iter()
+                .map(|path| skipped_warning(path))
+                .collect(),
             ..RemoteSshOutcome::default()
         };
         if manifest.conflicts > 0 {
@@ -400,28 +417,60 @@ impl LegacyDomainAdapter for RemoteSshAdapter {
 
 fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<SshState> {
     let mut files = BTreeMap::new();
+    let mut omitted = Vec::new();
     for relative in FILES {
         let path = root.join(relative);
-        if existing_regular(
-            root,
-            &path,
-            if relative.contains("vault") {
-                MAX_VAULT_BYTES
+        let inspected = (|| -> LegacyMigrationResult<Option<String>> {
+            if existing_regular(
+                root,
+                &path,
+                if relative.contains("vault") {
+                    MAX_VAULT_BYTES
+                } else {
+                    MAX_JSON_BYTES
+                },
+            )? {
+                Ok(Some(file_digest(&path)?))
             } else {
-                MAX_JSON_BYTES
-            },
-        )? {
-            files.insert(relative.to_string(), file_digest(&path)?);
+                Ok(None)
+            }
+        })();
+        match inspected {
+            Ok(Some(digest)) => {
+                files.insert(relative.to_string(), digest);
+            }
+            Ok(None) => {}
+            Err(_) if legacy => omitted.push(relative.to_string()),
+            Err(error) => return Err(error),
         }
     }
-    let connections = if files.contains_key("ssh_connections.json") {
+
+    let connections = if legacy {
+        read_source_records(
+            root,
+            "ssh_connections.json",
+            false,
+            &mut omitted,
+            |v: &SavedConnectionRecord| v.validate().is_ok(),
+        )
+    } else if files.contains_key("ssh_connections.json") {
         owner::read_saved_connections(&root.join("ssh_connections.json"))
             .map_err(owner_error)?
             .unwrap_or_default()
     } else {
         Vec::new()
     };
-    let workspaces = if files.contains_key("remote_workspace.json") {
+    let workspaces = if legacy {
+        read_source_records(
+            root,
+            "remote_workspace.json",
+            true,
+            &mut omitted,
+            |v: &RemoteWorkspaceRecord| {
+                !v.connection_id.trim().is_empty() && v.remote_path.starts_with('/')
+            },
+        )
+    } else if files.contains_key("remote_workspace.json") {
         if legacy {
             owner::read_legacy_remote_workspaces(&root.join("remote_workspace.json"))
         } else {
@@ -432,7 +481,20 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<SshState> {
     } else {
         Vec::new()
     };
-    let known_hosts = if files.contains_key("known_hosts") {
+    let known_hosts = if legacy {
+        read_source_records(
+            root,
+            "known_hosts",
+            false,
+            &mut omitted,
+            |v: &KnownHostRecord| {
+                v.port != 0
+                    && [&v.host, &v.key_type, &v.fingerprint, &v.public_key]
+                        .iter()
+                        .all(|s| !s.trim().is_empty())
+            },
+        )
+    } else if files.contains_key("known_hosts") {
         owner::read_known_hosts(&root.join("known_hosts"))
             .map_err(owner_error)?
             .unwrap_or_default()
@@ -451,6 +513,7 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<SshState> {
         VaultHealth::Absent
     };
     Ok(SshState {
+        omitted,
         files,
         connections,
         workspaces,
@@ -462,7 +525,7 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<SshState> {
 fn merge_states(source: &SshState, target: &SshState) -> MergePlan {
     let mut conflicts = Vec::new();
     let mut imported = 0u64;
-    let mut skipped = 0u64;
+    let mut skipped = source.omitted.len() as u64;
     let mut connections = Vec::new();
     let mut vault_sources = BTreeMap::new();
     let mut target_ids = BTreeSet::new();
@@ -892,6 +955,50 @@ fn read_manifest(context: &DomainContext<'_>) -> LegacyMigrationResult<RemoteSsh
     read_bounded_json(&context.layout.stage_root(), &manifest_path(context))
 }
 
+fn skipped_warning(path: &str) -> MigrationDiagnostic {
+    MigrationDiagnostic {
+        severity: FindingSeverity::Warning,
+        domain: Some(MigrationDomainId::RemoteSsh),
+        code: "remote_items_skipped".into(),
+        message: "An unreadable legacy remote record was omitted; other records remain available."
+            .into(),
+        relative_path: Some(path.into()),
+        ..Default::default()
+    }
+}
+
+fn read_source_records<T: serde::de::DeserializeOwned>(
+    root: &Path,
+    name: &str,
+    singleton: bool,
+    omitted: &mut Vec<String>,
+    valid: impl Fn(&T) -> bool,
+) -> Vec<T> {
+    let path = root.join(name);
+    if !path.exists() {
+        return Vec::new();
+    }
+    let values = match read_bounded_json::<serde_json::Value>(root, &path) {
+        Ok(serde_json::Value::Array(values)) => values,
+        Ok(value @ serde_json::Value::Object(_)) if singleton => vec![value],
+        _ => {
+            omitted.push(name.into());
+            return Vec::new();
+        }
+    };
+    values
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, value)| match serde_json::from_value::<T>(value) {
+            Ok(value) if valid(&value) => Some(value),
+            _ => {
+                omitted.push(format!("{name}/{index}"));
+                None
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -902,6 +1009,24 @@ mod tests {
     use openbitfun_product_domains::legacy_migration::{
         MigrationGroupId, MigrationRunStatus, MigrationSelection,
     };
+
+    #[test]
+    fn damaged_ssh_records_and_files_leave_valid_profiles_available() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let connection = serde_json::json!({"id":"good","name":"Good","host":"host","port":22,"username":"user","authType":{"type":"Password"}});
+        atomic_write_json(
+            &root.join("ssh_connections.json"),
+            &serde_json::json!([connection, {"id":1}]),
+        )
+        .unwrap();
+        fs::write(root.join("known_hosts"), b"broken JSON").unwrap();
+        let source = read_state(root, true).unwrap();
+        assert_eq!(source.connections.len(), 1);
+        assert_eq!(source.omitted.len(), 2);
+        assert!(read_state(root, false).is_err());
+        assert_eq!(fs::read(root.join("known_hosts")).unwrap(), b"broken JSON");
+    }
 
     #[test]
     fn ssh_merge_rewrites_reference_closure_and_keeps_target_host_key() {

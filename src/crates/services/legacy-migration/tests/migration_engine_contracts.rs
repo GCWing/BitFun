@@ -42,6 +42,8 @@ struct FakeAdapter {
     calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
     finalize_behavior: FinalizeBehavior,
     stage_error: Option<std::io::ErrorKind>,
+    scan_error: bool,
+    dependencies: Vec<MigrationDomainId>,
 }
 
 impl LegacyDomainAdapter for FakeAdapter {
@@ -51,6 +53,11 @@ impl LegacyDomainAdapter for FakeAdapter {
 
     fn scan(&self, _roots: &MigrationRoots) -> LegacyMigrationResult<DomainScan> {
         self.update(|counts| counts.scan += 1);
+        if self.scan_error {
+            return Err(LegacyMigrationError::UnsupportedSource(
+                "invalid fixture".to_string(),
+            ));
+        }
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain,
@@ -63,7 +70,7 @@ impl LegacyDomainAdapter for FakeAdapter {
             },
             conflicts: Vec::new(),
             target_schema: Some("fake.current".to_string()),
-            dependencies: Vec::new(),
+            dependencies: self.dependencies.clone(),
         })
     }
 
@@ -378,6 +385,7 @@ fn engine_rolls_back_unverified_commit_when_owner_finalization_fails() {
         })
     ));
     assert!(!target_path_for_roots(&roots, MigrationDomainId::Settings).exists());
+    assert!(target_path_for_roots(&roots, MigrationDomainId::Credentials).exists());
     let settings_calls = calls
         .lock()
         .expect("calls should not poison")
@@ -769,12 +777,79 @@ fn fake_engine_with_behaviors(
             } else {
                 FinalizeBehavior::PassThrough
             },
+            scan_error: false,
+            dependencies: Vec::new(),
             stage_error: (domain == MigrationDomainId::Settings)
                 .then_some(settings_stage_error)
                 .flatten(),
         }) as Box<dyn LegacyDomainAdapter>
     });
     MigrationEngine::new(roots, adapters).expect("fake engine should be valid")
+}
+
+#[test]
+fn scan_failure_skips_dependents_but_executes_and_recovers_independent_domains() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    let calls = Arc::new(Mutex::new(BTreeMap::new()));
+    let selection = MigrationSelection {
+        groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+    };
+    let adapters = selection.expanded_domains().into_iter().map(|domain| {
+        Box::new(FakeAdapter {
+            domain,
+            calls: calls.clone(),
+            finalize_behavior: FinalizeBehavior::PassThrough,
+            stage_error: None,
+            scan_error: domain == MigrationDomainId::Settings,
+            dependencies: if domain == MigrationDomainId::Credentials {
+                vec![MigrationDomainId::Settings]
+            } else {
+                Vec::new()
+            },
+        }) as Box<dyn LegacyDomainAdapter>
+    });
+    let engine = MigrationEngine::new(roots.clone(), adapters).unwrap();
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .unwrap()
+        .unwrap();
+    let plan = engine
+        .plan(&source, selection, &CancellationToken::default())
+        .unwrap();
+    assert_eq!(
+        plan.findings
+            .iter()
+            .filter(|finding| !finding.migratable)
+            .count(),
+        2
+    );
+    let serialized = serde_json::to_vec(&plan).unwrap();
+    let restored = serde_json::from_slice(&serialized).unwrap();
+    for _ in 0..2 {
+        let report = engine
+            .execute(&restored, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        assert_eq!(
+            report
+                .domain_results
+                .iter()
+                .filter(|result| result.state == MigrationDomainState::Skipped)
+                .count(),
+            2
+        );
+    }
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls[&MigrationDomainId::Settings].stage, 0);
+    assert_eq!(calls[&MigrationDomainId::Credentials].stage, 0);
+    assert_eq!(calls[&MigrationDomainId::CrossReferenceRepair].commit, 1);
+    let cancelled = CancellationToken::default();
+    cancelled.cancel();
+    assert!(matches!(
+        engine.scan(&plan.selection, &cancelled),
+        Err(LegacyMigrationError::Cancelled)
+    ));
 }
 
 fn fixture_roots(root: &Path) -> MigrationRoots {

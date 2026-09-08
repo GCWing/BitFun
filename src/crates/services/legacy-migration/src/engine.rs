@@ -158,9 +158,25 @@ impl MigrationEngine {
         for domain in selection.expanded_domains() {
             cancellation.check()?;
             let adapter = self.adapter(domain)?;
-            let scan = adapter
-                .scan(&self.roots)
-                .map_err(|error| domain_error(domain, error))?;
+            let scan = match adapter.scan(&self.roots) {
+                Ok(scan) => scan,
+                Err(LegacyMigrationError::Cancelled) => {
+                    return Err(LegacyMigrationError::Cancelled)
+                }
+                Err(error) => DomainScan {
+                    finding: openbitfun_product_domains::legacy_migration::ScanFinding {
+                        domain,
+                        code: "domain_scan_skipped".to_string(),
+                        severity: FindingSeverity::Warning,
+                        migratable: false,
+                        detail: error.to_string(),
+                        ..Default::default()
+                    },
+                    conflicts: Vec::new(),
+                    target_schema: None,
+                    dependencies: Vec::new(),
+                },
+            };
             if scan.finding.domain != domain {
                 return Err(LegacyMigrationError::InvalidPlan(format!(
                     "adapter {domain:?} returned a finding for {:?}",
@@ -168,6 +184,32 @@ impl MigrationEngine {
                 )));
             }
             scans.push(scan);
+        }
+        // Dependencies may appear later in an adapter's scan results. Propagate
+        // unavailable domains to a fixed point before authorizing any writes.
+        loop {
+            let unavailable = scans
+                .iter()
+                .filter(|scan| !scan.finding.migratable)
+                .map(|scan| scan.finding.domain)
+                .collect::<BTreeSet<_>>();
+            let mut changed = false;
+            for scan in &mut scans {
+                if scan.finding.migratable
+                    && scan.dependencies.iter().any(|id| unavailable.contains(id))
+                {
+                    scan.finding.migratable = false;
+                    scan.finding.severity = FindingSeverity::Warning;
+                    scan.finding.code = "domain_dependency_skipped".to_string();
+                    scan.finding.detail =
+                        "A required domain could not be scanned; this domain will be skipped."
+                            .to_string();
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
         }
         Ok(scans)
     }
@@ -218,12 +260,16 @@ impl MigrationEngine {
                     )));
                 }
             }
-            estimated_write_bytes =
-                estimated_write_bytes.saturating_add(scan.estimated_write_bytes());
+            let write_bytes = if scan.finding.migratable {
+                scan.estimated_write_bytes()
+            } else {
+                0
+            };
+            estimated_write_bytes = estimated_write_bytes.saturating_add(write_bytes);
             steps.push(MigrationPlanStep {
                 sequence: u32::try_from(index + 1).unwrap_or(u32::MAX),
                 domain: scan.finding.domain,
-                estimated_write_bytes: scan.estimated_write_bytes(),
+                estimated_write_bytes: write_bytes,
                 source_schema: scan.finding.source_schema.clone(),
                 target_schema: scan.target_schema,
                 dependencies: scan.dependencies,
@@ -321,6 +367,7 @@ impl MigrationEngine {
             "lock_acquired",
         )?;
 
+        let mut last_failure = None;
         for (index, step) in plan.steps.iter().enumerate() {
             let result_index = report
                 .domain_results
@@ -329,6 +376,38 @@ impl MigrationEngine {
                 .expect("normalized report includes every plan step");
             if report.domain_results[result_index].state == MigrationDomainState::Verified {
                 continue;
+            }
+            let unavailable_dependency = step.dependencies.iter().any(|dependency| {
+                !report.domain_results.iter().any(|result| {
+                    result.domain == *dependency && result.state == MigrationDomainState::Verified
+                })
+            });
+            let skipped_finding = plan
+                .findings
+                .iter()
+                .find(|finding| finding.domain == step.domain && !finding.migratable);
+            if skipped_finding.is_some() || unavailable_dependency {
+                let code = skipped_finding
+                    .map(|finding| finding.code.as_str())
+                    .unwrap_or("domain_dependency_skipped");
+                let result = &mut report.domain_results[result_index];
+                result.state = MigrationDomainState::Skipped;
+                if !result.warnings.iter().any(|warning| warning.code == code) {
+                    result.warnings.push(MigrationDiagnostic {
+                        code: code.to_string(),
+                        severity: FindingSeverity::Warning,
+                        domain: Some(step.domain),
+                        message: "This domain was skipped; its source data remains available."
+                            .to_string(),
+                        ..Default::default()
+                    });
+                }
+                persist_report(&layout, &report)?;
+                continue;
+            }
+            // A dependency skipped on a previous attempt may now be available.
+            if report.domain_results[result_index].state == MigrationDomainState::Skipped {
+                report.domain_results[result_index].state = MigrationDomainState::NotStarted;
             }
             let context = DomainContext {
                 roots: &self.roots,
@@ -379,8 +458,15 @@ impl MigrationEngine {
                             MigrationPhase::Stage,
                             &error,
                         )?;
-                        let _ = adapter.rollback_unverified(&context);
-                        return Err(domain_error(step.domain, error));
+                        if adapter.rollback_unverified(&context).is_err() {
+                            return Err(LegacyMigrationError::Domain {
+                                domain: step.domain,
+                                message: error.to_string(),
+                            });
+                        }
+                        cancellation.check()?;
+                        last_failure = Some((step.domain, MigrationPhase::Stage, error));
+                        continue;
                     }
                 };
                 if staged.domain != step.domain {
@@ -438,8 +524,15 @@ impl MigrationEngine {
                         MigrationPhase::ValidateStage,
                         &error,
                     )?;
-                    let _ = adapter.rollback_unverified(&context);
-                    return Err(domain_error(step.domain, error));
+                    if adapter.rollback_unverified(&context).is_err() {
+                        return Err(LegacyMigrationError::Domain {
+                            domain: step.domain,
+                            message: error.to_string(),
+                        });
+                    }
+                    cancellation.check()?;
+                    last_failure = Some((step.domain, MigrationPhase::ValidateStage, error));
+                    continue;
                 }
                 journal(
                     &layout,
@@ -488,8 +581,15 @@ impl MigrationEngine {
                         MigrationPhase::Commit,
                         &error,
                     )?;
-                    let _ = adapter.rollback_unverified(&context);
-                    return Err(domain_error(step.domain, error));
+                    if adapter.rollback_unverified(&context).is_err() {
+                        return Err(LegacyMigrationError::Domain {
+                            domain: step.domain,
+                            message: error.to_string(),
+                        });
+                    }
+                    cancellation.check()?;
+                    last_failure = Some((step.domain, MigrationPhase::Commit, error));
+                    continue;
                 }
                 inject(crash_injector, CrashPoint::AfterCommit(step.domain))?;
                 report.domain_results[result_index].state = MigrationDomainState::Committed;
@@ -535,26 +635,41 @@ impl MigrationEngine {
                         MigrationPhase::ValidateCommit,
                         &error,
                     )?;
-                    let _ = adapter.rollback_unverified(&context);
-                    return Err(domain_error(step.domain, error));
+                    if adapter.rollback_unverified(&context).is_err() {
+                        return Err(LegacyMigrationError::Domain {
+                            domain: step.domain,
+                            message: error.to_string(),
+                        });
+                    }
+                    cancellation.check()?;
+                    last_failure = Some((step.domain, MigrationPhase::ValidateCommit, error));
+                    continue;
                 }
-                let mut finalized =
-                    match adapter.finalize_result(&context, &report.domain_results[result_index]) {
-                        Ok(finalized) => finalized,
-                        Err(error) => {
-                            record_domain_failure(
-                                &layout,
-                                &mut report,
-                                &mut journal_sequence,
-                                result_index,
-                                step.domain,
-                                MigrationPhase::ValidateCommit,
-                                &error,
-                            )?;
-                            let _ = adapter.rollback_unverified(&context);
-                            return Err(domain_error(step.domain, error));
+                let mut finalized = match adapter
+                    .finalize_result(&context, &report.domain_results[result_index])
+                {
+                    Ok(finalized) => finalized,
+                    Err(error) => {
+                        record_domain_failure(
+                            &layout,
+                            &mut report,
+                            &mut journal_sequence,
+                            result_index,
+                            step.domain,
+                            MigrationPhase::ValidateCommit,
+                            &error,
+                        )?;
+                        if adapter.rollback_unverified(&context).is_err() {
+                            return Err(LegacyMigrationError::Domain {
+                                domain: step.domain,
+                                message: error.to_string(),
+                            });
                         }
-                    };
+                        cancellation.check()?;
+                        last_failure = Some((step.domain, MigrationPhase::ValidateCommit, error));
+                        continue;
+                    }
+                };
                 if finalized.domain != step.domain {
                     let error = LegacyMigrationError::InvalidPlan(format!(
                         "adapter {:?} finalized a result for {:?}",
@@ -629,16 +744,40 @@ impl MigrationEngine {
                 )
             })
         });
-        let final_status = if has_warnings {
+        let has_failures = report
+            .domain_results
+            .iter()
+            .any(|result| result.state == MigrationDomainState::Failed);
+        let final_status = if has_failures {
+            MigrationRunStatus::FailedRecoverable
+        } else if has_warnings {
             MigrationRunStatus::CompletedWithWarnings
         } else {
             MigrationRunStatus::Completed
         };
-        let final_code = if has_warnings {
+        let final_code = if has_failures {
+            "migration_partially_failed"
+        } else if has_warnings {
             "migration_completed_with_warnings"
         } else {
             "migration_completed"
         };
+        if let Some((domain, phase, error)) = last_failure {
+            transition(
+                &layout,
+                &mut report,
+                &mut journal_sequence,
+                MigrationRunStatus::FailedRecoverable,
+                phase,
+                Some(domain),
+                Some(MigrationDomainState::Failed),
+                "domain_failed_recoverable",
+            )?;
+            return Err(LegacyMigrationError::Domain {
+                domain,
+                message: error.to_string(),
+            });
+        }
         transition(
             &layout,
             &mut report,
@@ -1057,16 +1196,6 @@ fn inject(injector: &dyn CrashInjector, point: CrashPoint) -> LegacyMigrationRes
         Err(LegacyMigrationError::InjectedCrash(point))
     } else {
         Ok(())
-    }
-}
-
-fn domain_error(domain: MigrationDomainId, error: LegacyMigrationError) -> LegacyMigrationError {
-    match error {
-        LegacyMigrationError::Domain { .. } => error,
-        error => LegacyMigrationError::Domain {
-            domain,
-            message: error.to_string(),
-        },
     }
 }
 

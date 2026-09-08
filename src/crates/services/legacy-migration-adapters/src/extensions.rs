@@ -100,16 +100,21 @@ impl LegacyDomainAdapter for SkillsAdapter {
     }
 
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
-        let planned = plan_skills(context.roots)?;
+        let mut planned = plan_skills(context.roots)?;
         let output = stage_domain_dir(context, "skills").join("output");
         let mut manifest = ImportManifest::default();
-        for item in &planned {
+        for item in &mut planned {
             if matches!(item.action, ImportAction::Import | ImportAction::Remap) {
-                copy_declared_tree(
+                if copy_declared_tree(
                     &item.source_path,
                     &output.join(&item.target_id),
                     &item.files,
-                )?;
+                )
+                .and_then(|_| require_hash(&output.join(&item.target_id), &item.content_hash))
+                .is_err()
+                {
+                    item.action = ImportAction::Skip;
+                }
             }
             manifest.entries.push(import_entry(item));
             manifest.skipped_paths.extend(item.skipped_paths.clone());
@@ -206,29 +211,36 @@ impl LegacyDomainAdapter for MiniappsAdapter {
     }
 
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
-        let planned = plan_miniapps(context.roots)?;
+        let mut planned = plan_miniapps(context.roots)?;
         let domain_root = stage_domain_dir(context, "miniapps");
         let output = domain_root.join("output");
         let mut manifest = ImportManifest::default();
-        for item in &planned {
-            match item.action {
-                ImportAction::Import | ImportAction::Remap => {
-                    let staged = output.join(&item.target_id);
-                    write_miniapp_output(&item.source_path, &item.target_id, &staged)?;
-                    require_hash(&staged, &item.content_hash)?;
+        for item in &mut planned {
+            let staged_result = (|| -> LegacyMigrationResult<()> {
+                match item.action {
+                    ImportAction::Import | ImportAction::Remap => {
+                        let staged = output.join(&item.target_id);
+                        write_miniapp_output(&item.source_path, &item.target_id, &staged)?;
+                        require_hash(&staged, &item.content_hash)?;
+                    }
+                    ImportAction::BuiltinStorage => {
+                        let source = item.source_path.join(STORAGE_JSON);
+                        let value: serde_json::Value =
+                            read_bounded_json(&item.source_path, &source)?;
+                        atomic_write_json(
+                            &domain_root
+                                .join("builtin-storage")
+                                .join(&item.target_id)
+                                .join(STORAGE_JSON),
+                            &value,
+                        )?;
+                    }
+                    ImportAction::Duplicate | ImportAction::TargetWins | ImportAction::Skip => {}
                 }
-                ImportAction::BuiltinStorage => {
-                    let source = item.source_path.join(STORAGE_JSON);
-                    let value: serde_json::Value = read_bounded_json(&item.source_path, &source)?;
-                    atomic_write_json(
-                        &domain_root
-                            .join("builtin-storage")
-                            .join(&item.target_id)
-                            .join(STORAGE_JSON),
-                        &value,
-                    )?;
-                }
-                ImportAction::Duplicate | ImportAction::TargetWins | ImportAction::Skip => {}
+                Ok(())
+            })();
+            if staged_result.is_err() {
+                item.action = ImportAction::Skip;
             }
             manifest.entries.push(import_entry(item));
             manifest.skipped_paths.extend(item.skipped_paths.clone());
@@ -370,9 +382,27 @@ impl LegacyDomainAdapter for AgentsAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: "legacy_agents_supported".to_string(),
-                severity: FindingSeverity::Info,
-                entity_count: planned.len() as u64,
+                code: if planned
+                    .iter()
+                    .any(|item| matches!(item.action, ImportAction::Skip))
+                {
+                    "extension_items_skipped"
+                } else {
+                    "legacy_agents_supported"
+                }
+                .to_string(),
+                severity: if planned
+                    .iter()
+                    .any(|item| matches!(item.action, ImportAction::Skip))
+                {
+                    FindingSeverity::Warning
+                } else {
+                    FindingSeverity::Info
+                },
+                entity_count: planned
+                    .iter()
+                    .filter(|item| !matches!(item.action, ImportAction::Skip))
+                    .count() as u64,
                 logical_bytes: planned
                     .iter()
                     .map(|item| fs::metadata(&item.source_path).map_or(0, |meta| meta.len()))
@@ -385,7 +415,7 @@ impl LegacyDomainAdapter for AgentsAdapter {
             },
             conflicts,
             target_schema: Some("openbitfun.custom-agent.current".to_string()),
-            dependencies: vec![MigrationDomainId::Skills, MigrationDomainId::Miniapps],
+            dependencies: Vec::new(),
         })
     }
 
@@ -393,27 +423,19 @@ impl LegacyDomainAdapter for AgentsAdapter {
         let planned = plan_agents(context.roots)?;
         let output = stage_domain_dir(context, "agents").join("output");
         let mut manifest = ImportManifest::default();
-        for item in planned {
+        for mut item in planned {
             if matches!(item.action, ImportAction::Import | ImportAction::Remap) {
                 let path = output.join(format!("{}.md", safe_component(&item.target_id)));
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).map_err(|error| io(parent, error))?;
+                if atomic_write_bytes(&path, &item.staged_content).is_err() {
+                    item.action = ImportAction::Skip;
                 }
-                atomic_write_bytes(&path, &item.staged_content)?;
-                manifest.entries.push(ImportEntry {
-                    source_id: item.source_id,
-                    target_id: item.target_id,
-                    action: item.action,
-                    content_hash: item.content_hash,
-                });
-            } else {
-                manifest.entries.push(ImportEntry {
-                    source_id: item.source_id,
-                    target_id: item.target_id,
-                    action: item.action,
-                    content_hash: item.content_hash,
-                });
             }
+            manifest.entries.push(ImportEntry {
+                source_id: item.source_id,
+                target_id: item.target_id,
+                action: item.action,
+                content_hash: item.content_hash,
+            });
         }
         atomic_write_json(&agents_manifest_path(context), &manifest)?;
         result_from_manifest(self.domain(), &manifest)
@@ -459,38 +481,69 @@ fn plan_skills(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTree>
     let target_root = &roots.target_skills_root;
     let mut planned = Vec::new();
     for source in direct_child_directories(&source_root)? {
-        let source_id = file_name(&source)?;
-        if source_id == OPENBITFUN_SYSTEM_SKILL_DIR {
-            continue;
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            let source_id = file_name(&source)?;
+            if source_id == OPENBITFUN_SYSTEM_SKILL_DIR {
+                return Ok(());
+            }
+            let skill_file = source.join("SKILL.md");
+            let content = match fs::read_to_string(&skill_file) {
+                Ok(content) => content,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    planned.push(PlannedTree {
+                        target_id: source_id.clone(),
+                        source_id,
+                        action: ImportAction::Skip,
+                        content_hash: String::new(),
+                        source_path: source.clone(),
+                        files: Vec::new(),
+                        skipped_paths: Vec::new(),
+                    });
+                    return Ok(());
+                }
+                Err(error) => return Err(io(&skill_file, error)),
+            };
+            SkillData::from_markdown(
+                skill_file.to_string_lossy().to_string(),
+                &content,
+                SkillLocation::User,
+                false,
+            )
+            .map_err(|error| {
+                LegacyMigrationError::InvalidRequest(format!(
+                    "legacy Skill {source_id} failed current owner parsing: {error}"
+                ))
+            })?;
+            let mut files = Vec::new();
+            collect_regular_files(&source, &source, &mut files)?;
+            enforce_tree_limits(&source, &files)?;
+            let content_hash = hash_file_set(&source, &files)?;
+            let target = target_root.join(&source_id);
+            let (target_id, action) =
+                resolve_directory_conflict(&source_id, &content_hash, &target)?;
+            planned.push(PlannedTree {
+                source_id,
+                target_id,
+                action,
+                content_hash,
+                source_path: source.clone(),
+                files,
+                skipped_paths: Vec::new(),
+            });
+            Ok(())
+        })();
+        if inspect.is_err() {
+            let source_id = file_name(&source)?;
+            planned.push(PlannedTree {
+                target_id: source_id.clone(),
+                source_id,
+                action: ImportAction::Skip,
+                content_hash: String::new(),
+                source_path: source,
+                files: Vec::new(),
+                skipped_paths: Vec::new(),
+            });
         }
-        let skill_file = source.join("SKILL.md");
-        let content = fs::read_to_string(&skill_file).map_err(|error| io(&skill_file, error))?;
-        SkillData::from_markdown(
-            skill_file.to_string_lossy().to_string(),
-            &content,
-            SkillLocation::User,
-            false,
-        )
-        .map_err(|error| {
-            LegacyMigrationError::InvalidRequest(format!(
-                "legacy Skill {source_id} failed current owner parsing: {error}"
-            ))
-        })?;
-        let mut files = Vec::new();
-        collect_regular_files(&source, &source, &mut files)?;
-        enforce_tree_limits(&source, &files)?;
-        let content_hash = hash_file_set(&source, &files)?;
-        let target = target_root.join(&source_id);
-        let (target_id, action) = resolve_directory_conflict(&source_id, &content_hash, &target)?;
-        planned.push(PlannedTree {
-            source_id,
-            target_id,
-            action,
-            content_hash,
-            source_path: source,
-            files,
-            skipped_paths: Vec::new(),
-        });
     }
     Ok(planned)
 }
@@ -504,77 +557,92 @@ fn plan_miniapps(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTre
         .collect::<BTreeSet<_>>();
     let mut planned = Vec::new();
     for source in direct_child_directories(&source_root)? {
-        let directory_id = file_name(&source)?;
-        let meta_path = source.join(META_JSON);
-        let raw_meta: serde_json::Value = read_bounded_json(&source, &meta_path)?;
-        let declared_id = raw_meta
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default();
-        let source_id = if declared_id.trim().is_empty() {
-            directory_id.clone()
-        } else {
-            declared_id.to_string()
-        };
-        let current_builtin_id = if builtin_ids.contains(source_id.as_str()) {
-            Some(source_id.clone())
-        } else if builtin_ids.contains(directory_id.as_str()) {
-            Some(directory_id.clone())
-        } else {
-            None
-        };
-        let is_builtin =
-            current_builtin_id.is_some() || source.join(BUILTIN_INSTALL_MARKER).exists();
-        let mut files = Vec::new();
-        collect_regular_files(&source, &source, &mut files)?;
-        enforce_tree_limits(&source, &files)?;
-        let source_hash = hash_file_set(&source, &files)?;
-        if is_builtin {
-            let target_id = current_builtin_id
-                .clone()
-                .unwrap_or_else(|| remapped_id(&source_id, &source_hash));
-            let target_storage = target_root.join(&target_id).join(STORAGE_JSON);
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            let directory_id = file_name(&source)?;
+            let meta_path = source.join(META_JSON);
+            let raw_meta: serde_json::Value = read_bounded_json(&source, &meta_path)?;
+            let declared_id = raw_meta
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let source_id = if declared_id.trim().is_empty() {
+                directory_id.clone()
+            } else {
+                declared_id.to_string()
+            };
+            let current_builtin_id = if builtin_ids.contains(source_id.as_str()) {
+                Some(source_id.clone())
+            } else if builtin_ids.contains(directory_id.as_str()) {
+                Some(directory_id.clone())
+            } else {
+                None
+            };
+            let is_builtin =
+                current_builtin_id.is_some() || source.join(BUILTIN_INSTALL_MARKER).exists();
+            let mut files = Vec::new();
+            collect_regular_files(&source, &source, &mut files)?;
+            enforce_tree_limits(&source, &files)?;
+            let source_hash = hash_file_set(&source, &files)?;
+            if is_builtin {
+                let target_id = current_builtin_id
+                    .clone()
+                    .unwrap_or_else(|| remapped_id(&source_id, &source_hash));
+                let target_storage = target_root.join(&target_id).join(STORAGE_JSON);
+                planned.push(PlannedTree {
+                    source_id,
+                    target_id,
+                    action: if current_builtin_id.is_none() || !source.join(STORAGE_JSON).exists() {
+                        ImportAction::Skip
+                    } else if target_storage.exists() {
+                        ImportAction::TargetWins
+                    } else {
+                        ImportAction::BuiltinStorage
+                    },
+                    content_hash: source_hash,
+                    source_path: source.clone(),
+                    files,
+                    skipped_paths: Vec::new(),
+                });
+                return Ok(());
+            }
+            build_import_bundle_plan(
+                &source_id,
+                &fs::read_to_string(&meta_path).map_err(|error| io(&meta_path, error))?,
+                0,
+            )
+            .map_err(|error| {
+                LegacyMigrationError::InvalidRequest(format!(
+                    "legacy MiniApp {source_id} failed current owner conversion: {error}"
+                ))
+            })?;
+            let (target_id, action, content_hash) = if is_safe_component(&source_id) {
+                resolve_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
+            } else {
+                resolve_remapped_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
+            };
             planned.push(PlannedTree {
                 source_id,
                 target_id,
-                action: if current_builtin_id.is_none() || !source.join(STORAGE_JSON).exists() {
-                    ImportAction::Skip
-                } else if target_storage.exists() {
-                    ImportAction::TargetWins
-                } else {
-                    ImportAction::BuiltinStorage
-                },
-                content_hash: source_hash,
-                source_path: source,
+                action,
+                content_hash,
+                source_path: source.clone(),
                 files,
                 skipped_paths: Vec::new(),
             });
-            continue;
+            Ok(())
+        })();
+        if inspect.is_err() {
+            let source_id = file_name(&source)?;
+            planned.push(PlannedTree {
+                target_id: source_id.clone(),
+                source_id,
+                action: ImportAction::Skip,
+                content_hash: String::new(),
+                source_path: source,
+                files: Vec::new(),
+                skipped_paths: Vec::new(),
+            });
         }
-        build_import_bundle_plan(
-            &source_id,
-            &fs::read_to_string(&meta_path).map_err(|error| io(&meta_path, error))?,
-            0,
-        )
-        .map_err(|error| {
-            LegacyMigrationError::InvalidRequest(format!(
-                "legacy MiniApp {source_id} failed current owner conversion: {error}"
-            ))
-        })?;
-        let (target_id, action, content_hash) = if is_safe_component(&source_id) {
-            resolve_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
-        } else {
-            resolve_remapped_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
-        };
-        planned.push(PlannedTree {
-            source_id,
-            target_id,
-            action,
-            content_hash,
-            source_path: source,
-            files,
-            skipped_paths: Vec::new(),
-        });
     }
     Ok(planned)
 }
@@ -594,38 +662,54 @@ fn plan_agents(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedAgent
     }
     let mut planned = Vec::new();
     for source_path in direct_markdown_files(&source_root)? {
-        let content = fs::read_to_string(&source_path).map_err(|error| io(&source_path, error))?;
-        let parsed =
-            custom_agent_read_markdown_str(&content, CustomAgentLevel::User).map_err(|error| {
-                LegacyMigrationError::InvalidRequest(format!(
-                    "legacy Agent {} failed current owner parsing: {error}",
-                    source_path.display()
-                ))
-            })?;
-        let source_id = parsed.definition.id.clone();
-        let source_bytes = content.into_bytes();
-        let source_hash = hash_bytes(&source_bytes);
-        let (target_id, action, staged_content) =
-            match target_by_id.get(&source_id.to_ascii_lowercase()) {
-                Some(existing) if existing == &source_bytes => {
-                    (source_id.clone(), ImportAction::Duplicate, source_bytes)
-                }
-                Some(_) => {
-                    let target_id = remapped_id(&source_id, &source_hash);
-                    let remapped = rewrite_agent_id(&source_bytes, &target_id)?;
-                    (target_id, ImportAction::Remap, remapped)
-                }
-                None => (source_id.clone(), ImportAction::Import, source_bytes),
-            };
-        let content_hash = hash_bytes(&staged_content);
-        planned.push(PlannedAgent {
-            source_id,
-            target_id,
-            action,
-            content_hash,
-            source_path,
-            staged_content,
-        });
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            let content =
+                fs::read_to_string(&source_path).map_err(|error| io(&source_path, error))?;
+            let parsed = custom_agent_read_markdown_str(&content, CustomAgentLevel::User).map_err(
+                |error| {
+                    LegacyMigrationError::InvalidRequest(format!(
+                        "legacy Agent {} failed current owner parsing: {error}",
+                        source_path.display()
+                    ))
+                },
+            )?;
+            let source_id = parsed.definition.id.clone();
+            let source_bytes = content.into_bytes();
+            let source_hash = hash_bytes(&source_bytes);
+            let (target_id, action, staged_content) =
+                match target_by_id.get(&source_id.to_ascii_lowercase()) {
+                    Some(existing) if existing == &source_bytes => {
+                        (source_id.clone(), ImportAction::Duplicate, source_bytes)
+                    }
+                    Some(_) => {
+                        let target_id = remapped_id(&source_id, &source_hash);
+                        let remapped = rewrite_agent_id(&source_bytes, &target_id)?;
+                        (target_id, ImportAction::Remap, remapped)
+                    }
+                    None => (source_id.clone(), ImportAction::Import, source_bytes),
+                };
+            let content_hash = hash_bytes(&staged_content);
+            planned.push(PlannedAgent {
+                source_id,
+                target_id,
+                action,
+                content_hash,
+                source_path: source_path.clone(),
+                staged_content,
+            });
+            Ok(())
+        })();
+        if inspect.is_err() {
+            let source_id = file_name(&source_path)?;
+            planned.push(PlannedAgent {
+                target_id: source_id.clone(),
+                source_id,
+                action: ImportAction::Skip,
+                content_hash: String::new(),
+                source_path: source_path,
+                staged_content: Vec::new(),
+            });
+        }
     }
     Ok(planned)
 }
@@ -872,9 +956,13 @@ fn scan_from_trees(
     DomainScan {
         finding: ScanFinding {
             domain,
-            code: code.to_string(),
-            severity: FindingSeverity::Info,
-            entity_count: planned.len() as u64,
+            code: if planned.iter().any(|item| matches!(item.action, ImportAction::Skip)) {
+                "extension_items_skipped".to_string()
+            } else { code.to_string() },
+            severity: if planned.iter().any(|item| matches!(item.action, ImportAction::Skip)) {
+                FindingSeverity::Warning
+            } else { FindingSeverity::Info },
+            entity_count: planned.iter().filter(|item| !matches!(item.action, ImportAction::Skip)).count() as u64,
             logical_bytes: planned
                 .iter()
                 .map(|item| {
@@ -897,10 +985,7 @@ fn scan_from_trees(
             })
             .collect(),
         target_schema: Some(target_schema.to_string()),
-        dependencies: match domain {
-            MigrationDomainId::Miniapps => vec![MigrationDomainId::Skills],
-            _ => Vec::new(),
-        },
+        dependencies: Vec::new(),
     }
 }
 
@@ -979,6 +1064,12 @@ fn result_from_manifest(
             message: "The path is outside the current owner's import contract.".to_string(),
             action: Some("Review the source extension manually.".to_string()),
         })
+        .chain(manifest.entries.iter().filter(|entry| matches!(entry.action, ImportAction::Skip)).map(|entry| MigrationDiagnostic {
+            code: "extension_item_skipped".to_string(), severity: FindingSeverity::Warning,
+            domain: Some(domain), relative_path: Some(entry.source_id.clone()),
+            message: "The source extension is incomplete or outside the import contract and was preserved.".to_string(),
+            ..Default::default()
+        }))
         .collect();
     Ok(MigrationDomainResult {
         domain,
@@ -1787,6 +1878,71 @@ mod tests {
         assert!(text.contains("id: researcher-from-legacy-deadbeef\r\n"));
         assert!(text.contains("future_field: keep-me\r\n# user comment\r\n"));
         assert!(text.ends_with("Keep this body byte-for-byte.\r\n"));
+    }
+
+    #[test]
+    fn invalid_extensions_do_not_block_valid_entries_in_the_same_domain() {
+        let temp = test_tempdir("partial-extensions");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        assert!(AgentsAdapter.scan(&roots).unwrap().dependencies.is_empty());
+        assert!(MiniappsAdapter
+            .scan(&roots)
+            .unwrap()
+            .dependencies
+            .is_empty());
+        fs::create_dir_all(roots.legacy_skills_root.join("empty-skill")).unwrap();
+        atomic_write_bytes(
+            &roots.legacy_skills_root.join("broken-skill/SKILL.md"),
+            b"---\ninvalid: [\n---",
+        )
+        .unwrap();
+        atomic_write_bytes(
+            &roots
+                .legacy_user_root
+                .join("data/miniapps/broken/meta.json"),
+            b"invalid",
+        )
+        .unwrap();
+        atomic_write_bytes(
+            &roots.legacy_user_root.join("agents/broken.md"),
+            b"---\ninvalid: [\n---",
+        )
+        .unwrap();
+        let selection = MigrationSelection {
+            groups: BTreeSet::from([MigrationGroupId::AgentsSkillsAndMiniapps]),
+        };
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        for domain in [
+            MigrationDomainId::Skills,
+            MigrationDomainId::Miniapps,
+            MigrationDomainId::Agents,
+        ] {
+            let result = report
+                .domain_results
+                .iter()
+                .find(|result| result.domain == domain)
+                .unwrap();
+            assert_eq!(result.state, MigrationDomainState::Verified);
+            assert!(result.imported > 0, "{domain:?}");
+            assert!(result.skipped > 0, "{domain:?}");
+            assert!(!result.warnings.is_empty(), "{domain:?}");
+        }
+        assert!(roots
+            .target_skills_root
+            .join("user-skill/SKILL.md")
+            .exists());
+        assert!(!roots.target_skills_root.join("empty-skill").exists());
+        assert!(roots.legacy_skills_root.join("empty-skill").exists());
     }
 
     fn fixture_roots(root: &Path) -> MigrationRoots {

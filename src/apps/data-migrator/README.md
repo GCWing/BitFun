@@ -46,6 +46,24 @@ fixture is **0.2.19**. This is format-based support, not a claim that every old
 release has been tested. The source must pass the probe and selected domain
 validators. Unsupported or corrupt data is kept and reported.
 
+Scanning isolates invalid settings/model entries, workspace registrations, memory
+rows/files, SSH profiles, Remote Connect files/Bots, Sessions, Skills, MiniApps,
+and Agent definitions. Readable Turns within a damaged Session are recovered;
+derived Turn counts and workspace reference lists are rebuilt. Identical Turn
+copies are deduplicated; conflicting Turn identities are omitted with warnings.
+Nested user memory notes are supported. Legacy memory jobs are not read or
+imported: the runtime creates jobs on demand, and destination jobs stay intact.
+Optional Skills and MiniApps do not block importing Agent definitions.
+
+Item failures during staging are omitted from the committed manifest where the
+item has an independent storage boundary. Source data remains read-only and the
+report shows omissions and partial history recovery. Unreadable destination
+stores, unsafe paths, unsupported schemas, changed inputs, and transaction/write
+failures still protect the affected domain; independent domains can continue
+after successful rollback. A failed rollback stops execution. Review warnings
+and the report before retrying.
+
+
 The destination is OpenBitFun: configuration schema **1**, workspace registry
 format **1**, coordination database schema **2**, and the session, memory,
 extension, and connection formats accepted by the shared storage owners in
@@ -67,6 +85,15 @@ staging, validation, backups, a migration lock and atomic replacement. Keep
 both applications closed until the run finishes. Cancellation and window close
 requests wait for an engine-declared safe boundary; already verified domains
 may remain imported.
+
+
+Agent coordination imports do not require historical Session/Turn references,
+parent relationships, counters, timestamps, or Swarm lineage to remain valid.
+Records that cannot be decoded or inserted under the target table constraints
+are skipped individually. Tasks without a mapped Agent are skipped instead of
+being attached to an unrelated target primary key. Existing target records still
+win conflicts; imported Agent primary keys and task references are remapped.
+Importing historical task state does not start or resume an Agent execution.
 
 ## Resume and diagnose
 

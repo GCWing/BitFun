@@ -6,19 +6,17 @@ use super::workspace_sessions::{
     read_workspace_sessions_manifest, target_wins_session_ids, SessionImportAction,
     WorkspaceSessionsManifest,
 };
-use openbitfun_core_types::validate_session_id;
 use openbitfun_legacy_migration::{
     atomic_write_bytes, atomic_write_json, snapshot_sqlite_read_only, validate_sqlite,
     DomainContext, DomainScan, LegacyDomainAdapter, LegacyMigrationError, LegacyMigrationResult,
     MigrationRoots,
 };
 use openbitfun_product_domains::legacy_migration::{
-    ConflictResolution, FindingSeverity, MigrationConflict, MigrationDomainId,
+    ConflictResolution, FindingSeverity, MigrationConflict, MigrationDiagnostic, MigrationDomainId,
     MigrationDomainResult, MigrationDomainState, ScanFinding,
 };
 use openbitfun_services_core::coordination_persistence::{
-    coordination_table_has_column, initialize_coordination_schema, validate_coordination_agent_id,
-    COORDINATION_SCHEMA_VERSION,
+    coordination_table_has_column, initialize_coordination_schema, COORDINATION_SCHEMA_VERSION,
 };
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
@@ -41,6 +39,8 @@ struct CoordinationManifest {
     imported: u64,
     skipped: u64,
     conflicts: u64,
+    #[serde(default)]
+    incompatible_rows: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -51,6 +51,8 @@ struct CoordinationData {
     tasks: Vec<BackgroundTaskRow>,
     swarm_trees: Vec<SwarmTreeRow>,
     swarm_nodes: Vec<SwarmNodeRow>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    unreadable_rows: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -117,6 +119,7 @@ struct MergeOutcome {
     imported: u64,
     duplicate: u64,
     target_wins: u64,
+    incompatible_rows: u64,
     conflicts: Vec<MigrationConflict>,
 }
 
@@ -166,8 +169,13 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: "legacy_agent_coordination_supported".to_string(),
-                severity: if conflicts.is_empty() {
+                code: if source.unreadable_rows.is_empty() {
+                    "legacy_agent_coordination_supported"
+                } else {
+                    "coordination_rows_skipped"
+                }
+                .to_string(),
+                severity: if conflicts.is_empty() && source.unreadable_rows.is_empty() {
                     FindingSeverity::Info
                 } else {
                     FindingSeverity::Warning
@@ -204,7 +212,6 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
         initialize_snapshot(&staged_source)?;
         let source = load_coordination_data(&staged_source, DatabaseRole::StagedCurrent)?;
         let workspace_manifest = read_workspace_sessions_manifest(context)?;
-        validate_source_cross_references(&source, &workspace_manifest)?;
         let blocked_sessions = manifest_target_wins_session_ids(&workspace_manifest);
 
         let target_path = target_coordination_path(context.roots);
@@ -237,8 +244,12 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
             target_digest,
             merged_digest: coordination_digest(&merged)?,
             imported: outcome.imported,
-            skipped: outcome.duplicate.saturating_add(outcome.target_wins),
+            skipped: outcome
+                .duplicate
+                .saturating_add(outcome.target_wins)
+                .saturating_add(outcome.incompatible_rows),
             conflicts: outcome.target_wins,
+            incompatible_rows: outcome.incompatible_rows,
         };
         atomic_write_json(&coordination_manifest_path(context), &manifest)?;
 
@@ -248,6 +259,16 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: if manifest.incompatible_rows > 0 {
+                vec![MigrationDiagnostic {
+                code: "coordination_rows_skipped".to_string(), severity: FindingSeverity::Warning,
+                domain: Some(self.domain()),
+                message: format!("{} coordination records could not be represented in the target store and were preserved in the source.", manifest.incompatible_rows),
+                ..Default::default()
+            }]
+            } else {
+                Vec::new()
+            },
             ..MigrationDomainResult::default()
         })
     }
@@ -272,7 +293,7 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
                 "staged Agent coordination merge differs from its manifest".to_string(),
             ));
         }
-        validate_source_cross_references(&source, &read_workspace_sessions_manifest(context)?)
+        Ok(())
     }
 
     fn commit(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
@@ -312,7 +333,7 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
     }
 
     fn validate_commit(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
-        validate_committed_coordination_cross_references(context)
+        validate_committed_coordination_storage(context)
     }
 
     fn rollback_unverified(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
@@ -338,7 +359,7 @@ impl LegacyDomainAdapter for AgentCoordinationAdapter {
     }
 }
 
-pub(crate) fn validate_committed_coordination_cross_references(
+pub(crate) fn validate_committed_coordination_storage(
     context: &DomainContext<'_>,
 ) -> LegacyMigrationResult<()> {
     let manifest = read_coordination_manifest(context)?;
@@ -352,11 +373,7 @@ pub(crate) fn validate_committed_coordination_cross_references(
                 .to_string(),
         ));
     }
-    let source = load_coordination_data(
-        &stage_domain_dir(context, "agent-coordination").join("source.sqlite"),
-        DatabaseRole::StagedCurrent,
-    )?;
-    validate_source_cross_references(&source, &read_workspace_sessions_manifest(context)?)
+    Ok(())
 }
 
 fn source_coordination_path(roots: &MigrationRoots) -> PathBuf {
@@ -431,8 +448,10 @@ fn load_coordination_data(
                 "delivered_parent_dialog_turn_id",
             )
             .map_err(|error| owner_error("inspect coordination delivery columns", error))?;
+    let mut unreadable_rows = Vec::new();
     let sessions = query_rows(
         &connection,
+        &mut unreadable_rows,
         path,
         "SELECT parent_session_id, next_auto_agent_seq, updated_at_ms FROM coordination_sessions ORDER BY parent_session_id",
         |row| {
@@ -445,6 +464,7 @@ fn load_coordination_data(
     )?;
     let agents = query_rows(
         &connection,
+        &mut unreadable_rows,
         path,
         "SELECT agent_pk, parent_session_id, agent_id, child_session_id, next_bg_seq, state, created_at_ms FROM agents ORDER BY agent_pk",
         |row| {
@@ -464,7 +484,7 @@ fn load_coordination_data(
     } else {
         "SELECT task_pk, parent_session_id, agent_pk, bg_task_id, bg_ordinal, parent_dialog_turn_id, parent_tool_call_id, child_dialog_turn_id, status, error_code, error_message, execution_owner_token, created_at_ms, terminal_at_ms, NULL, NULL FROM background_tasks ORDER BY task_pk"
     };
-    let tasks = query_rows(&connection, path, task_sql, |row| {
+    let tasks = query_rows(&connection, &mut unreadable_rows, path, task_sql, |row| {
         Ok(BackgroundTaskRow {
             task_pk: row.get(0)?,
             parent_session_id: row.get(1)?,
@@ -488,6 +508,7 @@ fn load_coordination_data(
         (
             query_rows(
                 &connection,
+                &mut unreadable_rows,
                 path,
                 "SELECT root_session_id, created_at_ms FROM swarm_trees ORDER BY root_session_id",
                 |row| {
@@ -499,6 +520,7 @@ fn load_coordination_data(
             )?,
             query_rows(
                 &connection,
+                &mut unreadable_rows,
                 path,
                 "SELECT session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms FROM swarm_nodes ORDER BY depth, session_id",
                 |row| {
@@ -522,16 +544,17 @@ fn load_coordination_data(
         tasks,
         swarm_trees,
         swarm_nodes,
+        unreadable_rows,
     };
-    validate_coordination_data(&data)?;
     Ok(data)
 }
 
 fn query_rows<T, F>(
     connection: &Connection,
+    unreadable_rows: &mut Vec<String>,
     path: &Path,
     sql: &str,
-    mapper: F,
+    mut mapper: F,
 ) -> LegacyMigrationResult<Vec<T>>
 where
     F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
@@ -539,11 +562,24 @@ where
     let mut statement = connection
         .prepare(sql)
         .map_err(|error| db_error(path, error))?;
-    let rows = statement
-        .query_map([], mapper)
-        .map_err(|error| db_error(path, error))?;
-    rows.collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|error| db_error(path, error))
+    let mut rows = statement.query([]).map_err(|error| db_error(path, error))?;
+    let mut parsed = Vec::new();
+    while let Some(row) = rows.next().map_err(|error| db_error(path, error))? {
+        match mapper(row) {
+            Ok(value) => parsed.push(value),
+            Err(_) => {
+                let mut digest = Sha256::new();
+                digest.update(sql.as_bytes());
+                for column in 0..row.as_ref().column_count() {
+                    let value = row.get_ref(column).map_err(|error| db_error(path, error))?;
+                    digest.update(format!("{value:?}").as_bytes());
+                    digest.update([0]);
+                }
+                unreadable_rows.push(hex::encode(digest.finalize()));
+            }
+        }
+    }
+    Ok(parsed)
 }
 
 fn validate_required_tables(
@@ -630,235 +666,6 @@ fn table_columns(
         .map_err(|error| db_error(path, error))
 }
 
-fn validate_coordination_data(data: &CoordinationData) -> LegacyMigrationResult<()> {
-    let mut session_keys = HashSet::new();
-    for row in &data.sessions {
-        validate_session(&row.parent_session_id)?;
-        if row.next_auto_agent_seq < 1 || row.updated_at_ms < 0 {
-            return unsupported("coordination Session counters or timestamps are invalid");
-        }
-        if !session_keys.insert(row.parent_session_id.as_str()) {
-            return unsupported("coordination Session identities are not unique");
-        }
-    }
-
-    let mut agent_pks = HashSet::new();
-    let mut agent_ids = HashSet::new();
-    let mut child_ids = HashSet::new();
-    for row in &data.agents {
-        validate_session(&row.parent_session_id)?;
-        if let Some(child) = row.child_session_id.as_deref() {
-            validate_session(child)?;
-            if !child_ids.insert((row.parent_session_id.as_str(), child)) {
-                return unsupported("Agent child Session identities are not unique per parent");
-            }
-        }
-        if row.agent_pk <= 0
-            || row.next_bg_seq < 1
-            || row.created_at_ms < 0
-            || !matches!(row.state.as_str(), "active" | "historical")
-        {
-            return unsupported("Agent coordination row contains invalid owner fields");
-        }
-        validate_coordination_agent_id(&row.agent_id)
-            .map_err(|error| owner_error("validate legacy agent id", error))?;
-        if !agent_pks.insert(row.agent_pk)
-            || !agent_ids.insert((row.parent_session_id.as_str(), row.agent_id.as_str()))
-        {
-            return unsupported("Agent coordination identities are not unique");
-        }
-    }
-
-    let agents = data
-        .agents
-        .iter()
-        .map(|row| (row.agent_pk, row))
-        .collect::<HashMap<_, _>>();
-    let mut task_pks = HashSet::new();
-    let mut task_ids = HashSet::new();
-    let mut task_ordinals = HashSet::new();
-    for row in &data.tasks {
-        validate_session(&row.parent_session_id)?;
-        let Some(agent) = agents.get(&row.agent_pk) else {
-            return unsupported("background Task references a missing Agent");
-        };
-        if agent.parent_session_id != row.parent_session_id {
-            return unsupported("background Task parent Session differs from its Agent");
-        }
-        if row.task_pk <= 0
-            || row.bg_task_id.is_empty()
-            || row.bg_ordinal < 1
-            || row.parent_dialog_turn_id.is_empty()
-            || row.parent_tool_call_id.is_empty()
-            || row.child_dialog_turn_id.is_empty()
-            || row.execution_owner_token.is_empty()
-            || row.created_at_ms < 0
-            || row.terminal_at_ms.is_some_and(|value| value < 0)
-            || row.delivered_at_ms.is_some_and(|value| value < 0)
-            || !matches!(
-                row.status.as_str(),
-                "running"
-                    | "completed"
-                    | "partial_timeout"
-                    | "failed"
-                    | "cancelled"
-                    | "interrupted"
-            )
-        {
-            return unsupported("background Task row contains invalid owner fields");
-        }
-        if !task_pks.insert(row.task_pk)
-            || !task_ids.insert((row.parent_session_id.as_str(), row.bg_task_id.as_str()))
-            || !task_ordinals.insert((row.agent_pk, row.bg_ordinal))
-        {
-            return unsupported("background Task identities are not unique");
-        }
-    }
-
-    let tree_ids = data
-        .swarm_trees
-        .iter()
-        .map(|row| row.root_session_id.as_str())
-        .collect::<HashSet<_>>();
-    if tree_ids.len() != data.swarm_trees.len() {
-        return unsupported("Swarm tree identities are not unique");
-    }
-    for row in &data.swarm_trees {
-        validate_session(&row.root_session_id)?;
-        if row.created_at_ms < 0 {
-            return unsupported("Swarm tree timestamp is invalid");
-        }
-    }
-    let nodes = data
-        .swarm_nodes
-        .iter()
-        .map(|row| (row.session_id.as_str(), row))
-        .collect::<HashMap<_, _>>();
-    if nodes.len() != data.swarm_nodes.len() {
-        return unsupported("Swarm node identities are not unique");
-    }
-    for row in &data.swarm_nodes {
-        validate_session(&row.session_id)?;
-        validate_session(&row.root_session_id)?;
-        if !tree_ids.contains(row.root_session_id.as_str())
-            || row.agent_type.trim().is_empty()
-            || row.depth < 0
-            || row.created_at_ms < 0
-        {
-            return unsupported("Swarm node contains invalid owner fields");
-        }
-        match row.parent_session_id.as_deref() {
-            None if row.session_id == row.root_session_id && row.depth == 0 => {}
-            Some(parent_id) => {
-                let Some(parent) = nodes.get(parent_id) else {
-                    return unsupported("Swarm node references a missing parent node");
-                };
-                if parent.root_session_id != row.root_session_id
-                    || parent.depth.saturating_add(1) != row.depth
-                {
-                    return unsupported("Swarm node lineage is inconsistent");
-                }
-            }
-            _ => return unsupported("Swarm root node shape is invalid"),
-        }
-    }
-    Ok(())
-}
-
-fn validate_source_cross_references(
-    data: &CoordinationData,
-    manifest: &WorkspaceSessionsManifest,
-) -> LegacyMigrationResult<()> {
-    let sessions = manifest
-        .sessions
-        .iter()
-        .map(|entry| (entry.session_id.as_str(), entry))
-        .collect::<HashMap<_, _>>();
-    let mut turns = HashMap::<&str, BTreeSet<&str>>::new();
-    for entry in &manifest.sessions {
-        turns
-            .entry(entry.session_id.as_str())
-            .or_default()
-            .extend(entry.turn_ids.iter().map(String::as_str));
-    }
-    for entry in &manifest.runtime_events {
-        turns
-            .entry(entry.session_id.as_str())
-            .or_default()
-            .extend(entry.turn_ids.iter().map(String::as_str));
-    }
-    let require_session = |session_id: &str| -> LegacyMigrationResult<()> {
-        if sessions.contains_key(session_id) {
-            Ok(())
-        } else {
-            unsupported(format!(
-                "Agent coordination references missing Session {session_id}"
-            ))
-        }
-    };
-    let require_turn = |session_id: &str, turn_id: &str| -> LegacyMigrationResult<()> {
-        if turns
-            .get(session_id)
-            .is_some_and(|values| values.contains(turn_id))
-        {
-            Ok(())
-        } else {
-            unsupported(format!(
-                "Agent coordination references missing Turn {turn_id} in Session {session_id}"
-            ))
-        }
-    };
-    for row in &data.sessions {
-        require_session(&row.parent_session_id)?;
-    }
-    let agents = data
-        .agents
-        .iter()
-        .map(|row| (row.agent_pk, row))
-        .collect::<HashMap<_, _>>();
-    for row in &data.agents {
-        require_session(&row.parent_session_id)?;
-        if let Some(child_id) = row.child_session_id.as_deref() {
-            require_session(child_id)?;
-            let relationship = sessions[child_id].relationship.as_ref().ok_or_else(|| {
-                LegacyMigrationError::UnsupportedSource(format!(
-                    "Agent child Session {child_id} has no parent relationship"
-                ))
-            })?;
-            if relationship.parent_session_id.as_deref() != Some(&row.parent_session_id) {
-                return unsupported(format!(
-                    "Agent child Session {child_id} has a different persisted parent"
-                ));
-            }
-        }
-    }
-    for row in &data.tasks {
-        let agent = agents[&row.agent_pk];
-        let child_session_id = agent.child_session_id.as_deref().ok_or_else(|| {
-            LegacyMigrationError::UnsupportedSource(format!(
-                "background Task {} references an Agent without a child Session",
-                row.bg_task_id
-            ))
-        })?;
-        require_turn(&row.parent_session_id, &row.parent_dialog_turn_id)?;
-        require_turn(child_session_id, &row.child_dialog_turn_id)?;
-        if let Some(delivered_turn) = row.delivered_parent_dialog_turn_id.as_deref() {
-            require_turn(&row.parent_session_id, delivered_turn)?;
-        }
-    }
-    for row in &data.swarm_trees {
-        require_session(&row.root_session_id)?;
-    }
-    for row in &data.swarm_nodes {
-        require_session(&row.session_id)?;
-        require_session(&row.root_session_id)?;
-        if let Some(parent) = row.parent_session_id.as_deref() {
-            require_session(parent)?;
-        }
-    }
-    Ok(())
-}
-
 fn merge_coordination_database(
     source_path: &Path,
     target_path: &Path,
@@ -875,7 +682,10 @@ fn merge_coordination_database(
     let transaction = connection
         .transaction()
         .map_err(|error| db_error(target_path, error))?;
-    let mut outcome = MergeOutcome::default();
+    let mut outcome = MergeOutcome {
+        incompatible_rows: source.unreadable_rows.len() as u64,
+        ..Default::default()
+    };
     merge_coordination_sessions(
         &transaction,
         &source.sessions,
@@ -938,26 +748,26 @@ fn merge_coordination_sessions(
             .query_row(
                 "SELECT parent_session_id, next_auto_agent_seq, updated_at_ms FROM coordination_sessions WHERE parent_session_id = ?1",
                 params![row.parent_session_id],
-                |record| Ok(CoordinationSessionRow {
+                |record| Ok((|| -> rusqlite::Result<CoordinationSessionRow> { Ok(CoordinationSessionRow {
                     parent_session_id: record.get(0)?,
                     next_auto_agent_seq: record.get(1)?,
                     updated_at_ms: record.get(2)?,
-                }),
+                }) })()),
             )
             .optional()
             .map_err(|error| db_error(path, error))?;
         match existing {
-            Some(existing) if existing == *row => outcome.duplicate += 1,
+            Some(Ok(existing)) if existing == *row => outcome.duplicate += 1,
             Some(_) => record_target_win(
                 outcome,
                 "coordination_session_target_wins",
                 &row.parent_session_id,
             ),
             None => {
-                transaction.execute(
+                if !insert_compatible_row(transaction.execute(
                     "INSERT INTO coordination_sessions (parent_session_id, next_auto_agent_seq, updated_at_ms) VALUES (?1, ?2, ?3)",
                     params![row.parent_session_id, row.next_auto_agent_seq, row.updated_at_ms],
-                ).map_err(|error| db_error(path, error))?;
+                ), outcome, path)? { continue; }
                 outcome.imported += 1;
             }
         }
@@ -1010,10 +820,10 @@ fn merge_agents(
             }
         }
         if candidates.is_empty() {
-            transaction.execute(
+            if !insert_compatible_row(transaction.execute(
                 "INSERT INTO agents (parent_session_id, agent_id, child_session_id, next_bg_seq, state, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![row.parent_session_id, row.agent_id, row.child_session_id, row.next_bg_seq, row.state, row.created_at_ms],
-            ).map_err(|error| db_error(path, error))?;
+            ), outcome, path)? { continue; }
             let pk = transaction.last_insert_rowid();
             mapping.insert(row.agent_pk, AgentMergeTarget::Imported(pk));
             outcome.imported += 1;
@@ -1021,8 +831,9 @@ fn merge_agents(
         }
         if candidates.len() == 1 {
             let pk = *candidates.iter().next().expect("one candidate exists");
-            let existing = load_agent_by_pk(transaction, path, pk)?;
-            if agent_logically_equal(&existing, row) {
+            if load_agent_by_pk(transaction, path, pk)
+                .is_ok_and(|existing| agent_logically_equal(&existing, row))
+            {
                 mapping.insert(row.agent_pk, AgentMergeTarget::Existing(pk));
                 outcome.duplicate += 1;
                 continue;
@@ -1056,7 +867,8 @@ fn merge_background_tasks(
             continue;
         }
         let Some(agent_target) = agent_map.get(&row.agent_pk).copied() else {
-            return unsupported("background Task Agent mapping was not constructed");
+            outcome.incompatible_rows += 1;
+            continue;
         };
         let Some(agent_pk) = agent_target.agent_pk() else {
             record_target_win(
@@ -1084,18 +896,18 @@ fn merge_background_tasks(
             .flatten()
             .collect::<BTreeSet<_>>();
         if candidates.is_empty() {
-            transaction.execute(
+            if !insert_compatible_row(transaction.execute(
                 "INSERT INTO background_tasks (parent_session_id, agent_pk, bg_task_id, bg_ordinal, parent_dialog_turn_id, parent_tool_call_id, child_dialog_turn_id, status, error_code, error_message, execution_owner_token, created_at_ms, terminal_at_ms, delivered_at_ms, delivered_parent_dialog_turn_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 params![row.parent_session_id, agent_pk, row.bg_task_id, row.bg_ordinal, row.parent_dialog_turn_id, row.parent_tool_call_id, row.child_dialog_turn_id, row.status, row.error_code, row.error_message, row.execution_owner_token, row.created_at_ms, row.terminal_at_ms, row.delivered_at_ms, row.delivered_parent_dialog_turn_id],
-            ).map_err(|error| db_error(path, error))?;
+            ), outcome, path)? { continue; }
             outcome.imported += 1;
         } else if candidates.len() == 1 {
             let existing = load_task_by_pk(
                 transaction,
                 path,
                 *candidates.iter().next().expect("one candidate exists"),
-            )?;
-            if task_logically_equal(&existing, row, agent_pk) {
+            );
+            if existing.is_ok_and(|existing| task_logically_equal(&existing, row, agent_pk)) {
                 outcome.duplicate += 1;
             } else {
                 record_target_win(outcome, "coordination_task_target_wins", &row.bg_task_id);
@@ -1128,28 +940,34 @@ fn merge_swarm_trees(
                 "SELECT root_session_id, created_at_ms FROM swarm_trees WHERE root_session_id = ?1",
                 params![row.root_session_id],
                 |record| {
-                    Ok(SwarmTreeRow {
-                        root_session_id: record.get(0)?,
-                        created_at_ms: record.get(1)?,
-                    })
+                    Ok((|| -> rusqlite::Result<SwarmTreeRow> {
+                        Ok(SwarmTreeRow {
+                            root_session_id: record.get(0)?,
+                            created_at_ms: record.get(1)?,
+                        })
+                    })())
                 },
             )
             .optional()
             .map_err(|error| db_error(path, error))?;
         match existing {
-            Some(existing) if existing == *row => outcome.duplicate += 1,
+            Some(Ok(existing)) if existing == *row => outcome.duplicate += 1,
             Some(_) => record_target_win(
                 outcome,
                 "coordination_swarm_tree_target_wins",
                 &row.root_session_id,
             ),
             None => {
-                transaction
-                    .execute(
+                if !insert_compatible_row(
+                    transaction.execute(
                         "INSERT INTO swarm_trees (root_session_id, created_at_ms) VALUES (?1, ?2)",
                         params![row.root_session_id, row.created_at_ms],
-                    )
-                    .map_err(|error| db_error(path, error))?;
+                    ),
+                    outcome,
+                    path,
+                )? {
+                    continue;
+                }
                 outcome.imported += 1;
             }
         }
@@ -1182,25 +1000,42 @@ fn merge_swarm_nodes(
         let existing = transaction.query_row(
             "SELECT session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms FROM swarm_nodes WHERE session_id = ?1",
             params![row.session_id],
-            |record| Ok(SwarmNodeRow { session_id: record.get(0)?, root_session_id: record.get(1)?, parent_session_id: record.get(2)?, agent_type: record.get(3)?, depth: record.get(4)?, created_at_ms: record.get(5)? }),
+            |record| Ok((|| -> rusqlite::Result<SwarmNodeRow> { Ok(SwarmNodeRow { session_id: record.get(0)?, root_session_id: record.get(1)?, parent_session_id: record.get(2)?, agent_type: record.get(3)?, depth: record.get(4)?, created_at_ms: record.get(5)? }) })()),
         ).optional().map_err(|error| db_error(path, error))?;
         match existing {
-            Some(existing) if existing == *row => outcome.duplicate += 1,
+            Some(Ok(existing)) if existing == *row => outcome.duplicate += 1,
             Some(_) => record_target_win(
                 outcome,
                 "coordination_swarm_node_target_wins",
                 &row.session_id,
             ),
             None => {
-                transaction.execute(
+                if !insert_compatible_row(transaction.execute(
                     "INSERT INTO swarm_nodes (session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     params![row.session_id, row.root_session_id, row.parent_session_id, row.agent_type, row.depth, row.created_at_ms],
-                ).map_err(|error| db_error(path, error))?;
+                ), outcome, path)? { continue; }
                 outcome.imported += 1;
             }
         }
     }
     Ok(())
+}
+
+fn insert_compatible_row(
+    result: rusqlite::Result<usize>,
+    outcome: &mut MergeOutcome,
+    path: &Path,
+) -> LegacyMigrationResult<bool> {
+    match result {
+        Ok(_) => Ok(true),
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            outcome.incompatible_rows += 1;
+            Ok(false)
+        }
+        Err(error) => Err(db_error(path, error)),
+    }
 }
 
 fn load_agent_by_pk(
@@ -1497,15 +1332,6 @@ fn validate_current_database(path: &Path) -> LegacyMigrationResult<()> {
             )));
         }
     }
-    let foreign_key_error: Option<String> = connection
-        .query_row("PRAGMA foreign_key_check", [], |row| row.get(0))
-        .optional()
-        .map_err(|error| db_error(path, error))?;
-    if foreign_key_error.is_some() {
-        return Err(LegacyMigrationError::InvalidRequest(
-            "Agent coordination foreign-key validation failed".to_string(),
-        ));
-    }
     Ok(())
 }
 
@@ -1551,14 +1377,6 @@ fn manifest_target_wins_session_ids(manifest: &WorkspaceSessionsManifest) -> BTr
         .collect()
 }
 
-fn validate_session(session_id: &str) -> LegacyMigrationResult<()> {
-    validate_session_id(session_id).map_err(|error| {
-        LegacyMigrationError::UnsupportedSource(format!(
-            "Agent coordination contains an invalid Session id: {error}"
-        ))
-    })
-}
-
 fn reset_stage_file(path: &Path) -> LegacyMigrationResult<()> {
     remove_file_if_present(path)?;
     remove_sqlite_sidecars(path)
@@ -1578,10 +1396,6 @@ fn remove_file_if_present(path: &Path) -> LegacyMigrationResult<()> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(io_error(path, error)),
     }
-}
-
-fn unsupported<T>(detail: impl Into<String>) -> LegacyMigrationResult<T> {
-    Err(LegacyMigrationError::UnsupportedSource(detail.into()))
 }
 
 fn owner_error(context: &str, error: impl std::fmt::Display) -> LegacyMigrationError {
@@ -1823,7 +1637,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_or_unknown_coordination_schema_blocks_the_session_plan() {
+    fn missing_or_unknown_coordination_schema_skips_only_coordination_and_dependents() {
         let temp = test_tempdir("coordination-schema");
         let roots = fixture_roots(temp.path());
         copy_fixture(&roots);
@@ -1834,9 +1648,13 @@ mod tests {
             .unwrap();
         let missing = engine.plan(&source, selection.clone(), &CancellationToken::default());
         assert!(missing
-            .unwrap_err()
-            .to_string()
-            .contains("requires a readable legacy coordination.sqlite"));
+            .unwrap()
+            .findings
+            .iter()
+            .any(|finding| !finding.migratable
+                && finding
+                    .detail
+                    .contains("requires a readable legacy coordination.sqlite")));
 
         let connection = materialize_coordination(&roots, false);
         connection.pragma_update(None, "user_version", 99).unwrap();
@@ -1846,9 +1664,11 @@ mod tests {
             .unwrap();
         let unknown = engine.plan(&source, selection, &CancellationToken::default());
         assert!(unknown
-            .unwrap_err()
-            .to_string()
-            .contains("schema 99 is not supported"));
+            .unwrap()
+            .findings
+            .iter()
+            .any(|finding| !finding.migratable
+                && finding.detail.contains("schema 99 is not supported")));
     }
 
     #[test]
@@ -2026,7 +1846,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_and_cancelled_runs_leave_the_legacy_source_bytes_unchanged() {
+    fn missing_turn_is_imported_and_cancellation_keeps_the_source_unchanged() {
         let temp = test_tempdir("coordination-source-read-only");
         let roots = fixture_roots(temp.path());
         copy_fixture(&roots);
@@ -2047,11 +1867,16 @@ mod tests {
         let plan = engine
             .plan(&source, selection.clone(), &CancellationToken::default())
             .unwrap();
-        let failed = engine.execute(&plan, &CancellationToken::default(), &NoCrashInjection);
-        assert!(failed
-            .unwrap_err()
-            .to_string()
-            .contains("references missing Turn missing-turn"));
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert_eq!(report.status, MigrationRunStatus::Completed);
+        let imported = load_coordination_data(
+            &target_coordination_path(&roots),
+            DatabaseRole::CurrentTarget,
+        )
+        .unwrap();
+        assert_eq!(imported.tasks[0].parent_dialog_turn_id, "missing-turn");
         assert_eq!(hash_source_roots(&roots), source_hash);
 
         let cancellation = CancellationToken::default();
@@ -2059,6 +1884,141 @@ mod tests {
         let cancelled = engine.plan(&source, selection, &cancellation);
         assert!(matches!(cancelled, Err(LegacyMigrationError::Cancelled)));
         assert_eq!(hash_source_roots(&roots), source_hash);
+    }
+
+    #[test]
+    fn historical_business_inconsistencies_and_bad_rows_do_not_block_merge() {
+        let temp = test_tempdir("permissive-coordination");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        let connection = materialize_coordination(&roots, false);
+        connection.execute_batch(r#"
+            UPDATE coordination_sessions SET next_auto_agent_seq = -2, updated_at_ms = -1;
+            UPDATE agents SET child_session_id = 'missing-child', next_bg_seq = 0, created_at_ms = -1;
+            UPDATE background_tasks SET parent_dialog_turn_id = 'missing-turn', parent_tool_call_id = '', child_dialog_turn_id = '', execution_owner_token = '', status = 'running', bg_ordinal = 0, created_at_ms = -1;
+            UPDATE swarm_nodes SET parent_session_id = 'missing-parent', depth = -9, agent_type = '', created_at_ms = -1;
+            INSERT INTO agents VALUES (99, 'parent-99', 'bad-type', NULL, 'not-an-integer', 'active', 0);
+            INSERT INTO agents VALUES (100, 'parent-100', 'unknown-state', NULL, 1, 'retired-old-state', 0);
+            INSERT INTO swarm_nodes VALUES ('orphan-node', 'missing-tree', NULL, '', -1, -1);
+            INSERT INTO background_tasks (parent_session_id, agent_pk, bg_task_id, bg_ordinal, parent_dialog_turn_id, parent_tool_call_id, child_dialog_turn_id, status, execution_owner_token, created_at_ms)
+            VALUES ('orphan', 999, 'orphan-task', 1, '', '', '', 'running', '', 0);
+        "#).unwrap();
+        drop(connection);
+        let source_hash = hash_source_roots(&roots);
+        let selection = session_selection();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        let result = report
+            .domain_results
+            .iter()
+            .find(|result| result.domain == MigrationDomainId::AgentCoordination)
+            .unwrap();
+        assert_eq!(result.state, MigrationDomainState::Verified);
+        assert_eq!(result.skipped, 4);
+        assert_eq!(result.warnings[0].code, "coordination_rows_skipped");
+        let target = load_coordination_data(
+            &target_coordination_path(&roots),
+            DatabaseRole::CurrentTarget,
+        )
+        .unwrap();
+        assert_eq!(target.sessions[0].next_auto_agent_seq, -2);
+        assert_eq!(
+            target.agents[0].child_session_id.as_deref(),
+            Some("missing-child")
+        );
+        assert_eq!(target.tasks.len(), 1);
+        assert_eq!(target.tasks[0].parent_dialog_turn_id, "missing-turn");
+        assert_eq!(target.tasks[0].status, "running");
+        assert_eq!(target.tasks[0].execution_owner_token, "");
+        assert!(target.swarm_nodes.iter().all(|row| row.depth == -9));
+        assert_eq!(hash_source_roots(&roots), source_hash);
+        engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert_eq!(
+            coordination_digest(&target).unwrap(),
+            coordination_digest(
+                &load_coordination_data(
+                    &target_coordination_path(&roots),
+                    DatabaseRole::CurrentTarget
+                )
+                .unwrap()
+            )
+            .unwrap()
+        );
+        let layout = openbitfun_legacy_migration::MigrationLayout::new(&roots, &plan.run_id);
+        let context = DomainContext {
+            roots: &roots,
+            layout: &layout,
+            plan: &plan,
+            step: plan
+                .steps
+                .iter()
+                .find(|step| step.domain == MigrationDomainId::AgentCoordination)
+                .unwrap(),
+        };
+        let manifest = read_coordination_manifest(&context).unwrap();
+        let mut old = serde_json::to_value(&manifest).unwrap();
+        old.as_object_mut().unwrap().remove("incompatibleRows");
+        assert_eq!(
+            serde_json::from_value::<CoordinationManifest>(old)
+                .unwrap()
+                .incompatible_rows,
+            0
+        );
+    }
+
+    #[test]
+    fn unreadable_target_record_is_preserved_and_still_participates_in_change_detection() {
+        let temp = test_tempdir("target-row-preserved");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        drop(materialize_coordination(&roots, false));
+        let target = target_coordination_path(&roots);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        let connection = Connection::open(&target).unwrap();
+        initialize_coordination_schema(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO coordination_sessions VALUES ('session-1', 'broken-counter', 0)",
+                [],
+            )
+            .unwrap();
+        drop(connection);
+        let selection = session_selection();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+        engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        let before = coordination_digest(
+            &load_coordination_data(&target, DatabaseRole::CurrentTarget).unwrap(),
+        )
+        .unwrap();
+        let connection = Connection::open(&target).unwrap();
+        let value: String = connection.query_row("SELECT next_auto_agent_seq FROM coordination_sessions WHERE parent_session_id = 'session-1'", [], |row| row.get(0)).unwrap();
+        assert_eq!(value, "broken-counter");
+        connection.execute("UPDATE coordination_sessions SET next_auto_agent_seq = 'changed-counter' WHERE parent_session_id = 'session-1'", []).unwrap();
+        drop(connection);
+        let after = coordination_digest(
+            &load_coordination_data(&target, DatabaseRole::CurrentTarget).unwrap(),
+        )
+        .unwrap();
+        assert_ne!(before, after);
     }
 
     fn session_selection() -> MigrationSelection {

@@ -166,8 +166,8 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: "legacy_workspace_sessions_supported".to_string(),
-                severity: if plan.conflicts.is_empty() {
+                code: if !plan.conflicts.iter().any(|conflict| conflict.resolution == ConflictResolution::ItemSkipped) { "legacy_workspace_sessions_supported" } else { "session_items_skipped" }.to_string(),
+                severity: if plan.conflicts.is_empty() && plan.skipped_paths.is_empty() {
                     FindingSeverity::Info
                 } else {
                     FindingSeverity::Warning
@@ -194,7 +194,7 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
     }
 
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
-        let plan = plan_workspace_sessions(context.roots)?;
+        let mut plan = plan_workspace_sessions(context.roots)?;
         let domain_root = stage_domain_dir(context, "workspace-sessions");
         atomic_write_json(
             &domain_root.join("workspace_data.json"),
@@ -213,29 +213,49 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
         }
 
         let runtime = offline_runtime()?;
-        for session in &plan.sessions {
+        let mut failed_sessions = BTreeSet::new();
+        for session in &mut plan.sessions {
             if session.action != SessionImportAction::Import {
                 continue;
             }
             let sessions_root = domain_root.join("home").join(&session.runtime_relative);
             let store = OfflineSessionImportStore::new(&sessions_root);
-            runtime
-                .block_on(store.write_bundle(&session.bundle))
-                .map_err(|error| owner_error("write staged Session", error))?;
-            let staged_session = sessions_root.join(&session.bundle.metadata.session_id);
-            for (relative, source) in &session.auxiliary_files {
-                if relative == Path::new("state.json") {
-                    if let Some(bytes) = &session.state_bytes_override {
-                        atomic_write_bytes(&staged_session.join(relative), bytes)?;
-                        continue;
+            let staged_result = (|| -> LegacyMigrationResult<()> {
+                runtime
+                    .block_on(store.write_bundle(&session.bundle))
+                    .map_err(|error| owner_error("write staged Session", error))?;
+                let staged_session = sessions_root.join(&session.bundle.metadata.session_id);
+                for (relative, source) in &session.auxiliary_files {
+                    if relative == Path::new("state.json") {
+                        if let Some(bytes) = &session.state_bytes_override {
+                            atomic_write_bytes(&staged_session.join(relative), bytes)?;
+                            continue;
+                        }
                     }
+                    let source_bytes = fs::read(source).map_err(|error| io_error(source, error))?;
+                    atomic_write_bytes(&staged_session.join(relative), &source_bytes)?;
                 }
-                let source_bytes = fs::read(source).map_err(|error| io_error(source, error))?;
-                atomic_write_bytes(&staged_session.join(relative), &source_bytes)?;
+                require_tree_hash(&staged_session, &session.expected_hash)?;
+                Ok(())
+            })();
+            if staged_result.is_err() {
+                failed_sessions.insert(session.bundle.metadata.session_id.clone());
+                plan.conflicts.push(MigrationConflict {
+                    domain: self.domain(),
+                    code: "session_entry_skipped".into(),
+                    source_summary: session.bundle.metadata.session_id.clone(),
+                    target_summary: "Session could not be staged".into(),
+                    resolution: ConflictResolution::ItemSkipped,
+                });
+                plan.skipped_paths
+                    .push(session.bundle.metadata.session_id.clone());
             }
-            require_tree_hash(&staged_session, &session.expected_hash)?;
         }
 
+        plan.sessions
+            .retain(|session| !failed_sessions.contains(&session.bundle.metadata.session_id));
+        plan.runtime_events
+            .retain(|event| !failed_sessions.contains(&event.session_id));
         for event in &plan.runtime_events {
             if event.action != SessionImportAction::Import {
                 continue;
@@ -304,7 +324,8 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 .assistant_workspaces
                 .iter()
                 .filter(|entry| entry.action != SessionImportAction::Import)
-                .count();
+                .count()
+            + manifest.skipped_paths.len();
         let mut warnings = manifest
             .skipped_paths
             .iter()
@@ -313,11 +334,17 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 severity: FindingSeverity::Info,
                 domain: Some(self.domain()),
                 relative_path: Some(path.clone()),
-                message: "A non-owned or rebuildable Session path was left in the legacy source"
+                message: "An unreadable, unsupported, or non-owned Session path was preserved in the legacy source"
                     .to_string(),
                 action: None,
             })
             .collect::<Vec<_>>();
+        warnings.extend(plan.conflicts.iter().filter(|conflict| conflict.resolution == ConflictResolution::ItemSkipped).map(|conflict| MigrationDiagnostic {
+            code: conflict.code.clone(), severity: FindingSeverity::Warning,
+            domain: Some(self.domain()),
+            message: "An unreadable or unsupported source item was skipped; other Sessions were imported.".to_string(),
+            ..Default::default()
+        }));
         let orphaned_relationships = orphaned_session_relationship_count(&manifest);
         if orphaned_relationships > 0 {
             warnings.push(MigrationDiagnostic {
@@ -589,21 +616,137 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
     }
 }
 
+fn skipped_workspace(id: &str) -> MigrationConflict {
+    MigrationConflict {
+        domain: MigrationDomainId::WorkspaceSessions,
+        code: "workspace_item_skipped".into(),
+        source_summary: id.to_string(),
+        target_summary: "Source workspace retained; other data can continue.".into(),
+        resolution: ConflictResolution::ItemSkipped,
+    }
+}
+
+fn repair_workspace_lists(data: &mut WorkspacePersistenceData, miniapps_root: &Path) {
+    for list in [
+        &mut data.opened_workspace_ids,
+        &mut data.recent_workspaces,
+        &mut data.recent_assistant_workspaces,
+    ] {
+        let mut seen = HashSet::new();
+        list.retain(|id| data.workspaces.contains_key(id) && seen.insert(id.clone()));
+    }
+    let recent = data
+        .recent_workspaces
+        .iter()
+        .chain(&data.recent_assistant_workspaces)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    data.recent_workspaces.retain(|id| {
+        data.workspaces[id].workspace_kind != WorkspaceKind::Assistant
+            && !data.workspaces[id].root_path.starts_with(miniapps_root)
+    });
+    data.recent_assistant_workspaces
+        .retain(|id| data.workspaces[id].workspace_kind == WorkspaceKind::Assistant);
+    for id in recent {
+        let workspace = &data.workspaces[&id];
+        if workspace.workspace_kind == WorkspaceKind::Assistant {
+            if !data.recent_assistant_workspaces.contains(&id) {
+                data.recent_assistant_workspaces.push(id);
+            }
+        } else if !workspace.root_path.starts_with(miniapps_root)
+            && !data.recent_workspaces.contains(&id)
+        {
+            data.recent_workspaces.push(id);
+        }
+    }
+    if data
+        .current_workspace_id
+        .as_ref()
+        .is_some_and(|id| !data.workspaces.contains_key(id))
+    {
+        data.current_workspace_id = None;
+    }
+    if let Some(id) = &data.current_workspace_id {
+        if !data.opened_workspace_ids.contains(id) {
+            data.opened_workspace_ids.push(id.clone());
+        }
+    }
+}
+
 fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<WorkspaceSessionsPlan> {
     let source_workspace_path = source_workspace_data_path(roots);
-    let legacy: LegacyWorkspacePersistenceData =
-        read_bounded_json(&roots.legacy_user_root, &source_workspace_path)?;
+    let mut conflicts = Vec::new();
+    let mut raw: serde_json::Value =
+        match read_bounded_json(&roots.legacy_user_root, &source_workspace_path) {
+            Ok(value) => value,
+            Err(_) => {
+                conflicts.push(skipped_workspace("registry"));
+                serde_json::json!({})
+            }
+        };
+    let mut workspaces = serde_json::Map::new();
+    if let Some(entries) = raw.get("workspaces").and_then(serde_json::Value::as_object) {
+        for (id, value) in entries {
+            if serde_json::from_value::<WorkspaceInfo>(value.clone()).is_ok() {
+                workspaces.insert(id.clone(), value.clone());
+            } else {
+                conflicts.push(skipped_workspace(id));
+            }
+        }
+    }
+    if !raw.is_object() {
+        raw = serde_json::json!({});
+    }
+    raw["workspaces"] = serde_json::Value::Object(workspaces);
+    for key in [
+        "opened_workspace_ids",
+        "recent_workspaces",
+        "recent_assistant_workspaces",
+    ] {
+        raw[key] = serde_json::Value::Array(
+            raw.get(key)
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|value| value.is_string())
+                .cloned()
+                .collect(),
+        );
+    }
+    if raw
+        .get("current_workspace_id")
+        .is_some_and(|value| !value.is_string())
+    {
+        raw["current_workspace_id"] = serde_json::Value::Null;
+    }
+    if serde_json::from_value::<Option<PrimaryAssistantKey>>(
+        raw.get("primary_assistant_key")
+            .cloned()
+            .unwrap_or_default(),
+    )
+    .is_err()
+    {
+        raw["primary_assistant_key"] = serde_json::Value::Null;
+    }
+    if serde_json::from_value::<chrono::DateTime<chrono::Utc>>(
+        raw.get("saved_at").cloned().unwrap_or_default(),
+    )
+    .is_err()
+    {
+        raw["saved_at"] = serde_json::json!(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH);
+    }
+    let legacy: LegacyWorkspacePersistenceData = serde_json::from_value(raw).map_err(json_error)?;
     let target_workspace_path = target_workspace_data_path(roots);
-    let target = read_optional_bounded_json::<WorkspacePersistenceData>(
+    let mut target = read_optional_bounded_json::<WorkspacePersistenceData>(
         &roots.target_user_root,
         &target_workspace_path,
     )?;
-    if let Some(target) = &target {
+    if let Some(target) = &mut target {
+        repair_workspace_lists(target, &roots.target_user_root.join("data/miniapps"));
         validate_workspace_persistence_data(target, &roots.target_user_root.join("data/miniapps"))
             .map_err(|error| owner_error("read current Workspace registry", error))?;
     }
 
-    let mut conflicts = Vec::new();
     let assistant_workspaces = plan_assistant_workspaces(roots, &mut conflicts)?;
     let mut assistant_path_relocations = BTreeMap::new();
     for workspace in &assistant_workspaces {
@@ -622,26 +765,32 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
     source_workspace_ids.sort();
     let mut requires_relocation = Vec::new();
     for source_id in source_workspace_ids {
-        let mut workspace = legacy.workspaces[&source_id].clone();
-        let relocated_assistant = (workspace.workspace_kind == WorkspaceKind::Assistant)
-            .then(|| assistant_path_relocations.get(&native_path_key(&workspace.root_path)))
-            .flatten()
-            .cloned();
-        if let Some(target_path) = &relocated_assistant {
-            workspace.root_path = target_path.clone();
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            let mut workspace = legacy.workspaces[&source_id].clone();
+            let relocated_assistant = (workspace.workspace_kind == WorkspaceKind::Assistant)
+                .then(|| assistant_path_relocations.get(&native_path_key(&workspace.root_path)))
+                .flatten()
+                .cloned();
+            if let Some(target_path) = &relocated_assistant {
+                workspace.root_path = target_path.clone();
+            }
+            normalize_legacy_workspace_for_current(&mut workspace)?;
+            let target_id = current_workspace_storage_id(&workspace)
+                .map_err(|error| owner_error("convert legacy Workspace id", error))?;
+            workspace.id = target_id.clone();
+            if workspace.workspace_kind != WorkspaceKind::Remote
+                && relocated_assistant.is_none()
+                && !workspace.root_path.exists()
+            {
+                requires_relocation.push(target_id.clone());
+            }
+            workspace_id_map.insert(source_id.clone(), target_id.clone());
+            converted.push((target_id, workspace));
+            Ok(())
+        })();
+        if inspect.is_err() {
+            conflicts.push(skipped_workspace(&source_id));
         }
-        normalize_legacy_workspace_for_current(&mut workspace)?;
-        let target_id = current_workspace_storage_id(&workspace)
-            .map_err(|error| owner_error("convert legacy Workspace id", error))?;
-        workspace.id = target_id.clone();
-        if workspace.workspace_kind != WorkspaceKind::Remote
-            && relocated_assistant.is_none()
-            && !workspace.root_path.exists()
-        {
-            requires_relocation.push(target_id.clone());
-        }
-        workspace_id_map.insert(source_id, target_id.clone());
-        converted.push((target_id, workspace));
     }
 
     let mut output_workspaces = target
@@ -701,7 +850,7 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
             opened_workspace_ids.push(current_id.clone());
         }
     }
-    let workspace_data = WorkspacePersistenceData {
+    let mut workspace_data = WorkspacePersistenceData {
         format_version: WORKSPACE_PERSISTENCE_FORMAT_VERSION,
         product_id: product_id().to_string(),
         workspaces: output_workspaces,
@@ -718,6 +867,10 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
             .map(|value| value.saved_at)
             .unwrap_or(legacy.saved_at),
     };
+    repair_workspace_lists(
+        &mut workspace_data,
+        &roots.target_user_root.join("data/miniapps"),
+    );
     validate_workspace_persistence_data(
         &workspace_data,
         &roots.target_user_root.join("data/miniapps"),
@@ -743,9 +896,7 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
                 .unwrap_or(0)
         })
         .sum::<u64>();
-    let workspace_bytes = fs::metadata(&source_workspace_path)
-        .map_err(|error| io_error(&source_workspace_path, error))?
-        .len();
+    let workspace_bytes = fs::metadata(&source_workspace_path).map_or(0, |metadata| metadata.len());
     let target_workspace_existed = target_workspace_path.exists();
     let target_workspace_hash = target_workspace_existed
         .then(|| hash_file(&target_workspace_path))
@@ -811,7 +962,16 @@ fn plan_assistant_workspaces(
     let mut planned = Vec::new();
     for source_path in child_directories(&source_root)? {
         let relative_path = PathBuf::from(file_name(&source_path)?);
-        let (expected_hash, logical_bytes) = hash_tree_with_size(&source_path)?;
+        let (expected_hash, logical_bytes) = match hash_tree_with_size(&source_path) {
+            Ok(value) => value,
+            Err(_) => {
+                conflicts.push(skipped_workspace(&relative_display(
+                    &roots.legacy_home_root,
+                    &source_path,
+                )));
+                continue;
+            }
+        };
         let target_path = target_root.join(&relative_path);
         let action = if !target_path.exists() {
             SessionImportAction::Import
@@ -973,130 +1133,170 @@ fn plan_sessions(
             .map_err(|_| LegacyMigrationError::PathEscape(sessions_root.clone()))?
             .to_path_buf();
         for session_dir in child_directories(&sessions_root)? {
-            let session_id = file_name(&session_dir)?;
-            validate_session_id(&session_id).map_err(|error| {
-                LegacyMigrationError::UnsupportedSource(format!(
-                    "legacy Session id is unsafe: {error}"
-                ))
-            })?;
-            let metadata_path = session_dir.join("metadata.json");
-            match fs::symlink_metadata(&metadata_path) {
-                Ok(_) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    skipped_paths.push(relative_display(&roots.legacy_home_root, &session_dir));
-                    continue;
+            let inspect = (|| -> LegacyMigrationResult<()> {
+                let session_id = file_name(&session_dir)?;
+                validate_session_id(&session_id).map_err(|error| {
+                    LegacyMigrationError::UnsupportedSource(format!(
+                        "legacy Session id is unsafe: {error}"
+                    ))
+                })?;
+                let metadata_path = session_dir.join("metadata.json");
+                match fs::symlink_metadata(&metadata_path) {
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        skipped_paths.push(relative_display(&roots.legacy_home_root, &session_dir));
+                        return Ok(());
+                    }
+                    Err(error) => return Err(io_error(&metadata_path, error)),
                 }
-                Err(error) => return Err(io_error(&metadata_path, error)),
-            }
-            let metadata_file: StoredSessionMetadataFile =
-                read_bounded_json(&roots.legacy_home_root, &metadata_path)?;
-            if metadata_file.schema_version > SESSION_STORAGE_SCHEMA_VERSION {
-                return Err(LegacyMigrationError::UnsupportedSource(format!(
-                    "Session {session_id} uses unsupported schema {}",
-                    metadata_file.schema_version
-                )));
-            }
-            if metadata_file.metadata.session_id != session_id {
-                return Err(LegacyMigrationError::UnsupportedSource(format!(
-                    "Session directory id does not match its metadata: {session_id}"
-                )));
-            }
-            let turns = read_session_turns(&roots.legacy_home_root, &session_dir, &session_id)?;
-            let mut session_metadata = metadata_file.metadata;
-            let relocated_assistant_path = relocate_assistant_session_metadata(
-                &mut session_metadata,
-                assistant_path_relocations,
-            );
-            let runtime_relative = relocated_assistant_path
-                .clone()
-                .map(assistant_session_runtime_relative)
-                .unwrap_or_else(|| source_runtime_relative.clone());
-            let bundle = OfflineSessionBundle {
-                metadata: session_metadata,
-                turns,
-            };
-            bundle
-                .validate()
-                .map_err(|error| owner_error("validate legacy Session", error))?;
-            let auxiliary_files = collect_auxiliary_session_files(
-                &roots.legacy_home_root,
-                &session_dir,
-                &mut skipped_paths,
-            )?;
-            let state_bytes_override = if relocated_assistant_path.is_some() {
-                relocate_assistant_session_state(
-                    &roots.legacy_home_root,
-                    &session_dir.join("state.json"),
-                    assistant_path_relocations,
-                )?
-            } else {
-                None
-            };
-            let expected_hash =
-                expected_session_hash(&bundle, &auxiliary_files, state_bytes_override.as_deref())?;
-            if auxiliary_files
-                .len()
-                .saturating_add(bundle.turns.len())
-                .saturating_add(1)
-                > MAX_SESSION_FILES
-            {
-                return Err(LegacyMigrationError::ResourceLimit(format!(
-                    "Session contains more than {MAX_SESSION_FILES} files: {}",
-                    session_dir.display()
-                )));
-            }
-            if expected_bundle_bytes(&bundle, &auxiliary_files, state_bytes_override.as_deref())?
-                > MAX_SESSION_BYTES
-            {
-                return Err(LegacyMigrationError::ResourceLimit(format!(
-                    "Session exceeds {MAX_SESSION_BYTES} bytes: {}",
-                    session_dir.display()
-                )));
-            }
-            if let Some(previous_hash) =
-                source_ids.insert(session_id.clone(), expected_hash.clone())
-            {
-                if previous_hash != expected_hash {
+                let metadata_file: StoredSessionMetadataFile =
+                    read_bounded_json(&roots.legacy_home_root, &metadata_path)?;
+                if metadata_file.schema_version > SESSION_STORAGE_SCHEMA_VERSION {
                     return Err(LegacyMigrationError::UnsupportedSource(format!(
-                        "legacy Session id appears with different contents: {session_id}"
+                        "Session {session_id} uses unsupported schema {}",
+                        metadata_file.schema_version
                     )));
                 }
-                skipped_paths.push(relative_display(&roots.legacy_home_root, &session_dir));
-                continue;
-            }
-
-            let target_same_path = roots
-                .target_home_root
-                .join(&runtime_relative)
-                .join(&session_id);
-            let action = match target_sessions.get(&session_id) {
-                None => SessionImportAction::Import,
-                Some(paths)
-                    if paths.len() == 1
-                        && paths[0] == target_same_path
-                        && hash_tree(&target_same_path)? == expected_hash =>
-                {
-                    SessionImportAction::Duplicate
+                if metadata_file.metadata.session_id != session_id {
+                    return Err(LegacyMigrationError::UnsupportedSource(format!(
+                        "Session directory id does not match its metadata: {session_id}"
+                    )));
                 }
-                Some(_) => {
-                    conflicts.push(MigrationConflict {
-                        domain: MigrationDomainId::WorkspaceSessions,
-                        code: "session_target_wins".to_string(),
-                        source_summary: format!("legacy Session {session_id}"),
-                        target_summary: format!("current Session {session_id}"),
-                        resolution: ConflictResolution::TargetWins,
+                let (turns, turn_issues) =
+                    read_session_turns(&roots.legacy_home_root, &session_dir, &session_id)?;
+                skipped_paths.extend(turn_issues.iter().cloned());
+                if !turn_issues.is_empty() {
+                    conflicts.push(MigrationConflict { domain: MigrationDomainId::WorkspaceSessions, code: "session_turns_recovered".into(), source_summary: session_id.clone(), target_summary: "Only readable, unambiguous Turns will be imported; inspect the original Session for omitted content.".into(), resolution: ConflictResolution::ItemSkipped });
+                }
+                let mut session_metadata = metadata_file.metadata;
+                // Legacy metadata counters can lag persisted Turns. Rebuild the
+                // derived count in the import copy without changing the source.
+                session_metadata.turn_count = turns.len();
+                let relocated_assistant_path = relocate_assistant_session_metadata(
+                    &mut session_metadata,
+                    assistant_path_relocations,
+                );
+                let runtime_relative = relocated_assistant_path
+                    .clone()
+                    .map(assistant_session_runtime_relative)
+                    .unwrap_or_else(|| source_runtime_relative.clone());
+                let bundle = OfflineSessionBundle {
+                    metadata: session_metadata,
+                    turns,
+                };
+                bundle
+                    .validate()
+                    .map_err(|error| owner_error("validate legacy Session", error))?;
+                let mut auxiliary_files = collect_auxiliary_session_files(
+                    &roots.legacy_home_root,
+                    &session_dir,
+                    &mut skipped_paths,
+                )?;
+                if !turn_issues.is_empty() {
+                    auxiliary_files.retain(|(relative, _)| {
+                        !matches!(
+                            relative.to_str(),
+                            Some("turn-catalog.json" | "token-anchors.json")
+                        )
                     });
-                    SessionImportAction::TargetWins
                 }
-            };
-            sessions.push(PlannedSession {
-                runtime_relative: runtime_relative.clone(),
-                bundle,
-                auxiliary_files,
-                state_bytes_override,
-                action,
-                expected_hash,
-            });
+                let state_bytes_override = if relocated_assistant_path.is_some()
+                    && auxiliary_files
+                        .iter()
+                        .any(|(relative, _)| relative == Path::new("state.json"))
+                {
+                    relocate_assistant_session_state(
+                        &roots.legacy_home_root,
+                        &session_dir.join("state.json"),
+                        assistant_path_relocations,
+                    )?
+                } else {
+                    None
+                };
+                let expected_hash = expected_session_hash(
+                    &bundle,
+                    &auxiliary_files,
+                    state_bytes_override.as_deref(),
+                )?;
+                if auxiliary_files
+                    .len()
+                    .saturating_add(bundle.turns.len())
+                    .saturating_add(1)
+                    > MAX_SESSION_FILES
+                {
+                    return Err(LegacyMigrationError::ResourceLimit(format!(
+                        "Session contains more than {MAX_SESSION_FILES} files: {}",
+                        session_dir.display()
+                    )));
+                }
+                if expected_bundle_bytes(
+                    &bundle,
+                    &auxiliary_files,
+                    state_bytes_override.as_deref(),
+                )? > MAX_SESSION_BYTES
+                {
+                    return Err(LegacyMigrationError::ResourceLimit(format!(
+                        "Session exceeds {MAX_SESSION_BYTES} bytes: {}",
+                        session_dir.display()
+                    )));
+                }
+                if let Some(previous_hash) = source_ids.get(&session_id) {
+                    if previous_hash != &expected_hash {
+                        return Err(LegacyMigrationError::UnsupportedSource(format!(
+                            "legacy Session id appears with different contents: {session_id}"
+                        )));
+                    }
+                    skipped_paths.push(relative_display(&roots.legacy_home_root, &session_dir));
+                    return Ok(());
+                }
+
+                let target_same_path = roots
+                    .target_home_root
+                    .join(&runtime_relative)
+                    .join(&session_id);
+                let action = match target_sessions.get(&session_id) {
+                    None => SessionImportAction::Import,
+                    Some(paths)
+                        if paths.len() == 1
+                            && paths[0] == target_same_path
+                            && hash_tree(&target_same_path)? == expected_hash =>
+                    {
+                        SessionImportAction::Duplicate
+                    }
+                    Some(_) => {
+                        conflicts.push(MigrationConflict {
+                            domain: MigrationDomainId::WorkspaceSessions,
+                            code: "session_target_wins".to_string(),
+                            source_summary: format!("legacy Session {session_id}"),
+                            target_summary: format!("current Session {session_id}"),
+                            resolution: ConflictResolution::TargetWins,
+                        });
+                        SessionImportAction::TargetWins
+                    }
+                };
+                source_ids.insert(session_id.clone(), expected_hash.clone());
+                sessions.push(PlannedSession {
+                    runtime_relative: runtime_relative.clone(),
+                    bundle,
+                    auxiliary_files,
+                    state_bytes_override,
+                    action,
+                    expected_hash,
+                });
+                Ok(())
+            })();
+            if let Err(error) = inspect {
+                skipped_paths.push(relative_display(&roots.legacy_home_root, &session_dir));
+                conflicts.push(MigrationConflict {
+                    domain: MigrationDomainId::WorkspaceSessions,
+                    code: "session_source_skipped".to_string(),
+                    source_summary: error.to_string(),
+                    target_summary:
+                        "The original Session is preserved; other Sessions can be imported."
+                            .to_string(),
+                    resolution: ConflictResolution::ItemSkipped,
+                });
+            }
         }
     }
     sessions.sort_by(|left, right| {
@@ -1124,65 +1324,79 @@ fn plan_runtime_events(
     let mut planned = Vec::new();
     for entry in read_dir_sorted(&source_root)? {
         let path = entry.path();
-        let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
-        if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
-            return Err(LegacyMigrationError::LinkedPath(path));
-        }
-        if !metadata.is_file() || path.extension().and_then(|value| value.to_str()) != Some("jsonl")
-        {
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
+            if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
+                return Err(LegacyMigrationError::LinkedPath(path.clone()));
+            }
+            if !metadata.is_file()
+                || path.extension().and_then(|value| value.to_str()) != Some("jsonl")
+            {
+                skipped_paths.push(relative_display(&roots.legacy_home_root, &path));
+                return Ok(());
+            }
+            if metadata.len() > MAX_RUNTIME_EVENT_BYTES {
+                return Err(LegacyMigrationError::ResourceLimit(format!(
+                    "runtime event log exceeds {MAX_RUNTIME_EVENT_BYTES} bytes: {}",
+                    relative_display(&roots.legacy_home_root, &path)
+                )));
+            }
+            validate_regular_file(&roots.legacy_home_root, &path)?;
+            let session_id = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| {
+                    LegacyMigrationError::UnsupportedSource(
+                        "runtime event log name is not valid UTF-8".to_string(),
+                    )
+                })?
+                .to_string();
+            let Some(session_action) = known_sessions.get(session_id.as_str()).copied() else {
+                skipped_paths.push(relative_display(&roots.legacy_home_root, &path));
+                return Ok(());
+            };
+            let summary = validate_runtime_event_log(&path, &session_id)
+                .map_err(|error| owner_error("read legacy runtime event log", error))?;
+            let expected_hash = hash_file(&path)?;
+            let target = roots
+                .target_home_root
+                .join("runtime-events")
+                .join(format!("{session_id}.jsonl"));
+            let action = if session_action == SessionImportAction::TargetWins {
+                SessionImportAction::TargetWins
+            } else if !target.exists() {
+                SessionImportAction::Import
+            } else if hash_file(&target)? == expected_hash {
+                SessionImportAction::Duplicate
+            } else {
+                conflicts.push(MigrationConflict {
+                    domain: MigrationDomainId::WorkspaceSessions,
+                    code: "runtime_event_target_wins".to_string(),
+                    source_summary: format!("legacy runtime event log for {session_id}"),
+                    target_summary: format!("current runtime event log for {session_id}"),
+                    resolution: ConflictResolution::TargetWins,
+                });
+                SessionImportAction::TargetWins
+            };
+            planned.push(PlannedRuntimeEvent {
+                session_id,
+                source_path: path.clone(),
+                action,
+                expected_hash,
+                turn_ids: summary.turn_ids,
+            });
+            Ok(())
+        })();
+        if let Err(error) = inspect {
             skipped_paths.push(relative_display(&roots.legacy_home_root, &path));
-            continue;
-        }
-        if metadata.len() > MAX_RUNTIME_EVENT_BYTES {
-            return Err(LegacyMigrationError::ResourceLimit(format!(
-                "runtime event log exceeds {MAX_RUNTIME_EVENT_BYTES} bytes: {}",
-                relative_display(&roots.legacy_home_root, &path)
-            )));
-        }
-        validate_regular_file(&roots.legacy_home_root, &path)?;
-        let session_id = path
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| {
-                LegacyMigrationError::UnsupportedSource(
-                    "runtime event log name is not valid UTF-8".to_string(),
-                )
-            })?
-            .to_string();
-        let Some(session_action) = known_sessions.get(session_id.as_str()).copied() else {
-            skipped_paths.push(relative_display(&roots.legacy_home_root, &path));
-            continue;
-        };
-        let summary = validate_runtime_event_log(&path, &session_id)
-            .map_err(|error| owner_error("read legacy runtime event log", error))?;
-        let expected_hash = hash_file(&path)?;
-        let target = roots
-            .target_home_root
-            .join("runtime-events")
-            .join(format!("{session_id}.jsonl"));
-        let action = if session_action == SessionImportAction::TargetWins {
-            SessionImportAction::TargetWins
-        } else if !target.exists() {
-            SessionImportAction::Import
-        } else if hash_file(&target)? == expected_hash {
-            SessionImportAction::Duplicate
-        } else {
             conflicts.push(MigrationConflict {
                 domain: MigrationDomainId::WorkspaceSessions,
-                code: "runtime_event_target_wins".to_string(),
-                source_summary: format!("legacy runtime event log for {session_id}"),
-                target_summary: format!("current runtime event log for {session_id}"),
-                resolution: ConflictResolution::TargetWins,
+                code: "session_event_log_skipped".to_string(),
+                source_summary: error.to_string(),
+                target_summary: "The original event log is preserved.".to_string(),
+                resolution: ConflictResolution::ItemSkipped,
             });
-            SessionImportAction::TargetWins
-        };
-        planned.push(PlannedRuntimeEvent {
-            session_id,
-            source_path: path,
-            action,
-            expected_hash,
-            turn_ids: summary.turn_ids,
-        });
+        }
     }
     planned.sort_by(|left, right| left.session_id.cmp(&right.session_id));
     Ok(planned)
@@ -1192,42 +1406,74 @@ fn read_session_turns(
     legacy_home_root: &Path,
     session_dir: &Path,
     session_id: &str,
-) -> LegacyMigrationResult<Vec<openbitfun_services_core::session::DialogTurnData>> {
+) -> LegacyMigrationResult<(
+    Vec<openbitfun_services_core::session::DialogTurnData>,
+    Vec<String>,
+)> {
     let turns_dir = session_dir.join("turns");
     if !turns_dir.exists() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     reject_linked_directory(&turns_dir)?;
     let mut turns = Vec::new();
+    let mut issues = Vec::new();
     for entry in read_dir_sorted(&turns_dir)? {
         let path = entry.path();
-        validate_regular_file(legacy_home_root, &path)?;
-        let file_name = file_name(&path)?;
-        let file_index = file_name
-            .strip_prefix("turn-")
-            .and_then(|value| value.strip_suffix(".json"))
-            .and_then(|value| value.parse::<usize>().ok())
-            .ok_or_else(|| {
-                LegacyMigrationError::UnsupportedSource(format!(
-                    "unsupported legacy Turn filename: {file_name}"
-                ))
-            })?;
-        let stored: StoredDialogTurnFile = read_bounded_json(legacy_home_root, &path)?;
-        if stored.schema_version > SESSION_STORAGE_SCHEMA_VERSION {
-            return Err(LegacyMigrationError::UnsupportedSource(format!(
-                "Session {session_id} Turn uses unsupported schema {}",
-                stored.schema_version
-            )));
+        let inspect = (|| -> LegacyMigrationResult<_> {
+            let stored: StoredDialogTurnFile = read_bounded_json(legacy_home_root, &path)?;
+            if stored.schema_version > SESSION_STORAGE_SCHEMA_VERSION
+                || stored.turn.session_id != session_id
+            {
+                return Err(LegacyMigrationError::UnsupportedSource(
+                    "unsupported Turn schema or Session identity".into(),
+                ));
+            }
+            Ok(stored.turn)
+        })();
+        match inspect {
+            Ok(turn) => {
+                let expected = format!("turn-{:04}.json", turn.turn_index);
+                if path.file_name().and_then(|name| name.to_str()) != Some(expected.as_str()) {
+                    issues.push(relative_display(legacy_home_root, &path));
+                }
+                turns.push(turn);
+            }
+            Err(_) => issues.push(relative_display(legacy_home_root, &path)),
         }
-        if stored.turn.session_id != session_id || stored.turn.turn_index != file_index {
-            return Err(LegacyMigrationError::UnsupportedSource(format!(
-                "legacy Turn identity does not match its storage path in Session {session_id}"
-            )));
-        }
-        turns.push(stored.turn);
     }
+    let mut seen_payloads = BTreeSet::new();
+    turns.retain(|turn| {
+        let unique = seen_payloads
+            .insert(serde_json::to_vec(turn).expect("Turn serialization is infallible"));
+        if !unique {
+            issues.push(format!(
+                "{}/turns/duplicate",
+                relative_display(legacy_home_root, session_dir)
+            ));
+        }
+        unique
+    });
+    // Conflicting identities cannot safely choose a winner. Preserve every
+    // original and exclude the ambiguous group from this import.
+    let mut ids = HashMap::new();
+    let mut indices = HashMap::new();
+    for turn in &turns {
+        *ids.entry(turn.turn_id.clone()).or_insert(0usize) += 1;
+        *indices.entry(turn.turn_index).or_insert(0usize) += 1;
+    }
+    turns.retain(|turn| {
+        let keep = ids[&turn.turn_id] == 1 && indices[&turn.turn_index] == 1;
+        if !keep {
+            issues.push(format!(
+                "{}/turns/turn-{:04}.json",
+                relative_display(legacy_home_root, session_dir),
+                turn.turn_index
+            ));
+        }
+        keep
+    });
     turns.sort_by_key(|turn| turn.turn_index);
-    Ok(turns)
+    Ok((turns, issues))
 }
 
 fn collect_auxiliary_session_files(
@@ -1241,7 +1487,8 @@ fn collect_auxiliary_session_files(
         let name = file_name(&path)?;
         let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
         if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
-            return Err(LegacyMigrationError::LinkedPath(path));
+            skipped_paths.push(relative_display(legacy_home_root, &path));
+            continue;
         }
         if metadata.is_file() {
             if name == "metadata.json" {
@@ -1251,7 +1498,9 @@ fn collect_auxiliary_session_files(
                 continue;
             }
             if SESSION_ROOT_FILES.contains(&name.as_str()) {
-                validate_owned_file(legacy_home_root, session_dir, &path, &mut files)?;
+                if validate_owned_file(legacy_home_root, session_dir, &path, &mut files).is_err() {
+                    skipped_paths.push(relative_display(legacy_home_root, &path));
+                }
             } else {
                 skipped_paths.push(relative_display(legacy_home_root, &path));
             }
@@ -1260,7 +1509,11 @@ fn collect_auxiliary_session_files(
                 continue;
             }
             if SESSION_OWNED_DIRECTORIES.contains(&name.as_str()) {
-                collect_owned_directory(legacy_home_root, session_dir, &path, 0, &mut files)?;
+                if collect_owned_directory(legacy_home_root, session_dir, &path, 0, &mut files)
+                    .is_err()
+                {
+                    skipped_paths.push(relative_display(legacy_home_root, &path));
+                }
             } else {
                 skipped_paths.push(relative_display(legacy_home_root, &path));
             }
@@ -1914,6 +2167,41 @@ mod tests {
     use openbitfun_core_types::SessionExecutionTarget;
 
     #[test]
+    fn damaged_turns_and_filename_mismatches_recover_valid_history() {
+        let temp = test_tempdir("partial-turns");
+        let root = temp.path();
+        let session = root.join("session-1");
+        fs::create_dir_all(session.join("turns")).unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../legacy-migration/tests/fixtures/v0.2.19/home/projects/c--fixture-workspace/sessions/session-1/turns/turn-0000.json");
+        let bytes = fs::read(fixture).unwrap();
+        fs::write(session.join("turns/old-name.json"), &bytes).unwrap();
+        fs::write(session.join("turns/turn-0001.json"), b"broken JSON").unwrap();
+        let (turns, issues) = read_session_turns(root, &session, "session-1").unwrap();
+        assert_eq!(turns.len(), 1);
+        assert_eq!(issues.len(), 2);
+        fs::write(session.join("turns/duplicate.json"), &bytes).unwrap();
+        assert_eq!(
+            read_session_turns(root, &session, "session-1")
+                .unwrap()
+                .0
+                .len(),
+            1
+        );
+        let mut conflicting: StoredDialogTurnFile = serde_json::from_slice(&bytes).unwrap();
+        conflicting.turn.turn_id = "conflicting-id".into();
+        atomic_write_json(&session.join("turns/conflict.json"), &conflicting).unwrap();
+        assert!(read_session_turns(root, &session, "session-1")
+            .unwrap()
+            .0
+            .is_empty());
+
+        assert_eq!(
+            fs::read(session.join("turns/old-name.json")).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
     fn remote_workspace_paths_are_normalized_with_posix_semantics() {
         let mut workspace: WorkspaceInfo = serde_json::from_value(serde_json::json!({
             "id": "legacy-remote",
@@ -2133,6 +2421,86 @@ mod tests {
                 .and_then(serde_json::Value::as_str),
             Some(source_display.as_str())
         );
+    }
+
+    #[test]
+    fn damaged_session_is_skipped_and_stale_turn_count_is_rebuilt_on_import() {
+        use crate::adapters_for_groups;
+        use openbitfun_legacy_migration::{
+            probe_legacy_source, CancellationToken, MigrationEngine, NoCrashInjection, ProbeLimits,
+        };
+        use openbitfun_product_domains::legacy_migration::{
+            MigrationGroupId, MigrationRunStatus, MigrationSelection,
+        };
+        let temp = test_tempdir("partial-sessions");
+        let roots = fixture_roots(temp.path());
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../legacy-migration/tests/fixtures/v0.2.19");
+        copy_tree(&fixture.join("user-root"), &roots.legacy_user_root).unwrap();
+        copy_tree(&fixture.join("home"), &roots.legacy_home_root).unwrap();
+        let relative = "projects/c--fixture-workspace/sessions/session-1/metadata.json";
+        let metadata_path = roots.legacy_home_root.join(relative);
+        let mut metadata: StoredSessionMetadataFile =
+            serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+        metadata.metadata.turn_count = 0;
+        atomic_write_json(&metadata_path, &metadata).unwrap();
+        let original = fs::read(&metadata_path).unwrap();
+        let damaged = roots
+            .legacy_home_root
+            .join("projects/c--fixture-workspace/sessions/broken/metadata.json");
+        atomic_write_bytes(&damaged, b"invalid JSON").unwrap();
+        let workspace_path = source_workspace_data_path(&roots);
+        let mut registry: serde_json::Value =
+            serde_json::from_slice(&fs::read(&workspace_path).unwrap()).unwrap();
+        registry["workspaces"]["broken"] = serde_json::json!({"rootPath": 42});
+        registry["opened_workspace_ids"] =
+            serde_json::json!(["workspace-1", "workspace-1", "missing", 7]);
+        atomic_write_json(&workspace_path, &registry).unwrap();
+        let broken_turn = metadata_path.parent().unwrap().join("turns/turn-0001.json");
+        fs::write(&broken_turn, b"invalid Turn").unwrap();
+        let selection = MigrationSelection {
+            groups: BTreeSet::from([MigrationGroupId::WorkspacesSessionsAndTasks]),
+        };
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+        assert!(plan.findings.iter().any(|finding| finding.domain
+            == MigrationDomainId::WorkspaceSessions
+            && finding.migratable
+            && finding.code == "session_items_skipped"));
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        let imported: StoredSessionMetadataFile =
+            serde_json::from_slice(&fs::read(roots.target_home_root.join(relative)).unwrap())
+                .unwrap();
+        assert_eq!(imported.metadata.turn_count, 1);
+        assert!(report
+            .domain_results
+            .iter()
+            .flat_map(|result| &result.warnings)
+            .any(|warning| warning.code == "session_turns_recovered"));
+        assert_eq!(fs::read(&broken_turn).unwrap(), b"invalid Turn");
+        assert!(!roots
+            .target_home_root
+            .join("projects/c--fixture-workspace/sessions/session-1/turns/turn-0001.json")
+            .exists());
+
+        assert_eq!(fs::read(metadata_path).unwrap(), original);
+        assert_eq!(fs::read(damaged).unwrap(), b"invalid JSON");
+        assert!(!roots
+            .target_home_root
+            .join("projects/c--fixture-workspace/sessions/broken")
+            .exists());
+        assert!(report.domain_results.iter().any(|result| result.domain
+            == MigrationDomainId::WorkspaceSessions
+            && result.skipped > 0
+            && !result.warnings.is_empty()));
     }
 
     fn fixture_roots(root: &Path) -> MigrationRoots {

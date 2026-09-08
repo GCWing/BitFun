@@ -48,6 +48,8 @@ enum BotSourceKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RemoteConnectManifest {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    omitted: Vec<String>,
     source_files: BTreeMap<String, String>,
     target_before: BTreeMap<String, Option<String>>,
     bot_source_kind: BotSourceKind,
@@ -77,6 +79,7 @@ struct RemoteConnectOutcome {
 
 #[derive(Default)]
 struct RemoteConnectState {
+    omitted: Vec<String>,
     files: BTreeMap<String, String>,
     device: Option<owner::DeviceIdentityRecord>,
     account_session_present: bool,
@@ -108,12 +111,14 @@ impl LegacyDomainAdapter for RemoteConnectAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: if source.files.is_empty() {
+                code: if !source.omitted.is_empty() {
+                    "remote_items_skipped".to_string()
+                } else if source.files.is_empty() {
                     "legacy_remote_connect_absent".to_string()
                 } else {
                     "legacy_remote_connect_supported".to_string()
                 },
-                severity: if preview.conflicts.is_empty() {
+                severity: if preview.conflicts.is_empty() && source.omitted.is_empty() {
                     FindingSeverity::Info
                 } else {
                     FindingSeverity::Warning
@@ -143,6 +148,7 @@ impl LegacyDomainAdapter for RemoteConnectAdapter {
             })
             .collect();
         let manifest = RemoteConnectManifest {
+            omitted: source.omitted,
             source_files: source.files,
             target_before,
             bot_source_kind: source.bot_source_kind,
@@ -160,6 +166,11 @@ impl LegacyDomainAdapter for RemoteConnectAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: manifest
+                .omitted
+                .iter()
+                .map(|path| remote_skipped_warning(path))
+                .collect(),
             ..MigrationDomainResult::default()
         })
     }
@@ -251,6 +262,11 @@ impl LegacyDomainAdapter for RemoteConnectAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: manifest
+                .omitted
+                .iter()
+                .map(|path| remote_skipped_warning(path))
+                .collect(),
             ..RemoteConnectOutcome::default()
         };
         if manifest.conflicts > 0 {
@@ -344,7 +360,7 @@ struct Preview {
 
 fn preview(source: &RemoteConnectState, target: &RemoteConnectState) -> Preview {
     let mut imported = 0;
-    let mut skipped = 0;
+    let mut skipped = source.omitted.len() as u64;
     let mut conflicts = Vec::new();
     if source.device.is_some() {
         if target.device.is_some() {
@@ -774,18 +790,34 @@ fn merge_weixin_auxiliary(
 fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<RemoteConnectState> {
     let mut state = RemoteConnectState::default();
     let device_path = root.join("device_identity.json");
-    if existing_regular(root, &device_path, MAX_JSON_BYTES)? {
-        state.device = owner::read_device_identity(&device_path).map_err(owner_error)?;
+    if source_file_exists(
+        root,
+        &device_path,
+        MAX_JSON_BYTES,
+        legacy,
+        &mut state.omitted,
+    )? {
+        state.device = source_optional(
+            owner::read_device_identity(&device_path).map_err(owner_error),
+            legacy,
+            "device_identity.json",
+            &mut state.omitted,
+        )?;
         record_file(root, &device_path, &mut state.files)?;
     }
     let hint_path = root.join("account_hint.json");
-    if existing_regular(root, &hint_path, MAX_JSON_BYTES)? {
-        state.account_hint = owner::read_account_hint(&hint_path).map_err(owner_error)?;
+    if source_file_exists(root, &hint_path, MAX_JSON_BYTES, legacy, &mut state.omitted)? {
+        state.account_hint = source_optional(
+            owner::read_account_hint(&hint_path).map_err(owner_error),
+            legacy,
+            "account_hint.json",
+            &mut state.omitted,
+        )?;
         record_file(root, &hint_path, &mut state.files)?;
     }
     for name in ["account_session.enc", "account_session.key"] {
         let path = root.join(name);
-        if existing_regular(root, &path, MAX_SECRET_BYTES)? {
+        if source_file_exists(root, &path, MAX_SECRET_BYTES, legacy, &mut state.omitted)? {
             record_file(root, &path, &mut state.files)?;
         }
     }
@@ -800,7 +832,9 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<RemoteConnectS
             ));
         }
         for path in paths {
-            existing_regular(root, &path, MAX_JSON_BYTES)?;
+            if !source_file_exists(root, &path, MAX_JSON_BYTES, legacy, &mut state.omitted)? {
+                continue;
+            }
             let name = path
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -810,23 +844,22 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<RemoteConnectS
                     )
                 })?
                 .to_string();
+            record_file(root, &path, &mut state.files)?;
             if name.ends_with(".settings.json") {
-                let value = owner::read_settings_cursor(&path)
-                    .map_err(owner_error)?
-                    .ok_or_else(|| {
-                        LegacyMigrationError::InvalidRequest(
-                            "account settings cursor disappeared".to_string(),
-                        )
-                    })?;
-                state.settings_cursors.insert(name, value);
-            } else {
-                let value = owner::read_account_sync_state(&path)
-                    .map_err(owner_error)?
-                    .ok_or_else(|| {
-                        LegacyMigrationError::InvalidRequest(
-                            "account sync state disappeared".to_string(),
-                        )
-                    })?;
+                if let Some(value) = source_optional(
+                    owner::read_settings_cursor(&path).map_err(owner_error),
+                    legacy,
+                    &format!("account_sync/{name}"),
+                    &mut state.omitted,
+                )? {
+                    state.settings_cursors.insert(name, value);
+                }
+            } else if let Some(value) = source_optional(
+                owner::read_account_sync_state(&path).map_err(owner_error),
+                legacy,
+                &format!("account_sync/{name}"),
+                &mut state.omitted,
+            )? {
                 state.sync_states.insert(name, value);
             }
             record_file(root, &path, &mut state.files)?;
@@ -836,39 +869,71 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<RemoteConnectS
     let canonical = root.join("remote_connect_persistence.json");
     let backup = root.join("remote_connect_persistence.json.bak");
     let fallback = root.join("bot_connections.json");
-    let canonical_exists = existing_regular(root, &canonical, MAX_JSON_BYTES)?;
-    let backup_exists = existing_regular(root, &backup, MAX_JSON_BYTES)?;
-    let fallback_exists = existing_regular(root, &fallback, MAX_JSON_BYTES)?;
-    for path in [&canonical, &backup, &fallback] {
-        if path.exists() {
+    let canonical_exists =
+        source_file_exists(root, &canonical, MAX_JSON_BYTES, legacy, &mut state.omitted)?;
+    let backup_exists =
+        source_file_exists(root, &backup, MAX_JSON_BYTES, legacy, &mut state.omitted)?;
+    let fallback_exists =
+        source_file_exists(root, &fallback, MAX_JSON_BYTES, legacy, &mut state.omitted)?;
+    for (path, exists) in [
+        (&canonical, canonical_exists),
+        (&backup, backup_exists),
+        (&fallback, fallback_exists),
+    ] {
+        if exists {
             record_file(root, path, &mut state.files)?;
         }
     }
     if canonical_exists {
-        state.bot = owner::read_bot_persistence(&canonical).map_err(owner_error)?;
+        state.bot = if legacy {
+            read_source_bot(root, &canonical, &mut state.omitted)
+        } else {
+            owner::read_bot_persistence(&canonical).map_err(owner_error)?
+        };
+        state.bot_unresolved = state.bot.is_none();
         state.bot_source_kind = BotSourceKind::Canonical;
     } else if backup_exists {
         state.bot_unresolved = true;
         state.bot_source_kind = BotSourceKind::UnresolvedBackup;
     } else if legacy && fallback_exists {
-        state.bot = owner::read_bot_persistence(&fallback).map_err(owner_error)?;
+        state.bot = read_source_bot(root, &fallback, &mut state.omitted);
         state.bot_source_kind = BotSourceKind::Fallback;
     }
 
     if let Some(bot) = &state.bot {
         for account_id in active_weixin_ids(bot)? {
             let sync_path = weixin_sync_path(root, &account_id);
-            if existing_regular(root, &sync_path, MAX_SECRET_BYTES)? {
-                if let Some(value) =
-                    owner::read_weixin_sync_buffer(&sync_path).map_err(owner_error)?
-                {
+            if source_file_exists(
+                root,
+                &sync_path,
+                MAX_SECRET_BYTES,
+                legacy,
+                &mut state.omitted,
+            )? {
+                if let Some(value) = source_optional(
+                    owner::read_weixin_sync_buffer(&sync_path).map_err(owner_error),
+                    legacy,
+                    "weixin/sync",
+                    &mut state.omitted,
+                )? {
                     state.weixin_sync.insert(account_id.clone(), value);
                 }
                 record_file(root, &sync_path, &mut state.files)?;
             }
             let token_path = weixin_tokens_path(root, &account_id);
-            if existing_regular(root, &token_path, MAX_JSON_BYTES)? {
-                if let Some(value) = owner::read_context_tokens(&token_path).map_err(owner_error)? {
+            if source_file_exists(
+                root,
+                &token_path,
+                MAX_JSON_BYTES,
+                legacy,
+                &mut state.omitted,
+            )? {
+                if let Some(value) = source_optional(
+                    owner::read_context_tokens(&token_path).map_err(owner_error),
+                    legacy,
+                    "weixin/context_tokens",
+                    &mut state.omitted,
+                )? {
                     state.weixin_tokens.insert(account_id.clone(), value);
                 }
                 record_file(root, &token_path, &mut state.files)?;
@@ -1156,6 +1221,107 @@ fn reset_stage(context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
     fs::create_dir_all(&path).map_err(|error| io_error(&path, error))
 }
 
+fn source_optional<T>(
+    result: LegacyMigrationResult<Option<T>>,
+    legacy: bool,
+    path: &str,
+    omitted: &mut Vec<String>,
+) -> LegacyMigrationResult<Option<T>> {
+    match result {
+        Err(_) if legacy => {
+            omitted.push(path.into());
+            Ok(None)
+        }
+        other => other,
+    }
+}
+fn remote_skipped_warning(path: &str) -> MigrationDiagnostic {
+    MigrationDiagnostic {
+        severity: FindingSeverity::Warning,
+        domain: Some(MigrationDomainId::RemoteConnectDevices),
+        code: "remote_items_skipped".into(),
+        message: "An unreadable legacy remote record was omitted; other records remain available."
+            .into(),
+        relative_path: Some(path.into()),
+        ..Default::default()
+    }
+}
+fn read_source_bot(
+    root: &Path,
+    path: &Path,
+    omitted: &mut Vec<String>,
+) -> Option<BotPersistenceRecord> {
+    let name = relative_display(root, path);
+    let Ok(serde_json::Value::Object(mut fields)) =
+        read_bounded_json::<serde_json::Value>(root, path)
+    else {
+        omitted.push(name);
+        return None;
+    };
+    let mut bot = BotPersistenceRecord::default();
+    if let Some(value) = fields.remove("form_state") {
+        match serde_json::from_value(value) {
+            Ok(value) => bot.form_state = value,
+            Err(_) => omitted.push(format!("{name}/form_state")),
+        }
+    }
+    bot.verbose_mode = fields
+        .get("verbose_mode")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or_default();
+    match fields.remove("connections") {
+        Some(serde_json::Value::Array(values)) => {
+            for (index, value) in values.into_iter().enumerate() {
+                let label = format!("{name}/connections/{index}");
+                let Ok(mut connection) = serde_json::from_value::<SavedBotConnectionRecord>(value)
+                else {
+                    omitted.push(label);
+                    continue;
+                };
+                let kind = match &connection.config {
+                    BotConfigRecord::Feishu { .. } => "feishu",
+                    BotConfigRecord::Telegram { .. } => "telegram",
+                    BotConfigRecord::Weixin { bot_account_id, .. } => {
+                        if !bot_account_id.is_empty()
+                            && !owner::is_safe_weixin_account_id(bot_account_id)
+                        {
+                            omitted.push(label);
+                            continue;
+                        }
+                        "weixin"
+                    }
+                };
+                connection.bot_type = kind.into();
+                connection.chat_state.chat_id = connection.chat_id.clone();
+                if bot.connections.iter().any(|other| other.bot_type == kind) {
+                    omitted.push(label);
+                    continue;
+                }
+                bot.connections.push(connection);
+            }
+        }
+        Some(_) => omitted.push(format!("{name}/connections")),
+        None => {}
+    }
+    Some(bot)
+}
+
+fn source_file_exists(
+    root: &Path,
+    path: &Path,
+    limit: u64,
+    legacy: bool,
+    omitted: &mut Vec<String>,
+) -> LegacyMigrationResult<bool> {
+    match existing_regular(root, path, limit) {
+        Err(_) if legacy => {
+            omitted.push(relative_display(root, path));
+            Ok(false)
+        }
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1168,6 +1334,24 @@ mod tests {
         MigrationGroupId, MigrationRunStatus, MigrationSelection,
     };
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn corrupt_remote_files_do_not_block_independent_data() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join("device_identity.json"), b"broken JSON").unwrap();
+        atomic_write_json(
+            &root.join("remote_connect_persistence.json"),
+            &serde_json::json!({"connections":[{"config":null}],"verbose_mode":true}),
+        )
+        .unwrap();
+        let source = read_state(root, true).unwrap();
+        assert!(source.device.is_none());
+        assert!(source.bot.as_ref().unwrap().verbose_mode);
+        assert_eq!(source.omitted.len(), 2);
+        assert_eq!(source.files.len(), 2);
+        assert!(read_state(root, false).is_err());
+    }
 
     #[test]
     fn remote_connect_merge_preserves_target_identity_and_remote_bot_context() {

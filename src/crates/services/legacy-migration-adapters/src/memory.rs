@@ -8,13 +8,13 @@ use openbitfun_legacy_migration::{
     MigrationRoots,
 };
 use openbitfun_product_domains::legacy_migration::{
-    ConflictResolution, FindingSeverity, MigrationConflict, MigrationDomainId,
+    ConflictResolution, FindingSeverity, MigrationConflict, MigrationDiagnostic, MigrationDomainId,
     MigrationDomainResult, MigrationDomainState, ScanFinding,
 };
 use openbitfun_services_core::memory_store::{
-    classify_memory_workspace_file, initialize_memory_schema, read_memory_store_snapshot,
-    upsert_memory_record, MemoryRecord, MemoryStoreSnapshot, MemoryWorkspaceFileKind,
-    MEMORY_STORE_SCHEMA,
+    classify_memory_workspace_file, decode_memory_record, initialize_memory_schema,
+    read_memory_store_snapshot, upsert_memory_record, MemoryRecord, MemoryStoreSnapshot,
+    MemoryWorkspaceFileKind, MEMORY_STORE_SCHEMA,
 };
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,31 @@ const FILE_MEMORY_SCHEMA: &str = "openbitfun.memory-files.v1";
 const MAX_MEMORY_FILE_COUNT: usize = 4_096;
 const MAX_MEMORY_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_MEMORY_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+
+#[derive(Default, Serialize)]
+struct MigrationMemorySnapshot {
+    #[serde(flatten)]
+    data: MemoryStoreSnapshot,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    omitted: Vec<String>,
+}
+impl std::ops::Deref for MigrationMemorySnapshot {
+    type Target = MemoryStoreSnapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+fn memory_warning(path: &str) -> MigrationDiagnostic {
+    MigrationDiagnostic {
+        code: "memory_item_skipped".into(),
+        severity: FindingSeverity::Warning,
+        domain: None,
+        relative_path: Some(path.to_string()),
+        message: "An unreadable memory item was retained in the source.".into(),
+        ..Default::default()
+    }
+}
 
 pub(crate) struct StructuredMemoryAdapter;
 pub(crate) struct FileMemoryAdapter;
@@ -89,6 +114,8 @@ struct FileMemoryCommitReceipt {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct FileMemoryManifest {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    omitted: Vec<String>,
     entries: Vec<FileMemoryManifestEntry>,
     imported: u64,
     skipped: u64,
@@ -107,6 +134,7 @@ struct FileMemoryPlan {
     files: Vec<PlannedMemoryFile>,
     conflicts: Vec<MigrationConflict>,
     logical_bytes: u64,
+    omitted: Vec<String>,
 }
 
 struct MemoryFileFact {
@@ -150,15 +178,20 @@ impl LegacyDomainAdapter for StructuredMemoryAdapter {
                 MemoryDatabaseRole::CurrentTarget,
             )?
         } else {
-            MemoryStoreSnapshot::default()
+            MigrationMemorySnapshot::default()
         };
         let outcome = preview_structured_merge(&source.records, &target.records);
         let logical_bytes = sqlite_family_size(&source_path)?;
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: "legacy_structured_memory_supported".to_string(),
-                severity: if outcome.conflicts.is_empty() {
+                code: if source.omitted.is_empty() {
+                    "legacy_structured_memory_supported"
+                } else {
+                    "memory_items_skipped"
+                }
+                .to_string(),
+                severity: if outcome.conflicts.is_empty() && source.omitted.is_empty() {
                     FindingSeverity::Info
                 } else {
                     FindingSeverity::Warning
@@ -221,7 +254,7 @@ impl LegacyDomainAdapter for StructuredMemoryAdapter {
             let connection = Connection::open(&staged_merged)
                 .map_err(|error| db_error(&staged_merged, error))?;
             initialize_memory_schema(&connection).map_err(owner_error)?;
-            (MemoryStoreSnapshot::default(), None)
+            (MigrationMemorySnapshot::default(), None)
         };
 
         let outcome = preview_structured_merge(&source.records, &target.records);
@@ -247,7 +280,10 @@ impl LegacyDomainAdapter for StructuredMemoryAdapter {
             target_digest,
             merged_digest: Some(memory_snapshot_digest(&merged)?),
             imported: outcome.imports.len() as u64,
-            skipped: outcome.duplicate.saturating_add(outcome.target_wins),
+            skipped: outcome
+                .duplicate
+                .saturating_add(outcome.target_wins)
+                .saturating_add(source.omitted.len() as u64),
             conflicts: outcome.conflicts.len() as u64,
         };
         atomic_write_json(&structured_manifest_path(context), &manifest)?;
@@ -257,6 +293,11 @@ impl LegacyDomainAdapter for StructuredMemoryAdapter {
             imported: manifest.imported,
             skipped: manifest.skipped,
             conflicts: manifest.conflicts,
+            warnings: source
+                .omitted
+                .iter()
+                .map(|hash| memory_warning(hash))
+                .collect(),
             ..MigrationDomainResult::default()
         })
     }
@@ -271,7 +312,22 @@ impl LegacyDomainAdapter for StructuredMemoryAdapter {
             &domain_root.join("source.sqlite"),
             MemoryDatabaseRole::LegacySource,
         )?;
-        if Some(memory_snapshot_digest(&source)?) != manifest.source_digest {
+        let legacy_digest = || -> Option<String> {
+            let connection = Connection::open_with_flags(
+                domain_root.join("source.sqlite"),
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .ok()?;
+            let data = read_memory_store_snapshot(&connection).ok()?;
+            memory_snapshot_digest(&MigrationMemorySnapshot {
+                data,
+                omitted: Vec::new(),
+            })
+            .ok()
+        };
+        if Some(memory_snapshot_digest(&source)?) != manifest.source_digest
+            && (manifest.source_digest.is_none() || legacy_digest() != manifest.source_digest)
+        {
             return Err(LegacyMigrationError::InvalidRequest(
                 "staged structured Memory source differs from its manifest".to_string(),
             ));
@@ -450,13 +506,15 @@ impl LegacyDomainAdapter for FileMemoryAdapter {
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
-                code: if plan.files.is_empty() {
+                code: if !plan.omitted.is_empty() {
+                    "memory_items_skipped"
+                } else if plan.files.is_empty() {
                     "legacy_file_memory_absent"
                 } else {
                     "legacy_file_memory_supported"
                 }
                 .to_string(),
-                severity: if plan.conflicts.is_empty() {
+                severity: if plan.conflicts.is_empty() && plan.omitted.is_empty() {
                     FindingSeverity::Info
                 } else {
                     FindingSeverity::Warning
@@ -477,18 +535,26 @@ impl LegacyDomainAdapter for FileMemoryAdapter {
     }
 
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
-        let plan = plan_file_memory(context.roots)?;
+        let mut plan = plan_file_memory(context.roots)?;
         let domain_root = stage_domain_dir(context, "file-memory");
         reset_directory(&domain_root)?;
         let files_root = domain_root.join("files");
         let mut entries = Vec::with_capacity(plan.files.len());
         let mut imported = 0u64;
-        let mut skipped = 0u64;
+        let mut skipped = plan.omitted.len() as u64;
         for file in plan.files {
             if file.action == FileMemoryAction::Import {
-                let bytes = fs::read(&file.source_path)
-                    .map_err(|error| io_error(&file.source_path, error))?;
-                atomic_write_bytes(&files_root.join(&file.target_relative), &bytes)?;
+                let staged_result = (|| -> LegacyMigrationResult<()> {
+                    let bytes = fs::read(&file.source_path)
+                        .map_err(|error| io_error(&file.source_path, error))?;
+                    atomic_write_bytes(&files_root.join(&file.target_relative), &bytes)?;
+                    Ok(())
+                })();
+                if staged_result.is_err() {
+                    skipped += 1;
+                    plan.omitted.push(relative_string(&file.source_relative));
+                    continue;
+                }
                 imported = imported.saturating_add(1);
             } else {
                 skipped = skipped.saturating_add(1);
@@ -501,6 +567,7 @@ impl LegacyDomainAdapter for FileMemoryAdapter {
             });
         }
         let manifest = FileMemoryManifest {
+            omitted: plan.omitted.clone(),
             entries,
             imported,
             skipped,
@@ -513,6 +580,11 @@ impl LegacyDomainAdapter for FileMemoryAdapter {
             imported,
             skipped,
             conflicts: manifest.conflicts,
+            warnings: plan
+                .omitted
+                .iter()
+                .map(|path| memory_warning(path))
+                .collect(),
             ..MigrationDomainResult::default()
         })
     }
@@ -708,7 +780,8 @@ fn structured_conflict(
 
 fn plan_file_memory(roots: &MigrationRoots) -> LegacyMigrationResult<FileMemoryPlan> {
     let source_root = source_file_memory_root(roots);
-    let source = collect_memory_files(&roots.legacy_home_root, &source_root)?;
+    let mut omitted = Vec::new();
+    let source = collect_source_memory_files(&roots.legacy_home_root, &source_root, &mut omitted)?;
     let target_root = target_file_memory_root(roots);
     let target = collect_memory_files(&roots.target_home_root, &target_root)?;
     let target_by_path = target
@@ -770,55 +843,90 @@ fn plan_file_memory(roots: &MigrationRoots) -> LegacyMigrationResult<FileMemoryP
         files,
         conflicts,
         logical_bytes,
+        omitted,
     })
+}
+
+fn collect_source_memory_files(
+    boundary: &Path,
+    root: &Path,
+    omitted: &mut Vec<String>,
+) -> LegacyMigrationResult<Vec<MemoryFileFact>> {
+    if !path_entry_exists(root)? {
+        return Ok(Vec::new());
+    }
+    validate_directory(boundary, root)?;
+    let mut files = Vec::new();
+    for name in ["MEMORY.md", "memory_summary.md"] {
+        let path = root.join(name);
+        if path_entry_exists(&path)? && push_memory_file(root, &path, &mut files).is_err() {
+            omitted.push(relative_string(Path::new(name)));
+        }
+    }
+    fn visit(
+        root: &Path,
+        path: &Path,
+        files: &mut Vec<MemoryFileFact>,
+        omitted: &mut Vec<String>,
+        depth: usize,
+    ) {
+        if depth > 16 || files.len() >= MAX_MEMORY_FILE_COUNT {
+            omitted.push(relative_string(path.strip_prefix(root).unwrap_or(path)));
+            return;
+        }
+        let inspect = (|| -> LegacyMigrationResult<()> {
+            validate_directory(root, path)?;
+            for entry in fs::read_dir(path).map_err(|error| io_error(path, error))? {
+                let entry = entry.map_err(|error| io_error(path, error))?;
+                let child = entry.path();
+                let meta = fs::symlink_metadata(&child).map_err(|error| io_error(&child, error))?;
+                if meta.is_dir() && !meta.file_type().is_symlink() && !is_reparse_point(&meta) {
+                    visit(root, &child, files, omitted, depth + 1);
+                } else if classify_memory_workspace_file(child.strip_prefix(root).unwrap_or(&child))
+                    .is_some()
+                    && push_memory_file(root, &child, files).is_err()
+                {
+                    omitted.push(relative_string(child.strip_prefix(root).unwrap_or(&child)));
+                }
+            }
+            Ok(())
+        })();
+        if inspect.is_err() {
+            omitted.push(relative_string(path.strip_prefix(root).unwrap_or(path)));
+        }
+    }
+    let notes = root.join("extensions/ad_hoc/notes");
+    if path_entry_exists(&notes)? {
+        visit(root, &notes, &mut files, omitted, 0);
+    }
+    files.sort_by(|left, right| left.relative.cmp(&right.relative));
+    let mut count = 0usize;
+    let mut total = 0u64;
+    files.retain(|file| {
+        if count >= MAX_MEMORY_FILE_COUNT
+            || total.saturating_add(file.bytes) > MAX_MEMORY_TOTAL_BYTES
+        {
+            omitted.push(relative_string(&file.relative));
+            false
+        } else {
+            count += 1;
+            total += file.bytes;
+            true
+        }
+    });
+    Ok(files)
 }
 
 fn collect_memory_files(
     boundary_root: &Path,
     memory_root: &Path,
 ) -> LegacyMigrationResult<Vec<MemoryFileFact>> {
-    if !path_entry_exists(memory_root)? {
-        return Ok(Vec::new());
-    }
-    validate_directory(boundary_root, memory_root)?;
-    let mut files = Vec::new();
-    for name in ["MEMORY.md", "memory_summary.md"] {
-        let path = memory_root.join(name);
-        if path_entry_exists(&path)? {
-            push_memory_file(memory_root, &path, &mut files)?;
-        }
-    }
-    let extensions = memory_root.join("extensions");
-    let ad_hoc = extensions.join("ad_hoc");
-    let notes = ad_hoc.join("notes");
-    for directory in [&extensions, &ad_hoc, &notes] {
-        if path_entry_exists(directory)? {
-            validate_directory(memory_root, directory)?;
-        } else {
-            return finish_memory_files(files);
-        }
-    }
-    for entry in fs::read_dir(&notes).map_err(|error| io_error(&notes, error))? {
-        let entry = entry.map_err(|error| io_error(&notes, error))?;
-        let path = entry.path();
-        let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
-        if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
-            return Err(LegacyMigrationError::LinkedPath(path));
-        }
-        if metadata.is_dir() {
-            return Err(LegacyMigrationError::InvalidRequest(format!(
-                "nested file Memory directories are unsupported: {}",
-                path.display()
-            )));
-        }
-        if classify_memory_workspace_file(
-            path.strip_prefix(memory_root)
-                .map_err(|_| LegacyMigrationError::PathEscape(path.clone()))?,
-        )
-        .is_some()
-        {
-            push_memory_file(memory_root, &path, &mut files)?;
-        }
+    let mut omitted = Vec::new();
+    let files = collect_source_memory_files(boundary_root, memory_root, &mut omitted)?;
+    if !omitted.is_empty() {
+        return Err(LegacyMigrationError::InvalidRequest(
+            "target file Memory contains unreadable items; preserving target".into(),
+        ));
     }
     finish_memory_files(files)
 }
@@ -950,7 +1058,7 @@ fn normalize_text(text: &str) -> String {
     normalized.trim_end_matches('\n').to_string()
 }
 
-fn memory_snapshot_digest(snapshot: &MemoryStoreSnapshot) -> LegacyMigrationResult<String> {
+fn memory_snapshot_digest(snapshot: &MigrationMemorySnapshot) -> LegacyMigrationResult<String> {
     let bytes = serde_json::to_vec(snapshot)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
     Ok(hex::encode(Sha256::digest(bytes)))
@@ -962,7 +1070,7 @@ fn read_consistent_scan_snapshot(
     source: &Path,
     label: &str,
     role: MemoryDatabaseRole,
-) -> LegacyMigrationResult<MemoryStoreSnapshot> {
+) -> LegacyMigrationResult<MigrationMemorySnapshot> {
     validate_sqlite_family(boundary, source)?;
     let scan_root = roots.migration_root().join("scan-snapshots");
     fs::create_dir_all(&scan_root).map_err(|error| io_error(&scan_root, error))?;
@@ -990,23 +1098,55 @@ enum MemoryDatabaseRole {
 fn read_memory_snapshot(
     path: &Path,
     role: MemoryDatabaseRole,
-) -> LegacyMigrationResult<MemoryStoreSnapshot> {
+) -> LegacyMigrationResult<MigrationMemorySnapshot> {
     validate_sqlite(path)?;
     let connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(|error| db_error(path, error))?;
-    read_memory_store_snapshot(&connection).map_err(|error| match role {
-        MemoryDatabaseRole::LegacySource => LegacyMigrationError::UnsupportedSource(format!(
-            "legacy structured Memory schema is not supported: {error}"
-        )),
-        MemoryDatabaseRole::CurrentTarget | MemoryDatabaseRole::StagedCurrent => {
+    if matches!(role, MemoryDatabaseRole::LegacySource) {
+        // Historical jobs are recreated by runtime acquisition and never imported.
+        // Only the content table is required; malformed rows do not poison peers.
+        let mut statement = connection.prepare("SELECT thread_id, workspace_path, rollout_path, source_updated_at, raw_memory, rollout_summary, rollout_slug, generated_at, COALESCE(usage_count, 0), last_usage, selected_for_phase2, selected_for_phase2_source_updated_at FROM stage1_outputs ORDER BY thread_id")
+            .map_err(|error| LegacyMigrationError::UnsupportedSource(format!("legacy structured Memory schema is not supported: {error}")))?;
+        let mut rows = statement.query([]).map_err(|error| db_error(path, error))?;
+        let mut snapshot = MigrationMemorySnapshot::default();
+        while let Some(row) = rows.next().map_err(|error| db_error(path, error))? {
+            match decode_memory_record(row) {
+                Ok(mut record) if !record.session_id.trim().is_empty() => {
+                    record.selected_for_phase2 = i64::from(record.selected_for_phase2 != 0);
+                    record.usage_count = record.usage_count.max(0);
+                    snapshot.data.records.push(record);
+                }
+                _ => {
+                    let mut hash = Sha256::new();
+                    for index in 0..row.as_ref().column_count() {
+                        hash.update(
+                            format!(
+                                "{:?}",
+                                row.get_ref(index).map_err(|error| db_error(path, error))?
+                            )
+                            .as_bytes(),
+                        );
+                        hash.update([0]);
+                    }
+                    snapshot.omitted.push(hex::encode(hash.finalize()));
+                }
+            }
+        }
+        return Ok(snapshot);
+    }
+    read_memory_store_snapshot(&connection)
+        .map(|data| MigrationMemorySnapshot {
+            data,
+            omitted: Vec::new(),
+        })
+        .map_err(|error| {
             LegacyMigrationError::InvalidRequest(format!(
                 "current structured Memory schema is invalid: {error}"
             ))
-        }
-    })
+        })
 }
 
 fn verify_structured_target_state(
@@ -1355,6 +1495,36 @@ mod tests {
         fn should_crash(&self, point: CrashPoint) -> bool {
             point == self.point && !self.fired.swap(true, Ordering::AcqRel)
         }
+    }
+
+    #[test]
+    fn legacy_memory_jobs_are_optional_and_bad_rows_are_isolated() {
+        let temp = test_tempdir("memory-bad-row");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        let connection = materialize_source_memory(&roots, false);
+        connection.execute_batch("DROP TABLE jobs;").unwrap();
+        let original = read_memory_snapshot(
+            &source_structured_memory_path(&roots),
+            MemoryDatabaseRole::LegacySource,
+        )
+        .unwrap();
+        assert!(!original.records.is_empty());
+        let id = original.records[0].session_id.clone();
+        connection
+            .execute(
+                "UPDATE stage1_outputs SET raw_memory = X'FF' WHERE thread_id = ?1",
+                [&id],
+            )
+            .unwrap();
+        let recovered = read_memory_snapshot(
+            &source_structured_memory_path(&roots),
+            MemoryDatabaseRole::LegacySource,
+        )
+        .unwrap();
+        assert_eq!(recovered.records.len() + 1, original.records.len());
+        assert_eq!(recovered.omitted.len(), 1);
+        assert!(recovered.jobs.is_empty());
     }
 
     #[test]
@@ -1884,9 +2054,13 @@ mod tests {
         let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
         assert!(engine
             .plan(&source, selection.clone(), &CancellationToken::default())
-            .unwrap_err()
-            .to_string()
-            .contains("legacy structured Memory schema is not supported"));
+            .unwrap()
+            .findings
+            .iter()
+            .any(|finding| !finding.migratable
+                && finding
+                    .detail
+                    .contains("legacy structured Memory schema is not supported")));
         assert_eq!(hash_source_roots(&roots), source_hash);
 
         fs::remove_file(&invalid_path).unwrap();
@@ -1911,10 +2085,8 @@ mod tests {
             validated_memory_relative_path("../MEMORY.md"),
             Err(LegacyMigrationError::PathEscape(_))
         ));
-        assert!(matches!(
-            validated_memory_relative_path("extensions/ad_hoc/notes/nested/note.md"),
-            Err(LegacyMigrationError::PathEscape(_))
-        ));
+        assert!(validated_memory_relative_path("extensions/ad_hoc/notes/nested/note.md").is_ok());
+        assert!(validated_memory_relative_path("extensions/ad_hoc/notes/../note.md").is_err());
     }
 
     #[test]

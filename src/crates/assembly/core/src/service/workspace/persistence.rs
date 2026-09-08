@@ -1,4 +1,3 @@
-use super::types::WorkspaceInfo;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use openbitfun_services_core::workspace_persistence as storage;
 pub(crate) use openbitfun_services_core::workspace_persistence::{
@@ -6,9 +5,6 @@ pub(crate) use openbitfun_services_core::workspace_persistence::{
 };
 use std::path::Path;
 
-pub(crate) fn current_workspace_storage_id(workspace: &WorkspaceInfo) -> OpenBitFunResult<String> {
-    storage::current_workspace_storage_id(workspace).map_err(Into::into)
-}
 pub(crate) fn validate_workspace_persistence_data(
     data: &WorkspacePersistenceData,
     miniapp_root: &Path,

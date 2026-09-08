@@ -1142,9 +1142,8 @@ fn unix_time_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::coordination_persistence::{
-        coordination_table_has_column, initialize_coordination_schema,
-    };
+    use crate::service::coordination_persistence::initialize_coordination_schema;
+    use openbitfun_services_core::coordination_persistence::coordination_table_has_column;
 
     fn test_tempdir() -> tempfile::TempDir {
         if let Some(root) = std::env::var_os("OPENBITFUN_TEST_TMPDIR") {
