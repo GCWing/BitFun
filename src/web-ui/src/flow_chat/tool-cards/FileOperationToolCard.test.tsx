@@ -877,7 +877,8 @@ describe('FileOperationToolCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('toolCards.file.guidanceHint');
+    expect(container.textContent).not.toContain('toolCards.file.guidanceHint');
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).toBeNull();
     expect(container.textContent).not.toContain('toolCards.file.failed');
     expect(container.textContent).toContain('report.md');
     expect(container.textContent).not.toContain(
@@ -894,6 +895,8 @@ describe('FileOperationToolCard', () => {
       'Use Read to load the current contents of docs/report.md before calling Write on it.',
     );
     expect(container.querySelector('[data-openbitfun-part="error"] [data-guidance="true"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('toolCards.file.guidanceTitle');
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).toBeNull();
   });
 
   it('renders edit guardrail blocks as guidance instead of hard failure', async () => {
@@ -938,7 +941,8 @@ describe('FileOperationToolCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('toolCards.file.guidanceHint');
+    expect(container.textContent).not.toContain('toolCards.file.guidanceHint');
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).toBeNull();
     expect(container.textContent).not.toContain('toolCards.file.failed');
     expect(container.textContent).toContain('main.rs');
     expect(container.textContent).not.toContain(
@@ -955,6 +959,8 @@ describe('FileOperationToolCard', () => {
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
     expect(container.querySelector('[data-openbitfun-part="error"] [data-guidance="true"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('toolCards.file.guidanceTitle');
+    expect(container.querySelector('[data-openbitfun-icon="warning"]')).toBeNull();
   });
 
   it('shows receiving content label while write content streams before file_path', async () => {

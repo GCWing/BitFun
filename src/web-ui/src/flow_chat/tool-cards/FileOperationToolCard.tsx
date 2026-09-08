@@ -808,7 +808,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     ? `${t('toolCards.file.delete')}${isFailed ? t('toolCards.file.failed') : ''}`
     : isFailed
       ? isFileGuidanceBlocked
-        ? `${toolDisplayName}${t('toolCards.file.guidanceHint')}`
+        ? `${toolDisplayName}:`
         : `${toolDisplayName}${t('toolCards.file.failed')}`
       : `${toolDisplayName}:`;
 
@@ -838,7 +838,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
           guidance: isFileGuidanceBlocked,
           message: getDisplayMessage(),
           title: isFileGuidanceBlocked
-            ? t('toolCards.file.guidanceTitle')
+            ? undefined
             : `${toolDisplayName}${t('toolCards.file.failed')}`,
         } : undefined}
         isExpanded={isCardContentExpanded}

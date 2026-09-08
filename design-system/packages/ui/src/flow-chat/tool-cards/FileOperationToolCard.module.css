@@ -81,6 +81,8 @@
   }
 
   .errorMessage {
+    max-block-size: 20rem;
+    overflow-y: auto;
     color: var(--openbitfun-color-content-muted);
     white-space: pre-wrap;
     overflow-wrap: anywhere;

@@ -1636,8 +1636,6 @@
       "delete": "Delete File",
       "deletedLabel": "Deleted",
       "failed": "Failed",
-      "guidanceHint": " · Needs attention",
-      "guidanceTitle": "Action required before retrying",
       "parsingPath": "Parsing file path...",
       "receivingContent": "Receiving file content...",
       "unknownFile": "Unknown file",

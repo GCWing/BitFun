@@ -1636,8 +1636,6 @@
       "delete": "刪除檔案",
       "deletedLabel": "刪除",
       "failed": "失敗",
-      "guidanceHint": " · 需要處理",
-      "guidanceTitle": "重試前需要處理",
       "parsingPath": "解析檔案路徑中...",
       "receivingContent": "接收檔案內容中...",
       "unknownFile": "未知檔案",
