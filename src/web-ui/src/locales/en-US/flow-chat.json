@@ -1494,6 +1494,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "Compact image",
+    "expandedThinking": "Image with thinking",
     "subtitle": "AI Programming Assistant · Chat Record",
     "poweredBy": "Powered by",
     "aiAssistant": "AI Programming Assistant",

@@ -1494,6 +1494,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "简洁长图",
+    "expandedThinking": "含思考长图",
     "subtitle": "AI 编程助手 · 对话记录",
     "poweredBy": "Powered by",
     "aiAssistant": "AI 编程助手",

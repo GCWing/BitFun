@@ -1494,6 +1494,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "精簡長圖",
+    "expandedThinking": "含思考長圖",
     "subtitle": "AI 編程助手 · 對話記錄",
     "poweredBy": "Powered by",
     "aiAssistant": "AI 編程助手",

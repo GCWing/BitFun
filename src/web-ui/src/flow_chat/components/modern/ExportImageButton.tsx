@@ -4,15 +4,18 @@
  * Uses modern-screenshot (fork of html-to-image with better CSS var / font / CORS handling).
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
-import { i18nService } from '@/infrastructure/i18n';
+import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { getBuiltinAppearanceThemeToken } from '@/infrastructure/appearance/builtins/catalog';
@@ -74,12 +77,13 @@ interface ExportImageButtonProps {
 // Exported content renderer.
 interface ExportContentProps {
   dialogTurn: DialogTurn;
+  expandThinking: boolean;
 }
 
 // Marker class on the logo placeholder so we can locate it for canvas compositing.
 const LOGO_PLACEHOLDER_CLASS = 'export-content__logo-placeholder';
 
-const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
+const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn, expandThinking }) => {
   return (
     <div data-openbitfun-component="export-image" data-openbitfun-part="root" className="export-content">
       <div className="export-content__header" data-openbitfun-component="export-image" data-openbitfun-part="header">
@@ -133,13 +137,14 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
                 } else if (item.type === 'thinking') {
                   const thinkingItem = item as FlowThinkingItem;
                   return (
-                    <div data-openbitfun-component="export-image" data-openbitfun-part="thinking" key={item.id} className="export-content__thinking-item">
+                    <div data-openbitfun-component="export-image" data-openbitfun-part="thinking" key={item.id} className={`export-content__thinking-item${expandThinking ? ' export-content__thinking-item--expanded' : ''}`}>
                       <ModelThinkingDisplay 
                         thinkingItem={{
                           ...thinkingItem,
                           isStreaming: false,
                         }}
-                        isLastItem={true}
+                        isLastItem={false}
+                        forceExpanded={expandThinking}
                       />
                     </div>
                   );
@@ -171,7 +176,38 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
   turnId,
   className = ''
 }) => {
+  const { t } = useI18n('flow-chat');
   const [isExporting, setIsExporting] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuLayout = useAnchoredPopoverPosition({
+    open: isMenuOpen,
+    anchorRef: buttonRef,
+    popoverRef: menuRef,
+    preferredPlacement: 'top',
+    alignment: 'end',
+    gap: 4,
+  });
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMenuOpen]);
   // Ref guard to prevent double-invocation while state update is pending.
   const isExportingRef = useRef(false);
 
@@ -187,8 +223,9 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
     return null;
   }, [turnId]);
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (expandThinking: boolean) => {
     if (isExportingRef.current) return;
+    setIsMenuOpen(false);
     isExportingRef.current = true;
     setIsExporting(true);
     
@@ -283,7 +320,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       // Render export content with React.
       root = createRoot(wrapper);
-      root.render(<ExportContent dialogTurn={dialogTurn} />);
+      root.render(<ExportContent dialogTurn={dialogTurn} expandThinking={expandThinking} />);
       
       // Adaptive render wait: base time + per-round allowance, capped.
       const roundCount = dialogTurn.modelRounds?.length ?? 1;
@@ -545,23 +582,48 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
   }, [getDialogTurn]);
 
   return (
-    <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">
-      <button
-        className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
-        data-openbitfun-component="export-image"
-        data-openbitfun-part="trigger"
-        data-openbitfun-state={isExporting ? 'exporting' : undefined}
-        onClick={handleExport}
-        disabled={isExporting}
-        aria-label={isExporting
-          ? i18nService.t('flow-chat:exportImage.exporting')
-          : i18nService.t('flow-chat:exportImage.exportToImage')}
-      >
-        {isExporting
-          ? <Icon name="progress-25" size="sm" className="spinning" />
-          : <Icon name="image" size="sm" />}
-      </button>
-    </Tooltip>
+    <>
+      <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">
+        <button
+          ref={buttonRef}
+          className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
+          data-openbitfun-component="export-image"
+          data-openbitfun-part="trigger"
+          data-openbitfun-state={isExporting ? 'exporting' : undefined}
+          onClick={() => setIsMenuOpen(current => !current)}
+          disabled={isExporting}
+          aria-haspopup="menu"
+          aria-expanded={isMenuOpen}
+          aria-label={isExporting
+            ? i18nService.t('flow-chat:exportImage.exporting')
+            : i18nService.t('flow-chat:exportImage.exportToImage')}
+        >
+          {isExporting
+            ? <Icon name="progress-25" size="sm" className="spinning" />
+            : <Icon name="image" size="sm" />}
+        </button>
+      </Tooltip>
+      {isMenuOpen && createPortal(
+        <Menu
+          ref={menuRef}
+          className="export-image-menu"
+          data-openbitfun-placement={menuLayout?.placement ?? 'top'}
+          style={{
+            top: `${menuLayout?.top ?? 0}px`,
+            left: `${menuLayout?.left ?? 0}px`,
+            visibility: menuLayout ? 'visible' : 'hidden',
+          }}
+        >
+          <MenuItem type="button" onClick={() => void handleExport(false)}>
+            {t('exportImage.collapsedThinking')}
+          </MenuItem>
+          <MenuItem type="button" onClick={() => void handleExport(true)}>
+            {t('exportImage.expandedThinking')}
+          </MenuItem>
+        </Menu>,
+        getAppearanceOverlayHost(),
+      )}
+    </>
   );
 };
 
