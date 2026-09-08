@@ -4352,11 +4352,11 @@ pub(crate) fn reveal_local_path_in_explorer(
                 .spawn()
                 .map_err(|e| format!("Failed to open explorer: {}", e))?;
         } else {
-            let normalized_path = path_str.replace("/", "\\");
-            openbitfun_core::util::process_manager::create_command("explorer")
-                .arg(format!("/select,{}", normalized_path))
-                .spawn()
-                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+            // Explorer does not use standard argv quoting for /select: Command
+            // quotes the entire switch + path when a filename contains spaces.
+            // Use Shell item IDs instead so the path is never a command line.
+            tauri_plugin_opener::reveal_item_in_dir(path)
+                .map_err(|e| format!("Failed to reveal file in explorer: {}", e))?;
         }
     }
 
