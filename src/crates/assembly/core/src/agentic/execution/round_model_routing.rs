@@ -3,9 +3,13 @@
 //! It exposes a narrow execution-engine hook plus an opt-in HTTP implementation while
 //! keeping the existing agent loop, retry lifecycle, and tool pipeline authoritative.
 
-use crate::agentic::core::{Message, MessageContent, MessageRole, MessageSemanticKind};
+pub mod context;
+
+use crate::agentic::core::{Message, MessageContent};
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use context::{RoundRouterContext, RouterContextConfig, RouterContextFactory};
 use log::{debug, info, warn};
+use openbitfun_agent_runtime::router_context::PreparedRouterContext;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs::OpenOptions;
@@ -48,6 +52,8 @@ pub struct RoundModelRouteRequest {
     pub agent_type: String,
     pub original_user_input: String,
     pub messages: Vec<Message>,
+    /// HTTP routing receives an isolated, bounded snapshot instead of cloning main history.
+    pub prepared_context: Option<PreparedRouterContext>,
 }
 
 /// Selects the execution model exactly once for each logical model round.
@@ -56,6 +62,16 @@ pub struct RoundModelRouteRequest {
 /// therefore reuse the selected model without calling this hook again.
 #[async_trait::async_trait]
 pub trait RoundModelRouter: Send + Sync {
+    /// Optional router-owned incremental state. Custom routers retain their read-only history API.
+    fn create_context(
+        &self,
+        _session_id: &str,
+        _dialog_turn_id: &str,
+        _task: &str,
+    ) -> Option<RoundRouterContext> {
+        None
+    }
+
     async fn select_model(
         &self,
         request: RoundModelRouteRequest,
@@ -86,6 +102,7 @@ pub struct HttpRoundModelRouterConfig {
     pub max_input_chars: usize,
     pub simple_threshold: f64,
     pub trace_path: Option<PathBuf>,
+    pub context: RouterContextConfig,
 }
 
 impl HttpRoundModelRouterConfig {
@@ -158,6 +175,7 @@ impl HttpRoundModelRouterConfig {
             trace_path: std::env::var("OPENBITFUN_ROUND_ROUTER_TRACE")
                 .ok()
                 .map(PathBuf::from),
+            context: RouterContextConfig::from_env()?,
         }))
     }
 }
@@ -189,15 +207,28 @@ fn parse_env_f64(name: &str, default: f64) -> OpenBitFunResult<f64> {
 pub struct HttpRoundModelRouter {
     config: HttpRoundModelRouterConfig,
     client: reqwest::Client,
+    context_factory: RouterContextFactory,
 }
 
 impl HttpRoundModelRouter {
     pub fn new(config: HttpRoundModelRouterConfig) -> OpenBitFunResult<Self> {
+        openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
             .build()
             .map_err(|error| OpenBitFunError::Http(error.to_string()))?;
-        Ok(Self { config, client })
+        let context_factory = RouterContextFactory::new(
+            config.context.clone(),
+            config.recent_rounds,
+            config.max_input_chars,
+            &config.system_prompt,
+            config.trace_path.clone(),
+        )?;
+        Ok(Self {
+            config,
+            client,
+            context_factory,
+        })
     }
 }
 
@@ -262,15 +293,38 @@ struct OpenAiTokenLogprob {
 
 #[async_trait::async_trait]
 impl RoundModelRouter for HttpRoundModelRouter {
+    fn create_context(
+        &self,
+        session_id: &str,
+        dialog_turn_id: &str,
+        task: &str,
+    ) -> Option<RoundRouterContext> {
+        Some(
+            self.context_factory
+                .create(session_id, dialog_turn_id, task),
+        )
+    }
+
     async fn select_model(
         &self,
         request: RoundModelRouteRequest,
     ) -> OpenBitFunResult<RoundModelRoute> {
-        let user_prompt = build_router_user_prompt(
-            &request,
-            self.config.recent_rounds,
-            self.config.max_input_chars,
-        )?;
+        let prepared = if let Some(prepared) = request.prepared_context.as_ref() {
+            prepared.clone()
+        } else {
+            // Direct callers also get isolated context, never the main compression summary.
+            let preparation_started = Instant::now();
+            let mut context = self.context_factory.create(
+                &request.session_id,
+                &request.dialog_turn_id,
+                &request.original_user_input,
+            );
+            context.observe(&request.messages);
+            let mut prepared = context.render();
+            prepared.preparation_ms = preparation_started.elapsed().as_millis() as u64;
+            prepared
+        };
+        let user_prompt = &prepared.user_prompt;
         let body = OpenAiChatRequest {
             model: &self.config.model,
             messages: [
@@ -362,6 +416,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                             "agent_type": request.agent_type,
                             "router_model": self.config.model,
                             "router_input": user_prompt,
+                            "router_context": prepared,
                             "error": error.to_string(),
                             "fallback_route": RoundModelRoute::Primary,
                             "latency_ms": started_at.elapsed().as_millis(),
@@ -381,6 +436,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                 "agent_type": request.agent_type,
                 "router_model": self.config.model,
                 "router_input": user_prompt,
+                "router_context": prepared,
                 "router_output": raw_output,
                 "router_usage": router_usage,
                 "generated_route": generated_route,
@@ -547,295 +603,6 @@ fn append_trace_record(trace_path: Option<&PathBuf>, record: &Value) {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct RouterTrajectoryRound {
-    round_id: usize,
-    assistant: RouterAssistant,
-    tool_results: Vec<RouterToolResult>,
-}
-
-#[derive(Debug, Serialize)]
-struct RouterAssistant {
-    reasoning_content: String,
-    text: String,
-    tool_calls: Vec<RouterToolCall>,
-}
-
-#[derive(Debug, Serialize)]
-struct RouterToolCall {
-    tool_id: String,
-    tool_name: String,
-    arguments: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    raw_arguments: Option<String>,
-    is_error: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct RouterToolResult {
-    #[serde(skip)]
-    tool_id: String,
-    tool_name: String,
-    result_for_assistant: String,
-}
-
-fn build_router_user_prompt(
-    request: &RoundModelRouteRequest,
-    recent_round_count: usize,
-    max_input_chars: usize,
-) -> OpenBitFunResult<String> {
-    let rounds = collect_router_rounds(&request.messages);
-    let recent_start = rounds.len().saturating_sub(recent_round_count);
-    let recent_rounds = &rounds[recent_start..];
-    let existing_summary = request.messages.iter().rev().find_map(|message| {
-        if message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary) {
-            message_text(message)
-        } else {
-            None
-        }
-    });
-    let section_limit = (max_input_chars / 8).max(512);
-    let earlier_history = if let Some(summary) = existing_summary {
-        truncate_router_text(&summary, section_limit)
-    } else if recent_start > 0 {
-        format!(
-            "({recent_start} earlier completed rounds omitted; no compression summary available)"
-        )
-    } else {
-        "(none)".to_string()
-    };
-    let task_description = truncate_router_text(&build_task_description(request), section_limit);
-    let fixed_chars = task_description.chars().count()
-        + earlier_history.chars().count()
-        + "## Task\n\n\n## Earlier history summary\n\n\n## Recent trajectory\n".len();
-    let recent_budget = max_input_chars.saturating_sub(fixed_chars).max(512);
-    let recent_json = bounded_recent_rounds_json(recent_rounds, recent_budget)?;
-    Ok(format!(
-        "## Task\n{}\n\n## Earlier history summary\n{}\n\n## Recent trajectory\n{}",
-        task_description, earlier_history, recent_json
-    ))
-}
-
-fn truncate_router_text(value: &str, max_chars: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= max_chars {
-        return value.to_string();
-    }
-    let marker = format!("\n...[truncated {} chars]...\n", char_count - max_chars);
-    let marker_chars = marker.chars().count();
-    if max_chars <= marker_chars + 2 {
-        return value.chars().take(max_chars).collect();
-    }
-    let retained = max_chars - marker_chars;
-    let head_chars = retained * 2 / 3;
-    let tail_chars = retained - head_chars;
-    let head: String = value.chars().take(head_chars).collect();
-    let tail: String = value
-        .chars()
-        .rev()
-        .take(tail_chars)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect();
-    format!("{head}{marker}{tail}")
-}
-
-fn bounded_json_value(value: &Value, max_chars: usize) -> Value {
-    let rendered = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
-    if rendered.chars().count() <= max_chars {
-        value.clone()
-    } else {
-        json!({
-            "truncated": true,
-            "preview": truncate_router_text(&rendered, max_chars),
-        })
-    }
-}
-
-fn bounded_recent_rounds_json(
-    rounds: &[RouterTrajectoryRound],
-    max_chars: usize,
-) -> OpenBitFunResult<String> {
-    let mut first_round = 0;
-    let mut field_limit = 1_536usize.min((max_chars / 12).max(128));
-    let mut item_limit = 8usize;
-
-    loop {
-        let compact: Vec<Value> = rounds[first_round..]
-            .iter()
-            .map(|round| {
-                json!({
-                    "round_id": round.round_id,
-                    "assistant": {
-                        "reasoning_content": truncate_router_text(
-                            &round.assistant.reasoning_content,
-                            field_limit,
-                        ),
-                        "text": truncate_router_text(&round.assistant.text, field_limit),
-                        "tool_calls": round.assistant.tool_calls.iter().take(item_limit).map(|call| {
-                            json!({
-                                "tool_id": call.tool_id,
-                                "tool_name": call.tool_name,
-                                "arguments": bounded_json_value(&call.arguments, field_limit),
-                                "raw_arguments": call.raw_arguments.as_deref().map(|value| {
-                                    truncate_router_text(value, field_limit)
-                                }),
-                                "is_error": call.is_error,
-                            })
-                        }).collect::<Vec<_>>(),
-                        "omitted_tool_calls": round.assistant.tool_calls.len().saturating_sub(item_limit),
-                    },
-                    "tool_results": round.tool_results.iter().take(item_limit).map(|result| {
-                        json!({
-                            "tool_name": result.tool_name,
-                            "result_for_assistant": truncate_router_text(
-                                &result.result_for_assistant,
-                                field_limit,
-                            ),
-                        })
-                    }).collect::<Vec<_>>(),
-                    "omitted_tool_results": round.tool_results.len().saturating_sub(item_limit),
-                })
-            })
-            .collect();
-        let rendered = serde_json::to_string(&compact)?;
-        if rendered.chars().count() <= max_chars {
-            return Ok(rendered);
-        }
-        if rounds.len().saturating_sub(first_round) > 1 {
-            first_round += 1;
-        } else if field_limit > 128 {
-            field_limit = (field_limit / 2).max(128);
-        } else if item_limit > 1 {
-            item_limit = (item_limit / 2).max(1);
-        } else {
-            return Ok("[{\"trajectory_truncated\":true}]".to_string());
-        }
-    }
-}
-
-fn build_task_description(request: &RoundModelRouteRequest) -> String {
-    let mut instructions: Vec<String> = request
-        .messages
-        .iter()
-        .filter(|message| {
-            message.role == MessageRole::User
-                && message.metadata.semantic_kind == Some(MessageSemanticKind::ActualUserInput)
-        })
-        .filter_map(message_text)
-        .filter(|text| !text.trim().is_empty())
-        .collect();
-    if !request.original_user_input.trim().is_empty()
-        && instructions.last() != Some(&request.original_user_input)
-    {
-        instructions.push(request.original_user_input.clone());
-    }
-    if instructions.is_empty() {
-        "(none)".to_string()
-    } else {
-        instructions.join("\n\nUser update:\n")
-    }
-}
-
-fn push_completed_round(
-    rounds: &mut Vec<RouterTrajectoryRound>,
-    current: Option<RouterTrajectoryRound>,
-) {
-    let Some(mut round) = current else {
-        return;
-    };
-    let call_order: std::collections::HashMap<String, usize> = round
-        .assistant
-        .tool_calls
-        .iter()
-        .enumerate()
-        .map(|(index, call)| (call.tool_id.clone(), index))
-        .collect();
-    round.tool_results.sort_by_key(|result| {
-        call_order
-            .get(result.tool_id.as_str())
-            .copied()
-            .unwrap_or(usize::MAX)
-    });
-    rounds.push(round);
-}
-
-fn collect_router_rounds(messages: &[Message]) -> Vec<RouterTrajectoryRound> {
-    let mut rounds = Vec::new();
-    let mut current: Option<RouterTrajectoryRound> = None;
-    for message in messages {
-        match (&message.role, &message.content) {
-            (MessageRole::Assistant, MessageContent::Text(text)) => {
-                push_completed_round(&mut rounds, current.take());
-                current = Some(RouterTrajectoryRound {
-                    round_id: rounds.len(),
-                    assistant: RouterAssistant {
-                        reasoning_content: String::new(),
-                        text: text.clone(),
-                        tool_calls: Vec::new(),
-                    },
-                    tool_results: Vec::new(),
-                });
-            }
-            (
-                MessageRole::Assistant,
-                MessageContent::Mixed {
-                    reasoning_content,
-                    text,
-                    tool_calls,
-                },
-            ) => {
-                push_completed_round(&mut rounds, current.take());
-                current = Some(RouterTrajectoryRound {
-                    round_id: rounds.len(),
-                    assistant: RouterAssistant {
-                        reasoning_content: reasoning_content.clone().unwrap_or_default(),
-                        text: text.clone(),
-                        tool_calls: tool_calls
-                            .iter()
-                            .map(|call| RouterToolCall {
-                                tool_id: call.tool_id.clone(),
-                                tool_name: call.tool_name.clone(),
-                                arguments: call.arguments.clone(),
-                                raw_arguments: call.raw_arguments.clone(),
-                                is_error: call.is_error,
-                            })
-                            .collect(),
-                    },
-                    tool_results: Vec::new(),
-                });
-            }
-            (
-                MessageRole::Tool,
-                MessageContent::ToolResult {
-                    tool_id,
-                    tool_name,
-                    effective_tool_name,
-                    result,
-                    result_for_assistant,
-                    ..
-                },
-            ) => {
-                if let Some(round) = current.as_mut() {
-                    round.tool_results.push(RouterToolResult {
-                        tool_id: tool_id.clone(),
-                        tool_name: effective_tool_name
-                            .clone()
-                            .unwrap_or_else(|| tool_name.clone()),
-                        result_for_assistant: result_for_assistant
-                            .clone()
-                            .unwrap_or_else(|| result.to_string()),
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-    push_completed_round(&mut rounds, current);
-    rounds
-}
-
 fn message_text(message: &Message) -> Option<String> {
     match &message.content {
         MessageContent::Text(text) => Some(text.clone()),
@@ -893,13 +660,10 @@ fn parse_router_route(raw_output: &str) -> OpenBitFunResult<(RoundModelRoute, bo
 #[cfg(test)]
 mod tests {
     use super::{
-        bounded_recent_rounds_json, extract_simple_probability, parse_router_route,
-        route_for_simple_probability, OpenAiChatChoice, OpenAiChatLogprobContent,
-        OpenAiChatLogprobs, OpenAiResponseMessage, OpenAiTokenLogprob, RoundModelRoute,
-        RouterAssistant, RouterToolCall, RouterToolResult, RouterTrajectoryRound,
-        NON_SIMPLE_FIRST_TOKEN_ID, SIMPLE_TOKEN_ID,
+        extract_simple_probability, parse_router_route, route_for_simple_probability,
+        OpenAiChatChoice, OpenAiChatLogprobContent, OpenAiChatLogprobs, OpenAiResponseMessage,
+        OpenAiTokenLogprob, RoundModelRoute, NON_SIMPLE_FIRST_TOKEN_ID, SIMPLE_TOKEN_ID,
     };
-    use serde_json::json;
 
     #[test]
     fn routes_use_existing_model_slots() {
@@ -921,40 +685,6 @@ mod tests {
             (RoundModelRoute::Primary, true)
         );
         assert!(parse_router_route("explanation first").is_err());
-    }
-
-    #[test]
-    fn bounded_recent_trajectory_stays_valid_json() {
-        let oversized = "x".repeat(20_000);
-        let rounds = vec![RouterTrajectoryRound {
-            round_id: 7,
-            assistant: RouterAssistant {
-                reasoning_content: oversized.clone(),
-                text: oversized.clone(),
-                tool_calls: (0..20)
-                    .map(|index| RouterToolCall {
-                        tool_id: format!("tool-{index}"),
-                        tool_name: "ExecCommand".to_string(),
-                        arguments: json!({"output": oversized}),
-                        raw_arguments: Some(oversized.clone()),
-                        is_error: false,
-                    })
-                    .collect(),
-            },
-            tool_results: (0..20)
-                .map(|index| RouterToolResult {
-                    tool_id: format!("tool-{index}"),
-                    tool_name: "ExecCommand".to_string(),
-                    result_for_assistant: oversized.clone(),
-                })
-                .collect(),
-        }];
-
-        let rendered = bounded_recent_rounds_json(&rounds, 4_096).unwrap();
-
-        assert!(rendered.chars().count() <= 4_096);
-        assert!(serde_json::from_str::<serde_json::Value>(&rendered).is_ok());
-        assert!(rendered.contains("truncated"));
     }
 
     #[test]
@@ -1039,5 +769,131 @@ mod tests {
         };
 
         assert!(extract_simple_probability(&choice, raw_output, RoundModelRoute::Fast).is_none());
+    }
+
+    #[tokio::test]
+    async fn http_request_preserves_system_and_protocol_with_isolated_bounded_input() {
+        use super::{
+            HttpRoundModelRouter, HttpRoundModelRouterConfig, RoundModelRouteRequest,
+            RoundModelRouter,
+        };
+        use crate::agentic::core::{Message, MessageSemanticKind};
+        use serde_json::{json, Value};
+        use std::io::{BufRead, BufReader, Read, Write};
+        use std::time::Duration;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().unwrap()
+        );
+        let router = HttpRoundModelRouter::new(HttpRoundModelRouterConfig {
+            endpoint,
+            model: "router-fixture".into(),
+            system_prompt: "EXACT_FIXED_SYSTEM".into(),
+            api_key: None,
+            timeout: Duration::from_secs(3),
+            recent_rounds: 3,
+            max_input_chars: 80_000,
+            simple_threshold: 0.7,
+            trace_path: None,
+            context: super::RouterContextConfig {
+                summary_enabled: false,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+        let server = std::thread::spawn(move || {
+            let mut payloads = Vec::new();
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    assert!(reader.read_line(&mut line).unwrap() > 0);
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = value.trim().parse::<usize>().unwrap();
+                    }
+                }
+                assert!(length > 0 && length < 100_000);
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                payloads.push(serde_json::from_slice::<Value>(&body).unwrap());
+                let response = json!({"choices": [{
+                    "message": {"content": "{\"simple_type\":\"simple\"}"},
+                    "logprobs": {"content": [
+                        {"bytes": b"{\"simple_type\":\"".to_vec(), "top_logprobs": []},
+                        {"bytes": b"simple".to_vec(), "top_logprobs": [
+                            {"token": "token_id:22944", "logprob": -0.2},
+                            {"token": "token_id:6280", "logprob": -1.4}
+                        ]},
+                        {"bytes": b"\"}".to_vec(), "top_logprobs": []}
+                    ]}, "token_ids": [1, 22944, 2]
+                }], "usage": {"prompt_tokens": 100, "completion_tokens": 8}})
+                .to_string();
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+            }
+            payloads
+        });
+        let messages = vec![
+            Message::user("DO_NOT_REUSE_MAIN_SUMMARY".into())
+                .with_semantic_kind(MessageSemanticKind::CompressionSummary),
+            Message::assistant("long evidence 世界 ".repeat(8_000)),
+            Message::assistant("LATEST_VISIBLE_RESULT".into()),
+        ];
+        for prepared in [false, true] {
+            let prepared_context = if prepared {
+                Some(
+                    router
+                        .create_context("session", "turn", "fix bug")
+                        .unwrap()
+                        .prepare(&messages)
+                        .await,
+                )
+            } else {
+                None
+            };
+            let request = RoundModelRouteRequest {
+                session_id: "session".into(),
+                dialog_turn_id: "turn".into(),
+                turn_index: 0,
+                round_index: 2,
+                agent_type: "code".into(),
+                original_user_input: "fix bug".into(),
+                messages: if prepared {
+                    Vec::new()
+                } else {
+                    messages.clone()
+                },
+                prepared_context,
+            };
+            assert_eq!(
+                router.select_model(request).await.unwrap(),
+                RoundModelRoute::Fast
+            );
+        }
+        let payloads = server.join().unwrap();
+        assert_eq!(payloads[0], payloads[1]);
+        let body = &payloads[0];
+        assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+        assert_eq!(body["messages"][0]["content"], "EXACT_FIXED_SYSTEM");
+        assert_eq!(body["temperature"].as_f64(), Some(0.0));
+        assert_eq!(body["max_tokens"], 128);
+        assert_eq!(body["stop"], json!(["\n"]));
+        assert!(body.get("tools").is_none());
+        let prompt = body["messages"][1]["content"].as_str().unwrap();
+        assert!(prompt.len() <= 4_096);
+        assert!(prompt.contains("LATEST_VISIBLE_RESULT"));
+        assert!(!prompt.contains("DO_NOT_REUSE_MAIN_SUMMARY"));
+        assert!(prompt.starts_with("## Task\n"));
+        let trajectory = prompt.split("## Recent trajectory\n").nth(1).unwrap();
+        serde_json::from_str::<Value>(trajectory).unwrap();
     }
 }

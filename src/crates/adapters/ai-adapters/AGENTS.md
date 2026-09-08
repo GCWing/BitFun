@@ -29,6 +29,12 @@ provider-neutral contracts owned by `openbitfun-agent-stream`.
 
 ## Verification
 
+Local Router token counting (optional `local-tokenizer`, no model downloads):
+
+```bash
+cargo test --locked -p openbitfun-ai-adapters --features local-tokenizer --lib local_tokenizer
+```
+
 Subscription model discovery must use the authenticated account catalog.
 Antigravity uses `v1internal:fetchAvailableModels`; preserve returned wire IDs
 and restrict alias translation to known legacy names. Codex's `supported_in_api`

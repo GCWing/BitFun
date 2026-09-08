@@ -40,6 +40,7 @@ hex = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
+tokenizers = { workspace = true, optional = true, features = ["fancy-regex"] }
 urlencoding = { workspace = true }
 uuid = { workspace = true, optional = true }
 
@@ -52,6 +53,7 @@ keyring-core = { workspace = true, optional = true }
 zbus-secret-service-keyring-store = { workspace = true, optional = true }
 
 [features]
+local-tokenizer = ["dep:tokenizers"]
 subscription-auth = [
     "dep:base64",
     "openbitfun-services-core/credential-vault",

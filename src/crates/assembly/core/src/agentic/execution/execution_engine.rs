@@ -3759,6 +3759,34 @@ impl ExecutionEngine {
         let mut main_context_overflow_recoveries = 0usize;
         let mut active_round_lifecycle: Option<ModelRoundLifecycle> = None;
         let mut active_round_model: Option<RoundExecutionModel> = None;
+        // Router context is per execution generation and never writes to `messages` or
+        // the primary compactor. Capture initial history before any main compression.
+        let routing_allowed = context.subagent_parent_info.is_none()
+            && !matches!(
+                session.config.model_binding_policy,
+                SessionModelBindingPolicy::ApprovedImmutable
+            );
+        let mut router_context = self
+            .round_model_router
+            .as_ref()
+            .filter(|_| routing_allowed)
+            .and_then(|router| {
+                router.create_context(
+                    &context.session_id,
+                    &context.dialog_turn_id,
+                    &original_user_input,
+                )
+            });
+        if let Some(router_context) = router_context.as_mut() {
+            router_context
+                .restore(
+                    self.session_manager
+                        .persistent_model_exchange_trace_dir(&context.session_id)
+                        .await,
+                )
+                .await;
+            router_context.observe(&messages);
+        }
 
         // Track tool-call patterns for context health, but only use rounds with
         // actual failed tool results for no-progress recovery decisions.
@@ -3851,12 +3879,7 @@ impl ExecutionEngine {
             let selected_model = if let Some(selected_model) = active_round_model.clone() {
                 selected_model
             } else {
-                let requested_route = if self.round_model_router.is_some()
-                    && context.subagent_parent_info.is_none()
-                    && !matches!(
-                        session.config.model_binding_policy,
-                        SessionModelBindingPolicy::ApprovedImmutable
-                    ) {
+                let requested_route = if self.round_model_router.is_some() && routing_allowed {
                     if self
                         .round_executor
                         .is_dialog_turn_cancelled(&dialog_turn_id)
@@ -3866,6 +3889,22 @@ impl ExecutionEngine {
                         ));
                     }
 
+                    let prepared_context = if let Some(router_context) = router_context.as_mut() {
+                        let preparation_started = std::time::Instant::now();
+                        // The append-only generation transcript also retains feedback that
+                        // main context-overflow recovery may already have removed.
+                        if let Some(generated) = self
+                            .generation_messages
+                            .get(&(context.session_id.clone(), context.dialog_turn_id.clone()))
+                        {
+                            router_context.observe(generated.as_slice());
+                        }
+                        let mut prepared = router_context.prepare(&messages).await;
+                        prepared.preparation_ms = preparation_started.elapsed().as_millis() as u64;
+                        Some(prepared)
+                    } else {
+                        None
+                    };
                     let request = RoundModelRouteRequest {
                         session_id: context.session_id.clone(),
                         dialog_turn_id: context.dialog_turn_id.clone(),
@@ -3873,7 +3912,12 @@ impl ExecutionEngine {
                         round_index,
                         agent_type: agent_type.clone(),
                         original_user_input: original_user_input.clone(),
-                        messages: messages.clone(),
+                        messages: if prepared_context.is_some() {
+                            Vec::new()
+                        } else {
+                            messages.clone()
+                        },
+                        prepared_context,
                     };
                     match self
                         .round_model_router
@@ -5320,6 +5364,16 @@ impl ExecutionEngine {
             );
         } else {
             warn!("Dialog turn completed but token stats not available");
+        }
+
+        if let Some(router_context) = router_context.as_mut() {
+            if let Some(generated) = self
+                .generation_messages
+                .get(&(context.session_id.clone(), context.dialog_turn_id.clone()))
+            {
+                router_context.observe(generated.as_slice());
+            }
+            router_context.finish(&messages).await;
         }
 
         Ok(ExecutionResult {

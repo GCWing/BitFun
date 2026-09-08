@@ -2,6 +2,8 @@
 
 pub mod client;
 pub mod diagnostics;
+#[cfg(feature = "local-tokenizer")]
+pub mod local_tokenizer;
 pub mod model_selector;
 pub mod models_dev;
 pub mod providers;

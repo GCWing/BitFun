@@ -193,6 +193,7 @@ product-full = [
 # external ecosystem discovery.
 agent-runtime = [
     "ai-adapter-runtime",
+    "openbitfun-ai-adapters/local-tokenizer",
     "dep:reqwest",
     "dep:openbitfun-agent-runtime",
     "openbitfun-agent-runtime/agent-runtime",

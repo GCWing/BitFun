@@ -119,6 +119,7 @@ brotli-decompressor = "=5.0.0"
 alloc-no-stdlib = "=2.0.4"
 alloc-stdlib = "=0.2.2"
 regex = "1"
+tokenizers = { version = "0.22.2", default-features = false }
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
 bitflags = "=2.11.1"

@@ -106,6 +106,12 @@ so `autotests = false` cannot silently omit a new contract.
 
 ## Verification
 
+Router-only incremental context, budgeting, and summary fencing:
+
+```bash
+cargo test --locked -p openbitfun-agent-runtime --no-default-features --features agent-runtime --lib router_context
+```
+
 Use the focused contract form by default. Run the package-wide form only when a
 change crosses several runtime targets:
 

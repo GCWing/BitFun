@@ -1,5 +1,17 @@
 If you modify `stream_processor.rs`, run the stream integration tests before finishing.
 
+For per-round Router input preparation, isolation from main context compression,
+background summaries, and routing protocol behavior, use:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib round_model_routing
+```
+
+Router context state/budgets live in `openbitfun-agent-runtime::router_context`;
+Core only observes messages, invokes the auxiliary fast model and stores its
+separate sidecar. Never feed Router summaries back into the main transcript or
+use the main compactor's summary/model/config as Router state.
+
 For model retry admission and recovery, use:
 
 ```bash

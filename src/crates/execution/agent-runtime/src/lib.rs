@@ -48,6 +48,8 @@ pub mod prompt_markup;
 #[cfg(feature = "agent-runtime")]
 pub mod remote_file_delivery;
 #[cfg(feature = "agent-runtime")]
+pub mod router_context;
+#[cfg(feature = "agent-runtime")]
 pub mod runtime;
 #[cfg(feature = "agent-runtime")]
 pub mod scheduled_job;
