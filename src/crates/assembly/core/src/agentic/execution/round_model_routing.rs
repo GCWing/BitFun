@@ -79,6 +79,7 @@ pub struct HttpRoundModelRouterConfig {
     pub api_key: Option<String>,
     pub timeout: Duration,
     pub recent_rounds: usize,
+    pub max_input_chars: usize,
     pub trace_path: Option<PathBuf>,
 }
 
@@ -117,9 +118,15 @@ impl HttpRoundModelRouterConfig {
         })?;
         let timeout_ms = parse_env_usize("OPENBITFUN_ROUND_ROUTER_TIMEOUT_MS", 10_000)?;
         let recent_rounds = parse_env_usize("OPENBITFUN_ROUND_ROUTER_RECENT_ROUNDS", 3)?;
+        let max_input_chars = parse_env_usize("OPENBITFUN_ROUND_ROUTER_MAX_INPUT_CHARS", 80_000)?;
         if recent_rounds == 0 {
             return Err(OpenBitFunError::Configuration(
                 "OPENBITFUN_ROUND_ROUTER_RECENT_ROUNDS must be positive".to_string(),
+            ));
+        }
+        if max_input_chars < 4_096 {
+            return Err(OpenBitFunError::Configuration(
+                "OPENBITFUN_ROUND_ROUTER_MAX_INPUT_CHARS must be at least 4096".to_string(),
             ));
         }
 
@@ -135,6 +142,7 @@ impl HttpRoundModelRouterConfig {
                 .filter(|value| !value.trim().is_empty()),
             timeout: Duration::from_millis(timeout_ms as u64),
             recent_rounds,
+            max_input_chars,
             trace_path: std::env::var("OPENBITFUN_ROUND_ROUTER_TRACE")
                 .ok()
                 .map(PathBuf::from),
@@ -189,6 +197,8 @@ struct OpenAiChatMessage<'a> {
 #[derive(Debug, Deserialize)]
 struct OpenAiChatResponse {
     choices: Vec<OpenAiChatChoice>,
+    #[serde(default)]
+    usage: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,7 +217,11 @@ impl RoundModelRouter for HttpRoundModelRouter {
         &self,
         request: RoundModelRouteRequest,
     ) -> OpenBitFunResult<RoundModelRoute> {
-        let user_prompt = build_router_user_prompt(&request, self.config.recent_rounds)?;
+        let user_prompt = build_router_user_prompt(
+            &request,
+            self.config.recent_rounds,
+            self.config.max_input_chars,
+        )?;
         let body = OpenAiChatRequest {
             model: &self.config.model,
             messages: [
@@ -231,29 +245,57 @@ impl RoundModelRouter for HttpRoundModelRouter {
         if let Some(api_key) = self.config.api_key.as_deref() {
             http_request = http_request.bearer_auth(api_key);
         }
-        let response = http_request
-            .send()
-            .await
-            .map_err(|error| OpenBitFunError::Http(format!("Router request failed: {error}")))?
-            .error_for_status()
-            .map_err(|error| OpenBitFunError::Http(format!("Router returned an error: {error}")))?
-            .json::<OpenAiChatResponse>()
-            .await
-            .map_err(|error| {
-                OpenBitFunError::Deserialization(format!(
-                    "Failed to decode Router response: {error}"
-                ))
-            })?;
-        let raw_output = response
-            .choices
-            .first()
-            .and_then(|choice| choice.message.content.as_deref())
-            .ok_or_else(|| {
-                OpenBitFunError::Deserialization(
-                    "Router response did not contain assistant content".to_string(),
-                )
-            })?;
-        let (route, recovered) = parse_router_route(raw_output)?;
+        let route_result = async {
+            let response = http_request
+                .send()
+                .await
+                .map_err(|error| OpenBitFunError::Http(format!("Router request failed: {error}")))?
+                .error_for_status()
+                .map_err(|error| {
+                    OpenBitFunError::Http(format!("Router returned an error: {error}"))
+                })?
+                .json::<OpenAiChatResponse>()
+                .await
+                .map_err(|error| {
+                    OpenBitFunError::Deserialization(format!(
+                        "Failed to decode Router response: {error}"
+                    ))
+                })?;
+            let raw_output = response
+                .choices
+                .first()
+                .and_then(|choice| choice.message.content.as_deref())
+                .ok_or_else(|| {
+                    OpenBitFunError::Deserialization(
+                        "Router response did not contain assistant content".to_string(),
+                    )
+                })?;
+            let (route, recovered) = parse_router_route(raw_output)?;
+            Ok::<_, OpenBitFunError>((route, recovered, raw_output.to_string(), response.usage))
+        }
+        .await;
+        let (route, recovered, raw_output, router_usage) = match route_result {
+            Ok(result) => result,
+            Err(error) => {
+                append_trace_record(
+                    self.config.trace_path.as_ref(),
+                    &json!({
+                        "event": "router_failure",
+                        "session_id": request.session_id,
+                        "dialog_turn_id": request.dialog_turn_id,
+                        "turn_index": request.turn_index,
+                        "round_index": request.round_index,
+                        "agent_type": request.agent_type,
+                        "router_model": self.config.model,
+                        "router_input": user_prompt,
+                        "error": error.to_string(),
+                        "fallback_route": RoundModelRoute::Primary,
+                        "latency_ms": started_at.elapsed().as_millis(),
+                    }),
+                );
+                return Err(error);
+            }
+        };
         append_trace_record(
             self.config.trace_path.as_ref(),
             &json!({
@@ -266,6 +308,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                 "router_model": self.config.model,
                 "router_input": user_prompt,
                 "router_output": raw_output,
+                "router_usage": router_usage,
                 "route": route,
                 "recovered": recovered,
                 "latency_ms": started_at.elapsed().as_millis(),
@@ -375,6 +418,7 @@ struct RouterToolResult {
 fn build_router_user_prompt(
     request: &RoundModelRouteRequest,
     recent_round_count: usize,
+    max_input_chars: usize,
 ) -> OpenBitFunResult<String> {
     let rounds = collect_router_rounds(&request.messages);
     let recent_start = rounds.len().saturating_sub(recent_round_count);
@@ -386,22 +430,125 @@ fn build_router_user_prompt(
             None
         }
     });
+    let section_limit = (max_input_chars / 8).max(512);
     let earlier_history = if let Some(summary) = existing_summary {
-        summary
+        truncate_router_text(&summary, section_limit)
     } else if recent_start > 0 {
         format!(
-            "Earlier completed rounds: {}",
-            serde_json::to_string(&rounds[..recent_start])?
+            "({recent_start} earlier completed rounds omitted; no compression summary available)"
         )
     } else {
         "(none)".to_string()
     };
-    let recent_json = serde_json::to_string(recent_rounds)?;
-    let task_description = build_task_description(request);
+    let task_description = truncate_router_text(&build_task_description(request), section_limit);
+    let fixed_chars = task_description.chars().count()
+        + earlier_history.chars().count()
+        + "## Task\n\n\n## Earlier history summary\n\n\n## Recent trajectory\n".len();
+    let recent_budget = max_input_chars.saturating_sub(fixed_chars).max(512);
+    let recent_json = bounded_recent_rounds_json(recent_rounds, recent_budget)?;
     Ok(format!(
         "## Task\n{}\n\n## Earlier history summary\n{}\n\n## Recent trajectory\n{}",
         task_description, earlier_history, recent_json
     ))
+}
+
+fn truncate_router_text(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+    let marker = format!("\n...[truncated {} chars]...\n", char_count - max_chars);
+    let marker_chars = marker.chars().count();
+    if max_chars <= marker_chars + 2 {
+        return value.chars().take(max_chars).collect();
+    }
+    let retained = max_chars - marker_chars;
+    let head_chars = retained * 2 / 3;
+    let tail_chars = retained - head_chars;
+    let head: String = value.chars().take(head_chars).collect();
+    let tail: String = value
+        .chars()
+        .rev()
+        .take(tail_chars)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    format!("{head}{marker}{tail}")
+}
+
+fn bounded_json_value(value: &Value, max_chars: usize) -> Value {
+    let rendered = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
+    if rendered.chars().count() <= max_chars {
+        value.clone()
+    } else {
+        json!({
+            "truncated": true,
+            "preview": truncate_router_text(&rendered, max_chars),
+        })
+    }
+}
+
+fn bounded_recent_rounds_json(
+    rounds: &[RouterTrajectoryRound],
+    max_chars: usize,
+) -> OpenBitFunResult<String> {
+    let mut first_round = 0;
+    let mut field_limit = 1_536usize.min((max_chars / 12).max(128));
+    let mut item_limit = 8usize;
+
+    loop {
+        let compact: Vec<Value> = rounds[first_round..]
+            .iter()
+            .map(|round| {
+                json!({
+                    "round_id": round.round_id,
+                    "assistant": {
+                        "reasoning_content": truncate_router_text(
+                            &round.assistant.reasoning_content,
+                            field_limit,
+                        ),
+                        "text": truncate_router_text(&round.assistant.text, field_limit),
+                        "tool_calls": round.assistant.tool_calls.iter().take(item_limit).map(|call| {
+                            json!({
+                                "tool_id": call.tool_id,
+                                "tool_name": call.tool_name,
+                                "arguments": bounded_json_value(&call.arguments, field_limit),
+                                "raw_arguments": call.raw_arguments.as_deref().map(|value| {
+                                    truncate_router_text(value, field_limit)
+                                }),
+                                "is_error": call.is_error,
+                            })
+                        }).collect::<Vec<_>>(),
+                        "omitted_tool_calls": round.assistant.tool_calls.len().saturating_sub(item_limit),
+                    },
+                    "tool_results": round.tool_results.iter().take(item_limit).map(|result| {
+                        json!({
+                            "tool_name": result.tool_name,
+                            "result_for_assistant": truncate_router_text(
+                                &result.result_for_assistant,
+                                field_limit,
+                            ),
+                        })
+                    }).collect::<Vec<_>>(),
+                    "omitted_tool_results": round.tool_results.len().saturating_sub(item_limit),
+                })
+            })
+            .collect();
+        let rendered = serde_json::to_string(&compact)?;
+        if rendered.chars().count() <= max_chars {
+            return Ok(rendered);
+        }
+        if rounds.len().saturating_sub(first_round) > 1 {
+            first_round += 1;
+        } else if field_limit > 128 {
+            field_limit = (field_limit / 2).max(128);
+        } else if item_limit > 1 {
+            item_limit = (item_limit / 2).max(1);
+        } else {
+            return Ok("[{\"trajectory_truncated\":true}]".to_string());
+        }
+    }
 }
 
 fn build_task_description(request: &RoundModelRouteRequest) -> String {
@@ -581,7 +728,11 @@ fn parse_router_route(raw_output: &str) -> OpenBitFunResult<(RoundModelRoute, bo
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_router_route, RoundModelRoute};
+    use super::{
+        bounded_recent_rounds_json, parse_router_route, RoundModelRoute, RouterAssistant,
+        RouterToolCall, RouterToolResult, RouterTrajectoryRound,
+    };
+    use serde_json::json;
 
     #[test]
     fn routes_use_existing_model_slots() {
@@ -603,5 +754,39 @@ mod tests {
             (RoundModelRoute::Primary, true)
         );
         assert!(parse_router_route("explanation first").is_err());
+    }
+
+    #[test]
+    fn bounded_recent_trajectory_stays_valid_json() {
+        let oversized = "x".repeat(20_000);
+        let rounds = vec![RouterTrajectoryRound {
+            round_id: 7,
+            assistant: RouterAssistant {
+                reasoning_content: oversized.clone(),
+                text: oversized.clone(),
+                tool_calls: (0..20)
+                    .map(|index| RouterToolCall {
+                        tool_id: format!("tool-{index}"),
+                        tool_name: "ExecCommand".to_string(),
+                        arguments: json!({"output": oversized}),
+                        raw_arguments: Some(oversized.clone()),
+                        is_error: false,
+                    })
+                    .collect(),
+            },
+            tool_results: (0..20)
+                .map(|index| RouterToolResult {
+                    tool_id: format!("tool-{index}"),
+                    tool_name: "ExecCommand".to_string(),
+                    result_for_assistant: oversized.clone(),
+                })
+                .collect(),
+        }];
+
+        let rendered = bounded_recent_rounds_json(&rounds, 4_096).unwrap();
+
+        assert!(rendered.chars().count() <= 4_096);
+        assert!(serde_json::from_str::<serde_json::Value>(&rendered).is_ok());
+        assert!(rendered.contains("truncated"));
     }
 }

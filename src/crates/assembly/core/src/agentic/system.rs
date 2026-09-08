@@ -39,6 +39,30 @@ pub struct AgenticSystem {
     pub token_usage_service: Arc<TokenUsageService>,
 }
 
+/// Install the opt-in round router on an execution engine assembled by a host.
+///
+/// Desktop supplies a computer-use host and therefore assembles its own engine;
+/// keeping the environment-driven router wiring here prevents that host-specific
+/// path from silently diverging from CLI, ACP, Server, and SDK behavior.
+pub fn with_configured_round_model_router(
+    mut execution_engine: execution::ExecutionEngine,
+) -> Result<execution::ExecutionEngine> {
+    if let Some(router_config) = execution::HttpRoundModelRouterConfig::from_env()? {
+        info!(
+            "Enabling per-round model routing: endpoint={}, model={}, recent_rounds={}, max_input_chars={}, timeout_ms={}",
+            router_config.endpoint,
+            router_config.model,
+            router_config.recent_rounds,
+            router_config.max_input_chars,
+            router_config.timeout.as_millis()
+        );
+        execution_engine = execution_engine.with_round_model_router(Arc::new(
+            execution::HttpRoundModelRouter::new(router_config)?,
+        ));
+    }
+    Ok(execution_engine)
+}
+
 /// Initialize the full compatibility Agent Runtime and register the global
 /// coordinator.
 ///
@@ -137,25 +161,14 @@ pub async fn init_agentic_system_for_profile_with_runtime_ownership(
     ));
 
     let execution_config = execution::execution_engine_config_from_global_config().await;
-    let mut execution_engine = execution::ExecutionEngine::new(
+    let execution_engine = execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
         execution_config,
     );
-    if let Some(router_config) = execution::HttpRoundModelRouterConfig::from_env()? {
-        info!(
-            "Enabling per-round model routing: endpoint={}, model={}, recent_rounds={}, timeout_ms={}",
-            router_config.endpoint,
-            router_config.model,
-            router_config.recent_rounds,
-            router_config.timeout.as_millis()
-        );
-        execution_engine = execution_engine.with_round_model_router(Arc::new(
-            execution::HttpRoundModelRouter::new(router_config)?,
-        ));
-    }
+    let execution_engine = with_configured_round_model_router(execution_engine)?;
     let execution_engine = Arc::new(execution_engine);
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

@@ -2178,13 +2178,16 @@ async fn init_agentic_system() -> anyhow::Result<(
 
     let execution_config = execution::execution_engine_config_from_global_config().await;
 
-    let execution_engine = Arc::new(execution::ExecutionEngine::new(
+    let execution_engine = execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
         execution_config,
-    ));
+    );
+    let execution_engine = Arc::new(
+        openbitfun_core::agentic::system::with_configured_round_model_router(execution_engine)?,
+    );
 
     let runtime_ownership = Arc::new(
         openbitfun_core::runtime_ownership::CoreRuntimeOwnership::embedded(

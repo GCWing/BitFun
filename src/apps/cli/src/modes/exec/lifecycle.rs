@@ -1314,7 +1314,10 @@ impl ExecMode {
         // A routed round reports the model that actually executed that round. It
         // must not replace the session's admitted primary model with the fast
         // candidate merely because the latest round happened to be simple.
-        if std::env::var_os("OPENBITFUN_ROUND_ROUTER_URL").is_some() {
+        if std::env::var("OPENBITFUN_ROUND_ROUTER_URL")
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
             return;
         }
         let trimmed = model_config_id.trim();
