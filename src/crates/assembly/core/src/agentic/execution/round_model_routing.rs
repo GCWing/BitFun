@@ -10,17 +10,14 @@ use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use context::{RoundRouterContext, RouterContextConfig, RouterContextFactory};
 use log::{debug, info, warn};
 use openbitfun_agent_runtime::router_context::PreparedRouterContext;
-use serde::{Deserialize, Serialize};
+use openbitfun_ai_adapters::round_router::{RouterClientError, RouterHttpClient};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-
-const SIMPLE_TOKEN_ID: u32 = 22_944;
-const NON_SIMPLE_FIRST_TOKEN_ID: u32 = 6_280;
-const ROUTER_TOP_LOGPROBS: usize = 20;
 
 /// The configured execution-model slot to use for one logical model round.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -206,17 +203,20 @@ fn parse_env_f64(name: &str, default: f64) -> OpenBitFunResult<f64> {
 
 pub struct HttpRoundModelRouter {
     config: HttpRoundModelRouterConfig,
-    client: reqwest::Client,
+    client: RouterHttpClient,
     context_factory: RouterContextFactory,
 }
 
 impl HttpRoundModelRouter {
     pub fn new(config: HttpRoundModelRouterConfig) -> OpenBitFunResult<Self> {
-        openbitfun_services_core::tls_provider::ensure_ring_crypto_provider();
-        let client = reqwest::Client::builder()
-            .timeout(config.timeout)
-            .build()
-            .map_err(|error| OpenBitFunError::Http(error.to_string()))?;
+        let client = RouterHttpClient::new(
+            config.endpoint.clone(),
+            config.model.clone(),
+            config.system_prompt.clone(),
+            config.api_key.clone(),
+            config.timeout,
+        )
+        .map_err(map_router_error)?;
         let context_factory = RouterContextFactory::new(
             config.context.clone(),
             config.recent_rounds,
@@ -230,65 +230,6 @@ impl HttpRoundModelRouter {
             context_factory,
         })
     }
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChatRequest<'a> {
-    model: &'a str,
-    messages: [OpenAiChatMessage<'a>; 2],
-    temperature: f32,
-    top_p: f32,
-    max_tokens: usize,
-    stop: [&'a str; 1],
-    logprobs: bool,
-    top_logprobs: usize,
-    return_token_ids: bool,
-    return_tokens_as_token_ids: bool,
-    chat_template_kwargs: Value,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChatMessage<'a> {
-    role: &'a str,
-    content: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatResponse {
-    choices: Vec<OpenAiChatChoice>,
-    #[serde(default)]
-    usage: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatChoice {
-    message: OpenAiResponseMessage,
-    #[serde(default)]
-    logprobs: Option<OpenAiChatLogprobs>,
-    #[serde(default)]
-    token_ids: Option<Vec<u32>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiResponseMessage {
-    content: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatLogprobs {
-    content: Option<Vec<OpenAiChatLogprobContent>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatLogprobContent {
-    bytes: Option<Vec<u8>>,
-    top_logprobs: Vec<OpenAiTokenLogprob>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiTokenLogprob {
-    token: String,
-    logprob: f64,
 }
 
 #[async_trait::async_trait]
@@ -325,82 +266,32 @@ impl RoundModelRouter for HttpRoundModelRouter {
             prepared
         };
         let user_prompt = &prepared.user_prompt;
-        let body = OpenAiChatRequest {
-            model: &self.config.model,
-            messages: [
-                OpenAiChatMessage {
-                    role: "system",
-                    content: &self.config.system_prompt,
-                },
-                OpenAiChatMessage {
-                    role: "user",
-                    content: &user_prompt,
-                },
-            ],
-            temperature: 0.0,
-            top_p: 1.0,
-            max_tokens: 128,
-            stop: ["\n"],
-            logprobs: true,
-            top_logprobs: ROUTER_TOP_LOGPROBS,
-            return_token_ids: true,
-            return_tokens_as_token_ids: true,
-            chat_template_kwargs: json!({"enable_thinking": false}),
-        };
         let started_at = Instant::now();
-        let mut http_request = self.client.post(&self.config.endpoint).json(&body);
-        if let Some(api_key) = self.config.api_key.as_deref() {
-            http_request = http_request.bearer_auth(api_key);
-        }
-        let route_result = async {
-            let response = http_request
-                .send()
-                .await
-                .map_err(|error| OpenBitFunError::Http(format!("Router request failed: {error}")))?
-                .error_for_status()
-                .map_err(|error| {
-                    OpenBitFunError::Http(format!("Router returned an error: {error}"))
-                })?
-                .json::<OpenAiChatResponse>()
-                .await
-                .map_err(|error| {
-                    OpenBitFunError::Deserialization(format!(
-                        "Failed to decode Router response: {error}"
-                    ))
-                })?;
-            let choice = response.choices.first().ok_or_else(|| {
-                OpenBitFunError::Deserialization(
-                    "Router response did not contain a choice".to_string(),
-                )
-            })?;
-            let raw_output = choice.message.content.as_deref().ok_or_else(|| {
-                OpenBitFunError::Deserialization(
-                    "Router response did not contain assistant content".to_string(),
-                )
-            })?;
-            let (generated_route, recovered) = parse_router_route(raw_output)?;
-            let simple_probability =
-                extract_simple_probability(choice, raw_output, generated_route);
+        let route_result = self.client.predict(user_prompt).await.map_err(map_router_error).map(|prediction| {
+            let generated_route = if prediction.generated_simple {
+                RoundModelRoute::Fast
+            } else {
+                RoundModelRoute::Primary
+            };
             let route = route_for_simple_probability(
-                simple_probability,
+                prediction.simple_probability,
                 self.config.simple_threshold,
             );
-            if simple_probability.is_none() {
+            if prediction.simple_probability.is_none() {
                 warn!(
                     "Router logprobs did not contain both class tokens; conservatively selecting primary: turn_id={}, round_index={}",
                     request.dialog_turn_id, request.round_index
                 );
             }
-            Ok::<_, OpenBitFunError>((
+            (
                 route,
                 generated_route,
-                simple_probability,
-                recovered,
-                raw_output.to_string(),
-                response.usage,
-            ))
-        }
-        .await;
+                prediction.simple_probability,
+                prediction.recovered,
+                prediction.raw_output,
+                prediction.usage,
+            )
+        });
         let (route, generated_route, simple_probability, recovered, raw_output, router_usage) =
             match route_result {
                 Ok(result) => result,
@@ -484,6 +375,13 @@ impl RoundModelRouter for HttpRoundModelRouter {
     }
 }
 
+fn map_router_error(error: RouterClientError) -> OpenBitFunError {
+    match error {
+        RouterClientError::Http(message) => OpenBitFunError::Http(message),
+        RouterClientError::Deserialization(message) => OpenBitFunError::Deserialization(message),
+    }
+}
+
 fn route_for_simple_probability(
     simple_probability: Option<f64>,
     simple_threshold: f64,
@@ -492,80 +390,6 @@ fn route_for_simple_probability(
         Some(probability) if probability > simple_threshold => RoundModelRoute::Fast,
         _ => RoundModelRoute::Primary,
     }
-}
-
-fn extract_simple_probability(
-    choice: &OpenAiChatChoice,
-    raw_output: &str,
-    generated_route: RoundModelRoute,
-) -> Option<f64> {
-    let token_ids = choice.token_ids.as_deref()?;
-    let logprobs = choice.logprobs.as_ref()?.content.as_deref()?;
-    if token_ids.len() != logprobs.len() {
-        return None;
-    }
-
-    let generated_label_token = match generated_route {
-        RoundModelRoute::Fast => SIMPLE_TOKEN_ID,
-        RoundModelRoute::Primary => NON_SIMPLE_FIRST_TOKEN_ID,
-    };
-    let label_byte_offset = simple_type_value_byte_offset(raw_output)?;
-    let label_index = token_index_at_byte_offset(logprobs, label_byte_offset)?;
-    if token_ids.get(label_index).copied()? != generated_label_token {
-        return None;
-    }
-    let candidates = &logprobs.get(label_index)?.top_logprobs;
-    let simple_logprob = find_token_logprob(candidates, SIMPLE_TOKEN_ID)?;
-    let non_simple_logprob = find_token_logprob(candidates, NON_SIMPLE_FIRST_TOKEN_ID)?;
-
-    // Renormalize over the two routing classes only. Log-probabilities differ
-    // from raw logits by the same log-softmax constant, so this is equivalent
-    // to a two-class softmax over their logits.
-    let maximum = simple_logprob.max(non_simple_logprob);
-    let simple_weight = (simple_logprob - maximum).exp();
-    let non_simple_weight = (non_simple_logprob - maximum).exp();
-    Some(simple_weight / (simple_weight + non_simple_weight))
-}
-
-fn simple_type_value_byte_offset(raw_output: &str) -> Option<usize> {
-    let first_line = raw_output.lines().next()?;
-    let key_offset = first_line.find("\"simple_type\"")?;
-    let after_key_offset = key_offset + "\"simple_type\"".len();
-    let after_key = &first_line[after_key_offset..];
-    let colon_offset = after_key.find(':')?;
-    let after_colon_offset = after_key_offset + colon_offset + 1;
-    let whitespace_bytes = first_line[after_colon_offset..]
-        .len()
-        .saturating_sub(first_line[after_colon_offset..].trim_start().len());
-    let opening_quote_offset = after_colon_offset + whitespace_bytes;
-    if first_line.as_bytes().get(opening_quote_offset) != Some(&b'"') {
-        return None;
-    }
-    Some(opening_quote_offset + 1)
-}
-
-fn token_index_at_byte_offset(
-    logprobs: &[OpenAiChatLogprobContent],
-    target_offset: usize,
-) -> Option<usize> {
-    let mut current_offset: usize = 0;
-    for (index, token) in logprobs.iter().enumerate() {
-        let token_bytes = token.bytes.as_deref()?;
-        let next_offset = current_offset.checked_add(token_bytes.len())?;
-        if (current_offset..next_offset).contains(&target_offset) {
-            return Some(index);
-        }
-        current_offset = next_offset;
-    }
-    None
-}
-
-fn find_token_logprob(candidates: &[OpenAiTokenLogprob], token_id: u32) -> Option<f64> {
-    let expected = format!("token_id:{token_id}");
-    candidates
-        .iter()
-        .find(|candidate| candidate.token == expected)
-        .map(|candidate| candidate.logprob)
 }
 
 static TRACE_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -612,117 +436,14 @@ fn message_text(message: &Message) -> Option<String> {
     }
 }
 
-fn parse_router_route(raw_output: &str) -> OpenBitFunResult<(RoundModelRoute, bool)> {
-    let first_line = raw_output.lines().next().unwrap_or_default().trim();
-    if first_line.is_empty() || !first_line.starts_with('{') {
-        return Err(OpenBitFunError::Deserialization(
-            "Router output is not a JSON object".to_string(),
-        ));
-    }
-    if first_line.matches("\"simple_type\"").count() != 1 {
-        return Err(OpenBitFunError::Deserialization(
-            "Router output must contain exactly one simple_type key".to_string(),
-        ));
-    }
-    let (prediction, recovered) = match serde_json::from_str::<Value>(first_line) {
-        Ok(value) => (value, false),
-        Err(_) if !first_line.ends_with('}') => {
-            let repaired = format!("{first_line}}}");
-            let value = serde_json::from_str::<Value>(&repaired).map_err(|error| {
-                OpenBitFunError::Deserialization(format!("Router output is invalid JSON: {error}"))
-            })?;
-            (value, true)
-        }
-        Err(error) => {
-            return Err(OpenBitFunError::Deserialization(format!(
-                "Router output is invalid JSON: {error}"
-            )));
-        }
-    };
-    let simple_type = prediction
-        .as_object()
-        .and_then(|object| object.get("simple_type"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            OpenBitFunError::Deserialization(
-                "Router output is missing a string simple_type".to_string(),
-            )
-        })?;
-    match simple_type {
-        "simple" => Ok((RoundModelRoute::Fast, recovered)),
-        "non_simple" => Ok((RoundModelRoute::Primary, recovered)),
-        value => Err(OpenBitFunError::Deserialization(format!(
-            "Router output has unsupported simple_type: {value}"
-        ))),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        extract_simple_probability, parse_router_route, route_for_simple_probability,
-        OpenAiChatChoice, OpenAiChatLogprobContent, OpenAiChatLogprobs, OpenAiResponseMessage,
-        OpenAiTokenLogprob, RoundModelRoute, NON_SIMPLE_FIRST_TOKEN_ID, SIMPLE_TOKEN_ID,
-    };
+    use super::{route_for_simple_probability, RoundModelRoute};
 
     #[test]
     fn routes_use_existing_model_slots() {
         assert_eq!(RoundModelRoute::Primary.model_selector(), "primary");
         assert_eq!(RoundModelRoute::Fast.model_selector(), "fast");
-    }
-
-    #[test]
-    fn parser_maps_simple_type_and_repairs_only_a_missing_closing_brace() {
-        let simple = r#"{"phase":"editing","phase_detail":"production_change_applied","simple_type":"simple"}"#;
-        let non_simple = r#"{"phase":"localization","phase_detail":"root_cause_closed","simple_type":"non_simple""#;
-
-        assert_eq!(
-            parse_router_route(simple).unwrap(),
-            (RoundModelRoute::Fast, false)
-        );
-        assert_eq!(
-            parse_router_route(non_simple).unwrap(),
-            (RoundModelRoute::Primary, true)
-        );
-        assert!(parse_router_route("explanation first").is_err());
-    }
-
-    #[test]
-    fn confidence_is_renormalized_over_simple_and_non_simple() {
-        let raw_output = r#"{"simple_type":"simple"}"#;
-        let choice = OpenAiChatChoice {
-            message: OpenAiResponseMessage { content: None },
-            logprobs: Some(OpenAiChatLogprobs {
-                content: Some(vec![
-                    OpenAiChatLogprobContent {
-                        bytes: Some(br#"{"simple_type":""#.to_vec()),
-                        top_logprobs: Vec::new(),
-                    },
-                    OpenAiChatLogprobContent {
-                        bytes: Some(b"simple".to_vec()),
-                        top_logprobs: vec![
-                            OpenAiTokenLogprob {
-                                token: format!("token_id:{SIMPLE_TOKEN_ID}"),
-                                logprob: -0.2,
-                            },
-                            OpenAiTokenLogprob {
-                                token: format!("token_id:{NON_SIMPLE_FIRST_TOKEN_ID}"),
-                                logprob: -1.4,
-                            },
-                        ],
-                    },
-                    OpenAiChatLogprobContent {
-                        bytes: Some(br#""}"#.to_vec()),
-                        top_logprobs: Vec::new(),
-                    },
-                ]),
-            }),
-            token_ids: Some(vec![1, SIMPLE_TOKEN_ID, 2]),
-        };
-
-        let probability =
-            extract_simple_probability(&choice, raw_output, RoundModelRoute::Fast).unwrap();
-        assert!((probability - 0.768_524_783_5).abs() < 1e-9);
     }
 
     #[test]
@@ -739,36 +460,6 @@ mod tests {
             route_for_simple_probability(None, 0.7),
             RoundModelRoute::Primary
         );
-    }
-
-    #[test]
-    fn missing_class_logprob_has_no_confidence() {
-        let raw_output = r#"{"simple_type":"simple"}"#;
-        let choice = OpenAiChatChoice {
-            message: OpenAiResponseMessage { content: None },
-            logprobs: Some(OpenAiChatLogprobs {
-                content: Some(vec![
-                    OpenAiChatLogprobContent {
-                        bytes: Some(br#"{"simple_type":""#.to_vec()),
-                        top_logprobs: Vec::new(),
-                    },
-                    OpenAiChatLogprobContent {
-                        bytes: Some(b"simple".to_vec()),
-                        top_logprobs: vec![OpenAiTokenLogprob {
-                            token: format!("token_id:{SIMPLE_TOKEN_ID}"),
-                            logprob: -0.2,
-                        }],
-                    },
-                    OpenAiChatLogprobContent {
-                        bytes: Some(br#""}"#.to_vec()),
-                        top_logprobs: Vec::new(),
-                    },
-                ]),
-            }),
-            token_ids: Some(vec![1, SIMPLE_TOKEN_ID, 2]),
-        };
-
-        assert!(extract_simple_probability(&choice, raw_output, RoundModelRoute::Fast).is_none());
     }
 
     #[tokio::test]

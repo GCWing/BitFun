@@ -29,6 +29,16 @@ provider-neutral contracts owned by `openbitfun-agent-stream`.
 
 ## Verification
 
+Router HTTP serialization, classifier parsing, authentication, and failures:
+
+```bash
+cargo test --locked -p openbitfun-ai-adapters --lib round_router
+```
+
+`round_router` owns the OpenAI-compatible wire protocol and returns classifier
+facts. Core retains thresholds, model-slot selection, context lifecycle, traces,
+and fallback; the adapter must not depend on Core config or Agent sessions.
+
 Local Router token counting (optional `local-tokenizer`, no model downloads):
 
 ```bash

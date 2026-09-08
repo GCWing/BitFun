@@ -39,7 +39,7 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 
-reqwest = { workspace = true, features = ["json"], optional = true }
+reqwest = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 
@@ -194,7 +194,6 @@ product-full = [
 agent-runtime = [
     "ai-adapter-runtime",
     "openbitfun-ai-adapters/local-tokenizer",
-    "dep:reqwest",
     "dep:openbitfun-agent-runtime",
     "openbitfun-agent-runtime/agent-runtime",
     "dep:openbitfun-agent-content",

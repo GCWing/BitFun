@@ -12,6 +12,11 @@ Core only observes messages, invokes the auxiliary fast model and stores its
 separate sidecar. Never feed Router summaries back into the main transcript or
 use the main compactor's summary/model/config as Router state.
 
+Router HTTP transport and classifier wire parsing live in
+`openbitfun-ai-adapters::round_router`. Keep the existing Core router facade and
+error categories; thresholds, execution-model slots, traces and fallback stay
+owned here. Core Agent Runtime must not enable a direct Reqwest dependency.
+
 For model retry admission and recovery, use:
 
 ```bash

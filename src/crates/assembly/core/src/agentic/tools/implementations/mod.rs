@@ -72,6 +72,7 @@ pub mod util;
 pub mod view_image_tool;
 #[cfg(feature = "tools-browser-web")]
 pub mod web;
+#[cfg(feature = "tools-git")]
 pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
@@ -143,4 +144,5 @@ pub use todo_write_tool::TodoWriteTool;
 pub use view_image_tool::ViewImageTool;
 #[cfg(feature = "tools-browser-web")]
 pub use web::{WebFetchTool, WebSearchTool};
+#[cfg(feature = "tools-git")]
 pub use worktree_tool::WorktreeTool;
