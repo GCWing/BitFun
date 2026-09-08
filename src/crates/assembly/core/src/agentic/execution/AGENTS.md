@@ -21,3 +21,10 @@ tests take absolute JSONL input/report paths in `OPENBITFUN_SHELL_REPLAY_INPUT` 
 `OPENBITFUN_SHELL_NORMAL_OUTPUT`. They only analyze strings; never execute archived
 commands. The ignored Bash append integration test requires `OPENBITFUN_SHELL_TEST_BASH`
 to name a trusted Bash 4+ executable and uses only isolated synthetic commands.
+
+For automatic/manual context compaction cancellation, preparation, and commit races, use:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib compression
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib compaction
+```

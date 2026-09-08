@@ -25,8 +25,8 @@ use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
 };
 use crate::agentic::execution::{
-    ContextCompactionOutcome, ExecutionContext, ExecutionEngine, ExecutionResult,
-    ManualCompactionCommitGate,
+    prepare_compression_cancellable, ContextCompactionOutcome, ExecutionContext, ExecutionEngine,
+    ExecutionResult, ManualCompactionCommitGate,
 };
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
@@ -5693,61 +5693,73 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         cancellation_token: CancellationToken,
         commit_gate: Arc<ManualCompactionCommitGate>,
     ) -> OpenBitFunResult<()> {
-        let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await?;
-        let manual_execution_context = ExecutionContext {
-            session_id: session_id.clone(),
-            dialog_turn_id: turn_id.clone(),
-            turn_index,
-            agent_type: runtime_agent_type,
-            workspace: manual_workspace,
-            context: HashMap::from([(
-                "cancel_lifecycle_owner".to_string(),
-                "coordinator".to_string(),
-            )]),
-            subagent_parent_info: None,
-            permission_delegation: None,
-            permission_runtime_ceiling: None,
-            delegation_policy: DelegationPolicy::top_level(),
-            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: manual_workspace_services,
-            terminal_port,
-            remote_exec_port,
-            round_injection: None,
-            emit_lifecycle_events: false,
-            recover_partial_on_cancel: false,
-        };
-        let session_max_tokens = session.config.max_context_tokens;
-
-        // Unify context_window: min(model capability, session config)
-        let model_context_window =
-            match crate::infrastructure::ai::get_global_ai_client_factory().await {
-                Ok(factory) => {
-                    let model_id = session.config.model_id.as_deref().unwrap_or("default");
-                    match factory.get_client_resolved(model_id).await {
-                        Ok(client) => Some(client.config.context_window as usize),
-                        Err(_) => None,
-                    }
-                }
-                Err(_) => None,
-            };
-        let context_window = match model_context_window {
-            Some(mcw) => mcw.min(session_max_tokens),
-            None => session_max_tokens,
-        };
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
-        match execution_engine
-            .compact_session_context(
-                session_id.clone(),
-                turn_id.clone(),
-                compression_id.clone(),
-                manual_execution_context,
-                context_messages,
-                "manual",
-                cancellation_token,
-                commit_gate,
-            )
-            .await
-        {
+        let mut context_window = session.config.max_context_tokens;
+        let result = async {
+            let (manual_execution_context, resolved_context_window) =
+                prepare_compression_cancellable(&cancellation_token, async {
+                    let manual_workspace_services =
+                        Self::build_workspace_services(&manual_workspace).await?;
+                    let manual_execution_context = ExecutionContext {
+                        session_id: session_id.clone(),
+                        dialog_turn_id: turn_id.clone(),
+                        turn_index,
+                        agent_type: runtime_agent_type,
+                        workspace: manual_workspace,
+                        context: HashMap::from([(
+                            "cancel_lifecycle_owner".to_string(),
+                            "coordinator".to_string(),
+                        )]),
+                        subagent_parent_info: None,
+                        permission_delegation: None,
+                        permission_runtime_ceiling: None,
+                        delegation_policy: DelegationPolicy::top_level(),
+                        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+                        workspace_services: manual_workspace_services,
+                        terminal_port,
+                        remote_exec_port,
+                        round_injection: None,
+                        emit_lifecycle_events: false,
+                        recover_partial_on_cancel: false,
+                    };
+                    let session_max_tokens = session.config.max_context_tokens;
+
+                    // Unify context_window: min(model capability, session config)
+                    let model_context_window =
+                        match crate::infrastructure::ai::get_global_ai_client_factory().await {
+                            Ok(factory) => {
+                                let model_id =
+                                    session.config.model_id.as_deref().unwrap_or("default");
+                                match factory.get_client_resolved(model_id).await {
+                                    Ok(client) => Some(client.config.context_window as usize),
+                                    Err(_) => None,
+                                }
+                            }
+                            Err(_) => None,
+                        };
+                    let context_window = match model_context_window {
+                        Some(mcw) => mcw.min(session_max_tokens),
+                        None => session_max_tokens,
+                    };
+                    Ok((manual_execution_context, context_window))
+                })
+                .await?;
+            context_window = resolved_context_window;
+            execution_engine
+                .compact_session_context(
+                    session_id.clone(),
+                    turn_id.clone(),
+                    compression_id.clone(),
+                    manual_execution_context,
+                    context_messages,
+                    "manual",
+                    cancellation_token,
+                    commit_gate,
+                )
+                .await
+        }
+        .await;
+        match result {
             Ok(outcome) => {
                 Self::finalize_manual_compaction_success(
                     session_manager.as_ref(),
@@ -15751,6 +15763,68 @@ mod tests {
         assert!(!result.success);
         assert_eq!(result.result["error"], "summary request failed");
         assert_eq!(result.error.as_deref(), Some("summary request failed"));
+    }
+
+    #[tokio::test]
+    async fn manual_compaction_cancelled_before_setup_preserves_context_and_settles_turn() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace = tempfile::tempdir().unwrap();
+        let session = session_manager
+            .create_session(
+                "Cancelled compaction".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..SessionConfig::default()
+                },
+            )
+            .await
+            .unwrap();
+        let session_id = session.session_id.clone();
+        let original = vec![Message::user("Keep this context".to_string())];
+        session_manager
+            .replace_context_messages(&session_id, original.clone())
+            .await;
+        let turn_id = session_manager
+            .start_maintenance_turn(
+                &session_id,
+                "/compact".to_string(),
+                None,
+                Some(ConversationCoordinator::manual_compaction_metadata()),
+            )
+            .await
+            .unwrap();
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = ConversationCoordinator::execute_manual_compaction_task(
+            session_manager.clone(),
+            coordinator.execution_engine.clone(),
+            coordinator.event_queue.clone(),
+            session,
+            original,
+            session_id.clone(),
+            turn_id.clone(),
+            0,
+            "agentic".to_string(),
+            None,
+            None,
+            None,
+            token,
+            Arc::new(ManualCompactionCommitGate::planning()),
+        )
+        .await;
+        assert!(matches!(result, Err(OpenBitFunError::Cancelled(_))));
+        let session = session_manager.get_session(&session_id).unwrap();
+        assert!(matches!(session.state, SessionState::Idle));
+        assert_eq!(session.compression_state.compression_count, 0);
+        let messages = session_manager
+            .get_context_messages(&session_id)
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            matches!(&messages[0].content, MessageContent::Text(text) if text == "Keep this context")
+        );
     }
 
     #[tokio::test]

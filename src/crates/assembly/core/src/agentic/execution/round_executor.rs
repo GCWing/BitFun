@@ -1326,6 +1326,11 @@ impl RoundExecutor {
         self.cancellation_tokens.insert(dialog_turn_id, token);
     }
 
+    /// Reuse an early registered token, including its already-cancelled state.
+    pub(crate) fn ensure_cancel_token(&self, dialog_turn_id: &str) -> CancellationToken {
+        self.cancellation_tokens.get_or_insert_new(dialog_turn_id)
+    }
+
     /// Return a clone of the cancellation token registered for a dialog turn.
     pub fn cancel_token_for_dialog_turn(&self, dialog_turn_id: &str) -> Option<CancellationToken> {
         self.cancellation_tokens.token(dialog_turn_id)
@@ -2126,6 +2131,20 @@ mod tests {
 
         assert!(executor.cancel_token_for_dialog_turn("turn-1").is_some());
         assert!(executor.cancel_token_for_dialog_turn("missing").is_none());
+    }
+
+    #[tokio::test]
+    async fn compression_token_is_cancellable_before_first_round_and_keeps_early_cancel() {
+        let executor = test_round_executor();
+        let token = executor.ensure_cancel_token("turn-1");
+        executor.cancel_dialog_turn("turn-1").await.unwrap();
+        assert!(token.is_cancelled());
+        assert!(executor.ensure_cancel_token("turn-1").is_cancelled());
+
+        let early = CancellationToken::new();
+        early.cancel();
+        executor.register_cancel_token("turn-2", early);
+        assert!(executor.ensure_cancel_token("turn-2").is_cancelled());
     }
 
     #[tokio::test]
