@@ -19,7 +19,7 @@ pub struct SkillScanDiagnostic {
 impl SkillScanDiagnostic {
     pub fn to_xml(&self) -> String {
         let text = format!(
-            "Skill discovery incomplete at {} ({}): {}",
+            "Skill discovery notice at {} ({}): {}",
             self.path, self.source_id, self.message
         );
         let escaped = text
@@ -163,6 +163,8 @@ pub struct SkillData {
     pub allow_user_invocation: bool,
     pub argument_hint: Option<String>,
     pub argument_names: Vec<String>,
+    /// Compatibility notices accompany both discovery and explicit loading.
+    pub compatibility_warnings: Vec<String>,
 }
 
 fn default_allow_implicit_invocation() -> bool {
@@ -343,15 +345,13 @@ fn claude_argument_names(metadata: &Value) -> Result<Vec<String>, SkillParseErro
     Ok(names)
 }
 
-fn reject_unsupported_claude_semantics(
+fn claude_compatibility_warnings(
     metadata: &Value,
     body: &str,
-) -> Result<(), SkillParseError> {
+) -> Result<Vec<String>, SkillParseError> {
     const UNSUPPORTED_FIELDS: &[&str] = &[
         "context",
         "agent",
-        "model",
-        "effort",
         "hooks",
         "paths",
         "shell",
@@ -368,21 +368,45 @@ fn reject_unsupported_claude_semantics(
         )));
     }
 
+    let mut warnings = Vec::new();
+    for field in ["model", "effort"] {
+        if metadata.get(field).is_some() {
+            warnings.push(format!(
+                "Claude preference '{field}' is not applied; the current session configuration is used."
+            ));
+        }
+    }
     const DYNAMIC_MARKERS: &[&str] = &[
         "${CLAUDE_SESSION_ID}",
         "${CLAUDE_EFFORT}",
         "${CLAUDE_SKILL_DIR}",
-        "!`",
+        "${CLAUDE_PROJECT_DIR}",
     ];
-    if let Some(marker) = DYNAMIC_MARKERS
-        .iter()
-        .find(|marker| body.contains(**marker))
-    {
-        return Err(SkillParseError::InvalidFormat(format!(
-            "Claude dynamic expression '{marker}' is not supported"
-        )));
+    for marker in DYNAMIC_MARKERS {
+        if body.contains(marker) {
+            warnings.push(format!(
+                "Claude variable '{marker}' is preserved as literal text and has not been expanded. Do not assume it identifies a valid value or path."
+            ));
+        }
     }
-    Ok(())
+    if has_claude_shell_expression(body) {
+        warnings.push(
+            "Claude shell expressions are preserved as literal text and have not been executed. They are not command results. If the task needs this data, obtain it through normal tools and permission checks in the active workspace.".to_string(),
+        );
+    }
+    Ok(warnings)
+}
+
+fn has_claude_shell_expression(body: &str) -> bool {
+    // Inline commands require a whitespace/start boundary and a closing backtick.
+    // In particular, Markdown code such as `!` and `#REF!` is ordinary text.
+    static INLINE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"(?m)(?:^|\s)!`[^`\r\n]+`").expect("Claude inline expression regex")
+    });
+    static FENCED: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+        Regex::new(r"(?m)^ {0,3}```![ \t]*\r?$").expect("Claude fenced expression regex")
+    });
+    INLINE.is_match(body) || FENCED.is_match(body)
 }
 
 impl SkillData {
@@ -487,11 +511,12 @@ impl SkillData {
         {
             return Err(SkillParseError::MissingField("description"));
         }
-        let argument_names = if dialect == SkillSourceDialect::ClaudeCode {
-            reject_unsupported_claude_semantics(&metadata, &body)?;
-            claude_argument_names(&metadata)?
+        let (argument_names, compatibility_warnings) = if dialect == SkillSourceDialect::ClaudeCode
+        {
+            let warnings = claude_compatibility_warnings(&metadata, &body)?;
+            (claude_argument_names(&metadata)?, warnings)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
 
         let allow_implicit_invocation =
@@ -517,6 +542,7 @@ impl SkillData {
             allow_user_invocation,
             argument_hint,
             argument_names,
+            compatibility_warnings,
         })
     }
 
@@ -552,8 +578,16 @@ pub fn render_loaded_skill_for_assistant(
         String::new()
     };
 
+    let warnings = if skill_data.compatibility_warnings.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\nCompatibility notes:\n- {}",
+            skill_data.compatibility_warnings.join("\n- ")
+        )
+    };
     format!(
-        "Skill '{}' loaded successfully{}. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n<skill_content>\n{}\n</skill_content>",
-        skill_data.name, loaded_from, skill_data.path, skill_data.content
+        "Skill '{}' loaded successfully{}. Note: any paths mentioned in this skill are relative to {}, not the workspace.{}\n\n<skill_content>\n{}\n</skill_content>",
+        skill_data.name, loaded_from, skill_data.path, warnings, skill_data.content
     )
 }

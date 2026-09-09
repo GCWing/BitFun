@@ -149,6 +149,13 @@ impl SkillRegistry {
                                 entry.slot,
                             ) {
                                 Ok(mut data) => {
+                                    for warning in &data.compatibility_warnings {
+                                        scan.diagnostics.push(diagnostic(
+                                            &skill_md,
+                                            entry.source_id,
+                                            warning,
+                                        ));
+                                    }
                                     if let Some(error) =
                                         Self::apply_remote_openai_policy(&mut data, fs, &path).await
                                     {
@@ -428,6 +435,13 @@ impl SkillRegistry {
                                 entry.slot,
                             ) {
                                 Ok(mut data) => {
+                                    for warning in &data.compatibility_warnings {
+                                        scan.diagnostics.push(diagnostic(
+                                            skill_md.to_string_lossy(),
+                                            entry.source_id,
+                                            warning,
+                                        ));
+                                    }
                                     let (cacheable, policy_error) =
                                         Self::apply_local_openai_policy(&mut data, &path).await;
                                     scan.cacheable &= cacheable;

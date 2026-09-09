@@ -320,6 +320,7 @@ impl Tool for SkillTool {
                 "description": skill_data.description,
                 "location": location_str,
                 "content": skill_data.content,
+                "compatibility_warnings": skill_data.compatibility_warnings,
                 "success": true
             }),
             result_for_assistant: Some(result_for_assistant),
@@ -444,7 +445,7 @@ Use the remote project skill.
         async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
             if path == "/remote/project/.claude/skills/remote-review/SKILL.md" {
                 return Ok(
-                    "---\ndescription: Review a remote target.\narguments: target focus\n---\n\nReview $target for $focus.\n"
+                    "---\ndescription: Review a remote target.\narguments: target focus\nmodel: opus\n---\n\nReview $target for $focus.\nContext: !`git diff`\n"
                         .to_string(),
                 );
             }
@@ -712,6 +713,23 @@ Use the remote project skill.
     #[tokio::test]
     async fn remote_claude_skill_uses_the_same_dialect_for_discovery_and_load() {
         let registry = SkillRegistry::global();
+        let report = registry
+            .get_skill_scan_report_for_remote_workspace(&ClaudeRemoteFs, "/remote/project")
+            .await;
+        assert!(report
+            .skills
+            .iter()
+            .any(|skill| skill.name == "remote-review"));
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .filter(
+                    |notice| notice.path == "/remote/project/.claude/skills/remote-review/SKILL.md"
+                )
+                .count(),
+            2
+        );
         let visible = registry
             .get_resolved_skills_for_remote_workspace(&ClaudeRemoteFs, "/remote/project", None)
             .await;
@@ -732,6 +750,8 @@ Use the remote project skill.
         assert_eq!(loaded.source_id, "claude-code");
         assert_eq!(loaded.source_label, "Claude Code");
         assert_eq!(loaded.argument_names, ["target", "focus"]);
+        assert_eq!(loaded.compatibility_warnings.len(), 2);
+        assert!(loaded.content.contains("!`git diff`"));
 
         let loaded_by_key = registry
             .find_and_load_skill_by_key_for_remote_workspace(
@@ -744,6 +764,61 @@ Use the remote project skill.
             .expect("remote skill should retain source metadata when loaded by key");
         assert_eq!(loaded_by_key.source_id, loaded.source_id);
         assert_eq!(loaded_by_key.source_label, loaded.source_label);
+        assert_eq!(
+            loaded_by_key.compatibility_warnings,
+            loaded.compatibility_warnings
+        );
+    }
+
+    #[tokio::test]
+    async fn local_claude_fallback_survives_discovery_and_explicit_tool_loading() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".claude/skills/compatibility-review");
+        fs::create_dir_all(&skill_dir).unwrap();
+        let body = "Excel `!` and `#REF!`. Review $target. Context: !`git diff`";
+        fs::write(skill_dir.join("SKILL.md"), format!(
+            "---\ndescription: Compatibility review.\nmodel: opus\neffort: high\narguments: target\n---\n{body}"
+        )).unwrap();
+        let registry = SkillRegistry::global();
+        let report = registry
+            .get_skill_scan_report_for_workspace(Some(temp.path()))
+            .await;
+        let skill = report
+            .skills
+            .iter()
+            .find(|skill| skill.name == "compatibility-review")
+            .unwrap();
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .filter(|notice| PathBuf::from(&notice.path) == skill_dir.join("SKILL.md"))
+                .count(),
+            3
+        );
+        let context = local_context(temp.path().to_path_buf());
+        for command in [skill.name.as_str(), skill.key.as_str()] {
+            let results = SkillTool::new()
+                .call_impl(
+                    &json!({"command": command, "arguments": "workbook.xlsx"}),
+                    &context,
+                )
+                .await
+                .unwrap();
+            let ToolResult::Result {
+                data,
+                result_for_assistant,
+                ..
+            } = &results[0]
+            else {
+                panic!("expected skill result");
+            };
+            assert_eq!(data["content"], body.replace("$target", "workbook.xlsx"));
+            assert_eq!(data["compatibility_warnings"].as_array().unwrap().len(), 3);
+            let rendered = result_for_assistant.as_deref().unwrap();
+            assert!(rendered.contains("have not been executed"));
+            assert!(rendered.contains("current session configuration"));
+        }
     }
 
     #[tokio::test]

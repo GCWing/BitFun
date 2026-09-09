@@ -180,8 +180,6 @@ fn claude_skill_rejects_unavailable_runtime_semantics() {
     for field in [
         "context: fork",
         "agent: Explore",
-        "model: opus",
-        "effort: high",
         "hooks: {}",
         "paths: src/**",
         "shell: bash",
@@ -201,23 +199,103 @@ fn claude_skill_rejects_unavailable_runtime_semantics() {
         .expect_err("unsupported Claude behavior must fail closed");
         assert!(matches!(error, SkillParseError::InvalidFormat(_)));
     }
+}
 
+#[test]
+fn claude_dynamic_content_loads_unchanged_with_compatibility_notes() {
     for body in [
         "Use ${CLAUDE_SESSION_ID}.",
         "Use ${CLAUDE_EFFORT}.",
         "Read ${CLAUDE_SKILL_DIR}/data.",
         "Run !`git status` before continuing.",
+        "!`git diff`",
+        "Read ${CLAUDE_PROJECT_DIR}/data.",
+        "```!\ngit status\n```",
     ] {
-        let markdown = format!("---\ndescription: Dynamic behavior.\n---\n\n{body}\n");
-        assert!(SkillData::from_markdown_for_source_slot(
-            "/workspace/.claude/skills/dynamic".to_string(),
-            &markdown,
-            SkillLocation::Project,
-            true,
-            "claude",
-        )
-        .is_err());
+        let markdown = format!("---\ndescription: Dynamic behavior.\n---\n\n{body}");
+        for slot in ["claude", "home.claude"] {
+            let skill = SkillData::from_markdown_for_source_slot(
+                "/workspace/.claude/skills/dynamic".to_string(),
+                &markdown,
+                SkillLocation::Project,
+                true,
+                slot,
+            )
+            .expect("dynamic content should load without executing or expanding it");
+            assert_eq!(skill.content, body);
+            assert_eq!(skill.compatibility_warnings.len(), 1);
+            for stable_key in [false, true] {
+                let rendered = render_loaded_skill_for_assistant(&skill, stable_key);
+                assert!(rendered.contains(&skill.compatibility_warnings[0]));
+                assert!(rendered.contains(&format!("<skill_content>\n{body}\n</skill_content>")));
+            }
+            let discovery = SkillData::from_markdown_for_source_slot(
+                skill.path.clone(),
+                &markdown,
+                SkillLocation::Project,
+                false,
+                slot,
+            )
+            .unwrap();
+            assert!(discovery.content.is_empty());
+            assert_eq!(
+                discovery.compatibility_warnings,
+                skill.compatibility_warnings
+            );
+        }
     }
+}
+
+#[test]
+fn claude_excel_punctuation_and_non_command_backticks_need_no_fallback() {
+    let body = "Cross-sheet `!` references: `Sheet1!A1`. Errors: `#REF!`, `#DIV/0!`, `#VALUE!`.\nKEY=!`cmd`\nUnclosed !`command\nHello!";
+    for slot in ["claude", "home.claude"] {
+        let skill = SkillData::from_markdown_for_source_slot(
+            "/skills/officecli-xlsx".into(),
+            &format!("---\nname: officecli-xlsx\ndescription: Excel workflows.\n---\n{body}"),
+            SkillLocation::User,
+            true,
+            slot,
+        )
+        .unwrap();
+        assert_eq!(skill.content, body);
+        assert!(skill.compatibility_warnings.is_empty());
+    }
+}
+
+#[test]
+fn claude_preferences_degrade_without_bypassing_execution_constraints() {
+    let markdown = "---\ndescription: Review.\nmodel: opus\neffort: high\ndisable-model-invocation: true\nuser-invocable: false\n---\nReview.";
+    let skill = SkillData::from_markdown_for_source_slot(
+        "/skills/review".into(),
+        markdown,
+        SkillLocation::User,
+        true,
+        "home.claude",
+    )
+    .unwrap();
+    assert_eq!(skill.compatibility_warnings.len(), 2);
+    assert!(!skill.allow_implicit_invocation);
+    assert!(!skill.allow_user_invocation);
+    assert_eq!(skill.content, "Review.");
+    let restricted = markdown.replace("model: opus", "model: opus\ndisallowed-tools: Write");
+    assert!(SkillData::from_markdown_for_source_slot(
+        "/skills/review".into(),
+        &restricted,
+        SkillLocation::User,
+        true,
+        "home.claude",
+    )
+    .is_err());
+    let generic = SkillData::from_markdown_for_source_slot(
+        "/skills/review".into(),
+        &markdown.replace("description:", "name: review\ndescription:"),
+        SkillLocation::User,
+        true,
+        "openbitfun",
+    )
+    .unwrap();
+    assert!(generic.compatibility_warnings.is_empty());
 }
 
 #[test]

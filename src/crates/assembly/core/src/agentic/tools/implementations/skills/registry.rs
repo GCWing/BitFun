@@ -197,7 +197,7 @@ impl SkillCandidateScan {
     fn into_candidates(self) -> Vec<SkillCandidate> {
         for diagnostic in &self.diagnostics {
             warn!(
-                "Skill discovery incomplete: path={}, source={}, error={}",
+                "Skill discovery notice: path={}, source={}, detail={}",
                 diagnostic.path, diagnostic.source_id, diagnostic.message
             );
         }
