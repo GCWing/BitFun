@@ -357,7 +357,11 @@ export function Tooltip({
     const onEnter = (event: MouseEvent) => {
       if (trigger === "hover" || trigger === "hover-focus") showTooltip(event);
     };
-    const onLeave = () => {
+    const onLeave = (event: MouseEvent) => {
+      // React can deliver the portal's mouse-enter before this native
+      // mouse-leave. Do not restart the hide timer when entering the tooltip.
+      if (interactive && event.relatedTarget instanceof Node
+        && tooltipRef.current?.contains(event.relatedTarget)) return;
       if (trigger === "hover-focus" && element.contains(element.ownerDocument.activeElement)) return;
       if (trigger === "hover" || trigger === "hover-focus") scheduleHideTooltip();
     };
@@ -384,7 +388,7 @@ export function Tooltip({
       element.removeEventListener("focusout", onBlur);
       element.removeEventListener("click", onClick);
     };
-  }, [externalTriggerRef, hideTooltip, scheduleHideTooltip, showTooltip, trigger, visible]);
+  }, [externalTriggerRef, hideTooltip, interactive, scheduleHideTooltip, showTooltip, trigger, visible]);
 
   // A measured text slot can mount after focus has already reached its owner.
   // Only replay focus/virtual activation on a transition, not on visibility updates.
@@ -504,6 +508,8 @@ export function Tooltip({
           data-openbitfun-interactive={interactive ? "true" : "false"}
           data-openbitfun-state={isShown ? "visible" : undefined}
           data-instant={instantRef.current || undefined}
+          // Portal clicks still bubble through the React tree to the owning control.
+          onClick={(event) => event.stopPropagation()}
           onMouseEnter={interactive ? () => {
             if (hideTimeoutRef.current) {
               clearTimeout(hideTimeoutRef.current);

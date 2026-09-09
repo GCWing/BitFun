@@ -592,9 +592,11 @@ describe('UserMessageItem steering tag', () => {
     const editButton = container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn');
 
     expect(rollbackButton?.disabled).toBe(true);
-    expect(rollbackButton?.title).toContain(`message.rollbackDisabled${reason}`);
+    expect(rollbackButton?.getAttribute('aria-label')).toContain(`message.rollbackDisabled${reason}`);
+    expect(rollbackButton?.hasAttribute('title')).toBe(false);
     expect(editButton?.disabled).toBe(true);
-    expect(editButton?.title).toContain(`message.editDisabled${reason}`);
+    expect(editButton?.getAttribute('aria-label')).toContain(`message.editDisabled${reason}`);
+    expect(editButton?.hasAttribute('title')).toBe(false);
   });
 
   it('hides the edit button when the panel context disables user message editing', () => {

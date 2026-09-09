@@ -669,13 +669,16 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           )}
           {!isEditing && (
             <div className="user-message-item__actions" data-openbitfun-component="user-message-item" data-openbitfun-part="actions">
-              <button
-                className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                title={copied ? t('message.copyFailed') : t('message.copy')}
-              >
-                {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
-              </button>
+              <Tooltip content={copied ? t('message.copied') : t('message.copy')}>
+                <button
+                  type="button"
+                  className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
+                  onClick={handleCopy}
+                  aria-label={copied ? t('message.copied') : t('message.copy')}
+                >
+                  {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
+                </button>
+              </Tooltip>
               {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
                   <button
@@ -683,7 +686,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__edit-btn"
                     onClick={handleBeginEdit}
                     disabled={!canEdit}
-                    title={canEdit ? t('message.edit') : editDisabledReason}
+                    aria-label={canEdit ? t('message.edit') : editDisabledReason}
                   >
                     <Icon name="edit" size="sm" />
                   </button>
@@ -704,7 +707,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__rollback-btn"
                     onClick={handleRollback}
                     disabled={!canRollback}
-                    title={rollbackTooltip}
+                    aria-label={rollbackTooltip}
                   >
                     {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
                       <Loader2 size={14} className="user-message-item__rollback-spinner" />
