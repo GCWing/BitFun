@@ -423,6 +423,8 @@ class GatedRoomClient extends RelayHttpClient {
 }
 
 class RecordingAccountDeviceClient extends CloudAccountClient {
+  miniAppAvailable: boolean = false;
+  miniAppCalls: number = 0;
   async deviceRpc<T extends CommandStatusResponse>(
     _relayUrl: string,
     _session: CloudAccountSession,
@@ -430,7 +432,12 @@ class RecordingAccountDeviceClient extends CloudAccountClient {
     command: RemoteCommand,
     _timeoutMs: number = 130000
   ): Promise<T> {
+    if (command.cmd === 'miniapp') {
+      this.miniAppCalls += 1;
+      return JSON.parse('{"resp":"miniapp_result","value":{"apps":[]}}') as T;
+    }
     if (command.cmd === 'get_workspace_info') {
+      if (this.miniAppAvailable) return JSON.parse('{"resp":"workspace_info","capabilities":["miniapp_h5_v1"]}') as T;
       return JSON.parse(
         '{"resp":"workspace_info","has_workspace":true,"workspace_path":"/account-workspace",' +
         '"workspace_name":"Account workspace"}'
@@ -729,6 +736,30 @@ export default function transportAndGeneralChatUnitTest() {
   });
 
   describe('RemoteSessionManager room reconnect', () => {
+    it('refreshes MiniApp capabilities after a desktop upgrade and rejects a downgrade', 0, async () => {
+      const client = new RecordingAccountDeviceClient();
+      const manager = new RemoteSessionManager();
+      await manager.connectAccountDevice(client, 'https://relay.example.com',
+        { token: 'token', userId: 'account-user', masterKey: new Uint8Array(32) }, 'desktop');
+      client.miniAppAvailable = true;
+      await manager.miniApp({ action: 'list' }, manager.miniAppConnection());
+      expect(client.miniAppCalls).assertEqual(1);
+      client.miniAppAvailable = false;
+      let rejected = false;
+      try { await manager.miniApp({ action: 'list' }, manager.miniAppConnection()); }
+      catch (_error) { rejected = true; }
+      expect(rejected).assertTrue();
+      expect(client.miniAppCalls).assertEqual(1);
+    });
+
+    it('distinguishes a missing connection from an unsupported desktop', 0, async () => {
+      const manager = new RemoteSessionManager();
+      let message = '';
+      try { await manager.miniApp({ action: 'list' }, manager.miniAppConnection()); }
+      catch (error) { message = error instanceof Error ? error.message : String(error); }
+      expect(message).assertEqual(RemoteI18n.t('miniapp.notConnected'));
+    });
+
     it('keeps the newly scanned descriptor and its initial sessions after a prior room transport', 0, async () => {
       const roomClient = new RecordingRoomClient();
       const manager = new RemoteSessionManager(() => roomClient, () => new RemoteCrypto({

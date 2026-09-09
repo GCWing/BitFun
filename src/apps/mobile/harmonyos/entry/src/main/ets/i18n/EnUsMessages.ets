@@ -1,4 +1,13 @@
 export const EN_US_MESSAGES: [string, string][] = [
+  ['miniapp.notConnected', 'Connect to a desktop first: open one of its remote conversations in the sidebar, then open MiniApps.'],
+  ['miniapp.connectionFailed', 'Unable to confirm the desktop connection. Check that it is online and retry.'],
+  ['miniapp.title', 'MiniApps'],
+  ['miniapp.refresh', 'Refresh'],
+  ['miniapp.empty', 'This desktop has no MiniApps yet.'],
+  ['miniapp.unsupported', 'Mobile MiniApps are unavailable on this connection. Connect to a supported desktop version.'],
+  ['miniapp.invalidPage', 'The MiniApp page is incomplete. Reopen it.'],
+  ['miniapp.closed', 'The MiniApp was closed or changed.'],
+  ['miniapp.previewHint', 'Preview · Page runs on phone; data and host calls run on desktop. AI, Agent and file pickers are not supported yet.'],
   ['app.title', 'OpenBitFun'],
 
   ['common.cancel', 'Cancel'],

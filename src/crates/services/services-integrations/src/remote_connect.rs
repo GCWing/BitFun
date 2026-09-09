@@ -13,6 +13,7 @@ mod chat_projection;
 pub mod device;
 pub mod encryption;
 mod lan;
+pub mod miniapp;
 mod mobile_web_upload;
 mod ngrok;
 mod page_upload;
@@ -555,11 +556,15 @@ pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
 pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 
 fn remote_host_capabilities() -> Vec<String> {
-    vec![
+    let mut capabilities = vec![
         REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
-    ]
+    ];
+    if miniapp::is_available() {
+        capabilities.push(miniapp::CAPABILITY.to_string());
+    }
+    capabilities
 }
 
 pub fn resolve_remote_file_chunk_range(
@@ -2279,6 +2284,9 @@ pub struct RemoteControlClient {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum RemoteCommand {
+    Miniapp {
+        request: miniapp::MiniAppRequest,
+    },
     GetWorkspaceInfo,
     ListRecentWorkspaces,
     SetWorkspace {
@@ -2489,6 +2497,9 @@ pub enum RemoteCommand {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "resp", rename_all = "snake_case")]
 pub enum RemoteResponse {
+    MiniappResult {
+        value: serde_json::Value,
+    },
     WorkspaceInfo {
         has_workspace: bool,
         path: Option<String>,
@@ -2738,6 +2749,7 @@ where
     H: RemoteCommandRuntimeHost + ?Sized,
 {
     match command {
+        RemoteCommand::Miniapp { request } => miniapp::dispatch(request).await,
         RemoteCommand::Ping { .. } => RemoteResponse::Pong,
 
         RemoteCommand::GetWorkspaceInfo

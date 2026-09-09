@@ -910,6 +910,9 @@ pub async fn run() {
             }
         })
         .setup(move |app| {
+            openbitfun_services_integrations::remote_connect::miniapp::register_host(
+                Arc::new(api::remote_miniapp_host::DesktopRemoteMiniAppHost(app.handle().clone()))
+            ).map_err(std::io::Error::other)?;
             let setup_started = Instant::now();
             startup_trace.record_phase("tauri_setup_start", "native_setup");
             #[cfg(target_os = "macos")]

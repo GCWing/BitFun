@@ -1,3 +1,4 @@
+import { RemoteMiniAppRequest } from './RemoteMiniAppModels';
 export interface RemoteDescriptor {
   relayUrl: string;
   roomId: string;
@@ -109,6 +110,7 @@ export interface ChallengeCommand {
 }
 
 export interface RemoteCommand {
+  request?: RemoteMiniAppRequest;
   cmd: string;
   _request_id?: string;
   session_id?: string;

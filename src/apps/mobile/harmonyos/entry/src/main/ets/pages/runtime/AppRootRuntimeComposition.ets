@@ -1,3 +1,4 @@
+import { MiniAppViewModel } from '../viewmodel/MiniAppViewModel';
 import {
   ChatMessage,
   RemoteModelCatalog,
@@ -155,6 +156,7 @@ export abstract class AppRootRuntimeComposition {
   abstract toggleVoiceInput(): Promise<void>;
 
   readonly sessionManager: RemoteSessionManager = new RemoteSessionManager();
+  readonly miniAppViewModel: MiniAppViewModel = new MiniAppViewModel(this.sessionManager);
   readonly taskCompletionNotificationController: TaskCompletionNotificationController =
     new TaskCompletionNotificationController(
       new HarmonyTaskCompletionNotificationPort((): Context => this.host.context()),
@@ -926,6 +928,7 @@ export abstract class AppRootRuntimeComposition {
     onCompactLayoutEntered: (): void => this.enterCompactLayout(),
     onLayoutModeChanged: (wideLayout: boolean): void => this.appShellState.setWideLayout(wideLayout),
     onRemoteHome: {
+      openMiniApps: (): void => { this.closeAppSidebar(); this.miniAppViewModel.actions.open(); },
       openSidebar: (): void => this.openAppSidebar(),
       connectWorkspace: (): void => this.openConnectSheet(),
       addConnection: (): void => this.openConnectSheet(),

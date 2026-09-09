@@ -1,4 +1,13 @@
 export const ZH_CN_MESSAGES: [string, string][] = [
+  ['miniapp.notConnected', '请先连接电脑：在侧边栏打开该电脑的一个远程会话，然后再打开小应用。'],
+  ['miniapp.connectionFailed', '暂时无法确认电脑连接，请检查电脑是否在线后重试。'],
+  ['miniapp.title', '小应用'],
+  ['miniapp.refresh', '刷新'],
+  ['miniapp.empty', '这台电脑还没有小应用。'],
+  ['miniapp.unsupported', '当前连接不支持手机小应用，请连接支持此功能的新版电脑端。'],
+  ['miniapp.invalidPage', '小应用页面数据不完整，请重新打开。'],
+  ['miniapp.closed', '小应用已关闭或切换。'],
+  ['miniapp.previewHint', '预览版 · 页面在手机运行，数据与宿主调用由电脑处理；暂不支持 AI、Agent 和文件选择。'],
   ['app.title', 'OpenBitFun'],
 
   ['common.cancel', '取消'],

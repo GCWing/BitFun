@@ -53,6 +53,7 @@ export struct AppSidebar {
   @Param showConversationSection: boolean = true;
   @Event onClose: () => void = () => {};
   @Event onNewChat: () => void = () => {};
+  @Event onOpenMiniApps: () => void = () => {};
   @Event onEnterCode: () => void = () => {};
   @Event onScanDesktop: () => void = () => {};
   @Event onCollapse: () => void = () => {};
@@ -100,6 +101,14 @@ export struct AppSidebar {
         // the same scroll instead of pushing the current working context down.
         Scroll() {
           Column() {
+            if (this.shouldShowPrimaryNavigation()) {
+              Button(RemoteI18n.t('miniapp.title'))
+                .fontSize(MobileDesignTypography.titleSmall.size)
+                .fontColor(INK).backgroundColor(CARD)
+                .width('100%').height(MobileDesignGeometry.controlTouchSize)
+                .margin({ top: 8, bottom: 12 })
+                .onClick(() => this.onOpenMiniApps())
+            }
             if (this.showWorkspaceSection) {
               this.contentSlot()
             }

@@ -1,3 +1,4 @@
+import { MINIAPP_H5_CAPABILITY, RemoteMiniAppClient, RemoteMiniAppRequest, RemoteMiniAppResponse } from '../model/RemoteMiniAppModels';
 import { AssistantEntry, AssistantListResponse, ChatMessageItemResponse, ChatMessageResponse, CommandStatusResponse, CreateSessionOptions, CreateSessionResponse, FileInfo, FileInfoResponse, InitialSyncResponse, InitialSyncResult, ModelCatalogResponse, PermissionModeResponse, PollSessionResponse, PollSessionResult, ReadFileChunkResponse, ReadFileChunkResult, ReadFileResult, RecentWorkspaceEntry, RecentWorkspaceListResponse, RemoteCommand, RemoteDescriptor, RemoteImageContext, RemoteModelCatalog, RemotePermissionMode, RemoteQuestionAnswerPayload, RemoteSession, SendMessageResponse, SessionListResponse, SessionListResult, SessionMessagesResponse, SessionMessagesResult, SessionSummary, SetAssistantResponse, SetSessionModelResponse, SetWorkspaceResponse, SteerTurnResponse, SteerTurnResult, WorkspaceInfo, WorkspaceInfoResponse } from '../model/RemoteModels';
 import { Encoding } from './Encoding';
 import { PairIdentity, PeerDeviceProvisionOutcome, RelayHttpClient } from './RelayHttpClient';
@@ -48,10 +49,11 @@ export interface ProvisionedPeerDevice {
  */
 const ACCOUNT_HANDSHAKE_TIMEOUT_MS: number = 15000;
 
-export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
+export class RemoteSessionManager implements RemoteMiniAppClient, RemoteChatCommandClient, RemoteFileDownloadClient, RemoteModelClient, RemoteSessionClient, RemoteToolActionClient {
   private roomClient?: RelayHttpClient;
   private transport?: RemoteCommandTransport;
   private transportGeneration: number = 0;
+  private miniAppSupported: boolean = false;
   private workspace?: WorkspaceInfo;
   private roomRelayUrl: string = '';
   private readonly roomClientFactory: () => RelayHttpClient;
@@ -67,6 +69,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   reset(): void {
     this.transportGeneration += 1;
+    this.miniAppSupported = false;
     this.workspace = undefined;
     this.roomRelayUrl = '';
     const hadTransport = this.transport !== undefined;
@@ -98,6 +101,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     }
 
     const workspace = RemoteResponseMapper.workspaceFromInitialSync(initialSync);
+    this.miniAppSupported = (initialSync.capabilities || []).includes(MINIAPP_H5_CAPABILITY);
     this.roomClient = roomClient;
     this.transport = transport;
     this.roomRelayUrl = descriptor.relayUrl;
@@ -113,6 +117,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   private beginTransportReplacement(): number {
     this.transportGeneration += 1;
+    this.miniAppSupported = false;
     const hadTransport = this.transport !== undefined;
     this.transport?.reset();
     this.transport = undefined;
@@ -210,6 +215,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       this.requireCurrentGeneration(generation);
       this.transport = transport;
       this.workspace = workspace;
+      this.miniAppSupported = (workspaceResponse.capabilities || []).includes(MINIAPP_H5_CAPABILITY);
       return {
         workspace,
         sessions,
@@ -225,6 +231,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
 
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
     const response = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo());
+    this.miniAppSupported = (response.capabilities || []).includes(MINIAPP_H5_CAPABILITY);
     return RemoteResponseMapper.workspaceFromResponse(response);
   }
 
@@ -569,6 +576,30 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
       mimeType,
       size: totalSize
     };
+  }
+
+  miniAppConnection(): number { return this.transportGeneration; }
+
+  async miniApp(request: RemoteMiniAppRequest, connection: number): Promise<Object> {
+    this.requireCurrentGeneration(connection);
+    if (!this.transport) throw new Error(RemoteI18n.t('miniapp.notConnected'));
+    // A desktop may restart or upgrade while the relay connection survives.
+    // Refresh its advertised contract before each catalog load, never probe an
+    // unsupported command or replay a mutation to discover capabilities.
+    if (request.action === 'list') {
+      const info = await this.send<WorkspaceInfoResponse>(RemoteCommandFactory.getWorkspaceInfo(), 15000);
+      this.requireCurrentGeneration(connection);
+      if (info.resp !== 'workspace_info') {
+        throw new Error(info.message || RemoteI18n.t('miniapp.connectionFailed'));
+      }
+      this.miniAppSupported = (info.capabilities || []).includes(MINIAPP_H5_CAPABILITY);
+    }
+    if (!this.miniAppSupported) {
+      throw new Error(RemoteI18n.t('miniapp.unsupported'));
+    }
+    const response = await this.send<RemoteMiniAppResponse>({ cmd: 'miniapp', request }, 60000);
+    if (response.resp !== 'miniapp_result') throw new Error(response.message || RemoteI18n.t('miniapp.unsupported'));
+    return response.value as Object;
   }
 
   async ping(): Promise<boolean> {

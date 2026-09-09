@@ -89,9 +89,17 @@ export struct RemoteSurfaceHost {
   }
 
   @Builder
+  private MiniAppEntry() {
+    Button(RemoteI18n.t('miniapp.title'))
+      .onClick(() => this.actions.onRemoteHome.openMiniApps())
+      .margin({ top: 8, bottom: 8 })
+  }
+
+  @Builder
   private MasterContent() {
     Column() {
       this.StatusRow()
+      this.MiniAppEntry()
       if (this.isInitialLoading()) {
         RemoteSessionLoadingView()
       } else if (this.canShowSessionList()) {
@@ -218,6 +226,7 @@ export struct RemoteSurfaceHost {
         showSidebarButton: true,
         onOpenSidebar: this.onOpenSidebar
       })
+      this.MiniAppEntry()
       if (RemoteCompactHomePolicy.shouldShowConnectHome(this.remotePageState.connectionState)) {
         this.DisconnectedState()
       } else {

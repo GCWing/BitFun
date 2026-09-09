@@ -102,6 +102,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   aboutToDisappear(): void {
+    this.miniAppViewModel.close();
     this.settingsController.stopPresencePolling();
     this.watchProvisionController.stop();
     this.taskCompletionNotificationController.stop();
@@ -257,6 +258,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   async disconnect(clearPairing: boolean): Promise<void> {
+    this.miniAppViewModel.close();
     this.filePreviewController.invalidate();
     await this.remoteConnectionController.disconnect(clearPairing);
   }
