@@ -7,7 +7,9 @@ use openbitfun_product_domains::legacy_migration::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
-use std::fs::{self, File, OpenOptions};
+#[cfg(not(windows))]
+use std::fs::OpenOptions;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
@@ -340,16 +342,21 @@ fn write_new_private_json<T: Serialize>(path: &Path, value: &T) -> LegacyMigrati
     let mut bytes = serde_json::to_vec_pretty(value)
         .map_err(|error| LegacyMigrationError::json(path, error))?;
     bytes.push(b'\n');
-    let mut options = OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|error| LegacyMigrationError::io(path, error))?;
+    #[cfg(windows)]
+    let mut file = create_current_user_owned_file(path)?;
+    #[cfg(not(windows))]
+    let mut file = {
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options
+            .open(path)
+            .map_err(|error| LegacyMigrationError::io(path, error))?
+    };
     file.write_all(&bytes)
         .map_err(|error| LegacyMigrationError::io(path, error))?;
     file.sync_all()
@@ -424,26 +431,13 @@ fn ensure_path_chain_is_plain(root: &Path, target: &Path) -> LegacyMigrationResu
 
 #[cfg(windows)]
 fn verify_current_user_owned(path: &Path) -> LegacyMigrationResult<()> {
-    use std::ffi::c_void;
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{CloseHandle, LocalFree, HANDLE, HLOCAL};
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
     use windows::Win32::Security::{
-        EqualSid, GetTokenInformation, TokenUser, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-        PSID, TOKEN_QUERY, TOKEN_USER,
+        EqualSid, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
     };
-    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-    struct OwnedHandle(HANDLE);
-    impl Drop for OwnedHandle {
-        fn drop(&mut self) {
-            // SAFETY: this wrapper owns the process token handle exactly once.
-            unsafe {
-                let _ = CloseHandle(self.0);
-            }
-        }
-    }
 
     struct LocalSecurityDescriptor(PSECURITY_DESCRIPTOR);
     impl Drop for LocalSecurityDescriptor {
@@ -456,7 +450,9 @@ fn verify_current_user_owned(path: &Path) -> LegacyMigrationResult<()> {
         }
     }
 
-    let wide_path = path
+    let canonical_path =
+        fs::canonicalize(path).map_err(|error| LegacyMigrationError::io(path, error))?;
+    let wide_path = canonical_path
         .as_os_str()
         .encode_wide()
         .chain(std::iter::once(0))
@@ -483,6 +479,35 @@ fn verify_current_user_owned(path: &Path) -> LegacyMigrationResult<()> {
         ));
     }
     let _descriptor = LocalSecurityDescriptor(descriptor);
+
+    with_current_user_sid(|sid| {
+        // SAFETY: both SIDs are owned by live security descriptor/token buffers.
+        unsafe { EqualSid(owner, sid) }.map_err(|_| {
+            LegacyMigrationError::InvalidRequest(
+                "handoff file is owned by another OS user".to_string(),
+            )
+        })
+    })
+}
+
+#[cfg(windows)]
+fn with_current_user_sid<T>(
+    action: impl FnOnce(windows::Win32::Security::PSID) -> LegacyMigrationResult<T>,
+) -> LegacyMigrationResult<T> {
+    use std::ffi::c_void;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            // SAFETY: this wrapper owns the process token handle exactly once.
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+        }
+    }
 
     let mut raw_token = HANDLE::default();
     // SAFETY: `raw_token` is writable and becomes owned by `OwnedHandle` only
@@ -516,13 +541,93 @@ fn verify_current_user_owned(path: &Path) -> LegacyMigrationResult<()> {
     // SAFETY: GetTokenInformation successfully initialized a TOKEN_USER at the
     // start of the aligned allocator buffer for the duration of this scope.
     let token_user = unsafe { &*(buffer.as_ptr() as *const TOKEN_USER) };
-    // SAFETY: both SIDs are owned by live security descriptor/token buffers.
-    if unsafe { EqualSid(owner, token_user.User.Sid) }.is_err() {
-        return Err(LegacyMigrationError::InvalidRequest(
-            "handoff file is owned by another OS user".to_string(),
-        ));
-    }
-    Ok(())
+    action(token_user.User.Sid)
+}
+
+#[cfg(windows)]
+fn create_current_user_owned_file(path: &Path) -> LegacyMigrationResult<File> {
+    use std::os::windows::{ffi::OsStrExt, io::FromRawHandle};
+    use windows::core::PCWSTR;
+    use windows::Win32::Security::{
+        InitializeSecurityDescriptor, SetSecurityDescriptorOwner, PSECURITY_DESCRIPTOR,
+        SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR,
+    };
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+
+    with_current_user_sid(|sid| {
+        let mut descriptor = SECURITY_DESCRIPTOR::default();
+        let descriptor_ptr =
+            PSECURITY_DESCRIPTOR((&mut descriptor as *mut SECURITY_DESCRIPTOR).cast());
+        // SAFETY: the descriptor is aligned, writable and lives through file creation.
+        // The SID remains live inside with_current_user_sid. Leave the DACL absent
+        // so Windows retains its normal inherited/default access policy.
+        unsafe {
+            InitializeSecurityDescriptor(descriptor_ptr, 1)
+                .and_then(|()| SetSecurityDescriptorOwner(descriptor_ptr, Some(sid), false))
+        }
+        .map_err(|error| LegacyMigrationError::ProcessInspection(error.to_string()))?;
+        let mut attributes = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: descriptor_ptr.0,
+            bInheritHandle: false.into(),
+        };
+        // canonicalize supplies the verbatim Windows prefix for long paths,
+        // matching std::fs behavior without requiring the new file to exist.
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let name = path.file_name().ok_or_else(|| {
+            LegacyMigrationError::io(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "request path has no filename",
+                ),
+            )
+        })?;
+        let absolute = fs::canonicalize(parent)
+            .map_err(|error| LegacyMigrationError::io(path, error))?
+            .join(name);
+        let mut wide_path = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+        if wide_path.contains(&0) {
+            return Err(LegacyMigrationError::io(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "request path contains a NUL character",
+                ),
+            ));
+        }
+        wide_path.push(0);
+        // SAFETY: the path, attributes, descriptor and SID remain live through
+        // CreateFileW. CREATE_NEW never opens or changes an existing file.
+        let handle = unsafe {
+            CreateFileW(
+                PCWSTR(wide_path.as_ptr()),
+                FILE_GENERIC_WRITE.0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                Some(&mut attributes),
+                CREATE_NEW,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+        }
+        .map_err(|error| {
+            // CreateFileW reports HRESULT_FROM_WIN32; preserve the OS code so
+            // callers can still distinguish AlreadyExists during nonce recovery.
+            LegacyMigrationError::io(
+                path,
+                std::io::Error::from_raw_os_error(error.code().0 & 0xffff),
+            )
+        })?;
+        // SAFETY: CreateFileW returned a valid, uniquely owned handle; File
+        // takes responsibility for closing it, including on write failure.
+        Ok(unsafe { File::from_raw_handle(handle.0) })
+    })
 }
 
 #[cfg(unix)]
@@ -1040,6 +1145,26 @@ mod tests {
             plan_hash: "sha256:plan".to_string(),
             ..MigrationPlan::default()
         }
+    }
+
+    #[test]
+    fn private_request_creation_preserves_owner_and_existing_contents() {
+        let temporary = tempfile::tempdir().expect("temporary directory");
+        let parent = temporary
+            .path()
+            .join("nested".repeat(20))
+            .join("nested".repeat(20));
+        fs::create_dir_all(&parent).expect("long request directory");
+        let path = parent.join("request.json");
+        write_new_private_json(&path, &"original").expect("create owned request");
+        verify_current_user_owned(&path).expect("request belongs to current user");
+        let original = fs::read(&path).unwrap();
+        assert!(matches!(
+            write_new_private_json(&path, &"replacement"),
+            Err(LegacyMigrationError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::AlreadyExists
+        ));
+        assert_eq!(fs::read(&path).unwrap(), original);
     }
 
     #[test]
