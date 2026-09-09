@@ -56,6 +56,10 @@ impl RuntimeServicePort for TerminalRuntimePort {
 
 #[async_trait::async_trait]
 impl TerminalPort for TerminalRuntimePort {
+    fn exec_terminal_size(&self) -> Option<openbitfun_runtime_ports::ExecTerminalSize> {
+        Some(crate::exec::EXEC_TERMINAL_SIZE)
+    }
+
     async fn is_session_active(&self, session_id: i32) -> PortResult<bool> {
         Ok(self.manager.is_session_active(session_id).await)
     }

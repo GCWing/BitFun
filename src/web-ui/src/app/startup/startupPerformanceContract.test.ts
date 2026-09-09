@@ -421,8 +421,11 @@ describe('startup performance contract', () => {
     );
     expect(backgroundCommandOutputPanelSource).not.toMatch(/from\s+['"]@\/tools\/terminal\/components['"]/);
     expect(backgroundCommandOutputPanelSource).toContain(
-      "from '@/tools/terminal/components/LazyTerminalOutputRenderer'"
+      "React.lazy(() => import('./BackgroundTerminalProjection'))"
     );
+    expect(backgroundCommandOutputPanelSource).toContain("await import('./backgroundTerminalReplay')");
+    expect(backgroundCommandOutputPanelSource).not.toMatch(/from\s+['"]@xterm\//);
+    expect(backgroundCommandOutputPanelSource).not.toMatch(/import\s+\{[^}]*BackgroundTerminalReplay[^}]*\}\s+from/);
     expect(lazyTerminalOutputSource).toContain("import('./TerminalOutputRenderer')");
   });
 

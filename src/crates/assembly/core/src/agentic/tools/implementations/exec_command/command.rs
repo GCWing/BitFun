@@ -558,6 +558,7 @@ impl ExecCommandTool {
                         workdir: Some(workdir.clone()),
                         remote: true,
                         tty,
+                        terminal_size: remote_exec_port.exec_terminal_size(),
                     })
                     .await,
             )
@@ -833,6 +834,7 @@ Output:
                         workdir: Some(workdir.to_string_lossy().to_string()),
                         remote: false,
                         tty,
+                        terminal_size: terminal_port.exec_terminal_size(),
                     })
                     .await,
             )

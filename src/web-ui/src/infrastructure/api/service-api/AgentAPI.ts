@@ -523,6 +523,8 @@ export interface BackgroundCommandOutputMetadata {
   workdir?: string;
   remote: boolean;
   tty: boolean;
+  /** Missing on legacy hosts (fixed 80x24); null explicitly means unknown. */
+  terminalSize?: { cols: number; rows: number } | null;
   status: BackgroundCommandOutputStatus;
   exitCode?: number;
   startedAt: number;
