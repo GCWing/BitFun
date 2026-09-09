@@ -39,8 +39,7 @@ How to use skills:
   - `command: "user::openbitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
-- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key or the user's message contains an exact `[$skill-name]` or `[$scope::source::directory]` invocation
-- For an exact stable-key invocation, pass that key unchanged as `command`; never replace it with a same-named skill from another source
+- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()

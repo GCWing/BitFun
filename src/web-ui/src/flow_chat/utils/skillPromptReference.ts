@@ -7,8 +7,8 @@ export interface SkillPromptReferenceTokenPayload {
   skillKey?: string;
 }
 
-export function createSkillPromptReferenceToken(skillName: string, skillKey?: string): string {
-  return `[$${skillKey?.trim() || skillName.trim()}]`;
+export function createSkillPromptReferenceToken(skillName: string): string {
+  return `[$${skillName.trim()}]`;
 }
 
 export function parseSkillPromptReferenceToken(
@@ -59,9 +59,8 @@ export function getSkillPromptReferenceMatches(text: string): Array<{
 export function appendSkillPromptReferenceToken(
   text: string,
   skillName: string,
-  skillKey?: string,
 ): string {
-  const token = createSkillPromptReferenceToken(skillName, skillKey);
+  const token = createSkillPromptReferenceToken(skillName);
   const trimmed = text.trimEnd();
   return trimmed ? `${trimmed} ${token}` : token;
 }
@@ -69,11 +68,10 @@ export function appendSkillPromptReferenceToken(
 export function replaceLeadingSlashCommandWithSkillToken(
   text: string,
   skillName: string,
-  skillKey?: string,
 ): string {
-  const token = createSkillPromptReferenceToken(skillName, skillKey);
+  const token = createSkillPromptReferenceToken(skillName);
   if (!text.trimStart().startsWith('/')) {
-    return appendSkillPromptReferenceToken(text, skillName, skillKey);
+    return appendSkillPromptReferenceToken(text, skillName);
   }
 
   return text.replace(LEADING_SLASH_COMMAND_PATTERN, (_match, whitespace: string) => `${whitespace}${token}`);

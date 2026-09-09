@@ -297,7 +297,7 @@ mod local_skill_scan_tests {
         let mut entry = test_root(&skills_path);
         entry.level = SkillLocation::Project;
         entry.slot = "agents";
-        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await;
+        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await.candidates;
         assert_eq!(scanned.len(), 1);
         assert_eq!(
             scanned[0].info.installation_source.as_deref(),
@@ -305,17 +305,19 @@ mod local_skill_scan_tests {
         );
 
         entry.slot = "claude";
-        assert!(SkillRegistry::scan_skills_in_dir(&entry).await[0]
-            .info
-            .installation_source
-            .is_none());
+        assert!(
+            SkillRegistry::scan_skills_in_dir(&entry).await.candidates[0]
+                .info
+                .installation_source
+                .is_none()
+        );
         entry.slot = "agents";
         fs::write(
             temp.path().join("skills-lock.json"),
             "invalid existing user data",
         )
         .unwrap();
-        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await;
+        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await.candidates;
         assert_eq!(scanned.len(), 1);
         assert!(scanned[0].info.installation_source.is_none());
         assert_eq!(
@@ -375,7 +377,7 @@ mod local_skill_scan_tests {
         }
         let entry = test_root(root);
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -391,7 +393,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert!(scan.candidates.is_empty());
@@ -413,7 +415,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -436,7 +438,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -456,7 +458,7 @@ mod local_skill_scan_tests {
         .expect("skill markdown");
         let entry = test_root(root);
 
-        let failed = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let failed = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(!failed.cacheable);
         assert!(failed.candidates[0].info.allow_implicit_invocation);
@@ -469,7 +471,7 @@ mod local_skill_scan_tests {
         )
         .expect("policy file");
 
-        let recovered = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let recovered = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(recovered.cacheable);
         assert!(!recovered.candidates[0].info.allow_implicit_invocation);
@@ -902,10 +904,6 @@ impl SkillRegistry {
         roots
     }
 
-    async fn scan_skills_in_dir(entry: &SkillRootEntry) -> Vec<SkillCandidate> {
-        Self::scan_skills_in_dir_with_status(entry).await.candidates
-    }
-
     async fn scan_user_skill_sources() -> UserSkillSources {
         #[cfg(feature = "file-watch")]
         let mut cacheable = match ensure_builtin_skills_installed().await {
@@ -923,7 +921,7 @@ impl SkillRegistry {
         let mut standard = Vec::new();
         let mut diagnostics = Vec::new();
         for entry in Self::get_user_skill_roots() {
-            let mut scan = Self::scan_skills_in_dir_with_status(&entry).await;
+            let mut scan = Self::scan_skills_in_dir(&entry).await;
             #[cfg(feature = "file-watch")]
             {
                 cacheable &= scan.cacheable;
@@ -983,7 +981,7 @@ impl SkillRegistry {
         let mut standard = Vec::new();
         if let Some(workspace_root) = workspace_root {
             for entry in Self::get_project_skill_roots(workspace_root) {
-                let mut part = Self::scan_skills_in_dir_with_status(&entry).await;
+                let mut part = Self::scan_skills_in_dir(&entry).await;
                 standard.append(&mut part.candidates);
                 diagnostics.append(&mut part.diagnostics);
             }
@@ -1326,15 +1324,6 @@ impl SkillRegistry {
         }
     }
 
-    async fn scan_remote_project_skills(
-        fs: &dyn WorkspaceFileSystem,
-        remote_root: &str,
-    ) -> Vec<SkillCandidate> {
-        Self::scan_remote_project_skills_with_diagnostics(fs, remote_root)
-            .await
-            .into_candidates()
-    }
-
     async fn scan_skill_candidates_for_remote_workspace(
         &self,
         fs: &dyn WorkspaceFileSystem,
@@ -1352,7 +1341,7 @@ impl SkillRegistry {
     ) -> SkillCandidateScan {
         let (user, project) = tokio::join!(
             self.scan_skill_candidates_with_diagnostics_for_workspace(None),
-            Self::scan_remote_project_skills_with_diagnostics(fs, remote_root),
+            Self::scan_remote_project_skills(fs, remote_root),
         );
         Self::merge_remote_skill_scans(user, project)
     }
@@ -2114,7 +2103,8 @@ mod opencode_configured_skill_tests {
                 .unwrap(),
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(roots).await;
         let candidates =
             SkillRegistry::merge_configured_opencode_candidates(standard, configured, true);
@@ -2142,7 +2132,8 @@ mod opencode_configured_skill_tests {
             priority: 0,
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(vec![configured_root(
             project.join("custom"),
             ExternalSourceScope::Project,
@@ -2178,7 +2169,8 @@ mod opencode_configured_skill_tests {
             priority: super::PROJECT_SKILL_ROOTS.len(),
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(vec![
             configured_root(home.join("configured"), ExternalSourceScope::UserGlobal, 0),
             configured_root(project.join("configured"), ExternalSourceScope::Project, 1),
@@ -2438,7 +2430,9 @@ mod remote_scan_tests {
             ),
             ..Default::default()
         };
-        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/").await;
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
         assert_eq!(skills.len(), 39);
         let installed = skills
             .iter()
@@ -2453,7 +2447,9 @@ mod remote_scan_tests {
         );
 
         fs.installation_lock = Some("invalid remote lock".into());
-        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/").await;
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
         assert_eq!(skills.len(), 39);
         assert!(skills
             .iter()
@@ -2464,7 +2460,9 @@ mod remote_scan_tests {
     async fn remote_scan_preserves_order_and_policy_with_bounded_io() {
         let fs = DelayedFs::default();
         let start = Instant::now();
-        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/").await;
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
         eprintln!(
             "remote scan: {:?}, {} logical IO calls, peak {}",
             start.elapsed(),
@@ -2517,7 +2515,7 @@ mod remote_scan_tests {
         let start = Instant::now();
         let mut local = Vec::new();
         for entry in SkillRegistry::get_project_skill_roots(local_root.path()) {
-            local.extend(SkillRegistry::scan_skills_in_dir(&entry).await);
+            local.extend(SkillRegistry::scan_skills_in_dir(&entry).await.candidates);
         }
         eprintln!(
             "local project scan: {:?}, {} skills",

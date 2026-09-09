@@ -53,7 +53,7 @@ fn flat_skill_data(
 }
 
 impl SkillRegistry {
-    pub(super) async fn scan_remote_project_skills_with_diagnostics(
+    pub(super) async fn scan_remote_project_skills(
         fs: &dyn WorkspaceFileSystem,
         remote_root: &str,
     ) -> SkillCandidateScan {
@@ -322,7 +322,7 @@ impl SkillRegistry {
         scan
     }
 
-    pub(super) async fn scan_skills_in_dir_with_status(entry: &SkillRootEntry) -> LocalSkillScan {
+    pub(super) async fn scan_skills_in_dir(entry: &SkillRootEntry) -> LocalSkillScan {
         let mut scan = LocalSkillScan {
             candidates: Vec::new(),
             diagnostics: Vec::new(),
@@ -685,7 +685,7 @@ mod tests {
                 priority: 0,
                 is_builtin: false,
             };
-            let scan = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+            let scan = SkillRegistry::scan_skills_in_dir(&entry).await;
             assert!(scan.diagnostics.is_empty());
             assert_eq!(scan.candidates.len(), if slot == "pi" { 3 } else { 2 });
             let flat = scan
@@ -750,9 +750,7 @@ mod tests {
 
     #[tokio::test]
     async fn remote_flat_skill_discovery_and_loading_use_remote_posix_paths() {
-        let scan =
-            SkillRegistry::scan_remote_project_skills_with_diagnostics(&FlatRemote, "/remote")
-                .await;
+        let scan = SkillRegistry::scan_remote_project_skills(&FlatRemote, "/remote").await;
         assert!(scan.diagnostics.is_empty());
         assert_eq!(scan.candidates.len(), 2);
         let pi = scan
@@ -801,7 +799,7 @@ mod tests {
             priority: 0,
             is_builtin: false,
         };
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&entry).await;
         let keys: HashSet<_> = scan
             .candidates
             .iter()
@@ -875,9 +873,7 @@ mod tests {
 
     #[tokio::test]
     async fn remote_nested_links_errors_cycles_and_project_priority() {
-        let scan =
-            SkillRegistry::scan_remote_project_skills_with_diagnostics(&RemoteFixture, "/remote")
-                .await;
+        let scan = SkillRegistry::scan_remote_project_skills(&RemoteFixture, "/remote").await;
         assert_eq!(scan.candidates.len(), 2);
         assert!(scan
             .candidates

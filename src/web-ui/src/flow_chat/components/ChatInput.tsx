@@ -1511,20 +1511,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [resolvedModeSkills],
   );
   const userInvocableSkills = useMemo(
-    // Management keeps the full catalog; invocation surfaces apply both runtime and author visibility.
-    () => resolvedModeSkills.filter(isSkillAvailableForUserInvocation),
+    // All input pickers use the host-selected winner for each skill name.
+    () => {
+      const seenNames = new Set<string>();
+      return resolvedModeSkills.filter(skill => {
+        if (!skill.selectedForRuntime || !isSkillAvailableForUserInvocation(skill)
+          || !skill.name.trim() || seenNames.has(skill.name)) return false;
+        seenNames.add(skill.name);
+        return true;
+      });
+    },
     [resolvedModeSkills]
   );
-
-  const duplicateSkillNames = useMemo(() => {
-    const seen = new Set<string>();
-    const duplicates = new Set<string>();
-    for (const skill of userInvocableSkills) {
-      if (seen.has(skill.name)) duplicates.add(skill.name);
-      seen.add(skill.name);
-    }
-    return duplicates;
-  }, [userInvocableSkills]);
 
   const quickSkillShortcuts = useMemo(
     () => canUseSkillsForTarget
@@ -3233,7 +3231,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         kind: 'skill' as const,
         id: skill.key,
         command: `/${skill.name}`,
-        label: [duplicateSkillNames.has(skill.name) ? skill.key : undefined, skill.argumentHint?.trim(), skill.description || skill.name]
+        label: [skill.argumentHint?.trim(), skill.description || skill.name]
           .filter(Boolean)
           .join(' — '),
         skillName: skill.name,
@@ -3245,7 +3243,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const bExact = bName === q ? 0 : bName.startsWith(q) ? 1 : 2;
         return aExact - bExact || aName.localeCompare(bName);
       });
-  }, [canUseSkillsForTarget, duplicateSkillNames, slashCommandState.query, userInvocableSkills]);
+  }, [canUseSkillsForTarget, slashCommandState.query, userInvocableSkills]);
 
   const resolveTypedMcpPromptCommand = useCallback((text: string): SlashMcpPromptItem | null => {
     const trimmed = text.trim();
@@ -5226,14 +5224,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const replaceInlineTrigger = getRichTextTriggerController()?.replaceActiveInlineTrigger;
 
     if (inlineTriggerState.isActive) {
-      replaceInlineTrigger?.(createSkillPromptReferenceToken(item.skillName, item.id));
+      replaceInlineTrigger?.(createSkillPromptReferenceToken(item.skillName));
       setQueuedInput(null);
       setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       window.setTimeout(() => richTextInputRef.current?.focus(), 0);
       return;
     }
 
-    const next = replaceLeadingSlashCommandWithSkillToken(inputState.value, item.skillName, item.id);
+    const next = replaceLeadingSlashCommandWithSkillToken(inputState.value, item.skillName);
     dispatchInput({ type: 'SET_VALUE', payload: next });
     inputValueRef.current = next;
     setQueuedInput(null);
@@ -5593,13 +5591,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [dispatchInput, focusRichTextInputSoon, getRichTextTriggerController, inputState.value]
   );
 
-  const insertSkillIntoInput = useCallback((skillName: string, skillKey?: string) => {
-    insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName, skillKey));
+  const insertSkillIntoInput = useCallback((skillName: string) => {
+    insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName));
   }, [insertInlineReferenceIntoInput]);
 
   const selectContextSkill = useCallback((skill: ContextPickerSkill) => {
     getRichTextTriggerController()?.replaceActiveContextTrigger?.(
-      createSkillPromptReferenceToken(skill.name, skill.key),
+      createSkillPromptReferenceToken(skill.name),
     );
     setQueuedInput(null);
     focusRichTextInputSoon();
@@ -6502,10 +6500,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   leading={<Icon name="spark" size="xs" aria-hidden />}
                                   onClick={event => {
                                     event.stopPropagation();
-                                    insertSkillIntoInput(skill.name, skill.key);
+                                    insertSkillIntoInput(skill.name);
                                   }}
                                 >
-                                  {[skill.name, duplicateSkillNames.has(skill.name) ? `(${skill.key})` : undefined, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
+                                  {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
                                 </MenuItem>
                               ))
                             )}
