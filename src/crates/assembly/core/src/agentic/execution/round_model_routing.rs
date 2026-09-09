@@ -267,6 +267,19 @@ impl RoundModelRouter for HttpRoundModelRouter {
         };
         let user_prompt = &prepared.user_prompt;
         let started_at = Instant::now();
+        let mut trace_guard = RouterTraceGuard::start(
+            self.config.trace_path.as_ref(),
+            "router_request_started",
+            "router_cancelled",
+            json!({
+                "session_id": request.session_id,
+                "dialog_turn_id": request.dialog_turn_id,
+                "turn_index": request.turn_index,
+                "round_index": request.round_index,
+                "agent_type": request.agent_type,
+                "router_model": self.config.model,
+            }),
+        );
         let route_result = self.client.predict(user_prompt).await.map_err(map_router_error).map(|prediction| {
             let generated_route = if prediction.generated_simple {
                 RoundModelRoute::Fast
@@ -300,6 +313,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                         self.config.trace_path.as_ref(),
                         &json!({
                             "event": "router_failure",
+                            "request_id": trace_guard.request_id(),
                             "session_id": request.session_id,
                             "dialog_turn_id": request.dialog_turn_id,
                             "turn_index": request.turn_index,
@@ -313,6 +327,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                             "latency_ms": started_at.elapsed().as_millis(),
                         }),
                     );
+                    trace_guard.finish();
                     return Err(error);
                 }
             };
@@ -320,6 +335,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
             self.config.trace_path.as_ref(),
             &json!({
                 "event": "router_decision",
+                "request_id": trace_guard.request_id(),
                 "session_id": request.session_id,
                 "dialog_turn_id": request.dialog_turn_id,
                 "turn_index": request.turn_index,
@@ -338,6 +354,7 @@ impl RoundModelRouter for HttpRoundModelRouter {
                 "latency_ms": started_at.elapsed().as_millis(),
             }),
         );
+        trace_guard.finish();
         info!(
             "Router decision completed: session_id={}, turn_id={}, round_index={}, generated_route={:?}, simple_probability={:?}, threshold={}, route={:?}, recovered={}, latency_ms={}",
             request.session_id,
@@ -394,6 +411,57 @@ fn route_for_simple_probability(
 
 static TRACE_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Keep cancelled in-flight auxiliary calls visible without waiting for a model
+/// during cancellation or changing the Agent's shutdown behavior.
+struct RouterTraceGuard {
+    path: Option<PathBuf>,
+    request_id: String,
+    started: Instant,
+    cancellation: Value,
+    finished: bool,
+}
+
+impl RouterTraceGuard {
+    fn start(
+        path: Option<&PathBuf>,
+        started_event: &str,
+        cancelled_event: &str,
+        mut record: Value,
+    ) -> Self {
+        let started = Instant::now();
+        let request_id = uuid::Uuid::new_v4().to_string();
+        record["request_id"] = json!(request_id);
+        record["event"] = json!(started_event);
+        append_trace_record(path, &record);
+        record["event"] = json!(cancelled_event);
+        record["error"] = json!("Request cancelled or dropped before completion");
+        Self {
+            path: path.cloned(),
+            request_id,
+            started,
+            cancellation: record,
+            finished: false,
+        }
+    }
+
+    fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+    }
+}
+
+impl Drop for RouterTraceGuard {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.cancellation["latency_ms"] = json!(self.started.elapsed().as_millis());
+            append_trace_record(self.path.as_ref(), &self.cancellation);
+        }
+    }
+}
+
 fn append_trace_record(trace_path: Option<&PathBuf>, record: &Value) {
     let Some(trace_path) = trace_path else {
         return;
@@ -414,7 +482,20 @@ fn append_trace_record(trace_path: Option<&PathBuf>, record: &Value) {
             .create(true)
             .append(true)
             .open(trace_path)?;
-        serde_json::to_writer(&mut file, record).map_err(std::io::Error::other)?;
+        #[derive(Serialize)]
+        struct TraceEnvelope<'a> {
+            recorded_at: chrono::DateTime<chrono::Utc>,
+            #[serde(flatten)]
+            record: &'a Value,
+        }
+        serde_json::to_writer(
+            &mut file,
+            &TraceEnvelope {
+                recorded_at: chrono::Utc::now(),
+                record,
+            },
+        )
+        .map_err(std::io::Error::other)?;
         file.write_all(b"\n")?;
         Ok(())
     })();
@@ -438,7 +519,50 @@ fn message_text(message: &Message) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{route_for_simple_probability, RoundModelRoute};
+    use super::{route_for_simple_probability, RoundModelRoute, RouterTraceGuard};
+
+    #[test]
+    fn dropped_router_call_retains_identity_timestamps_and_unknown_usage() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("router.jsonl");
+        let guard = RouterTraceGuard::start(
+            Some(&path),
+            "router_request_started",
+            "router_cancelled",
+            serde_json::json!({"session_id": "s", "round_index": 1}),
+        );
+        let request_id = guard.request_id().to_string();
+        drop(guard);
+        let events: Vec<serde_json::Value> = std::fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["event"], "router_request_started");
+        assert_eq!(events[1]["event"], "router_cancelled");
+        for event in &events {
+            assert_eq!(event["request_id"], request_id);
+            assert!(event["recorded_at"].is_string());
+        }
+        assert!(events[1]["latency_ms"].is_u64());
+        assert!(events[1]["router_usage"].is_null());
+    }
+
+    #[test]
+    fn completed_router_call_does_not_emit_cancellation() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("router.jsonl");
+        let mut guard = RouterTraceGuard::start(
+            Some(&path),
+            "router_request_started",
+            "router_cancelled",
+            serde_json::json!({"round_index": 0}),
+        );
+        guard.finish();
+        drop(guard);
+        assert_eq!(std::fs::read_to_string(path).unwrap().lines().count(), 1);
+    }
 
     #[test]
     fn routes_use_existing_model_slots() {

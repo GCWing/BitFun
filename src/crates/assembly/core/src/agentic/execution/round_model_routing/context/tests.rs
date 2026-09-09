@@ -518,7 +518,15 @@ async fn incomplete_summary_keeps_old_state_but_records_reported_usage() {
     settle(&mut context).await;
     assert_eq!(context.state.summarized_through, 0);
     assert_eq!(context.state.entries.len(), 8);
-    let event: Value = serde_json::from_slice(&tokio::fs::read(trace).await.unwrap()).unwrap();
+    let content = tokio::fs::read_to_string(trace).await.unwrap();
+    let events: Vec<Value> = content
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event"], "router_context_summary_started");
+    let event = &events[1];
+    assert_eq!(event["request_id"], events[0]["request_id"]);
     assert_eq!(event["event"], "router_context_summary");
     assert_eq!(event["usage"]["candidatesTokenCount"], 4096);
     assert!(event["error"].is_string());

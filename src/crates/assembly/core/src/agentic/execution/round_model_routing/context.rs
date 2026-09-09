@@ -1,6 +1,6 @@
 //! Router-owned observation, auxiliary summarization and recovery. No main compactor access.
 
-use super::{append_trace_record, parse_env_usize};
+use super::{append_trace_record, parse_env_usize, RouterTraceGuard};
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
 };
@@ -526,6 +526,16 @@ impl RoundRouterContext {
         self.pending_summary = Some(tokio::spawn(async move {
             let _permit = permit;
             let started = Instant::now();
+            let mut trace_guard = RouterTraceGuard::start(
+                factory.trace_path.as_ref(),
+                "router_context_summary_started",
+                "router_context_summary_cancelled",
+                json!({
+                    "session_id": session_id, "dialog_turn_id": dialog_turn_id,
+                    "base_through": work.base_through, "through": work.through,
+                    "model_selector": "fast",
+                }),
+            );
             let result = tokio::time::timeout(
                 factory.config.summary_timeout,
                 factory.summary_provider.summarize(work.prompt.clone()),
@@ -549,11 +559,13 @@ impl RoundRouterContext {
                 factory.trace_path.as_ref(),
                 &json!({
                     "event": "router_context_summary", "session_id": session_id, "dialog_turn_id": dialog_turn_id,
+                    "request_id": trace_guard.request_id(),
                     "base_through": work.base_through, "through": work.through,
                     "model_selector": "fast", "model_config_id": model_id, "effective_model_name": model_name,
                     "usage": usage, "error": error, "latency_ms": started.elapsed().as_millis(),
                 }),
             );
+            trace_guard.finish();
             (work, result)
         }));
     }
