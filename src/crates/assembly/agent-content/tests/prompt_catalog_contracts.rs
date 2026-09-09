@@ -14,10 +14,6 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/agentic_mode.md"),
     ),
     (
-        "agentic_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/agentic_mode_first_entry_reminder.md"),
-    ),
-    (
         "claw_mode",
         include_bytes!("../prompts/agents/claw_mode.md"),
     ),
@@ -34,8 +30,8 @@ const CATALOG_PROMPT_SOURCES: &[(&str, &[u8])] = &[
         include_bytes!("../prompts/agents/cowork_mode.md"),
     ),
     (
-        "creative_mode_first_entry_reminder",
-        include_bytes!("../prompts/agents/creative_mode_first_entry_reminder.md"),
+        "creative_mode",
+        include_bytes!("../prompts/agents/creative_mode.md"),
     ),
     (
         "deep_research_agent",

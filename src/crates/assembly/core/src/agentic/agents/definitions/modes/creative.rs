@@ -4,12 +4,10 @@
 //! default tool manifests of general coding, office, or assistant modes.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
     shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
 };
 use async_trait::async_trait;
-
-const CREATIVE_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "creative_mode_first_entry_reminder";
 
 pub struct CreativeMode {
     default_tools: Vec<String>,
@@ -76,24 +74,6 @@ impl Agent for CreativeMode {
         shared_coding_mode_user_context_policy()
     }
 
-    async fn get_system_reminder(
-        &self,
-        previous_agent_type: Option<&str>,
-        _workspace: Option<&crate::agentic::WorkspaceBinding>,
-    ) -> crate::util::errors::OpenBitFunResult<String> {
-        if previous_agent_type == Some(self.id()) {
-            return Ok(String::new());
-        }
-        get_embedded_prompt(CREATIVE_MODE_FIRST_ENTRY_REMINDER_TEMPLATE)
-            .map(str::to_string)
-            .ok_or_else(|| {
-                crate::util::errors::OpenBitFunError::Agent(format!(
-                    "{} not found in embedded files",
-                    CREATIVE_MODE_FIRST_ENTRY_REMINDER_TEMPLATE
-                ))
-            })
-    }
-
     fn is_readonly(&self) -> bool {
         false
     }
@@ -129,20 +109,5 @@ mod tests {
             .join(" ")
             .contains("installed client"));
         assert!(prompt.contains("FrontendWorkbench"));
-    }
-
-    #[tokio::test]
-    async fn creative_reminder_is_only_injected_on_entry() {
-        let mode = CreativeMode::new();
-        assert!(mode
-            .get_system_reminder(None, None)
-            .await
-            .expect("reminder")
-            .contains("FrontendWorkbench"));
-        assert!(mode
-            .get_system_reminder(Some("Creative"), None)
-            .await
-            .expect("ongoing reminder")
-            .is_empty());
     }
 }
