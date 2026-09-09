@@ -123,6 +123,17 @@ describe('Markdown file links', () => {
     vi.clearAllMocks();
   });
 
+  it.each([false, true])('keeps fullwidth parentheses outside bare web links (escaped=%s)', async escaped => {
+    const url = 'http://127.0.0.1:8000';
+    const bare = escaped ? url.replace(':', '\\:') : url;
+    const content = `\uff08Link1 ${bare}\uff09\uff08Link2 [${url}](${url}) \uff09`;
+    await act(async () => root.render(<MarkdownRenderer content={content} />));
+    const links = [...container.querySelectorAll('a')];
+    expect(links.map(link => link.getAttribute('href'))).toEqual([url, url]);
+    expect(links.map(link => link.textContent)).toEqual([url, url]);
+    expect(container.textContent).toContain(`\uff08Link1 ${url}\uff09\uff08Link2 ${url} \uff09`);
+  });
+
   it('does not resolve workspace path for markdown without local file links', async () => {
     await act(async () => {
       root.render(

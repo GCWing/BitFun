@@ -7,6 +7,7 @@ import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useR
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { Tooltip } from '@openbitfun/ui';
 import remarkGfm from 'remark-gfm';
+import { remarkAutolinkBoundaries } from './remarkAutolinkBoundaries';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { visit } from 'unist-util-visit';
@@ -1640,7 +1641,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const wrapperClassName = `markdown-renderer ${className}`.trim();
   const basicMarkdownRenderer = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAutolinkInternalLinks]}
+      remarkPlugins={[remarkGfm, remarkAutolinkBoundaries, remarkAutolinkInternalLinks]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], [rehypeSourceRange, sourceRange]]}
       urlTransform={markdownUrlTransform}
       components={components}
