@@ -2,11 +2,233 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 pub trait RouterTokenCounter: Send + Sync {
     fn count(&self, text: &str) -> usize;
     fn name(&self) -> &'static str;
+    fn cacheable(&self) -> bool {
+        true
+    }
+    fn cached_projection(&self, _text: &str, _budget: usize) -> Option<Value> {
+        None
+    }
+    fn remember_projection(&self, _text: &str, _budget: usize, _value: &Value) {}
+    fn metrics(&self) -> RouterTokenMetrics {
+        RouterTokenMetrics::default()
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, Serialize)]
+pub struct RouterTokenMetrics {
+    pub cache_hits: u64,
+    pub encode_calls: u64,
+    pub encoded_bytes: u64,
+    pub encode_us: u64,
+    pub projection_hits: u64,
+}
+
+impl RouterTokenMetrics {
+    pub fn since(self, before: Self) -> Self {
+        Self {
+            cache_hits: self.cache_hits.saturating_sub(before.cache_hits),
+            encode_calls: self.encode_calls.saturating_sub(before.encode_calls),
+            encoded_bytes: self.encoded_bytes.saturating_sub(before.encoded_bytes),
+            encode_us: self.encode_us.saturating_sub(before.encode_us),
+            projection_hits: self.projection_hits.saturating_sub(before.projection_hits),
+        }
+    }
+}
+
+/// Exact, FIFO-bounded memoization. Keys retain full bytes, so hash collisions cannot
+/// change a token count or projection. The two caches are owned by one Router turn,
+/// never serialized, and never hold a lock while calling the tokenizer.
+pub struct CachedRouterTokenCounter {
+    inner: Arc<dyn RouterTokenCounter>,
+    tokens: Mutex<RouterMemo<usize>>,
+    projections: Mutex<RouterMemo<Value>>,
+    hits: AtomicU64,
+    calls: AtomicU64,
+    bytes: AtomicU64,
+    encode_us: AtomicU64,
+    projection_hits: AtomicU64,
+}
+
+struct RouterMemo<T> {
+    values: HashMap<usize, HashMap<Arc<str>, T>>,
+    order: VecDeque<(Arc<str>, usize, usize)>,
+    bytes: usize,
+    entries: usize,
+    max_bytes: usize,
+    max_entries: usize,
+}
+
+impl<T> RouterMemo<T> {
+    fn new(max_bytes: usize, max_entries: usize) -> Self {
+        Self {
+            values: HashMap::new(),
+            order: VecDeque::new(),
+            bytes: 0,
+            entries: 0,
+            max_bytes,
+            max_entries,
+        }
+    }
+
+    fn get(&self, text: &str, budget: usize) -> Option<&T> {
+        self.values.get(&budget)?.get(text)
+    }
+
+    fn insert(&mut self, key: (Arc<str>, usize), value: T, cost: usize) {
+        // Include a conservative allowance for map/queue nodes as well as payload bytes.
+        let cost = cost.saturating_add(256);
+        if cost > self.max_bytes || self.max_entries == 0 || self.get(&key.0, key.1).is_some() {
+            return;
+        }
+        while self.bytes.saturating_add(cost) > self.max_bytes || self.entries >= self.max_entries {
+            let Some((text, budget, bytes)) = self.order.pop_front() else {
+                break;
+            };
+            if let Some(values) = self.values.get_mut(&budget) {
+                values.remove(&text);
+                if values.is_empty() {
+                    self.values.remove(&budget);
+                }
+            }
+            self.bytes -= bytes;
+            self.entries -= 1;
+        }
+        self.order.push_back((key.0.clone(), key.1, cost));
+        self.values.entry(key.1).or_default().insert(key.0, value);
+        self.bytes += cost;
+        self.entries += 1;
+    }
+}
+
+impl CachedRouterTokenCounter {
+    pub fn new(inner: Arc<dyn RouterTokenCounter>) -> Self {
+        Self::with_limits(inner, 4 * 1024 * 1024, 4096)
+    }
+
+    fn with_limits(inner: Arc<dyn RouterTokenCounter>, bytes: usize, entries: usize) -> Self {
+        Self {
+            inner,
+            tokens: Mutex::new(RouterMemo::new(bytes, entries)),
+            projections: Mutex::new(RouterMemo::new(bytes, entries.min(256))),
+            hits: AtomicU64::new(0),
+            calls: AtomicU64::new(0),
+            bytes: AtomicU64::new(0),
+            encode_us: AtomicU64::new(0),
+            projection_hits: AtomicU64::new(0),
+        }
+    }
+}
+
+impl RouterTokenCounter for CachedRouterTokenCounter {
+    fn count(&self, text: &str) -> usize {
+        let cacheable = text.len() <= 65_536 && self.inner.cacheable();
+        if cacheable {
+            if let Some(value) = self
+                .tokens
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(text, 0)
+                .copied()
+            {
+                self.hits.fetch_add(1, Ordering::Relaxed);
+                return value;
+            }
+        }
+        let started = Instant::now();
+        let count = self.inner.count(text);
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        self.bytes.fetch_add(text.len() as u64, Ordering::Relaxed);
+        self.encode_us
+            .fetch_add(started.elapsed().as_micros() as u64, Ordering::Relaxed);
+        if cacheable && self.inner.cacheable() {
+            self.tokens
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert((Arc::from(text), 0), count, text.len());
+        }
+        count
+    }
+
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+    fn cacheable(&self) -> bool {
+        self.inner.cacheable()
+    }
+
+    fn cached_projection(&self, text: &str, budget: usize) -> Option<Value> {
+        if text.len() > 65_536 || !self.inner.cacheable() {
+            return None;
+        }
+        let result = self
+            .projections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(text, budget)
+            .cloned();
+        if result.is_some() {
+            self.projection_hits.fetch_add(1, Ordering::Relaxed);
+        }
+        result
+    }
+
+    fn remember_projection(&self, text: &str, budget: usize, value: &Value) {
+        if text.len() > 65_536 || !self.inner.cacheable() {
+            return;
+        }
+        // Charge container nodes too: a large array of nulls has little JSON text
+        // but substantially more heap usage. This is accounting, not an allocator limit.
+        fn value_cost(value: &Value) -> usize {
+            std::mem::size_of::<Value>().saturating_add(match value {
+                Value::String(text) => text.capacity(),
+                Value::Array(values) => values.iter().fold(0usize, |bytes, value| {
+                    bytes.saturating_add(value_cost(value)).saturating_add(32)
+                }),
+                Value::Object(values) => values.iter().fold(0usize, |bytes, (key, value)| {
+                    bytes
+                        .saturating_add(key.capacity())
+                        .saturating_add(value_cost(value))
+                        .saturating_add(128)
+                }),
+                _ => 0,
+            })
+        }
+        let cost = text.len().saturating_add(value_cost(value));
+        self.projections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert((Arc::<str>::from(text), budget), value.clone(), cost);
+    }
+
+    fn metrics(&self) -> RouterTokenMetrics {
+        RouterTokenMetrics {
+            cache_hits: self.hits.load(Ordering::Relaxed),
+            encode_calls: self.calls.load(Ordering::Relaxed),
+            encoded_bytes: self.bytes.load(Ordering::Relaxed),
+            encode_us: self.encode_us.load(Ordering::Relaxed),
+            projection_hits: self.projection_hits.load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct RouterPreparationMetrics {
+    pub generation_lookup_ms: u64,
+    pub generation_observe_ms: u64,
+    pub observe_ms: u64,
+    pub summary_apply_ms: u64,
+    pub summary_prepare_ms: u64,
+    pub checkpoint_ms: u64,
+    pub render_ms: u64,
+    pub tokens: RouterTokenMetrics,
 }
 
 /// Conservative fallback for the router's byte-level BPE when no tokenizer is installed.
@@ -89,6 +311,7 @@ pub struct PreparedRouterContext {
     #[serde(skip_serializing)]
     pub user_prompt: String,
     pub preparation_ms: u64,
+    pub preparation: RouterPreparationMetrics,
     pub input_tokens: usize,
     pub budget_tokens: usize,
     pub counter: &'static str,
@@ -99,7 +322,7 @@ pub struct PreparedRouterContext {
 
 impl RouterContextState {
     pub fn claim_message(&mut self, id: &str) -> bool {
-        self.seen_message_ids.insert(id.to_string())
+        !self.seen_message_ids.contains(id) && self.seen_message_ids.insert(id.to_string())
     }
 
     pub fn append(
@@ -128,6 +351,7 @@ impl RouterContextState {
                 }
             }
         }
+        let content = project_observation(content, counter);
         let flagged = |value: &Value| value.get("is_error").and_then(Value::as_bool) == Some(true);
         let is_error = flagged(&content)
             || content
@@ -302,6 +526,7 @@ impl RouterContextState {
         };
         PreparedRouterContext {
             preparation_ms: 0,
+            preparation: RouterPreparationMetrics::default(),
             input_tokens: counter.count(&user_prompt),
             budget_tokens: max_tokens,
             counter: counter.name(),
@@ -311,6 +536,206 @@ impl RouterContextState {
             omitted_through: self.omitted_through,
         }
     }
+}
+
+/// A deterministic, Router-only projection of observed facts. These limits bound
+/// evidence size, never the Agent loop; no model call or main-message rewrite occurs.
+fn project_observation(mut value: Value, counter: &dyn RouterTokenCounter) -> Value {
+    if let Some(assistant) = value.get_mut("assistant") {
+        for key in ["text", "reasoning_content"] {
+            if let Some(text) = assistant.get(key).and_then(Value::as_str) {
+                assistant[key] = json!(excerpt(text, 512, counter));
+            }
+        }
+        if let Some(calls) = assistant
+            .get_mut("tool_calls")
+            .and_then(Value::as_array_mut)
+        {
+            for call in calls {
+                let name = call
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if let Some(arguments) = call.get_mut("arguments").and_then(Value::as_object_mut) {
+                    for (key, argument) in arguments {
+                        let Some(text) = argument.as_str() else {
+                            continue;
+                        };
+                        let budget = match (name.as_str(), key.as_str()) {
+                            (
+                                "edit" | "write" | "applypatch" | "apply_patch",
+                                "old_string" | "new_string" | "content" | "patch",
+                            ) => 384,
+                            (_, "file_path" | "path" | "workdir" | "cmd" | "command") => 512,
+                            _ => 256,
+                        };
+                        *argument = json!(excerpt(text, budget, counter));
+                    }
+                }
+            }
+        }
+    }
+    if let Some(results) = value.get_mut("tool_results").and_then(Value::as_array_mut) {
+        for result in results {
+            project_result(result, counter);
+        }
+    } else if value.get("tool_name").is_some() {
+        // A tool result that arrived after a partial-round checkpoint is feedback.
+        project_result(&mut value, counter);
+    }
+    value
+}
+
+fn project_result(result: &mut Value, counter: &dyn RouterTokenCounter) {
+    let failed = result.get("is_error").and_then(Value::as_bool) == Some(true)
+        || result
+            .pointer("/status/exit_code")
+            .and_then(Value::as_i64)
+            .is_some_and(|code| code != 0)
+        || result.pointer("/status/success").and_then(Value::as_bool) == Some(false)
+        || ["timed_out", "interrupted"]
+            .iter()
+            .any(|key| result["status"][key].as_bool() == Some(true));
+    result["is_error"] = json!(failed);
+    let name = result
+        .get("tool_name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if let Some(output) = result.get("result_for_assistant") {
+        let output = output
+            .as_str()
+            .map(std::borrow::Cow::Borrowed)
+            .unwrap_or_else(|| std::borrow::Cow::Owned(output.to_string()));
+        // Errors can occur in a successful command's output too. The excerpts are
+        // evidence, not a heuristic claim that a command succeeded or failed.
+        let evidence = if failed
+            || matches!(
+                name.as_str(),
+                "execcommand" | "writestdin" | "bash" | "terminal"
+            ) {
+            failure_evidence(&output, counter)
+        } else {
+            None
+        };
+        let budget = match name.as_str() {
+            "read" | "readfile" => 512,
+            "edit" | "write" | "applypatch" | "apply_patch" => 384,
+            _ if failed => 1_024,
+            _ => 768,
+        };
+        let projected = excerpt(&output, budget, counter);
+        if let Some(evidence) = evidence {
+            result["key_evidence"] = json!(evidence);
+        }
+        result["result_for_assistant"] = json!(projected);
+    }
+}
+
+fn excerpt(text: &str, budget: usize, counter: &dyn RouterTokenCounter) -> String {
+    // Collapse only exactly repeated adjacent lines. Do not fuzzy-deduplicate code,
+    // reasoning, or separate observations that may have different execution states.
+    let mut output = String::new();
+    let mut previous = "";
+    let mut repeats = 0usize;
+    for line in text.split_inclusive('\n') {
+        if line == previous && !previous.is_empty() {
+            repeats += 1;
+            continue;
+        }
+        if repeats > 0 {
+            output.push_str(&format!("\n[omitted {repeats} exact repeated lines]\n"));
+            repeats = 0;
+        }
+        output.push_str(line);
+        previous = line;
+    }
+    if repeats > 0 {
+        output.push_str(&format!("\n[omitted {repeats} exact repeated lines]\n"));
+    }
+    truncate(&output, budget, counter)
+}
+
+fn failure_evidence(text: &str, counter: &dyn RouterTokenCounter) -> Option<String> {
+    // Scan once and retain bounded neighborhoods, including failures in the middle
+    // of very large logs. No regex, tokenization of raw logs, or semantic summary.
+    let mut before = VecDeque::<(usize, String)>::new();
+    let mut selected = VecDeque::<(usize, String)>::new();
+    let mut anchors = VecDeque::new();
+    let mut following = 0usize;
+    for (index, line) in text.lines().enumerate() {
+        let lower = line.to_ascii_lowercase();
+        let relevant = [
+            "assert",
+            "error",
+            "traceback",
+            "panic",
+            "failed",
+            "exception",
+            "stack trace",
+        ]
+        .iter()
+        .any(|pattern| lower.contains(pattern));
+        if relevant {
+            for (line_index, line) in &before {
+                if selected.back().is_none_or(|(last, _)| last < line_index) {
+                    selected.push_back((*line_index, line.clone()));
+                }
+            }
+            following = 3;
+        }
+        // Bound capture by bytes. Tokenize only the final selected excerpt, not
+        // every matching line (a failure log can contain hundreds of thousands).
+        let mut end = line.len().min(1024);
+        while !line.is_char_boundary(end) {
+            end -= 1;
+        }
+        let bounded = if end < line.len() {
+            format!("{} [omitted]", &line[..end])
+        } else {
+            line.to_string()
+        };
+        if relevant {
+            anchors.push_back(bounded.clone());
+            if anchors.len() > 8 {
+                anchors.pop_front();
+            }
+        }
+        if following > 0 {
+            selected.push_back((index, bounded.clone()));
+            following -= 1;
+        }
+        while selected.len() > 24 {
+            selected.pop_front();
+        }
+        before.push_back((index, bounded));
+        if before.len() > 2 {
+            before.pop_front();
+        }
+    }
+    if selected.is_empty() {
+        return None;
+    }
+    let mut output = String::from("[selected failure-related output; other lines omitted]\n");
+    let mut previous = None;
+    for (index, line) in selected {
+        if previous.is_some_and(|previous| index > previous + 1) {
+            output.push_str("[omitted]\n");
+        }
+        output.push_str(&line);
+        output.push('\n');
+        previous = Some(index);
+    }
+    Some(format!(
+        "Selected failure lines:\n{}\nSurrounding output:\n{}",
+        truncate(
+            &anchors.into_iter().collect::<Vec<_>>().join("\n"),
+            640,
+            counter
+        ),
+        truncate(&output, 320, counter)
+    ))
 }
 
 /// UTF-8 safe, explicitly marked head/tail truncation, measured with the supplied tokenizer.
@@ -369,6 +794,21 @@ pub fn truncate(text: &str, budget: usize, counter: &dyn RouterTokenCounter) -> 
 }
 
 pub fn compact_json(value: &Value, budget: usize, counter: &dyn RouterTokenCounter) -> Value {
+    let rendered = value.to_string();
+    if let Some(cached) = counter.cached_projection(&rendered, budget) {
+        return cached;
+    }
+    let result = compact_json_uncached(value, &rendered, budget, counter);
+    counter.remember_projection(&rendered, budget, &result);
+    result
+}
+
+fn compact_json_uncached(
+    value: &Value,
+    rendered: &str,
+    budget: usize,
+    counter: &dyn RouterTokenCounter,
+) -> Value {
     fn shrink(
         value: &Value,
         field_budget: usize,
@@ -411,7 +851,6 @@ pub fn compact_json(value: &Value, budget: usize, counter: &dyn RouterTokenCount
             _ => value.clone(),
         }
     }
-    let rendered = value.to_string();
     if rendered.len() <= 65_536 && counter.count(&rendered) <= budget {
         return value.clone();
     }
@@ -440,6 +879,154 @@ pub fn compact_json(value: &Value, budget: usize, counter: &dyn RouterTokenCount
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_projection_keeps_paths_ranges_changes_status_and_actual_excerpts() {
+        let value = json!({"assistant": {
+        "text": "Actual conclusion\nActual conclusion\nNext step",
+        "reasoning_content": "Observed reasoning\nObserved reasoning\nNeed validation",
+        "tool_calls": [
+            {"tool_id": "read", "tool_name": "Read", "arguments": {"file_path": "src/parser.rs", "offset": 40, "limit": 60}},
+            {"tool_id": "edit", "tool_name": "Edit", "arguments": {"file_path": "src/parser.rs", "old_string": format!("OLD_START{}OLD_END", "old ".repeat(3000)), "new_string": format!("NEW_START{}NEW_END", "new ".repeat(3000))}},
+            {"tool_id": "cmd", "tool_name": "ExecCommand", "arguments": {"cmd": "cargo test parser", "workdir": "/testbed"}}
+        ]}, "tool_results": [
+            {"tool_id": "read", "tool_name": "Read", "status": {"start_line": 40, "end_line": 99}, "result_for_assistant": format!("Read lines 40-99 from src/parser.rs\nSTART_CODE{}END_CODE", "code ".repeat(3000))},
+            {"tool_id": "edit", "tool_name": "Edit", "status": {"success": true}, "result_for_assistant": "Edit succeeded"},
+            {"tool_id": "cmd", "tool_name": "ExecCommand", "status": {"exit_code": 1}, "is_error": false, "result_for_assistant": format!("{}\nAssertionError: expected two nodes\n  at parser.rs:42\n{}", "passing log\n".repeat(10_000), "cleanup log\n".repeat(10_000))}
+        ]});
+        let projected = project_observation(value.clone(), &Utf8ByteBudget);
+        assert_eq!(
+            projected.pointer("/assistant/tool_calls/0/arguments"),
+            value.pointer("/assistant/tool_calls/0/arguments")
+        );
+        assert_eq!(projected["tool_results"][0]["status"]["start_line"], 40);
+        assert_eq!(projected["tool_results"][1]["status"]["success"], true);
+        assert_eq!(projected["tool_results"][2]["is_error"], true);
+        let text = projected.to_string();
+        for expected in [
+            "OLD_START",
+            "OLD_END",
+            "NEW_START",
+            "NEW_END",
+            "START_CODE",
+            "END_CODE",
+            "cargo test parser",
+            "AssertionError: expected two nodes",
+            "parser.rs:42",
+            "exact repeated lines",
+            "Observed reasoning",
+            "Next step",
+        ] {
+            assert!(text.contains(expected), "missing {expected}");
+        }
+        assert!(text.len() < 5_000);
+        let cache = CachedRouterTokenCounter::new(Arc::new(Utf8ByteBudget));
+        assert_eq!(projected, project_observation(value, &cache));
+        let mut state = RouterContextState::default();
+        state.append("tools".into(), RouterEntryKind::Round, projected, &cache);
+        let prompt = state.prepare(3, 4_096, &cache).user_prompt;
+        assert!(prompt.contains("AssertionError: expected two nodes"));
+        assert!(prompt.contains("exit_code"));
+    }
+
+    #[test]
+    fn exact_cache_preserves_prompts_across_budgets_updates_and_summaries() {
+        let counter = CachedRouterTokenCounter::new(Arc::new(Utf8ByteBudget));
+        let mut state = RouterContextState {
+            task: "Fix parser 世界 🦀".into(),
+            ..Default::default()
+        };
+        for index in 0..12 {
+            state.append(index.to_string(), RouterEntryKind::Round,
+                json!({"assistant": {"text": "reasoning snippet ".repeat(80)},
+                    "tool_results": [{"is_error": index == 3, "result_for_assistant": format!("{index}: {}", "output 世界 ".repeat(200))}]}),
+                &Utf8ByteBudget);
+        }
+        for budget in [512, 2048, 4096] {
+            let original = state.prepare(3, budget, &Utf8ByteBudget);
+            let cached = state.prepare(3, budget, &counter);
+            assert_eq!(original.user_prompt, cached.user_prompt);
+            assert_eq!(original.input_tokens, cached.input_tokens);
+            let before = counter.metrics();
+            assert_eq!(
+                state.prepare(3, budget, &counter).user_prompt,
+                original.user_prompt
+            );
+            assert_eq!(counter.metrics().since(before).encode_calls, 0);
+        }
+        state.append(
+            "steer".into(),
+            RouterEntryKind::UserUpdate,
+            json!("Do not edit; continue verification"),
+            &counter,
+        );
+        let work = state.summary_work(3, 4, &counter).unwrap();
+        assert!(state.apply_summary(&work, "Earlier tests failed", &counter));
+        let original = state.prepare(3, 4096, &Utf8ByteBudget);
+        let cached = state.prepare(3, 4096, &counter);
+        assert_eq!(original.user_prompt, cached.user_prompt);
+        assert!(cached.user_prompt.contains("continue verification"));
+        assert!(counter.metrics().cache_hits > 0);
+        assert!(counter.metrics().projection_hits > 0);
+    }
+
+    #[test]
+    fn cache_is_bounded_thread_safe_and_does_not_reuse_failed_counts() {
+        let counter = Arc::new(CachedRouterTokenCounter::with_limits(
+            Arc::new(Utf8ByteBudget),
+            2048,
+            8,
+        ));
+        let handles: Vec<_> = (0..4)
+            .map(|worker| {
+                let counter = counter.clone();
+                std::thread::spawn(move || {
+                    for index in 0..100 {
+                        let text = format!("{worker}-{index}-{}", "🌍".repeat(30));
+                        assert_eq!(counter.count(&text), text.len());
+                        let value = json!({"text": text});
+                        assert_eq!(
+                            compact_json(&value, 64, counter.as_ref()),
+                            compact_json(&value, 64, &Utf8ByteBudget)
+                        );
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        let tokens = counter.tokens.lock().unwrap();
+        assert!(tokens.bytes <= 2048 && tokens.entries <= 8);
+        let projections = counter.projections.lock().unwrap();
+        assert!(projections.bytes <= 2048 && projections.entries <= 8);
+
+        struct FailingCounter(std::sync::atomic::AtomicBool);
+        impl RouterTokenCounter for FailingCounter {
+            fn count(&self, text: &str) -> usize {
+                if self.cacheable() {
+                    1
+                } else {
+                    text.len()
+                }
+            }
+            fn name(&self) -> &'static str {
+                "test"
+            }
+            fn cacheable(&self) -> bool {
+                !self.0.load(Ordering::Relaxed)
+            }
+        }
+        let inner = Arc::new(FailingCounter(std::sync::atomic::AtomicBool::new(false)));
+        let cache = CachedRouterTokenCounter::new(inner.clone());
+        assert_eq!(cache.count("changed counter"), 1);
+        inner.0.store(true, Ordering::Relaxed);
+        assert_eq!(cache.count("changed counter"), "changed counter".len());
+        assert_eq!(
+            CachedRouterTokenCounter::new(Arc::new(Utf8ByteBudget)).count("changed counter"),
+            "changed counter".len()
+        );
+    }
 
     fn append_round(state: &mut RouterContextState, index: usize) {
         state.append(format!("m{index}"), RouterEntryKind::Round, json!({"round_id": index, "assistant": {"text": format!("step-{index}"), "tool_calls": []}, "tool_results": []}), &Utf8ByteBudget);

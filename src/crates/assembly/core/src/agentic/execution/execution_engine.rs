@@ -3779,7 +3779,10 @@ impl ExecutionEngine {
             });
         if let Some(router_context) = router_context.as_mut() {
             router_context
-                .restore(
+                .restore_with_legacy(
+                    self.session_manager
+                        .persistent_context_snapshot_dir(&context.session_id)
+                        .await,
                     self.session_manager
                         .persistent_model_exchange_trace_dir(&context.session_id)
                         .await,
@@ -3891,15 +3894,24 @@ impl ExecutionEngine {
 
                     let prepared_context = if let Some(router_context) = router_context.as_mut() {
                         let preparation_started = std::time::Instant::now();
+                        let token_metrics = router_context.token_metrics();
                         // The append-only generation transcript also retains feedback that
                         // main context-overflow recovery may already have removed.
-                        if let Some(generated) = self
+                        let generated = self
                             .generation_messages
-                            .get(&(context.session_id.clone(), context.dialog_turn_id.clone()))
-                        {
+                            .get(&(context.session_id.clone(), context.dialog_turn_id.clone()));
+                        let generation_lookup_ms = preparation_started.elapsed().as_millis() as u64;
+                        let observe_started = std::time::Instant::now();
+                        if let Some(generated) = generated.as_ref() {
                             router_context.observe(generated.as_slice());
                         }
+                        drop(generated);
+                        let generation_observe_ms = observe_started.elapsed().as_millis() as u64;
                         let mut prepared = router_context.prepare(&messages).await;
+                        prepared.preparation.generation_lookup_ms = generation_lookup_ms;
+                        prepared.preparation.generation_observe_ms = generation_observe_ms;
+                        prepared.preparation.tokens =
+                            router_context.token_metrics().since(token_metrics);
                         prepared.preparation_ms = preparation_started.elapsed().as_millis() as u64;
                         Some(prepared)
                     } else {

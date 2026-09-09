@@ -210,6 +210,64 @@ async fn compaction_is_read_only_and_user_steering_errors_and_results_survive() 
 }
 
 #[tokio::test]
+async fn task_feedback_defaults_to_retained_and_process_failure_is_not_tool_failure() {
+    let (mut context, _) = fixture(true);
+    context.factory.config.summary_enabled = false;
+    let kinds = [
+        InternalReminderKind::GoalContinuation,
+        InternalReminderKind::SessionMessageRequest,
+        InternalReminderKind::RemoteFileDelivery,
+        InternalReminderKind::Generic,
+        InternalReminderKind::BackgroundResult,
+        InternalReminderKind::StopHookBlock,
+    ];
+    let mut messages = vec![
+        Message::assistant("Run validation".into()),
+        Message::tool_result(ToolResult {
+            tool_id: "exec".into(),
+            tool_name: "ExecCommand".into(),
+            result: json!({"exit_code": 1, "raw_only": "PRIVATE_RAW_RESULT"}),
+            result_for_assistant: Some("AssertionError: validation failed".into()),
+            is_error: false,
+            effective_tool_name: None,
+            duration_ms: None,
+            image_attachments: None,
+        }),
+    ];
+    for (index, kind) in kinds.into_iter().enumerate() {
+        messages.push(Message::internal_reminder(
+            kind,
+            format!("FRESH_FEEDBACK_{index}"),
+        ));
+    }
+    messages.push(Message::internal_reminder(
+        InternalReminderKind::SkillListingDiff,
+        "CATALOG_SCAFFOLD",
+    ));
+    messages.push(Message::internal_reminder(
+        InternalReminderKind::UserSteering,
+        "LATEST_USER_CHANGE",
+    ));
+    let before = serde_json::to_value(&messages).unwrap();
+    let prepared = context.prepare(&messages).await;
+    assert_eq!(serde_json::to_value(&messages).unwrap(), before);
+    assert!(context.state.entries[0].is_error);
+    assert_eq!(
+        context.state.entries[0].content["tool_results"][0]["status"]["exit_code"],
+        1
+    );
+    for index in 0..6 {
+        assert!(prepared
+            .user_prompt
+            .contains(&format!("FRESH_FEEDBACK_{index}")));
+    }
+    assert!(prepared.user_prompt.contains("LATEST_USER_CHANGE"));
+    assert!(!prepared.user_prompt.contains("PRIVATE_RAW_RESULT"));
+    assert!(!prepared.user_prompt.contains("CATALOG_SCAFFOLD"));
+    assert_eq!(context.state.latest_user_updates.len(), 1);
+}
+
+#[tokio::test]
 async fn sidecar_recovery_deduplicates_and_preserves_incompatible_files() {
     let dir = tempfile::tempdir().unwrap();
     let (mut context, _) = fixture(true);
@@ -258,6 +316,62 @@ async fn exhausted_summary_capacity_does_not_queue_or_block_and_disabled_is_noop
     context.factory.config.summary_enabled = false;
     context.prepare(&messages).await;
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn checkpoint_migrates_to_snapshots_without_changing_legacy_or_main_context() {
+    let dir = tempfile::tempdir().unwrap();
+    let legacy = dir.path().join("request-traces");
+    let snapshots = dir.path().join("snapshots");
+    tokio::fs::create_dir_all(&snapshots).await.unwrap();
+    let main = snapshots.join("context-0001.json");
+    tokio::fs::write(&main, b"main context must stay unchanged")
+        .await
+        .unwrap();
+    let (mut old, _) = fixture(true);
+    old.factory.config.summary_enabled = false;
+    old.restore(Some(legacy.clone())).await;
+    old.finish(&rounds(3)).await;
+    let old_path = old.checkpoint.clone().unwrap();
+    let before = tokio::fs::read(&old_path).await.unwrap();
+
+    let (mut migrated, _) = fixture(true);
+    migrated.factory.config.summary_enabled = false;
+    migrated
+        .restore_with_legacy(Some(snapshots.clone()), Some(legacy.clone()))
+        .await;
+    assert_eq!(migrated.state.next_sequence, old.state.next_sequence);
+    migrated.finish(&rounds(1)).await;
+    let new_path = migrated.checkpoint.clone().unwrap();
+    assert_eq!(new_path.parent(), Some(snapshots.as_path()));
+    assert_eq!(tokio::fs::read(&old_path).await.unwrap(), before);
+    assert_eq!(
+        tokio::fs::read(&main).await.unwrap(),
+        b"main context must stay unchanged"
+    );
+
+    let (mut restored, _) = fixture(true);
+    restored
+        .restore_with_legacy(Some(snapshots.clone()), Some(legacy.clone()))
+        .await;
+    assert_eq!(restored.state.next_sequence, migrated.state.next_sequence);
+    restored.finish(&[]).await;
+    // A bad new file must not silently fall back to an older state or be overwritten.
+    for invalid in [
+        b"{broken".as_slice(),
+        br#"{"version":999}"#,
+        br#"{"session_id":"other","dialog_turn_id":"turn"}"#,
+    ] {
+        tokio::fs::write(&new_path, invalid).await.unwrap();
+        let (mut rejected, _) = fixture(true);
+        rejected
+            .restore_with_legacy(Some(snapshots.clone()), Some(legacy.clone()))
+            .await;
+        assert!(rejected.checkpoint.is_none());
+        rejected.finish(&[]).await;
+        assert_eq!(tokio::fs::read(&new_path).await.unwrap(), invalid);
+        assert_eq!(tokio::fs::read(&old_path).await.unwrap(), before);
+    }
 }
 
 #[tokio::test]

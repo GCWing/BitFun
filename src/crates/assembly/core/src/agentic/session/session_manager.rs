@@ -1279,6 +1279,22 @@ impl SessionManager {
     }
 
     pub async fn persistent_model_exchange_trace_dir(&self, session_id: &str) -> Option<PathBuf> {
+        self.persistent_session_layout(session_id)
+            .await
+            .map(|layout| layout.request_traces_dir(session_id))
+    }
+
+    /// Runtime-owned checkpoints share the session snapshot directory, not diagnostic traces.
+    pub(crate) async fn persistent_context_snapshot_dir(
+        &self,
+        session_id: &str,
+    ) -> Option<PathBuf> {
+        self.persistent_session_layout(session_id)
+            .await
+            .map(|layout| layout.snapshots_dir(session_id))
+    }
+
+    async fn persistent_session_layout(&self, session_id: &str) -> Option<SessionStorageLayout> {
         if !self.should_persist_session_id(session_id) {
             return None;
         }
@@ -1292,7 +1308,7 @@ impl SessionManager {
                     .map(|entry| entry.value().path.clone())
             })?;
 
-        Some(SessionStorageLayout::new(storage_path).request_traces_dir(session_id))
+        Some(SessionStorageLayout::new(storage_path))
     }
 
     /// Materialize a bounded transcript copy for a user-selected reference.

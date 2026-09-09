@@ -10,9 +10,10 @@ use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::types::Message as AIMessage;
 use log::warn;
 use openbitfun_agent_runtime::router_context::{
-    PreparedRouterContext, RouterContextState, RouterEntryKind, RouterSummaryWork,
-    RouterTokenCounter, Utf8ByteBudget,
+    CachedRouterTokenCounter, PreparedRouterContext, RouterContextState, RouterEntryKind,
+    RouterSummaryWork, RouterTokenCounter, Utf8ByteBudget,
 };
+use openbitfun_agent_tools::effective_tool_invocation;
 use openbitfun_ai_adapters::local_tokenizer::LocalTokenizer;
 use openbitfun_services_core::json_store::JsonFileStore;
 use serde_json::{json, Value};
@@ -95,6 +96,9 @@ struct TokenizerCounter {
 }
 
 impl RouterTokenCounter for TokenizerCounter {
+    fn cacheable(&self) -> bool {
+        !self.failed.load(Ordering::Relaxed)
+    }
     fn count(&self, text: &str) -> usize {
         // Encoding failures must tighten the budget, never permit an oversized request.
         self.tokenizer.count(text).unwrap_or_else(|_| {
@@ -263,8 +267,10 @@ impl RouterContextFactory {
         dialog_turn_id: &str,
         task: &str,
     ) -> RoundRouterContext {
+        let mut factory = self.clone();
+        factory.counter = Arc::new(CachedRouterTokenCounter::new(self.counter.clone()));
         RoundRouterContext {
-            factory: self.clone(),
+            factory,
             state: RouterContextState {
                 session_id: session_id.into(),
                 dialog_turn_id: dialog_turn_id.into(),
@@ -306,16 +312,44 @@ impl Drop for RoundRouterContext {
 }
 
 impl RoundRouterContext {
-    pub async fn restore(&mut self, trace_dir: Option<PathBuf>) {
-        let Some(dir) = trace_dir else {
+    /// Compatibility entry point for callers supplying an explicit checkpoint directory.
+    pub async fn restore(&mut self, checkpoint_dir: Option<PathBuf>) {
+        self.restore_with_legacy(checkpoint_dir, None).await;
+    }
+
+    /// Prefer session snapshots; consult the old trace location only when the new file is absent.
+    /// Neither migration nor an unreadable checkpoint deletes or overwrites the legacy file.
+    pub async fn restore_with_legacy(
+        &mut self,
+        snapshot_dir: Option<PathBuf>,
+        legacy_trace_dir: Option<PathBuf>,
+    ) {
+        let Some(dir) = snapshot_dir else {
             return;
         };
         let filename = format!(
             "router-context-{:x}.json",
             Sha256::digest(self.state.dialog_turn_id.as_bytes())
         );
-        let path = dir.join(filename);
-        match tokio::time::timeout(Duration::from_millis(500), JsonFileStore.read_optional::<RouterContextState>(&path)).await {
+        let path = dir.join(&filename);
+        let loaded = tokio::time::timeout(Duration::from_millis(500), async {
+            let current = JsonFileStore
+                .read_optional::<RouterContextState>(&path)
+                .await?;
+            if current.is_some() {
+                return Ok(current);
+            }
+            match legacy_trace_dir {
+                Some(dir) => {
+                    JsonFileStore
+                        .read_optional::<RouterContextState>(&dir.join(&filename))
+                        .await
+                }
+                None => Ok(None),
+            }
+        })
+        .await;
+        match loaded {
             Ok(Ok(Some(state))) if state.version == 1
                 && state.session_id == self.state.session_id
                 && state.dialog_turn_id == self.state.dialog_turn_id
@@ -342,18 +376,41 @@ impl RoundRouterContext {
                     }
                 }
             }));
+            // Also migrate a recovered checkpoint when no new messages have arrived yet.
+            self.queue_save();
         }
     }
 
     pub async fn prepare(&mut self, messages: &[Message]) -> PreparedRouterContext {
         let started = Instant::now();
+        let token_metrics = self.factory.counter.metrics();
         self.observe(messages);
+        let observe_ms = started.elapsed().as_millis() as u64;
+        let phase = Instant::now();
         self.poll_summary().await;
+        let summary_apply_ms = phase.elapsed().as_millis() as u64;
+        let phase = Instant::now();
         self.start_summary();
+        let summary_prepare_ms = phase.elapsed().as_millis() as u64;
+        let phase = Instant::now();
         self.queue_save();
+        let checkpoint_ms = phase.elapsed().as_millis() as u64;
+        let phase = Instant::now();
         let mut prepared = self.render();
+        prepared.preparation.observe_ms = observe_ms;
+        prepared.preparation.summary_apply_ms = summary_apply_ms;
+        prepared.preparation.summary_prepare_ms = summary_prepare_ms;
+        prepared.preparation.checkpoint_ms = checkpoint_ms;
+        prepared.preparation.render_ms = phase.elapsed().as_millis() as u64;
+        prepared.preparation.tokens = self.factory.counter.metrics().since(token_metrics);
         prepared.preparation_ms = started.elapsed().as_millis() as u64;
         prepared
+    }
+
+    pub(in crate::agentic::execution) fn token_metrics(
+        &self,
+    ) -> openbitfun_agent_runtime::router_context::RouterTokenMetrics {
+        self.factory.counter.metrics()
     }
 
     pub async fn finish(&mut self, messages: &[Message]) {
@@ -527,7 +584,10 @@ impl RoundRouterContext {
                             tool_calls,
                         } => json!({
                             "text": text, "reasoning_content": reasoning_content,
-                            "tool_calls": tool_calls.iter().map(|call| json!({"tool_id": call.tool_id, "tool_name": call.tool_name, "arguments": call.arguments, "is_error": call.is_error, "parse_error": call.parse_error})).collect::<Vec<_>>()
+                            "tool_calls": tool_calls.iter().map(|call| {
+                                let (tool_name, arguments) = effective_tool_invocation(&call.tool_name, &call.arguments);
+                                json!({"tool_id": call.tool_id, "tool_name": tool_name, "arguments": arguments, "is_error": call.is_error, "parse_error": call.parse_error})
+                            }).collect::<Vec<_>>()
                         }),
                         MessageContent::Text(text) | MessageContent::Multimodal { text, .. } => {
                             json!({"text": text})
@@ -550,9 +610,31 @@ impl RoundRouterContext {
                         ..
                     } = &message.content
                     {
+                        // The assistant-facing rendering may omit process status. Copy
+                        // only status/path facts, not private raw/provider payloads.
+                        let mut status = serde_json::Map::new();
+                        for key in [
+                            "exit_code",
+                            "success",
+                            "timed_out",
+                            "interrupted",
+                            "session_id",
+                            "file_path",
+                            "path",
+                            "start_line",
+                            "end_line",
+                            "total_lines",
+                        ] {
+                            if let Some(value) = result.get(key).filter(|value| {
+                                value.is_boolean() || value.is_number() || value.is_string()
+                            }) {
+                                status.insert(key.into(), value.clone());
+                            }
+                        }
                         let tool_result = json!({
                             "tool_id": tool_id, "tool_name": effective_tool_name.as_ref().unwrap_or(tool_name),
                             "result_for_assistant": result_for_assistant.as_ref().map(|text| json!(text)).unwrap_or_else(|| result.clone()), "is_error": is_error,
+                            "status": status,
                         });
                         if let Some((_, value)) = &mut round {
                             value["tool_results"]
@@ -584,19 +666,19 @@ impl RoundRouterContext {
                     } else if matches!(
                         message.metadata.internal_reminder_kind,
                         Some(
-                            InternalReminderKind::BackgroundResult
-                                | InternalReminderKind::LoopRecovery
-                                | InternalReminderKind::PeriodicLoopRecovery
-                                | InternalReminderKind::InterruptedContinue
-                                | InternalReminderKind::ThinkingOnlyRescue
-                                | InternalReminderKind::StopHookBlock
-                                | InternalReminderKind::HookContext
-                                | InternalReminderKind::SessionMessageReply
+                            InternalReminderKind::SkillListingDiff
+                                | InternalReminderKind::AgentListingDiff
+                                | InternalReminderKind::FinalizeCacheAnchor
+                                | InternalReminderKind::CompressionContinuation
                         )
                     ) {
-                        Some(RouterEntryKind::Feedback)
-                    } else {
+                        // Repeated catalog/cache scaffolding is not fresh task evidence.
                         None
+                    } else {
+                        // Default to retaining task feedback. New reminder kinds must
+                        // not silently drop background results or verification requests.
+                        // Keep the feedback label; do not promote it to user authority.
+                        Some(RouterEntryKind::Feedback)
                     };
                     if let Some(kind) = kind {
                         if let Some(text) = super::message_text(message) {
