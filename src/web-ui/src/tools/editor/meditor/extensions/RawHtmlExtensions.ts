@@ -5,6 +5,7 @@ import { Selection, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { embeddedSource } from '../utils/embeddedSource';
 import { sourceBlockPreview } from '../utils/sourceBlockPreview';
+import { sanitizeDetailsSummaryHtml } from '../utils/sanitizeDetailsSummaryHtml';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
@@ -114,81 +115,6 @@ function parseDetailsSource(markdown: string): {
     summaryHtml,
     bodyMarkdown: normalizeDetailsBodyMarkdown(bodyRaw),
   };
-}
-
-function isSafePreviewUrl(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return !normalized.startsWith('javascript:') && !normalized.startsWith('vbscript:');
-}
-
-function sanitizeDetailsSummaryHtml(summaryHtml: string): string {
-  if (typeof document === 'undefined') {
-    return summaryHtml;
-  }
-
-  const template = document.createElement('template');
-  template.innerHTML = summaryHtml;
-  const allowedTags = new Set(['A', 'STRONG', 'B', 'EM', 'I', 'CODE', 'BR', 'IMG']);
-
-  const sanitizeNode = (node: globalThis.Node) => {
-    if (!(node instanceof HTMLElement)) {
-      return;
-    }
-
-    if (!allowedTags.has(node.tagName)) {
-      const parent = node.parentNode;
-      if (!parent) {
-        return;
-      }
-
-      while (node.firstChild) {
-        parent.insertBefore(node.firstChild, node);
-      }
-      parent.removeChild(node);
-      return;
-    }
-
-    Array.from(node.attributes).forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = attr.value;
-
-      if (name.startsWith('on')) {
-        node.removeAttribute(attr.name);
-        return;
-      }
-
-      if (node.tagName === 'A') {
-        if (!['href', 'title'].includes(name)) {
-          node.removeAttribute(attr.name);
-          return;
-        }
-        if (name === 'href' && !isSafePreviewUrl(value)) {
-          node.removeAttribute(attr.name);
-        }
-        return;
-      }
-
-      if (node.tagName === 'IMG') {
-        if (!['src', 'alt', 'title', 'width', 'height', 'align'].includes(name)) {
-          node.removeAttribute(attr.name);
-          return;
-        }
-        if (name === 'src' && !isSafePreviewUrl(value)) {
-          node.removeAttribute(attr.name);
-        }
-        return;
-      }
-
-      if (name !== 'class') {
-        node.removeAttribute(attr.name);
-      }
-    });
-
-    Array.from(node.children).forEach((child) => sanitizeNode(child));
-  };
-
-  Array.from(template.content.children).forEach((child) => sanitizeNode(child));
-  return template.innerHTML;
 }
 
 function executeTextareaAction(

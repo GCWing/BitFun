@@ -14,6 +14,47 @@ describe('Markdown rich text browser E2E', () => {
 
   });
 
+  it('sanitizes loaded and edited details summaries without changing their Markdown source', async () => {
+    const heading = '# Untrusted document\n\n';
+    const details = '<details open>\n<summary>'
+      + '<span><img src="data:image/png;base64,broken"><a href="java&#x09;script:window.__markdownXss=1">Open</a></span>'
+      + '<strong>Safe title</strong></summary>\n\nBody\n\n</details>';
+    await browser.url('about:blank');
+    await fetch('http://127.0.0.1:1450/file', { method: 'PUT', body: heading + details });
+    await editor.open();
+
+    const summary = editor.block('details').$('summary');
+    await expect(summary.$('strong')).toHaveText('Safe title');
+    await expect(summary.$('a')).not.toHaveAttribute('href');
+    await browser.execute(() => {
+      document.querySelector<HTMLAnchorElement>('[data-testid="md-embed-block"] summary a')?.click();
+    });
+    expect(await browser.execute(() => (window as Window & { __markdownXss?: number }).__markdownXss ?? 0)).toBe(0);
+
+    // Pasting source into an existing details embed renders live without going
+    // through the initial document parser's source-only classification.
+    const editedDetails = details.replace('<span>', '<span><img src="data:image/png;base64,broken" onerror="window.__markdownXss=1">')
+      .replace('</summary>', '<svg onload="window.__markdownXss=1"></svg></summary>');
+    const block = editor.block('details');
+    if (!(await block.$('[data-testid="md-embed-source"]').isDisplayed())) {
+      if (await block.$('details').getAttribute('open') === null) {
+        await summary.click();
+      }
+      await block.$('p').click();
+    }
+    await block.$('[data-testid="md-embed-source"]').waitForDisplayed();
+    await block.$('[data-testid="md-embed-source"]').setValue(editedDetails);
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector<HTMLImageElement>('[data-testid="md-embed-block"] summary img')?.complete === true));
+    await expect(summary.$('img')).not.toHaveAttribute('onerror');
+    await expect(summary.$('svg')).not.toExist();
+    expect(await browser.execute(() => (window as Window & { __markdownXss?: number }).__markdownXss ?? 0)).toBe(0);
+    await editor.save();
+    expect(await editor.savedSource()).toBe(heading + editedDetails);
+    await editor.mode(1);
+    await expect(editor.source).toHaveValue(heading + editedDetails, { trim: false });
+  });
+
   it('retains the original standard preview typography and embedded appearance', async () => {
     // The math renderer adds an asynchronous wrapper. Compare the standard
     // document layout here; formula editing/rendering has separate coverage.
