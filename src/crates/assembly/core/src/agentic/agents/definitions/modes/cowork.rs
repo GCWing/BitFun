@@ -2,13 +2,11 @@
 //!
 //! A collaborative mode that prioritizes early clarification and lightweight progress tracking.
 
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
-use crate::agentic::tools::framework::ToolExposure;
+use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 pub struct CoworkMode {
     default_tools: Vec<String>,
-    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for CoworkMode {
@@ -19,13 +17,7 @@ impl Default for CoworkMode {
 
 impl CoworkMode {
     pub fn new() -> Self {
-        // Cowork is the office/research mode; web research is baseline there,
-        // so keep WebSearch/WebFetch expanded (same as DeepResearch).
-        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
-        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
         Self {
-            tool_exposure_overrides,
             default_tools: vec![
                 // Clarification + planning helpers
                 "AskUserQuestion".to_string(),
@@ -94,10 +86,6 @@ impl Agent for CoworkMode {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
-    }
-
-    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
-        &self.tool_exposure_overrides
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {

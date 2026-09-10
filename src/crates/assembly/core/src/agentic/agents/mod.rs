@@ -83,16 +83,6 @@ static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOve
 static EMPTY_PERMISSION_CONSTRAINTS: std::sync::LazyLock<PermissionConstraintLayer> =
     std::sync::LazyLock::new(PermissionConstraintLayer::default);
 
-pub fn standard_harness_tool_exposure_overrides() -> AgentToolPolicyOverrides {
-    // Web research is a baseline capability of the shared coding modes; keep
-    // WebSearch/WebFetch expanded so models do not need a GetToolSpec
-    // unlock round-trip when switching between those modes.
-    let mut overrides = AgentToolPolicyOverrides::default();
-    overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
-    overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
-    overrides
-}
-
 pub fn standard_harness_tools() -> Vec<String> {
     vec![
         "Task".to_string(),
@@ -264,9 +254,8 @@ pub trait Agent: Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_embedded_prompt, standard_harness_tool_exposure_overrides, standard_harness_tools,
-        standard_harness_user_context_policy, Agent, MinimalHarness, StandardHarness,
-        EMBEDDED_PROMPTS,
+        get_embedded_prompt, standard_harness_tools, standard_harness_user_context_policy, Agent,
+        MinimalHarness, StandardHarness, EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -324,13 +313,5 @@ mod tests {
         let shared_policy = standard_harness_user_context_policy();
 
         assert_eq!(StandardHarness::new().user_context_policy(), shared_policy);
-    }
-
-    #[test]
-    fn agentic_mode_uses_shared_coding_tool_exposure_overrides() {
-        let shared_overrides = standard_harness_tool_exposure_overrides();
-        let agentic = StandardHarness::new();
-
-        assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
     }
 }

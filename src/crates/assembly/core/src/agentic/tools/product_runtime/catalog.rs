@@ -691,38 +691,14 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "tools-browser-web")]
-    #[tokio::test]
-    async fn product_catalog_facade_resolves_manifest_from_same_provider_owner() {
-        let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
-
-        let manifest = resolve_product_tool_manifest(
-            &allowed_tools,
-            &AgentToolPolicyOverrides::default(),
-            &tool_context(Some("Standard")),
-        )
-        .await;
-
-        assert_eq!(manifest.deferred_tool_names, vec!["WebFetch".to_string()]);
-        assert_eq!(
-            manifest
-                .tool_definitions
-                .iter()
-                .map(|tool| tool.name.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Read", "GetToolSpec", "CallDeferredTool"],
-            "product manifest facade must preserve prompt-visible definition order"
-        );
-    }
-
     #[tokio::test]
     async fn runtime_restrictions_hide_tools_from_manifest_and_get_tool_spec() {
-        let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
-        let mut context = tool_context(Some("Standard"));
+        let allowed_tools = vec!["Read".to_string(), "SessionHistory".to_string()];
+        let mut context = tool_context(Some("Claw"));
         context
             .runtime_tool_restrictions
             .denied_tool_names
-            .extend(["Read".to_string(), "WebFetch".to_string()]);
+            .extend(["Read".to_string(), "SessionHistory".to_string()]);
 
         let manifest = resolve_product_tool_manifest(
             &allowed_tools,
@@ -737,11 +713,11 @@ mod tests {
         assert!(!manifest
             .allowed_tool_names
             .iter()
-            .any(|name| name == "WebFetch"));
+            .any(|name| name == "SessionHistory"));
         assert!(!manifest
             .deferred_tool_names
             .iter()
-            .any(|name| name == "WebFetch"));
+            .any(|name| name == "SessionHistory"));
         assert!(!manifest
             .tool_definitions
             .iter()
@@ -754,13 +730,12 @@ mod tests {
             .into_iter()
             .map(|tool| tool.name().to_string())
             .collect::<Vec<_>>();
-        assert!(!deferred_names.iter().any(|name| name == "WebFetch"));
+        assert!(!deferred_names.iter().any(|name| name == "SessionHistory"));
     }
 
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_resolved_manifest_owner_matches_legacy_shape() {
-        let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
+        let allowed_tools = vec!["Read".to_string(), "SessionHistory".to_string()];
 
         let manifest = resolve_product_resolved_tool_manifest(
             &allowed_tools,
@@ -773,14 +748,17 @@ mod tests {
             manifest.allowed_tool_names,
             vec![
                 "Read".to_string(),
-                "WebFetch".to_string(),
+                "SessionHistory".to_string(),
                 GET_TOOL_SPEC_TOOL_NAME.to_string(),
                 "CallDeferredTool".to_string()
             ]
         );
-        assert_eq!(manifest.deferred_tool_names, vec!["WebFetch".to_string()]);
+        assert_eq!(
+            manifest.deferred_tool_names,
+            vec!["SessionHistory".to_string()]
+        );
         assert_eq!(manifest.deferred_tool_summaries.len(), 1);
-        assert_eq!(manifest.deferred_tool_summaries[0].name, "WebFetch");
+        assert_eq!(manifest.deferred_tool_summaries[0].name, "SessionHistory");
         assert!(manifest.deferred_tool_summaries[0]
             .short_description
             .as_deref()
@@ -866,7 +844,6 @@ mod tests {
         );
     }
 
-    #[cfg(all(feature = "tools-browser-web", feature = "tools-mcp"))]
     #[tokio::test]
     async fn disabled_deferred_tool_loading_exposes_builtin_and_mcp_tools_directly() {
         let registry = create_tool_registry();
@@ -878,12 +855,14 @@ mod tests {
             registry
                 .get_tool(CALL_DEFERRED_TOOL_NAME)
                 .expect("CallDeferredTool gateway"),
-            registry.get_tool("WebFetch").expect("WebFetch tool"),
+            registry
+                .get_tool("SessionHistory")
+                .expect("SessionHistory tool"),
             Arc::new(DeferredMcpCatalogTool) as Arc<dyn Tool>,
         ];
         let allowed_tools = vec![
             "Read".to_string(),
-            "WebFetch".to_string(),
+            "SessionHistory".to_string(),
             GET_TOOL_SPEC_TOOL_NAME.to_string(),
             CALL_DEFERRED_TOOL_NAME.to_string(),
             "mcp__github__search_repos".to_string(),
@@ -913,13 +892,13 @@ mod tests {
             allowed_tools,
             vec![
                 "Read".to_string(),
-                "WebFetch".to_string(),
+                "SessionHistory".to_string(),
                 "mcp__github__search_repos".to_string(),
             ]
         );
         assert!(manifest.deferred_tool_names.is_empty());
         assert!(manifest.deferred_tools.is_empty());
-        for tool_name in ["Read", "WebFetch", "mcp__github__search_repos"] {
+        for tool_name in ["Read", "SessionHistory", "mcp__github__search_repos"] {
             assert!(
                 manifest
                     .tool_definitions
@@ -943,11 +922,10 @@ mod tests {
         assert_eq!(mcp_tool.parameters["required"], json!(["query"]));
     }
 
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_resolved_visible_tools_owner_matches_registry_visibility() {
         let visible = resolve_product_resolved_visible_tools(
-            &["Read".to_string(), "WebFetch".to_string()],
+            &["Read".to_string(), "SessionHistory".to_string()],
             &AgentToolPolicyOverrides::default(),
             &tool_context(Some("Standard")),
         )
@@ -971,41 +949,39 @@ mod tests {
                 .iter()
                 .map(|tool| tool.name().to_string())
                 .collect::<Vec<_>>(),
-            vec!["WebFetch".to_string()]
+            vec!["SessionHistory".to_string()]
         );
     }
 
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_catalog_facade_resolves_get_tool_spec_results_from_same_provider_owner() {
         let results = resolve_product_get_tool_spec_results(
-            &json!({ "tool_name": "WebFetch" }),
-            &tool_context(Some("GeneralPurpose")),
+            &json!({ "tool_name": "SessionHistory" }),
+            &tool_context(Some("Claw")),
             "GetToolSpec",
         )
         .await
-        .expect("WebFetch should resolve through product GetToolSpec runtime facade");
+        .expect("SessionHistory should resolve through product GetToolSpec runtime facade");
 
         assert_eq!(results.len(), 1);
         let ToolResult::Result { data, .. } = &results[0] else {
             panic!("expected normal tool result");
         };
 
-        assert_eq!(data["tool_name"], "WebFetch");
+        assert_eq!(data["tool_name"], "SessionHistory");
         assert_eq!(data["input_schema"]["type"], "object");
         assert!(data["catalog_generation"].as_u64().is_some());
     }
 
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
-    async fn product_get_tool_spec_returns_assistant_hint_for_direct_webfetch_in_agentic_mode() {
+    async fn product_get_tool_spec_returns_assistant_hint_for_direct_tool() {
         let results = resolve_product_get_tool_spec_results(
-            &json!({ "tool_name": "WebFetch" }),
+            &json!({ "tool_name": "Read" }),
             &tool_context(Some("Standard")),
             "GetToolSpec",
         )
         .await
-        .expect("agentic mode expands WebFetch, so GetToolSpec should return a direct-use hint");
+        .expect("Read is direct, so GetToolSpec should return a direct-use hint");
 
         assert_eq!(results.len(), 1);
         let ToolResult::Result {
@@ -1017,7 +993,7 @@ mod tests {
             panic!("expected normal tool result");
         };
 
-        assert_eq!(data["tool_name"], "WebFetch");
+        assert_eq!(data["tool_name"], "Read");
         assert_eq!(data["already_available"], true);
         assert!(
             result_for_assistant
@@ -1149,7 +1125,16 @@ mod tests {
 
     #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
-    async fn product_manifest_snapshot_preserves_deferred_tool_discovery_contract() {
+    async fn product_manifest_snapshot_exposes_web_tools_directly() {
+        use crate::agentic::tools::implementations::web::{WebFetchTool, WebSearchTool};
+
+        let registry = create_tool_registry();
+        let tool_snapshot: Vec<Arc<dyn Tool>> = vec![
+            registry.get_tool("Read").expect("Read tool"),
+            registry.get_tool("TodoWrite").expect("TodoWrite tool"),
+            Arc::new(WebSearchTool::new()),
+            Arc::new(WebFetchTool::new()),
+        ];
         let allowed_tools = vec![
             "TodoWrite".to_string(),
             "WebFetch".to_string(),
@@ -1157,10 +1142,12 @@ mod tests {
             "WebSearch".to_string(),
         ];
 
-        let manifest = resolve_product_resolved_tool_manifest(
+        let manifest = openbitfun_agent_tools::resolve_contextual_tool_manifest(
+            &tool_snapshot,
             &allowed_tools,
             &AgentToolPolicyOverrides::default(),
             &tool_context(Some("test-agent")),
+            GET_TOOL_SPEC_TOOL_NAME,
         )
         .await;
 
@@ -1171,96 +1158,27 @@ mod tests {
                 "WebFetch".to_string(),
                 "Read".to_string(),
                 "WebSearch".to_string(),
-                GET_TOOL_SPEC_TOOL_NAME.to_string(),
-                "CallDeferredTool".to_string(),
             ],
-            "GetToolSpec should be appended without reordering the allowed-list contract"
+            "direct web tools must not add deferred gateways"
         );
-        assert_eq!(
-            manifest.deferred_tool_names,
-            vec!["WebSearch".to_string(), "WebFetch".to_string()],
-            "deferred tools should follow registry snapshot order"
-        );
+        assert!(manifest.deferred_tool_names.is_empty());
         assert_eq!(
             manifest
                 .tool_definitions
                 .iter()
                 .map(|tool| tool.name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["Read", "TodoWrite", "GetToolSpec", "CallDeferredTool",],
-            "prompt-visible manifest order must stay stable before owner migration"
+            vec!["Read", "WebFetch", "WebSearch", "TodoWrite"],
+            "direct web definitions must follow the model-facing tool order"
         );
     }
 
-    #[cfg(all(feature = "tools-browser-web", feature = "tools-git"))]
-    #[tokio::test]
-    async fn product_manifest_guard_preserves_deferred_gateway_surface() {
-        let allowed_tools = vec![
-            "Read".to_string(),
-            "WebFetch".to_string(),
-            "GetFileDiff".to_string(),
-            "Worktree".to_string(),
-        ];
-
-        let mut context = tool_context(Some("test-agent"));
-        context.workspace = Some(crate::agentic::WorkspaceBinding::new(
-            None,
-            std::env::current_dir().expect("absolute test workspace root"),
-        ));
-
-        let manifest = resolve_product_resolved_tool_manifest(
-            &allowed_tools,
-            &AgentToolPolicyOverrides::default(),
-            &context,
-        )
-        .await;
-
-        assert_eq!(
-            manifest.allowed_tool_names,
-            vec![
-                "Read".to_string(),
-                "WebFetch".to_string(),
-                "GetFileDiff".to_string(),
-                "Worktree".to_string(),
-                GET_TOOL_SPEC_TOOL_NAME.to_string(),
-                "CallDeferredTool".to_string(),
-            ],
-            "GetToolSpec insertion must preserve the runtime allowed-list contract"
-        );
-        assert_eq!(
-            manifest.deferred_tool_names,
-            vec![
-                "GetFileDiff".to_string(),
-                "WebFetch".to_string(),
-                "Worktree".to_string()
-            ],
-            "deferred loaded-spec list must follow product registry snapshot order"
-        );
-        assert_eq!(
-            manifest
-                .tool_definitions
-                .iter()
-                .map(|tool| tool.name.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Read", "GetToolSpec", "CallDeferredTool"],
-            "prompt-visible definitions must keep the current discovery insertion and policy order stable"
-        );
-
-        for tool_name in ["GetFileDiff", "WebFetch", "Worktree"] {
-            assert!(
-                !manifest
-                    .tool_definitions
-                    .iter()
-                    .any(|tool| tool.name == tool_name),
-                "deferred target {tool_name} must not enter the provider manifest"
-            );
-        }
-    }
-
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_manifest_preserves_explicit_get_tool_spec_runtime_contract() {
-        let allowed_tools = vec![GET_TOOL_SPEC_TOOL_NAME.to_string(), "WebFetch".to_string()];
+        let allowed_tools = vec![
+            GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            "SessionHistory".to_string(),
+        ];
 
         let manifest = resolve_product_resolved_tool_manifest(
             &allowed_tools,
@@ -1273,11 +1191,14 @@ mod tests {
             manifest.allowed_tool_names,
             vec![
                 GET_TOOL_SPEC_TOOL_NAME.to_string(),
-                "WebFetch".to_string(),
+                "SessionHistory".to_string(),
                 "CallDeferredTool".to_string(),
             ]
         );
-        assert_eq!(manifest.deferred_tool_names, vec!["WebFetch".to_string()]);
+        assert_eq!(
+            manifest.deferred_tool_names,
+            vec!["SessionHistory".to_string()]
+        );
         assert_eq!(
             manifest
                 .tool_definitions
@@ -1289,12 +1210,11 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "tools-browser-web")]
     #[tokio::test]
     async fn product_manifest_expands_tool_when_agent_override_requests_it() {
-        let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
+        let allowed_tools = vec!["Read".to_string(), "SessionHistory".to_string()];
         let mut overrides = AgentToolPolicyOverrides::default();
-        overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
+        overrides.insert("SessionHistory".to_string(), ToolExposure::Direct);
 
         let manifest = resolve_product_resolved_tool_manifest(
             &allowed_tools,
@@ -1307,7 +1227,7 @@ mod tests {
         assert!(manifest
             .tool_definitions
             .iter()
-            .any(|tool| tool.name == "WebFetch"));
+            .any(|tool| tool.name == "SessionHistory"));
         assert!(!manifest
             .tool_definitions
             .iter()

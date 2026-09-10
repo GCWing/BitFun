@@ -1,17 +1,15 @@
 //! Standard Harness
 //!
-//! Uses the shared coding prompt, tools, exposure policy, and user context.
+//! Uses the shared coding prompt, tools, and user context.
 
 use crate::agentic::agents::{
-    standard_harness_tool_exposure_overrides, standard_harness_tools,
-    standard_harness_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    standard_harness_tools, standard_harness_user_context_policy, Agent, UserContextPolicy,
     STANDARD_HARNESS_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
 pub struct StandardHarness {
     default_tools: Vec<String>,
-    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for StandardHarness {
@@ -24,7 +22,6 @@ impl StandardHarness {
     pub fn new() -> Self {
         Self {
             default_tools: standard_harness_tools(),
-            tool_exposure_overrides: standard_harness_tool_exposure_overrides(),
         }
     }
 }
@@ -53,10 +50,6 @@ impl Agent for StandardHarness {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
-    }
-
-    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
-        &self.tool_exposure_overrides
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
