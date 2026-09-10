@@ -102,7 +102,7 @@
     appearance: none;
     padding: 0;
     border: 0;
-    color: var(--openbitfun-color-action-primary-content);
+    color: var(--openbitfun-color-accent-default);
     background: transparent;
     font: inherit;
     font-size: var(--openbitfun-type-body-sm-font-size);
@@ -119,6 +119,10 @@
   .openLinkText {
     min-inline-size: 0;
     overflow-wrap: anywhere;
+  }
+
+  .openLink:is(:hover, :focus-visible) {
+    color: var(--openbitfun-color-accent-hover);
   }
 
   .openLink:is(:hover, :focus-visible) .openLinkText {
