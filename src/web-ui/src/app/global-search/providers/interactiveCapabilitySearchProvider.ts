@@ -1,5 +1,6 @@
 import {
   INTERACTIVE_CAPABILITY_CATALOG,
+  getInteractiveCapabilityCatalog,
   type InteractiveCapability,
 } from '../interactiveCapabilityCatalog';
 import { scoreTextMatch } from '../searchMatching';
@@ -46,7 +47,10 @@ export const interactiveCapabilitySearchProvider: GlobalSearchProvider = {
   search: (request) => {
     if (request.scope === 'content' || !request.query) return { items: [] };
 
-    const items = INTERACTIVE_CAPABILITY_CATALOG.capabilities
+    const catalog = request.currentWorkspace?.workspaceKind === 'remote'
+      ? getInteractiveCapabilityCatalog(false)
+      : INTERACTIVE_CAPABILITY_CATALOG;
+    const items = catalog.capabilities
       .map((capability) => {
         const item = matchingItem(capability, request.query);
         const textScore = scoreTextMatch(request.query, [

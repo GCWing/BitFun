@@ -35,6 +35,8 @@ function createWorkspace(overrides: Partial<WorkspaceInfo>): WorkspaceInfo {
 describe('normalizeUserDefaultChatInputModeId', () => {
   it('normalizes non-empty strings and rejects blank values', () => {
     expect(normalizeUserDefaultChatInputModeId(' PlannerPlus ')).toBe('PlannerPlus');
+    expect(normalizeUserDefaultChatInputModeId(' ultra ')).toBe('Ultimate');
+    expect(normalizeUserDefaultChatInputModeId('CREATIVE')).toBe('Creative');
     expect(normalizeUserDefaultChatInputModeId('   ')).toBeNull();
     expect(normalizeUserDefaultChatInputModeId(null)).toBeNull();
   });
@@ -52,9 +54,9 @@ describe('resolveWorkspaceChatInputMode', () => {
   it('forces Claw inside assistant workspaces', () => {
     expect(
       resolveWorkspaceChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: true,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       })
     ).toBe('Claw');
   });
@@ -74,9 +76,9 @@ describe('resolveWorkspaceChatInputMode', () => {
       resolveWorkspaceChatInputMode({
         currentMode: 'Plan',
         isAssistantWorkspace: false,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       })
-    ).toBe('agentic');
+    ).toBe('Standard');
   });
 
   it('restores a project session mode after a transient assistant workspace state', () => {
@@ -84,9 +86,9 @@ describe('resolveWorkspaceChatInputMode', () => {
       resolveWorkspaceChatInputMode({
         currentMode: 'Claw',
         isAssistantWorkspace: false,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       })
-    ).toBe('agentic');
+    ).toBe('Standard');
   });
 
   it('restores Cowork when a project Cowork session inherited the Claw UI mode', () => {
@@ -106,13 +108,13 @@ describe('resolveWorkspaceChatInputMode', () => {
         isAssistantWorkspace: false,
         sessionMode: undefined,
       })
-    ).toBe('agentic');
+    ).toBe('Standard');
   });
 
   it('keeps Claw sessions synchronized even before workspace state identifies the assistant workspace', () => {
     expect(
       resolveWorkspaceChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'Claw',
       })
@@ -124,9 +126,9 @@ describe('resolveChatInputModePolicy', () => {
   it('allows mode switching for normal code sessions', () => {
     expect(
       resolveChatInputModePolicy({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       }),
     ).toEqual({
       canSwitchModes: true,
@@ -138,9 +140,9 @@ describe('resolveChatInputModePolicy', () => {
   it('fixes assistant workspaces to Claw', () => {
     expect(
       resolveChatInputModePolicy({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: true,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       }),
     ).toEqual({
       canSwitchModes: false,
@@ -152,7 +154,7 @@ describe('resolveChatInputModePolicy', () => {
   it('fixes Claw sessions even when workspace resolution is temporarily stale', () => {
     expect(
       resolveChatInputModePolicy({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'claw',
       }),
@@ -168,7 +170,7 @@ describe('resolveChatInputModePolicy', () => {
       resolveChatInputModePolicy({
         currentMode: 'Cowork',
         isAssistantWorkspace: false,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
       }),
     ).toEqual({
       canSwitchModes: true,
@@ -178,7 +180,7 @@ describe('resolveChatInputModePolicy', () => {
 
     expect(
       resolveChatInputModePolicy({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'cowork',
       }),
@@ -192,7 +194,7 @@ describe('resolveChatInputModePolicy', () => {
   it('fixes ACP sessions without treating them as a product mode', () => {
     expect(
       resolveChatInputModePolicy({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'acp:example',
         isAcpTargetSession: true,
@@ -209,13 +211,13 @@ describe('ChatInput Agent projection', () => {
   it('puts specialized and custom main Agents under Other without duplicating Harness profiles', () => {
     expect(
       resolveChatInputMainAgentModes([
-        { id: 'agentic' },
+        { id: 'Standard' },
         { id: 'Cowork' },
         { id: 'Multitask' },
         { id: 'Plan' },
         { id: 'Claw' },
         { id: 'minimal' },
-        { id: 'Ultra' },
+        { id: 'Ultimate' },
         { id: 'PlannerPlus' },
       ]),
     ).toEqual([
@@ -228,9 +230,9 @@ describe('ChatInput Agent projection', () => {
 
 describe('Agent execution tier locking', () => {
   it('classifies product tiers from Agent types', () => {
-    expect(agentExecutionTier('minimal')).toBe('minimal');
-    expect(agentExecutionTier('Ultra')).toBe('ultimate');
-    expect(agentExecutionTier('Plan')).toBe('balanced');
+    expect(agentExecutionTier('minimal')).toBe('Minimal');
+    expect(agentExecutionTier('Ultimate')).toBe('Ultimate');
+    expect(agentExecutionTier('Plan')).toBe('Standard');
   });
 
   it('locks every Harness or main-Agent change after the first turn', () => {
@@ -246,13 +248,13 @@ describe('Agent execution tier locking', () => {
     })).toBe(true);
     expect(canSwitchSessionMainAgent({
       sessionStarted: true,
-      currentAgentType: 'agentic',
+      currentAgentType: 'Standard',
       nextAgentType: 'Cowork',
     })).toBe(false);
     expect(canSwitchSessionMainAgent({
       sessionStarted: false,
       currentAgentType: 'minimal',
-      nextAgentType: 'Ultra',
+      nextAgentType: 'Ultimate',
     })).toBe(true);
   });
 });
@@ -264,9 +266,9 @@ describe('resolveChatInputSendAgentType', () => {
         isSubagentTarget: false,
         sessionMode: null,
         acpTargetAgentType: null,
-        composerMode: 'Ultra',
+        composerMode: 'Ultimate',
       }),
-    ).toBe('Ultra');
+    ).toBe('Ultimate');
   });
 
   it('keeps normal sessions on the composer or ACP target mode', () => {
@@ -275,16 +277,16 @@ describe('resolveChatInputSendAgentType', () => {
         isSubagentTarget: false,
         sessionMode: 'Explore',
         acpTargetAgentType: null,
-        composerMode: 'agentic',
+        composerMode: 'Standard',
       }),
-    ).toBe('agentic');
+    ).toBe('Standard');
 
     expect(
       resolveChatInputSendAgentType({
         isSubagentTarget: false,
-        sessionMode: 'agentic',
+        sessionMode: 'Standard',
         acpTargetAgentType: 'acp:example',
-        composerMode: 'agentic',
+        composerMode: 'Standard',
       }),
     ).toBe('acp:example');
   });
@@ -308,7 +310,7 @@ describe('resolveChatInputSendAgentType', () => {
         subagentType: 'ReviewSecurity',
         sessionMode: undefined,
         acpTargetAgentType: null,
-        composerMode: 'agentic',
+        composerMode: 'Standard',
       }),
     ).toBe('ReviewSecurity');
   });
@@ -320,9 +322,9 @@ describe('resolveChatInputSendAgentType', () => {
         subagentType: 'Not provided',
         sessionMode: 'Not provided',
         acpTargetAgentType: null,
-        composerMode: 'agentic',
+        composerMode: 'Standard',
       }),
-    ).toBe('agentic');
+    ).toBe('Standard');
   });
 });
 
@@ -373,7 +375,7 @@ describe('resolveChatInputCanUseSkills', () => {
     expect(
       resolveChatInputCanUseSkills({
         isSubagentTarget: false,
-        targetAgentType: 'agentic',
+        targetAgentType: 'Standard',
         availableAgents: [],
       }),
     ).toBe(true);
@@ -383,8 +385,8 @@ describe('resolveChatInputCanUseSkills', () => {
     expect(
       resolveChatInputCanUseSkills({
         isSubagentTarget: false,
-        targetAgentType: 'agentic',
-        availableAgents: [{ id: 'agentic' }],
+        targetAgentType: 'Standard',
+        availableAgents: [{ id: 'Standard' }],
       }),
     ).toBe(true);
 
@@ -513,10 +515,10 @@ describe('resolveAvailableChatInputMode', () => {
   it('returns the synchronized session mode when it is still available', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'Plan',
-        availableModeIds: ['agentic', 'Plan', 'Cowork'],
+        availableModeIds: ['Standard', 'Plan', 'Cowork'],
       }),
     ).toBe('Plan');
   });
@@ -527,7 +529,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Cowork'],
+        availableModeIds: ['Standard', 'Cowork'],
       }),
     ).toBeNull();
   });
@@ -538,7 +540,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'Cowork',
         isAssistantWorkspace: false,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Cowork'],
+        availableModeIds: ['Standard', 'Cowork'],
       }),
     ).toBe('PlannerPlus');
   });
@@ -546,7 +548,7 @@ describe('resolveAvailableChatInputMode', () => {
   it('restores the persisted session mode while the workspace catalog is loading', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'WorkspaceProfile',
         availableModeIds: [],
@@ -560,7 +562,7 @@ describe('resolveAvailableChatInputMode', () => {
         currentMode: 'PlannerPlus',
         isAssistantWorkspace: true,
         sessionMode: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Claw'],
+        availableModeIds: ['Standard', 'Claw'],
       }),
     ).toBe('Claw');
   });
@@ -568,10 +570,10 @@ describe('resolveAvailableChatInputMode', () => {
   it('keeps Claw sessions pinned even before assistant workspace resolution catches up', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: 'Claw',
-        availableModeIds: ['agentic', 'Claw', 'PlannerPlus'],
+        availableModeIds: ['Standard', 'Claw', 'PlannerPlus'],
       }),
     ).toBe('Claw');
   });
@@ -590,11 +592,11 @@ describe('resolveAvailableChatInputMode', () => {
   it('uses the user default mode when starting from the internal project default', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: undefined,
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'PlannerPlus'],
+        availableModeIds: ['Standard', 'PlannerPlus'],
       }),
     ).toBe('PlannerPlus');
   });
@@ -606,7 +608,7 @@ describe('resolveAvailableChatInputMode', () => {
         isAssistantWorkspace: false,
         sessionMode: 'Multitask',
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Multitask', 'PlannerPlus'],
+        availableModeIds: ['Standard', 'Multitask', 'PlannerPlus'],
       }),
     ).toBeNull();
   });
@@ -618,19 +620,19 @@ describe('resolveAvailableChatInputMode', () => {
         isAssistantWorkspace: false,
         sessionMode: undefined,
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Cowork'],
+        availableModeIds: ['Standard', 'Cowork'],
       }),
-    ).toBe('agentic');
+    ).toBe('Standard');
   });
 
   it.each(['Multitask', 'Plan'])('does not restore retired %s as a new-session main Agent default', (retiredMode) => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: false,
         sessionMode: undefined,
         userDefaultModeId: retiredMode,
-        availableModeIds: ['agentic', retiredMode],
+        availableModeIds: ['Standard', retiredMode],
       }),
     ).toBeNull();
   });
@@ -638,11 +640,11 @@ describe('resolveAvailableChatInputMode', () => {
   it('keeps assistant workspaces pinned to Claw even with a user default', () => {
     expect(
       resolveAvailableChatInputMode({
-        currentMode: 'agentic',
+        currentMode: 'Standard',
         isAssistantWorkspace: true,
         sessionMode: undefined,
         userDefaultModeId: 'PlannerPlus',
-        availableModeIds: ['agentic', 'Claw', 'PlannerPlus'],
+        availableModeIds: ['Standard', 'Claw', 'PlannerPlus'],
       }),
     ).toBe('Claw');
   });

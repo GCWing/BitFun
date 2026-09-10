@@ -895,3 +895,44 @@ Shared Agent Runtime 是第一方多实例的目标部署，不是上表新增�
   启停顺序和失败回滚。这项宿主接入不构成 CLI、Server、ACP 或 HarmonyOS 本地产品支持。
 - HarmonyOS PC 的完整目标同时包含本地 CLI/TUI 与 GUI，当前均不能标记可用；两种宿主分别验收，具体支持证据和禁止替代项以平台规约及各自专题为准。
 - 文档、边界脚本和 focused 测试能说明本次变更保护了哪个稳定接口边界，或删除/降级了哪个过宽接口。
+
+## 独立数据迁移工具的依赖边界
+
+Data Migrator 是独立发布的本地离线工具，不依赖 Core、Product Assembly、Desktop 或 Web UI。
+主应用不检测、启动或捆绑迁移器。两者在同一源码工作区复用稳定的数据格式与存储实现：
+
+- contracts/config-contracts：配置 DTO、默认值、版本校验及到共享模型 DTO 的纯转换；Core 原路径保留转发，ConfigProvider 仍在 Core。
+- services-core 的 workspace-persistence、coordination-store、session-event-format：工作区记录、注册表校验、SQLite 物理 schema 和会话日志格式。
+- services/legacy-migration-adapters：旧版读取、转换、引用修复；只调用共享存储 owner。
+- services/legacy-migration：快照、锁、暂存、备份、原子写入、日志恢复和无时效交接依赖的任务存储。
+
+本次只移动数据/存储 owner，不移动 WorkspaceManager、会话生命周期、权限、事件或远程执行。
+WorkspaceInfo/WorkspaceIdentity 的运行操作由 Core 的 runtime extension traits 保留，稳定记录无需导入这些能力。
+原 Core 存储入口保留错误映射；可选 legacy-migration facade 保留旧导入路径，但不再由 product-full 启用。
+远程四种场景不提供迁移工具的执行入口；仅转换本机保存的连接记录，不连接远端。
+使用与发行契约以 [独立迁移器说明](../../src/apps/data-migrator/README.zh-CN.md) 为准。
+
+
+## Agent 身份与产品概念
+
+Agent Harness 的唯一规范标识为 `Minimal`、`Standard`、`Ultimate`、`Creative`，分别显示为极简、标准、极致、创造。配置键、运行注册、会话状态和新持久化记录共用这些大小写固定的标识。共享源为 [Harness 身份契约](../../src/shared/agent-harness/contract.json)，由 `pnpm run agent-harness:generate` 生成 Rust 和 TypeScript 类型，核心边界检查校验生成结果。
+
+| 概念 | 负责的事实 | 例子 |
+| --- | --- | --- |
+| Agent Harness | 会话的执行策略、工具策略和协作方式 | Minimal、Standard、Ultimate、Creative |
+| 智能体（Agent） | 直接承接用户任务的角色 | 助理 Claw、办公协作 Cowork、深度研究 DeepResearch，以及自定义智能体 |
+| 子智能体（SubAgent） | 受父级委派的独立任务执行者 | ComputerUse、Explore、ResearchSpecialist、SwarmWorker |
+| 技能（Skill） | 执行者可发现和调用的能力资源 | 由技能注册表提供 |
+| 技能套件 | 现有的技能分组与各执行者的技能选择配置 | 保留分组、开关、逐项调整、按组保存和重置 |
+
+来源（内置、用户、项目、外部）与角色分别建模。电脑操作属于子智能体；助理可在智能体管理页配置，但会话选择器继续遵守助理工作区的固定入口。技能套件从当前设备、工作区的真实目录中筛选支持 Skill 工具且可由本产品配置的执行者，不维护三项固定名单，不为缺少 Skill 能力的 Minimal 提供无效配置，也不将外部来源的只读定义当成本地可写配置。
+
+会话选择器保留四项 Harness 和既有智能体子菜单。打开、选择、关闭、高亮、首轮锁定、新会话确认、跟随上次选择、固定默认值，以及助理、ACP、子会话限制均由原有交互规则负责。`other` 只代表菜单导航，不能写入运行身份。一个主会话选择一个可执行入口；Harness 和普通智能体不组成无依据的二重配置。
+
+旧名只在明确的升级与协议适配边界读取。历史 `coding_shared` 配置键迁往 Standard，迁移同时保留工具、技能及子智能体覆盖；无法无损合并的冲突返回明确错误并保留原始文件。旧会话中的 Minimal 执行标记保留原有优先级。外部或带来源限定的身份不改名，未知身份保留并交由原有可用性判断处理。
+
+Peer HostInvoke、Peer 事件和移动遥控在各自适配边界继续支持现有 v0 线协议，双向翻译产品身份字段；应用内状态和磁盘记录保持规范标识。工具参数、提示词正文、用户元数据和外部定义不参与通用翻译。旧 CLI 参数 `--harness-profile balanced` 的历史语义仍是保留显式 `--agent`，先解码语义再规范化身份。各发行能力集继续决定真正可执行的目录，命名统一不增加 CLI 或远程宿主的能力。
+
+历史 API 名称（例如 get_available_modes）、agentic 事件通道和编译期提示词资源键是兼容协议，不是另一套 Agent 标识。小写图标、颜色 token 和模型推理强度属于各自独立领域，不通过大小写替换改变其语义。技能“已启用”或“运行时已选择”表示可用性与解析状态，不能表述为已经被 Agent 调用。
+
+Detached Dispatch 的 SSH、账号设备 RPC 和 CLI 协议入口同样在传输边界保留现有协议标识，接收后立即规范化。目标持久化任务、会话和控制端观察记录使用规范身份；改名不改变协议版本、工作区归属或断线后目标独立执行的行为。按路径读写配置时，适配器只转换对应身份字段，保留未知配置字段；歧义别名在调用写入逻辑之前返回错误。

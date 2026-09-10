@@ -126,7 +126,7 @@ describe('ConfigAPI batch config reads', () => {
 
     await configAPI.getSkillConfigs({ workspacePath: '/remote/project' });
     await configAPI.getModeSkillConfigs({
-      modeId: 'agentic',
+      modeId: 'Standard',
       workspacePath: '/remote/project',
     });
 
@@ -140,7 +140,7 @@ describe('ConfigAPI batch config reads', () => {
       2,
       'get_mode_skill_configs',
       {
-        modeId: 'agentic',
+        modeId: 'Standard',
         forceRefresh: undefined,
         workspacePath: '/remote/project',
       },
@@ -166,5 +166,28 @@ describe('ConfigAPI batch config reads', () => {
 
     invokeMock.mockResolvedValueOnce(undefined);
     await expect(configAPI.importConfig({})).rejects.toThrow('Configuration import was not confirmed');
+  });
+});
+
+
+describe('skill scan response compatibility', () => {
+  it('accepts legacy arrays and marks diagnostics as unavailable', async () => {
+    invokeMock.mockResolvedValueOnce([{ key: 'user::codex::pdf', name: 'pdf' }]);
+    const report = await new ConfigAPI().getSkillScanReport();
+    expect(report.skills).toHaveLength(1);
+    expect(report.diagnosticsAvailable).toBe(false);
+    expect(report.diagnostics).toEqual([]);
+  });
+
+  it('preserves partial inventories and diagnostics from new hosts', async () => {
+    const value = { skills: [{ key: 'project::codex::pdf' }], diagnostics: [{ path: '/remote/denied', sourceId: 'codex', message: 'permission denied' }] };
+    invokeMock.mockResolvedValueOnce(value);
+    expect(await new ConfigAPI().getModeSkillScanReport({ modeId: 'agent', workspacePath: '/remote' }))
+      .toEqual({ ...value, diagnosticsAvailable: true });
+  });
+
+  it('rejects malformed responses rather than presenting an empty inventory', async () => {
+    invokeMock.mockResolvedValueOnce({ invalid: true });
+    await expect(new ConfigAPI().getSkillScanReport()).rejects.toThrow();
   });
 });

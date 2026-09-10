@@ -11,6 +11,7 @@
     "dev": "vite",
     "test:ui-components": "node --test tests/mobile-ui-components.test.mjs",
     "test:account-login": "node --test tests/account-login.test.mjs",
+    "test:workspace-identity": "node --test tests/workspace-identity.test.mjs",
     "type-check": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
@@ -25,7 +26,6 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.6",
-    "qr-scanner": "^1.4.2",
     "remark-gfm": "^4.0.1",
     "zustand": "^5.0.10"
   },

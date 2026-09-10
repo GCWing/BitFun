@@ -149,6 +149,8 @@ public data class ConversationRow public constructor(
     public val pending: Boolean,
     /** The send failed and this is the row a retry would repeat. */
     public val showRetry: Boolean,
+    /** A user-visible assistant failure returned by the desktop. */
+    public val error: String?,
 )
 
 /**
@@ -193,6 +195,7 @@ public fun ChatTimelineState.conversationRows(): List<ConversationRow> =
             typing = message?.let { isTyping(it, item.isStreaming) } == true,
             pending = item.type == ChatTimelineItemType.OPTIMISTIC_USER_MESSAGE,
             showRetry = item.showRetryAction,
+            error = message?.error?.trim()?.takeIf(String::isNotEmpty),
         )
     }
 

@@ -1,0 +1,54 @@
+[package]
+name = "openbitfun-legacy-migration"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Offline legacy BitFun data migration service"
+autotests = false
+
+[lib]
+name = "openbitfun_legacy_migration"
+crate-type = ["rlib"]
+
+[[example]]
+name = "legacy-migration-dry-run"
+path = "examples/dry_run.rs"
+
+[[test]]
+name = "migration_engine_contracts"
+path = "tests/migration_engine_contracts.rs"
+
+[dependencies]
+chrono = { workspace = true }
+dirs = { workspace = true }
+fs2 = { workspace = true }
+hex = { workspace = true }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["legacy-migration"] }
+openbitfun-services-core = { path = "../services-core", features = ["process-runtime", "product-identity"] }
+rusqlite = { workspace = true, features = ["backup", "bundled"] }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,22 +1,37 @@
-Flashgrep distribution is temporarily suspended. The platform binaries have been removed,
-and desktop development, packaging, and the Windows installer no longer require them.
-The Web UI hides accelerated-search settings and index controls, including on remote
-workspaces and peer devices. Saved preferences and backend implementations are retained.
+# Flashgrep binary distribution
 
-To restore the feature, restore the binaries and desktop preparation/bundling steps,
-then enable `WORKSPACE_SEARCH_AVAILABLE` in the Web UI.
+Desktop development and packaging download the pinned release from
+https://github.com/wgqqqqq/flashgrep-binaries/releases. No binaries belong in Git.
+`VERSION.json` pins the repository, tag, filename, size, and SHA-256 for every target.
 
-Pinned release:
+Run `node scripts/prepare-flashgrep-resource.mjs` for the current host, or pass
+`--target x86_64-pc-windows-msvc` (including `--target=...` syntax). Desktop builds
+use the explicit Tauri target, falling back to the Rust host triple. Linux GNU
+application targets use the matching musl Flashgrep binary. Unsupported targets
+fail explicitly. The preparation step requires curl (curl.exe on Windows).
 
-- `v0.2.16` from `wgqqqqq/flashgrep`
+Downloads go to ignored files in this directory. Cached files are verified before
+reuse; failed or corrupted downloads never become package inputs. Only the
+selected binary is added to Tauri resources, even if the cache holds other targets.
+macOS release builds sign a copy with APPLE_SIGNING_IDENTITY, preserving the
+original download and its checksum. The Windows custom installer currently targets
+x86_64 and requires its matching Flashgrep payload.
 
-Expected filenames (restoration reference):
+Remote workspaces do not support Flashgrep. Index controls are hidden and remote
+index/content/glob service calls return an explicit unsupported error before SSH
+or local filesystem access. Remote file-name search and agent search paths that
+already use remote shell tools remain available. Saved preferences are retained.
 
-- macOS x86_64: `flashgrep-x86_64-apple-darwin`
-- macOS arm64: `flashgrep-aarch64-apple-darwin`
-- Linux x86_64: `flashgrep-x86_64-unknown-linux-musl`
-- Linux arm64: `flashgrep-aarch64-unknown-linux-musl`
-- Windows x86_64: `flashgrep-x86_64-pc-windows-msvc.exe`
-- Windows arm64: `flashgrep-aarch64-pc-windows-msvc.exe`
+## Updating the pinned release
 
-macOS binaries are ad-hoc signed after download so local development can execute them directly.
+Publish the six standalone binaries and SHA256SUMS to the public binary repository
+as Release assets, without publishing private source or MCP bundles. Verify the
+release, then update VERSION.json with its tag and asset checksums/sizes. Do not use
+`latest` or replace assets of an already consumed release; publish a new version.
+OpenBitFun builds only need public download access, with no private-repository token.
+
+## Focused verification
+
+```sh
+node --test scripts/prepare-flashgrep-resource.test.mjs scripts/desktop-tauri-build.test.mjs OpenBitFun-Installer/scripts/build-installer.test.cjs
+```

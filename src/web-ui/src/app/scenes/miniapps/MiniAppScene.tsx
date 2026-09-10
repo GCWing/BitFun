@@ -2,7 +2,7 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import { Button, Icon, IconButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -158,9 +158,9 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
       <div className="miniapp-scene__header" data-openbitfun-scene="miniapp" data-openbitfun-part="header">
         <div className="miniapp-scene__header-center">
           {app ? (
-            <span className="miniapp-scene__title">{appName}</span>
+            <OverflowText className="miniapp-scene__title">{appName}</OverflowText>
           ) : (
-            <span className="miniapp-scene__title miniapp-scene__title--loading">Mini App</span>
+            <OverflowText className="miniapp-scene__title miniapp-scene__title--loading">Mini App</OverflowText>
           )}
         </div>
         <div className="miniapp-scene__header-actions">

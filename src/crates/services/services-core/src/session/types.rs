@@ -93,7 +93,10 @@ pub struct SessionMetadata {
     pub session_name: String,
 
     /// Agent type
-    #[serde(alias = "agent_type")]
+    #[serde(
+        alias = "agent_type",
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id"
+    )]
     pub agent_type: String,
     /// Mode of the last surviving user dialog turn in the persisted history.
     ///
@@ -104,6 +107,9 @@ pub struct SessionMetadata {
         skip_serializing_if = "Option::is_none",
         alias = "last_user_dialog_agent_type"
     )]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
     ///
@@ -113,6 +119,9 @@ pub struct SessionMetadata {
         default,
         skip_serializing_if = "Option::is_none",
         alias = "last_submitted_agent_type"
+    )]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
     )]
     pub last_submitted_agent_type: Option<String>,
 
@@ -146,6 +155,11 @@ pub struct SessionMetadata {
         alias = "lastFinishedAt"
     )]
     pub last_finished_at: Option<u64>,
+
+    /// Compact latest user-Turn fact, maintained with the metadata index. Lists
+    /// must not load transcript files to discover the latest outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_turn: Option<SessionLastTurn>,
 
     /// Turn count
     #[serde(alias = "turn_count")]
@@ -335,6 +349,22 @@ impl StoredSessionMetadataFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredDialogTurnFile {
+    pub schema_version: u32,
+    #[serde(flatten)]
+    pub turn: DialogTurnData,
+}
+
+impl StoredDialogTurnFile {
+    pub fn new(turn: DialogTurnData) -> Self {
+        Self {
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+            turn,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredSessionIndexFile {
     pub schema_version: u32,
     pub updated_at: u64,
@@ -504,6 +534,9 @@ pub struct DialogTurnData {
     /// Maintenance/local utility turns leave this empty so they do not affect
     /// mode-transition reminder semantics.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "agent_type")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub agent_type: Option<String>,
 
     /// User message
@@ -1082,7 +1115,30 @@ pub enum TurnStatus {
     Cancelled,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLastTurn {
+    pub turn_id: String,
+    pub turn_index: usize,
+    pub status: TurnStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_generation: Option<u32>,
+    /// A persisted interrupted recovery checkpoint, distinct from cancellation.
+    /// None identifies older summaries that have not captured this fact yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_pending: Option<bool>,
+}
+
 impl SessionMetadata {
+    pub fn needs_last_turn_backfill(&self) -> bool {
+        self.turn_count > 0
+            && self.last_turn.as_ref().is_none_or(|last| {
+                last.status == TurnStatus::Cancelled && last.recovery_pending.is_none()
+            })
+    }
+
     /// Creates a new session metadata.
     pub fn new(
         session_id: String,
@@ -1098,7 +1154,8 @@ impl SessionMetadata {
         Self {
             session_id,
             session_name,
-            agent_type,
+            agent_type: openbitfun_core_types::agent_identity::canonical_agent_id(&agent_type)
+                .to_owned(),
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             created_by: None,
@@ -1129,6 +1186,7 @@ impl SessionMetadata {
             workspace_hostname: None,
             unread_completion: None,
             needs_user_attention: None,
+            last_turn: None,
         }
     }
 
@@ -1449,7 +1507,7 @@ mod tests {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         assert_eq!(metadata.memory_mode, SessionMemoryMode::Enabled);
@@ -1457,7 +1515,7 @@ mod tests {
         let payload = serde_json::json!({
             "sessionId": "session-1",
             "sessionName": "Legacy",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "sessionKind": "standard",
             "modelName": "model",
             "createdAt": 1,
@@ -1478,7 +1536,7 @@ mod tests {
             let mut metadata = SessionMetadata::new(
                 "session-1".to_string(),
                 "Session".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "model".to_string(),
             );
             metadata.memory_mode = mode;
@@ -1578,7 +1636,7 @@ mod tests {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
             "Normal Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
 

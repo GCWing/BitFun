@@ -20,6 +20,28 @@ const CLEAN_STATUS = {
 };
 
 describe('Review target evidence', () => {
+  it('preserves Gitee identity and capped provider coverage through the review target', () => {
+    const target = classifyReviewTargetFromFiles(['src/new.rs'], 'pull_request');
+    const evidence = buildPullRequestReviewTargetEvidence({
+      target,
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      pullRequest: {
+        remoteId: 'origin:gitee:example__repo', platform: 'gitee', host: 'gitee.com',
+        projectPath: 'example/repo', pullRequestId: '69', number: 69,
+        webUrl: 'https://gitee.com/example/repo/pulls/69',
+      },
+      files: [{ path: 'src/new.rs', oldPath: 'src/old.rs', status: 'renamed', diffAvailable: true }],
+      omittedFileCount: 1,
+      limitations: ['provider_file_list_incomplete', 'gitee_file_list_limit'],
+    });
+    expect(evidence.completeness).toBe('partial');
+    expect(evidence.pullRequest?.platform).toBe('gitee');
+    expect(evidence.files[0]).toMatchObject({ path: 'src/new.rs', previousPath: 'src/old.rs', status: 'renamed' });
+    expect(evidence.limitations).toContain('gitee_file_list_limit');
+    expect(allowsReviewLiveRepositoryContext(evidence)).toBe(false);
+  });
+
   it('keeps large diffs explicitly partial instead of implying fully consumed evidence', () => {
     const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'slash_command_git_ref');
     const evidence = buildGitRangeReviewTargetEvidence({

@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Disclosure, Spinner } from '@openbitfun/ui';
+import { OverflowText, Disclosure, Spinner } from '@openbitfun/ui';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardSummary, ToolProcessingDots } from '@openbitfun/ui/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
@@ -698,7 +698,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
         <span className="mcp-tool-info" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="info">
-          <span className="tool-name">{toolName}</span>
+          <OverflowText className="tool-name">{toolName}</OverflowText>
         </span>
       }
       extra={
@@ -823,8 +823,8 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               )}
               {item.type === 'resource' && item.resource && (
                 <div className="resource-content" data-openbitfun-component="mcp-tool-display" data-openbitfun-part="resource">
-                  <div className="resource-name">{item.resource.name || 'Resource'}</div>
-                  <div className="resource-uri">{item.resource.uri}</div>
+                  <div className="resource-name"><OverflowText>{item.resource.name || 'Resource'}</OverflowText></div>
+                  <div className="resource-uri"><OverflowText>{item.resource.uri}</OverflowText></div>
                   {item.resource.description && (
                     <div className="resource-description">{item.resource.description}</div>
                   )}

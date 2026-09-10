@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, TrendingUp } from 'lucide-react';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { installedSkillMarketIds, isSkillMarketItemInstalled } from '@/infrastructure/config/skillMarketInstallation';
 
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -287,11 +288,11 @@ const SkillsConfig: React.FC = () => {
           )}
         </div>
         <div className="openbitfun-collection-form__footer">
-          <Button variant="outline" size="sm" onClick={resetForm}>
+          <Button variant="fill" size="sm" onClick={resetForm}>
             {t('form.actions.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             onClick={handleAdd}
             disabled={!validationResult?.valid || isAdding}
@@ -428,7 +429,7 @@ const SkillsConfig: React.FC = () => {
       <div className="openbitfun-skills-config__market-list" data-openbitfun-component="skills-config" data-openbitfun-part="marketList">
         {displayMarketSkills.map((skill) => {
           const isDownloading = downloadingPackage === skill.installId;
-          const isInstalled = installedSkillNames.has(skill.name);
+          const isInstalled = isSkillMarketItemInstalled(skill, installedMarketIds);
           const sourceLabel = formatMarketSource(skill.source);
           const projectTooltipText = !hasWorkspace
             ? t('messages.noWorkspace')
@@ -463,21 +464,21 @@ const SkillsConfig: React.FC = () => {
                       {t('market.item.installs', { count: skill.installs })}
                     </span>
                   </div>
-                  <div className="openbitfun-skills-config__market-item-description">
+                  <OverflowText as="div" lines={3} className="openbitfun-skills-config__market-item-description">
                     {skill.description?.trim() || t('market.item.noDescription')}
-                  </div>
+                  </OverflowText>
                   <div className="openbitfun-skills-config__market-item-meta">
                     {skill.source ? (
                       sourceLabel !== skill.source ? (
                         <Tooltip content={skill.source}>
-                          <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source">
+                          <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source"><OverflowText>
                             {t('market.item.sourceLabel')}{sourceLabel}
-                          </span>
+                          </OverflowText></span>
                         </Tooltip>
                       ) : (
-                        <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source">
+                        <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source"><OverflowText>
                           {t('market.item.sourceLabel')}{sourceLabel}
-                        </span>
+                        </OverflowText></span>
                       )
                     ) : null}
                   </div>
@@ -506,7 +507,7 @@ const SkillsConfig: React.FC = () => {
                           <span>
                             <Button
                               className="openbitfun-skills-config__market-action-button"
-                              variant="fill"
+                              variant="primary"
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
                               disabled={isDownloading || !hasWorkspace}
@@ -522,7 +523,7 @@ const SkillsConfig: React.FC = () => {
                         <span>
                           <Button
                             className="openbitfun-skills-config__market-action-button"
-                            variant={isRemote ? 'fill' : 'outline'}
+                            variant={isRemote ? 'primary' : 'outline'}
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
                             disabled={isDownloading}
@@ -571,8 +572,8 @@ const SkillsConfig: React.FC = () => {
     </>
   );
 
-  const installedSkillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.name)),
+  const installedMarketIds = useMemo(
+    () => installedSkillMarketIds(skills),
     [skills]
   );
 
@@ -600,7 +601,7 @@ const SkillsConfig: React.FC = () => {
     const entries = marketSkills.map((skill, index) => ({
       skill,
       index,
-      installed: installedSkillNames.has(skill.name),
+      installed: isSkillMarketItemInstalled(skill, installedMarketIds),
     }));
 
     entries.sort((a, b) => {
@@ -617,7 +618,7 @@ const SkillsConfig: React.FC = () => {
     });
 
     return entries.map((entry) => entry.skill);
-  }, [marketSkills, installedSkillNames]);
+  }, [marketSkills, installedMarketIds]);
 
   const handleMarketSearch = useCallback(() => {
     loadMarketSkills(marketKeyword);
@@ -680,7 +681,7 @@ const SkillsConfig: React.FC = () => {
               onClear={marketKeyword ? () => setMarketKeyword('') : undefined}
               size="sm"
             />
-            <Button size="sm" variant="fill" onClick={handleMarketSearch}>
+            <Button size="sm" variant="primary" onClick={handleMarketSearch}>
               {tShared('common:actions.search')}
             </Button>
           </div>

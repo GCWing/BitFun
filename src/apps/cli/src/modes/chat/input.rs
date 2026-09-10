@@ -477,7 +477,6 @@ impl ChatMode {
         }
 
         if chat_view.login_form_visible() {
-            self.refresh_account_panel_live(chat_view);
             let action = chat_view.login_form_handle_key(key);
             return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
         }

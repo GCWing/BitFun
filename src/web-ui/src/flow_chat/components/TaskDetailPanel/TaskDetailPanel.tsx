@@ -3,7 +3,7 @@
  * Minimal layout to match the FlowChat background.
  */
 
-import { Button } from '@openbitfun/ui';
+import { OverflowText, Button } from '@openbitfun/ui';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -485,9 +485,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     return (
       <div data-openbitfun-component="task-detail-panel" data-openbitfun-part="root" data-openbitfun-state="empty" className="task-detail-panel task-detail-panel--empty">
         <div className="task-detail-panel__header" data-openbitfun-component="task-detail-panel" data-openbitfun-part="header">
-          <span className="task-detail-panel__header-title">
+          <OverflowText className="task-detail-panel__header-title">
             {t('toolCards.taskDetailPanel.untitled')}
-          </span>
+          </OverflowText>
         </div>
         <div className="task-detail-panel__empty-content" data-openbitfun-component="task-detail-panel" data-openbitfun-part="empty">
           {t('toolCards.taskDetailPanel.noData')}
@@ -502,9 +502,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     <div data-openbitfun-component="task-detail-panel" data-openbitfun-part="root" className="task-detail-panel">
       <div className="task-detail-panel__header" data-openbitfun-component="task-detail-panel" data-openbitfun-part="header">
         <Split size={14} className="task-detail-panel__header-icon" />
-        <span className="task-detail-panel__header-title">
+        <OverflowText className="task-detail-panel__header-title">
           {taskInput?.description || t('toolCards.taskDetailPanel.untitled')}
-        </span>
+        </OverflowText>
         {taskInput?.agentType && (
           <span className="task-detail-panel__header-badge">
             {taskInput.isReviewCoverageTask

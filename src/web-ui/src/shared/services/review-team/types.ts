@@ -101,7 +101,7 @@ export interface ReviewTargetEvidenceFile {
 
 export interface ReviewTargetPullRequestIdentity {
   remoteId: string;
-  platform: 'github' | 'gitlab' | 'gitcode';
+  platform: 'github' | 'gitlab' | 'gitcode' | 'gitee';
   host: string;
   projectPath: string;
   pullRequestId: string;

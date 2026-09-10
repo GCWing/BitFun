@@ -283,6 +283,91 @@ impl MiniAppStorage {
         Ok(())
     }
 
+    /// Write a validated import bundle from an offline owner such as the data migrator.
+    ///
+    /// Callers must provide an isolated destination root. Product runtime code should
+    /// continue using the async port; this synchronous entrypoint exists so an offline
+    /// process does not need to construct the normal MiniApp runtime.
+    pub fn write_import_bundle_offline(
+        &self,
+        request: MiniAppImportBundleWriteRequest,
+    ) -> MiniAppStorageResult<()> {
+        let import_layout = MiniAppImportLayout::new(&request.source_path);
+        Self::validate_import_layout(&request.source_path, &import_layout)?;
+        let destination = self.layout(&request.app_id);
+        std::fs::create_dir_all(destination.source_dir()).map_err(|error| {
+            MiniAppStorageError::io(format!(
+                "Failed to create offline import directory: {error}"
+            ))
+        })?;
+        std::fs::write(destination.meta_path(), request.meta_json).map_err(|error| {
+            MiniAppStorageError::io(format!("Failed to write meta.json: {error}"))
+        })?;
+        for name in REQUIRED_SOURCE_FILES {
+            std::fs::copy(
+                import_layout.source_file_path(name),
+                destination.source_file_path(name),
+            )
+            .map_err(|error| {
+                MiniAppStorageError::io(format!("Failed to copy source/{name}: {error}"))
+            })?;
+        }
+        let esm_source = import_layout.esm_dependencies_path();
+        if esm_source.exists() {
+            std::fs::copy(&esm_source, destination.source_file_path(ESM_DEPS_JSON)).map_err(
+                |error| {
+                    MiniAppStorageError::io(format!(
+                        "Failed to copy esm_dependencies.json: {error}"
+                    ))
+                },
+            )?;
+        } else {
+            std::fs::write(
+                destination.source_file_path(ESM_DEPS_JSON),
+                request.esm_dependencies_json,
+            )
+            .map_err(|error| {
+                MiniAppStorageError::io(format!("Failed to write esm_dependencies.json: {error}"))
+            })?;
+        }
+        let package_source = import_layout.package_json_path();
+        if package_source.exists() {
+            std::fs::copy(package_source, destination.package_json_path()).map_err(|error| {
+                MiniAppStorageError::io(format!("Failed to copy package.json: {error}"))
+            })?;
+        } else {
+            std::fs::write(destination.package_json_path(), request.package_json).map_err(
+                |error| MiniAppStorageError::io(format!("Failed to write package.json: {error}")),
+            )?;
+        }
+        let storage_source = import_layout.storage_json_path();
+        if storage_source.exists() {
+            std::fs::copy(storage_source, destination.storage_path()).map_err(|error| {
+                MiniAppStorageError::io(format!("Failed to copy storage.json: {error}"))
+            })?;
+        } else {
+            std::fs::write(destination.storage_path(), request.storage_json).map_err(|error| {
+                MiniAppStorageError::io(format!("Failed to write storage.json: {error}"))
+            })?;
+        }
+        std::fs::write(destination.compiled_path(), request.compiled_html).map_err(|error| {
+            MiniAppStorageError::io(format!("Failed to write compiled.html: {error}"))
+        })
+    }
+
+    /// Validate and read an import bundle without starting the MiniApp runtime.
+    pub fn read_import_meta_json_offline(
+        &self,
+        source_path: impl AsRef<Path>,
+    ) -> MiniAppStorageResult<String> {
+        let source_path = source_path.as_ref();
+        let import_layout = MiniAppImportLayout::new(source_path);
+        Self::validate_import_layout(source_path, &import_layout)?;
+        std::fs::read_to_string(import_layout.meta_path()).map_err(|error| {
+            MiniAppStorageError::io(format!("Failed to read offline import meta.json: {error}"))
+        })
+    }
+
     /// Ensure app directory and source subdir exist.
     pub async fn ensure_app_dir(&self, app_id: &str) -> MiniAppStorageResult<()> {
         let dir = self.app_dir(app_id);

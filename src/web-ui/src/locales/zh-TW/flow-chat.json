@@ -4,9 +4,11 @@
     "subagentOwner": "{{subagent}} 子 Agent",
     "responseFailed": "權限回覆未能送達，請重試。",
     "allowOnce": "允許一次",
-    "allowAlways": "始終允許",
-    "allowAlwaysTooltip": "始終允許會為 {{projectPath}} 儲存相符的存取權限。",
-    "allowAlwaysTooltipCurrentProject": "始終允許會為目前項目儲存相符的存取權限。",
+    "allowAlways": "始終允許此範圍",
+    "allowAlwaysCommand": "始終允許此命令",
+    "allowAlwaysCommandDescription": "僅對目前專案中完全相同的命令（含參數）生效，不會放行其他命令。",
+    "allowAlwaysTooltip": "在 {{projectPath}} 中記住目前操作的授權，僅對以下範圍生效：\n{{resources}}",
+    "allowAlwaysTooltipCurrentProject": "在目前專案中記住目前操作的授權，僅對以下範圍生效：\n{{resources}}",
     "allowAlwaysTooltipNoGrant": "此請求沒有可儲存的存取範圍；始終允許僅套用於這次請求。",
     "risks": {
       "pageSave": "以{{visibility}}可見性儲存「{{slug}}」的新不可變版本，不變更目前正式版本。",
@@ -177,7 +179,7 @@
     },
     "loading": {
       "title": "正在產生用量報告",
-      "description": "正在讀取本機工作階段記錄，並整理隱私安全的統計摘要。",
+      "description": "正在讀取工作階段記錄，並整理隱私安全的統計摘要。",
       "steps": {
         "collecting": "讀取工作階段記錄",
         "tokens": "彙總 Token 和工具活動",
@@ -487,6 +489,7 @@
     "cannotRollback": "無法回滾",
     "rollbackDisabledBusy": "請等待會話閒置後再回滾。",
     "rollbackDisabledRemote": "遠端工作區未記錄檔案快照，暫不支援檔案與訊息一致回滾；不會變更任何檔案或訊息。",
+    "rollbackDisabledDispatch": "遠端任務暫不支援從目前裝置回滾歷史。",
     "rollbackTo": "回滾到第 {{index}} 輪之前（刪除該輪及之後）",
     "rollbackDialogTitle": "確定回滾到第 {{index}} 輪之前？",
     "rollbackDialogIntro": "將執行：",
@@ -501,6 +504,7 @@
     "editDisabledBusy": "請等待會話閒置後再編輯並重跑。",
     "editDisabledImages": "暫不支援編輯圖片消息",
     "editDisabledRemote": "編輯並重新執行需要完整回滾；遠端工作區未記錄檔案快照，因此暫不支援。",
+    "editDisabledDispatch": "編輯並重新執行需要先回滾歷史，遠端任務暫不支援此操作。",
     "editDisabledLocalCommand": "無法編輯本機命令消息",
     "editDisabledHistoryNotReady": "會話歷史尚未就緒",
     "editDialogTitle": "從第 {{index}} 輪編輯並重跑？",
@@ -620,6 +624,7 @@
     "codeBlock": "代碼塊",
     "image": "圖片",
     "url": "URL",
+    "dropToAdd": "放開即可新增",
     "dragHint": "拖放檔案到此處新增上下文"
   },
   "agent": {
@@ -721,7 +726,6 @@
     "harness": {
       "selectorTooltip": "目前執行：{{name}}",
       "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
-      "activateBalanced": "切換到標準 Harness",
       "compatibilityShort": "相容模式",
       "comingSoon": "開發中",
       "comingSoonNotice": "「{{name}}」Harness 執行框架正在開發中。",
@@ -738,17 +742,29 @@
       "profileChangeOutcomeUnknown": "暫時無法確認 Harness 是否已切換，請重新整理工作階段後再重試。",
       "profileUnavailable": "目前 OpenBitFun Host 不支援該 Harness。",
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
+      "rememberFailed": "Harness 已切換，但無法記住本次選擇。之後的新工作階段可能繼續使用原預設值。",
       "otherAgentsTitle": "智能體",
       "otherAgentsEmpty": "目前沒有可用的主智能體",
       "unavailable": "無法使用",
       "agentUnavailable": "目前 Host 或設定不支援 {{name}}。",
       "profiles": {
-        "minimal": { "name": "極簡" },
-        "balanced": { "name": "標準" },
-        "ultimate": { "name": "極致" },
-        "creative": { "name": "創造" },
-        "other": { "name": "智能體" }
-      }
+        "other": {
+          "name": "智能體"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "切換到標準 Harness"
     },
     "agents": {
       "available": "可用",
@@ -756,9 +772,15 @@
       "comingSoon": "開發中",
       "comingSoonNotice": "直接呼叫「{{name}}」Agent 的能力正在開發中。",
       "reviewUnavailable": "Review Agent 需要一個包含可審查變更的活動會話。",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "Cowork"
+      },
+      "computerUse": {
+        "name": "Computer Use"
+      }
     },
     "addBoostTooltip": "指令、上下文、圖片或 Skill",
     "modeChangeFailed": "切換智能體模式失敗，請重試。",
@@ -833,7 +855,6 @@
     "boostSkillsEmpty": "暫無已啟用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "移除目前 Agent",
     "defaultModeSetTooltip": "將 {{mode}} 設為新聊天預設模式",
     "defaultModeUnsetTooltip": "預設模式覆蓋已啟用，點擊清除",
     "defaultModeSet": "已將 {{mode}} 設為新聊天預設模式。",
@@ -915,20 +936,22 @@
     "sendingToMain": "主會話：{{title}}",
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
-      "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
       "ComputerUse": "獨立電腦操作智能體：感知本機環境，操作應用、瀏覽器與系統介面",
       "DeepResearch": "深度研究：並行派發多個子 Agent 同時調研不同章節，快速生成高質量研究報告",
-      "Ultra": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
+      "Standard": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
+      "Ultimate": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "開啟資料夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",
@@ -963,15 +986,18 @@
     "percentComplete": "{{percent}}% 完成",
     "currentStatus": "目前狀態: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "skillsIncomplete": "部分技能掃描失敗，已成功讀取的技能仍可使用。",
+    "skillsDiagnosticsUnavailable": "目前主機不提供技能掃描診斷。",
+    "menuTitle": "選擇上下文",
     "searchResults": "搜尋結果",
     "loading": "載入中...",
     "browseUnavailable": "無法載入工作區檔案，請檢查連線後重試。",
     "searchUnavailable": "無法搜尋工作區，請檢查連線後重試。",
-    "noMatchingFiles": "沒有找到匹配的檔案",
+    "noMatchingResults": "找不到相符的上下文",
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",
-    "goBack": "返回上級目錄",
+    "goBack": "返回上一級",
     "navHint": "導航",
     "enterHint": "進入",
     "backHint": "返回",
@@ -1093,6 +1119,8 @@
     "fixRunning": "正在修復...",
     "fixCompleted": "修復完成",
     "fixFailed": "修復失敗",
+    "actionStartFailed": "無法開始此次操作。",
+    "actionStartFailedWithReason": "無法開始此次操作：{{reason}}",
     "fixTimeout": "修復超時",
     "fixInterrupted": "修復已中斷，最多有 {{count}} 個已選項目可能仍需處理。",
     "reviewWaitingCapacity": "審核正在等待容量",
@@ -1264,6 +1292,7 @@
       "unresolvedGitRange": "無法解析要求的 Git 範圍，請檢查引用或範圍後重試",
       "emptyWorkspace": "目前工作區沒有可審核的變更",
       "emptyExplicitScope": "要求的檔案或目錄沒有工作區變更",
+      "missingExplicitScope": "要求的檔案或目錄不存在於目前工作區中",
       "unresolvedTarget": "無法將審核目標準備為有界證據，請開啟對應工作區或縮小目標後重試",
       "repositoryUntrusted": "該目錄屬於其他使用者，Git 拒絕讀取此儲存庫。請在提示中信任該目錄後重新啟動審核",
       "uncertain": "審核要求可能已在執行。工作階段已保留，可安全檢查或重試",
@@ -1335,7 +1364,7 @@
     "btwBackTooltipWithoutTurn": "返回到來源會話：{{title}}",
     "btwCreateTooltip": "快速發起一個側問",
     "searchPlaceholder": "搜尋對話消息",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} 個結果",
     "searchNoResults": "沒有匹配結果",
     "searchPrevious": "上一個匹配結果",
     "searchNext": "下一個匹配結果",
@@ -1409,9 +1438,10 @@
     "sendInput": "傳送輸入",
     "sendInputUnavailable": "只能向正在運行的互動式命令傳送輸入。",
     "copy": "複製輸出",
+    "copyRaw": "複製原始輸出",
+    "replayIncomplete": "較早的輸出已捨棄，無法完整恢復終端狀態；保留內容可能顯示不完整。",
+    "unknownGeometry": "無法確定來源終端尺寸，不能準確重播輸出。你仍可複製原始輸出。",
     "copyCommand": "複製命令",
-    "simplifiedView": "簡化顯示",
-    "simplifiedViewTooltip": "隱藏終端控制符，讓輸出更易讀。",
     "loading": "正在載入輸出...",
     "empty": "暫未擷取到輸出。",
     "remote": "遠端",
@@ -1486,6 +1516,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "精簡長圖",
+    "expandedThinking": "含思考長圖",
     "subtitle": "AI 編程助手 · 對話記錄",
     "poweredBy": "Powered by",
     "aiAssistant": "AI 編程助手",
@@ -1628,8 +1660,6 @@
       "delete": "刪除檔案",
       "deletedLabel": "刪除",
       "failed": "失敗",
-      "guidanceHint": " · 需要處理",
-      "guidanceTitle": "重試前需要處理",
       "parsingPath": "解析檔案路徑中...",
       "receivingContent": "接收檔案內容中...",
       "unknownFile": "未知檔案",
@@ -1963,7 +1993,7 @@
       "executing": "執行中...",
       "subAgentFailed": "子代理任務執行失敗",
       "subAgentTaskFailed": "子代理任務失敗",
-      "failed": "失敗",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "確認委派",
       "cancel": "取消",
       "task": "任務",
@@ -1996,8 +2026,8 @@
       "waitingForModelResponse": "等待模型回應...",
       "status": {
         "pending": "等待中",
-        "running": "執行中",
-        "completed": "已完成",
+        "running": "$t(shared:statuses.running)",
+        "completed": "$t(shared:statuses.done)",
         "failed": "執行失敗"
       },
       "loadingMore": "正在載入更多輸出...",
@@ -2186,10 +2216,10 @@
       "pending": "等待中",
       "paramsReceiving": "接收參數中",
       "preparing": "準備中",
-      "running": "執行中",
-      "completed": "已完成",
-      "error": "失敗",
-      "cancelled": "已取消"
+      "running": "$t(shared:statuses.running)",
+      "completed": "$t(shared:statuses.done)",
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "執行中...",

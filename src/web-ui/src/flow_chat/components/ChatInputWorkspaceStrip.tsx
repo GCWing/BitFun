@@ -14,7 +14,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Circle, Shield, ShieldAlert, ShieldCheck, Square, SquareCheck } from 'lucide-react';
-import { Menu, MenuItem, MenuSection, MenuSeparator } from '@openbitfun/ui';
+import { OverflowText, Menu, MenuItem, MenuSection, MenuSeparator } from '@openbitfun/ui';
 import { Tooltip, Icon } from '@openbitfun/ui';
 import { BranchQuickSwitch } from '@/tools/git/components/BranchQuickSwitch';
 import { useGitState } from '@/tools/git/hooks/useGitState';
@@ -496,9 +496,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           data-openbitfun-component="chat-input-workspace-strip"
           data-openbitfun-part="branch"
           className="openbitfun-chat-input-workspace-strip__branch"
-        >
+        ><OverflowText>
           {branchLabel}
-        </span>
+        </OverflowText></span>
       </>
     );
 
@@ -553,7 +553,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       return (
         <Tooltip content={workspaceTooltipContent} placement="top">
           <span data-openbitfun-component="chat-input-workspace-strip" data-openbitfun-part="workspace" className="openbitfun-chat-input-workspace-strip__workspace">
-            <span className="openbitfun-chat-input-workspace-strip__workspace-name">{label}</span>
+            <span className="openbitfun-chat-input-workspace-strip__workspace-name"><OverflowText>{label}</OverflowText></span>
           </span>
         </Tooltip>
       );
@@ -562,7 +562,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     return (
       <>
         <Tooltip content={tCommon('header.switchWorkspace')} placement="top">
-          <button
+          <button data-overflow-trigger
             ref={workspaceTriggerRef}
             type="button"
             data-openbitfun-component="chat-input-workspace-strip"
@@ -576,7 +576,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               setWorkspaceMenuOpen(open => !open);
             }}
           >
-            <span className="openbitfun-chat-input-workspace-strip__workspace-name">{label}</span>
+            <span className="openbitfun-chat-input-workspace-strip__workspace-name"><OverflowText>{label}</OverflowText></span>
           </button>
         </Tooltip>
         {workspaceMenuOpen ? createPortal(
@@ -614,7 +614,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                     : 'workspaceStrip.personalAssistant')
                 : workspacePath;
               return (
-                <MenuItem
+                <MenuItem data-overflow-trigger
                   key={workspace.id}
                   role="menuitemradio"
                   checked={isActive}
@@ -636,13 +636,13 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   }}
                 >
                   <span className="openbitfun-chat-input-workspace-strip__workspace-option-copy">
-                    <span className="openbitfun-chat-input-workspace-strip__workspace-option-name">
+                    <OverflowText className="openbitfun-chat-input-workspace-strip__workspace-option-name">
                       {workspaceName}
-                    </span>
+                    </OverflowText>
                     {workspaceDetail ? (
-                      <span className="openbitfun-chat-input-workspace-strip__workspace-option-detail">
+                      <OverflowText className="openbitfun-chat-input-workspace-strip__workspace-option-detail">
                         {workspaceDetail}
-                      </span>
+                      </OverflowText>
                     ) : null}
                   </span>
                 </MenuItem>
@@ -775,7 +775,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         {label ? (
           <span className="openbitfun-chat-input-workspace-strip__location">
             {renderWorkspaceControl()}
-            {renderBranchChip()}
+            {isGitWorkspace ? renderBranchChip() : null}
           </span>
         ) : null}
         {showDispatchPicker && label ? renderDivider('context-target') : null}
@@ -809,14 +809,14 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
         {dispatchControl?.syncableJobId ? (
           <>
             <Tooltip content={tCommon('dispatch.syncTitle')} placement="top">
-              <button
+              <button data-overflow-trigger
                 type="button"
                 className="openbitfun-chat-input-workspace-strip__dispatch-result"
                 onClick={() => setResultDialogOpen(true)}
                 data-testid="dispatch-sync-trigger"
               >
                 <Icon name="refresh" size="xs" aria-hidden />
-                <span>{tCommon('dispatch.syncAction')}</span>
+                <span><OverflowText>{tCommon('dispatch.syncAction')}</OverflowText></span>
               </button>
             </Tooltip>
             <DispatchResultDialog
@@ -840,7 +840,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             className="openbitfun-chat-input-workspace-strip__permission"
           >
             <Tooltip content={permissionTooltip} placement="top">
-              <button
+              <button data-overflow-trigger
                 ref={permissionTriggerRef}
                 type="button"
                 className={[
@@ -877,9 +877,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                   strokeWidth={1.8}
                   aria-hidden
                 />
-                <span className="openbitfun-chat-input-workspace-strip__permission-label">
+                <span className="openbitfun-chat-input-workspace-strip__permission-label"><OverflowText>
                   {permissionModeLabel}
-                </span>
+                </OverflowText></span>
                 {/* Only a one-off override gets a dot: a session-level choice
                     is already legible from the label the trigger shows, and
                     marking both made every customized session look pending. */}

@@ -473,7 +473,7 @@ fn request(request_id: &str, session_id: &str) -> PermissionRequest {
         project_path: None,
         project_id: "project-a".to_string(),
         session_id: session_id.to_string(),
-        agent_id: "agentic".to_string(),
+        agent_id: "Standard".to_string(),
         action: "edit".to_string(),
         resources: vec!["src/lib.rs".to_string()],
         save_resources: vec!["src/*".to_string(), "src/*".to_string()],

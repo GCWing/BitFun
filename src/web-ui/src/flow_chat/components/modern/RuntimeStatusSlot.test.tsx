@@ -8,6 +8,7 @@ import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 
 vi.mock('@openbitfun/ui', () => ({
   Spinner: () => <span data-testid="dot-matrix" />,
+  OverflowText: ({ children, behavior: _behavior, marqueeActive: _marqueeActive, ...props }: any) => <span {...props}>{children}</span>,
 }));
 
 vi.mock('react-i18next', () => ({

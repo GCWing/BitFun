@@ -135,7 +135,7 @@ impl Default for BehaviorConfig {
         Self {
             auto_save: true,
             confirm_dangerous: true,
-            default_agent: "agentic".to_string(),
+            default_agent: "Standard".to_string(),
             auto_update: true,
         }
     }
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(config.ui.notification_method, NotificationMethod::Auto);
         assert!(config.behavior.auto_save);
         assert!(config.behavior.confirm_dangerous);
-        assert_eq!(config.behavior.default_agent, "agentic");
+        assert_eq!(config.behavior.default_agent, "Standard");
         assert!(config.behavior.auto_update);
         assert_eq!(config.workspace.default_path, ".");
         assert_eq!(

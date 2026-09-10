@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, MessageSquare, Square } from 'lucide-react';
-import { Spinner, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Spinner, Tooltip } from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
@@ -443,7 +443,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           ) : (
             <span className="session-tree-popover__expand-spacer" aria-hidden="true" />
           )}
-          <button
+          <button data-overflow-trigger
             type="button"
             className="session-tree-popover__node-main"
             onClick={() => handleSelect(node)}
@@ -464,15 +464,15 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                   />
                 )}
             <span className="session-tree-popover__node-copy">
-              <span
+              <OverflowText
                 className="session-tree-popover__node-title"
                 data-openbitfun-component="flow-chat-header"
                 data-openbitfun-part="sessionTreeNodeTitle"
               >
                 {primaryLabel}
-              </span>
+              </OverflowText>
               {nodeMeta ? (
-                <span className="session-tree-popover__node-meta">{nodeMeta}</span>
+                <OverflowText className="session-tree-popover__node-meta">{nodeMeta}</OverflowText>
               ) : null}
             </span>
           </button>

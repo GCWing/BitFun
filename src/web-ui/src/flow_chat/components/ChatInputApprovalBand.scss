@@ -1,150 +1,67 @@
 // The approval band normally sits in the composer stack, directly above the
 // capsule. Embedded child-session panels reuse the same compact surface when
 // no child composer exists.
+@use '@/shared/styles/surface-recipes' as surfaces;
+
 .openbitfun-chat-input-approval {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
   box-sizing: border-box;
-  margin-bottom: 6px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 52%, var(--openbitfun-color-border-default));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 94%, var(--openbitfun-color-status-warning-content));
-  color: var(--openbitfun-color-content-primary);
-  font-size: var(--openbitfun-type-flow-control-font-size);
-  animation: openbitfun-chat-input-approval-in 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  // The composer centers its children, so constrain the band before laying out
+  // long resources; otherwise its intrinsic width can exceed the composer.
+  width: 100%;
+  min-width: 0;
+  max-width: min(100%, var(--openbitfun-overlay-dialog-max-inline-size-large));
+  margin-inline: auto;
+  margin-bottom: var(--openbitfun-space-3);
 
-  &__request {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 5px;
+  &__surface {
+    @include surfaces.floating;
   }
 
-  &__icon {
-    flex: none;
-    color: var(--openbitfun-color-status-warning-content);
-  }
-
-  &__action {
-    flex: none;
-    font-weight: var(--openbitfun-type-label-selected-font-weight);
-  }
-
-  &__separator {
-    flex: none;
-    color: var(--openbitfun-color-content-secondary);
-  }
-
-  // The resource is the part worth the remaining width: which file, which
-  // command. Identity and owner are context and yield first.
-  &__resource {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  &__title {
+    flex-shrink: 0;
   }
 
   &__owner {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
     color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-flow-support-font-size);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-weight: var(--openbitfun-type-flow-support-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
   }
 
-  &__count {
-    flex: none;
-    margin-left: auto;
-    padding: 1px 6px;
-    border-radius: 8px;
-    color: var(--openbitfun-color-content-on-dark);
-    background: var(--openbitfun-color-status-warning-content);
-    font-size: var(--openbitfun-type-flow-support-font-size);
-    font-weight: var(--openbitfun-type-heading-page-font-weight);
-    cursor: default;
+  // Keep the full command readable without letting it widen the composer or
+  // push the approval actions out of view. Only the resource body scrolls.
+  &__resource {
+    flex: 1;
+    max-height: min(160px, 25vh);
+    color: var(--openbitfun-color-content-primary);
+    font-size: var(--openbitfun-type-code-sm-font-size);
+    line-height: var(--openbitfun-type-code-sm-line-height);
   }
 
   &__note {
-    margin: 0;
-    color: var(--openbitfun-color-status-warning-content);
-    font-size: var(--openbitfun-type-flow-support-font-size);
+    overflow-wrap: anywhere;
+  }
 
-    &--error {
-      color: var(--openbitfun-color-status-danger-content);
-    }
+  &__grant-note {
+    margin: 0;
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-flow-support-font-weight);
+    line-height: var(--openbitfun-type-flow-support-line-height);
+    overflow-wrap: anywhere;
   }
 
   &__actions {
+    flex-wrap: wrap;
+  }
+
+  &__buttons {
     display: flex;
+    min-width: 0;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-  }
-
-  &__spacer {
-    flex: 1 1 auto;
-  }
-
-  &__scope {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    padding: 2px;
-    border: 1px solid var(--openbitfun-color-border-default);
-    border-radius: 7px;
-    background: var(--openbitfun-color-surface-canvas);
-  }
-
-  &__scope-option {
-    min-height: 20px;
-    padding: 1px 7px;
-    border: none;
-    border-radius: 5px;
-    color: var(--openbitfun-color-content-secondary);
-    background: transparent;
-    font-size: var(--openbitfun-type-flow-support-font-size);
-    cursor: pointer;
-
-    &--active {
-      color: var(--openbitfun-color-content-primary);
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--openbitfun-color-status-warning-content);
-      outline-offset: 1px;
-    }
-  }
-
-}
-
-// A narrow composer drops secondary identity information while the shared
-// buttons wrap as complete, readable actions.
-@media (max-width: 560px) {
-  .openbitfun-chat-input-approval {
-    &__owner {
-      display: none;
-    }
-  }
-}
-
-@keyframes openbitfun-chat-input-approval-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .openbitfun-chat-input-approval {
-    animation: none;
+    justify-content: flex-end;
+    gap: var(--openbitfun-space-2);
+    margin-inline-start: auto;
   }
 }

@@ -213,20 +213,10 @@
     overflow-x: hidden;
     overscroll-behavior: contain;
     pointer-events: auto;
-    scrollbar-width: thin;
 
     &--single {
       height: min(var(--openbitfun-agent-companion-pet-height), 100vh);
       overflow-y: hidden;
-    }
-
-    &::-webkit-scrollbar {
-      width: 5px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 18%, transparent);
     }
   }
 
@@ -350,7 +340,6 @@
   &__bubble-status {
     display: block;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

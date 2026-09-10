@@ -1,3 +1,4 @@
+use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use serde_json::{Map, Value};
 
 use crate::runtime::approval::{approval_metadata, CliApprovalPolicy};
@@ -16,14 +17,21 @@ pub(crate) const fn cli_policy(policy: DispatchApprovalPolicy) -> CliApprovalPol
 }
 
 pub(crate) fn metadata(policy: DispatchApprovalPolicy) -> Map<String, Value> {
-    approval_metadata(cli_policy(policy))
+    let mut metadata = approval_metadata(cli_policy(policy));
+    // Dispatch persists permission replies, but its current wire has no user
+    // question mailbox. A remote permission supervisor therefore cannot answer
+    // AskUserQuestion. Use the Runtime's availability gate before a tool waits.
+    metadata.insert(
+        USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
+        Value::Bool(false),
+    );
+    metadata
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use openbitfun_agent_runtime::sdk::AUTO_APPROVE_ASK_CONTEXT_KEY;
-    use openbitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 
     #[test]
     fn dispatch_policy_uses_the_shared_invocation_metadata_contract() {
@@ -53,9 +61,10 @@ mod tests {
         );
 
         let remote = metadata(DispatchApprovalPolicy::Remote);
-        assert!(
-            remote.get(USER_INPUT_AVAILABLE_CONTEXT_KEY).is_none(),
-            "remote supervision keeps the shared user-input channel available"
+        assert_eq!(
+            remote.get(USER_INPUT_AVAILABLE_CONTEXT_KEY),
+            Some(&Value::Bool(false)),
+            "remote permission supervision does not provide a user-question mailbox"
         );
         assert_eq!(
             remote.get(AUTO_APPROVE_ASK_CONTEXT_KEY),

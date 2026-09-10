@@ -22,6 +22,15 @@ pub struct TokenUsageService {
 }
 
 impl TokenUsageService {
+    /// Query a target's existing usage ledger without runtime initialization.
+    pub fn for_queries(path_manager: &PathManager) -> Self {
+        Self {
+            inner: openbitfun_services_core::token_usage::TokenUsageService::for_queries(
+                path_manager.user_data_dir().join(TOKEN_USAGE_DIR),
+            ),
+        }
+    }
+
     pub async fn new(path_manager: Arc<PathManager>) -> Result<Self> {
         Self::new_in_base_dir(path_manager.user_data_dir().join(TOKEN_USAGE_DIR)).await
     }

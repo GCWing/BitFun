@@ -4,5 +4,5 @@
 
 pub use openbitfun_agent_runtime::skills::{
     render_loaded_skill_for_assistant, ModeSkillInfo, ModeSkillStateReason, SkillData, SkillInfo,
-    SkillLocation, SkillParseError,
+    SkillLocation, SkillParseError, SkillScanDiagnostic, SkillScanReport,
 };

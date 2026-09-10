@@ -1,0 +1,30 @@
+[package]
+name = "openbitfun-legacy-migration-adapters"
+version.workspace = true
+edition.workspace = true
+description = "Offline BitFun data conversion and current storage owner adapters"
+
+[dependencies]
+openbitfun-config-contracts = { path = "../../contracts/config-contracts" }
+openbitfun-legacy-migration = { path = "../legacy-migration" }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["legacy-migration", "miniapp"] }
+openbitfun-services-core = { path = "../services-core", features = ["local-storage", "memory-store", "workspace-persistence", "coordination-store", "session-event-format"] }
+openbitfun-services-integrations = { path = "../services-integrations", features = ["miniapp-storage", "remote-persistence"] }
+openbitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["definition-contracts"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+dunce = { workspace = true }
+rusqlite = { workspace = true, features = ["backup", "bundled"] }
+tokio = { workspace = true, features = ["rt"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

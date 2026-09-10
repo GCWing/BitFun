@@ -58,7 +58,7 @@ export function explainProduct(resolution) {
     localizedNames: resolution.productNames,
     localeDigest: resolution.assembly.localeDigest,
     assemblyDigest: resolution.assembly.assemblyDigest,
-    implementedScope: 'identity-and-localized-name-c0a',
+    implementedScope: 'identity-and-localized-name-c0b',
   };
 }
 

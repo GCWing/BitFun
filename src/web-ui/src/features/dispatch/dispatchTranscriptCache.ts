@@ -87,6 +87,8 @@ export function scheduleDispatchTranscriptSave(
   }
   pendingPayloads.set(job.jobId, {
     schemaVersion: DISPATCH_TRANSCRIPT_SCHEMA_VERSION,
+    title: job.title,
+    titleSource: job.titleSource,
     jobId: job.jobId,
     sessionId: job.sessionId,
     cursor,

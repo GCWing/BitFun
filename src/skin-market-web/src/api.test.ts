@@ -48,7 +48,7 @@ describe('Skin Market API paths', () => {
 
   it('uses the MiniApp auth broker and returns to the current Skin route', () => {
     expect(sharedMarketLoginUrl('/skin/appearances/ocean-night?q=dark')).toBe(
-      '/miniapp/api/v1/auth/github/start?returnTo=%2Fskin%2Fappearances%2Focean-night%3Fq%3Ddark',
+      'https://auth.openbitfun.com/sign-in?returnTo=%2Fskin%2Fappearances%2Focean-night%3Fq%3Ddark',
     );
   });
 

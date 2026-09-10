@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Dialog,
   DialogBody,
@@ -85,7 +85,7 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           <span data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="summaryLabel" className="background-command-input-dialog__summary-label">
             {t('backgroundCommandInput.commandLabel')}
           </span>
-          <code data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="command">{command.command || command.title}</code>
+          <code data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="command"><OverflowText>{command.command || command.title}</OverflowText></code>
         </div>
 
         <Textarea
@@ -123,7 +123,7 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
         <div data-openbitfun-component="background-command-input-dialog" data-openbitfun-part="actions" className="background-command-input-dialog__actions">
           <Button
             type="button"
-            variant="outline"
+            variant="fill"
             size="sm"
             onClick={onClose}
             disabled={isSending}
@@ -132,7 +132,7 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           </Button>
           <Button
             type="submit"
-            variant="fill"
+            variant="primary"
             size="sm"
             loading={isSending}
             disabled={!canSend}

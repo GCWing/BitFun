@@ -63,8 +63,8 @@ export struct MarkdownContent {
     } else {
       this.InlineText(
         block.inlines,
-        MobileDesignTypography.bodyMedium.size,
-        MobileDesignTypography.bodyMedium.lineHeight,
+        MobileDesignTypography.bodyLarge.size,
+        MobileDesignTypography.bodyLarge.lineHeight,
         INK,
         false
       )
@@ -152,16 +152,16 @@ export struct MarkdownContent {
           } else {
             Text(item.marker)
               .width(20)
-              .fontSize(MobileDesignTypography.bodyMedium.size)
-              .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
+              .fontSize(MobileDesignTypography.bodyLarge.size)
+              .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
               .fontColor(MUTED)
               .textAlign(TextAlign.End)
           }
           Column() {
             this.InlineText(
               item.inlines,
-              MobileDesignTypography.bodyMedium.size,
-              MobileDesignTypography.bodyMedium.lineHeight,
+              MobileDesignTypography.bodyLarge.size,
+              MobileDesignTypography.bodyLarge.lineHeight,
               INK,
               false
             )
@@ -271,7 +271,7 @@ export struct MarkdownContent {
     if (level === 3) {
       return MobileDesignTypography.titleSmall.size;
     }
-    return MobileDesignTypography.bodyMedium.size;
+    return MobileDesignTypography.bodyLarge.size;
   }
 
   private headingLineHeight(level: number): number {
@@ -284,7 +284,7 @@ export struct MarkdownContent {
     if (level === 3) {
       return MobileDesignTypography.titleSmall.lineHeight;
     }
-    return MobileDesignTypography.bodyMedium.lineHeight;
+    return MobileDesignTypography.bodyLarge.lineHeight;
   }
 
   private tableTextAlign(alignment: string): TextAlign {

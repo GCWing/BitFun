@@ -72,7 +72,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
             {actions.map((action, index) => (
               <Button
                 key={index}
-                variant={action.variant === 'primary' || action.variant === 'danger' ? 'fill' : 'outline'}
+                variant={action.variant === 'primary' ? 'primary' : action.variant === 'danger' ? 'fill' : 'outline'}
                 tone={action.variant === 'danger' ? 'danger' : 'neutral'}
                 size="sm"
                 onClick={() => handleAction(action.onClick)}

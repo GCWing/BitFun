@@ -191,7 +191,7 @@ export interface ReviewActionBarState extends ReviewActionBarData {
   updatePhase: (phase: ReviewActionPhase, errorMessage?: string | null, childSessionId?: string) => void;
   toggleRemediation: (id: string, childSessionId?: string) => void;
   toggleAllRemediation: (childSessionId?: string) => void;
-  toggleGroupRemediation: (groupId: RemediationGroupId, childSessionId?: string) => void;
+  toggleGroupRemediation: (groupId: RemediationGroupId | 'ungrouped', childSessionId?: string) => void;
   setActiveAction: (
     action: 'fix' | 'fix-review' | 'review' | 'resume' | 'retry' | null,
     options?: { baselineTurnId?: string | null },

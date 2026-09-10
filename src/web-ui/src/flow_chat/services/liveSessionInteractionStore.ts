@@ -207,6 +207,24 @@ class LiveSessionInteractionStore {
     if (changed) this.changed(surfaceId, state);
   }
 
+  /** A quiet global read can remove replies lost while the client was away. */
+  reconcileUnversionedPermissions(
+    surfaceId: DeviceSurfaceId,
+    requests: readonly PermissionRequest[],
+    expectedEventVersion: number,
+  ): void {
+    const state = this.stateFor(surfaceId);
+    if (state.eventVersion !== expectedEventVersion) {
+      this.mergeUnversionedPermissions(surfaceId, requests);
+      return;
+    }
+    const next = new Map(requests.filter(request => !state.resolvedIds.has(request.requestId))
+      .map(request => [request.requestId, request]));
+    if (next.size === state.requests.size && [...next.keys()].every(id => state.requests.has(id))) return;
+    state.requests = next;
+    this.changed(surfaceId, state);
+  }
+
   /**
    * Reconcile the filtered Session mailbox returned with restore_session_view.
    * If an event arrived while the request was in flight, preserve it and only
@@ -288,10 +306,10 @@ export function installLiveSessionInteractionMailbox(): void {
 }
 
 /** Start one forwarding/list bootstrap per host Surface. */
-export function ensureActivePermissionMailbox(): Promise<void> {
+export function ensureActivePermissionMailbox(refresh = false): Promise<void> {
   installLiveSessionInteractionMailbox();
   const scope = getActiveSurfaceScope();
-  if (subscribedSurfaces.has(scope.surfaceId)) {
+  if (!refresh && subscribedSurfaces.has(scope.surfaceId)) {
     return Promise.resolve();
   }
   const existing = subscriptionRequests.get(scope.surfaceId);
@@ -300,9 +318,10 @@ export function ensureActivePermissionMailbox(): Promise<void> {
   const request = (async () => {
     try {
       await agentAPI.subscribePermissionRequests();
+      const eventVersion = liveSessionInteractionStore.captureEventVersion(scope.surfaceId);
       const pending = await agentAPI.listPendingPermissionRequests();
       scope.assertCurrent('bootstrap permission mailbox');
-      liveSessionInteractionStore.mergeUnversionedPermissions(scope.surfaceId, pending);
+      liveSessionInteractionStore.reconcileUnversionedPermissions(scope.surfaceId, pending, eventVersion);
       subscribedSurfaces.add(scope.surfaceId);
     } catch (error) {
       if (!isSurfaceChangedError(error)) {

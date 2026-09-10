@@ -7,21 +7,26 @@ struct MobileDesignGallery: View {
     init(scenario: MobilePreviewScenario) {
         self.scenario = scenario
         let session = ChatSession(id: UUID().uuidString, title: scenario.headerTitle, updatedLabel: "刚刚")
+        let previewMessages = scenario.messages.map { message in
+            ChatMessage(
+                id: UUID(),
+                role: message.role == "user" ? .user : .assistant,
+                text: message.text
+            )
+        }
         let previewModel = MobileAppModel(
             sessions: [session],
             selectedSessionID: session.id,
-            messages: scenario.messages.map { message in
-                ChatMessage(
-                    id: UUID(),
-                    role: message.role == "user" ? .user : .assistant,
-                    text: message.text
-                )
-            }
+            messages: previewMessages
         )
+        previewModel.coreAdapter = nil
         previewModel.surface = .remote
         previewModel.remoteConnected = true
         previewModel.remoteSessionSelected = true
         previewModel.remoteSessions = [session]
+        previewModel.messages = previewMessages
+        previewModel.timelineRows = previewMessages.map(MobileAppModel.simpleTimelineRow)
+        previewModel.designGalleryPreview = true
         previewModel.draft = scenario.composerDraft
         previewModel.isSending = scenario.streaming
         _model = StateObject(wrappedValue: previewModel)
@@ -33,7 +38,8 @@ struct MobileDesignGallery: View {
             ConversationHeader(
                 model: model,
                 actionsOpen: .constant(false),
-                contextTitle: scenario.headerSubtitle
+                contextTitle: scenario.headerSubtitle,
+                sidebarAction: {}
             )
             ChatTimelineView(model: model)
             ComposerBar(model: model)

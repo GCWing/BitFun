@@ -20,6 +20,7 @@ import React, {
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useActiveSessionState } from '../../hooks/useActiveSessionState';
+import { useSessionCompletionReceipt } from '../../hooks/useSessionCompletionReceipt';
 import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import type { SessionHistoryWindowDirection } from '../../store/FlowChatStore';
 import {
@@ -45,7 +46,6 @@ import {
   findElementWithDataValue,
   findFlowChatSearchTextRanges,
   getFlowChatSearchTextRoot,
-  setFlowChatSearchHighlight,
 } from './flowChatSearchDom';
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
@@ -434,6 +434,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   onViewportSnapshotRef.current = onViewportSnapshot;
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isOpenViewportSettled, setIsOpenViewportSettled] = useState(false);
+  useSessionCompletionReceipt(activeSessionId, scrollerElementRef, isViewportActive && isOpenViewportSettled);
   const shouldRestoreInitialSnapshot = Boolean(
     initialViewportSnapshot
     && initialViewportSnapshot.sessionId === activeSessionId
@@ -504,6 +505,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const evaluateHistoryBoundariesRef = useRef<() => void>(() => {});
   const searchNavigationRequestIdRef = useRef(0);
   const visibleTurnUpdateFrameRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => () => {
+    searchNavigationRequestIdRef.current += 1;
+  }, [activeSessionId]);
 
   const virtualizer = useFlowChatVirtualizer({
     items: virtualItems,
@@ -1002,6 +1007,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
      * recording stopped.
      */
     virtualizer.cancelAim();
+    searchNavigationRequestIdRef.current += 1;
     viewportAnchor.markUserScrollIntent();
     handleUserScrollIntent();
     setNavigatedTurn(null);
@@ -2045,8 +2051,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const clearSearchMatch = useCallback(() => {
     searchNavigationRequestIdRef.current += 1;
-    setFlowChatSearchHighlight(null);
-  }, []);
+    virtualizer.cancelAim();
+  }, [virtualizer]);
 
   const scrollToSearchMatch = useCallback((target: {
     virtualItemIndex: number;
@@ -2059,21 +2065,50 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     exitFollowOutput('scroll-to-index');
     setNavigatedTurn(virtualItems[target.virtualItemIndex]?.turnId ?? null);
     const requestId = searchNavigationRequestIdRef.current;
-    virtualizer.scrollItemIntoView(target.virtualItemIndex, {
-      align: 'center',
-      owner: 'one-shot-navigation',
-      holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
-    });
     let attempts = 0;
+    let materializing = false;
+    const traceSkipped = (reason: string) => traceViewport({
+      location: 'searchNavigation.skipped',
+      message: 'search navigation kept the viewport at its reading position',
+      data: () => ({
+        reason,
+        virtualItemIndex: target.virtualItemIndex,
+        flowItemId: target.flowItemId,
+        occurrenceIndex: target.occurrenceIndex ?? 0,
+        scrollTopPx: roundViewportPx(scrollerElementRef.current?.scrollTop ?? 0),
+      }),
+    });
     const resolve = () => {
       if (searchNavigationRequestIdRef.current !== requestId) return;
       attempts += 1;
-      const scroller = scrollerElementRef.current;
-      const wrapper = Array.from(
-        scroller?.querySelectorAll<HTMLElement>('.virtual-item-wrapper') ?? [],
-      ).find(element => Number(element.dataset.virtualIndex) === target.virtualItemIndex);
-      if (!scroller || !wrapper) {
+      const retry = (reason: string) => {
         if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) requestAnimationFrame(resolve);
+        else {
+          if (materializing) virtualizer.cancelAim();
+          traceSkipped(reason);
+        }
+      };
+      const scroller = scrollerElementRef.current;
+      if (!scroller) {
+        traceSkipped('no-scroller');
+        return;
+      }
+      const wrapper = Array.from(
+        scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper'),
+      ).find(element => Number(element.dataset.virtualIndex) === target.virtualItemIndex);
+      if (!wrapper) {
+        // Coarse item alignment is only for materializing an unmounted row.
+        // A mounted hit can be resolved before any painted placement.
+        if (!materializing) {
+          materializing = true;
+          viewportAnchor.reanchorAfterNavigation();
+          virtualizer.scrollItemIntoView(target.virtualItemIndex, {
+            align: 'center',
+            owner: 'one-shot-navigation',
+            holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+          });
+        }
+        retry('row-not-mounted');
         return;
       }
       for (const expandableId of target.expandableIds ?? []) {
@@ -2082,35 +2117,60 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           expandable.querySelector<HTMLElement>(
             '[data-testid="chat-explore-group-toggle"], [data-testid="chat-thinking-toggle"]',
           )?.click();
-          if (attempts < SEARCH_NAVIGATION_MAX_ATTEMPTS) requestAnimationFrame(resolve);
+          retry('source-not-expanded');
           return;
         }
       }
       const root = getFlowChatSearchTextRoot(wrapper, target.flowItemId);
+      if (!root) {
+        retry('source-not-mounted');
+        return;
+      }
       const ranges = findFlowChatSearchTextRanges(root, target.query);
       const rangeIndex = Math.min(target.occurrenceIndex ?? 0, Math.max(0, ranges.length - 1));
       const range = ranges[rangeIndex] ?? null;
-      if (!range) return;
-      setFlowChatSearchHighlight(range, ranges.filter((_, index) => index !== rangeIndex));
-      const rangeRect = range.getBoundingClientRect();
+      // Use the same first painted line as the passive current-line marker.
+      const rangeRect = range && Array.from(range.getClientRects())
+        .find(rect => rect.width > 0 && rect.height > 0);
+      if (!rangeRect) {
+        retry('text-not-painted');
+        return;
+      }
       const scrollerRect = scroller.getBoundingClientRect();
-      viewportOwner.write({
+      // Read the design-system spacing used by the scroller's edge masks.
+      // The floating input and its fade are outside the readable viewport.
+      const edgeFadePx = Number.parseFloat(
+        getComputedStyle(scroller).getPropertyValue('--openbitfun-space-12'),
+      ) || 0;
+      const readableTop = scrollerRect.top
+        + (scroller.scrollTop <= FLOWCHAT_SCROLL_START_THRESHOLD_PX ? 0 : edgeFadePx);
+      const readableBottom = scrollerRect.top + scroller.clientHeight - inputOverlayInsetPx - edgeFadePx;
+      if (readableBottom <= readableTop) {
+        if (materializing) virtualizer.cancelAim();
+        traceSkipped('no-readable-area');
+        return;
+      }
+      if (rangeRect.top >= readableTop && rangeRect.bottom <= readableBottom) {
+        if (materializing) virtualizer.cancelAim();
+        traceSkipped('already-readable');
+        return;
+      }
+
+      // Replacing the item aim through the virtualizer prevents its later
+      // remeasurements from pulling the viewport back to the row's center.
+      viewportAnchor.reanchorAfterNavigation();
+      const topPx = Math.max(0, Math.min(
+        scroller.scrollHeight - scroller.clientHeight,
+        scroller.scrollTop + (rangeRect.top + rangeRect.bottom) / 2
+          - (readableTop + readableBottom) / 2,
+      ));
+      virtualizer.scrollToOffset(topPx, {
         owner: 'one-shot-navigation',
         holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
-        topPx: Math.max(
-          0,
-          Math.min(
-            scroller.scrollHeight - scroller.clientHeight,
-            scroller.scrollTop + rangeRect.top - scrollerRect.top -
-              Math.max(0, (scroller.clientHeight - rangeRect.height) / 2),
-          ),
-        ),
       });
     };
-    requestAnimationFrame(resolve);
-  }, [clearSearchMatch, exitFollowOutput, setNavigatedTurn, viewportOwner, virtualItems, virtualizer]);
-
-  useEffect(() => () => setFlowChatSearchHighlight(null), []);
+    resolve();
+  }, [clearSearchMatch, exitFollowOutput, inputOverlayInsetPx, setNavigatedTurn, viewportAnchor, virtualItems, virtualizer]);
 
   const requestHistoryBoundary = useCallback((direction: SessionHistoryWindowDirection) => {
     /*

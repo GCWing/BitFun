@@ -382,10 +382,14 @@ Plugin Host Runtime、已退役的 LSP Runtime，以及通用动态模型路由�
   字符串或字符串列表；名称按参数顺序绑定并由现有纯文本参数展开器处理，缺失命名参数展开为空，既有缺失位置参数仍保留
   占位符。`.codex` Skill 只增加上游已有的目录名 fallback，`description` 仍必填；`.agents`、`.opencode`、`.openbitfun` 和
   `.cursor` 的严格格式不变。本地与 Remote 发现及实际加载必须使用同一方言映射，避免目录显示可用而执行时重新解析失败。
-- Claude Skill 的 `allowed-tools` 同样不能授予 OpenBitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
-  现有显式模型绑定，不成为请求级 override；`context`/`fork`、`agent`、`model`、`hooks`、`paths`、`shell`、
-  `runtime` 等会改变执行行为而当前没有等价 owner 的字段阻止加载。Claude runtime 变量与动态
-  shell 注入也不执行。此切片不增加插件 Skill、祖先活动目录、文件 watcher、URL 来源或另一条 reload 命令。
+- Claude Skill 的 `allowed-tools` 不能授予 OpenBitFun 工具预批准，因此降级为无额外权限。`model`、`effort` 偏好不应用，
+  继续使用当前会话配置，并在扫描诊断及实际加载结果中说明降级；它们不再阻止整份技能加载。
+  Claude runtime 变量与动态 shell 表达式保留为未展开、未执行的文本，加载说明明确它们不是实际值或命令结果；
+  如任务需要这些数据，Agent 必须通过当前工作区的正常工具与权限流程获取。行内 shell 表达式的识别要求行首或空白边界及闭合
+  反引号；普通 Markdown 中的感叹号、Excel `Sheet1!A1` 和错误值不会触发兼容性警告。
+  `context`（包括 `fork`）、`agent`、`hooks`、`paths`、`shell`、`runtime`、`background`、`disallowed-tools`
+  涉及未实现的执行方式或约束，仍阻止加载；格式损坏及无效调用控制字段也仍返回错误。本地与 Remote、名称与稳定键加载共享
+  同一兼容性判断和模型说明。此切片不增加插件 Skill、祖先活动目录、文件 watcher、URL 来源或另一条 reload 命令。
 - Claude Subagent 扫描用户与逐层项目 `.claude/agents/**/*.md`，近工作目录定义整项覆盖；Claude MCP 保留
   `local > project > user` 的整项覆盖，local 只读取与规范化当前工作区严格匹配的项目项。
 - Codex Subagent 从用户与逐层项目 `[agents]`、角色文件合并，缺失字段按 Codex 层级继承；`enabled`、默认模型、角色级

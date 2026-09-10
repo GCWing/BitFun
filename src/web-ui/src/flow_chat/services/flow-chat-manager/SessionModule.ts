@@ -48,9 +48,11 @@ import {
   recordHistorySessionDiagnosticEvent,
 } from '../historySessionDiagnostics';
 import {
-  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
-  normalizeUserDefaultChatInputModeId,
-} from '../../utils/chatInputMode';
+  CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH,
+  normalizeChatInputModePreference,
+  resolveConfiguredChatInputDefaultModeId,
+} from '../ChatInputModePreferenceService';
+import type { AppFlowChatConfig } from '@/infrastructure/config/types';
 import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
@@ -555,18 +557,23 @@ export const resolveAgentTypeForSessionCreation = async (
   }
 
   const normalizedRequestedMode = requestedMode?.trim();
-  if (normalizedRequestedMode && normalizedRequestedMode !== 'agentic') {
+  // A provided mode is an explicit caller decision. Only an omitted mode asks
+  // this owner to resolve the user's default preference. In particular,
+  // `agentic` is the real Standard Harness id, not a default-mode sentinel.
+  if (normalizedRequestedMode) {
     return normalizedRequestedMode;
   }
 
   try {
-    const configuredDefaultMode = normalizeUserDefaultChatInputModeId(
-      await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
-        skipRetryOnNotFound: true,
-      }),
+    const configuredDefaultMode = resolveConfiguredChatInputDefaultModeId(
+      normalizeChatInputModePreference(
+        await configAPI.getConfig(CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH, {
+          skipRetryOnNotFound: true,
+        }) as AppFlowChatConfig | undefined,
+      ),
     );
     if (!configuredDefaultMode) {
-      return normalizedRequestedMode || 'agentic';
+      return 'Standard';
     }
 
     const availableModes = await agentAPI.getAvailableModes({
@@ -590,7 +597,7 @@ export const resolveAgentTypeForSessionCreation = async (
     });
   }
 
-  return normalizedRequestedMode || 'agentic';
+  return 'Standard';
 };
 
 function requireSessionWorkspacePath(
@@ -714,10 +721,12 @@ export async function createChatSession(
  */
 export async function switchChatSession(
   context: FlowChatContext,
-  sessionId: string
+  sessionId: string,
+  isStillRelevant: () => boolean = () => true,
 ): Promise<void> {
   const surfaceScope = getActiveSurfaceScope();
   try {
+    if (!isStillRelevant()) return;
     const switchRequestId = ++latestSwitchRequestId;
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     const isRemoteSession = isRemoteTraceContext(session?.remoteConnectionId, session?.remoteSshHost);
@@ -776,7 +785,7 @@ export async function switchChatSession(
       try {
         await hydrateHistoricalSession(context, sessionId, true, {
           isRetryStillRelevant: () => (
-            surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId
+            surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId && isStillRelevant()
           ),
           retryActiveStaleReuse: shouldActivateBeforeHydrate,
         });
@@ -789,7 +798,7 @@ export async function switchChatSession(
         // Continue with activation so the failed state is visible.
       }
 
-      if (switchRequestId !== latestSwitchRequestId) {
+      if (switchRequestId !== latestSwitchRequestId || !isStillRelevant()) {
         recordHistorySessionDiagnosticEvent(sessionId, 'switch_superseded', {
           switchRequestId,
           latestSwitchRequestId,
@@ -897,6 +906,13 @@ export async function archiveChatSession(
       stateBeforeArchive.activeSessionId
       && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
     );
+
+    // Match deletion: a removed session must not leave a pending history-open
+    // shield or navigation intent behind while the archive request settles.
+    removedSessionIds.forEach(removedSessionId => {
+      clearRecentHistorySessionOpenIntent(removedSessionId);
+      clearHistorySessionOpenTransition(removedSessionId);
+    });
 
     await driverForSession(sessionId, session).archiveSession(context, sessionId, {
       removedSessionIds,
@@ -1193,7 +1209,7 @@ export async function ensureBackendSession(
       sessionName:
         resolveSessionTitle(latestSession, (key, options) => i18nService.t(key, options)) ||
         `Session ${sessionId.slice(0, 8)}`,
-      agentType: latestSession.mode || 'agentic',
+      agentType: latestSession.mode || 'Standard',
       workspacePath,
       projectWorkspacePath,
       executionTarget:
@@ -1245,7 +1261,7 @@ export async function retryCreateBackendSession(
     sessionName:
       resolveSessionTitle(session, (key, options) => i18nService.t(key, options)) ||
       `Session ${sessionId.slice(0, 8)}`,
-    agentType: session.mode || 'agentic',
+    agentType: session.mode || 'Standard',
     workspacePath,
     projectWorkspacePath,
     executionTarget:

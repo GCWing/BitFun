@@ -41,4 +41,11 @@ Keep these role features additive and do not replace either closure with
 cargo check -p openbitfun-acp --no-default-features --features client
 cargo check -p openbitfun-acp --no-default-features --features server
 cargo test -p openbitfun-acp
+cargo test -p openbitfun-acp --no-default-features --features client,openbitfun-core/git --lib client::prompt::tests
 ```
+
+The focused client prompt tests cover protocol errors, retry, cancellation,
+partial output, and transport termination with in-memory agent streams. These
+fixtures do not require a live provider or a device connection. The explicit
+Core `git` feature satisfies the worktree tool dependency in the current client
+closure without enabling the server role or `product-full`.

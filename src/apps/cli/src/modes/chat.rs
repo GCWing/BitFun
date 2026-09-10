@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
 use openbitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
-use openbitfun_product_domains::account::{AccountSnapshotProjection, SettingsSyncStatus};
+use openbitfun_product_domains::account::AccountSnapshotProjection;
 use openbitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use openbitfun_product_domains::native_hooks::{
     NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
@@ -444,7 +444,7 @@ fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
 }
 
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account-sync, usage, and other management remain Embedded.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account, usage, and other management remain Embedded.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -488,7 +488,7 @@ const LINEAGE_SETTLEMENT_RETRY_MAX: Duration = Duration::from_secs(1);
 pub(crate) struct ChatMode {
     config: CliConfig,
     keymap: ResolvedKeymap,
-    /// Current agent type (e.g. "agentic", "Cowork", "DeepResearch")
+    /// Current agent type (e.g. "Standard", "Cowork", "DeepResearch")
     agent_type: String,
     workspace: Option<String>,
     local_cwd: std::path::PathBuf,
@@ -567,7 +567,7 @@ pub(crate) struct ChatMode {
 /// Map agent_type to a display name for status messages
 fn agent_display_name(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" => "Fang",
+        "Standard" => "Fang",
         _ => "AI Assistant",
     }
 }

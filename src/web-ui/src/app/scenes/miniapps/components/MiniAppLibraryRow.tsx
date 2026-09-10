@@ -1,4 +1,4 @@
-import { Button, Icon, StatusPill, type StatusPillTone } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, StatusPill, type StatusPillTone } from '@openbitfun/ui';
 import {
   GalleryHorizontalEnd,
   HardDrive,
@@ -81,7 +81,7 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
       data-openbitfun-component="miniapp-gallery-view"
       data-openbitfun-part="item"
     >
-      <button
+      <button data-overflow-trigger
         type="button"
         className="miniapp-library-row__details"
         aria-label={detailsLabel}
@@ -129,7 +129,7 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
             data-openbitfun-component="miniapp-gallery-view"
             data-openbitfun-part="title"
           >
-            <strong className="miniapp-library-row__name">{name}</strong>
+            <strong className="miniapp-library-row__name"><OverflowText>{name}</OverflowText></strong>
             <StatusPill className="miniapp-library-row__category" tone="neutral">
               {category}
             </StatusPill>
@@ -144,30 +144,30 @@ const MiniAppLibraryRow: React.FC<MiniAppLibraryRowProps> = ({
           >
             <span className="miniapp-library-row__meta-item">
               <Package size={13} strokeWidth={1.8} aria-hidden="true" />
-              <span>{version}</span>
+              <OverflowText>{version}</OverflowText>
             </span>
             {owner ? (
               <span className="miniapp-library-row__meta-item miniapp-library-row__meta-item--owner">
                 <UserRound size={13} strokeWidth={1.8} aria-hidden="true" />
-                <span>@{owner}</span>
+                <OverflowText>@{owner}</OverflowText>
               </span>
             ) : null}
             {rating ? (
               <span className="miniapp-library-row__meta-item">
                 <Star size={13} strokeWidth={1.8} aria-hidden="true" />
-                <span>{rating}</span>
+                <OverflowText>{rating}</OverflowText>
               </span>
             ) : null}
             {downloadCount ? (
               <span className="miniapp-library-row__meta-item">
                 <Icon name="arrow-down" size="xs" aria-hidden />
-                <span>{downloadCount}</span>
+                <OverflowText>{downloadCount}</OverflowText>
               </span>
             ) : null}
             {localMeta ? (
               <span className="miniapp-library-row__meta-item miniapp-library-row__meta-item--local">
                 <HardDrive size={13} strokeWidth={1.8} aria-hidden="true" />
-                <span>{localMeta}</span>
+                <OverflowText>{localMeta}</OverflowText>
               </span>
             ) : null}
           </span>

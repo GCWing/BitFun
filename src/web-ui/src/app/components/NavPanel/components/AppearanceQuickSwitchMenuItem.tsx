@@ -9,7 +9,7 @@ import React, {
   type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, Menu, MenuItem, MenuSeparator } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, MenuSeparator } from '@openbitfun/ui';
 
 import {
   SYSTEM_APPEARANCE_ID,
@@ -215,14 +215,14 @@ const AppearanceQuickSwitchMenuItem: React.FC<AppearanceQuickSwitchMenuItemProps
 
   return (
     <>
-      <MenuItem
+      <MenuItem data-overflow-trigger
         ref={triggerRef}
         className={`openbitfun-nav-panel__appearance-menu-trigger${open ? ' is-open' : ''}`}
         leading={<Icon name="palette" size="sm" aria-hidden="true" />}
         metadata={(
-          <span className="openbitfun-nav-panel__appearance-menu-current" title={selectedDisplayName}>
+          <OverflowText className="openbitfun-nav-panel__appearance-menu-current" title={selectedDisplayName}>
             {selectedDisplayName}
-          </span>
+          </OverflowText>
         )}
         shortcut={<Icon name="chevron-right" size="sm" aria-hidden="true" />}
         aria-haspopup="menu"

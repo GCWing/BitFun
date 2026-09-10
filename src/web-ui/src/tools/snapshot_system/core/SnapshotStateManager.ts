@@ -165,7 +165,7 @@ export class SnapshotStateManager {
   async refreshSessionState(sessionId: string): Promise<void> {
     const scope = getActiveSurfaceScope();
     const canRefresh = () => scope.isCurrent() &&
-      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId));
+      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId);
     if (!canRefresh()) return;
 
     try {
@@ -219,7 +219,7 @@ export class SnapshotStateManager {
   async refreshFileState(sessionId: string, filePath: string): Promise<void> {
     const scope = getActiveSurfaceScope();
     const canRefresh = () => scope.isCurrent() &&
-      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId));
+      shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId);
     if (!canRefresh()) return;
 
     try {

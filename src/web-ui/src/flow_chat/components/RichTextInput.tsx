@@ -1,6 +1,6 @@
 /**
  * Rich text input component.
- * Supports inserting file tags inline and using @ to select files/folders.
+ * Supports inline context tags and the @ chat context picker trigger.
  */
 
 import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, Textarea } from '@openbitfun/ui';
@@ -64,11 +64,11 @@ function normalizeEquivalentCaretRange(editor: HTMLElement, range: Range): Range
   return caretRange;
 }
 
-/** @ mention state */
-export interface MentionState {
+/** State of the @ trigger that opens the chat context picker. */
+export interface ContextTriggerState {
   isActive: boolean;
   query: string;
-  startOffset: number;  // Position of the @ symbol in text
+  startOffset: number;
 }
 
 export interface InlineTriggerState {
@@ -82,11 +82,12 @@ export type RichTextInputElement = HTMLDivElement & {
   getComposerPresentation?: () => ComposerPresentation | null;
   restoreComposerPresentation?: (presentation: ComposerPresentation) => void;
   insertTag?: (context: ContextItem) => void;
-  insertTagReplacingMention?: (context: ContextItem) => void;
+  insertContextTagReplacingTrigger?: (context: ContextItem) => void;
+  replaceActiveContextTrigger?: (replacementText: string) => void;
   replaceActiveInlineTrigger?: (replacementText: string) => void;
   appendInlineTokenAtEnd?: (token: string) => void;
-  openMention?: () => void;
-  closeMention?: () => void;
+  openContextPicker?: () => void;
+  closeContextPicker?: () => void;
   closeInlineTrigger?: () => void;
 };
 
@@ -105,6 +106,7 @@ export interface RichTextInputProps
   onLargePaste?: (text: string) => string | null;
   onPasteFiles?: (paste: ClipboardFilePaste) => void | Promise<void>;
   pendingLargePastes?: Record<string, string>;
+  skillReferenceNames?: Readonly<Record<string, string>>;
   onUpdateLargePaste?: (placeholder: string, text: string) => string;
   onRemoveLargePaste?: (placeholder: string) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
@@ -117,8 +119,8 @@ export interface RichTextInputProps
   className?: string;
   contexts: ContextItem[];
   onRemoveContext: (id: string) => void;
-  /** Callback when @ mention state changes */
-  onMentionStateChange?: (state: MentionState) => void;
+  /** Callback when the @ context-picker trigger changes. */
+  onContextTriggerStateChange?: (state: ContextTriggerState) => void;
   /** Callback when inline trigger state changes for / or $ */
   onInlineTriggerStateChange?: (state: InlineTriggerState) => void;
 }
@@ -224,6 +226,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   onLargePaste,
   onPasteFiles,
   pendingLargePastes = EMPTY_PENDING_LARGE_PASTES,
+  skillReferenceNames,
   onUpdateLargePaste,
   onRemoveLargePaste,
   onKeyDown,
@@ -236,7 +239,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   className = '',
   contexts,
   onRemoveContext,
-  onMentionStateChange,
+  onContextTriggerStateChange,
   onInlineTriggerStateChange,
   ...restProps
 }, ref) => {
@@ -255,7 +258,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const [largePasteCopied, setLargePasteCopied] = useState(false);
   const isComposingRef = useRef(false);
   const lastContextIdsRef = useRef<Set<string>>(new Set());
-  const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
+  const contextTriggerStateRef = useRef<ContextTriggerState>({ isActive: false, query: '', startOffset: 0 });
   const inlineTriggerStateRef = useRef<InlineTriggerState>({
     isActive: false,
     trigger: null,
@@ -264,14 +267,14 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   });
   const triggerSyncRef = useRef<(() => void) | null>(null);
 
-  const closeMention = useCallback(() => {
-    if (!mentionStateRef.current.isActive) {
+  const closeContextPicker = useCallback(() => {
+    if (!contextTriggerStateRef.current.isActive) {
       return;
     }
 
-    mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-    onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-  }, [onMentionStateChange]);
+    contextTriggerStateRef.current = { isActive: false, query: '', startOffset: 0 };
+    onContextTriggerStateChange?.({ isActive: false, query: '', startOffset: 0 });
+  }, [onContextTriggerStateChange]);
 
   const closeInlineTrigger = useCallback(() => {
     if (!inlineTriggerStateRef.current.isActive) {
@@ -516,11 +519,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
           token,
           contextType: 'skill-reference',
           inlineTokenType: 'skill-ref',
-          title: `Skill: ${payload.skillName}`,
-          displayText: payload.skillName,
+          title: '',
+          displayText: (payload.skillKey && skillReferenceNames?.[payload.skillKey]) || payload.skillName,
         })
       : null;
-  }, [createSkillStyledReferenceElement]);
+  }, [createSkillStyledReferenceElement, skillReferenceNames]);
 
   const createAdditionalModeReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
     const payload = parseAdditionalModePromptReferenceToken(token);
@@ -604,7 +607,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
             kind: 'inline-token',
             token,
             tokenType: 'skill',
-            label: skill.skillName,
+            label: element.querySelector('[data-openbitfun-part="tagText"]')?.textContent || skill.skillName,
           });
           return;
         }
@@ -819,20 +822,20 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return extractedText;
   }, [internalRef]);
 
-  // Detect @ mention plus inline / and $ triggers near the caret.
+  // Detect the @ context trigger plus inline / and $ triggers near the caret.
   const detectActiveTrigger = useCallback(() => {
     if (!internalRef.current) return;
     
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
-      closeMention();
+      closeContextPicker();
       closeInlineTrigger();
       return;
     }
     
     const range = selection.getRangeAt(0);
     if (!range.collapsed) {
-      closeMention();
+      closeContextPicker();
       closeInlineTrigger();
       return;
     }
@@ -885,25 +888,25 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         !query.includes('\n')
       ) {
         if (selectedTrigger === '@') {
-          const newState: MentionState = {
+          const newState: ContextTriggerState = {
             isActive: true,
             query,
             startOffset: selectedIndex,
           };
 
           if (
-            !mentionStateRef.current.isActive ||
-            mentionStateRef.current.query !== query ||
-            mentionStateRef.current.startOffset !== selectedIndex
+            !contextTriggerStateRef.current.isActive ||
+            contextTriggerStateRef.current.query !== query ||
+            contextTriggerStateRef.current.startOffset !== selectedIndex
           ) {
-            mentionStateRef.current = newState;
-            onMentionStateChange?.(newState);
+            contextTriggerStateRef.current = newState;
+            onContextTriggerStateChange?.(newState);
           }
           closeInlineTrigger();
           return;
         }
 
-        closeMention();
+        closeContextPicker();
         const nextInlineTriggerState: InlineTriggerState = {
           isActive: true,
           trigger: selectedTrigger,
@@ -924,9 +927,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       }
     }
 
-    closeMention();
+    closeContextPicker();
     closeInlineTrigger();
-  }, [closeInlineTrigger, closeMention, internalRef, onInlineTriggerStateChange, onMentionStateChange]);
+  }, [closeContextPicker, closeInlineTrigger, internalRef, onContextTriggerStateChange, onInlineTriggerStateChange]);
 
   /** Compute the cursor's character offset within the editor. */
   const getCursorOffset = useCallback((editor: HTMLElement): number => {
@@ -1078,7 +1081,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     // Plain text paste - close active triggers so pasted marker characters do not immediately reopen pickers
-    closeMention();
+    closeContextPicker();
     closeInlineTrigger();
     
     const text = e.clipboardData.getData('text/plain');
@@ -1111,12 +1114,12 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       document.execCommand('insertText', false, text);
     }
     
-    // Mark that we just pasted to prevent mention detection in the next input event
+    // Mark that we just pasted to prevent trigger detection in the next input event
     isComposingRef.current = true;
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [closeInlineTrigger, closeMention, createLargePasteElement, handleInput, internalRef, onLargePaste, onPasteFiles]);
+  }, [closeContextPicker, closeInlineTrigger, createLargePasteElement, handleInput, internalRef, onLargePaste, onPasteFiles]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -1232,18 +1235,18 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
   }, [createTagElement, handleInput, internalRef]);
 
-  // Replace @ mention span with a tag, preserving existing tags
-  const insertTagReplacingMention = useCallback((context: ContextItem) => {
-    if (!internalRef.current || !mentionStateRef.current.isActive) {
+  // Replace the active @ trigger with a context tag, preserving existing tags.
+  const insertContextTagReplacingTrigger = useCallback((context: ContextItem) => {
+    if (!internalRef.current || !contextTriggerStateRef.current.isActive) {
       insertTagAtCursor(context);
       return;
     }
 
     const editor = internalRef.current;
-    const mentionStart = mentionStateRef.current.startOffset;
-    const mentionEnd = mentionStart + 1 + mentionStateRef.current.query.length; // @ + query
+    const triggerStart = contextTriggerStateRef.current.startOffset;
+    const triggerEnd = triggerStart + 1 + contextTriggerStateRef.current.query.length;
 
-    const range = getRangeByTextOffsets(editor, mentionStart, mentionEnd);
+    const range = getRangeByTextOffsets(editor, triggerStart, triggerEnd);
     if (range) {
       range.deleteContents();
       const tag = createTagElement(context);
@@ -1260,24 +1263,25 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         selection.addRange(newRange);
       }
       editor.focus();
-      closeMention();
+      closeContextPicker();
       handleInput();
       return;
     }
 
     // Fallback to cursor insertion if range cannot be found
     insertTagAtCursor(context);
-    closeMention();
-  }, [closeMention, createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef]);
+    closeContextPicker();
+  }, [closeContextPicker, createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef]);
 
-  const replaceActiveInlineTrigger = useCallback((replacementText: string) => {
-    if (!internalRef.current || !inlineTriggerStateRef.current.isActive) {
-      return;
-    }
-
+  const replaceActiveTextTrigger = useCallback((
+    trigger: { startOffset: number; query: string },
+    replacementText: string,
+    closeTrigger: () => void,
+  ) => {
+    if (!internalRef.current) return;
     const editor = internalRef.current;
-    const triggerStart = inlineTriggerStateRef.current.startOffset;
-    const triggerEnd = triggerStart + 1 + inlineTriggerStateRef.current.query.length;
+    const triggerStart = trigger.startOffset;
+    const triggerEnd = triggerStart + 1 + trigger.query.length;
     const range = getRangeByTextOffsets(editor, triggerStart, triggerEnd);
     if (!range) {
       return;
@@ -1310,9 +1314,27 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     editor.focus();
-    closeInlineTrigger();
+    closeTrigger();
     handleInput();
-  }, [closeInlineTrigger, createInlineTokenElement, getRangeByTextOffsets, handleInput, internalRef]);
+  }, [createInlineTokenElement, getRangeByTextOffsets, handleInput, internalRef]);
+
+  const replaceActiveContextTrigger = useCallback((replacementText: string) => {
+    if (!contextTriggerStateRef.current.isActive) return;
+    replaceActiveTextTrigger(
+      contextTriggerStateRef.current,
+      replacementText,
+      closeContextPicker,
+    );
+  }, [closeContextPicker, replaceActiveTextTrigger]);
+
+  const replaceActiveInlineTrigger = useCallback((replacementText: string) => {
+    if (!inlineTriggerStateRef.current.isActive) return;
+    replaceActiveTextTrigger(
+      inlineTriggerStateRef.current,
+      replacementText,
+      closeInlineTrigger,
+    );
+  }, [closeInlineTrigger, replaceActiveTextTrigger]);
 
   const appendInlineTokenAtEnd = useCallback((token: string) => {
     if (!internalRef.current) {
@@ -1354,8 +1376,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     handleInput();
   }, [createInlineTokenElement, extractTextContent, handleInput, internalRef]);
 
-  /** Insert @ at caret and open the file/folder mention picker (e.g. from ChatInput + menu). */
-  const openMention = useCallback(() => {
+  /** Insert @ at the caret and open the chat context picker. */
+  const openContextPicker = useCallback(() => {
     const editor = internalRef.current;
     if (!editor) return;
 
@@ -1378,9 +1400,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       ? (editor.textContent || '').slice(0, cursorOffset)
       : (editor.textContent || '');
     const charBeforeCursor = textBeforeCursor[textBeforeCursor.length - 1];
-    const mentionTriggerText = isWhitespaceCharacter(charBeforeCursor) ? '@' : ' @';
+    const contextTriggerText = isWhitespaceCharacter(charBeforeCursor) ? '@' : ' @';
 
-    document.execCommand('insertText', false, mentionTriggerText);
+    document.execCommand('insertText', false, contextTriggerText);
     requestAnimationFrame(() => {
       detectActiveTrigger();
     });
@@ -1390,16 +1412,17 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   useEffect(() => {
     if (internalRef.current) {
       (internalRef.current as any).insertTag = insertTagAtCursor;
-      (internalRef.current as any).insertTagReplacingMention = insertTagReplacingMention;
+      (internalRef.current as any).insertContextTagReplacingTrigger = insertContextTagReplacingTrigger;
+      (internalRef.current as any).replaceActiveContextTrigger = replaceActiveContextTrigger;
       (internalRef.current as any).replaceActiveInlineTrigger = replaceActiveInlineTrigger;
       (internalRef.current as any).appendInlineTokenAtEnd = appendInlineTokenAtEnd;
-      (internalRef.current as any).openMention = openMention;
-      (internalRef.current as any).closeMention = closeMention;
+      (internalRef.current as any).openContextPicker = openContextPicker;
+      (internalRef.current as any).closeContextPicker = closeContextPicker;
       (internalRef.current as any).closeInlineTrigger = closeInlineTrigger;
       (internalRef.current as RichTextInputElement).getComposerPresentation = buildComposerPresentation;
       (internalRef.current as RichTextInputElement).restoreComposerPresentation = restoreComposerPresentation;
     }
-  }, [appendInlineTokenAtEnd, buildComposerPresentation, closeInlineTrigger, closeMention, insertTagAtCursor, insertTagReplacingMention, openMention, replaceActiveInlineTrigger, restoreComposerPresentation, internalRef]);
+  }, [appendInlineTokenAtEnd, buildComposerPresentation, closeContextPicker, closeInlineTrigger, insertContextTagReplacingTrigger, insertTagAtCursor, openContextPicker, replaceActiveContextTrigger, replaceActiveInlineTrigger, restoreComposerPresentation, internalRef]);
 
   // Initialize and sync value changes from external sources.
   // This editor is effectively controlled by comparing the parent's value
@@ -1484,11 +1507,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     setIsFocused(false);
     // Delay closing to allow picker clicks
     setTimeout(() => {
-      closeMention();
+      closeContextPicker();
       closeInlineTrigger();
     }, 200);
     onBlur?.();
-  }, [closeInlineTrigger, closeMention, onBlur]);
+  }, [closeContextPicker, closeInlineTrigger, onBlur]);
 
   // Handle IME composition
   const handleCompositionStart = useCallback(() => {
@@ -1608,10 +1631,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
           <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyLargePaste()}>
             {largePasteCopied ? t('input.largePasteCopied') : t('input.largePasteCopy')}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setActiveLargePaste(null)}>
+          <Button type="button" size="sm" variant="fill" onClick={() => setActiveLargePaste(null)}>
             {t('input.largePasteCancel')}
           </Button>
-          <Button type="button" size="sm" variant="fill" onClick={handleSaveLargePaste}>
+          <Button type="button" size="sm" variant="primary" onClick={handleSaveLargePaste}>
             {t('input.largePasteSave')}
           </Button>
         </DialogFooter>

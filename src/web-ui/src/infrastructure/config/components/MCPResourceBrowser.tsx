@@ -1,7 +1,7 @@
  
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Icon, ScrollArea, SearchField } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, ScrollArea, SearchField } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { FileText, FileJson, FileCode } from 'lucide-react';
 import MCPAPI, { MCPResource } from '../../api/service-api/MCPAPI';
@@ -138,7 +138,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
           </Button>
           {onClose && (
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={onClose}
             >
@@ -171,7 +171,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
             </div>
           ) : (
             filteredResources.map((resource) => (
-              <div
+              <div data-overflow-trigger
                 data-openbitfun-component="mcp-resource-browser"
                 data-openbitfun-part="resource"
                 data-openbitfun-state={selectedResource?.uri === resource.uri ? 'selected' : undefined}
@@ -181,11 +181,11 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
               >
                 <div data-openbitfun-component="mcp-resource-browser" data-openbitfun-part="resourceIcon" className="resource-icon">{getMimeTypeIcon(resource.mimeType)}</div>
                 <div data-openbitfun-component="mcp-resource-browser" data-openbitfun-part="resourceInfo" className="resource-info">
-                  <div className="resource-name">{resource.name}</div>
+                  <div className="resource-name"><OverflowText>{resource.name}</OverflowText></div>
                   {resource.description && (
-                    <div className="resource-description">{resource.description}</div>
+                    <OverflowText as="div" lines={2} className="resource-description">{resource.description}</OverflowText>
                   )}
-                  <div className="resource-uri">{resource.uri}</div>
+                  <div className="resource-uri"><OverflowText>{resource.uri}</OverflowText></div>
                 </div>
               </div>
             ))
@@ -198,7 +198,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
               <div data-openbitfun-component="mcp-resource-browser" data-openbitfun-part="viewerHeader" className="viewer-header">
                 <div className="viewer-title">
                   <span className="viewer-icon">{getMimeTypeIcon(selectedResource.mimeType)}</span>
-                  <span className="viewer-name">{selectedResource.title || selectedResource.name}</span>
+                  <OverflowText className="viewer-name">{selectedResource.title || selectedResource.name}</OverflowText>
                 </div>
                 {selectedResource.mimeType && (
                   <div className="viewer-mime-type">{selectedResource.mimeType}</div>

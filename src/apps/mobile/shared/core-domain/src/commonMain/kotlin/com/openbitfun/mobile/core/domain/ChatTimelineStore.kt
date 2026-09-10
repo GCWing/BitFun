@@ -372,6 +372,7 @@ public class ChatTimelineStore public constructor() {
             tools = null,
             items = null,
             images = null,
+            error = null,
         )
 
         private fun realMessages(messages: List<ChatMessage>): List<ChatMessage> =

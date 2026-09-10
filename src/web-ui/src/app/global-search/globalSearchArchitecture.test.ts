@@ -11,7 +11,7 @@ describe('global search ownership', () => {
     expect(source('src/app/components/NavPanel/MainNav.tsx')).not.toContain('NavSearchDialog');
   });
 
-  it('reuses one design-system search presentation in the session right-panel empty state', () => {
+  it('keeps the shared search presentation outside the session right-panel empty state', () => {
     const globalSearch = source('src/app/global-search/GlobalSearchRoot.tsx');
     const globalSearchStyles = source('src/app/global-search/GlobalSearchRoot.scss');
     const auxPane = source('src/app/scenes/session/AuxPane.tsx');
@@ -22,9 +22,9 @@ describe('global search ownership', () => {
 
     expect(globalSearch).toContain('export const GlobalSearchContent');
     expect(globalSearch).toContain('variant="modal"');
-    expect(auxPane).toContain('emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}');
+    expect(auxPane).not.toContain('GlobalSearchContent');
     expect(auxPane).toContain('missionControlEnabled={false}');
-    expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : collapsePanel}>');
+    expect(contentCanvas).toContain('<EmptyState onClose={disablePopOut ? undefined : onCollapsePanel}>');
     expect(contentCanvas).toContain(
       'onOpenMissionControl={missionControlEnabled ? handleOpenMissionControl : undefined}',
     );

@@ -48,7 +48,7 @@ impl AgentSubmissionPort for ProductSdkAgentProvider {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 
@@ -99,7 +99,7 @@ async fn sdk_delivery_profile_builds_shared_runtime_owner_ceiling_without_openbi
 
     let handle = runtime
         .run(AgentRunRequest::new(
-            SessionSelector::create("SDK profile smoke", "agentic", None),
+            SessionSelector::create("SDK profile smoke", "Standard", None),
             "hello from sdk profile",
         ))
         .await
@@ -145,7 +145,7 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
             AgentRunRequest::new(
                 SessionSelector::create(
                     "Product SDK smoke",
-                    "agentic",
+                    "Standard",
                     Some("/workspace/project".to_string()),
                 ),
                 "hello from product assembly",
@@ -158,7 +158,7 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
 
     assert_eq!(handle.session_id, "product-sdk-session");
     assert_eq!(handle.turn_id, "product-sdk-turn");
-    assert_eq!(handle.agent_type.as_deref(), Some("agentic"));
+    assert_eq!(handle.agent_type.as_deref(), Some("Standard"));
     assert!(handle.accepted);
     assert_eq!(
         handle.events.expect("event stream").snapshot(),

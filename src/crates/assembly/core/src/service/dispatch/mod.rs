@@ -79,6 +79,9 @@ struct DispatchTargetJobEntry {
     workspace_path: String,
     title: String,
     #[serde(default)]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     agent_type: Option<String>,
     #[serde(default)]
     approval_policy: Option<String>,
@@ -104,6 +107,9 @@ pub struct OutboundDispatchRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub agent_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approval_policy: Option<String>,
@@ -1021,7 +1027,7 @@ mod tests {
         .expect("record")
         .with_submission_metadata(
             Some("Reasoning job".to_string()),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "remote".to_string(),
             Some("target-model".to_string()),
             Some("high".to_string()),

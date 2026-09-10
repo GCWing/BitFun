@@ -1,6 +1,34 @@
-import { Button, Icon, IconButton, SearchField, Switch, Tooltip, ScrollArea } from '@openbitfun/ui';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, Plug2, RotateCcw, Wrench } from 'lucide-react';
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogDescription,
+  DialogHeader,
+  DialogHeaderActions,
+  DialogHeading,
+  DialogTitle,
+  Empty,
+  Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
+  Icon,
+  IconButton,
+  NumberBadge,
+  OverflowText,
+  PageHeader,
+  ScrollArea,
+  SearchField,
+  SegmentedControl,
+  Spinner,
+  StatusPill,
+  Switch,
+  Tooltip,
+} from '@openbitfun/ui';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Plug2, RotateCcw, Wrench } from 'lucide-react';
 
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
@@ -21,7 +49,6 @@ import {
   differsFromProductDefault,
   isMcpServerAvailable,
   matchesAssistantDefaultsFilter,
-  summarizeAssistantDefaults,
   type AssistantDefaultsFilterableItem,
   type AssistantDefaultsStatusFilter,
 } from './assistantDefaultsPresentation';
@@ -122,10 +149,12 @@ const AssistantDefaultsPage: React.FC = () => {
   const [resetting, setResetting] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [activeTab, setActiveTab] = useState<AssistantDefaultsTab>('skills');
+  const categoryPanelId = useId();
   const [statusFilter, setStatusFilter] = useState<AssistantDefaultsStatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const loadRequestIdRef = useRef(0);
 
   // Distinguish "host doesn't expose a catalog" / "read failed" / "really no
@@ -164,6 +193,8 @@ const AssistantDefaultsPage: React.FC = () => {
     // See PR #2428 round 6.
     const requestId = ++loadRequestIdRef.current;
     setLoading(true);
+    setDetailOpen(false);
+    setDetail(null);
     setLoadWarning(false);
     try {
       // Skip the tool catalog invoke when the peer host cannot answer it,
@@ -231,15 +262,6 @@ const AssistantDefaultsPage: React.FC = () => {
   useEffect(() => {
     void loadDefaults();
   }, [loadDefaults, renderedPeerDeviceId]);
-
-  useEffect(() => {
-    if (!detail) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDetail(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [detail]);
 
   const duplicateSkillNames = useMemo(
     () => buildDuplicateSkillNameSet(modeSkills),
@@ -371,11 +393,6 @@ const AssistantDefaultsPage: React.FC = () => {
     () => [...skillRows, ...builtinRows, ...mcpRows],
     [builtinRows, mcpRows, skillRows],
   );
-  const summary = useMemo(
-    () => summarizeAssistantDefaults(allCapabilityRows),
-    [allCapabilityRows],
-  );
-
   const mcpGroups = useMemo<McpGroup[]>(() => {
     const ids = new Set([
       ...mcpRows.map((row) => {
@@ -537,7 +554,7 @@ const AssistantDefaultsPage: React.FC = () => {
 
   const handleTabChange = useCallback((tab: AssistantDefaultsTab) => {
     setActiveTab(tab);
-    setDetail(null);
+    setDetailOpen(false);
   }, []);
 
   const toggleCollapse = useCallback((id: string) => {
@@ -550,7 +567,8 @@ const AssistantDefaultsPage: React.FC = () => {
   }, []);
 
   const openDetail = useCallback((nextDetail: TemplateDetail) => {
-    setDetail((previous) => (isSameDetail(previous, nextDetail) ? null : nextDetail));
+    setDetail(nextDetail);
+    setDetailOpen(true);
   }, []);
 
   const toggleCapability = useCallback((row: CapabilityRow) => {
@@ -570,8 +588,12 @@ const AssistantDefaultsPage: React.FC = () => {
   ], [t]);
 
   const renderCapabilityRow = (row: CapabilityRow) => {
-    const selected = isSameDetail(detail, row.detail);
+    const selected = detailOpen && isSameDetail(detail, row.detail);
     const changed = differsFromProductDefault(row);
+    const defaultState = row.defaultEnabled
+      ? t('nursery.template.state.enabled')
+      : t('nursery.template.state.disabled');
+    const differenceHint = `${t('nursery.template.summary.changed')} · ${t('nursery.template.detailFields.productDefault')}: ${defaultState}`;
     const loadingRow = row.detail.type === 'skill'
       ? skillsLoading[row.detail.skill.key]
       : row.detail.type === 'tool' && toolsLoading[row.detail.tool.name];
@@ -589,54 +611,45 @@ const AssistantDefaultsPage: React.FC = () => {
     ].filter(Boolean).join(' ') || undefined;
     const rowContent = (
       <>
-        <button
-          type="button"
-          role="cell"
-          className="assistant-defaults-row__identity"
-          onClick={() => openDetail(row.detail)}
-          aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
-        >
-          <span className={`assistant-defaults-row__icon assistant-defaults-row__icon--${row.kind}`}>{icon}</span>
-          <span className="assistant-defaults-row__copy">
-            <strong title={row.name}>{row.name}</strong>
-            <span title={row.description}>{row.description}</span>
-            {row.statusNote ? <small title={row.statusNote}>{row.statusNote}</small> : null}
-          </span>
-        </button>
-        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__source" title={row.source}>{row.source}</div>
-        <div role="cell" className="assistant-defaults-row__cell">
-          <span className={`assistant-defaults-state assistant-defaults-state--${row.available ? 'available' : 'unavailable'}`}>
-            <span className="assistant-defaults-state__dot" aria-hidden />
-            {row.available
-              ? t('nursery.template.availability.available')
-              : t('nursery.template.availability.unavailable')}
-          </span>
-        </div>
-        <div role="cell" className="assistant-defaults-row__cell">
-          <span className={`assistant-defaults-badge${row.enabled ? '' : ' assistant-defaults-badge--muted'}`}>
-            {row.enabled ? t('nursery.template.state.enabled') : t('nursery.template.state.disabled')}
-          </span>
-        </div>
-        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__difference">
-          {changed ? t('nursery.template.valueYes') : t('nursery.template.valueNo')}
-        </div>
-        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__access" title={row.accessHint}>{row.accessLabel}</div>
-        <div role="cell" className="assistant-defaults-row__actions">
-          <Switch
-            checked={row.enabled}
-            disabled={row.switchDisabled || Boolean(loadingRow)}
-            aria-busy={Boolean(loadingRow)}
-            onChange={() => toggleCapability(row)}
-            aria-label={t('nursery.template.toggleCapability', { name: row.name })}
-          />
-          <button
+        <div role="cell" className="assistant-defaults-row__name-cell">
+          <button data-overflow-trigger
             type="button"
+            className="assistant-defaults-row__identity"
+            onClick={() => openDetail(row.detail)}
+            aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
+            aria-haspopup="dialog"
+          >
+            <span className={`assistant-defaults-row__icon assistant-defaults-row__icon--${row.kind}`}>{icon}</span>
+            <span className="assistant-defaults-row__copy">
+              <strong title={row.name}><OverflowText>{row.name}</OverflowText></strong>
+              <OverflowText title={row.description}>{row.description}</OverflowText>
+              {row.statusNote ? <small title={row.statusNote}><OverflowText>{row.statusNote}</OverflowText></small> : null}
+            </span>
+          </button>
+        </div>
+        <div role="cell" className="assistant-defaults-row__cell assistant-defaults-row__source" title={row.source}><OverflowText>{row.source}</OverflowText></div>
+        <div role="cell" className="assistant-defaults-row__actions">
+          <Tooltip content={differenceHint} disabled={!changed} trigger="hover-focus">
+            <span className={`assistant-defaults-row__toggle${changed ? ' assistant-defaults-row__toggle--changed' : ''}`}>
+              <Switch
+                checked={row.enabled}
+                disabled={row.switchDisabled || Boolean(loadingRow)}
+                aria-busy={Boolean(loadingRow)}
+                aria-description={changed ? differenceHint : undefined}
+                onChange={() => toggleCapability(row)}
+                aria-label={t('nursery.template.toggleCapability', { name: row.name })}
+              />
+            </span>
+          </Tooltip>
+          <IconButton
+            type="button"
+            size="sm"
             className="assistant-defaults-row__detail"
             onClick={() => openDetail(row.detail)}
             aria-label={t('nursery.template.openCapabilityDetail', { name: row.name })}
-          >
-            <Icon name="chevron-right" size="md" />
-          </button>
+            aria-haspopup="dialog"
+            icon={<Icon name="chevron-right" size="sm" />}
+          />
         </div>
       </>
     );
@@ -674,30 +687,28 @@ const AssistantDefaultsPage: React.FC = () => {
     <div role="row" className="assistant-defaults-list__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="listHeader">
       <div role="columnheader">{t('nursery.template.columns.name')}</div>
       <div role="columnheader">{t('nursery.template.columns.source')}</div>
-      <div role="columnheader">{t('nursery.template.columns.availability')}</div>
-      <div role="columnheader">{t('nursery.template.columns.state')}</div>
-      <div role="columnheader">{t('nursery.template.columns.changed')}</div>
-      <div role="columnheader">{t('nursery.template.columns.access')}</div>
       <div role="columnheader" aria-label={t('nursery.template.columns.actions')} />
     </div>
   );
 
   const renderEmptyState = (message: string) => (
-    <div className="assistant-defaults-empty" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="empty">
-      <Icon name="search" size="lg" />
-      <p>{message}</p>
-      {(searchQuery || statusFilter !== 'all') ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setSearchQuery('');
-            setStatusFilter('all');
-          }}
-        >
-          {t('nursery.template.clearFilters')}
-        </Button>
-      ) : null}
+    <div data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="empty">
+      <Empty
+        icon={<Icon name="search" size="lg" />}
+        description={message}
+        actions={(searchQuery || statusFilter !== 'all') ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('all');
+            }}
+          >
+            {t('nursery.template.clearFilters')}
+          </Button>
+        ) : undefined}
+      />
     </div>
   );
 
@@ -736,37 +747,37 @@ const AssistantDefaultsPage: React.FC = () => {
               data-openbitfun-state={collapsed ? 'collapsed' : undefined}
             >
               <div className="assistant-defaults-group__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="groupHeader">
-                <button
+                <IconButton
                   type="button"
+                  size="sm"
                   className="assistant-defaults-group__collapse"
                   onClick={() => toggleCollapse(group.id)}
                   aria-expanded={!collapsed}
                   aria-label={t('nursery.template.toggleServerGroup', { name: serverName })}
-                >
-                  <Icon name="chevron-down" size="md" />
-                </button>
+                  icon={<Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size="sm" />}
+                />
                 <span className="assistant-defaults-group__icon"><Plug2 size={14} /></span>
                 <div className="assistant-defaults-group__identity">
-                  <strong>{serverName}</strong>
-                  <span>{getMcpStatusLabel(group.server?.status)}</span>
+                  <strong><OverflowText>{serverName}</OverflowText></strong>
+                  <OverflowText>{getMcpStatusLabel(group.server?.status)}</OverflowText>
                 </div>
-                <span className={`assistant-defaults-state assistant-defaults-state--${available ? 'available' : 'unavailable'}`}>
-                  <span className="assistant-defaults-state__dot" aria-hidden />
+                <StatusPill className="assistant-defaults-group__status" tone={available ? 'success' : 'warning'}>
                   {available
                     ? t('nursery.template.availability.available')
                     : t('nursery.template.availability.unavailable')}
-                </span>
+                </StatusPill>
                 <span className="assistant-defaults-group__count">
                   {t('nursery.template.enabledCount', { enabled: enabledCount, total: group.allRows.length })}
                 </span>
-                <button
+                <IconButton
                   type="button"
+                  size="sm"
                   className="assistant-defaults-group__detail"
                   onClick={() => openDetail({ type: 'mcpServer', serverId: group.id })}
                   aria-label={t('nursery.template.openServerDetail')}
-                >
-                  <Icon name="info" size="md" />
-                </button>
+                  aria-haspopup="dialog"
+                  icon={<Icon name="info" size="sm" />}
+                />
                 {allNames.length > 0 ? (
                   <Switch
                     checked={allEnabled}
@@ -791,6 +802,33 @@ const AssistantDefaultsPage: React.FC = () => {
     );
   };
 
+  const saveLabel = saveState === 'saving'
+    ? t('nursery.template.saveState.saving')
+    : saveState === 'error'
+      ? t('nursery.template.saveState.error')
+      : t('nursery.template.saveState.saved');
+
+  const renderSaveStatus = () => (
+    <StatusPill
+      tone={saveState === 'error' ? 'danger' : 'neutral'}
+      role="status"
+      aria-live="polite"
+      leading={saveState === 'saving'
+        ? <Spinner size="sm" />
+        : <Icon name={saveState === 'error' ? 'info' : 'check-line'} size="xs" />}
+    >
+      {saveLabel}
+    </StatusPill>
+  );
+
+  const renderAvailability = (available: boolean) => (
+    <StatusPill tone={available ? 'success' : 'warning'}>
+      {available
+        ? t('nursery.template.availability.available')
+        : t('nursery.template.availability.unavailable')}
+    </StatusPill>
+  );
+
   const renderDetailField = (label: string, value: React.ReactNode) => (
     <div className="assistant-defaults-detail__field">
       <dt>{label}</dt>
@@ -798,23 +836,38 @@ const AssistantDefaultsPage: React.FC = () => {
     </div>
   );
 
-  const renderDetailPanel = () => {
-    if (!detail) {
-      return (
-        <aside
-          className="assistant-defaults-detail assistant-defaults-detail--empty"
-          data-openbitfun-component="assistant-defaults-page"
-          data-openbitfun-part="detail"
-          aria-label={t('nursery.template.detailPanel')}
-        >
-          <div className="assistant-defaults-detail__empty">
-            <Icon name="info" size="lg" />
-            <strong>{t('nursery.template.detailEmptyTitle')}</strong>
-            <span>{t('nursery.template.detailEmptyHint')}</span>
+  const renderDetailDescription = (description: string) => (
+    <ScrollArea className="assistant-defaults-detail__description-scroll" tabIndex={0}>
+      <p className="assistant-defaults-detail__description">{description}</p>
+    </ScrollArea>
+  );
+
+  const renderDetailDialog = (title: string, kindLabel: string, children: React.ReactNode) => (
+    <Dialog open={detailOpen} onOpenChange={setDetailOpen} size="lg">
+      <div className="assistant-defaults-detail" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detail">
+        <div className="assistant-defaults-detail__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailHeader">
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>{kindLabel}</DialogDescription>
+            </DialogHeading>
+            <DialogHeaderActions>
+              {renderSaveStatus()}
+              <DialogClose aria-label={t('nursery.template.closeDetail')} />
+            </DialogHeaderActions>
+          </DialogHeader>
+        </div>
+        <DialogBody>
+          <div className="assistant-defaults-detail__body" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailBody">
+            {children}
           </div>
-        </aside>
-      );
-    }
+        </DialogBody>
+      </div>
+    </Dialog>
+  );
+
+  const renderDetail = () => {
+    if (!detail) return null;
 
     if (detail.type === 'mcpServer') {
       const server = mcpServers.find((candidate) => candidate.id === detail.serverId);
@@ -826,65 +879,49 @@ const AssistantDefaultsPage: React.FC = () => {
       const allEnabled = allNames.length > 0 && rows.every((row) => row.enabled);
       const available = isMcpServerAvailable(server);
       const title = server?.name ?? detail.serverId;
-      return (
-        <aside className="assistant-defaults-detail" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="assistant-defaults-detail__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailHeader">
-            <div>
-              <span className="assistant-defaults-detail__eyebrow">MCP</span>
-              <h3>{title}</h3>
-            </div>
-            <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
-          </div>
-          <ScrollArea className="assistant-defaults-detail__body" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailBody">
-            {server?.statusMessage ? <p className="assistant-defaults-detail__description">{server.statusMessage}</p> : null}
-            <section>
-              <h4>{t('nursery.template.detailSections.basic')}</h4>
-              <dl>
-                {renderDetailField(t('nursery.template.detailFields.fullName'), title)}
-                {renderDetailField(t('nursery.template.detailFields.originalId'), detail.serverId)}
-                {renderDetailField(t('nursery.template.detailFields.source'), 'MCP')}
-                {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
-                {renderDetailField(t('nursery.template.detailFields.transport'), server?.transport || '—')}
-              </dl>
-            </section>
-            <section>
-              <h4>{t('nursery.template.detailSections.status')}</h4>
-              <dl>
-                {renderDetailField(t('nursery.template.detailFields.currentState'), getMcpStatusLabel(server?.status))}
-                {renderDetailField(t('nursery.template.detailFields.availability'), (
-                  <span className={`assistant-defaults-state assistant-defaults-state--${available ? 'available' : 'unavailable'}`}>
-                    <span className="assistant-defaults-state__dot" aria-hidden />
-                    {available
-                      ? t('nursery.template.availability.available')
-                      : t('nursery.template.availability.unavailable')}
-                  </span>
-                ))}
-                {renderDetailField(t('nursery.template.detailFields.autoStart'), server?.autoStart ? t('nursery.template.valueYes') : t('nursery.template.valueNo'))}
-                {renderDetailField(t('nursery.template.detailFields.toolCount'), rows.length)}
-              </dl>
-            </section>
-            <section>
-              <h4>{t('nursery.template.detailSections.management')}</h4>
-              {allNames.length > 0 ? (
-                <div className="assistant-defaults-detail__management-row">
-                  <div>
-                    <strong>{t('nursery.template.enableAllServerTools')}</strong>
-                    <span>{t('nursery.template.enableAllServerToolsHint')}</span>
-                  </div>
+      const saving = allNames.some((name) => toolsLoading[name]);
+
+      return renderDetailDialog(title, 'MCP', (
+        <>
+          {server?.statusMessage ? renderDetailDescription(server.statusMessage) : null}
+          {allNames.length > 0 ? (
+            <FieldGroup>
+              <FieldRow>
+                <Field
+                  orientation="horizontal"
+                  label={t('nursery.template.enableAllServerTools')}
+                  description={t('nursery.template.enableAllServerToolsHint')}
+                >
                   <Switch
                     checked={allEnabled}
-                    disabled={assistantModeConfig === null
-                      || allNames.some((name) => toolsLoading[name])}
-                    aria-busy={allNames.some((name) => toolsLoading[name])}
+                    disabled={!toolCatalogWritable || assistantModeConfig === null || saving}
+                    aria-busy={saving}
                     onChange={() => void handleGroupToggleAll(allNames)}
                     aria-label={t('nursery.template.toggleServerTools', { name: title })}
                   />
-                </div>
-              ) : <p className="assistant-defaults-detail__note">{t('nursery.template.mcpServerNoTools')}</p>}
-            </section>
-          </ScrollArea>
-        </aside>
-      );
+                </Field>
+              </FieldRow>
+            </FieldGroup>
+          ) : <p className="assistant-defaults-detail__description">{t('nursery.template.mcpServerNoTools')}</p>}
+          <FormSection headingAs="h3" title={t('nursery.template.detailSections.basic')}>
+            <dl className="assistant-defaults-detail__fields">
+              {renderDetailField(t('nursery.template.detailFields.fullName'), title)}
+              {renderDetailField(t('nursery.template.detailFields.originalId'), detail.serverId)}
+              {renderDetailField(t('nursery.template.detailFields.source'), 'MCP')}
+              {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
+              {renderDetailField(t('nursery.template.detailFields.transport'), server?.transport || '—')}
+            </dl>
+          </FormSection>
+          <FormSection headingAs="h3" title={t('nursery.template.detailSections.status')}>
+            <dl className="assistant-defaults-detail__fields">
+              {renderDetailField(t('nursery.template.detailFields.currentState'), getMcpStatusLabel(server?.status))}
+              {renderDetailField(t('nursery.template.detailFields.availability'), renderAvailability(available))}
+              {renderDetailField(t('nursery.template.detailFields.autoStart'), server?.autoStart ? t('nursery.template.valueYes') : t('nursery.template.valueNo'))}
+              {renderDetailField(t('nursery.template.detailFields.toolCount'), rows.length)}
+            </dl>
+          </FormSection>
+        </>
+      ));
     }
 
     const row = allCapabilityRows.find((candidate) => isSameDetail(candidate.detail, detail));
@@ -895,81 +932,61 @@ const AssistantDefaultsPage: React.FC = () => {
       : row.kind === 'mcp'
         ? t('nursery.template.toolTypeMcp')
         : t('nursery.template.toolTypeBuiltin');
+    const saving = detail.type === 'skill'
+      ? skillsLoading[detail.skill.key]
+      : toolsLoading[detail.tool.name];
 
-    return (
-      <aside className="assistant-defaults-detail" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detail" aria-label={t('nursery.template.detailPanel')}>
-        <div className="assistant-defaults-detail__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailHeader">
-          <div>
-            <span className="assistant-defaults-detail__eyebrow">{kindLabel}</span>
-            <h3>{row.name}</h3>
-          </div>
-          <button type="button" onClick={() => setDetail(null)} aria-label={t('nursery.template.closeDetail')}><Icon name="xmark" size="md" /></button>
-        </div>
-        <ScrollArea className="assistant-defaults-detail__body" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="detailBody">
-          <p className="assistant-defaults-detail__description">{row.description}</p>
-          <section>
-            <h4>{t('nursery.template.detailSections.basic')}</h4>
-            <dl>
-              {renderDetailField(t('nursery.template.detailFields.fullName'), row.name)}
-              {renderDetailField(t('nursery.template.detailFields.originalId'), row.originalId)}
-              {renderDetailField(t('nursery.template.detailFields.source'), row.source)}
-              {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
-              {renderDetailField(t('nursery.template.detailFields.productDefault'), row.defaultEnabled
-                ? t('nursery.template.state.enabled')
-                : t('nursery.template.state.disabled'))}
-            </dl>
-          </section>
-          <section>
-            <h4>{t('nursery.template.detailSections.status')}</h4>
-            <dl>
-              {renderDetailField(t('nursery.template.detailFields.currentState'), row.enabled
-                ? t('nursery.template.state.enabled')
-                : t('nursery.template.state.disabled'))}
-              {renderDetailField(t('nursery.template.detailFields.changed'), changed
-                ? t('nursery.template.valueYes')
-                : t('nursery.template.valueNo'))}
-              {renderDetailField(t('nursery.template.detailFields.availability'), (
-                <span className={`assistant-defaults-state assistant-defaults-state--${row.available ? 'available' : 'unavailable'}`}>
-                  <span className="assistant-defaults-state__dot" aria-hidden />
-                  {row.available
-                    ? t('nursery.template.availability.available')
-                    : t('nursery.template.availability.unavailable')}
-                </span>
-              ))}
-              {row.statusNote ? renderDetailField(t('nursery.template.detailFields.runtimeState'), row.statusNote) : null}
-            </dl>
-          </section>
-          <section>
-            <h4>{t('nursery.template.detailSections.permissions')}</h4>
-            <div className="assistant-defaults-detail__permission">
-              <strong>{row.accessLabel}</strong>
-              <p>{row.accessHint}</p>
-            </div>
-          </section>
-          <section>
-            <h4>{t('nursery.template.detailSections.management')}</h4>
-            <div className="assistant-defaults-detail__management-row">
-              <div>
-                <strong>{t('nursery.template.useByDefault')}</strong>
-                <span>{t('nursery.template.useByDefaultHint')}</span>
-              </div>
+    return renderDetailDialog(row.name, kindLabel, (
+      <>
+        {renderDetailDescription(row.description)}
+        <FieldGroup>
+          <FieldRow>
+            <Field
+              orientation="horizontal"
+              label={t('nursery.template.useByDefault')}
+              description={t('nursery.template.useByDefaultHint')}
+            >
               <Switch
                 checked={row.enabled}
-                disabled={row.switchDisabled
-                  || (detail.type === 'skill'
-                    ? skillsLoading[detail.skill.key]
-                    : toolsLoading[detail.tool.name])}
-                aria-busy={detail.type === 'skill'
-                  ? skillsLoading[detail.skill.key]
-                  : toolsLoading[detail.tool.name]}
+                disabled={row.switchDisabled || saving}
+                aria-busy={saving}
                 onChange={() => toggleCapability(row)}
                 aria-label={t('nursery.template.toggleCapability', { name: row.name })}
               />
-            </div>
-          </section>
-        </ScrollArea>
-      </aside>
-    );
+            </Field>
+          </FieldRow>
+        </FieldGroup>
+        <FormSection headingAs="h3" title={t('nursery.template.detailSections.basic')}>
+          <dl className="assistant-defaults-detail__fields">
+            {renderDetailField(t('nursery.template.detailFields.fullName'), row.name)}
+            {renderDetailField(t('nursery.template.detailFields.originalId'), row.originalId)}
+            {renderDetailField(t('nursery.template.detailFields.source'), row.source)}
+            {renderDetailField(t('nursery.template.detailFields.scope'), t('nursery.template.scopeLabel'))}
+            {renderDetailField(t('nursery.template.detailFields.productDefault'), row.defaultEnabled
+              ? t('nursery.template.state.enabled')
+              : t('nursery.template.state.disabled'))}
+          </dl>
+        </FormSection>
+        <FormSection headingAs="h3" title={t('nursery.template.detailSections.status')}>
+          <dl className="assistant-defaults-detail__fields">
+            {renderDetailField(t('nursery.template.detailFields.currentState'), row.enabled
+              ? t('nursery.template.state.enabled')
+              : t('nursery.template.state.disabled'))}
+            {renderDetailField(t('nursery.template.detailFields.changed'), changed
+              ? t('nursery.template.valueYes')
+              : t('nursery.template.valueNo'))}
+            {renderDetailField(t('nursery.template.detailFields.availability'), renderAvailability(row.available))}
+            {row.statusNote ? renderDetailField(t('nursery.template.detailFields.runtimeState'), row.statusNote) : null}
+          </dl>
+        </FormSection>
+        <FormSection headingAs="h3" title={t('nursery.template.detailSections.permissions')}>
+          <div>
+            <StatusPill tone="neutral">{row.accessLabel}</StatusPill>
+            <p className="assistant-defaults-detail__permission-hint">{row.accessHint}</p>
+          </div>
+        </FormSection>
+      </>
+    ));
   };
 
   const tabs: Array<{ id: AssistantDefaultsTab; label: string; count: number }> = [
@@ -977,36 +994,32 @@ const AssistantDefaultsPage: React.FC = () => {
     { id: 'builtin', label: t('nursery.template.builtinToolsSection'), count: builtinRows.length },
     { id: 'mcp', label: t('nursery.template.mcpToolsSection'), count: mcpRows.length },
   ];
-  const saveLabel = saveState === 'saving'
-    ? t('nursery.template.saveState.saving')
-    : saveState === 'error'
-      ? t('nursery.template.saveState.error')
-      : t('nursery.template.saveState.saved');
+  const activeCategoryLabel = tabs.find((tab) => tab.id === activeTab)?.label;
 
   return (
     <div data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="root" className="nursery-page nursery-page--assistant-defaults">
       <div className="assistant-defaults" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="content">
-        <header className="assistant-defaults__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="header">
-          <div className="assistant-defaults__title-row" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolbar">
-            <Tooltip content={t('nursery.backToGallery')}>
-              <IconButton
-                size="sm"
-                onClick={openGallery}
-                aria-label={t('nursery.backToGallery')}
-                icon={<Icon name="arrow-left" size="lg" />}
-              />
-            </Tooltip>
-            <h2>{t('nursery.template.title')}</h2>
-            <span className="assistant-defaults__scope">{t('nursery.template.scopeLabel')}</span>
+        <header className="nursery-page__header assistant-defaults__header" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="header">
+          <PageHeader
+            className="nursery-page__heading"
+            level={2}
+            title={t('nursery.template.title')}
+            description={t('nursery.template.pageDescription')}
+            leading={(
+              <Tooltip content={t('nursery.backToGallery')}>
+                <IconButton
+                  size="sm"
+                  onClick={openGallery}
+                  aria-label={t('nursery.backToGallery')}
+                  icon={<Icon name="arrow-left" size="sm" />}
+                />
+              </Tooltip>
+            )}
+          />
+          <div className="assistant-defaults__toolbar" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolbar">
+            <StatusPill tone="neutral">{t('nursery.template.scopeLabel')}</StatusPill>
             <div className="assistant-defaults__header-actions">
-              <span className={`assistant-defaults__save assistant-defaults__save--${saveState}`} role="status" aria-live="polite">
-                {saveState === 'saving'
-                  ? <Icon name="refresh" size="lg" className="nursery-spinning" style={{ width: 15, height: 15 }} />
-                  : saveState === 'error'
-                    ? <CircleAlert size={15} />
-                    : <Icon name="check-circle" size="sm" />}
-                {saveLabel}
-              </span>
+              {renderSaveStatus()}
               <Button
                 variant="outline"
                 size="sm"
@@ -1020,98 +1033,95 @@ const AssistantDefaultsPage: React.FC = () => {
               </Button>
             </div>
           </div>
-          <p>{t('nursery.template.pageDescription')}</p>
         </header>
 
         {loading ? (
           <div className="assistant-defaults__loading" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="loading">
-            <Icon name="refresh" size="lg" className="nursery-spinning" style={{ width: 20, height: 20 }} />
+            <Spinner size="md" />
             <span>{t('nursery.template.loading')}</span>
           </div>
         ) : (
           <div className="assistant-defaults__workspace" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="shell">
             <ScrollArea className="assistant-defaults__main" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="main">
               {loadWarning ? (
-                <div className="assistant-defaults__warning" role="status">
-                  <CircleAlert size={17} />
-                  <span>{t('nursery.template.configurationUnavailable')}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leadingIcon={<Icon name="refresh" size="sm" />}
-                    onClick={() => void loadDefaults()}
-                  >
-                    {t('nursery.template.retry')}
-                  </Button>
-                </div>
+                <Alert
+                  className="assistant-defaults__warning"
+                  tone="warning"
+                  message={t('nursery.template.configurationUnavailable')}
+                  description={(
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leadingIcon={<Icon name="refresh" size="sm" />}
+                      onClick={() => void loadDefaults()}
+                    >
+                      {t('nursery.template.retry')}
+                    </Button>
+                  )}
+                />
               ) : null}
 
-              <section className="assistant-defaults-summary" aria-label={t('nursery.template.summaryLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="summary">
-                <div><span>{t('nursery.template.summary.enabled')}</span><strong>{summary.enabled}</strong></div>
-                <div><span>{t('nursery.template.summary.changed')}</span><strong>{summary.changed}</strong></div>
-                <div><span>{t('nursery.template.summary.unavailable')}</span><strong>{summary.unavailable}</strong></div>
-              </section>
-
-              <div className="assistant-defaults-tabs" role="tablist" aria-label={t('nursery.template.categoryLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="tabs">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === tab.id}
-                    className={activeTab === tab.id ? 'is-active' : undefined}
-                    onClick={() => handleTabChange(tab.id)}
-                  >
-                    <span>{tab.label}</span><small>{tab.count}</small>
-                  </button>
-                ))}
+              <div className="assistant-defaults-tabs" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="tabs">
+                <SegmentedControl
+                  className="assistant-defaults-tabs__control"
+                  aria-label={t('nursery.template.categoryLabel')}
+                  aria-controls={categoryPanelId}
+                  tone="neutral"
+                  variant="bar"
+                  size="md"
+                  value={activeTab}
+                  onValueChange={(value) => handleTabChange(value as AssistantDefaultsTab)}
+                  options={tabs.map((tab) => ({
+                    value: tab.id,
+                    label: <span className="assistant-defaults-tabs__label">{tab.label}<NumberBadge value={tab.count} /></span>,
+                  }))}
+                />
               </div>
 
-              <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="filters">
-                <SearchField
-                  className="assistant-defaults-search"
-                  value={searchQuery}
-                  onValueChange={setSearchQuery}
-                  onClear={searchQuery ? () => setSearchQuery('') : undefined}
-                  clearLabel={searchQuery ? t('nursery.template.clearSearch') : undefined}
-                  leadingIcon={<Icon name="search" size="md" />}
-                  placeholder={t('nursery.template.searchPlaceholder')}
-                  aria-label={t('nursery.template.filterLabel')}
-                />
-                <div className="assistant-defaults-filters" role="group" aria-label={t('nursery.template.filterLabel')}>
-                  {statusFilters.map((filter) => (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      className={statusFilter === filter.id ? 'is-active' : undefined}
-                      aria-pressed={statusFilter === filter.id}
-                      onClick={() => setStatusFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <div role="region" id={categoryPanelId} aria-label={activeCategoryLabel}>
+                <section className="assistant-defaults-controls" aria-label={t('nursery.template.filterLabel')} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="filters">
+                  <SearchField
+                    className="assistant-defaults-search"
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                    onClear={searchQuery ? () => setSearchQuery('') : undefined}
+                    clearLabel={searchQuery ? t('nursery.template.clearSearch') : undefined}
+                    leadingIcon={<Icon name="search" size="md" />}
+                    placeholder={t('nursery.template.searchPlaceholder')}
+                    aria-label={t('nursery.template.filterLabel')}
+                  />
+                  <SegmentedControl
+                    className="assistant-defaults-filters"
+                    aria-label={t('nursery.template.filterLabel')}
+                    tone="neutral"
+                    variant="pills"
+                    size="sm"
+                    value={statusFilter}
+                    onValueChange={(value) => setStatusFilter(value as AssistantDefaultsStatusFilter)}
+                    options={statusFilters.map((filter) => ({ value: filter.id, label: filter.label }))}
+                  />
+                </section>
 
-              <section className="assistant-defaults-list" role="table" aria-label={tabs.find((tab) => tab.id === activeTab)?.label} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="list">
-                {renderListHeader()}
-                {activeTab === 'mcp' ? renderMcpGroups() : visibleFlatRows.length > 0 ? (
-                  activeTab === 'skills' ? (
-                    <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="skillList">
-                      {visibleFlatRows.map(renderCapabilityRow)}
-                    </div>
-                  ) : (
-                    <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolList">
-                      {visibleFlatRows.map(renderCapabilityRow)}
-                    </div>
-                  )
-                ) : renderEmptyState(t('nursery.template.noFilterResults'))}
-              </section>
-              <footer className="assistant-defaults__footer">{t('nursery.template.resultCount', { count: visibleCount })}</footer>
+                <section className="assistant-defaults-list" role="table" aria-label={activeCategoryLabel} data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="list">
+                  {renderListHeader()}
+                  {activeTab === 'mcp' ? renderMcpGroups() : visibleFlatRows.length > 0 ? (
+                    activeTab === 'skills' ? (
+                      <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="skillList">
+                        {visibleFlatRows.map(renderCapabilityRow)}
+                      </div>
+                    ) : (
+                      <div role="rowgroup" data-openbitfun-component="assistant-defaults-page" data-openbitfun-part="toolList">
+                        {visibleFlatRows.map(renderCapabilityRow)}
+                      </div>
+                    )
+                  ) : renderEmptyState(t('nursery.template.noFilterResults'))}
+                </section>
+                <footer className="assistant-defaults__footer">{t('nursery.template.resultCount', { count: visibleCount })}</footer>
+              </div>
             </ScrollArea>
-            {renderDetailPanel()}
           </div>
         )}
+        {renderDetail()}
       </div>
     </div>
   );

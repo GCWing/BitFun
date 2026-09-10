@@ -1,7 +1,13 @@
 # OpenBitFun HarmonyOS
 
-Native HarmonyOS client for OpenBitFun. The application provides general chat and
-remote control of OpenBitFun desktop sessions on phone and tablet devices.
+Native HarmonyOS controller for OpenBitFun desktop and CLI hosts on phones,
+foldables, and tablets. Sign in with GitHub, select an account device, then send
+tasks and view results from that host. The phone does not run an Agent Runtime or
+store model-provider configuration. Model selection applies to the selected host.
+
+Device QR codes identify a target; the authenticated account directory authorizes
+access. Old room records and local conversation data remain on disk during an
+upgrade, but do not automatically reconnect or start a local runtime.
 
 ## Project Layout
 

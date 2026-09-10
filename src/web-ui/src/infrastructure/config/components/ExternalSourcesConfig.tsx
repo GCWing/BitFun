@@ -2295,7 +2295,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                     </div>
                     <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                       <Button
-                        variant="outline"
+                        variant="fill"
                         size="sm"
                         disabled={!policyCompatible || busyKey !== null
                           || !hostCapabilities.canApproveRuntime}
@@ -2308,7 +2308,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                         {t('mcpApprovals.keepDisabled')}
                       </Button>
                       <Button
-                        variant="fill"
+                        variant="primary"
                         size="sm"
                         aria-describedby={reviewRiskId}
                         disabled={!policyCompatible || busyKey !== null
@@ -2334,7 +2334,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-bulk-capability="mcp">
                     {(snapshot?.mcpApprovalRequests?.length ?? 0) > 0 ? (
-                      <Button variant="fill" size="sm" aria-describedby="external-mcp-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(true)}>
+                      <Button variant="primary" size="sm" aria-describedby="external-mcp-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setMcpServersEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.mcpApprovalRequests?.length ?? 0 })}
                       </Button>
                     ) : null}
@@ -2465,7 +2465,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           {canEnable ? (
                             <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                               <Button
-                                variant="fill"
+                                variant="primary"
                                 size="sm"
                                 disabled={!policyCompatible || busyKey !== null
                                   || !hostCapabilities.canApproveRuntime}
@@ -2632,7 +2632,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                                 {reviewingExternal && !selected && candidate.available ? (
                                   <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                                     <Button
-                                      variant="fill"
+                                      variant="primary"
                                       size="sm"
                                       disabled={!policyCompatible || busyKey !== null
                                         || !hostCapabilities.canApproveRuntime}
@@ -2783,7 +2783,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-bulk-capability="subagent">
                     {(snapshot?.pendingSubagentApprovals?.length ?? 0) > 0 ? (
-                      <Button variant="fill" size="sm" aria-describedby="external-subagent-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(true)}>
+                      <Button variant="primary" size="sm" aria-describedby="external-subagent-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setSubagentsEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.pendingSubagentApprovals?.length ?? 0 })}
                       </Button>
                     ) : null}
@@ -2933,7 +2933,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           ) : null}
                           <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                             <Button
-                              variant="outline"
+                              variant="fill"
                               size="sm"
                               onClick={() => setReviewingAgentKey(null)}
                             >
@@ -2941,7 +2941,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             </Button>
                             {canEnable ? (
                               <Button
-                                variant="fill"
+                                variant="primary"
                                 size="sm"
                                 disabled={!policyCompatible || busyKey !== null
                                   || !hostCapabilities.canApproveRuntime}
@@ -3172,7 +3172,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                       </div>
                       <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                         <Button
-                          variant="outline"
+                          variant="fill"
                           size="sm"
                         disabled={!policyCompatible || busyKey === request.decisionKey
                           || !hostCapabilities.canApproveRuntime}
@@ -3185,7 +3185,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           {t('toolApprovals.keepDisabled')}
                         </Button>
                         <Button
-                          variant="fill"
+                          variant="primary"
                           size="sm"
                           disabled={!policyCompatible || busyKey === request.decisionKey
                             || !hostCapabilities.canApproveRuntime}
@@ -3216,7 +3216,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                 extra={(
                   <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-bulk-capability="tool">
                     {(snapshot?.toolApprovalRequests?.length ?? 0) > 0 ? (
-                      <Button variant="fill" size="sm" aria-describedby="external-tool-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(true)}>
+                      <Button variant="primary" size="sm" aria-describedby="external-tool-bulk-risk" disabled={!policyCompatible || busyKey !== null || !hostCapabilities.canApproveRuntime} onClick={() => void setToolTargetsEnabled(true)}>
                         {t('bulkActions.enablePending', { count: snapshot?.toolApprovalRequests?.length ?? 0 })}
                       </Button>
                     ) : null}
@@ -3358,7 +3358,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                           ) : null}
                           <div className="openbitfun-external-sources-config__tool-actions" data-openbitfun-component="external-sources-config" data-openbitfun-part="toolActions">
                             <Button
-                              variant="outline"
+                              variant="fill"
                               size="sm"
                               disabled={!policyCompatible || busyKey === tool.decisionKey
                                 || !hostCapabilities.canApproveRuntime}
@@ -3368,7 +3368,7 @@ const ExternalSourcesConfig: React.FC<ExternalSourcesConfigProps> = ({
                             </Button>
                             {enableable ? (
                               <Button
-                                variant="fill"
+                                variant="primary"
                                 size="sm"
                                 disabled={!policyCompatible || busyKey === tool.decisionKey
                                   || !hostCapabilities.canApproveRuntime}

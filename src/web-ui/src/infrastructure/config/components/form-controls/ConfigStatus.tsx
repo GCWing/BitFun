@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, IconButton } from '@openbitfun/ui';
+import { Icon, IconButton, OverflowText } from '@openbitfun/ui';
 ;
 import { useI18n } from '@/infrastructure/i18n';
 
@@ -49,12 +49,12 @@ export const ConfigStatus: React.FC<ConfigStatusProps> = ({
       <div 
         style={{ 
           flex: 1,
+          minWidth: 0,
           whiteSpace: multiline ? 'pre-line' : 'nowrap',
           overflow: multiline ? 'visible' : 'hidden',
-          textOverflow: multiline ? 'unset' : 'ellipsis'
         }}
       >
-        {message}
+        {multiline ? message : <OverflowText>{message}</OverflowText>}
       </div>
       {closable && onClose && (
         <IconButton

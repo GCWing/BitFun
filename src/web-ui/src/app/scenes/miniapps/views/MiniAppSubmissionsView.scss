@@ -220,9 +220,8 @@
         color: var(--openbitfun-color-content-muted);
       }
 
-      span {
+      span:not([data-overflow-content]) {
         overflow: hidden;
-        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
@@ -300,7 +299,6 @@
     strong,
     small {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 

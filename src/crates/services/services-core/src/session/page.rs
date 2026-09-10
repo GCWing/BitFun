@@ -13,6 +13,26 @@ pub struct SessionMetadataPage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
     pub has_more: bool,
+    /// Optional read-only extension. Absence identifies older hosts; an empty
+    /// array is an authoritative empty status batch, not a missing capability.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activities: Option<Vec<SessionActivitySummary>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionActivitySummary {
+    pub session_id: String,
+    /// Runtime-owned execution fact; unknown external owners remain explicit.
+    pub execution: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_turn_id: Option<String>,
+    pub pending_approvals: usize,
+    pub pending_questions: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_turn: Option<super::types::SessionLastTurn>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unread_completion: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +48,7 @@ pub fn empty_session_metadata_page() -> SessionMetadataPage {
         loaded_top_level_count: 0,
         next_cursor: None,
         has_more: false,
+        activities: None,
     }
 }
 
@@ -97,6 +118,7 @@ pub fn build_session_metadata_page(
         loaded_top_level_count,
         next_cursor,
         has_more,
+        activities: None,
     }
 }
 

@@ -1,3 +1,4 @@
+import { isSessionSceneId } from '@/app/components/SceneBar/types';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { openEcosystemCompatibility } from '@/app/scenes/ecosystem-compatibility/ecosystemCompatibilityStore';
@@ -33,7 +34,7 @@ export async function activateProductAction(
       window.dispatchEvent(new Event('nav:new-project'));
       return;
     case 'surface.browser.open':
-      if (sceneStore.activeTabId === 'session') {
+      if (isSessionSceneId(sceneStore.activeTabId)) {
         window.dispatchEvent(new CustomEvent('agent-create-tab', {
           detail: {
             type: 'browser',

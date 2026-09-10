@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 ;
-import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -136,7 +136,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
           {orderedAssistants.map(workspace => {
             const assistantName = getAssistantDisplayName(workspace);
             return (
-              <MenuItem
+              <MenuItem data-overflow-trigger
                 key={workspace.id}
                 leading={<Icon name="plus" size="xs" aria-hidden="true" />}
                 aria-label={t('nav.sessions.newAssistantSessionFor', { assistantName })}
@@ -146,7 +146,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
                 }}
                 data-testid={`nav-assistant-session-menu-item-${workspace.id}`}
               >
-                <span className="openbitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
+                <OverflowText className="openbitfun-nav-panel__assistant-session-menu-name">{assistantName}</OverflowText>
               </MenuItem>
             );
           })}

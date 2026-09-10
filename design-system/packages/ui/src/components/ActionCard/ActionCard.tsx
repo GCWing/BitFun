@@ -6,6 +6,7 @@ import {
 } from "react";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./ActionCard.module.css";
 
 export interface ActionCardAction {
@@ -52,7 +53,7 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
         data-selected={selected ? "true" : "false"}
         data-size={size}
       >
-        <button
+        <button data-overflow-trigger
           {...props}
           className={styles.trigger}
           data-openbitfun-part="trigger"
@@ -66,11 +67,11 @@ export const ActionCard = forwardRef<HTMLButtonElement, ActionCardProps>(
             </span>
           )}
           <span className={styles.content} data-openbitfun-part="content">
-            <span className={styles.title} data-openbitfun-part="title">{children}</span>
+            <OverflowText className={styles.title} data-openbitfun-part="title">{children}</OverflowText>
             {description !== undefined && description !== null && (
-              <span className={styles.description} data-openbitfun-part="description">
+              <OverflowText className={styles.description} data-openbitfun-part="description">
                 {description}
-              </span>
+              </OverflowText>
             )}
           </span>
         </button>

@@ -81,6 +81,7 @@ function buttonSize(size: CanvasButtonProps['size']): React.ComponentProps<typeo
 function buttonVariant(
   variant: CanvasButtonProps['variant'],
 ): React.ComponentProps<typeof OpenBitFunButton>['variant'] {
+  if (variant === 'primary') return 'primary';
   if (variant === 'secondary' || variant === 'ghost') return 'outline';
   return 'fill';
 }

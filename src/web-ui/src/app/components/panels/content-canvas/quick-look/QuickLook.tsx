@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import type { PanelContent } from '../types';
 import './QuickLook.scss';
-import { Icon, Tooltip, useDismissibleLayer } from '@openbitfun/ui';
+import { OverflowText, Icon, Tooltip, useDismissibleLayer } from '@openbitfun/ui';
 
 export interface QuickLookProps {
   /** Whether visible */
@@ -125,7 +125,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({
   }
 
   return createPortal(
-    <div
+    <div data-overflow-trigger
       ref={containerRef}
       className="canvas-quick-look"
       data-shortcut-scope="canvas"
@@ -141,7 +141,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({
       {/* Header */}
       <div className="canvas-quick-look__header" data-openbitfun-component="content-canvas" data-openbitfun-part="quickLookHeader">
         <div className="canvas-quick-look__title" data-openbitfun-component="content-canvas" data-openbitfun-part="quickLookTitle">
-          <span>{content.title}</span>
+          <OverflowText>{content.title}</OverflowText>
           {content.data?.filePath && (
             <Tooltip content={t('canvas.openFileLocation')}>
               <button className="canvas-quick-look__open-btn">

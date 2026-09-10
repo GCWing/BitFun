@@ -50,7 +50,6 @@ import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGe
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
-import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
 import {
   RemoteChatCache,
@@ -76,7 +75,6 @@ import {
   RemoteModelController,
   RemoteModelPreferenceStore
 } from '../main/ets/services/RemoteModelController';
-import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
 import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
 import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';

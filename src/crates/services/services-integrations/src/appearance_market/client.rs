@@ -9,8 +9,8 @@ use reqwest::{RequestBuilder, Response};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::miniapp_market::{
-    DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart, MarketClient,
+use crate::account_identity::{
+    AccountIdentityClient, DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart,
     MarketClientError, MarketMe,
 };
 
@@ -32,14 +32,14 @@ pub struct AppearanceMarketBrowseRequest {
 pub struct AppearanceMarketClient {
     base_url: String,
     client: reqwest::Client,
-    identity: MarketClient,
+    identity: AccountIdentityClient,
 }
 
 impl AppearanceMarketClient {
     pub async fn from_environment() -> Result<Self, MarketClientError> {
         let base_url = std::env::var("OPENBITFUN_APPEARANCE_MARKET_API_URL")
             .unwrap_or_else(|_| DEFAULT_APPEARANCE_MARKET_API_URL.to_string());
-        let identity = MarketClient::from_environment().await?;
+        let identity = AccountIdentityClient::from_environment().await?;
         Self::with_identity(base_url, identity)
     }
 
@@ -47,13 +47,13 @@ impl AppearanceMarketClient {
         base_url: impl Into<String>,
         identity_base_url: impl Into<String>,
     ) -> Result<Self, MarketClientError> {
-        let identity = MarketClient::new(identity_base_url).await?;
+        let identity = AccountIdentityClient::new(identity_base_url).await?;
         Self::with_identity(base_url, identity)
     }
 
     fn with_identity(
         base_url: impl Into<String>,
-        identity: MarketClient,
+        identity: AccountIdentityClient,
     ) -> Result<Self, MarketClientError> {
         let base_url = base_url.into().trim_end_matches('/').to_string();
         validate_market_url(&base_url)?;

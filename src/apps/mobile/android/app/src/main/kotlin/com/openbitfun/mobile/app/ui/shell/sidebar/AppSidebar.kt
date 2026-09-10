@@ -1,6 +1,8 @@
 package com.openbitfun.mobile.app.ui.shell.sidebar
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,8 +45,6 @@ import com.openbitfun.mobile.core.feature.session.SessionActionScope
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacement
 import com.openbitfun.mobile.core.feature.shell.RemoteSidebarSessionRow
-import com.openbitfun.mobile.core.feature.shell.SidebarPresentation
-import com.openbitfun.mobile.core.feature.shell.SidebarSessionRow
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 
 internal const val SIDEBAR_TEST_TAG: String = "app-sidebar"
@@ -78,8 +78,6 @@ internal fun AppSidebar(
     workspaceState: RemoteWorkspaceUiState,
     remoteActive: Boolean,
     remoteSelectedSessionId: String?,
-    sessions: List<SidebarSessionRow>,
-    selectedSessionId: String?,
     query: String,
     searchOpen: Boolean,
     onQueryChange: (String) -> Unit,
@@ -90,28 +88,15 @@ internal fun AppSidebar(
     onOpenRemoteSession: (String) -> Unit,
     onCreateRemoteInWorkspace: (String) -> Unit,
     onOpenRemoteWorkspace: (String) -> Unit,
-    onNewChat: () -> Unit,
-    onOpenSession: (SidebarSessionRow) -> Unit,
-    onArchiveSession: (String, Boolean) -> Unit,
-    onExportSession: (SidebarSessionRow) -> Unit,
-    onDeleteSession: (String) -> Unit,
     onDeleteRemoteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAccount: () -> Unit,
     modifier: Modifier,
 ) {
     val signedIn = !accountUserId.isNullOrBlank()
-    val sections = remember(sessions, query) { SidebarPresentation.sections(sessions, query) }
-
-    // Ids rather than rows: the list behind these sheets keeps updating while
-    // they are open, and a captured row would go stale the moment a reply lands.
-    var actionSessionId by rememberSaveable { mutableStateOf<String?>(null) }
-    var actionAnchor by remember { mutableStateOf(IntRect.Zero) }
-    var detailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     var remoteActionSession by remember { mutableStateOf<RemoteSidebarSessionRow?>(null) }
     var remoteActionAnchor by remember { mutableStateOf(IntRect.Zero) }
     var remoteDetailsSessionId by rememberSaveable { mutableStateOf<String?>(null) }
-    var archivedExpanded by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize().testTag(SIDEBAR_TEST_TAG)) {
         Column(
@@ -123,22 +108,10 @@ internal fun AppSidebar(
             if (signedIn) {
                 SidebarAuthenticatedHeader(searchOpen, query, onQueryChange, onToggleSearch)
             } else {
-                SidebarSignedOutHeader(onNewChat)
+                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
             }
 
-            SidebarSessionList(
-                sections = sections,
-                selectedSessionId = selectedSessionId,
-                activeActionSessionId = actionSessionId,
-                searching = query.isNotBlank(),
-                archivedExpanded = archivedExpanded,
-                onToggleArchived = { archivedExpanded = !archivedExpanded },
-                onOpenSession = onOpenSession,
-                onOpenActions = { session, anchor ->
-                    actionAnchor = anchor
-                    actionSessionId = session.id
-                },
-                workspaceContent = {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 142.dp)) {
                     SidebarRemoteWorkspaceSection(
                         connectionPhase = connectionPhase,
                         controlSource = remoteControlSource,
@@ -159,14 +132,7 @@ internal fun AppSidebar(
                         onCreateInWorkspace = onCreateRemoteInWorkspace,
                         onOpenWorkspace = onOpenRemoteWorkspace,
                     )
-                },
-                footerRoom = if (!signedIn && connectionPhase != ConnectionPhase.CONNECTED) {
-                    142.dp
-                } else {
-                    84.dp
-                },
-                modifier = Modifier.weight(1f),
-            )
+            }
         }
 
         // Over the list, not after it: the 84dp tail the list reserves is what
@@ -178,7 +144,7 @@ internal fun AppSidebar(
                 .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
         ) {
             if (signedIn) {
-                SidebarAuthenticatedFooter(onNewChat, onOpenSettings)
+                SidebarAuthenticatedFooter(onScanDesktop, onOpenSettings)
             } else {
                 SidebarSignedOutFooter(
                     showScan = connectionPhase != ConnectionPhase.CONNECTED,
@@ -187,53 +153,6 @@ internal fun AppSidebar(
                 )
             }
         }
-    }
-
-    actionSessionId?.let { id ->
-        val session = sessions.firstOrNull { it.id == id }
-        if (session == null) {
-            actionSessionId = null
-            return@let
-        }
-        val actionSurface: @Composable () -> Unit = {
-            if (permanent) {
-                SessionActionPopup(
-                    anchorBounds = actionAnchor,
-                    title = session.title,
-                    status = session.status,
-                    capabilities = SessionActionPolicy.resolve(
-                        SessionActionScope.GENERAL,
-                        GENERAL_CHAT_AGENT_TYPE,
-                        false,
-                    ),
-                    onViewDetails = { detailsSessionId = id },
-                    onArchive = { onArchiveSession(id, !session.status.equals(ARCHIVED, ignoreCase = true)) },
-                    onExport = { onExportSession(session) },
-                    onDelete = { onDeleteSession(id) },
-                    onDismiss = { actionSessionId = null },
-                )
-            } else {
-                SessionActionSheet(
-            title = session.title,
-            status = session.status,
-            // Every sidebar row is a local general chat, so the policy is asked
-            // with that agent type rather than one carried on the row.
-            capabilities = SessionActionPolicy.resolve(
-                SessionActionScope.GENERAL,
-                GENERAL_CHAT_AGENT_TYPE,
-                false,
-            ),
-            onViewDetails = { detailsSessionId = id },
-            onArchive = {
-                onArchiveSession(id, !session.status.equals(ARCHIVED, ignoreCase = true))
-            },
-            onExport = { onExportSession(session) },
-            onDelete = { onDeleteSession(id) },
-            onDismiss = { actionSessionId = null },
-                )
-            }
-        }
-        actionSurface()
     }
 
     remoteActionSession?.let { session ->
@@ -286,28 +205,4 @@ internal fun AppSidebar(
         )
     }
 
-    detailsSessionId?.let { id ->
-        val session = sessions.firstOrNull { it.id == id }
-        if (session == null) {
-            detailsSessionId = null
-            return@let
-        }
-        SessionDetailsSheet(
-            title = session.title,
-            agentType = stringResource(R.string.session_group_chat),
-            status = session.status,
-            // A locally stored conversation has no desktop workspace behind it.
-            workspaceName = null,
-            workspacePath = null,
-            createdAt = session.createdAt,
-            updatedAt = session.updatedAt,
-            messageCount = session.messageCount,
-            placement = sessionDetailsPlacement,
-            onDismiss = { detailsSessionId = null },
-        )
-    }
-
 }
-
-private const val GENERAL_CHAT_AGENT_TYPE = "general_chat"
-private const val ARCHIVED = "archived"

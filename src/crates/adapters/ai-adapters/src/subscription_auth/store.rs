@@ -1413,8 +1413,11 @@ pub(crate) async fn load_entry_with_revision(provider: &str) -> Result<Versioned
 /// Captures the provider epoch before a long-running authorization begins.
 /// Logout retains and advances this value even when no credential is present.
 pub(crate) async fn credential_revision(provider: &str) -> Result<u64> {
-    let state = load_with_state().await?;
-    Ok(state.provider_revisions.get(provider).copied().unwrap_or(0))
+    let (path, _transaction) = acquire_store_transaction().await?;
+    // Cache validation needs only the durable epoch, never decrypted secrets
+    // or opportunistic vault cleanup on every model call.
+    let file = read_secure_file(&path).await?;
+    Ok(file.provider_revisions.get(provider).copied().unwrap_or(0))
 }
 
 /// Inserts or replaces a provider credential. Secret material is committed to

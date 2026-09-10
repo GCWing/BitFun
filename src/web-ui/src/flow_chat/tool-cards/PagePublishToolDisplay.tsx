@@ -110,7 +110,7 @@ export const PagePublishDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
             {deployed && urlPath && (
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="arrow-up-right" size="xs" />}
                 data-testid="chat-page-publish-open-prod-btn"

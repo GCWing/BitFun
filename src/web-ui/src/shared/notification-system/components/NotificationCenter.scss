@@ -154,20 +154,21 @@
 
     &--success,
     &--completed {
-      color: var(--openbitfun-color-status-success-content);
+      color: var(--openbitfun-color-status-success-emphasis);
     }
 
     &--error,
     &--failed {
-      color: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-emphasis);
     }
 
     &--warning {
-      color: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-emphasis);
     }
 
+    &--info,
     &--active {
-      color: var(--openbitfun-color-accent-default);
+      color: var(--openbitfun-color-status-info-emphasis);
     }
 
     &--cancelled {
@@ -226,16 +227,16 @@
     inline-size: 100%;
     block-size: 100%;
     border-radius: inherit;
-    background: var(--openbitfun-color-accent-default);
+    background: var(--openbitfun-color-status-info-emphasis);
     transform-origin: left center;
     transition: transform var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
     &.is-completed {
-      background: var(--openbitfun-color-status-success-content);
+      background: var(--openbitfun-color-status-success-emphasis);
     }
 
     &.is-failed {
-      background: var(--openbitfun-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-emphasis);
     }
 
     &.is-cancelled {

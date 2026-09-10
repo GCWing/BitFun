@@ -81,6 +81,14 @@ async function writePng(filePath, buffer) {
   await writeFile(filePath, buffer);
 }
 
+function createReusableWebMark(svg) {
+  const reusableMark = svg.replaceAll('stroke="black"', 'stroke="currentColor"');
+  if (reusableMark === svg) {
+    throw new Error('OpenBitFun mark source is missing its canonical black strokes');
+  }
+  return reusableMark;
+}
+
 async function normalizePng(input) {
   return sharp(input)
     .ensureAlpha()
@@ -97,7 +105,8 @@ async function renderMark(svg, size, tone, opticalSize = size) {
     : opticalSize <= 48 ? [0, 3, 7, 11, 14]
       : opticalSize <= 96 ? [0, 2, 4, 7, 10, 12, 14] : null;
   let index = 0;
-  const artwork = indices ? svg.replace(/<path\b[^>]*\/>/g, element => {
+  const reusableMark = createReusableWebMark(svg);
+  const artwork = indices ? reusableMark.replace(/<path\b[^>]*\/>/g, element => {
     const contour = index++;
     if (!indices.includes(contour)) return '';
     const outer = contour === 14;
@@ -106,7 +115,7 @@ async function renderMark(svg, size, tone, opticalSize = size) {
       (outer ? 1.35 : inner ? 0.85 : 0.65) * 256 / opticalSize);
     return element.replace(/ (?:stroke-width|opacity)="[^"]*"/g, '')
       .replace('/>', ` stroke-width="${width}" opacity="${outer ? 1 : inner ? 0.9 : 0.75}"/>`);
-  }) : svg;
+  }) : reusableMark;
   return sharp(Buffer.from(artwork.replaceAll('currentColor', tone)), { density: 144 })
     .resize(size, size)
     .png({ compressionLevel: 9, adaptiveFiltering: true })
@@ -320,6 +329,7 @@ async function generateBrandAssets() {
   await writePng(path.join(webBrandDir, 'openbitfun-mark-dark-128.png'), darkMarkSmall);
   await writePng(path.join(webBrandDir, 'openbitfun-mark-light-128.png'), lightMarkSmall);
   await writePng(path.join(webBrandDir, 'openbitfun-app-icon.png'), applicationIcon);
+  await writeFile(path.join(webBrandDir, 'openbitfun-mark.svg'), createReusableWebMark(svg), 'utf8');
 
   const desktopIconDir = outputPath('src', 'apps', 'desktop', 'icons');
   await writePng(path.join(desktopIconDir, 'openbitfun-app-icon.png'), applicationIconLarge);

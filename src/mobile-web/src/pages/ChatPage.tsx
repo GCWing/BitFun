@@ -65,7 +65,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   sessionMgr,
   sessionId,
   sessionName,
-  agentType: sessionAgentType = 'agentic',
+  agentType: sessionAgentType = 'Standard',
   onBack,
   autoFocus,
   wideLayout = false,
@@ -94,6 +94,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const [modelUpdating, setModelUpdating] = useState(false);
   const [pendingImages, setPendingImages] = useState<{ name: string; dataUrl: string }[]>([]);
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const sendInFlightRef = useRef<symbol | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [optimisticMsg, setOptimisticMsg] = useState<{
     id: string; text: string; images: { name: string; data_url: string }[];
@@ -214,6 +216,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setHasMore(true);
       setModelUpdating(false);
       setImageAnalyzing(false);
+      setIsSending(false);
+      sendInFlightRef.current = null;
       setIsCancelling(false);
       setOptimisticMsg(null);
       modelSelectionInitializedRef.current = false;
@@ -475,12 +479,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, [isStreaming]);
-
-  useEffect(() => {
-    if (!error) return;
-    const t = setTimeout(() => setError(null), 5000);
-    return () => clearTimeout(t);
-  }, [error, setError]);
 
   useEffect(() => {
     if (!infoToast) return;
@@ -848,15 +846,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
     if (useMobileStore.getState().connectionHealth === 'unreachable') return;
     const text = input.trim();
     const imgs = pendingImages;
-    if ((!text && imgs.length === 0) || imageAnalyzing) return;
+    if ((!text && imgs.length === 0) || imageAnalyzing || sendInFlightRef.current) return;
     const targetEpoch = captureChatTargetEpoch();
     if (targetEpoch === null) return;
     const wasStreaming = isStreaming;
-    setInput('');
-    setPendingImages([]);
-    if (!wasStreaming) {
-      setInputExpanded(false);
-    }
+    const attempt = Symbol('message submission');
+    sendInFlightRef.current = attempt;
+    setIsSending(true);
+    setError(null);
 
     const hasImages = imgs.length > 0;
     const imageContexts = hasImages
@@ -888,14 +885,23 @@ const ChatPage: React.FC<ChatPageProps> = ({
         imageContexts,
       );
       if (!isChatTargetCurrent(targetEpoch)) return;
+      // Keep the draft until the host acknowledges it. A failed request must
+      // remain retryable, and an acknowledgement must not erase newer typing.
+      const draftUnchanged = inputRef.current?.value === input;
+      setInput(current => current === input ? '' : current);
+      setPendingImages(current => current.filter(image => !imgs.includes(image)));
+      if (!wasStreaming && draftUnchanged) setInputExpanded(false);
       pollerRef.current?.nudge();
       if (wasStreaming) {
         setInfoToast(t('chat.messageQueued'));
       }
     } catch (e: any) {
+      if (!isChatTargetCurrent(targetEpoch)) return;
       reportRemoteSessionError(e, setError);
     } finally {
-      if (isChatTargetCurrent(targetEpoch)) {
+      if (isChatTargetCurrent(targetEpoch) && sendInFlightRef.current === attempt) {
+        sendInFlightRef.current = null;
+        setIsSending(false);
         setImageAnalyzing(false);
         setOptimisticMsg(null);
       }
@@ -1010,7 +1016,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   return (
     <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${composerHeight}px` } as React.CSSProperties}>
       <ChatHeader
-        deviceName={controlTarget && !controlTarget.isHome ? controlTarget.deviceName || undefined : undefined}
+        deviceName={controlTarget ? controlTarget.deviceName || undefined : undefined}
         displayName={displayName}
         gitBranch={gitBranch}
         isStreaming={isStreaming}
@@ -1098,6 +1104,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         containerRef={inputBarRef}
         expanded={inputExpanded}
         imageAnalyzing={imageAnalyzing}
+        sending={isSending}
         input={input}
         inputRef={inputRef}
         remoteUnavailable={connectionHealth === 'unreachable'}

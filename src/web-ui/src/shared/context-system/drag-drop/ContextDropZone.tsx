@@ -15,7 +15,14 @@ export interface ContextDropZoneProps {
   onContextAdded?: (context: ContextItem) => void;
   onExternalFilesDrop?: (files: File[]) => void;
   disabled?: boolean;
+  /** Also accept drops in this enclosing surface; feedback stays on the composer. */
+  extendedTargetRef?: React.RefObject<HTMLElement | null>;
+  onDragStateChange?: (canDrop: boolean) => void;
 }
+
+type DropEvent = React.DragEvent | DragEvent;
+const nativeDragEvent = (event: DropEvent): DragEvent =>
+  'nativeEvent' in event ? event.nativeEvent : event;
 
 export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   acceptedTypes,
@@ -24,6 +31,8 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   onContextAdded,
   onExternalFilesDrop,
   disabled = false,
+  extendedTargetRef,
+  onDragStateChange,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [canAccept, setCanAccept] = useState(false);
@@ -31,6 +40,24 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   const dragCounterRef = useRef(0); 
   const addContext = useContextStore(state => state.addContext);
   const updateValidation = useContextStore(state => state.updateValidation);
+
+  useEffect(() => {
+    onDragStateChange?.(isDragOver && canAccept && !disabled);
+  }, [isDragOver, canAccept, disabled, onDragStateChange]);
+
+  useEffect(() => {
+    const reset = () => {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+      setCanAccept(false);
+    };
+    window.addEventListener('dragend', reset);
+    window.addEventListener('blur', reset);
+    return () => {
+      window.removeEventListener('dragend', reset);
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
   
   
   const acceptedTypesArray = React.useMemo(() => 
@@ -100,7 +127,8 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   }, [dropTarget]);
   
    
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
+  const handleDragEnter = useCallback((e: DropEvent) => {
+    if (!e.dataTransfer) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -118,12 +146,13 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
         const accepted = dropTargetRef.current.canAccept(payload);
         setIsDragOver(true);
         setCanAccept(accepted);
-        dragManager.handleDragEnter(dropTargetRef.current, e.nativeEvent);
+        dragManager.handleDragEnter(dropTargetRef.current, nativeDragEvent(e));
       }
     }
   }, [disabled, onExternalFilesDrop]);
   
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: DropEvent) => {
+    if (!e.dataTransfer) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -135,30 +164,32 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     const payload = dragManager.getCurrentPayload();
     if (payload && dropTargetRef.current.canAccept(payload)) {
       e.dataTransfer.dropEffect = 'copy';
-      dragManager.handleDragOver(dropTargetRef.current, e.nativeEvent);
+      dragManager.handleDragOver(dropTargetRef.current, nativeDragEvent(e));
     } else {
       e.dataTransfer.dropEffect = 'none';
     }
   }, [disabled, onExternalFilesDrop]);
   
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: DropEvent) => {
+    if (!e.dataTransfer) return;
     e.preventDefault();
     e.stopPropagation();
     const containsExternalFiles = Array.from(e.dataTransfer.types).includes('Files');
     
-    dragCounterRef.current--;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
     
     if (dragCounterRef.current === 0) {
       
       setIsDragOver(false);
       setCanAccept(false);
       if (!containsExternalFiles) {
-        dragManager.handleDragLeave(dropTargetRef.current, e.nativeEvent);
+        dragManager.handleDragLeave(dropTargetRef.current, nativeDragEvent(e));
       }
     }
   }, []);
   
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: DropEvent) => {
+    if (!e.dataTransfer) return;
     e.preventDefault();
     e.stopPropagation();
     
@@ -173,8 +204,34 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
       }
       return;
     }
-    dragManager.handleDrop(dropTargetRef.current, e.nativeEvent);
+    dragManager.handleDrop(dropTargetRef.current, nativeDragEvent(e));
   }, [disabled, onExternalFilesDrop]);
+
+  useEffect(() => {
+    const target = extendedTargetRef?.current;
+    if (!target) return;
+    const outsideComposer = (handler: (event: DropEvent) => void) => (event: DragEvent) => {
+      // The composer's existing React handlers own drops inside it. Do not
+      // consume text/tab drags in the transcript or add an attachment twice.
+      if (event.target instanceof Node && dropZoneRef.current?.contains(event.target)) return;
+      if (!event.dataTransfer?.types.includes('Files') && !dragManager.getCurrentPayload()) return;
+      handler(event);
+    };
+    const enter = outsideComposer(handleDragEnter);
+    const over = outsideComposer(handleDragOver);
+    const leave = outsideComposer(handleDragLeave);
+    const drop = outsideComposer(handleDrop);
+    target.addEventListener('dragenter', enter);
+    target.addEventListener('dragover', over);
+    target.addEventListener('dragleave', leave);
+    target.addEventListener('drop', drop);
+    return () => {
+      target.removeEventListener('dragenter', enter);
+      target.removeEventListener('dragover', over);
+      target.removeEventListener('dragleave', leave);
+      target.removeEventListener('drop', drop);
+    };
+  }, [extendedTargetRef, handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
   
   return (
     <div

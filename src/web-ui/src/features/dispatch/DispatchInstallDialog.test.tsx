@@ -63,7 +63,8 @@ vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
   gitAPI: { resolveRevision: mocks.resolveRevision },
 }));
 
-vi.mock('@openbitfun/ui', () => ({
+vi.mock('@openbitfun/ui', async (importOriginal) => ({
+  Disclosure: (await importOriginal<typeof import('@openbitfun/ui')>()).Disclosure,
   Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
@@ -131,6 +132,10 @@ vi.mock('@openbitfun/ui', () => ({
     return <button type="button" {...props} />;
   },
   DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+  DialogFooter: ({ children }: React.PropsWithChildren) => <footer>{children}</footer>,
 }));
 
 function createDeferred<T>() {
@@ -253,7 +258,7 @@ describe('DispatchInstallDialog target preparation', () => {
     expect(container.textContent).toContain('dispatch.oneClickDeploy');
     expect(container.textContent).toContain('1.2.3');
     expect(container.textContent).toContain('abc123');
-    expect(container.querySelector('details')?.open).toBe(false);
+    expect(container.querySelector('[data-openbitfun-component="disclosure"] button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
     expect(container.textContent).not.toContain('dispatch.installAutomaticDescription');
     expect(mocks.dialogLifecycleProps).toEqual({
       closeOnPointerOutside: true,

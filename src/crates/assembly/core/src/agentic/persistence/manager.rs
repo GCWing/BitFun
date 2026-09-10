@@ -29,9 +29,9 @@ use crate::service::remote_ssh::workspace_state::{
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTurnCatalog, SessionTurnCatalogEntry, SessionTurnWindowResponse, TranscriptLineRange,
-    TurnRailCapsulePreview, TurnRailCapsuleSegment, SESSION_STORAGE_SCHEMA_VERSION,
-    SESSION_TURN_CATALOG_SCHEMA_VERSION,
+    SessionTurnCatalog, SessionTurnCatalogEntry, SessionTurnWindowResponse, StoredDialogTurnFile,
+    TranscriptLineRange, TurnRailCapsulePreview, TurnRailCapsuleSegment,
+    SESSION_STORAGE_SCHEMA_VERSION, SESSION_TURN_CATALOG_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -48,8 +48,9 @@ use openbitfun_services_core::{
     session::{
         build_session_metadata as build_persisted_session_metadata, empty_session_metadata_page,
         refresh_session_metadata_from_turns, try_refresh_session_metadata_for_saved_turn,
-        SessionMemoryMode, SessionMetadataBuildFacts, SessionMetadataStore,
-        SessionMetadataStoreError, SessionStorageLayout, SessionWriteLock, SessionWriteLockError,
+        DialogTurnKind, SessionLastTurn, SessionMemoryMode, SessionMetadataBuildFacts,
+        SessionMetadataStore, SessionMetadataStoreError, SessionStorageLayout, SessionWriteLock,
+        SessionWriteLockError, TurnStatus,
     },
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -62,7 +63,7 @@ use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 pub use openbitfun_services_core::session::SessionMetadataPage;
 
@@ -71,6 +72,7 @@ const COMPRESSION_TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const COMPRESSION_TRANSCRIPT_CREATE_ATTEMPTS: usize = 32;
 const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
+static SESSION_ACTIVITY_REPAIR_SLOTS: Semaphore = Semaphore::const_new(2);
 const SESSION_TURN_CATALOG_PREVIEW_CHAR_LIMIT: usize = 320;
 const TURN_RAIL_CAPSULE_MAX_SEGMENTS: usize = 64;
 const TURN_RAIL_CAPSULE_TEXT_LIMIT: usize = 320;
@@ -158,11 +160,29 @@ fn current_unix_secs() -> i64 {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredDialogTurnFile {
-    schema_version: u32,
-    #[serde(flatten)]
-    turn: DialogTurnData,
+/// Legacy navigation repair reads only identity/outcome fields. In particular,
+/// do not flatten this DTO: serde flatten would materialize ignored messages
+/// and tool payloads while collecting the unknown fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredTurnActivity {
+    #[serde(alias = "turn_id")]
+    turn_id: String,
+    #[serde(alias = "turn_index")]
+    turn_index: usize,
+    #[serde(alias = "session_id")]
+    session_id: String,
+    #[serde(default, alias = "turn_kind")]
+    kind: DialogTurnKind,
+    status: TurnStatus,
+    #[serde(default, alias = "end_time")]
+    end_time: Option<u64>,
+    #[serde(default, alias = "finish_reason")]
+    finish_reason: Option<String>,
+    #[serde(default, alias = "recovery_epoch")]
+    recovery_epoch: Option<u32>,
+    #[serde(default)]
+    recovery: Option<openbitfun_services_core::session::DialogTurnRecoveryData>,
 }
 
 struct ReadTurnPathsResult {
@@ -1311,6 +1331,117 @@ impl PersistenceManager {
             .map_err(Self::session_metadata_store_error)
     }
 
+    pub async fn session_metadata_by_ids(
+        &self,
+        workspace_path: &Path,
+        session_ids: &[String],
+    ) -> OpenBitFunResult<Vec<SessionMetadata>> {
+        self.session_metadata_store(workspace_path)
+            .metadata_by_ids(session_ids)
+            .await
+            .map_err(Self::session_metadata_store_error)
+    }
+
+    /// Lazily repair one legacy activity summary on a targeted navigation read.
+    /// Current metadata and empty Sessions remain index-only. The caller keeps
+    /// initial list reads fast and does not call this for executing Sessions.
+    pub(crate) async fn backfill_session_last_turn(
+        &self,
+        workspace_path: &Path,
+        metadata: SessionMetadata,
+    ) -> OpenBitFunResult<SessionMetadata> {
+        if !metadata.needs_last_turn_backfill() {
+            return Ok(metadata);
+        }
+        Self::validate_session_id(&metadata.session_id)?;
+        let _slot = SESSION_ACTIVITY_REPAIR_SLOTS
+            .acquire()
+            .await
+            .expect("activity repair semaphore remains open");
+        let _session_write =
+            self.lock_session_write_operation(workspace_path, &metadata.session_id)?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, &metadata.session_id)
+            .await;
+        let _guard = persistence_lock.lock().await;
+        // Re-read under the existing writer locks. A newer Turn, receipt,
+        // rename or deletion must win over the list snapshot supplied above.
+        let mut current = self
+            .load_session_metadata(workspace_path, &metadata.session_id)
+            .await?
+            .ok_or_else(|| {
+                OpenBitFunError::NotFound(format!(
+                    "Session metadata not found: {}",
+                    metadata.session_id
+                ))
+            })?;
+        if !current.needs_last_turn_backfill() {
+            return Ok(current);
+        }
+        let boundary = self
+            .load_session_revert_state(workspace_path, &current.session_id)
+            .await?
+            .map(|state| state.boundary_turn);
+        // Enumerate filenames once, then read backwards only until the latest
+        // user Turn is found. Gaps and trailing maintenance Turns are legal.
+        let paths = self
+            .list_indexed_turn_paths(workspace_path, &current.session_id)
+            .await?;
+        if paths.is_empty() {
+            return Err(OpenBitFunError::NotFound(format!(
+                "Session activity history is missing: {}",
+                current.session_id
+            )));
+        }
+        for (index, path) in paths.into_iter().rev() {
+            if boundary.is_some_and(|boundary| index >= boundary) {
+                continue;
+            }
+            let turn = self
+                .read_json_optional::<StoredTurnActivity>(&path)
+                .await?
+                .ok_or_else(|| {
+                    OpenBitFunError::NotFound(format!(
+                        "Session activity Turn is missing: {}",
+                        path.display()
+                    ))
+                })?;
+            if turn.session_id != current.session_id || turn.turn_index != index {
+                return Err(OpenBitFunError::Validation(format!(
+                    "Session activity Turn identity mismatch: {}",
+                    path.display()
+                )));
+            }
+            if turn.kind != DialogTurnKind::UserDialog {
+                continue;
+            }
+            current.last_turn = Some(SessionLastTurn {
+                turn_id: turn.turn_id,
+                turn_index: turn.turn_index,
+                status: turn.status.clone(),
+                end_time: turn.end_time,
+                execution_generation: turn.recovery_epoch.or_else(||
+                    turn.recovery.as_ref().map(|recovery| recovery.execution_generation)),
+                recovery_pending: Some(turn.status == TurnStatus::Cancelled
+                    && turn.finish_reason.as_deref() == Some("interrupted")
+                    && turn.recovery.as_ref().is_some_and(|recovery|
+                        recovery.status == openbitfun_services_core::session::DialogTurnRecoveryStatus::Interrupted)),
+            });
+            // Repair outcome only. Inferring a read receipt from old history
+            // would revive notifications the user has already acknowledged.
+            // A staged revert is a temporary view: never persist its outcome
+            // over the physical history that redo may expose again.
+            if boundary.is_none() {
+                self.session_metadata_store(workspace_path)
+                    .save_metadata(&current)
+                    .await
+                    .map_err(Self::session_metadata_store_error)?;
+            }
+            return Ok(current);
+        }
+        Ok(current)
+    }
+
     pub async fn list_session_metadata_page(
         &self,
         workspace_path: &Path,
@@ -2457,7 +2588,7 @@ impl PersistenceManager {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: if legacy_minimal {
-                "minimal".to_string()
+                "Minimal".to_string()
             } else {
                 metadata.agent_type.clone()
             },
@@ -2828,7 +2959,7 @@ impl PersistenceManager {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: if legacy_minimal {
-                    "minimal".to_string()
+                    "Minimal".to_string()
                 } else {
                     metadata.agent_type
                 },
@@ -3397,10 +3528,7 @@ impl PersistenceManager {
         self.invalidate_session_search(workspace_path, &turn.session_id)
             .await;
 
-        let file = StoredDialogTurnFile {
-            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
-            turn: turn.clone(),
-        };
+        let file = StoredDialogTurnFile::new(turn.clone());
         let write_started_at = Instant::now();
         self.write_json_atomic(
             &self.turn_path(workspace_path, &turn.session_id, turn.turn_index),
@@ -4546,7 +4674,7 @@ mod tests {
                 &SessionMetadata::new(
                     session_id.to_string(),
                     "Hidden suffix".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )
@@ -4657,7 +4785,7 @@ mod tests {
         let session = Session::new_with_id(
             format!("model-summary-{}", Uuid::new_v4()),
             "Model summary".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 model_id: Some("fast".to_string()),
@@ -5381,7 +5509,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog persistence".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5461,7 +5589,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog restore".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5552,7 +5680,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Legacy catalog window".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5642,7 +5770,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog missing file".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5697,7 +5825,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Incremental catalog repair".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5806,7 +5934,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog rebuild fallback".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5875,7 +6003,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog staged revert".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5950,7 +6078,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Turn window".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6246,7 +6374,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Concurrent metadata".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6398,7 +6526,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Transactional deletion".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6470,7 +6598,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Transactional session deletion".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6516,7 +6644,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Canonical metadata lock".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6786,6 +6914,266 @@ mod tests {
             !manager.project_sessions_dir(workspace.path()).exists(),
             "listing sessions should not create the runtime sessions directory"
         );
+    }
+
+    async fn legacy_activity_fixture(
+        manager: &PersistenceManager,
+        workspace: &Path,
+    ) -> SessionMetadata {
+        let mut metadata = SessionMetadata::new(
+            "legacy-activity".into(),
+            "Original title".into(),
+            "agent".into(),
+            "model".into(),
+        );
+        metadata.turn_count = 2;
+        metadata.last_active_at = 100;
+        metadata.last_finished_at = Some(100);
+        manager
+            .session_metadata_store(workspace)
+            .save_metadata(&metadata)
+            .await
+            .unwrap();
+        // Sparse storage positions are legal. An unrelated old Turn and the
+        // runtime sidecar are deliberately unreadable: repair must not hydrate them.
+        manager
+            .write_text_atomic(
+                &manager.turn_path(workspace, &metadata.session_id, 0),
+                "not-json",
+            )
+            .await
+            .unwrap();
+        manager
+            .write_text_atomic(
+                &manager.state_path(workspace, &metadata.session_id),
+                "not-json",
+            )
+            .await
+            .unwrap();
+        manager
+            .write_json_atomic(
+                &manager.turn_path(workspace, &metadata.session_id, 3),
+                &serde_json::json!({
+                    "turn_id": "legacy-turn", "turn_index": 3, "session_id": metadata.session_id,
+                    "status": "error", "end_time": 100,
+                    // Unknown fields and legacy aliases do not require a full Turn DTO.
+                    "modelRounds": {"futurePayload": true}, "futureField": [1, 2, 3]
+                }),
+            )
+            .await
+            .unwrap();
+        metadata
+    }
+
+    #[tokio::test]
+    async fn session_activity_backfill_reads_only_the_latest_user_outcome_and_preserves_receipts() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let metadata = legacy_activity_fixture(&manager, workspace.path()).await;
+        manager
+            .write_json_atomic(
+                &manager.turn_path(workspace.path(), &metadata.session_id, 5),
+                &serde_json::json!({
+                    "turnId": "utility", "turnIndex": 5, "sessionId": metadata.session_id,
+                    "kind": "local_command", "status": "completed"
+                }),
+            )
+            .await
+            .unwrap();
+        let page = manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .unwrap();
+        assert!(
+            page.sessions[0].last_turn.is_none(),
+            "initial lists must remain metadata-only"
+        );
+
+        let (first, overlapping) = tokio::join!(
+            manager.backfill_session_last_turn(workspace.path(), metadata.clone()),
+            manager.backfill_session_last_turn(workspace.path(), metadata.clone())
+        );
+        let repaired = first.unwrap();
+        assert_eq!(repaired.last_turn, overlapping.unwrap().last_turn);
+        let last = repaired.last_turn.as_ref().unwrap();
+        assert_eq!(last.turn_id, "legacy-turn");
+        assert_eq!(last.turn_index, 3);
+        assert_eq!(last.status, super::TurnStatus::Error);
+        assert_eq!(last.recovery_pending, Some(false));
+        assert!(
+            repaired.unread_completion.is_none(),
+            "old viewed results must stay read"
+        );
+        assert_eq!(repaired.last_active_at, metadata.last_active_at);
+        assert_eq!(repaired.last_finished_at, metadata.last_finished_at);
+        assert_eq!(repaired.session_name, metadata.session_name);
+
+        // A later request, even one holding the old page, reuses persisted facts.
+        manager
+            .write_text_atomic(
+                &manager.turn_path(workspace.path(), &metadata.session_id, 3),
+                "not-json",
+            )
+            .await
+            .unwrap();
+        let again = manager
+            .backfill_session_last_turn(workspace.path(), metadata)
+            .await
+            .unwrap();
+        assert_eq!(again.last_turn, repaired.last_turn);
+        let indexed = manager
+            .session_metadata_by_ids(workspace.path(), &[again.session_id.clone()])
+            .await
+            .unwrap();
+        assert_eq!(indexed[0].last_turn, again.last_turn);
+    }
+
+    #[tokio::test]
+    async fn session_activity_backfill_distinguishes_a_recoverable_pause_from_cancellation() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let mut metadata = legacy_activity_fixture(&manager, workspace.path()).await;
+        metadata.unread_completion = Some("interrupted".into());
+        manager
+            .session_metadata_store(workspace.path())
+            .save_metadata(&metadata)
+            .await
+            .unwrap();
+        manager.write_json_atomic(&manager.turn_path(workspace.path(), &metadata.session_id, 3), &serde_json::json!({
+            "turnId": "paused-turn", "turnIndex": 3, "sessionId": metadata.session_id,
+            "status": "cancelled", "finishReason": "interrupted",
+            "recovery": {"status": "interrupted", "executionGeneration": 2, "resumeCount": 1}
+        })).await.unwrap();
+        let repaired = manager
+            .backfill_session_last_turn(workspace.path(), metadata.clone())
+            .await
+            .unwrap();
+        let last = repaired.last_turn.as_ref().unwrap();
+        assert_eq!(last.recovery_pending, Some(true));
+        assert_eq!(last.execution_generation, Some(2));
+        assert_eq!(repaired.unread_completion, metadata.unread_completion);
+
+        // Upgrade a summary written by the immediately previous version too.
+        let mut legacy_summary = repaired;
+        legacy_summary.last_turn.as_mut().unwrap().recovery_pending = None;
+        manager
+            .session_metadata_store(workspace.path())
+            .save_metadata(&legacy_summary)
+            .await
+            .unwrap();
+        let upgraded = manager
+            .backfill_session_last_turn(workspace.path(), legacy_summary)
+            .await
+            .unwrap();
+        assert_eq!(upgraded.last_turn.unwrap().recovery_pending, Some(true));
+    }
+
+    #[tokio::test]
+    async fn session_activity_backfill_keeps_a_newer_write_and_does_not_revive_deleted_sessions() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let metadata = legacy_activity_fixture(&manager, workspace.path()).await;
+        let mut current = metadata.clone();
+        current.session_name = "New title".into();
+        current.unread_completion = Some("completed".into());
+        current.last_turn = Some(super::SessionLastTurn {
+            turn_id: "new-turn".into(),
+            turn_index: 4,
+            status: super::TurnStatus::Completed,
+            end_time: Some(200),
+            execution_generation: None,
+            recovery_pending: Some(false),
+        });
+        manager
+            .session_metadata_store(workspace.path())
+            .save_metadata(&current)
+            .await
+            .unwrap();
+        let repaired = manager
+            .backfill_session_last_turn(workspace.path(), metadata.clone())
+            .await
+            .unwrap();
+        assert_eq!(repaired.last_turn, current.last_turn);
+        assert_eq!(repaired.session_name, current.session_name);
+        assert_eq!(repaired.unread_completion, current.unread_completion);
+
+        manager
+            .delete_session(workspace.path(), &metadata.session_id)
+            .await
+            .unwrap();
+        assert!(manager
+            .backfill_session_last_turn(workspace.path(), metadata.clone())
+            .await
+            .is_err());
+        assert!(!manager
+            .session_layout(workspace.path())
+            .session_dir(&metadata.session_id)
+            .exists());
+    }
+
+    #[tokio::test]
+    async fn session_activity_backfill_keeps_unreadable_history_unknown_without_rewriting_it() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let metadata = legacy_activity_fixture(&manager, workspace.path()).await;
+        let tail = manager.turn_path(workspace.path(), &metadata.session_id, 3);
+        manager.write_text_atomic(&tail, "not-json").await.unwrap();
+        assert!(manager
+            .backfill_session_last_turn(workspace.path(), metadata.clone())
+            .await
+            .is_err());
+        let retained = manager
+            .load_session_metadata(workspace.path(), &metadata.session_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(retained.last_turn.is_none());
+        assert_eq!(std::fs::read_to_string(tail).unwrap(), "not-json");
+    }
+
+    #[tokio::test]
+    async fn session_activity_backfill_does_not_persist_a_staged_revert_projection() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
+        let metadata = legacy_activity_fixture(&manager, workspace.path()).await;
+        manager.write_json_atomic(&manager.turn_path(workspace.path(), &metadata.session_id, 1), &serde_json::json!({
+            "turnId": "visible-turn", "turnIndex": 1, "sessionId": metadata.session_id, "status": "completed"
+        })).await.unwrap();
+        manager
+            .save_session_revert_state(
+                workspace.path(),
+                &metadata.session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 2,
+                    original_turn_end: 4,
+                    phase: SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .unwrap();
+        let projected = manager
+            .backfill_session_last_turn(workspace.path(), metadata.clone())
+            .await
+            .unwrap();
+        assert_eq!(projected.last_turn.unwrap().turn_id, "visible-turn");
+        assert!(manager
+            .load_session_metadata(workspace.path(), &metadata.session_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .last_turn
+            .is_none());
+        manager
+            .delete_session_revert_state(workspace.path(), &metadata.session_id)
+            .await
+            .unwrap();
+        let restored = manager
+            .backfill_session_last_turn(workspace.path(), metadata)
+            .await
+            .unwrap();
+        assert_eq!(restored.last_turn.unwrap().turn_id, "legacy-turn");
     }
 
     #[tokio::test]
@@ -7196,7 +7584,7 @@ mod tests {
         let historical = Session::new_with_id(
             historical_id.clone(),
             "Historical remote session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config.clone(),
         );
         manager
@@ -7257,7 +7645,7 @@ mod tests {
         let new_session = Session::new_with_id(
             new_session_id.clone(),
             "New remote session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config,
         );
         manager

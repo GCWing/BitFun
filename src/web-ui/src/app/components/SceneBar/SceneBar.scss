@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   flex: 1 1 240px;
-  min-width: calc(var(--openbitfun-control-tab-group-item-height-sm) * 4);
+  min-width: 0;
   height: 100%;
   overflow: hidden;
   background: transparent;
@@ -131,7 +131,6 @@
     }
 
     &:active {
-      transform: scale(0.94);
       background: var(--openbitfun-color-action-neutral-surface-pressed);
     }
 
@@ -141,13 +140,9 @@
     }
   }
 
-  &__tab-title {
-    display: block;
-    min-width: 0;
-    max-width: 280px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  &__tabs [data-openbitfun-part='item'] {
+    // Cap the whole tab, including its label padding and close-action reserve.
+    max-inline-size: 220px;
   }
 }
 

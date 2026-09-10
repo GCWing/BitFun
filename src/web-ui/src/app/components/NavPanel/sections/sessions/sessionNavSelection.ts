@@ -1,3 +1,5 @@
+import { isSessionSceneId } from '@/app/components/SceneBar/types';
+
 interface SessionNavRowActiveInput {
   rowSessionId: string;
   activeTabId?: string | null;
@@ -7,8 +9,6 @@ interface SessionNavRowActiveInput {
   activeChildHasVisibleRow: boolean;
 }
 
-const SESSION_TAB_ID = 'session';
-
 export function isSessionNavRowActive({
   rowSessionId,
   activeTabId,
@@ -17,7 +17,7 @@ export function isSessionNavRowActive({
   activeChildParentSessionId,
   activeChildHasVisibleRow,
 }: SessionNavRowActiveInput): boolean {
-  if (activeTabId !== SESSION_TAB_ID || !activeSessionId) {
+  if (!isSessionSceneId(activeTabId) || !activeSessionId) {
     return false;
   }
 

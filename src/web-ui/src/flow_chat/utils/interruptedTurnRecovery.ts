@@ -1,4 +1,10 @@
-import type { Session } from '../types/flow-chat';
+import type { DialogTurn, Session } from '../types/flow-chat';
+
+/** Durable recovery state; a surface may impose further Resume capability gates. */
+export function isTurnAwaitingRecovery(turn: DialogTurn | undefined): boolean {
+  return Boolean(turn?.status === 'cancelled' && turn.finishReason === 'interrupted'
+    && turn.recovery?.status === 'interrupted');
+}
 
 export interface InterruptedTurnRecoveryCandidate {
   sessionId: string;
@@ -84,11 +90,5 @@ export function selectInterruptedTurnRecovery(
 }
 
 export function hasInterruptedTurnHoldingQueue(session: Session | undefined): boolean {
-  const latest = session?.dialogTurns.at(-1);
-  return Boolean(
-    latest
-    && latest.status === 'cancelled'
-    && latest.finishReason === 'interrupted'
-    && latest.recovery?.status === 'interrupted',
-  );
+  return isTurnAwaitingRecovery(session?.dialogTurns.at(-1));
 }

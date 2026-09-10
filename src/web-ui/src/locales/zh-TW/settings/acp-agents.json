@@ -112,7 +112,8 @@
   "permissionMode": {
     "ask": "詢問",
     "allowOnce": "自動通過",
-    "rejectOnce": "自動拒絕"
+    "legacyRejectWarning": "部分 Agent 的已儲存設定仍為「自動拒絕」，編輯器已將其替換為「詢問」。請儲存並套用目前選擇；儲存前，這些 Agent 仍會自動拒絕請求。",
+    "saveAndApply": "儲存並套用"
   },
   "requirements": {
     "tool": "CLI",

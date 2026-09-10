@@ -34,15 +34,15 @@
   }
 
   &.is-remote {
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 14%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 14%, transparent);
     color: var(--openbitfun-color-content-primary);
 
     .openbitfun-device-switcher__icon {
-      color: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-emphasis);
     }
 
     &:hover {
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 20%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 20%, transparent);
     }
   }
 
@@ -58,7 +58,6 @@
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -69,7 +68,7 @@
     flex-shrink: 0;
     padding: 1px 5px;
     border-radius: var(--openbitfun-radius-sm);
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 18%, transparent);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 18%, transparent);
     color: var(--openbitfun-color-status-success-content);
     font-size: var(--openbitfun-type-micro-font-size);
     font-variant-numeric: tabular-nums;
@@ -102,10 +101,10 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-emphasis);
 
     &.is-busy {
-      background: var(--openbitfun-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-emphasis);
       animation: openbitfun-device-switcher-pulse 1.6s var(--openbitfun-motion-easing-standard) infinite;
     }
 
@@ -125,7 +124,7 @@
     white-space: nowrap;
 
     &.is-busy {
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
+      background: color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 18%, transparent);
       color: var(--openbitfun-color-status-warning-content);
     }
   }

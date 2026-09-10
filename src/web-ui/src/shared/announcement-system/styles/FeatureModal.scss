@@ -52,15 +52,6 @@
     overflow: hidden;
     position: relative;
 
-    // Thin scrollbar
-    scrollbar-width: thin;
-    scrollbar-color: var(--openbitfun-color-border-default) transparent;
-    &::-webkit-scrollbar { width: 4px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb {
-      background: var(--openbitfun-color-border-default);
-      border-radius: 2px;
-    }
   }
 
   &__page {

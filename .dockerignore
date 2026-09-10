@@ -6,6 +6,8 @@
 !src/apps/relay-server/Cargo.toml
 !src/apps/relay-server/src/
 !src/apps/relay-server/src/**
+!src/apps/relay-server/static/
+!src/apps/relay-server/static/**
 !src/crates/
 !src/crates/services/
 !src/crates/services/relay-service/

@@ -91,28 +91,9 @@
   }
 
   &__path-input-field {
-    display: block;
     width: 100%;
-  }
-
-  &__path-display,
-  &__path-input {
-    width: 100%;
+    min-width: 0;
     box-sizing: border-box;
-    border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: 6px;
-    background: var(--openbitfun-color-surface-canvas);
-    color: var(--openbitfun-color-content-primary);
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    padding: 6px 10px;
-    text-align: left;
-  }
-
-  &__path-display {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: text;
   }
 
   &__body {
@@ -186,7 +167,6 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-label-sm-font-size);

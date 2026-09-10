@@ -307,33 +307,6 @@ impl AppearanceConfig {
         appearance_id
     }
 
-    fn startup_messages_json(locale: &str) -> String {
-        let messages = match locale {
-            "en-US" | "en" => serde_json::json!({
-                "loadingApp": "Starting OpenBitFun...",
-                "minimize": "Minimize",
-                "maximize": "Maximize",
-                "close": "Close",
-                "petLoading": "Loading companion..."
-            }),
-            "zh-TW" | "zh-Hant-TW" => serde_json::json!({
-                "loadingApp": "正在啟動 OpenBitFun...",
-                "minimize": "最小化",
-                "maximize": "最大化",
-                "close": "關閉",
-                "petLoading": "正在載入助手..."
-            }),
-            _ => serde_json::json!({
-                "loadingApp": "正在启动 OpenBitFun...",
-                "minimize": "最小化",
-                "maximize": "最大化",
-                "close": "关闭",
-                "petLoading": "正在加载助手..."
-            }),
-        };
-        messages.to_string()
-    }
-
     fn generate_init_script(
         &self,
         startup_trace_id: &str,
@@ -344,7 +317,6 @@ impl AppearanceConfig {
         let startup_locale = &bootstrap_config.locale;
         let startup_locale_json =
             serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
-        let startup_messages_json = Self::startup_messages_json(startup_locale);
         let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
@@ -383,7 +355,6 @@ impl AppearanceConfig {
                 window.__OPENBITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
                 window.__OPENBITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
                 window.__OPENBITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
-                window.__OPENBITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
                 window.__OPENBITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
                 window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__ = {bootstrap_appearance_id_json};
                 window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__ = {bootstrap_appearance_selection_json};
@@ -443,7 +414,6 @@ impl AppearanceConfig {
             perf_trace_enabled = perf_trace_enabled,
             bootstrap_log_level_json = bootstrap_log_level_json,
             startup_locale_json = startup_locale_json,
-            startup_messages_json = startup_messages_json,
             show_startup_window_controls = show_startup_window_controls,
             bootstrap_keybindings_assignment = bootstrap_keybindings_assignment,
             bootstrap_workspace_startup_state_assignment =
@@ -564,13 +534,7 @@ pub fn create_main_window(
     );
 
     let main_url = if use_development_frontend() {
-        match "http://localhost:1422".parse() {
-            Ok(url) => WebviewUrl::External(url),
-            Err(e) => {
-                error!("Invalid dev URL, fallback to app URL: {}", e);
-                WebviewUrl::App("index.html".into())
-            }
-        }
+        app_url(app_handle, "")
     } else {
         frontend_workbench.active_frontend_url()
     };
@@ -648,7 +612,9 @@ pub fn create_main_window(
         builder = builder
             .decorations(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .traffic_light_position(tauri::LogicalPosition::new(12.0, 15.0))
+            // Match the 45px toolbar row (layout.toolbar.mdHeight) used by
+            // NavBar and SceneTopBar, including when the sidebar is collapsed.
+            .traffic_light_position(tauri::LogicalPosition::new(12.0, 22.5))
             .hidden_title(true);
     }
 
@@ -750,10 +716,24 @@ fn show_main_window_for_startup(
     }
 }
 
-fn app_url(path: &str) -> WebviewUrl {
+fn development_frontend_url(
+    dev_url: Option<&tauri::Url>,
+    path: &str,
+) -> Result<tauri::Url, String> {
+    let base = dev_url.ok_or_else(|| "Tauri build.devUrl is not configured".to_string())?;
+    if path.is_empty() {
+        return Ok(base.clone());
+    }
+    base.join(path).map_err(|error| error.to_string())
+}
+
+fn app_url(app: &tauri::AppHandle, path: &str) -> WebviewUrl {
     if use_development_frontend() {
-        match format!("http://localhost:1422/{}", path).parse() {
-            Ok(url) => WebviewUrl::External(url),
+        match development_frontend_url(app.config().build.dev_url.as_ref(), path) {
+            Ok(url) => {
+                debug!("Development frontend URL resolved: {}", url);
+                WebviewUrl::External(url)
+            }
             Err(e) => {
                 error!("Invalid dev URL, fallback to app URL: {}", e);
                 WebviewUrl::App(path.into())
@@ -932,7 +912,7 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         return Ok(());
     }
 
-    let url = app_url("?openbitfunWindow=agent-companion");
+    let url = app_url(&app, "?openbitfunWindow=agent-companion");
     let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
         .title("OpenBitFun Agent Companion")
         .inner_size(
@@ -1079,4 +1059,34 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod development_frontend_tests {
+    use super::development_frontend_url;
+
+    #[test]
+    fn windows_use_the_configured_development_origin() {
+        for origin in [
+            "http://localhost:1422/",
+            "http://localhost:1432/",
+            "http://127.0.0.1:15432/app/",
+        ] {
+            let base = origin.parse().unwrap();
+            assert_eq!(development_frontend_url(Some(&base), "").unwrap(), base);
+            assert_eq!(
+                development_frontend_url(Some(&base), "?openbitfunWindow=agent-companion")
+                    .unwrap()
+                    .as_str(),
+                format!("{origin}?openbitfunWindow=agent-companion")
+            );
+        }
+    }
+
+    #[test]
+    fn missing_development_url_does_not_choose_another_instance() {
+        assert!(development_frontend_url(None, "")
+            .unwrap_err()
+            .contains("build.devUrl"));
+    }
 }

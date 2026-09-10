@@ -75,7 +75,7 @@ export const useFlowChat = () => {
       const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
       const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
 
-      const agentTypeForSession = (config?.agentType || 'agentic').trim() || 'agentic';
+      const agentTypeForSession = (config?.agentType || 'Standard').trim() || 'Standard';
       const maxContextTokens = await getModelMaxTokens(config?.modelName, agentTypeForSession);
       const sessionTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
@@ -156,7 +156,7 @@ export const useFlowChat = () => {
       
         try {
           await aiApi.createAISession({
-            agent_type: config?.agentType || 'agentic',
+            agent_type: config?.agentType || 'Standard',
             model_name: config?.modelName || 'default',
             description: `FlowChat session ${sessionId}`
           });
@@ -170,7 +170,7 @@ export const useFlowChat = () => {
         workspaceId: workspace?.id ?? config?.workspaceId,
       };
 
-      const fallbackAgentType = (config?.agentType || 'agentic').trim() || 'agentic';
+      const fallbackAgentType = (config?.agentType || 'Standard').trim() || 'Standard';
       const fallbackTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
           ? 'claw'

@@ -84,6 +84,7 @@ test("registry exposes only the formal stable components", () => {
       "ProminentToolCard",
       "ReadFileToolCard",
       "ReviewSummaryToolCard",
+      "RollingText",
       "RunCodeToolCard",
       "ScrollArea",
       "SearchField",
@@ -122,12 +123,20 @@ test("every registered component declares states and owned tokens", () => {
         (token) =>
           token.startsWith("border.") ||
           token.startsWith("color.") ||
+          (component.name === "Button" && token.startsWith("component.button.")) ||
+          (component.name === "TabGroup" && [
+            "component.button.outlineBorder",
+            "component.button.outlineBorderInteractive",
+            "component.button.fillBackground",
+          ].includes(token)) ||
           token.startsWith("control.") ||
+          token.startsWith("effect.") ||
           token.startsWith("font.") ||
           token.startsWith("letterSpacing.") ||
           token.startsWith("lineHeight.") ||
           token.startsWith("layout.") ||
           token.startsWith("motion.") ||
+          token === "opacity.iconArtwork" ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||

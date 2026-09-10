@@ -311,14 +311,10 @@
     text-align: left;
   }
 
-  &__workspace-item.is-active &__workspace-item-name-stack {
-    padding-right: 28px;
-  }
-
   &__workspace-item:hover &__workspace-item-name-stack,
   &__workspace-item.is-menu-open &__workspace-item-name-stack,
   &__workspace-item:focus-within &__workspace-item-name-stack {
-    padding-right: 52px;
+    padding-right: 76px;
   }
 
   &__workspace-item-active-icon {
@@ -416,7 +412,6 @@
     flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-label-sm-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
@@ -523,12 +518,12 @@
     background: var(--openbitfun-color-content-muted);
 
     &.is-connected {
-      background: var(--openbitfun-color-status-success-content);
+      background: var(--openbitfun-color-status-success-emphasis);
     }
 
     &.is-error,
     &.is-disconnected {
-      background: var(--openbitfun-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-emphasis);
     }
 
     &.is-unknown {
@@ -536,7 +531,7 @@
     }
 
     &.is-connecting {
-      background: var(--openbitfun-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-emphasis);
       animation: openbitfun-status-dot-pulse 1.4s ease-in-out infinite;
     }
   }
@@ -561,11 +556,11 @@
     }
 
     &.is-green {
-      background: var(--openbitfun-color-status-success-content);
+      background: var(--openbitfun-color-status-success-emphasis);
     }
 
     &.is-yellow {
-      background: var(--openbitfun-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-emphasis);
     }
 
     &.is-gray {
@@ -573,7 +568,7 @@
     }
 
     &.is-red {
-      background: var(--openbitfun-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 
@@ -808,15 +803,15 @@
 
     &.is-warning {
       color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 84%, var(--openbitfun-color-content-primary));
-      border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 18%, transparent);
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, transparent);
+      border-color: var(--openbitfun-color-status-warning-border);
+      background: var(--openbitfun-color-status-warning-surface);
     }
   }
 
   &__workspace-index-tooltip-error {
     color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 88%, var(--openbitfun-color-content-primary));
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 22%, transparent);
-    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 11%, transparent);
+    border-color: var(--openbitfun-color-status-danger-border);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   &__workspace-index-tooltip-actions {
@@ -862,9 +857,8 @@
                 opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
                 margin-left var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -1211,14 +1205,13 @@
   &__assistant-item:hover &__assistant-item-name-btn,
   &__assistant-item.is-menu-open &__assistant-item-name-btn,
   &__assistant-item:focus-within &__assistant-item-name-btn {
-    padding-right: 52px;
+    padding-right: 76px;
   }
 
   &__assistant-item-label {
     flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-label-sm-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
@@ -1331,13 +1324,8 @@
   &__workspace-group-title-action {
     border-radius: var(--openbitfun-radius-sm);
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
-
-    &:active {
-      transform: scale(0.92);
-    }
   }
 
   &__workspace-item,
@@ -1357,7 +1345,6 @@
     background: transparent;
     box-shadow: none;
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
   }
@@ -1375,11 +1362,6 @@
     background: transparent;
   }
 
-  &__workspace-item-card:active,
-  &__assistant-item-card:active {
-    transform: scale(0.99);
-  }
-
   &__workspace-item-label,
   &__assistant-item-label {
     font-weight: var(--openbitfun-type-body-sm-font-weight);
@@ -1390,28 +1372,12 @@
     font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
-  &__workspace-item-collapse-btn,
-  &__assistant-item-collapse-btn,
-  &__workspace-item-name-btn,
-  &__assistant-item-name-btn {
-    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &:active {
-      transform: scale(0.97);
-    }
-  }
-
   &__workspace-item-menu-trigger,
   &__assistant-item-menu-trigger {
     border-radius: var(--openbitfun-radius-sm);
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
-
-    &:active {
-      transform: scale(0.92);
-    }
   }
 
   &__workspace-item-sessions,

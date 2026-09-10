@@ -1,6 +1,8 @@
 import { themeCssVariables, themes, type ThemeTokenName } from '@openbitfun/theme-openbitfun';
 
 import type { AppearancePalette } from './AppearancePalette';
+import { withLegacyButtonTokens } from './buttonThemeCompatibility';
+import { DEFAULT_DARK_APPEARANCE_ID, DEFAULT_LIGHT_APPEARANCE_ID } from './palettes';
 import type {
   AppearanceColorValue,
   AppearanceDurationValue,
@@ -67,11 +69,41 @@ type ThemeValue = string | number | boolean;
 
 function themeValuesToCssTokens(
   values: Readonly<Record<ThemeTokenName, ThemeValue>>,
+  palette: AppearancePalette,
 ): Record<AppearanceThemeTokenName, string> {
-  return Object.fromEntries(
+  const tokens = Object.fromEntries(
     (Object.entries(values) as [ThemeTokenName, ThemeValue][])
       .map(([name, value]) => [themeCssVariables[name], String(value)]),
   ) as Record<AppearanceThemeTokenName, string>;
+  if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID || palette.id === DEFAULT_DARK_APPEARANCE_ID) {
+    if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID) {
+      // Neutral action labels are primary text in the public theme. The generic
+      // palette's secondary text projection used to make product menus too faint.
+      tokens['--openbitfun-color-action-neutral-content'] = String(themes.light['color.action.neutral.content']);
+      tokens['--openbitfun-color-scrollbar-thumb'] = String(themes.light['color.scrollbar.thumb']);
+      tokens['--openbitfun-color-number-badge-background'] = String(themes.light['color.numberBadge.background']);
+      tokens['--openbitfun-color-key-hint-content'] = String(themes.light['color.keyHint.content']);
+      tokens['--openbitfun-color-action-card-background'] = String(themes.light['color.actionCard.background']);
+      tokens['--openbitfun-color-content-caption'] = String(themes.light['color.content.caption']);
+      // Default light fields use the published neutral states in both root and
+      // chrome. Branded palettes and imported overrides retain their own colors.
+      for (const name of Object.keys(themes.light) as ThemeTokenName[]) {
+        if (name.startsWith('color.field.') || name.startsWith('color.composer.')) {
+          tokens[themeCssVariables[name] as AppearanceThemeTokenName] = String(themes.light[name]);
+        }
+      }
+    }
+    return tokens;
+  }
+  // Branded presets retain their existing action palette; the default product
+  // themes consume the component colors published by the design system.
+  const legacyTokens = Object.fromEntries(
+    Object.entries(tokens).filter(([name]) => !name.startsWith('--openbitfun-component-button-')),
+  );
+  for (const [name, value] of Object.entries(withLegacyButtonTokens(legacyTokens))) {
+    if (value !== undefined) tokens[name as AppearanceThemeTokenName] = value;
+  }
+  return tokens;
 }
 
 function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenName, ThemeValue> {
@@ -104,6 +136,9 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
     'color.content.primary': colors.text.primary,
+    'color.content.caption': colors.text.muted,
+    'color.keyHint.content': colors.text.muted,
+    'color.numberBadge.background': colors.element.base,
     'color.content.secondary': colors.text.secondary,
     'color.content.muted': colors.text.muted,
     'color.content.disabled': colors.text.disabled,
@@ -118,6 +153,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.neutral.content': colors.text.secondary,
     'color.action.neutral.contentDisabled': colors.text.disabled,
     'color.action.neutral.fillBorder': colors.element.base,
+    'color.actionCard.background': colors.element.base,
     'color.action.neutral.surface': colors.element.base,
     'color.action.neutral.surfaceHover': colors.element.medium,
     'color.action.neutral.surfacePressed': colors.element.strong,
@@ -133,11 +169,16 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.quiet.pressed': colors.element.base,
     'color.action.quiet.content': colors.text.secondary,
     'color.selection.surface': colors.element.medium,
+    'color.field.groupBackground': colors.background.tertiary,
     'color.field.background': colors.background.secondary,
     'color.field.backgroundHover': colors.element.subtle,
+    'color.composer.border': colors.border.base,
+    'color.composer.contextBackground': colors.element.subtle,
     'color.field.border': colors.border.base,
     'color.field.borderHover': colors.border.medium,
     'color.field.borderFocus': colors.accent[500],
+    'color.field.borderActive': colors.accent[500],
+    'color.field.placeholder': colors.text.muted,
     'color.focus.ring': colors.accent[500],
     'color.status.info.content': colors.semantic.info,
     'color.status.info.surface': colors.semantic.infoBg,
@@ -174,6 +215,10 @@ function createChromeThemeTokens(
   const chrome = palette.colors.chrome;
   if (!chrome) return undefined;
   const values = createThemeTokenValues(palette);
+  const statusTheme = themes[chrome.type ?? palette.type];
+  for (const name of Object.keys(statusTheme) as ThemeTokenName[]) {
+    if (name.startsWith('color.status.')) values[name] = statusTheme[name];
+  }
   const scrollbar = chrome.scrollbar ?? palette.colors.scrollbar ?? {
     thumb: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)',
     thumbHover: palette.type === 'dark' ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.3)',
@@ -189,6 +234,9 @@ function createChromeThemeTokens(
     'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
+    'color.content.caption': chrome.text.muted,
+    'color.keyHint.content': chrome.text.muted,
+    'color.numberBadge.background': chrome.element.base,
     'color.content.secondary': chrome.text.secondary,
     'color.content.muted': chrome.text.muted,
     'color.content.disabled': chrome.text.disabled,
@@ -201,6 +249,7 @@ function createChromeThemeTokens(
     'color.action.neutral.content': chrome.text.secondary,
     'color.action.neutral.contentDisabled': chrome.text.disabled,
     'color.action.neutral.fillBorder': chrome.element.base,
+    'color.actionCard.background': chrome.element.base,
     'color.action.neutral.surface': chrome.element.base,
     'color.action.neutral.surfaceHover': chrome.element.medium,
     'color.action.neutral.surfacePressed': chrome.element.strong,
@@ -212,17 +261,22 @@ function createChromeThemeTokens(
     'color.action.quiet.pressed': chrome.element.base,
     'color.action.quiet.content': chrome.text.secondary,
     'color.selection.surface': chrome.element.medium,
+    'color.field.groupBackground': chrome.background.tertiary,
     'color.field.background': chrome.background.secondary,
     'color.field.backgroundHover': chrome.element.subtle,
+    'color.composer.border': chrome.border.base,
+    'color.composer.contextBackground': chrome.element.subtle,
     'color.field.border': chrome.border.base,
     'color.field.borderHover': chrome.border.medium,
     'color.field.borderFocus': chrome.accent[500],
+    'color.field.borderActive': chrome.accent[500],
+    'color.field.placeholder': chrome.text.muted,
     'color.focus.ring': chrome.accent[500],
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
   } satisfies Partial<Record<ThemeTokenName, ThemeValue>>);
 
-  return themeValuesToCssTokens(values);
+  return themeValuesToCssTokens(values, palette);
 }
 
 function createAppearanceOwnedTokens(
@@ -243,7 +297,7 @@ function createAppearanceOwnedTokens(
   const configPageRowHover = configPage?.rowHover
     ?? (palette.type === 'dark' ? colors.element.base : colors.element.soft);
   return {
-    ...themeValuesToCssTokens(createThemeTokenValues(palette)),
+    ...themeValuesToCssTokens(createThemeTokenValues(palette), palette),
     '--openbitfun-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
     '--openbitfun-component-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
     '--openbitfun-component-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',

@@ -9,7 +9,9 @@ use super::mode_overrides::{
 };
 #[cfg(feature = "file-watch")]
 use super::source_cache::{LocalSkillWatchMonitor, LocalSkillWatchRoot, VersionedSnapshotCache};
-use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
+use super::types::{
+    ModeSkillInfo, SkillData, SkillInfo, SkillLocation, SkillScanDiagnostic, SkillScanReport,
+};
 use crate::agentic::workspace::WorkspaceFileSystem;
 #[cfg(feature = "external-sources")]
 use crate::external_sources::{
@@ -17,14 +19,16 @@ use crate::external_sources::{
 };
 use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use futures::{stream, StreamExt};
 use log::{debug, error, warn};
+#[cfg(feature = "external-sources")]
+use openbitfun_agent_runtime::skills::normalize_local_skill_dir_name;
 use openbitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
     filter_implicitly_invocable_skills, filter_user_invocable_skills, is_skill_globally_enabled,
-    normalize_local_skill_dir_name, normalize_remote_skill_dir_name, normalize_skill_keys,
-    resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
-    resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
-    ExplicitSkillInvocationResolution, SkillCandidate, OPENBITFUN_SKILL_SOURCE_ID,
+    normalize_skill_keys, resolve_default_hidden_builtin_for_explicit_invocation,
+    resolve_user_config_skill_root, resolve_visible_skills, sort_skill_candidates_by_dir,
+    sort_skills, ExplicitSkillInvocationResolution, SkillCandidate, OPENBITFUN_SKILL_SOURCE_ID,
     OPENBITFUN_SKILL_SOURCE_LABEL, OPENBITFUN_SYSTEM_SKILL_DIR, OPENBITFUN_SYSTEM_SKILL_SLOT,
     OPENBITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS,
     USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
@@ -40,10 +44,12 @@ use openbitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
 use openbitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 #[cfg(feature = "external-sources")]
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
+
+mod discovery;
 
 #[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_SKILL_ROOTS: usize = 64;
@@ -56,6 +62,9 @@ const MAX_OPENCODE_CONFIGURED_POLICY_BYTES: usize = 64 * 1024;
 #[cfg(feature = "external-sources")]
 const OPENCODE_CONFIGURED_PRIORITY_BAND: usize =
     MAX_OPENCODE_CONFIGURED_SKILL_ROOTS * MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT;
+
+// Bound remote IO across the whole scan, including workspaces with many roots.
+const REMOTE_SKILL_SCAN_CONCURRENCY: usize = 4;
 
 const DEEP_RESEARCH_AGENT_ID: &str = "DeepResearch";
 const DEEP_RESEARCH_SKILL_NAME: &str = "deep-research";
@@ -89,6 +98,8 @@ mod implicit_invocation_policy_tests {
             source_slot: "codex".to_string(),
             source_id: "codex".to_string(),
             source_label: "Codex".to_string(),
+            installation_source: None,
+            entry_file: None,
             dir_name: name.to_string(),
             is_builtin: false,
             group_key: None,
@@ -163,6 +174,7 @@ struct RemoteSkillRootEntry {
 #[derive(Debug, Clone)]
 struct UserSkillSources {
     standard: Vec<SkillCandidate>,
+    diagnostics: Vec<SkillScanDiagnostic>,
     #[cfg(feature = "file-watch")]
     cacheable: bool,
     #[cfg(feature = "file-watch")]
@@ -171,7 +183,26 @@ struct UserSkillSources {
 
 struct LocalSkillScan {
     candidates: Vec<SkillCandidate>,
+    diagnostics: Vec<SkillScanDiagnostic>,
     cacheable: bool,
+}
+
+#[derive(Default)]
+struct SkillCandidateScan {
+    candidates: Vec<SkillCandidate>,
+    diagnostics: Vec<SkillScanDiagnostic>,
+}
+
+impl SkillCandidateScan {
+    fn into_candidates(self) -> Vec<SkillCandidate> {
+        for diagnostic in &self.diagnostics {
+            warn!(
+                "Skill discovery notice: path={}, source={}, detail={}",
+                diagnostic.path, diagnostic.source_id, diagnostic.message
+            );
+        }
+        self.candidates
+    }
 }
 
 async fn local_source_path_is_cacheable(path: &Path) -> bool {
@@ -179,6 +210,49 @@ async fn local_source_path_is_cacheable(path: &Path) -> bool {
         Ok(metadata) => !is_symlink_or_reparse(&metadata),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
         Err(_) => false,
+    }
+}
+
+// The skills installer records repository provenance separately from SKILL.md.
+// Read existing lock versions without rewriting them; a missing origin must
+// never turn a name-only match into an installed marketplace package.
+fn parse_skill_installation_sources(content: &str) -> HashMap<String, String> {
+    let lock: serde_json::Value = match serde_json::from_str(content) {
+        Ok(lock) => lock,
+        Err(error) => {
+            warn!("Ignoring invalid skill installation provenance: {}", error);
+            return HashMap::new();
+        }
+    };
+    lock.get("skills")
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, entry)| {
+            if entry.get("sourceType").and_then(serde_json::Value::as_str) != Some("github") {
+                return None;
+            }
+            let source = entry.get("source")?.as_str()?.trim();
+            (!source.is_empty()).then(|| (name.clone(), source.to_string()))
+        })
+        .collect()
+}
+
+fn skill_installation_lock_path(entry: &SkillRootEntry) -> Option<PathBuf> {
+    match (entry.level, entry.slot) {
+        (SkillLocation::Project, "agents") => {
+            Some(entry.path.parent()?.parent()?.join("skills-lock.json"))
+        }
+        (SkillLocation::User, "home.agents") => {
+            let default_path = entry.path.parent()?.join(".skill-lock.json");
+            Some(
+                std::env::var_os("XDG_STATE_HOME")
+                    .filter(|path| !path.is_empty())
+                    .map(|path| PathBuf::from(path).join("skills/.skill-lock.json"))
+                    .unwrap_or(default_path),
+            )
+        }
+        _ => None,
     }
 }
 
@@ -206,6 +280,68 @@ mod local_skill_scan_tests {
             source_label: "Test",
             priority: 0,
             is_builtin: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn installation_source_uses_only_the_matching_project_lock_and_existing_skills() {
+        let temp = tempfile::tempdir().unwrap();
+        let skills_path = temp.path().join(".agents/skills");
+        write_skill(&skills_path.join("shared-review"));
+        fs::write(temp.path().join("skills-lock.json"), r#"{
+            "version": 1, "skills": {
+                "shared-review": {"source":"first/skills", "sourceType":"github", "computedHash":"old"},
+                "deleted": {"source":"other/skills", "sourceType":"github"}
+            }
+        }"#).unwrap();
+        let mut entry = test_root(&skills_path);
+        entry.level = SkillLocation::Project;
+        entry.slot = "agents";
+        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await.candidates;
+        assert_eq!(scanned.len(), 1);
+        assert_eq!(
+            scanned[0].info.installation_source.as_deref(),
+            Some("first/skills")
+        );
+
+        entry.slot = "claude";
+        assert!(
+            SkillRegistry::scan_skills_in_dir(&entry).await.candidates[0]
+                .info
+                .installation_source
+                .is_none()
+        );
+        entry.slot = "agents";
+        fs::write(
+            temp.path().join("skills-lock.json"),
+            "invalid existing user data",
+        )
+        .unwrap();
+        let scanned = SkillRegistry::scan_skills_in_dir(&entry).await.candidates;
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].info.installation_source.is_none());
+        assert_eq!(
+            fs::read_to_string(temp.path().join("skills-lock.json")).unwrap(),
+            "invalid existing user data"
+        );
+    }
+
+    #[test]
+    fn installation_source_accepts_existing_global_lock_versions_without_name_fallback() {
+        for version in [1, 2, 3] {
+            let content = format!(
+                r#"{{"version":{version},"skills":{{
+                "eli5":{{"source":"first/skills","sourceType":"github","unknown":true}},
+                "local":{{"source":"first/skills","sourceType":"local"}},
+                "missing":{{"sourceType":"github"}}
+            }}}}"#
+            );
+            let sources = super::parse_skill_installation_sources(&content);
+            assert_eq!(sources.len(), 1);
+            assert_eq!(
+                sources.get("eli5").map(String::as_str),
+                Some("first/skills")
+            );
         }
     }
 
@@ -241,7 +377,7 @@ mod local_skill_scan_tests {
         }
         let entry = test_root(root);
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -257,7 +393,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert!(scan.candidates.is_empty());
@@ -279,7 +415,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -302,7 +438,7 @@ mod local_skill_scan_tests {
             return;
         }
 
-        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+        let scan = SkillRegistry::scan_skills_in_dir(&test_root(root)).await;
 
         assert!(!scan.cacheable);
         assert_eq!(scan.candidates.len(), 1);
@@ -322,7 +458,7 @@ mod local_skill_scan_tests {
         .expect("skill markdown");
         let entry = test_root(root);
 
-        let failed = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let failed = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(!failed.cacheable);
         assert!(failed.candidates[0].info.allow_implicit_invocation);
@@ -335,7 +471,7 @@ mod local_skill_scan_tests {
         )
         .expect("policy file");
 
-        let recovered = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+        let recovered = SkillRegistry::scan_skills_in_dir(&entry).await;
 
         assert!(recovered.cacheable);
         assert!(!recovered.candidates[0].info.allow_implicit_invocation);
@@ -454,21 +590,24 @@ impl SkillRegistry {
             .collect()
     }
 
-    async fn apply_local_openai_policy(skill_data: &mut SkillData, skill_dir: &Path) -> bool {
+    async fn apply_local_openai_policy(
+        skill_data: &mut SkillData,
+        skill_dir: &Path,
+    ) -> (bool, Option<String>) {
         let agents_dir = skill_dir.join("agents");
         let policy_path = agents_dir.join("openai.yaml");
         let cacheable = local_source_path_is_cacheable(&agents_dir).await
             && local_source_path_is_cacheable(&policy_path).await;
         let content = match fs::read_to_string(&policy_path).await {
             Ok(content) => content,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return cacheable,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return (cacheable, None),
             Err(error) => {
                 warn!(
                     "Failed to read optional skill policy {}: {}",
                     policy_path.display(),
                     error
                 );
-                return false;
+                return (false, Some(error.to_string()));
             }
         };
 
@@ -478,8 +617,9 @@ impl SkillRegistry {
                 policy_path.display(),
                 error
             );
+            return (cacheable, Some(error.to_string()));
         }
-        cacheable
+        (cacheable, None)
     }
 
     #[cfg(feature = "external-sources")]
@@ -549,7 +689,8 @@ impl SkillRegistry {
             });
         }
 
-        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
+        let skill_md_path =
+            PathBuf::from(&info.path).join(info.entry_file.as_deref().unwrap_or("SKILL.md"));
         fs::read_to_string(&skill_md_path)
             .await
             .map_err(|error| OpenBitFunError::tool(format!("Failed to read skill file: {}", error)))
@@ -559,7 +700,7 @@ impl SkillRegistry {
         skill_data: &mut SkillData,
         fs: &dyn WorkspaceFileSystem,
         skill_dir: &str,
-    ) {
+    ) -> Option<String> {
         let policy_path = format!("{}/agents/openai.yaml", skill_dir.trim_end_matches('/'));
         let is_file = match fs.is_file(&policy_path).await {
             Ok(is_file) => is_file,
@@ -568,11 +709,11 @@ impl SkillRegistry {
                     "Failed to inspect optional remote skill policy {}: {}",
                     policy_path, error
                 );
-                return;
+                return Some(error.to_string());
             }
         };
         if !is_file {
-            return;
+            return None;
         }
 
         let content = match fs.read_file_text(&policy_path).await {
@@ -582,7 +723,7 @@ impl SkillRegistry {
                     "Failed to read optional remote skill policy {}: {}",
                     policy_path, error
                 );
-                return;
+                return Some(error.to_string());
             }
         };
         if let Err(error) = skill_data.apply_openai_yaml_policy(&content) {
@@ -590,7 +731,9 @@ impl SkillRegistry {
                 "Ignoring invalid optional remote skill policy {}: {}",
                 policy_path, error
             );
+            return Some(error.to_string());
         }
+        None
     }
 
     fn get_project_skill_roots(workspace_path: &Path) -> Vec<SkillRootEntry> {
@@ -613,6 +756,32 @@ impl SkillRegistry {
         entries
     }
 
+    fn user_skill_root_path(
+        spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
+        home: &Path,
+    ) -> PathBuf {
+        let variable = match spec.slot {
+            "home.dsh" => Some("DSH_HOME"),
+            "home.pi" => Some("PI_CODING_AGENT_DIR"),
+            _ => None,
+        };
+        let root = variable
+            .and_then(|name| std::env::var(name).ok())
+            .filter(|value| !value.trim().is_empty());
+        let root = root
+            .map(|value| {
+                if value == "~" {
+                    home.to_path_buf()
+                } else if let Some(suffix) = value.strip_prefix("~/") {
+                    home.join(suffix)
+                } else {
+                    PathBuf::from(value)
+                }
+            })
+            .unwrap_or_else(|| home.join(spec.parent));
+        root.join(spec.subdir)
+    }
+
     fn get_user_skill_roots() -> Vec<SkillRootEntry> {
         let mut entries = Vec::new();
         let mut priority = 0usize;
@@ -622,7 +791,7 @@ impl SkillRegistry {
 
         if let Some(home) = home_dir.as_deref() {
             for spec in USER_HOME_SKILL_ROOTS {
-                let path = home.join(spec.parent).join(spec.subdir);
+                let path = Self::user_skill_root_path(spec, home);
                 if spec.parent == ".opencode" {
                     deferred_home_entries.push((
                         path,
@@ -711,7 +880,7 @@ impl SkillRegistry {
         let home_dir = dirs::home_dir();
         if let Some(home) = home_dir.as_deref() {
             roots.extend(USER_HOME_SKILL_ROOTS.iter().map(|spec| {
-                LocalSkillWatchRoot::recursive(home.join(spec.parent).join(spec.subdir))
+                LocalSkillWatchRoot::recursive(Self::user_skill_root_path(spec, home))
             }));
         }
 
@@ -735,162 +904,6 @@ impl SkillRegistry {
         roots
     }
 
-    async fn scan_skills_in_dir(entry: &SkillRootEntry) -> Vec<SkillCandidate> {
-        Self::scan_skills_in_dir_with_status(entry).await.candidates
-    }
-
-    async fn scan_skills_in_dir_with_status(entry: &SkillRootEntry) -> LocalSkillScan {
-        let mut skills = Vec::new();
-        let root_cacheable = local_source_path_is_cacheable(&entry.path).await;
-        match fs::metadata(&entry.path).await {
-            Ok(metadata) if metadata.is_dir() => {}
-            Ok(_) => {
-                return LocalSkillScan {
-                    candidates: skills,
-                    cacheable: root_cacheable,
-                };
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return LocalSkillScan {
-                    candidates: skills,
-                    cacheable: root_cacheable,
-                };
-            }
-            Err(error) => {
-                debug!(
-                    "Failed to inspect Skill root {}: {}",
-                    entry.path.display(),
-                    error
-                );
-                return LocalSkillScan {
-                    candidates: skills,
-                    cacheable: false,
-                };
-            }
-        }
-
-        let mut read_dir = match fs::read_dir(&entry.path).await {
-            Ok(read_dir) => read_dir,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return LocalSkillScan {
-                    candidates: skills,
-                    cacheable: root_cacheable,
-                };
-            }
-            Err(error) => {
-                debug!(
-                    "Failed to read Skill root {}: {}",
-                    entry.path.display(),
-                    error
-                );
-                return LocalSkillScan {
-                    candidates: skills,
-                    cacheable: false,
-                };
-            }
-        };
-        let mut cacheable = root_cacheable;
-
-        loop {
-            let item = match read_dir.next_entry().await {
-                Ok(Some(item)) => item,
-                Ok(None) => break,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    skills.clear();
-                    break;
-                }
-                Err(error) => {
-                    debug!(
-                        "Failed while reading Skill root {}: {}",
-                        entry.path.display(),
-                        error
-                    );
-                    cacheable = false;
-                    break;
-                }
-            };
-            let path = item.path();
-            cacheable &= local_source_path_is_cacheable(&path).await;
-            match fs::metadata(&path).await {
-                Ok(metadata) if metadata.is_dir() => {}
-                Ok(_) => continue,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(error) => {
-                    debug!(
-                        "Failed to inspect Skill entry {}: {}",
-                        path.display(),
-                        error
-                    );
-                    cacheable = false;
-                    continue;
-                }
-            }
-
-            let Some(dir_name) = normalize_local_skill_dir_name(&path) else {
-                continue;
-            };
-
-            if entry.slot == OPENBITFUN_USER_SKILL_SLOT && dir_name == OPENBITFUN_SYSTEM_SKILL_DIR {
-                continue;
-            }
-
-            let skill_md_path = path.join("SKILL.md");
-            cacheable &= local_source_path_is_cacheable(&skill_md_path).await;
-            match fs::metadata(&skill_md_path).await {
-                Ok(metadata) if metadata.is_file() => {}
-                Ok(_) => continue,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(error) => {
-                    debug!("Failed to inspect {}: {}", skill_md_path.display(), error);
-                    cacheable = false;
-                    continue;
-                }
-            }
-
-            match fs::read_to_string(&skill_md_path).await {
-                Ok(content) => match Self::parse_skill_markdown(
-                    path.to_string_lossy().to_string(),
-                    &content,
-                    entry.level,
-                    false,
-                    entry.slot,
-                ) {
-                    Ok(mut skill_data) => {
-                        cacheable &= Self::apply_local_openai_policy(&mut skill_data, &path).await;
-                        skill_data.dir_name = dir_name;
-                        let key_prefix = match entry.level {
-                            SkillLocation::User => USER_SKILL_KEY_PREFIX,
-                            SkillLocation::Project => PROJECT_SKILL_KEY_PREFIX,
-                        };
-                        skills.push(SkillCandidate::from_data(
-                            skill_data,
-                            entry.slot,
-                            entry.source_id,
-                            entry.source_label,
-                            key_prefix,
-                            entry.priority,
-                            entry.is_builtin,
-                        ));
-                    }
-                    Err(error) => {
-                        error!("Failed to parse SKILL.md in {}: {}", path.display(), error);
-                    }
-                },
-                Err(error) => {
-                    debug!("Failed to read {}: {}", skill_md_path.display(), error);
-                    if error.kind() != std::io::ErrorKind::NotFound {
-                        cacheable = false;
-                    }
-                }
-            }
-        }
-
-        LocalSkillScan {
-            candidates: sort_skill_candidates_by_dir(skills),
-            cacheable,
-        }
-    }
-
     async fn scan_user_skill_sources() -> UserSkillSources {
         #[cfg(feature = "file-watch")]
         let mut cacheable = match ensure_builtin_skills_installed().await {
@@ -906,8 +919,9 @@ impl SkillRegistry {
         }
 
         let mut standard = Vec::new();
+        let mut diagnostics = Vec::new();
         for entry in Self::get_user_skill_roots() {
-            let mut scan = Self::scan_skills_in_dir_with_status(&entry).await;
+            let mut scan = Self::scan_skills_in_dir(&entry).await;
             #[cfg(feature = "file-watch")]
             {
                 cacheable &= scan.cacheable;
@@ -915,10 +929,12 @@ impl SkillRegistry {
             #[cfg(not(feature = "file-watch"))]
             let _ = scan.cacheable;
             standard.append(&mut scan.candidates);
+            diagnostics.append(&mut scan.diagnostics);
         }
 
         UserSkillSources {
             standard,
+            diagnostics,
             #[cfg(feature = "file-watch")]
             cacheable,
             #[cfg(feature = "file-watch")]
@@ -951,12 +967,23 @@ impl SkillRegistry {
         &self,
         workspace_root: Option<&Path>,
     ) -> Vec<SkillCandidate> {
+        self.scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
+            .await
+            .into_candidates()
+    }
+
+    async fn scan_skill_candidates_with_diagnostics_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> SkillCandidateScan {
         let mut user_sources = self.user_skill_sources().await;
+        let mut diagnostics = std::mem::take(&mut user_sources.diagnostics);
         let mut standard = Vec::new();
         if let Some(workspace_root) = workspace_root {
             for entry in Self::get_project_skill_roots(workspace_root) {
                 let mut part = Self::scan_skills_in_dir(&entry).await;
-                standard.append(&mut part);
+                standard.append(&mut part.candidates);
+                diagnostics.append(&mut part.diagnostics);
             }
             for candidate in &mut user_sources.standard {
                 candidate.priority = candidate.priority.saturating_add(PROJECT_SKILL_ROOTS.len());
@@ -973,7 +1000,10 @@ impl SkillRegistry {
             // Discover and scan them once per request so scope and the 64-root cap
             // are applied to one coherent OpenCode configuration snapshot.
             let roots = opencode_configured_skill_roots(workspace_root);
-            let mut configured = Self::scan_configured_opencode_candidates(roots).await;
+            let configured_scan =
+                Self::scan_configured_opencode_candidates_with_diagnostics(roots).await;
+            diagnostics.extend(configured_scan.diagnostics);
+            let mut configured = configured_scan.candidates;
             let existing_paths = standard
                 .iter()
                 .map(canonical_candidate_path)
@@ -983,15 +1013,21 @@ impl SkillRegistry {
                 let path = canonical_candidate_path(candidate);
                 !existing_paths.contains(&path) && configured_paths.insert(path)
             });
-            return Self::merge_configured_opencode_candidates(
-                standard,
-                configured,
-                workspace_root.is_some(),
-            );
+            return SkillCandidateScan {
+                candidates: Self::merge_configured_opencode_candidates(
+                    standard,
+                    configured,
+                    workspace_root.is_some(),
+                ),
+                diagnostics,
+            };
         }
 
         #[cfg(not(feature = "external-sources"))]
-        standard
+        SkillCandidateScan {
+            candidates: standard,
+            diagnostics,
+        }
     }
 
     #[cfg(feature = "external-sources")]
@@ -1055,6 +1091,15 @@ impl SkillRegistry {
     async fn scan_configured_opencode_candidates(
         roots: Vec<LocalConfiguredSkillRootContribution>,
     ) -> Vec<SkillCandidate> {
+        Self::scan_configured_opencode_candidates_with_diagnostics(roots)
+            .await
+            .into_candidates()
+    }
+
+    #[cfg(feature = "external-sources")]
+    async fn scan_configured_opencode_candidates_with_diagnostics(
+        roots: Vec<LocalConfiguredSkillRootContribution>,
+    ) -> SkillCandidateScan {
         let mut roots = roots;
         roots.sort_by_key(|root| root.precedence);
         let roots = roots
@@ -1085,6 +1130,7 @@ impl SkillRegistry {
         let mut project_root_index = 0usize;
         let mut user_root_index = 0usize;
         let mut candidates = Vec::new();
+        let mut diagnostics = Vec::new();
 
         for root in roots {
             let root_path = root.path.clone();
@@ -1104,6 +1150,11 @@ impl SkillRegistry {
             {
                 Ok(Ok(files)) => files,
                 Ok(Err(error)) => {
+                    diagnostics.push(discovery::diagnostic(
+                        root.path.to_string_lossy(),
+                        "opencode",
+                        &error,
+                    ));
                     warn!(
                         "Skipping configured OpenCode skill root {}: {}",
                         root.path.display(),
@@ -1112,6 +1163,11 @@ impl SkillRegistry {
                     continue;
                 }
                 Err(error) => {
+                    diagnostics.push(discovery::diagnostic(
+                        root.path.to_string_lossy(),
+                        "opencode",
+                        &error,
+                    ));
                     warn!(
                         "Configured OpenCode skill scan failed for {}: {}",
                         root.path.display(),
@@ -1139,6 +1195,11 @@ impl SkillRegistry {
                 {
                     Ok(Ok(BoundedTextRead::Content(content))) => content,
                     Ok(Ok(BoundedTextRead::TooLarge)) => {
+                        diagnostics.push(discovery::diagnostic(
+                            skill_md_path.to_string_lossy(),
+                            "opencode",
+                            "SKILL.md exceeds the discovery size limit",
+                        ));
                         warn!(
                             "Skipping configured OpenCode skill file above the {} byte limit: {}",
                             MAX_OPENCODE_CONFIGURED_SKILL_BYTES,
@@ -1147,6 +1208,11 @@ impl SkillRegistry {
                         continue;
                     }
                     Ok(Ok(BoundedTextRead::InvalidUtf8)) => {
+                        diagnostics.push(discovery::diagnostic(
+                            skill_md_path.to_string_lossy(),
+                            "opencode",
+                            "SKILL.md is not valid UTF-8",
+                        ));
                         warn!(
                             "Skipping configured OpenCode skill file that is not valid UTF-8: {}",
                             skill_md_path.display()
@@ -1154,10 +1220,20 @@ impl SkillRegistry {
                         continue;
                     }
                     Ok(Err(error)) => {
+                        diagnostics.push(discovery::diagnostic(
+                            skill_md_path.to_string_lossy(),
+                            "opencode",
+                            &error,
+                        ));
                         debug!("Failed to read {}: {}", skill_md_path.display(), error);
                         continue;
                     }
                     Err(error) => {
+                        diagnostics.push(discovery::diagnostic(
+                            skill_md_path.to_string_lossy(),
+                            "opencode",
+                            &error,
+                        ));
                         warn!(
                             "Configured OpenCode skill read failed for {}: {}",
                             skill_md_path.display(),
@@ -1189,6 +1265,11 @@ impl SkillRegistry {
                 ) {
                     Ok(skill_data) => skill_data,
                     Err(error) => {
+                        diagnostics.push(discovery::diagnostic(
+                            skill_md_path.to_string_lossy(),
+                            "opencode",
+                            &error,
+                        ));
                         error!(
                             "Failed to parse configured OpenCode SKILL.md in {}: {}",
                             canonical_skill_dir.display(),
@@ -1237,82 +1318,10 @@ impl SkillRegistry {
         candidates.sort_by_key(|candidate| candidate.priority);
         let mut seen_paths = HashSet::new();
         candidates.retain(|candidate| seen_paths.insert(candidate.info.path.clone()));
-        sort_skill_candidates_by_dir(candidates)
-    }
-
-    async fn scan_remote_project_skills(
-        fs: &dyn WorkspaceFileSystem,
-        remote_root: &str,
-    ) -> Vec<SkillCandidate> {
-        let mut roots = Vec::new();
-        let root = remote_root.trim_end_matches('/');
-        for (priority, spec) in PROJECT_SKILL_ROOTS.iter().enumerate() {
-            let path = format!("{}/{}/{}", root, spec.parent, spec.subdir);
-            if fs.is_dir(&path).await.unwrap_or(false) {
-                roots.push(RemoteSkillRootEntry {
-                    path,
-                    slot: spec.slot,
-                    source_id: spec.source_id,
-                    source_label: spec.source_label,
-                    priority,
-                });
-            }
+        SkillCandidateScan {
+            candidates: sort_skill_candidates_by_dir(candidates),
+            diagnostics,
         }
-
-        let mut skills = Vec::new();
-        for entry in roots {
-            let mut entries = match fs.read_dir(&entry.path).await {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            sort_remote_dir_entries(&mut entries);
-
-            for item in entries {
-                if !item.is_dir || item.is_symlink {
-                    continue;
-                }
-
-                let Some(dir_name) = normalize_remote_skill_dir_name(&item.path) else {
-                    continue;
-                };
-                let skill_md_path = format!("{}/SKILL.md", item.path.trim_end_matches('/'));
-                if !fs.is_file(&skill_md_path).await.unwrap_or(false) {
-                    continue;
-                }
-
-                match fs.read_file_text(&skill_md_path).await {
-                    Ok(content) => match Self::parse_skill_markdown(
-                        item.path.clone(),
-                        &content,
-                        SkillLocation::Project,
-                        false,
-                        entry.slot,
-                    ) {
-                        Ok(mut skill_data) => {
-                            Self::apply_remote_openai_policy(&mut skill_data, fs, &item.path).await;
-                            skill_data.dir_name = dir_name;
-                            skills.push(SkillCandidate::from_data(
-                                skill_data,
-                                entry.slot,
-                                entry.source_id,
-                                entry.source_label,
-                                PROJECT_SKILL_KEY_PREFIX,
-                                entry.priority,
-                                false,
-                            ));
-                        }
-                        Err(error) => {
-                            error!("Failed to parse SKILL.md in {}: {}", item.path, error);
-                        }
-                    },
-                    Err(error) => {
-                        debug!("Failed to read {}: {}", skill_md_path, error);
-                    }
-                }
-            }
-        }
-
-        skills
     }
 
     async fn scan_skill_candidates_for_remote_workspace(
@@ -1320,9 +1329,33 @@ impl SkillRegistry {
         fs: &dyn WorkspaceFileSystem,
         remote_root: &str,
     ) -> Vec<SkillCandidate> {
-        let mut skills = self.scan_skill_candidates_for_workspace(None).await;
-        skills.extend(Self::scan_remote_project_skills(fs, remote_root).await);
-        skills
+        self.scan_skill_candidates_with_diagnostics_for_remote_workspace(fs, remote_root)
+            .await
+            .into_candidates()
+    }
+
+    async fn scan_skill_candidates_with_diagnostics_for_remote_workspace(
+        &self,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+    ) -> SkillCandidateScan {
+        let (user, project) = tokio::join!(
+            self.scan_skill_candidates_with_diagnostics_for_workspace(None),
+            Self::scan_remote_project_skills(fs, remote_root),
+        );
+        Self::merge_remote_skill_scans(user, project)
+    }
+
+    fn merge_remote_skill_scans(
+        mut user: SkillCandidateScan,
+        mut project: SkillCandidateScan,
+    ) -> SkillCandidateScan {
+        for candidate in &mut user.candidates {
+            candidate.priority = candidate.priority.saturating_add(PROJECT_SKILL_ROOTS.len());
+        }
+        project.candidates.append(&mut user.candidates);
+        project.diagnostics.append(&mut user.diagnostics);
+        project
     }
 
     async fn apply_mode_filters_for_workspace(
@@ -1507,6 +1540,33 @@ impl SkillRegistry {
         self.get_all_skills_for_workspace(None).await
     }
 
+    pub async fn get_skill_scan_report_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> SkillScanReport {
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
+            .await;
+        SkillScanReport {
+            skills: sort_skills(annotate_shadowed_skills(scan.candidates)),
+            diagnostics: scan.diagnostics,
+        }
+    }
+
+    pub async fn get_skill_scan_report_for_remote_workspace(
+        &self,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+    ) -> SkillScanReport {
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_remote_workspace(fs, remote_root)
+            .await;
+        SkillScanReport {
+            skills: sort_skills(annotate_shadowed_skills(scan.candidates)),
+            diagnostics: scan.diagnostics,
+        }
+    }
+
     pub async fn get_all_skills_for_workspace(
         &self,
         workspace_root: Option<&Path>,
@@ -1598,9 +1658,20 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         mode_id: &str,
     ) -> Vec<ModeSkillInfo> {
-        let candidates = self
-            .scan_skill_candidates_for_workspace(workspace_root)
+        self.get_mode_skill_scan_report_for_workspace(workspace_root, mode_id)
+            .await
+            .skills
+    }
+
+    pub async fn get_mode_skill_scan_report_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+        mode_id: &str,
+    ) -> SkillScanReport<ModeSkillInfo> {
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
             .await;
+        let candidates = scan.candidates;
         let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
         let user_overrides = load_user_mode_skill_overrides(mode_id)
             .await
@@ -1620,14 +1691,17 @@ impl SkillRegistry {
         );
         let resolved = resolve_visible_skills(filtered);
 
-        build_mode_skill_infos(
-            all_skills,
-            resolved,
-            mode_id,
-            &user_overrides,
-            &disabled_project,
-            &globally_disabled_user_skills,
-        )
+        SkillScanReport {
+            skills: build_mode_skill_infos(
+                all_skills,
+                resolved,
+                mode_id,
+                &user_overrides,
+                &disabled_project,
+                &globally_disabled_user_skills,
+            ),
+            diagnostics: scan.diagnostics,
+        }
     }
 
     pub async fn get_mode_skill_infos_for_remote_workspace(
@@ -1636,9 +1710,21 @@ impl SkillRegistry {
         remote_root: &str,
         mode_id: &str,
     ) -> Vec<ModeSkillInfo> {
-        let candidates = self
-            .scan_skill_candidates_for_remote_workspace(fs, remote_root)
+        self.get_mode_skill_scan_report_for_remote_workspace(fs, remote_root, mode_id)
+            .await
+            .skills
+    }
+
+    pub async fn get_mode_skill_scan_report_for_remote_workspace(
+        &self,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        mode_id: &str,
+    ) -> SkillScanReport<ModeSkillInfo> {
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_remote_workspace(fs, remote_root)
             .await;
+        let candidates = scan.candidates;
         let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
         let user_overrides = load_user_mode_skill_overrides(mode_id)
             .await
@@ -1655,14 +1741,17 @@ impl SkillRegistry {
         );
         let resolved = resolve_visible_skills(filtered);
 
-        build_mode_skill_infos(
-            all_skills,
-            resolved,
-            mode_id,
-            &user_overrides,
-            &disabled_project,
-            &globally_disabled_user_skills,
-        )
+        SkillScanReport {
+            skills: build_mode_skill_infos(
+                all_skills,
+                resolved,
+                mode_id,
+                &user_overrides,
+                &disabled_project,
+                &globally_disabled_user_skills,
+            ),
+            diagnostics: scan.diagnostics,
+        }
     }
 
     pub async fn find_skill_by_key_for_workspace(
@@ -1712,6 +1801,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1753,6 +1844,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1786,6 +1879,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1827,6 +1922,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1840,11 +1937,21 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<String> {
-        self.get_implicitly_invocable_skills_for_workspace(workspace_root, agent_type)
-            .await
-            .into_iter()
-            .map(|skill| skill.to_xml_desc())
-            .collect()
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_workspace(scan.candidates, workspace_root, agent_type)
+            .await;
+        let mut xml: Vec<_> = filter_implicitly_invocable_skills_for_agent(
+            sort_skills(resolve_visible_skills(filtered)),
+            agent_type,
+        )
+        .into_iter()
+        .map(|skill| skill.to_xml_desc())
+        .collect();
+        xml.extend(scan.diagnostics.iter().map(SkillScanDiagnostic::to_xml));
+        xml
     }
 
     pub async fn get_resolved_skills_xml_for_remote_workspace(
@@ -1853,11 +1960,21 @@ impl SkillRegistry {
         remote_root: &str,
         agent_type: Option<&str>,
     ) -> Vec<String> {
-        self.get_implicitly_invocable_skills_for_remote_workspace(fs, remote_root, agent_type)
-            .await
-            .into_iter()
-            .map(|skill| skill.to_xml_desc())
-            .collect()
+        let scan = self
+            .scan_skill_candidates_with_diagnostics_for_remote_workspace(fs, remote_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_remote_workspace(scan.candidates, fs, remote_root, agent_type)
+            .await;
+        let mut xml: Vec<_> = filter_implicitly_invocable_skills_for_agent(
+            sort_skills(resolve_visible_skills(filtered)),
+            agent_type,
+        )
+        .into_iter()
+        .map(|skill| skill.to_xml_desc())
+        .collect();
+        xml.extend(scan.diagnostics.iter().map(SkillScanDiagnostic::to_xml));
+        xml
     }
 
     async fn read_skill_md_for_remote_merge(
@@ -1867,7 +1984,11 @@ impl SkillRegistry {
         match info.level {
             SkillLocation::User => Self::read_local_skill_markdown(info).await,
             SkillLocation::Project => {
-                let skill_md_path = format!("{}/SKILL.md", info.path.trim_end_matches('/'));
+                let skill_md_path = format!(
+                    "{}/{}",
+                    info.path.trim_end_matches('/'),
+                    info.entry_file.as_deref().unwrap_or("SKILL.md")
+                );
                 remote_fs
                     .read_file_text(&skill_md_path)
                     .await
@@ -1982,7 +2103,8 @@ mod opencode_configured_skill_tests {
                 .unwrap(),
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(roots).await;
         let candidates =
             SkillRegistry::merge_configured_opencode_candidates(standard, configured, true);
@@ -2010,7 +2132,8 @@ mod opencode_configured_skill_tests {
             priority: 0,
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(vec![configured_root(
             project.join("custom"),
             ExternalSourceScope::Project,
@@ -2046,7 +2169,8 @@ mod opencode_configured_skill_tests {
             priority: super::PROJECT_SKILL_ROOTS.len(),
             is_builtin: false,
         })
-        .await;
+        .await
+        .candidates;
         let configured = SkillRegistry::scan_configured_opencode_candidates(vec![
             configured_root(home.join("configured"), ExternalSourceScope::UserGlobal, 0),
             configured_root(project.join("configured"), ExternalSourceScope::Project, 1),
@@ -2210,5 +2334,213 @@ mod opencode_configured_skill_tests {
     #[cfg(windows)]
     fn create_dir_symlink(target: &Path, link: &Path) -> bool {
         std::os::windows::fs::symlink_dir(target, link).is_ok()
+    }
+}
+
+#[cfg(test)]
+mod remote_scan_tests {
+    use super::SkillRegistry;
+    use crate::agentic::workspace::{WorkspaceDirEntry, WorkspaceFileSystem};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    #[derive(Default)]
+    struct DelayedFs {
+        active: AtomicUsize,
+        peak: AtomicUsize,
+        calls: AtomicUsize,
+        installation_lock: Option<String>,
+    }
+
+    impl DelayedFs {
+        async fn round_trip(&self) {
+            let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.peak.fetch_max(active, Ordering::SeqCst);
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            self.active.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl WorkspaceFileSystem for DelayedFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.read_file_text(path).await?.into_bytes())
+        }
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            self.round_trip().await;
+            if path.ends_with("skills-lock.json") {
+                assert_eq!(path, "/remote/project/skills-lock.json");
+                return self
+                    .installation_lock
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("missing lock"));
+            }
+            if path.ends_with("openai.yaml") {
+                return Ok("policy:\n  allow_implicit_invocation: false\n".into());
+            }
+            let name = path.rsplit('/').nth(1).unwrap();
+            Ok(format!(
+                "---\nname: {name}\ndescription: {path}\n---\nBody\n"
+            ))
+        }
+        async fn write_file(&self, _: &str, _: &[u8]) -> anyhow::Result<()> {
+            anyhow::bail!("read-only fixture")
+        }
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            if path.ends_with("skills-lock.json") {
+                return Ok(self.installation_lock.is_some());
+            }
+            self.is_file(path).await
+        }
+        async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+            self.round_trip().await;
+            Ok(path.ends_with("SKILL.md") || path.ends_with("skill-00/agents/openai.yaml"))
+        }
+        async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
+            self.round_trip().await;
+            Ok(path.contains("/.openbitfun/")
+                || path.contains("/.codex/")
+                || (self.installation_lock.is_some() && path.contains("/.agents/")))
+        }
+        async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            self.round_trip().await;
+            Ok((0..13)
+                .rev()
+                .map(|index| WorkspaceDirEntry {
+                    name: format!("skill-{index:02}"),
+                    path: format!("{path}/skill-{index:02}"),
+                    is_dir: true,
+                    is_symlink: index == 12,
+                    modified: None,
+                })
+                .collect())
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_scan_reads_provenance_from_the_remote_project_only() {
+        let mut fs = DelayedFs {
+            installation_lock: Some(
+                r#"{"version":1,"skills":{
+                "skill-00":{"source":"remote/skills","sourceType":"github"},
+                "deleted":{"source":"missing/skills","sourceType":"github"}
+            }}"#
+                .into(),
+            ),
+            ..Default::default()
+        };
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
+        assert_eq!(skills.len(), 39);
+        let installed = skills
+            .iter()
+            .filter(|skill| skill.info.installation_source.is_some())
+            .collect::<Vec<_>>();
+        assert_eq!(installed.len(), 1);
+        assert_eq!(installed[0].info.source_slot, "agents");
+        assert_eq!(installed[0].info.name, "skill-00");
+        assert_eq!(
+            installed[0].info.installation_source.as_deref(),
+            Some("remote/skills")
+        );
+
+        fs.installation_lock = Some("invalid remote lock".into());
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
+        assert_eq!(skills.len(), 39);
+        assert!(skills
+            .iter()
+            .all(|skill| skill.info.installation_source.is_none()));
+    }
+
+    #[tokio::test]
+    async fn remote_scan_preserves_order_and_policy_with_bounded_io() {
+        let fs = DelayedFs::default();
+        let start = Instant::now();
+        let skills = SkillRegistry::scan_remote_project_skills(&fs, "/remote/project/")
+            .await
+            .into_candidates();
+        eprintln!(
+            "remote scan: {:?}, {} logical IO calls, peak {}",
+            start.elapsed(),
+            fs.calls.load(Ordering::SeqCst),
+            fs.peak.load(Ordering::SeqCst)
+        );
+        assert_eq!(skills.len(), 26);
+        for group in skills.chunks(13) {
+            assert_eq!(
+                group
+                    .iter()
+                    .map(|skill| skill.info.name.clone())
+                    .collect::<Vec<_>>(),
+                (0..13)
+                    .map(|index| format!("skill-{index:02}"))
+                    .collect::<Vec<_>>()
+            );
+            assert!(!group[0].info.allow_implicit_invocation);
+            assert!(group[1].info.allow_implicit_invocation);
+        }
+        assert!(skills[0].priority < skills[13].priority);
+        assert!(fs.calls.load(Ordering::SeqCst) <= 100);
+        assert_eq!(fs.active.load(Ordering::SeqCst), 0);
+        assert!(fs.peak.load(Ordering::SeqCst) > 1);
+        assert!(fs.peak.load(Ordering::SeqCst) <= super::REMOTE_SKILL_SCAN_CONCURRENCY);
+
+        // The same project catalog on disk must retain the remote scan's source
+        // precedence and invocation policy, without involving user-global skills.
+        let local_root = tempfile::tempdir().unwrap();
+        for parent in [".openbitfun", ".codex"] {
+            for index in 0..13 {
+                let name = format!("skill-{index:02}");
+                let dir = local_root.path().join(parent).join("skills").join(&name);
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(
+                    dir.join("SKILL.md"),
+                    format!("---\nname: {name}\ndescription: fixture\n---\nBody\n"),
+                )
+                .unwrap();
+                if index == 0 {
+                    std::fs::create_dir_all(dir.join("agents")).unwrap();
+                    std::fs::write(
+                        dir.join("agents/openai.yaml"),
+                        "policy:\n  allow_implicit_invocation: false\n",
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        let start = Instant::now();
+        let mut local = Vec::new();
+        for entry in SkillRegistry::get_project_skill_roots(local_root.path()) {
+            local.extend(SkillRegistry::scan_skills_in_dir(&entry).await.candidates);
+        }
+        eprintln!(
+            "local project scan: {:?}, {} skills",
+            start.elapsed(),
+            local.len()
+        );
+        let catalog = |candidates: Vec<openbitfun_agent_runtime::skills::SkillCandidate>| {
+            candidates
+                .into_iter()
+                .map(|candidate| {
+                    (
+                        candidate.info.key,
+                        candidate.info.name,
+                        candidate.info.allow_implicit_invocation,
+                        candidate.priority,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        // Local directory enumeration is sorted by the shared resolver later.
+        local.sort_by(|a, b| {
+            a.priority
+                .cmp(&b.priority)
+                .then(a.info.name.cmp(&b.info.name))
+        });
+        assert_eq!(catalog(local), catalog(skills));
     }
 }

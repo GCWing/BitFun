@@ -14,6 +14,7 @@ export interface ShellEntry {
   name: string;
   isRunning: boolean;
   isPersisted: boolean;
+  status?: string;
   profileId?: string;
   cwd?: string;
   workingDirectory?: string;
@@ -29,7 +30,17 @@ export interface SaveShellEntryInput {
 
 export function isSessionRunning(session: SessionResponse): boolean {
   const normalizedStatus = String(session.status).toLowerCase();
-  return !['exited', 'stopped', 'error', 'terminating'].includes(normalizedStatus);
+  return ['active', 'running', 'ready', 'orphaned', 'starting', 'restoring'].includes(normalizedStatus);
+}
+
+export function getShellEntryState(entry: ShellEntry): 'running' | 'starting' | 'stopping' | 'saved' | 'exited' | 'error' | 'unknown' {
+  const status = entry.status?.toLowerCase() ?? '';
+  if (status === 'saved') return 'saved';
+  if (status === 'starting' || status === 'restoring') return 'starting';
+  if (status === 'terminating') return 'stopping';
+  if (status === 'error') return 'error';
+  if (status === 'stopped' || status.startsWith('exited')) return 'exited';
+  return entry.isRunning ? 'running' : 'unknown';
 }
 
 export function compareShellEntries(a: ShellEntry, b: ShellEntry): number {
@@ -51,11 +62,12 @@ export function createManualProfileEntry(
   return {
     id: profile.id,
     kind: 'manual-profile',
-    source: MANUAL_SOURCE,
+    source: session?.source ?? MANUAL_SOURCE,
     sessionId: profile.sessionId,
     name: profile.name,
     isRunning: session ? isSessionRunning(session) : false,
     isPersisted: true,
+    status: session?.status ?? 'saved',
     profileId: profile.id,
     cwd: session?.cwd,
     workingDirectory: profile.workingDirectory,
@@ -76,6 +88,7 @@ export function createSessionEntry(
     name: session.name,
     isRunning: isSessionRunning(session),
     isPersisted: false,
+    status: session.status,
     cwd: session.cwd,
     workingDirectory: session.cwd,
     shellType: session.shellType,

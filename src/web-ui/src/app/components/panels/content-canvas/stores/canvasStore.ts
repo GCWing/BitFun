@@ -30,6 +30,8 @@ import { normalizePath } from '@/shared/utils/pathUtils';
 // ==================== Store State Types ====================
 
 interface CanvasStoreState {
+  /** Live content scope, committed with workspace swaps and excluded from snapshots. */
+  workspaceKey?: string;
   primaryGroup: EditorGroupState;
   secondaryGroup: EditorGroupState;
   tertiaryGroup: EditorGroupState;
@@ -155,6 +157,7 @@ type CanvasStore = CanvasStoreState & CanvasStoreActions;
 // ==================== Initial State ====================
 
 const initialState: CanvasStoreState = {
+  workspaceKey: undefined,
   primaryGroup: createEditorGroupState(),
   secondaryGroup: createEditorGroupState(),
   tertiaryGroup: createEditorGroupState(),
@@ -492,9 +495,8 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
           const group = getGroup(draft, result.groupId);
           const tab = group.tabs.find(t => t.id === result.tab.id);
           if (tab) {
-            const displayTitle = newName.length > 20 ? `${newName.slice(0, 20)}...` : newName;
-            tab.title = displayTitle;
-            tab.content.title = displayTitle;
+            tab.title = newName;
+            tab.content.title = newName;
             tab.content.data = { ...tab.content.data, sessionName: newName };
           }
         });
@@ -1205,8 +1207,9 @@ function rememberAgentSnapshot(key: string, snapshot: CanvasStoreState): void {
   }
 }
 
-function applyEmptyAgentCanvas(): void {
+function applyEmptyAgentCanvas(workspaceKey?: string): void {
   useAgentCanvasStore.setState({
+    workspaceKey,
     primaryGroup: createEditorGroupState(),
     secondaryGroup: createEditorGroupState(),
     tertiaryGroup: createEditorGroupState(),
@@ -1260,6 +1263,7 @@ export function switchAgentCanvasWorkspace(
 
   if (nextSnapshotClone) {
     useAgentCanvasStore.setState({
+      workspaceKey: to,
       primaryGroup: nextSnapshotClone.primaryGroup,
       secondaryGroup: nextSnapshotClone.secondaryGroup,
       tertiaryGroup: nextSnapshotClone.tertiaryGroup,
@@ -1272,7 +1276,7 @@ export function switchAgentCanvasWorkspace(
       maxClosedTabsHistory: nextSnapshotClone.maxClosedTabsHistory,
     });
   } else {
-    applyEmptyAgentCanvas();
+    applyEmptyAgentCanvas(to);
   }
 
   lastAgentCanvasSwitchTargetKey = to;

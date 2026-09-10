@@ -52,7 +52,8 @@ describe('ecosystem compatibility scene presentation contract', () => {
     expect(scene).toContain("notification.info(t('comingSoon.notice'");
     expect(scene).not.toContain("openScene('settings')");
     expect(model).toContain("id: 'pi'");
-    expect(model).toContain('development: true');
+    expect(model).toContain("pi: ['skill', 'hook']");
+    expect(model).toContain("dsh: ['skill', 'hook']");
   });
 
   it('retires the duplicate Settings page and redirects legacy management links', () => {
@@ -250,8 +251,11 @@ describe('ecosystem compatibility scene presentation contract', () => {
     const piSupport = support('pi');
     expect(piSupport).toMatchObject({
       memory: 'notAdapted',
+      skill: 'adapted',
+      hook: 'adapted',
     });
     expect(piSupport).not.toHaveProperty('pet');
+    expect(support('dsh')).toMatchObject({ skill: 'adapted', hook: 'adapted' });
   });
 
   it('keeps use and import in one page with a compact header check summary', () => {
@@ -285,7 +289,7 @@ describe('ecosystem compatibility scene presentation contract', () => {
     expect(styles).not.toContain('max-width: 68ch;');
     expect(zhCN).toContain('"title": "导入与复用"');
     expect(zhCN).not.toMatch(/真实能力|适配范围|全部对象|直接导入链路|能力模块|第二套客户端状态/);
-    expect(scene).toContain("state === 'notAdapted' ? (");
+    expect(scene).toContain('!ready && !importing ? (');
     expect(scene).toContain('ecosystem-compatibility__import-action-placeholder');
     expect(scene).toContain('                      -');
   });

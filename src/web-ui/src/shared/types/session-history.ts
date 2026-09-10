@@ -80,6 +80,7 @@ export interface SessionMetadata {
   createdAt: number;
   lastActiveAt: number;
   lastFinishedAt?: number | null;
+  lastTurn?: SessionLastTurn;
   turnCount: number;
   messageCount: number;
   toolCallCount: number;
@@ -98,8 +99,8 @@ export interface SessionMetadata {
   /** Backend unified workspace identity field: localhost for local, SSH host for remote. */
   workspaceHostname?: string;
   /**
-   * Unread completion status for the session.
-   * 'completed' → green dot, 'error' → red dot, 'interrupted' → red dot (partial stream recovery).
+   * Result notification cleared after its result is viewed. Execution and
+   * resumable recovery remain separate facts in the activity/last-Turn summary.
    */
   unreadCompletion?: 'completed' | 'error' | 'interrupted';
   /**
@@ -120,6 +121,27 @@ export interface SessionMetadata {
    */
   deepReviewRunManifest?: ReviewTeamRunManifest;
   reviewTargetEvidence?: ReviewTargetEvidence;
+}
+
+/** Index-sized execution facts; never contains message or tool payloads. */
+export interface SessionLastTurn {
+  turnId: string;
+  turnIndex: number;
+  status: 'inprogress' | 'completed' | 'error' | 'cancelled';
+  endTime?: number;
+  executionGeneration?: number;
+  /** Explicit interrupted checkpoint; omitted by older hosts/metadata. */
+  recoveryPending?: boolean;
+}
+
+export interface SessionActivitySummary {
+  sessionId: string;
+  execution: 'idle' | 'running' | 'queued' | 'error' | 'external' | (string & {});
+  activeTurnId?: string;
+  pendingApprovals: number;
+  pendingQuestions: number;
+  lastTurn?: SessionLastTurn;
+  unreadCompletion?: 'completed' | 'error' | 'interrupted';
 }
 
 export interface ReviewActionPersistedState {
@@ -213,6 +235,7 @@ export interface DialogTurnData {
   tokenUsage?: DialogTurnTokenUsageData;
   status: TurnStatus;
   finishReason?: string;
+  recoveryEpoch?: number;
   recovery?: {
     status: 'interrupted' | 'recovering';
     executionGeneration: number;

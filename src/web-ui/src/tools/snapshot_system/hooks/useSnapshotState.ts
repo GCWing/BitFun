@@ -44,7 +44,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
   const [boundIdentity, setBoundIdentity] = useState(identity);
   const snapshotsAvailable = useSyncExternalStore(
     (callback) => flowChatStore.subscribe(() => callback()),
-    () => hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined),
+    () => hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined, sessionId),
     () => false,
   );
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
@@ -65,7 +65,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     if (!sessionId || !surfaceScope.isCurrent()) return;
 
     const session = flowChatStore.getState().sessions.get(sessionId);
-    if (!shouldRefreshSnapshotForSession(session)) {
+    if (!shouldRefreshSnapshotForSession(session, sessionId)) {
       refreshGenerationRef.current += 1;
       setLoading(false);
       setError(null);
@@ -87,7 +87,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
         !surfaceScope.isCurrent() ||
         refreshGenerationRef.current !== refreshGeneration ||
         activeSessionIdRef.current !== sessionId ||
-        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
+        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId)
       ) {
         return;
       }
@@ -98,7 +98,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
         !surfaceScope.isCurrent() ||
         refreshGenerationRef.current !== refreshGeneration ||
         activeSessionIdRef.current !== sessionId ||
-        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
+        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId)
       ) {
         return;
       }
@@ -229,7 +229,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
   const getCompactDiff = useCallback((filePath: string): CompactDiffResult | null => {
     if (!surfaceScope.isCurrent()) return null;
-    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
+    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined, sessionId)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
@@ -238,7 +238,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
   const getFullDiff = useCallback((filePath: string): FullDiffResult | null => {
     if (!surfaceScope.isCurrent()) return null;
-    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined)) return null;
+    if (!hasSessionFileSnapshots(sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined, sessionId)) return null;
     const file = stateManager.getFileState(filePath);
     if (!file) return null;
     
@@ -267,7 +267,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
     const unsubscribeSession = stateManager.onSessionStateChange((newSessionState) => {
       if (surfaceScope.isCurrent() && newSessionState.sessionId === activeSessionIdRef.current &&
-        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
+        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId)) {
         setSessionState(newSessionState);
         setFiles(Array.from(newSessionState.files.values()));
       } else {
@@ -277,7 +277,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
     const unsubscribeFile = stateManager.onFileStateChange((file) => {
       if (surfaceScope.isCurrent() && file.sessionId === activeSessionIdRef.current &&
-        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))) {
+        shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId), sessionId)) {
         setFiles(prev => {
           const newFiles = [...prev];
           const index = newFiles.findIndex(f => f.filePath === file.filePath);
@@ -294,7 +294,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     });
 
     let canRefresh = shouldRefreshSnapshotForSession(
-      flowChatStore.getState().sessions.get(sessionId)
+      flowChatStore.getState().sessions.get(sessionId), sessionId,
     );
 
     if (canRefresh) {
@@ -303,7 +303,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
     const unsubscribeFlowChat = flowChatStore.subscribe((state) => {
       if (!surfaceScope.isCurrent()) return;
-      const nextCanRefresh = shouldRefreshSnapshotForSession(state.sessions.get(sessionId));
+      const nextCanRefresh = shouldRefreshSnapshotForSession(state.sessions.get(sessionId), sessionId);
       if (nextCanRefresh && !canRefresh) {
         canRefresh = true;
         refreshSession();

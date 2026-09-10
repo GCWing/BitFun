@@ -160,6 +160,14 @@ export const dispatchApi = {
     });
   },
 
+  async readFile(jobId: string, filePath: string): Promise<{
+    kind: 'readFile'; jobId: string; sessionId: string; filePath: string; content: string;
+  }> {
+    return api.invoke('dispatch_query', {
+      request: { jobId, kind: 'readFile', filePath },
+    });
+  },
+
   async status(jobId: string, cursor: number): Promise<DispatchStatusResponse> {
     return api.invoke<DispatchStatusResponse>('dispatch_status', {
       request: { jobId, cursor },

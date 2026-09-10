@@ -9,6 +9,7 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'row' },
     { id: 'rowMain' },
     { id: 'assistantAvatar' },
+    { id: 'status' },
     { id: 'edit' },
     { id: 'actions' },
     { id: 'menu' },

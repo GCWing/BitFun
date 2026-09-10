@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStore';
+import { sessionCompletionReceipt } from '../utils/sessionCompletionReceipt';
 import {
   LOCAL_SURFACE_ID,
   SurfaceChangedError,
@@ -26,7 +27,6 @@ const apiMocks = vi.hoisted(() => ({
   restoreSessionView: vi.fn(),
   restoreSessionWithTurns: vi.fn(),
   loadSessionTurnWindow: vi.fn(),
-  accountFetchSessionTurns: vi.fn(),
   cancelSession: vi.fn(),
   cancelDispatchJob: vi.fn(),
   onPermissionRequestEvent: vi.fn(() => () => {}),
@@ -103,7 +103,6 @@ vi.mock('@/features/dispatch/dispatchApi', () => ({
 
 vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', () => ({
   remoteConnectAPI: {
-    accountFetchSessionTurns: apiMocks.accountFetchSessionTurns,
   },
 }));
 
@@ -178,14 +177,14 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   title: 'Session 1',
   dialogTurns: [],
   status: 'idle',
-  config: { agentType: 'agentic' },
+  config: { agentType: 'Standard' },
   createdAt: 1,
   lastActiveAt: 1,
   error: null,
   isHistorical: false,
   todos: [],
   maxContextTokens: 128128,
-  mode: 'agentic',
+  mode: 'Standard',
   workspacePath: 'D:/workspace/OpenBitFun',
   isTransient: false,
   ...overrides,
@@ -505,11 +504,108 @@ describe('FlowChatStore dispatch observer boundaries', () => {
     expect(appliedSession.error).toBe('Target execution failed');
     expect(appliedSession.dialogTurns[0]).toBe(terminalTurn);
   });
+
+  it('repairs a cached optimistic success when a follow-up fails before the executor adopts it', () => {
+    const session = createSession({
+      workspacePath: '/source',
+      config: {
+        dispatchTarget: { kind: 'ssh', connectionId: 'ssh-1', workspacePath: '/target', displayName: 'host' },
+        dispatchJobId: 'job-1',
+        dispatchJobState: 'failed',
+        dispatchCursor: 10,
+      },
+      dialogTurns: [{
+        id: 'dispatch_pending_job-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1', content: 'continue task', timestamp: 1,
+          metadata: { __openbitfunOptimisticDispatchJobId: 'job-1' },
+        },
+        modelRounds: [], status: 'completed', startTime: 1, endTime: 2, success: true,
+      }],
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]), activeSessionId: session.sessionId,
+    }));
+    flowChatStore.applyDispatchSnapshot(session.sessionId, {
+      jobId: 'job-1', state: 'failed', cursor: 10, expectedCursor: 10,
+      lastError: 'Unsupported target reasoning preset', terminalDrained: true,
+    });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0]).toMatchObject({
+      status: 'error', success: false, error: 'Unsupported target reasoning preset', modelRounds: [],
+    });
+  });
 });
 
 describe('FlowChatStore metadata persistence callbacks', () => {
+  const completedSession = (): Session => createSession({
+    hasUnreadCompletion: 'completed', lastFinishedAt: 10, historyState: 'ready',
+    needsUserAttention: 'tool_confirm',
+    dialogTurns: [{ id: 'finished-turn', sessionId: 'session-1', status: 'completed',
+      userMessage: { id: 'user', content: 'Task', timestamp: 1 },
+      modelRounds: [], startTime: 1, endTime: 10 }],
+  });
+
   afterEach(() => {
+    activateSurface(LOCAL_SURFACE_ID);
     resetStore();
+  });
+
+  it('acknowledges only the displayed completion and preserves pending interaction facts', () => {
+    const session = completedSession();
+    flowChatStore.setState(() => ({ sessions: new Map([[session.sessionId, session]]) }));
+    flowChatStore.clearSessionUnreadCompletion(session.sessionId, {
+      surfaceId: LOCAL_SURFACE_ID, receipt: sessionCompletionReceipt(session)!,
+    });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)).toMatchObject({
+      hasUnreadCompletion: undefined, needsUserAttention: 'tool_confirm',
+    });
+  });
+
+  it('does not let an old view clear a newer completion of the same kind', () => {
+    const old = completedSession();
+    const latest = { ...old, lastFinishedAt: 20,
+      dialogTurns: [{ ...old.dialogTurns[0], id: 'new-turn', endTime: 20 }] };
+    flowChatStore.setState(() => ({ sessions: new Map([[latest.sessionId, latest]]) }));
+    flowChatStore.clearSessionUnreadCompletion(latest.sessionId, {
+      surfaceId: LOCAL_SURFACE_ID, receipt: sessionCompletionReceipt(old)!,
+    });
+    expect(flowChatStore.getState().sessions.get(latest.sessionId)?.hasUnreadCompletion).toBe('completed');
+  });
+
+  it('does not acknowledge an equal session id on a different device surface', () => {
+    const session = completedSession();
+    const receipt = sessionCompletionReceipt(session)!;
+    activateSurface('peer-status-receipt');
+    flowChatStore.setState(() => ({ sessions: new Map([[session.sessionId, session]]) }));
+    flowChatStore.clearSessionUnreadCompletion(session.sessionId, { surfaceId: LOCAL_SURFACE_ID, receipt });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.hasUnreadCompletion).toBe('completed');
+  });
+
+  it('keeps a newer summary generation unread until its actual result is displayed', () => {
+    const session = completedSession();
+    flowChatStore.setState(() => ({ sessions: new Map([[session.sessionId, session]]) }));
+    flowChatStore.applySessionActivityReceipt({
+      sessionId: session.sessionId, execution: 'idle', pendingApprovals: 0, pendingQuestions: 0,
+      unreadCompletion: 'completed',
+      lastTurn: { turnId: 'finished-turn', turnIndex: 0, status: 'completed', executionGeneration: 2 },
+    });
+    const updated = flowChatStore.getState().sessions.get(session.sessionId)!;
+    expect(updated.unreadCompletionGeneration).toBe(2);
+    expect(sessionCompletionReceipt(updated)).toBeNull();
+    flowChatStore.clearSessionUnreadCompletion(session.sessionId, {
+      surfaceId: LOCAL_SURFACE_ID, receipt: sessionCompletionReceipt(session)!,
+    });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.hasUnreadCompletion).toBe('completed');
+  });
+
+  it('attaches the completion to its owner when a follow-up turn already exists', () => {
+    const session = completedSession();
+    session.dialogTurns.push({ ...session.dialogTurns[0], id: 'queued-follow-up', status: 'pending' });
+    flowChatStore.setState(() => ({ sessions: new Map([[session.sessionId, session]]) }));
+    flowChatStore.markSessionUnreadCompletion(session.sessionId, 'completed', 'finished-turn');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.unreadCompletionTurnId).toBe('finished-turn');
+    expect(sessionCompletionReceipt(flowChatStore.getState().sessions.get(session.sessionId))).toBeNull();
   });
 
   it('persists unread completion clear only when the session state changes', () => {
@@ -1246,7 +1342,7 @@ describe('FlowChatStore session model selection', () => {
   });
 
   it('stores the primary selector on a legacy session without a model', () => {
-    const session = createSession({ config: { agentType: 'agentic' } });
+    const session = createSession({ config: { agentType: 'Standard' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
@@ -1259,7 +1355,7 @@ describe('FlowChatStore session model selection', () => {
 
   it('sets and clears the session reasoning preset independently of the model', () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'model-a' },
+      config: { agentType: 'Standard', modelName: 'model-a' },
     });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
@@ -1279,7 +1375,7 @@ describe('FlowChatStore session model selection', () => {
 
   it('applies a model fallback notice that matches the stored model', () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'removed-model' },
+      config: { agentType: 'Standard', modelName: 'removed-model' },
     });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
@@ -1297,7 +1393,7 @@ describe('FlowChatStore session model selection', () => {
   });
 
   it('applies a model fallback notice when the session has no stored model yet', () => {
-    const session = createSession({ config: { agentType: 'agentic' } });
+    const session = createSession({ config: { agentType: 'Standard' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
@@ -1318,7 +1414,7 @@ describe('FlowChatStore session model selection', () => {
     // restore: the composer already stored the picked model when the notice
     // for the old one lands.
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'removed-model' },
+      config: { agentType: 'Standard', modelName: 'removed-model' },
     });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
@@ -1346,7 +1442,7 @@ describe('FlowChatStore session model selection', () => {
 
   it('clears an invalidated reasoning preset when the notice matches', () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'model-a', reasoningPreset: 'high' },
+      config: { agentType: 'Standard', modelName: 'model-a', reasoningPreset: 'high' },
     });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
@@ -1363,7 +1459,7 @@ describe('FlowChatStore session model selection', () => {
 
   it('ignores a stale reasoning preset clear after a newer selection', () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'model-a', reasoningPreset: 'high' },
+      config: { agentType: 'Standard', modelName: 'model-a', reasoningPreset: 'high' },
     });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
@@ -1387,7 +1483,6 @@ describe('FlowChatStore historical session hydration state', () => {
     apiMocks.restoreSessionWithTurns.mockReset();
     apiMocks.loadSessionTurns.mockReset();
     apiMocks.loadSessionTurnWindow.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
     vi.stubGlobal('CustomEvent', class {
       type: string;
       detail: unknown;
@@ -1417,7 +1512,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
@@ -1440,7 +1535,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'local-history',
         title: 'Local session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
         workspaceHostname: 'localhost',
@@ -1448,7 +1543,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'legacy-remote-history',
         title: 'Legacy remote session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 11,
         lastActiveAt: 21,
         remoteSshHost: 'localhost',
@@ -1473,7 +1568,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'remote-loopback-history',
         title: 'Remote loopback session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
         workspaceHostname: 'localhost',
@@ -1493,19 +1588,15 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
-  it('checks relay history completeness before restoring Core context', async () => {
+  it('restores history directly from the execution host', async () => {
     const order: string[] = [];
-    apiMocks.accountFetchSessionTurns.mockImplementationOnce(async () => {
-      order.push('relay');
-      return true;
-    });
     apiMocks.restoreSessionView.mockImplementationOnce(async () => {
       order.push('restore');
       return {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 0,
           createdAt: 1,
@@ -1527,37 +1618,17 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/OpenBitFun');
 
-    expect(order).toEqual(['relay', 'restore']);
+    expect(order).toEqual(['restore']);
   });
 
-  it('fails closed before Core restore when relay history is incomplete', async () => {
-    apiMocks.accountFetchSessionTurns.mockRejectedValueOnce(new Error('relay unavailable'));
-    flowChatStore.setState(() => ({
-      sessions: new Map([
-        ['history-1', createSession({
-          sessionId: 'history-1',
-          isHistorical: true,
-          historyState: 'metadata-only',
-        })],
-      ]),
-      activeSessionId: 'history-1',
-    }));
 
-    await expect(
-      flowChatStore.loadSessionHistory('history-1', 'D:/workspace/OpenBitFun')
-    ).rejects.toThrow('relay unavailable');
-
-    expect(apiMocks.restoreSessionView).not.toHaveBeenCalled();
-    expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('failed');
-  });
-
-  it('skips cloud turn fetch in Peer Device Mode and restores from the peer host', async () => {
+  it('restores history from the peer host in Peer Device Mode', async () => {
     peerModeFlagMock.active = true;
     apiMocks.restoreSessionView.mockResolvedValueOnce({
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 0,
         createdAt: 1,
@@ -1578,7 +1649,6 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
 
-    expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).toHaveBeenCalled();
     expect(flowChatStore.getState().sessions.get('history-1')?.historyState).not.toBe('failed');
   });
@@ -1589,7 +1659,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 1,
         createdAt: 1,
@@ -1668,7 +1738,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
         turnCount: 1,
         createdAt: 1,
@@ -1772,7 +1842,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
         turnCount: 1,
         createdAt: 1,
@@ -1855,7 +1925,7 @@ describe('FlowChatStore historical session hydration state', () => {
     const hostSession = {
       sessionId: 'history-1',
       sessionName: 'History 1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
       turnCount: 1,
       createdAt: 1,
@@ -2105,7 +2175,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: ToolExecution }',
         turnCount: 1,
         createdAt: 1,
@@ -2203,7 +2273,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 2,
         createdAt: 1,
@@ -2265,7 +2335,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 1,
         createdAt: 1,
@@ -2363,7 +2433,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
           turnCount: 1,
           createdAt: 1,
@@ -2445,7 +2515,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 1,
         createdAt: 1,
@@ -2539,7 +2609,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 1,
         createdAt: 1,
@@ -2633,7 +2703,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Processing { current_turn_id: "turn-live", phase: Streaming }',
         turnCount: 1,
         createdAt: 1,
@@ -2734,7 +2804,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -2851,7 +2921,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -2939,14 +3009,14 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
       },
       {
         sessionId: 'history-2',
         title: 'Saved session 2',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 11,
         lastActiveAt: 21,
       },
@@ -2970,14 +3040,14 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'bad-1',
         title: 'Bad session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
       },
       {
         sessionId: 'good-1',
         title: 'Good session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 11,
         lastActiveAt: 21,
       },
@@ -3023,7 +3093,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
       },
@@ -3043,7 +3113,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         createdAt: 10,
         lastActiveAt: 20,
       },
@@ -3065,7 +3135,7 @@ describe('FlowChatStore historical session hydration state', () => {
         {
           sessionId: 'history-1',
           title: 'Saved session',
-          agentType: 'agentic',
+          agentType: 'Standard',
           modelName: 'primary',
           createdAt: 10,
           lastActiveAt: 20,
@@ -3161,7 +3231,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 0,
         createdAt: 1,
@@ -3204,7 +3274,7 @@ describe('FlowChatStore historical session hydration state', () => {
           isHistorical: true,
           historyState: 'metadata-only',
           config: {
-            agentType: 'agentic',
+            agentType: 'Standard',
             dispatchTarget: {
               kind: 'ssh',
               connectionId: 'ssh-1',
@@ -3220,7 +3290,6 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('session-1', '/source');
 
-    expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionWithTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSession).not.toHaveBeenCalled();
@@ -3314,7 +3383,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'session-1',
         sessionName: 'Saved local shell',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 0,
         createdAt: 1,
@@ -3467,7 +3536,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 0,
           createdAt: 1,
@@ -3530,7 +3599,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 0,
           createdAt: 1,
@@ -3576,7 +3645,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 0,
         createdAt: 1,
@@ -3679,7 +3748,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -3745,7 +3814,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -3760,7 +3829,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -3870,7 +3939,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -3885,7 +3954,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -3952,7 +4021,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 5,
           createdAt: 1,
@@ -3980,7 +4049,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 5,
           createdAt: 1,
@@ -4101,7 +4170,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4155,7 +4224,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -4236,7 +4305,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -4351,7 +4420,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -4405,7 +4474,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -4461,7 +4530,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-remote',
         sessionName: 'Remote History',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -4540,7 +4609,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-remote',
           sessionName: 'Remote History',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4555,7 +4624,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-remote',
           sessionName: 'Remote History',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4646,7 +4715,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4661,7 +4730,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4748,7 +4817,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4763,7 +4832,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 2,
           createdAt: 1,
@@ -4848,7 +4917,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -4895,7 +4964,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -4944,7 +5013,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 1,
           createdAt: 1,
@@ -4955,7 +5024,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-2',
           sessionName: 'History 2',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 1,
           createdAt: 1,
@@ -5003,7 +5072,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-2',
           sessionName: 'History 2',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 1,
           createdAt: 1,
@@ -5015,7 +5084,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -5070,7 +5139,7 @@ describe('FlowChatStore historical session hydration state', () => {
     apiMocks.restoreSession.mockResolvedValueOnce({
       sessionId: 'history-1',
       sessionName: 'History 1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       state: 'Idle',
       turnCount: 1,
       createdAt: 1,
@@ -5119,7 +5188,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -5191,7 +5260,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -5260,7 +5329,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 15,
         createdAt: 1,
@@ -5329,7 +5398,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 8,
           createdAt: 1,
@@ -5345,7 +5414,7 @@ describe('FlowChatStore historical session hydration state', () => {
         session: {
           sessionId: 'history-1',
           sessionName: 'History 1',
-          agentType: 'agentic',
+          agentType: 'Standard',
           state: 'Idle',
           turnCount: 6,
           createdAt: 1,
@@ -5413,7 +5482,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 15,
         createdAt: 1,
@@ -5494,7 +5563,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 23,
         createdAt: 1,
@@ -5557,7 +5626,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 23,
         createdAt: 1,
@@ -5615,7 +5684,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 23,
         createdAt: 1,
@@ -5993,7 +6062,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 100,
         createdAt: 1,
@@ -6173,7 +6242,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -6250,7 +6319,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 2,
         createdAt: 1,
@@ -6370,8 +6439,8 @@ describe('FlowChatStore historical session hydration state', () => {
           sessionId: 'history-1',
           isHistorical: true,
           historyState: 'metadata-only',
-          mode: 'agentic',
-          config: { agentType: 'agentic' },
+          mode: 'Standard',
+          config: { agentType: 'Standard' },
         })],
       ]),
       activeSessionId: 'history-1',
@@ -6391,7 +6460,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -6457,7 +6526,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -6521,7 +6590,7 @@ describe('FlowChatStore historical session hydration state', () => {
       session: {
         sessionId: 'history-1',
         sessionName: 'History 1',
-        agentType: 'agentic',
+        agentType: 'Standard',
         state: 'Idle',
         turnCount: 1,
         createdAt: 1,
@@ -6582,7 +6651,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
@@ -6638,7 +6707,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
@@ -6663,7 +6732,7 @@ describe('FlowChatStore historical session hydration state', () => {
       {
         sessionId: 'history-1',
         title: 'Saved session',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
@@ -6700,7 +6769,7 @@ describe('FlowChatStore reconcile snapshot content safety', () => {
   const hostSession = (state = 'Idle') => ({
     sessionId: 'history-1',
     sessionName: 'History 1',
-    agentType: 'agentic',
+    agentType: 'Standard',
     state,
     turnCount: 1,
     createdAt: 1,
@@ -6709,7 +6778,6 @@ describe('FlowChatStore reconcile snapshot content safety', () => {
   beforeEach(() => {
     peerModeFlagMock.active = false;
     apiMocks.restoreSessionView.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
     vi.stubGlobal('CustomEvent', class {
       type: string;
       detail: unknown;
@@ -6929,7 +6997,7 @@ describe('FlowChatStore device surfaces', () => {
   const restoredSession = (sessionId: string) => ({
     sessionId,
     sessionName: sessionId,
-    agentType: 'agentic',
+    agentType: 'Standard',
     state: 'Idle',
     turnCount: 1,
     createdAt: 1,
@@ -6953,7 +7021,6 @@ describe('FlowChatStore device surfaces', () => {
     apiMocks.restoreSessionView.mockReset();
     apiMocks.restoreSessionWithTurns.mockReset();
     apiMocks.listSessionsPage.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -7019,7 +7086,7 @@ describe('FlowChatStore device surfaces', () => {
     const optimisticTurn = {
       id: 'optimistic-turn',
       sessionId: 'shared-session',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'hello', timestamp: 1 },
       modelRounds: [],
       status: 'pending' as const,

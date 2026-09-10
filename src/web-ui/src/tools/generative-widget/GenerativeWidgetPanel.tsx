@@ -124,7 +124,7 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
             {t('toolCards.generativeUI.reset')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             leadingIcon={<Save size={14} />}
             loading={saveState === 'saving'}

@@ -225,7 +225,9 @@
     }
   },
   "complete": {
-    "finish": "Finish"
+    "finish": "Finish",
+    "migrateLegacyData": "Migrate legacy data after installation",
+    "migrateLegacyDataDescription": "Starts the installed Data Migrator. It keeps the old data unchanged, asks you to confirm the scope, and reopens OpenBitFun when migration ends."
   },
   "uninstall": {
     "title": "Uninstall OpenBitFun",

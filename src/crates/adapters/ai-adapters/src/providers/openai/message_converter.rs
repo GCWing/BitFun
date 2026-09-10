@@ -175,12 +175,46 @@ impl OpenAIMessageConverter {
     }
 
     pub fn convert_messages(messages: Vec<Message>) -> Vec<Value> {
-        let mut messages = messages
-            .into_iter()
-            .map(Self::convert_single_message)
-            .collect::<Vec<_>>();
-        Self::trim_final_assistant_trailing_whitespace(&mut messages);
-        messages
+        let mut converted = Vec::with_capacity(messages.len());
+        let mut tool_images = Vec::new();
+        for mut msg in messages {
+            // Chat Completions tool content supports text only. Defer image context
+            // until every result in this contiguous tool batch has been emitted,
+            // so a synthetic user message never splits parallel tool responses.
+            if msg.role != "tool" && !tool_images.is_empty() {
+                converted.push(json!({
+                    "role": "user",
+                    "content": std::mem::take(&mut tool_images),
+                }));
+            }
+            if msg.role == "tool" {
+                if let Some(attachments) =
+                    msg.tool_image_attachments.take().filter(|a| !a.is_empty())
+                {
+                    tool_images.push(json!({
+                        "type": "text",
+                        "text": format!(
+                            "Images returned by tool {} (tool_call_id: {}):",
+                            msg.name.as_deref().unwrap_or("unknown"),
+                            msg.tool_call_id.as_deref().unwrap_or("unknown"),
+                        ),
+                    }));
+                    tool_images.extend(attachments.into_iter().map(|attachment| json!({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": format!("data:{};base64,{}", attachment.mime_type, attachment.data_base64),
+                            "detail": "auto",
+                        },
+                    })));
+                }
+            }
+            converted.push(Self::convert_single_message(msg));
+        }
+        if !tool_images.is_empty() {
+            converted.push(json!({ "role": "user", "content": tool_images }));
+        }
+        Self::trim_final_assistant_trailing_whitespace(&mut converted);
+        converted
     }
 
     fn trim_final_assistant_trailing_whitespace(messages: &mut [Value]) {
@@ -326,6 +360,11 @@ impl OpenAIMessageConverter {
     }
 
     fn parse_chat_completions_content_parts(role: &str, content: &str) -> Option<Vec<Value>> {
+        // Tool text is opaque, even when it happens to contain JSON content parts.
+        // Keeping it a string also works with providers that reject text arrays.
+        if role == "tool" {
+            return None;
+        }
         let items = serde_json::from_str::<Value>(content)
             .ok()?
             .as_array()?
@@ -380,41 +419,6 @@ impl OpenAIMessageConverter {
             if let Some(ref content) = msg.content {
                 if !content.starts_with("[TOOL ERROR]") {
                     msg.content = Some(format!("[TOOL ERROR] {}", content));
-                }
-            }
-        }
-
-        // Chat Completions: multimodal tool message (e.g. GPT-4o vision + tools) — image parts + text.
-        if msg.role == "tool" {
-            if let Some(ref attachments) = msg.tool_image_attachments {
-                if !attachments.is_empty() {
-                    let mut parts: Vec<Value> = attachments
-                        .iter()
-                        .map(|att| {
-                            let url = format!("data:{};base64,{}", att.mime_type, att.data_base64);
-                            json!({
-                                "type": "image_url",
-                                "image_url": { "url": url, "detail": "auto" }
-                            })
-                        })
-                        .collect();
-                    let text = msg.content.clone().unwrap_or_default();
-                    if text.trim().is_empty() {
-                        parts.push(json!({
-                            "type": "text",
-                            "text": "Tool execution completed"
-                        }));
-                    } else {
-                        parts.push(json!({ "type": "text", "text": text }));
-                    }
-                    let mut openai_msg = json!({
-                        "role": "tool",
-                        "content": Value::Array(parts),
-                    });
-                    if let Some(id) = msg.tool_call_id {
-                        openai_msg["tool_call_id"] = Value::String(id);
-                    }
-                    return openai_msg;
                 }
             }
         }
@@ -807,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_tool_message_with_images_to_chat_completions_content_parts() {
+    fn moves_tool_images_to_user_context_for_chat_completions() {
         let msg = Message {
             role: "tool".to_string(),
             content: Some("ok".to_string()),
@@ -825,11 +829,119 @@ mod tests {
         };
 
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
-        let content = openai[0]["content"].as_array().expect("content parts");
-        assert_eq!(content[0]["type"], json!("image_url"));
-        assert_eq!(content[1]["type"], json!("text"));
-        assert_eq!(content[1]["text"], json!("ok"));
-        assert!(openai[0].get("name").is_none());
+        assert_eq!(openai.len(), 2);
+        assert_eq!(
+            openai[0],
+            json!({
+                "role": "tool", "tool_call_id": "call_1", "content": "ok",
+            })
+        );
+        assert_eq!(openai[1]["role"], "user");
+        assert_eq!(
+            openai[1]["content"],
+            json!([
+                {"type": "text", "text": "Images returned by tool computer_use (tool_call_id: call_1):"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,YmFi", "detail": "auto"}},
+            ])
+        );
+    }
+
+    #[test]
+    fn replays_legacy_tool_images_after_all_parallel_results() {
+        // This is the existing provider-neutral shape, including attachments in
+        // old history. Conversion must not require a persisted-data migration.
+        let legacy = json!([
+            {"role": "assistant", "reasoning_content": "inspect both", "tool_calls": [
+                {"id": "a", "name": "view_image", "arguments": {"path": "a.png"}},
+                {"id": "b", "name": "view_image", "arguments": {"path": "b.jpg"}},
+                {"id": "c", "name": "Read", "arguments": {"path": "notes.txt"}}
+            ]},
+            {"role": "tool", "tool_call_id": "a", "name": "view_image", "content": "",
+             "tool_image_attachments": [
+                 {"mime_type": "image/png", "data_base64": "AAA"},
+                 {"mime_type": "image/png", "data_base64": "BBB"}
+             ]},
+            {"role": "tool", "tool_call_id": "b", "content": "partial image", "is_error": true,
+             "tool_image_attachments": [{"mime_type": "image/jpeg", "data_base64": "CCC"}]},
+            {"role": "tool", "tool_call_id": "c", "content": "notes"},
+            {"role": "assistant", "content": "Images inspected."},
+            {"role": "user", "content": "Continue."}
+        ]);
+        let messages: Vec<Message> = serde_json::from_value(legacy).unwrap();
+        let round_trip: Vec<Message> =
+            serde_json::from_value(serde_json::to_value(&messages).unwrap()).unwrap();
+        let converted = OpenAIMessageConverter::convert_messages(messages);
+        assert_eq!(
+            converted,
+            OpenAIMessageConverter::convert_messages(round_trip)
+        );
+        assert_eq!(
+            converted
+                .iter()
+                .map(|m| m["role"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                "assistant",
+                "tool",
+                "tool",
+                "tool",
+                "user",
+                "assistant",
+                "user"
+            ]
+        );
+        assert_eq!(converted[0]["reasoning_content"], "inspect both");
+        for (index, id) in [(1, "a"), (2, "b"), (3, "c")] {
+            assert_eq!(converted[index]["tool_call_id"], id);
+            assert!(converted[index]["content"].is_string());
+        }
+        assert_eq!(converted[1]["content"], "Tool execution completed");
+        assert_eq!(converted[2]["content"], "[TOOL ERROR] partial image");
+        let images = converted[4]["content"].as_array().unwrap();
+        assert_eq!(images.len(), 5);
+        assert!(images[0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("tool_call_id: a"));
+        assert_eq!(images[1]["image_url"]["url"], "data:image/png;base64,AAA");
+        assert_eq!(images[2]["image_url"]["url"], "data:image/png;base64,BBB");
+        assert!(images[3]["text"]
+            .as_str()
+            .unwrap()
+            .contains("tool_call_id: b"));
+        assert_eq!(images[4]["image_url"]["url"], "data:image/jpeg;base64,CCC");
+        assert_eq!(converted[6]["content"], "Continue.");
+    }
+
+    #[test]
+    fn keeps_tool_batches_without_images_unchanged() {
+        let messages: Vec<Message> = serde_json::from_value(json!([
+            {"role": "tool", "tool_call_id": "a", "content": "ok", "tool_image_attachments": []},
+            {"role": "user", "content": "Continue."}
+        ]))
+        .unwrap();
+        let converted = OpenAIMessageConverter::convert_messages(messages);
+        assert_eq!(
+            converted,
+            json!([
+                {"role": "tool", "tool_call_id": "a", "content": "ok"},
+                {"role": "user", "content": "Continue."}
+            ])
+            .as_array()
+            .unwrap()
+            .clone()
+        );
+    }
+
+    #[test]
+    fn keeps_tool_text_that_looks_like_content_parts_as_a_string() {
+        let text = r#"[{"type":"text","text":"tool data"}]"#;
+        let message: Message = serde_json::from_value(json!({
+            "role": "tool", "tool_call_id": "a", "content": text,
+        }))
+        .unwrap();
+        let converted = OpenAIMessageConverter::convert_messages(vec![message]);
+        assert_eq!(converted[0]["content"], text);
     }
 
     #[test]

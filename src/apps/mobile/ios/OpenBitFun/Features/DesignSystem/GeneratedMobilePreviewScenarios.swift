@@ -70,4 +70,52 @@ enum MobilePreviewScenarios {
         connectionPhase: "reconnecting",
         streaming: false
     )
+
+    static let narrowMultiline = MobilePreviewScenario(
+        id: "narrow-multiline",
+        title: "Narrow phone with a multiline draft",
+        description: "Narrow phone with a multiline draft",
+        appearance: "light",
+        viewportWidth: 360,
+        viewportHeight: 800,
+        headerTitle: "检查移动端长标题、正文与控制目标的可读性",
+        headerSubtitle: "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+        messages: [MobilePreviewMessage(role: "user", text: "三端的组件和样式可以保持一致吗？"), MobilePreviewMessage(role: "assistant", text: "可以。共享视觉契约，三端继续使用原生渲染。")],
+        composerDraft: "请检查输入框是否能保留多行中文草稿。\n模型选择后内容应继续保留。\n附件与文本应各自成行。",
+        composerPlaceholder: "向 OpenBitFun 提问",
+        connectionPhase: "connected",
+        streaming: false
+    )
+
+    static let foldContext = MobilePreviewScenario(
+        id: "fold-context",
+        title: "Foldable with long remote context",
+        description: "Foldable with long remote context",
+        appearance: "light",
+        viewportWidth: 700,
+        viewportHeight: 840,
+        headerTitle: "检查移动端长标题、正文与控制目标的可读性",
+        headerSubtitle: "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+        messages: [MobilePreviewMessage(role: "user", text: "三端的组件和样式可以保持一致吗？"), MobilePreviewMessage(role: "assistant", text: "可以。共享视觉契约，三端继续使用原生渲染。")],
+        composerDraft: "请保留当前会话与控制目标。",
+        composerPlaceholder: "向 OpenBitFun 提问",
+        connectionPhase: "connected",
+        streaming: false
+    )
+
+    static let longReading = MobilePreviewScenario(
+        id: "long-reading",
+        title: "Long reading content",
+        description: "Long reading content",
+        appearance: "light",
+        viewportWidth: 430,
+        viewportHeight: 932,
+        headerTitle: "检查移动端长标题、正文与控制目标的可读性",
+        headerSubtitle: "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+        messages: [MobilePreviewMessage(role: "user", text: "三端的组件和样式可以保持一致吗？"), MobilePreviewMessage(role: "assistant", text: "移动端的阅读层级需要清晰，正文应该舒适地换行，辅助说明保留足够对比度。\n\n当内容变长时，消息区滚动，输入框仍然可以操作。请在系统大字体设置下检查这一场景。")],
+        composerDraft: "",
+        composerPlaceholder: "向 OpenBitFun 提问",
+        connectionPhase: "connected",
+        streaming: false
+    )
 }

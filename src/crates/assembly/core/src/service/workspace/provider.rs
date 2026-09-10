@@ -1,3 +1,4 @@
+use super::manager::WorkspaceInfoRuntimeExt;
 use super::manager::{
     WorkspaceInfo, WorkspaceOpenOptions, WorkspaceStatistics, WorkspaceSummary, WorkspaceType,
 };

@@ -257,7 +257,7 @@ internal fun ComposerBar(
                     horizontalArrangement = Arrangement.spacedBy(actionSpacing),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(inputRowHeight),
+                        .heightIn(min = inputRowHeight),
                 ) {
                     // While expanded both side controls move to the row below,
                     // so the field gets the full width for what is being typed.
@@ -444,7 +444,7 @@ private fun ModelControl(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             modifier = Modifier
-                .height(34.dp)
+                .heightIn(min = MobileDesignGeometry.ComposerActionSize)
                 .widthIn(max = 220.dp)
                 .clip(RoundedCornerShape(9.dp))
                 .clickable(enabled = enabled, onClick = onClick)
@@ -543,11 +543,11 @@ private fun ModelSelectorContent(
         if (!compact) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(32.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = MobileDesignGeometry.SelectionCloseSize),
             ) {
                 Text(
                     stringResource(R.string.model_selector_title),
-                    fontSize = 13.sp,
+                    fontSize = MaterialTheme.typography.labelLarge.fontSize,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -575,7 +575,7 @@ private fun ModelSelectorContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(MobileDesignGeometry.ComposerModelSelectorRowHeight)
+                    .heightIn(min = MobileDesignGeometry.ComposerModelSelectorRowHeight)
                     .padding(horizontal = 10.dp, vertical = 14.dp),
             )
         } else {
@@ -594,7 +594,7 @@ private fun ModelSelectorContent(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(MobileDesignGeometry.ComposerModelSelectorRowHeight)
+                            .heightIn(min = MobileDesignGeometry.ComposerModelSelectorRowHeight)
                             .clip(
                                 RoundedCornerShape(
                                     MobileDesignGeometry.ComposerModelSelectorRowRadius,
@@ -611,7 +611,7 @@ private fun ModelSelectorContent(
                                 role = Role.Button
                                 selected = option.selected
                             }
-                            .padding(horizontal = 10.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                             .testTag(MODEL_SELECTOR_OPTION_TEST_TAG_PREFIX + option.id),
                     ) {
                         Box(
@@ -633,18 +633,14 @@ private fun ModelSelectorContent(
                         ) {
                             Text(
                                 option.primaryLabel,
-                                fontSize = 13.sp,
+                                fontSize = MaterialTheme.typography.labelLarge.fontSize,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                             Text(
                                 option.secondaryLabel,
-                                fontSize = 11.sp,
+                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

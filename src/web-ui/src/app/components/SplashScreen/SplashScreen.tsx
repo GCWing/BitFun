@@ -1,7 +1,7 @@
 /**
  * SplashScreen — full-screen loading overlay shown on app start.
  *
- * Idle:    logo larger, soft fade in/out.
+ * Idle:    vector mark at the reference scale with a subtle breathing motion.
  * Exiting: logo scales up and fades; backdrop dissolves.
  */
 
@@ -55,20 +55,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
     >
       <div className="splash-screen__center" data-openbitfun-component="splash-screen" data-openbitfun-part="center">
         <div className="splash-screen__logo-wrap" data-openbitfun-component="splash-screen" data-openbitfun-part="logo">
-          <img
-            src="/brand/openbitfun-mark-dark-128.png"
-            alt="OpenBitFun"
-            className="splash-screen__logo splash-screen__logo--dark"
-            draggable={false}
-            decoding="async"
-          />
-          <img
-            src="/brand/openbitfun-mark-light-128.png"
-            alt=""
-            className="splash-screen__logo splash-screen__logo--light"
-            draggable={false}
-            decoding="async"
-          />
+          <span className="splash-screen__logo" aria-hidden="true" />
         </div>
         {showDelayedMessage && delayedMessage && !isExiting && (
           <div

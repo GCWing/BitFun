@@ -25,7 +25,6 @@
   }
 
   &:active {
-    transform: scale(0.94);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
@@ -98,8 +97,8 @@
     color: var(--openbitfun-color-content-primary);
     box-shadow: var(--openbitfun-shadow-base);
     max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 

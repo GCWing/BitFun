@@ -297,12 +297,9 @@ impl RemoteFileService {
             None => Ok(manager
                 .sftp_read_dir(connection_id, path)
                 .await?
+                .into_iter()
                 .map(|entry| {
-                    remote_dir_entry_from_metadata(
-                        &path_resolved,
-                        entry.file_name(),
-                        entry.metadata(),
-                    )
+                    remote_dir_entry_from_metadata(&path_resolved, entry.filename, entry.attrs)
                 })
                 .collect()),
         }

@@ -77,13 +77,13 @@ export const SessionUsageModal: React.FC = () => {
       className="session-usage-dialog"
       data-testid="session-usage-modal"
     >
-      <DialogHeader className="session-usage-dialog__header">
-        <DialogHeading className="session-usage-dialog__heading">
-          <DialogTitle className="session-usage-dialog__title">{t('usage.title')}</DialogTitle>
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('usage.title')}</DialogTitle>
         </DialogHeading>
         <DialogClose data-testid="session-usage-modal-close" />
       </DialogHeader>
-      <DialogBody className="session-usage-dialog__body" inset="none">
+      <DialogBody>
         <div
           className="session-usage-dialog__content"
           data-openbitfun-component="session-usage-modal"

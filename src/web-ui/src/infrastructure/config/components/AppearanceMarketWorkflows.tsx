@@ -1,4 +1,4 @@
-import { Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@openbitfun/ui';
+import { OverflowText, Button, Field, Icon, Input, Select, ScrollArea, Textarea } from '@openbitfun/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Inbox, ShieldCheck } from 'lucide-react';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
@@ -324,7 +324,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
       <div className="appearance-market__manual-submit-actions">
         <Button
           type="button"
-          variant="outline"
+          variant="fill"
           disabled={submitting}
           onClick={() => setManualSubmitOpen(false)}
         >
@@ -332,7 +332,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
         </Button>
         <Button
           type="submit"
-          variant="fill"
+          variant="primary"
           loading={submitting}
           disabled={!manualDraft.packagePath || !manualDraft.licenseValue.trim()}
           leadingIcon={<Icon name="upload" size="sm" aria-hidden="true" />}
@@ -392,7 +392,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
           <div className="appearance-market__workflow-actions">
             {manualSubmitAvailable && (
               <Button
-                variant={manualSubmitOpen ? 'outline' : 'fill'}
+                variant={manualSubmitOpen ? 'outline' : 'primary'}
                 size="sm"
                 onClick={() => setManualSubmitOpen(open => !open)}
                 disabled={submitting}
@@ -445,20 +445,20 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                     </div>
                     <div className="appearance-market__submission-body">
                       <div className="appearance-market__submission-title">
-                        <strong>{submission.name || submission.slug}</strong>
+                        <strong><OverflowText>{submission.name || submission.slug}</OverflowText></strong>
                         <span className={`appearance-market__submission-status appearance-market__submission-status--${submissionDisplayStatus(submission)}`}>
                           {t(`package.market.submissions.status.${submissionDisplayStatus(submission)}`)}
                         </span>
                       </div>
-                      <p>{submission.description || submission.slug}</p>
-                      <small>
+                      <p><OverflowText>{submission.description || submission.slug}</OverflowText></p>
+                      <small><OverflowText>
                         {submission.packageVersion ? `v${submission.packageVersion} · ` : ''}
                         {t('package.market.submissions.updated', { date: formattedDate(submission.updatedAt) })}
-                      </small>
+                      </OverflowText></small>
                       {submission.rejectionReason && (
-                        <p className="appearance-market__submission-rejection">
+                        <p className="appearance-market__submission-rejection"><OverflowText>
                           {t('package.market.submissions.rejection', { reason: submission.rejectionReason })}
-                        </p>
+                        </OverflowText></p>
                       )}
                     </div>
                     {canWithdraw(submission) && (
@@ -518,16 +518,16 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             data-openbitfun-part="marketReviewQueue"
           >
             {reviewQueue.map(submission => (
-              <button
+              <button data-overflow-trigger
                 key={submission.submissionId}
                 type="button"
                 className="appearance-market__review-item"
                 data-active={reviewDetail?.submission.submissionId === submission.submissionId || undefined}
                 onClick={() => void openReview(submission.submissionId)}
               >
-                <strong>{submission.name || submission.slug}</strong>
-                <span>{submission.packageVersion ? `v${submission.packageVersion}` : submission.slug}</span>
-                <small>{formattedDate(submission.updatedAt)}</small>
+                <strong><OverflowText>{submission.name || submission.slug}</OverflowText></strong>
+                <OverflowText>{submission.packageVersion ? `v${submission.packageVersion}` : submission.slug}</OverflowText>
+                <small><OverflowText>{formattedDate(submission.updatedAt)}</OverflowText></small>
               </button>
             ))}
           </ScrollArea>
@@ -556,10 +556,10 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                   )}
                 </div>
                 <dl className="appearance-market__facts">
-                  <div><dt>{t('package.market.review.package')}</dt><dd>{reviewDetail.submission.packageId}</dd></div>
-                  <div><dt>{t('package.market.review.version')}</dt><dd>{reviewDetail.submission.packageVersion}</dd></div>
-                  <div><dt>{t('package.market.minimumVersion')}</dt><dd>{reviewDetail.submission.minOpenBitFunVersion}</dd></div>
-                  <div><dt>{t('package.market.license')}</dt><dd>{reviewDetail.submission.license.spdxExpression || t('package.market.customLicense')}</dd></div>
+                  <div><dt><OverflowText>{t('package.market.review.package')}</OverflowText></dt><dd><OverflowText>{reviewDetail.submission.packageId}</OverflowText></dd></div>
+                  <div><dt><OverflowText>{t('package.market.review.version')}</OverflowText></dt><dd><OverflowText>{reviewDetail.submission.packageVersion}</OverflowText></dd></div>
+                  <div><dt><OverflowText>{t('package.market.minimumVersion')}</OverflowText></dt><dd><OverflowText>{reviewDetail.submission.minOpenBitFunVersion}</OverflowText></dd></div>
+                  <div><dt><OverflowText>{t('package.market.license')}</OverflowText></dt><dd><OverflowText>{reviewDetail.submission.license.spdxExpression || t('package.market.customLicense')}</OverflowText></dd></div>
                 </dl>
                 {reviewDetail.submission.requiredCapabilities.length > 0 && (
                   <div className="appearance-market__capabilities">
@@ -599,7 +599,7 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                   />
                   <div>
                     <Button
-                      variant="fill"
+                      variant="primary"
                       size="sm"
                       loading={actingId === reviewDetail.submission.submissionId}
                       onClick={() => void decide('approve')}

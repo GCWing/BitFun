@@ -1,33 +1,16 @@
-export type SelectableComposerExecutionLevel = 'minimal' | 'balanced' | 'ultimate' | 'creative';
-export type ComposerExecutionLevel = SelectableComposerExecutionLevel | 'other';
+import { canonicalHarnessId, type HarnessId } from '@/shared/agents/identity';
 
-export interface ComposerExecutionLevelSelection {
-  modeId: string;
+export type SelectableComposerExecutionLevel = HarnessId;
+/** 'other' is menu navigation state, never an Agent or Harness identity. */
+export type ComposerExecutionLevel = HarnessId | 'other';
+export interface ComposerExecutionLevelSelection { modeId: HarnessId }
+
+export function resolveComposerExecutionLevelSelection(level: HarnessId): ComposerExecutionLevelSelection {
+  return { modeId: level };
 }
 
-export function isUltraAgentType(agentType: string | null | undefined): boolean {
-  return agentType?.trim().toLowerCase() === 'ultra';
-}
-
-/**
- * Composer execution levels are a presentation projection over real Agents.
- */
-export function resolveComposerExecutionLevelSelection(
-  level: SelectableComposerExecutionLevel,
-): ComposerExecutionLevelSelection {
-  if (level === 'minimal') return { modeId: 'minimal' };
-  if (level === 'ultimate') return { modeId: 'Ultra' };
-  if (level === 'creative') return { modeId: 'Creative' };
-  return { modeId: 'agentic' };
-}
-
-export function resolveSelectedComposerExecutionLevel(params: {
-  currentMode: string;
-}): ComposerExecutionLevel {
-  if (params.currentMode.trim().toLowerCase() === 'minimal') return 'minimal';
-  if (isUltraAgentType(params.currentMode)) return 'ultimate';
-  if (params.currentMode.trim().toLowerCase() === 'creative') return 'creative';
-  return params.currentMode.trim().toLowerCase() === 'agentic' ? 'balanced' : 'other';
+export function resolveSelectedComposerExecutionLevel(params: { currentMode: string }): ComposerExecutionLevel {
+  return canonicalHarnessId(params.currentMode) ?? 'other';
 }
 
 export type ChatInputExecutionLevelOwner =
@@ -70,8 +53,3 @@ export function resolveChatInputExecutionLevelPolicy(params: {
 
   return { owner: 'composer', userConfigurable: true };
 }
-
-/**
- * Prevents a selection drafted for a project Session from leaking into a
- * target whose execution level is not controlled by this composer.
- */

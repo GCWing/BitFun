@@ -47,7 +47,6 @@ import { SidebarDeviceProjectionPolicy } from '../main/ets/pages/policy/SidebarD
 import { HarnessProfilePolicy } from '../main/ets/pages/policy/HarnessProfilePolicy';
 import { CONNECT_INTENT_AUTO, CONNECT_INTENT_SCAN } from '../main/ets/pages/state/AppShellState';
 import {
-  ConnectScanDecisionPolicy,
   DetectedUrlAction
 } from '../main/ets/services/ConnectScanDecisionPolicy';
 
@@ -610,7 +609,7 @@ export default function conversationPresentationUnitTest() {
       expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.scanToConnect')).assertEqual('扫码连接电脑');
-      expect(RemoteI18n.t('sidebar.signInOpenBitFunAccount')).assertEqual('登录 OpenBitFun 账号');
+      expect(RemoteI18n.t('sidebar.signInOpenBitFunAccount')).assertEqual('使用 GitHub 登录');
       expect(RemoteI18n.t('connect.chooseConnectionTitle')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.local')).assertEqual('sidebar.local');
       expect(RemoteI18n.t('sidebar.code')).assertEqual('sidebar.code');
@@ -743,49 +742,6 @@ export default function conversationPresentationUnitTest() {
       expect(AccountDeviceSelectionPolicy.shouldReconnectLastTarget('desk-1', 'desk-1', 'failed')).assertTrue();
       expect(AccountDeviceSelectionPolicy.shouldReconnectLastTarget('desk-1', 'desk-1', 'connected')).assertFalse();
       expect(AccountDeviceSelectionPolicy.shouldReconnectLastTarget('desk-2', 'desk-1', 'failed')).assertFalse();
-    });
-  });
-
-  describe('ConnectScanDecisionPolicy', () => {
-    it('pairs an ordinary QR immediately without asking for an account password', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(false, false, '', '', ''))
-        .assertEqual(DetectedUrlAction.PAIR_NOW);
-      expect(ConnectScanDecisionPolicy.decide(false, true, 'alice', '', 'desktop-1'))
-        .assertEqual(DetectedUrlAction.PAIR_NOW);
-    });
-
-    it('asks for a password only when the QR needs account auth and this phone is signed out', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(true, false, '', 'alice', 'desktop-1'))
-        .assertEqual(DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD);
-    });
-
-    it('reuses the signed-in cloud session instead of asking for the password again', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', 'desktop-1', 'https://relay.example.com', 'https://relay.example.com/'))
-        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', 'alice', '', 'https://relay.example.com', 'wss://relay.example.com/ws'))
-        .assertEqual(DetectedUrlAction.SHOW_CLOUD_DEVICES);
-      expect(ConnectScanDecisionPolicy.decide(true, true, 'alice', '', 'desktop-1', 'https://relay.example.com', 'https://relay.example.com'))
-        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
-    });
-
-    it('does not reuse an account session from a different relay', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(
-        true, true, 'alice', 'alice', 'desktop-1',
-        'https://relay-a.example.com', 'https://relay-b.example.com'
-      )).assertEqual(DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD);
-    });
-
-    it('uses the authenticated device directory instead of display-name equality', 0, () => {
-      expect(ConnectScanDecisionPolicy.decide(
-        true, true, 'alice', 'bob', 'desktop-1',
-        'https://relay.example.com', 'wss://relay.example.com/ws'
-      ))
-        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
-      expect(ConnectScanDecisionPolicy.decide(
-        true, true, '', 'renamed-account', 'desktop-1',
-        'https://relay.example.com', 'https://relay.example.com/'
-      ))
-        .assertEqual(DetectedUrlAction.USE_CLOUD_DEVICE);
     });
   });
 

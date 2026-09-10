@@ -36,6 +36,7 @@ import { extractFilePathFromJsonBuffer, splitFilePathAndContent } from '@/shared
 import { i18nService } from '@/infrastructure/i18n';
 import { WritePlanDisplay } from './WritePlanDisplay';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+import { hasSessionFileProvider, openFileThroughSession } from '../session-drivers/sessionFileNavigation';
 
 const log = createLogger('FileOperationToolCard');
 const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
@@ -166,7 +167,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   // A recorded operation is viewable even when older Session history has no
   // complete snapshot coverage. Absence preserves compatibility with old hosts.
-  const operationSnapshotAvailable = snapshotsAvailable || toolResult?.result?.snapshot_recorded === true;
+  const isDispatchSession = hasSessionFileProvider(sessionId);
+  const operationSnapshotAvailable = !isDispatchSession
+    && (snapshotsAvailable || toolResult?.result?.snapshot_recorded === true);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
 
@@ -567,6 +570,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   };
 
   const handleOpenInCodeEditor = useCallback(async () => {
+    if (openFileThroughSession(sessionId, currentFilePath, fileName)) {
+      return;
+    }
     if (!currentFilePath) return;
     const scope = getActiveSurfaceScope();
 
@@ -669,6 +675,9 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const handleCodeLineClick = useCallback(async (lineNumber: number, filePath?: string) => {
     if (!filePath) return;
+    if (openFileThroughSession(sessionId, filePath, fileName, { start: lineNumber })) {
+      return;
+    }
     
     try {
       const { editorJumpService } = await import('../../shared/services/EditorJumpService');
@@ -676,7 +685,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     } catch (error) {
       log.error('Failed to jump to line', { filePath, lineNumber, error });
     }
-  }, []);
+  }, [sessionId, fileName]);
 
   const renderExpandedContent = () => {
     if (isFailed) return null;
@@ -799,7 +808,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     ? `${t('toolCards.file.delete')}${isFailed ? t('toolCards.file.failed') : ''}`
     : isFailed
       ? isFileGuidanceBlocked
-        ? `${toolDisplayName}${t('toolCards.file.guidanceHint')}`
+        ? `${toolDisplayName}:`
         : `${toolDisplayName}${t('toolCards.file.failed')}`
       : `${toolDisplayName}:`;
 
@@ -829,7 +838,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
           guidance: isFileGuidanceBlocked,
           message: getDisplayMessage(),
           title: isFileGuidanceBlocked
-            ? t('toolCards.file.guidanceTitle')
+            ? undefined
             : `${toolDisplayName}${t('toolCards.file.failed')}`,
         } : undefined}
         isExpanded={isCardContentExpanded}

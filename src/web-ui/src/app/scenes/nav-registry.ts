@@ -43,7 +43,7 @@ const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, SceneNavRegistration>> = {
   },
   'file-viewer': {
     component: lazy(loadFileViewerNav),
-    titleKey: 'nav.items.project',
+    titleKey: 'nav.resources.title',
     preload: loadFileViewerNav,
   },
 };

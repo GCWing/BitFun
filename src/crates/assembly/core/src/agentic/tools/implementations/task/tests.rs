@@ -888,7 +888,7 @@ async fn validate_input_infers_send_input_without_action_when_agent_id_present()
 #[test]
 fn permission_intents_follow_the_agent_id_contract() {
     let tool = TaskTool::new();
-    let context = test_tool_context("agentic");
+    let context = test_tool_context("Standard");
 
     for (action, expected_resource) in [("send_input", "send_input:a1"), ("cancel", "cancel:a1")] {
         let intents = tool
@@ -929,7 +929,7 @@ async fn validate_input_rejects_send_input_with_subagent_type() {
 
 #[tokio::test]
 async fn validate_input_rejects_deep_review_retry_fields_for_regular_parent() {
-    let context = test_tool_context("agentic");
+    let context = test_tool_context("Standard");
     let validation = TaskTool::new()
         .validate_input(
             &json!({
@@ -952,7 +952,7 @@ async fn validate_input_rejects_deep_review_retry_fields_for_regular_parent() {
 
 #[tokio::test]
 async fn validate_input_rejects_timeout_for_regular_parent() {
-    let context = test_tool_context("agentic");
+    let context = test_tool_context("Standard");
     let validation = TaskTool::new()
         .validate_input(
             &json!({
@@ -1128,7 +1128,7 @@ async fn call_impl_rejects_nested_subagent_delegation() {
     let policy = DelegationPolicy::top_level().spawn_child();
     let context = ToolUseContext {
         tool_call_id: Some("tool-call-1".to_string()),
-        agent_type: Some("agentic".to_string()),
+        agent_type: Some("Standard".to_string()),
         session_id: Some("session-1".to_string()),
         dialog_turn_id: Some("turn-1".to_string()),
         workspace: None,
@@ -1273,7 +1273,7 @@ fn deep_review_cancelled_reviewer_result_tells_parent_not_to_relaunch() {
 async fn description_with_context_filters_restricted_subagents_by_parent_agent() {
     let agentic_context = ToolUseContext {
         tool_call_id: None,
-        agent_type: Some("agentic".to_string()),
+        agent_type: Some("Standard".to_string()),
         session_id: None,
         dialog_turn_id: None,
         workspace: None,
@@ -1308,7 +1308,7 @@ async fn description_with_context_filters_restricted_subagents_by_parent_agent()
 
 #[tokio::test]
 async fn swarm_planners_use_static_agent_types_without_dynamic_listing() {
-    for parent_agent_type in ["Ultra", "SwarmPlanner"] {
+    for parent_agent_type in ["Ultimate", "SwarmPlanner"] {
         let context = test_tool_context(parent_agent_type);
         assert_eq!(
             TaskTool::build_available_agents_context_section(Some(&context)).await,
@@ -1330,7 +1330,7 @@ async fn swarm_planners_use_static_agent_types_without_dynamic_listing() {
 async fn prompt_stability_description_with_context_renders_available_agents_in_stable_order() {
     let context = ToolUseContext {
         tool_call_id: None,
-        agent_type: Some("agentic".to_string()),
+        agent_type: Some("Standard".to_string()),
         session_id: None,
         dialog_turn_id: None,
         workspace: None,

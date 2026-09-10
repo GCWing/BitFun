@@ -97,7 +97,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
             <Button
               key={option.optionId}
               type="button"
-              variant={approve ? 'fill' : 'outline'}
+              variant={approve ? 'primary' : 'fill'}
               size="sm"
               leadingIcon={optionIcon(option.kind)}
               data-openbitfun-decision={approve ? 'allow' : 'reject'}

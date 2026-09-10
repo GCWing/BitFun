@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import {
   forwardRef,
   type HTMLAttributes,
@@ -87,7 +88,7 @@ export const ChatComposerQueueTitle = forwardRef<
       data-openbitfun-part="title"
       ref={ref}
     >
-      <span className={styles.titleLabel}>{children}</span>
+      <OverflowText className={styles.titleLabel}>{children}</OverflowText>
       {count !== undefined && count !== null && (
         <span
           className={styles.totalCount}

@@ -329,7 +329,6 @@
     font-size: var(--openbitfun-type-label-sm-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     text-align: left;
-    text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
 
@@ -355,7 +354,6 @@
     overflow: hidden;
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-meta-font-size);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

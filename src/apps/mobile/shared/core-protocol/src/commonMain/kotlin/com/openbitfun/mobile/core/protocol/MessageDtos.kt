@@ -50,8 +50,11 @@ public data class RemoteImageContext(
 public data class ChatMessageResponse(
     @SerialName("id") val id: String? = null,
     @SerialName("message_id") val messageId: String? = null,
+    @SerialName("turn_id") val turnId: String? = null,
     @SerialName("role") val role: String,
     @SerialName("content") val content: String,
+    @SerialName("status") val status: String? = null,
+    @SerialName("error") val error: String? = null,
     @SerialName("timestamp") val timestamp: String? = null,
     @SerialName("metadata") val metadata: JsonElement? = null,
     @SerialName("thinking") val thinking: String? = null,
@@ -67,6 +70,7 @@ public data class ChatMessageResponse(
 public data class ActiveTurnSnapshotResponse(
     @SerialName("turn_id") val turnId: String,
     @SerialName("status") val status: String,
+    @SerialName("error") val error: String? = null,
     @SerialName("text") val text: String? = null,
     @SerialName("thinking") val thinking: String? = null,
     @SerialName("tools") val tools: List<RemoteToolStatusResponse> = emptyList(),

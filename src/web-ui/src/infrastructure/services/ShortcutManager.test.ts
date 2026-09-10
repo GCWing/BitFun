@@ -44,6 +44,21 @@ describe('ShortcutManager platform primary modifier', () => {
     vi.restoreAllMocks();
   });
 
+  it('restores the registered default when synced overrides are removed', () => {
+    setPlatform('Win32');
+    const callback = vi.fn();
+    shortcutManager.loadUserOverrides({ 'fixture.sync': { key: 'q', alt: true } });
+    shortcutManager.register('fixture.sync', { key: 'n', ctrl: true, scope: 'app' }, callback);
+    dispatchScopedKey('app', { key: 'q', altKey: true });
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    shortcutManager.loadUserOverrides({});
+    dispatchScopedKey('app', { key: 'q', altKey: true });
+    expect(callback).toHaveBeenCalledTimes(1);
+    dispatchScopedKey('app', { key: 'n', ctrlKey: true });
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
+
   it('maps logical Ctrl shortcuts to Command on macOS', () => {
     setPlatform('MacIntel');
     const callback = vi.fn();

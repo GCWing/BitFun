@@ -7,7 +7,7 @@
  * Jobs with nothing left to run are the only ones left out.
  */
 
-import { ScrollArea } from '@openbitfun/ui';
+import { OverflowText, ScrollArea } from '@openbitfun/ui';
 import React, { useMemo } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import {
@@ -87,7 +87,7 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
           ].filter(Boolean).join(' ');
 
           return (
-            <button
+            <button data-overflow-trigger
               key={dayKey}
               type="button"
               role="gridcell"
@@ -120,7 +120,7 @@ const TodoCalendar: React.FC<TodoCalendarProps> = ({
                     <span className="openbitfun-todos__calendar-chip-time">
                       {formatTimeOfDay(occurrence.atMs, formatDate)}
                     </span>
-                    <span className="openbitfun-todos__calendar-chip-name">{occurrence.job.name}</span>
+                    <OverflowText className="openbitfun-todos__calendar-chip-name">{occurrence.job.name}</OverflowText>
                   </span>
                 ))}
                 {dayOccurrences.length > MAX_CHIPS_PER_DAY ? (

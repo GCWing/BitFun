@@ -9,7 +9,7 @@ export const chatInputApprovalBandAppearanceDescriptor: AppearanceSurfaceDescrip
   id: 'permission-request-panel',
   parts: [
     { id: 'root' }, { id: 'request' }, { id: 'risk' }, { id: 'error' },
-    { id: 'actions' }, { id: 'scope' },
+    { id: 'actions' }, { id: 'scope' }, { id: 'grantScope' },
   ],
   states: [
     { id: 'responding', selector: { kind: 'self', suffix: '[data-openbitfun-state~="responding"]' } },

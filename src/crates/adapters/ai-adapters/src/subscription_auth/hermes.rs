@@ -3,8 +3,9 @@
 //! Authentication follows Hermes Agent's OAuth 2.0 device-code flow. The
 //! access token is an inference-scoped JWT and the refresh token rotates on
 //! every use. Runtime requests are pinned to Nous Research's trusted
-//! inference host, with `anthropic/*` models using Messages and all other
-//! models using OpenAI Chat Completions.
+//! inference host using OpenAI Chat Completions, including `anthropic/*`.
+//! Hermes defaults to this wire while the Portal native Messages cache issue
+//! is unresolved (hermes_cli/providers.py, upstream 2026-09-08).
 
 use super::device_flow::{poll_device_code, DevicePoll};
 use super::jwt;
@@ -348,13 +349,17 @@ async fn persist_tokens(tokens: TokenResponse, expected_revision: u64) -> Result
     Ok(())
 }
 
-async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
-    let client = http_client(options)?;
-    let response = client
+fn refresh_request(client: &reqwest::Client, refresh_token: &str) -> reqwest::RequestBuilder {
+    client
         .post(TOKEN_URL)
         .header(reqwest::header::ACCEPT, "application/json")
         .header("x-nous-refresh-token", refresh_token)
         .form(&[("grant_type", "refresh_token"), ("client_id", CLIENT_ID)])
+}
+
+async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Result<TokenResponse> {
+    let client = http_client(options)?;
+    let response = refresh_request(&client, refresh_token)
         .send()
         .await
         .context("call Nous Portal token refresh endpoint")?;
@@ -556,17 +561,12 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, i64,
     }
 }
 
-fn route_for(model: &str) -> HermesRoute {
-    if model.trim().to_ascii_lowercase().starts_with("anthropic/") {
-        HermesRoute {
-            format: "anthropic",
-            suffix: "messages",
-        }
-    } else {
-        HermesRoute {
-            format: "openai",
-            suffix: "chat/completions",
-        }
+fn route_for(_model: &str) -> HermesRoute {
+    // Hermes currently uses chat even for anthropic/*: concurrent native
+    // Messages calls can rewrite the previous prompt-cache breakpoint.
+    HermesRoute {
+        format: "openai",
+        suffix: "chat/completions",
     }
 }
 
@@ -651,12 +651,34 @@ mod tests {
     }
 
     #[test]
-    fn selects_messages_only_for_anthropic_catalog_ids() {
+    fn refresh_uses_the_portal_header_without_a_token_in_the_form() {
+        let client = http_client(&SubscriptionHttpOptions::default()).unwrap();
+        let request = refresh_request(&client, "synthetic-refresh")
+            .build()
+            .unwrap();
+        assert_eq!(request.url().as_str(), TOKEN_URL);
+        assert_eq!(request.method(), reqwest::Method::POST);
+        assert_eq!(request.headers()["accept"], "application/json");
+        assert_eq!(
+            request.headers()["x-nous-refresh-token"],
+            "synthetic-refresh"
+        );
+        assert_eq!(
+            request.headers()["content-type"],
+            "application/x-www-form-urlencoded"
+        );
+        let body = std::str::from_utf8(request.body().unwrap().as_bytes().unwrap()).unwrap();
+        assert_eq!(body, "grant_type=refresh_token&client_id=hermes-cli");
+        assert!(!body.contains("synthetic-refresh"));
+    }
+
+    #[test]
+    fn defaults_to_chat_for_all_portal_catalog_ids() {
         let anthropic = route_for("anthropic/claude-sonnet-5");
-        assert_eq!(anthropic.format, "anthropic");
+        assert_eq!(anthropic.format, "openai");
         assert_eq!(
             request_url(INFERENCE_BASE_URL, anthropic),
-            "https://inference-api.nousresearch.com/v1/messages"
+            "https://inference-api.nousresearch.com/v1/chat/completions"
         );
 
         let openai = route_for("openai/gpt-5.6-sol");

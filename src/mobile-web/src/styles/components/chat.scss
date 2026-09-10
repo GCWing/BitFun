@@ -197,7 +197,6 @@
   animation: scrollBtnIn 200ms var(--easing-standard);
 
   &:active {
-    transform: translateX(-50%) scale(0.92);
     box-shadow: var(--openbitfun-shadow-sm);
   }
 
@@ -337,7 +336,7 @@
 }
 
 .chat-page__toast {
-  position: fixed;
+  position: absolute;
   top: 80px;
   inline-size: auto;
   left: 16px;
@@ -348,6 +347,7 @@
   line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
   z-index: 9999;
   white-space: pre-line;
+  overflow-wrap: anywhere;
   animation: toastSlideIn 0.25s ease-out;
 }
 

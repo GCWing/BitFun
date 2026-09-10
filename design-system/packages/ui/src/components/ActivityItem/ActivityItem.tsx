@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import styles from "./ActivityItem.module.css";
 
@@ -51,9 +52,9 @@ function ActivityItemContent({
       )}
       <span className={styles.content} data-openbitfun-part="content">
         {label !== undefined && label !== null && (
-          <span className={styles.label} data-openbitfun-part="label">{label}</span>
+          <OverflowText className={styles.label} data-openbitfun-part="label">{label}</OverflowText>
         )}
-        <span className={styles.description} data-openbitfun-part="description">{children}</span>
+        <OverflowText className={styles.description} data-openbitfun-part="description">{children}</OverflowText>
       </span>
     </>
   );
@@ -93,6 +94,7 @@ export const ActivityItem = forwardRef<HTMLSpanElement, ActivityItemProps>(
       >
         {onActivate ? (
           <button
+            data-overflow-trigger
             className={styles.trigger}
             data-openbitfun-part="trigger"
             disabled={disabled}

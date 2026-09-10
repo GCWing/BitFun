@@ -32,7 +32,7 @@
   .content {
     position: relative;
     z-index: 1;
-    max-inline-size: var(--openbitfun-overlay-tooltip-max-inline-size);
+    max-inline-size: min(var(--openbitfun-overlay-tooltip-max-inline-size), calc(100vw - 16px));
     max-block-size: min(var(--openbitfun-overlay-tooltip-max-block-size), calc(100vh - 24px));
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -46,24 +46,12 @@
     font-weight: var(--openbitfun-type-support-font-weight);
     line-height: var(--openbitfun-type-support-line-height);
     letter-spacing: var(--openbitfun-type-support-letter-spacing);
-    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     user-select: text;
     box-shadow: var(--openbitfun-shadow-sm);
     backdrop-filter: var(--openbitfun-effect-blur-base);
     -webkit-backdrop-filter: var(--openbitfun-effect-blur-base);
-  }
-
-  .content::-webkit-scrollbar {
-    inline-size: 4px;
-  }
-
-  .content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .content::-webkit-scrollbar-thumb {
-    background: var(--openbitfun-color-border-default);
-    border-radius: 2px;
   }
 
   .arrow {

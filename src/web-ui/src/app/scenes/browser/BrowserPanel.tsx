@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Icon, IconButton, Input } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Input } from '@openbitfun/ui';
 import { AlertTriangle, MousePointer2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
@@ -239,7 +239,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
           >
             <div data-openbitfun-component="browser-panel" data-openbitfun-part="placeholder" className="browser-panel__webview-placeholder">
               <Icon name="browser" size="lg" />
-              <span data-testid="browser-current-url">{currentUrl}</span>
+              <OverflowText data-testid="browser-current-url">{currentUrl}</OverflowText>
             </div>
           </div>
         )}

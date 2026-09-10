@@ -161,6 +161,7 @@ RUN set -eux; \
 WORKDIR /app
 COPY --from=builder /out/openbitfun-relay-server /app/openbitfun-relay-server
 COPY --from=builder /out/relay-admin /app/relay-admin
+COPY src/apps/relay-server/static/ /app/static/
 RUN mkdir -p /app/static /app/data /app/room-web
 
 ENV RELAY_PORT=9700

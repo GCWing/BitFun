@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workspaceAPI } from '@/infrastructure/api';
 import { useWorkspaceSearchIndex } from './useWorkspaceSearchIndex';
 
@@ -15,13 +15,14 @@ vi.mock('@/infrastructure/api', () => ({
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-describe('temporarily suspended workspace search', () => {
+describe('workspace search availability', () => {
+  beforeEach(() => vi.clearAllMocks());
   it.each(['/local/repo', '/remote/repo'])('ignores an existing enabled preference for %s', async (workspacePath) => {
     const host = document.createElement('div');
     const root = createRoot(host);
     let result: ReturnType<typeof useWorkspaceSearchIndex>;
     function Probe() {
-      result = useWorkspaceSearchIndex({ workspacePath, enabled: true });
+      result = useWorkspaceSearchIndex({ workspacePath, enabled: true, isRemote: true });
       return null;
     }
     await act(async () => root.render(createElement(Probe)));
@@ -39,4 +40,20 @@ describe('temporarily suspended workspace search', () => {
       await act(async () => root.unmount());
     }
   });
+  it('polls an enabled local workspace', async () => {
+    vi.mocked(workspaceAPI.getSearchRepoStatus).mockResolvedValue({ repoStatus: {} } as never);
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    function Probe() {
+      useWorkspaceSearchIndex({ workspacePath: '/local/repo', enabled: true });
+      return null;
+    }
+    await act(async () => root.render(createElement(Probe)));
+    try {
+      expect(workspaceAPI.getSearchRepoStatus).toHaveBeenCalledWith('/local/repo');
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
 });

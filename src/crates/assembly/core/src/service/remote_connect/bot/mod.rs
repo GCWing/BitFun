@@ -80,6 +80,7 @@ impl BotSlotFence {
 /// work is not awaited during account replacement; instead every state commit
 /// is fenced and sanitized if it started under an older account epoch.
 pub(crate) struct BotRuntimeFence {
+    account_user_id: String,
     account_identity_epoch: Arc<AtomicU64>,
     observed_identity_epoch: AtomicU64,
     slot: Arc<BotSlotFence>,
@@ -96,11 +97,22 @@ impl BotRuntimeFence {
         Self {
             account_identity_epoch,
             observed_identity_epoch: AtomicU64::new(observed_identity_epoch),
+            account_user_id: String::new(),
             slot,
             lifecycle_generation,
         }
     }
 
+    pub(crate) fn with_account(mut self, user_id: String) -> Self {
+        self.account_user_id = user_id;
+        self
+    }
+
+    pub(crate) fn account_user_id(&self) -> String {
+        self.account_user_id.clone()
+    }
+
+    #[cfg(test)]
     pub(crate) fn standalone() -> Self {
         let account_identity_epoch = Arc::new(AtomicU64::new(0));
         let slot = Arc::new(BotSlotFence::default());

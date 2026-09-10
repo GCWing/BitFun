@@ -9,7 +9,7 @@ import React, {
 import { createPortal } from 'react-dom';
 import { FolderGit2, Laptop, Loader2, MonitorSmartphone, Server } from 'lucide-react';
 
-import { Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -153,7 +153,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       autoFocusFirstItem
     >
       <MenuSection title={t('chatInput.dispatch.localSection')}>
-        <MenuItem
+        <MenuItem data-overflow-trigger
           role="menuitemradio"
           checked={localDirectorySelected}
           className="dispatch-target-picker__option-row"
@@ -166,12 +166,12 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           onClick={() => selectLocalMode(false)}
         >
           <span className="dispatch-target-picker__option-copy">
-            <strong>{t('chatInput.dispatch.local')}</strong>
-            <small>{t('chatInput.dispatch.localDescription')}</small>
+            <strong><OverflowText>{t('chatInput.dispatch.local')}</OverflowText></strong>
+            <small><OverflowText>{t('chatInput.dispatch.localDescription')}</OverflowText></small>
           </span>
         </MenuItem>
         {localWorktreeControl ? (
-          <MenuItem
+          <MenuItem data-overflow-trigger
             role="menuitemradio"
             checked={localWorktreeSelected}
             className="dispatch-target-picker__option-row"
@@ -184,8 +184,8 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             onClick={() => selectLocalMode(true)}
           >
             <span className="dispatch-target-picker__option-copy">
-              <strong>{localWorktreeControl.label}</strong>
-              <small>{localWorktreeControl.description}</small>
+              <strong><OverflowText>{localWorktreeControl.label}</OverflowText></strong>
+              <small><OverflowText>{localWorktreeControl.description}</OverflowText></small>
             </span>
           </MenuItem>
         ) : null}
@@ -213,7 +213,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           const selected = target.kind === 'device' && target.deviceId === option.deviceId;
           const online = option.online !== false;
           return (
-            <MenuItem
+            <MenuItem data-overflow-trigger
               key={option.deviceId}
               role="menuitemradio"
               checked={selected}
@@ -227,12 +227,12 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               }}
             >
               <span className="dispatch-target-picker__option-copy">
-                <strong>{option.displayName}</strong>
-                <small>
+                <strong><OverflowText>{option.displayName}</OverflowText></strong>
+                <small><OverflowText>
                   {online
                     ? t('chatInput.dispatch.deviceDescription')
                     : t('chatInput.dispatch.deviceOffline')}
-                </small>
+                </OverflowText></small>
               </span>
             </MenuItem>
           );
@@ -263,7 +263,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         {sshTargets.map(option => {
           const selected = target.kind === 'ssh' && target.connectionId === option.connectionId;
           return (
-            <MenuItem
+            <MenuItem data-overflow-trigger
               key={option.connectionId}
               role="menuitemradio"
               checked={selected}
@@ -276,8 +276,8 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               }}
             >
               <span className="dispatch-target-picker__option-copy">
-                <strong>{option.displayName}</strong>
-                <small>{option.description || t('chatInput.dispatch.sshDescription')}</small>
+                <strong><OverflowText>{option.displayName}</OverflowText></strong>
+                <small><OverflowText>{option.description || t('chatInput.dispatch.sshDescription')}</OverflowText></small>
               </span>
             </MenuItem>
           );
@@ -306,7 +306,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         data-openbitfun-part="root"
       >
         <Tooltip content={tooltip} placement="top">
-          <button
+          <button data-overflow-trigger
             ref={triggerRef}
             type="button"
             className="dispatch-target-picker__trigger"
@@ -330,7 +330,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               : target.kind === 'device'
                 ? <MonitorSmartphone size={12} />
                 : <Server size={12} />}
-            <span>{displayLabel}</span>
+            <span><OverflowText>{displayLabel}</OverflowText></span>
           </button>
         </Tooltip>
         {menu && createPortal(menu, getAppearanceOverlayHost())}

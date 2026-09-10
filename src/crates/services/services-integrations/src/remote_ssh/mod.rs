@@ -7,6 +7,8 @@ mod file_name_search;
 pub mod paths;
 mod product_paths;
 pub mod remote_git;
+#[cfg(feature = "remote-ssh-concrete")]
+mod sftp_file;
 mod shell;
 #[cfg(feature = "remote-ssh-concrete")]
 mod transport;
@@ -29,7 +31,6 @@ mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
 mod port_forward;
 #[cfg(feature = "remote-ssh-concrete")]
-pub mod relay_deploy;
 #[cfg(feature = "remote-ssh-concrete")]
 mod release_verify;
 #[cfg(feature = "remote-ssh-concrete")]

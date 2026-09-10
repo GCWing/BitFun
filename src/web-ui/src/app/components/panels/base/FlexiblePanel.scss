@@ -116,7 +116,6 @@
 
 .openbitfun-flexible-panel__content-title {
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--openbitfun-type-body-md-font-size);
   font-weight: var(--openbitfun-type-label-selected-font-weight);
@@ -125,7 +124,6 @@
 
 .openbitfun-flexible-panel__content-type {
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--openbitfun-type-label-md-font-size);
   color: var(--openbitfun-color-content-secondary);

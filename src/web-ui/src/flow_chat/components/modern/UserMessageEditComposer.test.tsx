@@ -6,8 +6,8 @@ import { JSDOM } from 'jsdom';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import type { ComposerPresentation } from '../../utils/composerPresentation';
 
-vi.mock('../FileMentionPicker', () => ({
-  FileMentionPicker: () => null,
+vi.mock('../ChatContextPicker', () => ({
+  ChatContextPicker: () => null,
 }));
 
 const presentation: ComposerPresentation = {

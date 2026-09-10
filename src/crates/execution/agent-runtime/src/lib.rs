@@ -9,7 +9,7 @@ pub mod agents;
 pub mod checkpoint;
 #[cfg(feature = "agent-runtime")]
 pub mod context_profile;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod custom_agent;
 #[cfg(feature = "agent-runtime")]
 pub mod custom_subagent;
@@ -29,8 +29,6 @@ pub mod event_source;
 pub mod events;
 #[cfg(feature = "agent-runtime")]
 pub mod evidence_ledger;
-#[cfg(feature = "agent-runtime")]
-pub mod file_read_state;
 #[cfg(feature = "native-hook-settings")]
 pub mod native_hooks;
 #[cfg(feature = "agent-runtime")]
@@ -39,7 +37,7 @@ pub mod output_surface;
 pub mod permission;
 #[cfg(feature = "agent-runtime")]
 pub mod post_call_hooks;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod prompt;
 #[cfg(feature = "agent-runtime")]
 pub mod prompt_cache;
@@ -47,6 +45,8 @@ pub mod prompt_cache;
 pub mod prompt_markup;
 #[cfg(feature = "agent-runtime")]
 pub mod remote_file_delivery;
+#[cfg(feature = "agent-runtime")]
+pub mod review_read_receipt;
 #[cfg(feature = "agent-runtime")]
 pub mod runtime;
 #[cfg(feature = "agent-runtime")]
@@ -67,7 +67,7 @@ pub mod session_state_manager;
 pub mod side_question;
 #[cfg(feature = "agent-runtime")]
 pub mod skill_agent_snapshot;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod skills;
 #[cfg(feature = "agent-runtime")]
 pub mod subagent_task;

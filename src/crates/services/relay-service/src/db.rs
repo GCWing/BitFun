@@ -1,8 +1,7 @@
 //! SQLite-backed account storage for the relay server.
 //!
-//! The relay remains zero-knowledge: it stores only password-derived hashes
-//! and AES-GCM-wrapped master keys (encrypted client-side). It never holds a
-//! plaintext master key and cannot decrypt synced session/settings blobs.
+//! The versioned relay stores verified GitHub identity and device public keys.
+//! Device private keys never leave their owning clients.
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -24,13 +23,6 @@ const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS users (
   user_id            TEXT PRIMARY KEY,
   username           TEXT UNIQUE NOT NULL,
-  salt               TEXT NOT NULL,
-  kdf_salt           TEXT NOT NULL,
-  argon2_params      TEXT NOT NULL,
-  password_hash      TEXT NOT NULL,
-  wrapped_master_key TEXT NOT NULL,
-  failed_attempts    INTEGER NOT NULL DEFAULT 0,
-  locked_until       INTEGER NOT NULL DEFAULT 0,
   created_at         INTEGER NOT NULL,
   updated_at         INTEGER NOT NULL
 );
@@ -54,26 +46,13 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
   expires_at  INTEGER NOT NULL,
   FOREIGN KEY (user_id, device_id) REFERENCES devices(user_id, device_id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS delegated_device_keys (
+  token TEXT PRIMARY KEY REFERENCES auth_tokens(token) ON DELETE CASCADE,
+  controller_id TEXT NOT NULL UNIQUE,
+  public_key TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
-CREATE TABLE IF NOT EXISTS sync_sessions (
-  user_id        TEXT NOT NULL REFERENCES users(user_id),
-  session_id     TEXT NOT NULL,
-  encrypted_data TEXT NOT NULL,
-  nonce          TEXT NOT NULL,
-  version        INTEGER NOT NULL,
-  updated_at     INTEGER NOT NULL,
-  deleted        INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (user_id, session_id)
-);
-CREATE INDEX IF NOT EXISTS idx_sync_sessions_user ON sync_sessions(user_id);
-CREATE TABLE IF NOT EXISTS sync_settings (
-  user_id        TEXT PRIMARY KEY REFERENCES users(user_id),
-  encrypted_data TEXT NOT NULL,
-  nonce          TEXT NOT NULL,
-  version        INTEGER NOT NULL,
-  updated_at     INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS pages (
   user_id     TEXT NOT NULL REFERENCES users(user_id),
   slug        TEXT NOT NULL,
@@ -120,6 +99,19 @@ CREATE TABLE IF NOT EXISTS page_blobs (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, slug, blob_id)
 );
+"#;
+
+// SQLite triggers serialize admission with the insert itself, including concurrent clients.
+// Existing devices remain usable above a new quota; no user records are deleted.
+const REGISTRATION_QUOTAS: &str = r#"
+CREATE TRIGGER IF NOT EXISTS limit_account_devices BEFORE INSERT ON devices
+WHEN NOT EXISTS (SELECT 1 FROM devices WHERE user_id = NEW.user_id AND device_id = NEW.device_id)
+ AND (SELECT count(*) FROM devices WHERE user_id = NEW.user_id) >= 64
+BEGIN SELECT RAISE(ABORT, 'account device quota exceeded'); END;
+CREATE TRIGGER IF NOT EXISTS limit_account_tokens BEFORE INSERT ON auth_tokens
+WHEN NOT EXISTS (SELECT 1 FROM auth_tokens WHERE request_id = NEW.request_id)
+ AND (SELECT count(*) FROM auth_tokens WHERE user_id = NEW.user_id AND expires_at > unixepoch()) >= 256
+BEGIN SELECT RAISE(ABORT, 'account token quota exceeded'); END;
 "#;
 
 const MIGRATE_PAGES_DEPLOYED_VERSION: &str = r#"
@@ -237,6 +229,7 @@ async fn connect_with_presence_reset(db_path: &str, reset_presence: bool) -> Res
     .execute(&pool)
     .await
     .map_err(|e| anyhow!("index auth token request ids: {e}"))?;
+    sqlx::raw_sql(REGISTRATION_QUOTAS).execute(&pool).await?;
     let now = Utc::now().timestamp();
     sqlx::query("DELETE FROM auth_tokens WHERE expires_at <= ?")
         .bind(now)
@@ -371,78 +364,45 @@ async fn migrate_account_scoped_devices(pool: &DbPool) -> Result<()> {
 pub struct UserRow {
     pub user_id: String,
     pub username: String,
-    pub salt: String,
-    pub kdf_salt: String,
-    pub argon2_params: String,
-    pub password_hash: String,
-    pub wrapped_master_key: String,
-    pub failed_attempts: i64,
-    pub locked_until: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
 
 impl UserRow {
-    /// Insert a new user row. Not exposed via HTTP — accounts are provisioned
-    /// out-of-band (e.g. an admin import tool) so the relay never sees a
-    /// password. Kept as a DB primitive for that future tooling.
-    #[allow(dead_code)]
-    pub async fn create(
-        pool: &DbPool,
-        user_id: &str,
-        username: &str,
-        salt: &str,
-        kdf_salt: &str,
-        argon2_params: &str,
-        password_hash: &str,
-        wrapped_master_key: &str,
-    ) -> Result<()> {
+    /// Persist a profile authenticated by the shared GitHub authority. The
+    /// immutable numeric GitHub id owns devices; login is display/URL metadata.
+    pub async fn upsert_verified(pool: &DbPool, user_id: &str, username: &str) -> Result<UserRow> {
         let now = Utc::now().timestamp();
-        sqlx::query(
-            "INSERT INTO users \
-             (user_id, username, salt, kdf_salt, argon2_params, password_hash, \
-              wrapped_master_key, failed_attempts, locked_until, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)",
-        )
-        .bind(user_id)
-        .bind(username)
-        .bind(salt)
-        .bind(kdf_salt)
-        .bind(argon2_params)
-        .bind(password_hash)
-        .bind(wrapped_master_key)
-        .bind(now)
-        .bind(now)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("create user: {e}"))?;
+        let user = sqlx::query_as::<_, UserRow>(
+            "INSERT INTO users (user_id, username, created_at, updated_at) VALUES (?, ?, ?, ?) \
+             ON CONFLICT(user_id) DO UPDATE SET username = excluded.username, updated_at = excluded.updated_at \
+             RETURNING user_id, username, created_at, updated_at",
+        ).bind(user_id).bind(username).bind(now).bind(now).fetch_one(pool).await?;
+        Ok(user)
+    }
+
+    #[cfg(test)]
+    pub async fn create(pool: &DbPool, user_id: &str, username: &str) -> Result<()> {
+        Self::upsert_verified(pool, user_id, username).await?;
         Ok(())
     }
 
     pub async fn find_by_username(pool: &DbPool, username: &str) -> Result<Option<UserRow>> {
-        let row = sqlx::query_as::<_, UserRow>(
-            "SELECT user_id, username, salt, kdf_salt, argon2_params, password_hash, \
-             wrapped_master_key, failed_attempts, locked_until, created_at, updated_at \
-             FROM users WHERE username = ?",
+        Ok(sqlx::query_as::<_, UserRow>(
+            "SELECT user_id, username, created_at, updated_at FROM users WHERE username = ?",
         )
         .bind(username)
         .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("find user: {e}"))?;
-        Ok(row)
+        .await?)
     }
 
     pub async fn find_by_user_id(pool: &DbPool, user_id: &str) -> Result<Option<UserRow>> {
-        let row = sqlx::query_as::<_, UserRow>(
-            "SELECT user_id, username, salt, kdf_salt, argon2_params, password_hash, \
-             wrapped_master_key, failed_attempts, locked_until, created_at, updated_at \
-             FROM users WHERE user_id = ?",
+        Ok(sqlx::query_as::<_, UserRow>(
+            "SELECT user_id, username, created_at, updated_at FROM users WHERE user_id = ?",
         )
         .bind(user_id)
         .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("find user by id: {e}"))?;
-        Ok(row)
+        .await?)
     }
 
     /// Resolve username for a user id (convenience for page URL construction).
@@ -453,19 +413,6 @@ impl UserRow {
         Ok(Self::find_by_user_id(pool, user_id)
             .await?
             .map(|u| u.username))
-    }
-
-    /// Rename a user. Fails if the new username already exists.
-    pub async fn rename(pool: &DbPool, user_id: &str, new_username: &str) -> Result<()> {
-        let now = Utc::now().timestamp();
-        sqlx::query("UPDATE users SET username = ?, updated_at = ? WHERE user_id = ?")
-            .bind(new_username)
-            .bind(now)
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .map_err(|e| anyhow!("rename user: {e}"))?;
-        Ok(())
     }
 
     /// List all usernames (admin tooling). Returns `(username, created_at)`.
@@ -479,50 +426,9 @@ impl UserRow {
         Ok(rows)
     }
 
-    /// Update credentials for an existing user (admin password reset).
-    /// Replaces salt, kdf_salt, password_hash, and wrapped_master_key.
-    pub async fn update_credentials(
-        pool: &DbPool,
-        user_id: &str,
-        salt: &str,
-        kdf_salt: &str,
-        argon2_params: &str,
-        password_hash: &str,
-        wrapped_master_key: &str,
-    ) -> Result<()> {
-        let now = Utc::now().timestamp();
-        sqlx::query(
-            "UPDATE users SET salt = ?, kdf_salt = ?, argon2_params = ?, \
-             password_hash = ?, wrapped_master_key = ?, failed_attempts = 0, \
-             locked_until = 0, updated_at = ? WHERE user_id = ?",
-        )
-        .bind(salt)
-        .bind(kdf_salt)
-        .bind(argon2_params)
-        .bind(password_hash)
-        .bind(wrapped_master_key)
-        .bind(now)
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("update credentials: {e}"))?;
-        Ok(())
-    }
-
     /// Permanently delete a user and all associated data (devices, tokens,
-    /// sync blobs, pages). Cascading deletes handle FK-linked rows.
+    /// pages). Cascading deletes handle FK-linked rows.
     pub async fn delete(pool: &DbPool, user_id: &str) -> Result<()> {
-        // Clean up sync tables first (no FK cascade configured on them).
-        sqlx::query("DELETE FROM sync_sessions WHERE user_id = ?")
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .map_err(|e| anyhow!("delete sync_sessions: {e}"))?;
-        sqlx::query("DELETE FROM sync_settings WHERE user_id = ?")
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .map_err(|e| anyhow!("delete sync_settings: {e}"))?;
         sqlx::query("DELETE FROM page_kv WHERE user_id = ?")
             .bind(user_id)
             .execute(pool)
@@ -562,69 +468,6 @@ impl UserRow {
             .map_err(|e| anyhow!("delete user: {e}"))?;
         Ok(())
     }
-
-    /// Increment the failed-attempt counter and apply an exponential-backoff
-    /// lockout once the threshold is reached. Returns the new `locked_until`
-    /// timestamp (0 when not locked).
-    pub async fn record_failed_attempt(pool: &DbPool, user_id: &str) -> Result<i64> {
-        let now = Utc::now().timestamp();
-        let row = sqlx::query("SELECT failed_attempts FROM users WHERE user_id = ?")
-            .bind(user_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| anyhow!("fetch attempts: {e}"))?;
-        let current: i64 = sqlx::Row::get(&row, "failed_attempts");
-        let new_count = current + 1;
-        let locked_until = lockout_until(new_count, now);
-        sqlx::query(
-            "UPDATE users SET failed_attempts = ?, locked_until = ?, updated_at = ? \
-             WHERE user_id = ?",
-        )
-        .bind(new_count)
-        .bind(locked_until)
-        .bind(now)
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("update attempts: {e}"))?;
-        Ok(locked_until)
-    }
-
-    pub async fn reset_failed_attempts(pool: &DbPool, user_id: &str) -> Result<()> {
-        let now = Utc::now().timestamp();
-        sqlx::query(
-            "UPDATE users SET failed_attempts = 0, locked_until = 0, updated_at = ? \
-             WHERE user_id = ?",
-        )
-        .bind(now)
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("reset attempts: {e}"))?;
-        Ok(())
-    }
-
-    pub fn is_locked(&self) -> bool {
-        self.locked_until > Utc::now().timestamp()
-    }
-}
-
-/// Exponential backoff lockout schedule.
-///
-/// `attempts` is the count *after* the latest failure. Locking kicks in at 5
-/// failures and grows: 1m → 5m → 15m → 60m (capped).
-fn lockout_until(attempts: i64, now: i64) -> i64 {
-    if attempts < 5 {
-        return 0;
-    }
-    let level = (attempts - 4).min(4);
-    let secs = match level {
-        1 => 60,
-        2 => 300,
-        3 => 900,
-        _ => 3600,
-    };
-    now + secs
 }
 
 // ── Devices ─────────────────────────────────────────────────────────────
@@ -680,7 +523,7 @@ impl DeviceRow {
              ON CONFLICT(user_id, device_id) DO UPDATE SET \
                device_name = excluded.device_name, \
                device_kind = COALESCE(excluded.device_kind, devices.device_kind), \
-               public_key = excluded.public_key, \
+               public_key = COALESCE(excluded.public_key, devices.public_key), \
                last_seen_at = excluded.last_seen_at",
         )
         .bind(device_id)
@@ -800,6 +643,7 @@ impl AuthToken {
         device_name: &str,
         device_kind: Option<&str>,
         request_id: &str,
+        public_key: &str,
     ) -> Result<Option<AuthToken>> {
         let mut tx = pool
             .begin()
@@ -839,18 +683,32 @@ impl AuthToken {
                     "device provisioning request id conflicts with another device name"
                 ));
             }
+            let stored_key = sqlx::query_scalar::<_, Option<String>>(
+                "SELECT public_key FROM devices WHERE user_id = ? AND device_id = ?",
+            )
+            .bind(user_id)
+            .bind(device_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .flatten();
+            if stored_key.as_deref() != Some(public_key) {
+                return Err(anyhow!(
+                    "device provisioning request id conflicts with another public key"
+                ));
+            }
             return Ok(Some(existing));
         }
 
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO devices \
              (device_id, user_id, device_name, device_kind, public_key, last_seen_at, online) \
-             VALUES (?, ?, ?, ?, NULL, ?, 0)",
+             VALUES (?, ?, ?, ?, ?, ?, 0)",
         )
         .bind(device_id)
         .bind(user_id)
         .bind(device_name)
         .bind(device_kind)
+        .bind(public_key)
         .bind(now)
         .execute(&mut *tx)
         .await
@@ -888,6 +746,57 @@ impl AuthToken {
             created_at: now,
             expires_at,
         }))
+    }
+
+    pub async fn create_keyed_delegated(
+        pool: &DbPool,
+        user_id: &str,
+        parent_device_id: &str,
+        public_key: &str,
+    ) -> Result<AuthToken> {
+        let token = generate_token();
+        let now = Utc::now().timestamp();
+        let expires_at = now + DELEGATED_TOKEN_TTL_SECS;
+        let mut transaction = pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO auth_tokens (token, user_id, device_id, token_kind, created_at, expires_at) \
+             VALUES (?, ?, ?, 'delegated_control', ?, ?)",
+        )
+        .bind(&token).bind(user_id).bind(parent_device_id).bind(now).bind(expires_at)
+        .execute(&mut *transaction).await?;
+        let controller_id = format!("controller-{}", uuid::Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO delegated_device_keys (token, controller_id, public_key) VALUES (?, ?, ?)",
+        )
+        .bind(&token)
+        .bind(&controller_id)
+        .bind(public_key)
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(AuthToken {
+            token,
+            user_id: user_id.to_string(),
+            device_id: parent_device_id.to_string(),
+            token_kind: "delegated_control".to_string(),
+            request_id: None,
+            created_at: now,
+            expires_at,
+        })
+    }
+
+    /// The owner device remains the revocation parent; routing uses a distinct controller key.
+    pub async fn routing_device_id(&self, pool: &DbPool) -> Result<String> {
+        if self.is_device_token() {
+            return Ok(self.device_id.clone());
+        }
+        sqlx::query_scalar::<_, String>(
+            "SELECT controller_id FROM delegated_device_keys WHERE token = ?",
+        )
+        .bind(&self.token)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| anyhow!("controller has no registered device key"))
     }
 
     pub async fn create_delegated(
@@ -1074,224 +983,6 @@ pub fn is_valid_auth_token(token: &str) -> bool {
         && token
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-// ── Sync sessions (encrypted blobs, server never decrypts) ─────────────
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct SyncSessionRow {
-    pub session_id: String,
-    pub encrypted_data: String,
-    pub nonce: String,
-    pub version: i64,
-    pub updated_at: i64,
-    pub deleted: i64,
-}
-
-impl SyncSessionRow {
-    /// Upsert an encrypted session blob. Last-writer-wins via version.
-    ///
-    /// Enforces optional per-user active session count and total encrypted-byte
-    /// quotas. Product defaults are effectively unlimited (`i32::MAX`); pass
-    /// lower ceilings when an operator needs to bound account storage.
-    pub async fn upsert_with_quota(
-        pool: &DbPool,
-        user_id: &str,
-        session_id: &str,
-        encrypted_data: &str,
-        nonce: &str,
-        version: i64,
-        max_sessions: i64,
-        max_total_bytes: i64,
-    ) -> Result<bool> {
-        let now = Utc::now().timestamp();
-        let result = sqlx::query(
-            "INSERT INTO sync_sessions (user_id, session_id, encrypted_data, nonce, version, updated_at, deleted) \
-             SELECT ?, ?, ?, ?, ?, ?, 0 \
-             WHERE (SELECT COUNT(*) FROM sync_sessions \
-                    WHERE user_id = ? AND deleted = 0 AND session_id <> ?) < ? \
-               AND (SELECT COALESCE(SUM(LENGTH(encrypted_data)), 0) FROM sync_sessions \
-                    WHERE user_id = ? AND deleted = 0 AND session_id <> ?) + ? <= ? \
-             ON CONFLICT(user_id, session_id) DO UPDATE SET \
-               encrypted_data = excluded.encrypted_data, \
-               nonce = excluded.nonce, \
-               version = excluded.version, \
-               updated_at = excluded.updated_at, \
-               deleted = 0",
-        )
-        .bind(user_id)
-        .bind(session_id)
-        .bind(encrypted_data)
-        .bind(nonce)
-        .bind(version)
-        .bind(now)
-        .bind(user_id)
-        .bind(session_id)
-        .bind(max_sessions)
-        .bind(user_id)
-        .bind(session_id)
-        .bind(encrypted_data.len() as i64)
-        .bind(max_total_bytes)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("upsert sync session: {e}"))?;
-        Ok(result.rows_affected() > 0)
-    }
-
-    /// Fetch all non-deleted sessions for a user updated after `since_version`.
-    pub async fn list_since(
-        pool: &DbPool,
-        user_id: &str,
-        since_version: i64,
-    ) -> Result<Vec<SyncSessionRow>> {
-        let rows = sqlx::query_as::<_, SyncSessionRow>(
-            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
-             FROM sync_sessions WHERE user_id = ? AND version > ? AND deleted = 0 \
-             ORDER BY version ASC, session_id ASC",
-        )
-        .bind(user_id)
-        .bind(since_version)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| anyhow!("list sync sessions: {e}"))?;
-        Ok(rows)
-    }
-
-    /// Soft-delete a session (tombstone for syncing deletions across devices).
-    /// Bumps `version` so incremental-sync consumers pick up the deletion.
-    pub async fn delete(pool: &DbPool, user_id: &str, session_id: &str) -> Result<()> {
-        let now = Utc::now().timestamp();
-        sqlx::query(
-            "UPDATE sync_sessions SET deleted = 1, version = ?, updated_at = ? \
-             WHERE user_id = ? AND session_id = ?",
-        )
-        .bind(now)
-        .bind(now)
-        .bind(user_id)
-        .bind(session_id)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("delete sync session: {e}"))?;
-        Ok(())
-    }
-
-    /// Soft-delete oldest active sessions (excluding `keep_session_id`) until
-    /// inserting/replacing a blob of `needed_bytes` would satisfy count/byte quotas.
-    ///
-    /// Used when a fresh upsert is rejected so recent backups can displace LRU
-    /// cloud sessions instead of failing the whole sync with HTTP 507.
-    pub async fn make_room_for_upsert(
-        pool: &DbPool,
-        user_id: &str,
-        keep_session_id: &str,
-        needed_bytes: i64,
-        max_sessions: i64,
-        max_total_bytes: i64,
-    ) -> Result<usize> {
-        if needed_bytes > max_total_bytes {
-            return Ok(0);
-        }
-        let candidates = sqlx::query_as::<_, SyncSessionRow>(
-            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
-             FROM sync_sessions \
-             WHERE user_id = ? AND deleted = 0 AND session_id <> ? \
-             ORDER BY updated_at ASC, version ASC, session_id ASC",
-        )
-        .bind(user_id)
-        .bind(keep_session_id)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| anyhow!("list sync sessions for quota relief: {e}"))?;
-
-        let mut bytes: i64 = candidates
-            .iter()
-            .map(|row| row.encrypted_data.len() as i64)
-            .sum();
-        let mut count = candidates.len() as i64;
-        let mut evicted = 0usize;
-
-        for row in candidates {
-            if count < max_sessions && bytes.saturating_add(needed_bytes) <= max_total_bytes {
-                break;
-            }
-            Self::delete(pool, user_id, &row.session_id).await?;
-            bytes = bytes.saturating_sub(row.encrypted_data.len() as i64);
-            count = count.saturating_sub(1);
-            evicted += 1;
-        }
-
-        Ok(evicted)
-    }
-
-    /// Fetch one non-deleted session blob by id.
-    pub async fn get(
-        pool: &DbPool,
-        user_id: &str,
-        session_id: &str,
-    ) -> Result<Option<SyncSessionRow>> {
-        let row = sqlx::query_as::<_, SyncSessionRow>(
-            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
-             FROM sync_sessions \
-             WHERE user_id = ? AND session_id = ? AND deleted = 0",
-        )
-        .bind(user_id)
-        .bind(session_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("get sync session: {e}"))?;
-        Ok(row)
-    }
-}
-
-// ── Sync settings (single encrypted blob per user) ──────────────────────
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct SyncSettingsRow {
-    pub encrypted_data: String,
-    pub nonce: String,
-    pub version: i64,
-    pub updated_at: i64,
-}
-
-impl SyncSettingsRow {
-    pub async fn upsert(
-        pool: &DbPool,
-        user_id: &str,
-        encrypted_data: &str,
-        nonce: &str,
-        version: i64,
-    ) -> Result<()> {
-        let now = Utc::now().timestamp();
-        sqlx::query(
-            "INSERT INTO sync_settings (user_id, encrypted_data, nonce, version, updated_at) \
-             VALUES (?, ?, ?, ?, ?) \
-             ON CONFLICT(user_id) DO UPDATE SET \
-               encrypted_data = excluded.encrypted_data, \
-               nonce = excluded.nonce, \
-               version = excluded.version, \
-               updated_at = excluded.updated_at",
-        )
-        .bind(user_id)
-        .bind(encrypted_data)
-        .bind(nonce)
-        .bind(version)
-        .bind(now)
-        .execute(pool)
-        .await
-        .map_err(|e| anyhow!("upsert sync settings: {e}"))?;
-        Ok(())
-    }
-
-    pub async fn get(pool: &DbPool, user_id: &str) -> Result<Option<SyncSettingsRow>> {
-        let row = sqlx::query_as::<_, SyncSettingsRow>(
-            "SELECT encrypted_data, nonce, version, updated_at FROM sync_settings WHERE user_id = ?",
-        )
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| anyhow!("get sync settings: {e}"))?;
-        Ok(row)
-    }
 }
 
 // ── Pages (published static sites) ──────────────────────────────────────
@@ -2388,6 +2079,27 @@ pub fn new_page_version_id() -> String {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn delegated_key_failure_rolls_back_token() {
+        let pool = super::connect(":memory:").await.unwrap();
+        super::UserRow::create(&pool, "u1", "alice").await.unwrap();
+        super::DeviceRow::upsert(&pool, "d1", "u1", "desktop", None, None)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TRIGGER reject_controller_key BEFORE INSERT ON delegated_device_keys BEGIN SELECT RAISE(ABORT, 'test rejection'); END")
+            .execute(&pool).await.unwrap();
+        assert!(
+            super::AuthToken::create_keyed_delegated(&pool, "u1", "d1", "key")
+                .await
+                .is_err()
+        );
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM auth_tokens")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
     use super::*;
 
     async fn setup() -> DbPool {
@@ -2397,14 +2109,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn device_quota_is_atomic_and_account_scoped() {
+        let pool = connect(":memory:").await.unwrap();
+        UserRow::create(&pool, "quota-a", "a").await.unwrap();
+        UserRow::create(&pool, "quota-b", "b").await.unwrap();
+        for index in 0..63 {
+            DeviceRow::upsert(
+                &pool,
+                &format!("device-{index}"),
+                "quota-a",
+                "Device",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        }
+        let (first, second) = tokio::join!(
+            DeviceRow::upsert(&pool, "last-a", "quota-a", "Device", None, None),
+            DeviceRow::upsert(&pool, "last-b", "quota-a", "Device", None, None),
+        );
+        assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
+        DeviceRow::upsert(&pool, "device-0", "quota-a", "Renamed", None, None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&pool, "new", "quota-b", "Device", None, None)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn token_quota_preserves_idempotent_replays_and_other_accounts() {
+        let pool = connect(":memory:").await.unwrap();
+        UserRow::create(&pool, "a", "a").await.unwrap();
+        UserRow::create(&pool, "b", "b").await.unwrap();
+        DeviceRow::upsert(&pool, "device", "a", "Device", None, None)
+            .await
+            .unwrap();
+        DeviceRow::upsert(&pool, "device", "b", "Device", None, None)
+            .await
+            .unwrap();
+        let original = AuthToken::create_idempotent(&pool, "a", "device", "replay")
+            .await
+            .unwrap();
+        for _ in 1..256 {
+            AuthToken::create(&pool, "a", "device").await.unwrap();
+        }
+        assert!(AuthToken::create(&pool, "a", "device").await.is_err());
+        assert_eq!(
+            AuthToken::create_idempotent(&pool, "a", "device", "replay")
+                .await
+                .unwrap()
+                .token,
+            original.token
+        );
+        AuthToken::create(&pool, "b", "device").await.unwrap();
+        sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
+            .bind(&original.token)
+            .execute(&pool)
+            .await
+            .unwrap();
+        AuthToken::create(&pool, "a", "device").await.unwrap();
+    }
+
+    #[tokio::test]
     async fn admin_connection_preserves_live_server_presence_projection() {
         let temp = tempfile::tempdir().unwrap();
         let db_path = temp.path().join("relay.db");
         let db_path = db_path.to_str().unwrap();
         let runtime_pool = connect(db_path).await.unwrap();
-        UserRow::create(&runtime_pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&runtime_pool, "u1", "alice").await.unwrap();
         DeviceRow::upsert(&runtime_pool, "d1", "u1", "Laptop", None, None)
             .await
             .unwrap();
@@ -2418,50 +2192,10 @@ mod tests {
         assert_eq!(rows[0].online, 1);
     }
 
-    #[test]
-    fn lockout_schedule() {
-        let now = 1000;
-        assert_eq!(lockout_until(4, now), 0);
-        assert_eq!(lockout_until(5, now), now + 60);
-        assert_eq!(lockout_until(6, now), now + 300);
-        assert_eq!(lockout_until(7, now), now + 900);
-        assert_eq!(lockout_until(8, now), now + 3600);
-        assert_eq!(lockout_until(100, now), now + 3600);
-    }
-
-    #[tokio::test]
-    async fn failed_attempts_lock_account() {
-        let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
-        for _ in 0..4 {
-            let lock = UserRow::record_failed_attempt(&pool, "u1").await.unwrap();
-            assert_eq!(lock, 0, "not locked before 5 failures");
-        }
-        let lock = UserRow::record_failed_attempt(&pool, "u1").await.unwrap();
-        assert!(lock > 0, "locked at 5 failures");
-
-        let user = UserRow::find_by_username(&pool, "alice")
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(user.is_locked());
-
-        UserRow::reset_failed_attempts(&pool, "u1").await.unwrap();
-        let user = UserRow::find_by_username(&pool, "alice")
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(!user.is_locked());
-    }
-
     #[tokio::test]
     async fn token_create_and_find() {
         let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&pool, "u1", "alice").await.unwrap();
         DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None, None)
             .await
             .unwrap();
@@ -2489,12 +2223,8 @@ mod tests {
     #[tokio::test]
     async fn the_same_install_device_id_is_isolated_between_accounts() {
         let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
-        UserRow::create(&pool, "u2", "bob", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&pool, "u1", "alice").await.unwrap();
+        UserRow::create(&pool, "u2", "bob").await.unwrap();
 
         DeviceRow::upsert(&pool, "shared-install", "u1", "Alice laptop", None, None)
             .await
@@ -2523,83 +2253,6 @@ mod tests {
             .unwrap()
             .is_some());
         assert_eq!(DeviceRow::list_by_user(&pool, "u2").await.unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn sync_session_upsert_enforces_count_and_byte_quotas_atomically() {
-        let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
-
-        assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "1234", "n", 1, 1, 5)
-                .await
-                .unwrap()
-        );
-        assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "12345", "n", 2, 1, 5)
-                .await
-                .unwrap()
-        );
-        assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s2", "1", "n", 1, 1, 5)
-                .await
-                .unwrap()
-        );
-        assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "s1", "123456", "n", 3, 1, 5)
-                .await
-                .unwrap()
-        );
-
-        let stored = SyncSessionRow::get(&pool, "u1", "s1")
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(stored.encrypted_data, "12345");
-    }
-
-    #[tokio::test]
-    async fn sync_session_make_room_evicts_oldest_until_upsert_fits() {
-        let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
-
-        assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "old", "1234", "n", 1, 2, 8)
-                .await
-                .unwrap()
-        );
-        assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "mid", "1234", "n", 2, 2, 8)
-                .await
-                .unwrap()
-        );
-        assert!(
-            !SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
-                .await
-                .unwrap()
-        );
-
-        let evicted = SyncSessionRow::make_room_for_upsert(&pool, "u1", "new", 4, 2, 8)
-            .await
-            .unwrap();
-        assert!(evicted >= 1);
-        assert!(
-            SyncSessionRow::upsert_with_quota(&pool, "u1", "new", "1234", "n", 3, 2, 8)
-                .await
-                .unwrap()
-        );
-        assert!(SyncSessionRow::get(&pool, "u1", "old")
-            .await
-            .unwrap()
-            .is_none());
-        assert!(SyncSessionRow::get(&pool, "u1", "new")
-            .await
-            .unwrap()
-            .is_some());
     }
 
     #[tokio::test]
@@ -2734,9 +2387,7 @@ mod tests {
         let db_path_text = db_path.to_string_lossy().to_string();
 
         let first = connect(&db_path_text).await.unwrap();
-        UserRow::create(&first, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&first, "u1", "alice").await.unwrap();
         DeviceRow::upsert(
             &first,
             "phone",
@@ -2833,9 +2484,7 @@ mod tests {
     #[tokio::test]
     async fn page_ensure_version_deploy_and_resolve() {
         let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&pool, "u1", "alice").await.unwrap();
         PageRow::ensure(&pool, "u1", "my-site", PageVisibility::Public, "My Site")
             .await
             .unwrap();
@@ -2890,9 +2539,7 @@ mod tests {
     #[tokio::test]
     async fn page_version_metadata_and_lifecycle_mutations_are_atomic() {
         let pool = setup().await;
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&pool, "u1", "alice").await.unwrap();
         PageRow::ensure(
             &pool,
             "u1",

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
     createChatSession,
     sendMessage,
     getFlowChatState: () => ({
-      sessions: new Map([['created-session', { mode: 'agentic' }]]),
+      sessions: new Map([['created-session', { mode: 'Standard' }]]),
     }),
   };
 
@@ -110,13 +110,13 @@ describe('useMessageSender', () => {
       {
         workspacePath: '/workspace/project',
       },
-      'agentic',
+      'Standard',
     );
     expect(mocks.sendMessage).toHaveBeenCalledWith(
       'hello',
       'created-session',
       'hello',
-      'agentic',
+      'Standard',
       undefined,
       expect.objectContaining({
         pendingQueueDraft: {
@@ -141,7 +141,7 @@ describe('useMessageSender', () => {
       'expanded paste content',
       'created-session',
       '[Pasted text #1]',
-      'agentic',
+      'Standard',
       undefined,
       expect.objectContaining({
         pendingQueueDraft: {

@@ -21,6 +21,7 @@ import {
   Network,
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabIcon, SceneTabId } from '../components/SceneBar/types';
+import { getSceneViewId } from '../components/SceneBar/types';
 
 function catalogSceneIcon(name: IconName): SceneTabIcon {
   return function CatalogSceneIcon() {
@@ -182,7 +183,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
 ];
 
 export function getSceneDef(id: SceneTabId): SceneTabDef | undefined {
-  return SCENE_TAB_REGISTRY.find(d => d.id === id);
+  return SCENE_TAB_REGISTRY.find(d => d.id === getSceneViewId(id));
 }
 
 /** Shared closeability policy for the scene store and every tab interaction. */

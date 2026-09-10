@@ -101,7 +101,7 @@ export async function createBtwChildSession(params: {
     throw new Error(`Workspace path is required for BTW child session: ${parentSessionId}`);
   }
 
-  const agentType = params.agentType || parentSession?.mode || 'agentic';
+  const agentType = params.agentType || parentSession?.mode || 'Standard';
   const modelName = params.modelName || parentSession?.config?.modelName || 'default';
   const childSessionName = params.childSessionName.trim() || 'Side thread';
   const remoteConnectionId = parentSession?.remoteConnectionId;
@@ -230,7 +230,7 @@ export function createBtwSessionPlaceholder(params: {
   flowChatStore.addExternalSession(
     childSessionId,
     childSessionName,
-    parentSession.mode || 'agentic',
+    parentSession.mode || 'Standard',
     workspacePath,
     {
       parentSessionId: params.parentSessionId,

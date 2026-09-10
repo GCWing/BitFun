@@ -330,7 +330,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
     auto_push_failed_fmt: "发送「{name}」失败：{err}",
 
     devices_title: "多设备控制",
-    devices_account_required: "所连接的桌面端尚未登录 OpenBitFun 账号，无法使用多设备控制。请在桌面端的账号登录对话框中登录，机器人会自动继承账号身份。",
+    devices_account_required: "所连接的桌面端尚未使用 GitHub 登录，无法使用多设备控制。请在桌面端的账号登录对话框中登录，机器人会自动继承账号身份。",
     devices_empty: "当前账号下没有其它设备。",
     devices_status_online: "在线",
     devices_status_offline: "离线",
@@ -487,7 +487,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     auto_push_failed_fmt: "發送「{name}」失敗：{err}",
 
     devices_title: "多裝置控制",
-    devices_account_required: "所連接的桌面端尚未登入 OpenBitFun 帳號，無法使用多裝置控制。請在桌面端的帳號登入對話框中登入，機器人會自動繼承帳號身份。",
+    devices_account_required: "所連接的桌面端尚未使用 GitHub 登入，無法使用多裝置控制。請在桌面端的帳號登入對話框中登入，機器人會自動繼承帳號身份。",
     devices_empty: "目前帳號下沒有其它裝置。",
     devices_status_online: "線上",
     devices_status_offline: "離線",
@@ -645,7 +645,7 @@ Open Remote Connect in OpenBitFun Desktop and send the 6-digit pairing code here
     auto_push_failed_fmt: "Failed to send \"{name}\": {err}",
 
     devices_title: "Multi-device Control",
-    devices_account_required: "The paired desktop is not logged into a OpenBitFun account, so multi-device control is unavailable. Log in via the desktop's Account Login dialog and the bot will inherit the account identity.",
+    devices_account_required: "The paired desktop is not logged into a GitHub account, so multi-device control is unavailable. Log in via the desktop's Account Login dialog and the bot will inherit the account identity.",
     devices_empty: "No other devices in this account.",
     devices_status_online: "online",
     devices_status_offline: "offline",

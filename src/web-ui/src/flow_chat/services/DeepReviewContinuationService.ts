@@ -18,6 +18,6 @@ export async function continueDeepReviewSession(
     interruption.childSessionId,
     displayMessage,
     'DeepReview',
-    'agentic',
+    'Standard',
   );
 }

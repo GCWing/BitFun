@@ -34,11 +34,11 @@ test("KeyHint styles use the shared micro typography role", async () => {
 
   assert.match(styles, /--openbitfun-color-key-hint-background/);
   assert.match(styles, /--openbitfun-color-action-neutral-surface/);
-  assert.match(styles, /--openbitfun-color-content-muted/);
+  assert.match(styles, /--openbitfun-color-key-hint-content/);
   assert.match(styles, /--openbitfun-type-micro-font-family/);
   assert.match(styles, /--openbitfun-type-micro-font-size/);
   assert.match(styles, /--openbitfun-type-micro-letter-spacing/);
-  assert.match(styles, /--openbitfun-type-micro-line-height/);
+  assert.match(styles, /--openbitfun-type-modifier-leading-none-line-height/);
   assert.match(styles, /--openbitfun-radius-xs/);
   assert.match(styles, /--openbitfun-radius-sm/);
   assert.match(styles, /flex:\s*0 0 auto/);

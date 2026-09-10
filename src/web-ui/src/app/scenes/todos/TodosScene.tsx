@@ -464,7 +464,7 @@ const TodosScene: React.FC = () => {
           </Button>
           <Button
             size="sm"
-            variant="fill"
+            variant="primary"
             className="openbitfun-todos__new-button"
             leadingIcon={<Icon name="plus" size="lg" />}
             onClick={handleCreateNew}

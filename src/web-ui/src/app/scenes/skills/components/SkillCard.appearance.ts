@@ -4,7 +4,7 @@ export const skillCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'skill-card',
   parts: [
     { id: 'root' }, { id: 'header' }, { id: 'iconArea' }, { id: 'icon' },
-    { id: 'badges' }, { id: 'body' }, { id: 'titleRow' }, { id: 'name' },
+    { id: 'badges' }, { id: 'body' }, { id: 'titleRow' }, { id: 'name' }, { id: 'source' },
     { id: 'meta' }, { id: 'description' }, { id: 'footer' }, { id: 'actions' },
     { id: 'action' },
   ],

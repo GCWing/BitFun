@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
  
 
 import React from 'react';
@@ -113,7 +114,7 @@ export class CodeSnippetCardRenderer implements ContextCardRenderer<'code-snippe
         
         <div className="openbitfun-context-card__content">
           <div className="openbitfun-context-card__title">
-            {context.fileName}
+            <OverflowText>{context.fileName}</OverflowText>
             <span className="openbitfun-context-card__badge">
               L{context.startLine}-{context.endLine}
             </span>
@@ -121,14 +122,14 @@ export class CodeSnippetCardRenderer implements ContextCardRenderer<'code-snippe
           
           {!compact && (
             <>
-              <div className="openbitfun-context-card__subtitle">
+              <div className="openbitfun-context-card__subtitle"><OverflowText behavior="marquee">
                 {lineCount} {lineCount === 1 ? 'line' : 'lines'}
                 {context.language && (
                   <span className="openbitfun-context-card__meta">
                     {' • '}{context.language}
                   </span>
                 )}
-              </div>
+              </OverflowText></div>
               
               {showPreview && (
                 <div className="openbitfun-context-card__preview">

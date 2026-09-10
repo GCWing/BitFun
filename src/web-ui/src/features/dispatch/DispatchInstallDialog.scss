@@ -1,17 +1,3 @@
-// Three deliberate type steps, so "section" reads louder than "item" and
-// "item" reads louder than "explanation":
-//   title   18px/600  — the dialog's own heading
-//   section 13px/600  — section headings
-//   body    13px/400  — values and labels
-//   support 12px      — descriptions under a title
-// Nothing uses 10px; at that size the descriptions were unreadable and every
-// level looked the same.
-//
-// One box level only. Sections are separated by a hairline rule instead of
-// being drawn as cards: the modal is already a surface, and nesting a card
-// inside it (and a second card inside that) made a three-field form read as a
-// stack of unrelated panels. The approval options stay bordered because they
-// are the one thing here that is clickable and selectable.
 .dispatch-install-dialog {
   display: flex;
   min-height: 0;
@@ -20,26 +6,6 @@
   color: var(--openbitfun-color-content-primary);
   font-size: var(--openbitfun-type-label-md-font-size);
 
-  &__header {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--openbitfun-space-4) var(--openbitfun-space-4) var(--openbitfun-space-3);
-  }
-
-  &__title {
-    margin: 0;
-    color: var(--openbitfun-color-content-primary);
-    font-size: var(--openbitfun-type-flow-section-title-font-size);
-    font-weight: var(--openbitfun-type-label-selected-font-weight);
-    line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
-  }
-
-  &__subtitle {
-    color: var(--openbitfun-color-content-secondary);
-    font-size: var(--openbitfun-type-label-sm-font-size);
-  }
-
   // The one scrolling region. Keeps the footer reachable on short viewports,
   // which the section stack used to push off-screen.
   &__body {
@@ -47,7 +13,6 @@
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    padding: 0 var(--openbitfun-space-4) var(--openbitfun-space-4);
 
     // The body is a height-constrained column flex container, so its children
     // would otherwise shrink below their content instead of scrolling.
@@ -116,25 +81,14 @@
   }
 
   &__base-ref {
+    min-inline-size: 0;
+    gap: var(--openbitfun-space-2);
     cursor: text;
 
+    // Input owns its border, surface, sizing, and focus state on the wrapper.
     input {
-      box-sizing: border-box;
-      width: 100%;
-      min-height: 32px;
-      padding: 0 var(--openbitfun-space-2);
-      border: 1px solid var(--openbitfun-color-border-subtle);
-      border-radius: var(--openbitfun-radius-base);
-      background: var(--openbitfun-color-surface-canvas);
-      color: var(--openbitfun-color-content-primary);
-      font-family:var(--openbitfun-type-code-md-font-family);
+      font-family: var(--openbitfun-type-code-md-font-family);
       font-size: var(--openbitfun-type-label-sm-font-size);
-
-      &:focus-visible {
-        border-color: var(--openbitfun-color-accent-default);
-        outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 24%, transparent);
-        outline-offset: 1px;
-      }
     }
   }
 
@@ -203,22 +157,6 @@
     color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-label-sm-font-size);
 
-    summary {
-      width: fit-content;
-      color: var(--openbitfun-color-content-secondary);
-      cursor: pointer;
-      user-select: none;
-
-      &:hover,
-      &:focus-visible {
-        color: var(--openbitfun-color-content-primary);
-      }
-    }
-
-    &[open] summary {
-      margin-bottom: var(--openbitfun-space-2);
-    }
-
     dl {
       display: grid;
       gap: var(--openbitfun-space-1);
@@ -244,14 +182,8 @@
     }
   }
 
-  // Pinned so the primary action never scrolls away.
   &__actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--openbitfun-space-2);
-    padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
-    border-top: 1px solid var(--openbitfun-color-border-subtle);
-    background: var(--openbitfun-color-surface-canvas);
+    flex-shrink: 0;
   }
 
   &__spin {

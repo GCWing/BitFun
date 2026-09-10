@@ -95,6 +95,19 @@ function fakeLayout(options: {
   };
 }
 
+/** Range rectangles supply navigation geometry only; jsdom cannot verify appearance. */
+function searchRangeLayout(readRect: (range: Range) => DOMRect) {
+  const original = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    configurable: true,
+    value(this: Range) { return [readRect(this)]; },
+  });
+  return () => {
+    if (original) Object.defineProperty(Range.prototype, 'getClientRects', original);
+    else delete (Range.prototype as unknown as Record<string, unknown>).getClientRects;
+  };
+}
+
 /*
  * The virtualizer is mocked at FlowChat's own seam rather than at the library.
  * These tests are about which scroll the list decides to ask for, and the seam
@@ -473,6 +486,119 @@ describe('VirtualMessageList natural scroll contract', () => {
       expect(mocks.handleViewportResize).not.toHaveBeenCalled();
       expect(mocks.scheduleFollowToLatest).toHaveBeenCalledTimes(1);
     } finally {
+      restoreLayout();
+    }
+  });
+
+  it('keeps the viewport fixed when advancing between two search hits on the same readable line', async () => {
+    mocks.items = [userMessage('turn-1', 'message-1', 'needle and needle')];
+    const restoreLayout = fakeLayout({ clientHeight: 600, scrollHeight: 2400, turnTopFromScrollerTop: 100 });
+    const restoreRanges = searchRangeLayout(range => new DOMRect(range.startOffset * 8, 180, 48, 20));
+    try {
+      const listRef = React.createRef<VirtualMessageListRef>();
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.style.setProperty('--openbitfun-space-12', '48px');
+      scroller.scrollTop = 400;
+      mocks.scrollItemIntoView.mockClear();
+      mocks.scrollToOffset.mockClear();
+      mocks.cancelAim.mockClear();
+
+      for (const occurrenceIndex of [0, 1, 0]) {
+        act(() => listRef.current?.scrollToSearchMatch({ virtualItemIndex: 0, query: 'needle', occurrenceIndex }));
+        await settleOpenReveal();
+        expect(scroller.scrollTop).toBe(400);
+      }
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+      expect(mocks.cancelAim).toHaveBeenCalledTimes(3);
+    } finally {
+      restoreRanges();
+      restoreLayout();
+    }
+  });
+
+  it.each([30, 405, 510, 900])('directly positions a mounted search hit at %ipx inside the readable viewport', async (hitTop) => {
+    mocks.items = [userMessage('turn-1', 'message-1', 'needle')];
+    const restoreLayout = fakeLayout({ clientHeight: 600, scrollHeight: 2400, turnTopFromScrollerTop: 100 });
+    const restoreRanges = searchRangeLayout(() => new DOMRect(100, hitTop, 48, 20));
+    try {
+      const listRef = React.createRef<VirtualMessageListRef>();
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      scroller.style.setProperty('--openbitfun-space-12', '48px');
+      scroller.scrollTop = 400;
+      mocks.scrollItemIntoView.mockClear();
+      mocks.scrollToOffset.mockClear();
+
+      act(() => listRef.current?.scrollToSearchMatch({ virtualItemIndex: 0, query: 'needle' }));
+      // One synchronous text placement, without first centering the entire row.
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+      expect(mocks.scrollToOffset).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollToOffset).toHaveBeenCalledWith(400 + hitTop + 10 - 218, {
+        owner: 'one-shot-navigation',
+        holdForMs: ONE_SHOT_NAVIGATION_HOLD_MS,
+      });
+      await settleOpenReveal();
+      expect(mocks.scrollToOffset).toHaveBeenCalledTimes(1);
+    } finally {
+      restoreRanges();
+      restoreLayout();
+    }
+  });
+
+  it('materializes an unmounted search row once and ends its item aim when the hit is already readable', async () => {
+    mocks.items = [userMessage('turn-1', 'message-1', 'needle')];
+    const restoreLayout = fakeLayout({ clientHeight: 600, scrollHeight: 2400, turnTopFromScrollerTop: 100 });
+    const restoreRanges = searchRangeLayout(() => new DOMRect(100, 180, 48, 20));
+    try {
+      const listRef = React.createRef<VirtualMessageListRef>();
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      const wrapper = container.querySelector<HTMLElement>('.virtual-item-wrapper')!;
+      wrapper.dataset.virtualIndex = '-1';
+      mocks.scrollItemIntoView.mockClear();
+      mocks.scrollToOffset.mockClear();
+      mocks.cancelAim.mockClear();
+
+      act(() => listRef.current?.scrollToSearchMatch({ virtualItemIndex: 0, query: 'needle' }));
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledTimes(1);
+      wrapper.dataset.virtualIndex = '0';
+      await settleOpenReveal();
+      expect(mocks.scrollItemIntoView).toHaveBeenCalledTimes(1);
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+      // One cancellation replaces the previous intent; the other ends materialization.
+      expect(mocks.cancelAim).toHaveBeenCalledTimes(2);
+    } finally {
+      restoreRanges();
+      restoreLayout();
+    }
+  });
+
+  it.each(['clear', 'gesture'] as const)('abandons pending search placement after %s', async (cancel) => {
+    mocks.items = [userMessage('turn-1', 'message-1', 'needle')];
+    const restoreLayout = fakeLayout({ clientHeight: 600, scrollHeight: 2400, turnTopFromScrollerTop: 100 });
+    const restoreRanges = searchRangeLayout(() => new DOMRect(100, 900, 48, 20));
+    try {
+      const listRef = React.createRef<VirtualMessageListRef>();
+      act(() => root.render(<VirtualMessageList ref={listRef} />));
+      await settleOpenReveal();
+      const wrapper = container.querySelector<HTMLElement>('.virtual-item-wrapper')!;
+      wrapper.dataset.virtualIndex = '-1';
+      mocks.scrollToOffset.mockClear();
+      act(() => listRef.current?.scrollToSearchMatch({ virtualItemIndex: 0, query: 'needle' }));
+      act(() => {
+        if (cancel === 'clear') listRef.current?.clearSearchMatch();
+        else container.querySelector('[data-flowchat-scroller]')!
+          .dispatchEvent(new Event('wheel'));
+      });
+      wrapper.dataset.virtualIndex = '0';
+      await settleOpenReveal();
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+    } finally {
+      restoreRanges();
       restoreLayout();
     }
   });

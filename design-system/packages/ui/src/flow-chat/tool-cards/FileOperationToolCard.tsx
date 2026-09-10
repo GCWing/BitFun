@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type {
   HTMLAttributes,
   MouseEvent as ReactMouseEvent,
@@ -38,7 +39,7 @@ export interface FileOperationToolCardAction {
 export interface FileOperationToolCardError {
   guidance?: boolean;
   message: ReactNode;
-  title: ReactNode;
+  title?: ReactNode;
 }
 
 export interface FileOperationToolCardProps
@@ -117,7 +118,7 @@ export function FileOperationToolCard({
             <AmbientToolCardHeader
               action={actionLabel}
               content={(
-                <span
+                <OverflowText
                   className={styles.path}
                   data-path={path}
                   data-openbitfun-operation={operation}
@@ -126,7 +127,7 @@ export function FileOperationToolCard({
                   title={path}
                 >
                   {pathLabel}
-                </span>
+                </OverflowText>
               )}
               icon={(
                 <ToolCardStatusSlot
@@ -145,10 +146,12 @@ export function FileOperationToolCard({
 
   const errorContent = error ? (
     <div className={styles.error} data-guidance={error.guidance ? "true" : "false"}>
-      <div className={styles.errorTitle}>
-        {error.guidance ? <Info aria-hidden="true" /> : <XCircle aria-hidden="true" />}
-        <span>{error.title}</span>
-      </div>
+      {error.title != null && (
+        <div className={styles.errorTitle}>
+          {error.guidance ? <Info aria-hidden="true" /> : <XCircle aria-hidden="true" />}
+          <span>{error.title}</span>
+        </div>
+      )}
       <div className={styles.errorMessage}>{error.message}</div>
     </div>
   ) : undefined;
@@ -188,9 +191,9 @@ export function FileOperationToolCard({
               </ToolCardActions>
             ) : undefined}
             content={inlineMessage ? (
-              <span className={styles.inlineMessage}>{inlineMessage}</span>
+              <OverflowText className={styles.inlineMessage}>{inlineMessage}</OverflowText>
             ) : (
-              <span
+              <OverflowText
                 className={styles.path}
                 data-openbitfun-operation={operation}
                 data-path={path}
@@ -198,10 +201,10 @@ export function FileOperationToolCard({
                 title={path}
               >
                 {pathLabel}
-              </span>
+              </OverflowText>
             )}
             extra={statusDetail ? (
-              <span className={styles.statusDetail}>{statusDetail}</span>
+              <span className={styles.statusDetail}><OverflowText>{statusDetail}</OverflowText></span>
             ) : changeSummary ? (
               <ToolCardChangeSummary
                 additions={changeSummary.additions}
@@ -210,7 +213,7 @@ export function FileOperationToolCard({
               />
             ) : undefined}
             icon={<Icon aria-hidden="true" />}
-            statusIcon={failed
+            statusIcon={failed && !error?.guidance
               ? (
                 <TriangleAlert
                   aria-hidden="true"

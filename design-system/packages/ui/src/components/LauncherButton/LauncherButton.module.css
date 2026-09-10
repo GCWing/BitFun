@@ -19,12 +19,12 @@
     border-radius: var(--openbitfun-control-launcher-button-radius) 0 0 0;
     color: var(--openbitfun-color-control-launcher-content);
     background: var(--openbitfun-color-control-launcher-background);
-    font-family: var(--openbitfun-type-code-md-font-family);
-    font-size: var(--openbitfun-type-code-md-font-size);
-    font-weight: var(--openbitfun-type-code-md-font-weight);
+    font-family: var(--openbitfun-type-code-meta-font-family);
+    font-size: var(--openbitfun-type-code-meta-font-size);
+    font-weight: var(--openbitfun-type-code-meta-font-weight);
     font-synthesis: none;
-    letter-spacing: var(--openbitfun-type-code-md-letter-spacing);
-    line-height: var(--openbitfun-type-code-md-line-height);
+    letter-spacing: var(--openbitfun-type-code-meta-letter-spacing);
+    line-height: var(--openbitfun-type-code-meta-line-height);
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -73,7 +73,6 @@
   .label {
     min-inline-size: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   @media (prefers-reduced-motion: reduce) {

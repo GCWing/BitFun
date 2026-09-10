@@ -22,3 +22,35 @@
   width: 100%;
   height: 100%;
 }
+
+// A pane-sized target without intercepting drops or changing transcript geometry.
+.openbitfun-chat-pane__drop-overlay {
+  position: absolute;
+  inset: var(--openbitfun-space-2);
+  z-index: var(--openbitfun-layer-overlay);
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--openbitfun-color-accent-default);
+  border-radius: var(--openbitfun-radius-lg);
+  background: color-mix(in srgb, var(--openbitfun-color-accent-default) 9%, transparent);
+}
+
+.openbitfun-chat-pane__drop-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--openbitfun-space-2);
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+  margin: var(--openbitfun-space-4);
+  border: 1px solid var(--openbitfun-color-border-default);
+  border-radius: var(--openbitfun-radius-lg);
+  background: var(--openbitfun-color-surface-scene);
+  color: var(--openbitfun-color-content-primary);
+  box-shadow: var(--openbitfun-shadow-sm);
+  font-family: var(--openbitfun-type-label-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-md-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
+
+  .openbitfun-icon { color: var(--openbitfun-color-accent-default); }
+}

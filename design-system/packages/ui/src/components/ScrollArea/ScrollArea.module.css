@@ -3,8 +3,6 @@
     min-inline-size: 0;
     min-block-size: 0;
     overscroll-behavior: contain;
-    scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
-    scrollbar-width: thin;
   }
 
   .root[data-openbitfun-orientation="vertical"] {
@@ -31,42 +29,5 @@
 
   .root[data-openbitfun-orientation="both"][data-openbitfun-scrollbar-visibility="always"] {
     overflow: scroll;
-  }
-
-  .root::-webkit-scrollbar {
-    inline-size: var(--openbitfun-scrollbar-width);
-    block-size: var(--openbitfun-scrollbar-width);
-  }
-
-  .root::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .root::-webkit-scrollbar-thumb {
-    border-radius: var(--openbitfun-scrollbar-radius);
-    background: var(--openbitfun-color-scrollbar-thumb);
-  }
-
-  .root::-webkit-scrollbar-thumb:hover {
-    background: var(--openbitfun-color-scrollbar-thumb-hover);
-  }
-
-  .root[data-openbitfun-scrollbar-visibility="hidden"] {
-    scrollbar-width: none;
-  }
-
-  .root[data-openbitfun-scrollbar-visibility="hidden"]::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (forced-colors: active) {
-    .root {
-      scrollbar-color: CanvasText transparent;
-    }
-
-    .root::-webkit-scrollbar-thumb,
-    .root::-webkit-scrollbar-thumb:hover {
-      background: CanvasText;
-    }
   }
 }

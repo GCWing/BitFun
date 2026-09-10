@@ -197,7 +197,9 @@ async function applySourceChanges(designSystemDirectory, changes) {
     if (!target) {
       throw new Error(`Unsupported token target "${targetKey}".`);
     }
-    if (change.collection === "theme" && !change.name.startsWith("color.")) {
+    if (change.collection === "theme"
+      && !change.name.startsWith("color.")
+      && !change.name.startsWith("component.button.")) {
       throw new Error("Only public semantic color tokens can be written to theme sources.");
     }
     if (change.collection === "system" && change.name.startsWith("color.")) {
@@ -348,4 +350,3 @@ export function createTokenAuthoringPlugin({ designSystemDirectory }) {
     },
   };
 }
-

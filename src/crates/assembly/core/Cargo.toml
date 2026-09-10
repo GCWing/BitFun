@@ -80,13 +80,17 @@ openbitfun-agent-tools = { path = "../../execution/tool-contracts", optional = t
 openbitfun-tool-packs = { path = "../../execution/tool-provider-groups", optional = true }
 
 # Core service owner crate
-openbitfun-services-core = { path = "../../services/services-core", features = ["json-io", "product-identity"] }
+openbitfun-services-core = { path = "../../services/services-core", features = ["json-io", "product-identity", "workspace-identity"] }
 
 # Integration service owner crate
 openbitfun-services-integrations = { path = "../../services/services-integrations", optional = true }
 
+# Optional compatibility export for the independent offline migration adapters.
+openbitfun-legacy-migration-adapters = { path = "../../services/legacy-migration-adapters", optional = true }
+
 # Product domain owner crate
 openbitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
+openbitfun-config-contracts = { path = "../../contracts/config-contracts" }
 
 # Tool runtime
 tool-runtime = { path = "../../execution/tool-execution", optional = true }
@@ -114,6 +118,7 @@ openbitfun-runtime-services = { path = "../../execution/runtime-services", optio
 
 # Reviewed product-full plugin composition root.
 openbitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+openbitfun-pi-adapter = { path = "../../adapters/pi-adapter", optional = true }
 openbitfun-dsh-adapter = { path = "../../adapters/dsh-adapter", optional = true }
 openbitfun-opencode-plugin-host = { path = "../../adapters/opencode-plugin-host", optional = true }
 openbitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
@@ -134,6 +139,7 @@ default = []
 # product matrix. The other two upstream crates are non-optional and propagate
 # their `ts` features directly.
 ts = [
+    "openbitfun-config-contracts/ts",
     "dep:ts-rs",
     "openbitfun-core-types/ts",
     "openbitfun-services-integrations?/ts",
@@ -192,6 +198,9 @@ product-full = [
 # owns the existing agent/session/tool lifecycle, not app presentation or
 # external ecosystem discovery.
 agent-runtime = [
+    "dep:openbitfun-product-domains",
+    "openbitfun-services-core/coordination-store",
+    "openbitfun-services-core/session-event-format",
     "ai-adapter-runtime",
     "dep:openbitfun-agent-runtime",
     "openbitfun-agent-runtime/agent-runtime",
@@ -224,6 +233,7 @@ agent-runtime = [
     "dep:tool-runtime",
     "tool-runtime/shell-analysis",
     "openbitfun-services-core/permission",
+    "openbitfun-services-core/memory-store",
     "openbitfun-services-core/runtime-ownership",
     "openbitfun-services-core/workspace-text-runtime",
     "openbitfun-services-core/session-git",
@@ -234,7 +244,6 @@ agent-runtime = [
     "terminal",
     "workspace-runtime",
     "product-capabilities",
-    "dep:openbitfun-product-domains",
     "openbitfun-product-domains/external-sources",
     "runtime-services",
     "tool-packs",
@@ -246,8 +255,8 @@ agent-runtime = [
     "tokio/time",
 ]
 product-search = [
-    "agent-runtime",
     "dep:openbitfun-product-domains",
+    "agent-runtime",
     "openbitfun-runtime-ports/product-search",
     "openbitfun-services-core/session-search",
 ]
@@ -261,6 +270,7 @@ external-sources = [
     "script-tool-runtime",
     "dep:openbitfun-opencode-adapter",
     "dep:openbitfun-dsh-adapter",
+    "dep:openbitfun-pi-adapter",
     "dep:openbitfun-claude-code-adapter",
     "dep:openbitfun-codex-adapter",
     "dep:openbitfun-external-sources",
@@ -352,8 +362,8 @@ tools-image-analysis = [
     "openbitfun-tool-packs/image-analysis",
 ]
 tools-miniapp = [
-    "openbitfun-tool-packs/miniapp",
     "dep:openbitfun-product-domains",
+    "openbitfun-tool-packs/miniapp",
     "openbitfun-product-domains/appearance-market",
     "openbitfun-product-domains/miniapp",
     "openbitfun-services-integrations/miniapp-runtime",
@@ -399,8 +409,8 @@ plugin-source = [
     "openbitfun-services-integrations/plugin-source",
 ]
 function-agents = [
-    "ai-adapter-runtime",
     "dep:openbitfun-product-domains",
+    "ai-adapter-runtime",
     "openbitfun-product-domains/function-agents",
     "openbitfun-services-integrations/function-agents",
     "runtime-services",
@@ -410,6 +420,7 @@ canvas-runtime = [
     "openbitfun-services-integrations/canvas-runtime",
 ]
 runtime-services = ["dep:openbitfun-runtime-services"]
+legacy-migration = ["dep:openbitfun-legacy-migration-adapters"]
 announcement = ["openbitfun-services-integrations/announcement"]
 file-watch = ["openbitfun-services-integrations/file-watch"]
 git = ["openbitfun-services-integrations/git"]
@@ -423,6 +434,7 @@ local-storage = ["dep:openbitfun-agent-tools", "openbitfun-services-core/local-s
 process-runtime = ["openbitfun-services-core/process-runtime"]
 terminal = ["dep:terminal-core"]
 workspace-runtime = [
+    "openbitfun-services-core/workspace-persistence",
     "dep:serde_yaml",
     "filesystem",
     "local-storage",

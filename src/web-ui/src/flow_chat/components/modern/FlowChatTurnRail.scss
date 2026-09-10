@@ -59,8 +59,7 @@
       width 140ms ease,
       height 140ms ease,
       background-color 140ms ease,
-      opacity 140ms ease,
-      transform 100ms ease;
+      opacity 140ms ease;
   }
 
   // Hover previews a target without changing the actual current step. Only
@@ -91,10 +90,6 @@
     opacity: 1;
   }
 
-  &__item:active &__bar {
-    transform: translateY(-50%) scaleX(0.92);
-  }
-
   &__tooltip-content {
     min-width: 160px;
     max-width: 260px;
@@ -111,16 +106,13 @@
   }
 
   &__tooltip-message {
-    display: -webkit-box;
-    overflow: hidden;
+    display: block;
     color: var(--openbitfun-color-content-primary);
     font-size: var(--openbitfun-type-flow-control-font-size);
     line-height: var(--openbitfun-type-flow-support-line-height);
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
     overflow-wrap: anywhere;
     white-space: pre-wrap;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 5;
 
   }
 }

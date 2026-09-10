@@ -5,6 +5,7 @@ import {
   currentPullRequestReviewStatusText,
   effectivePullRequestReviewFreshness,
   mergeChangedFileCount,
+  mergePullRequestDetailLimitations,
   mergeRevalidatedPullRequestOverview,
   pullRequestReviewFreshness,
   pullRequestReviewLaunchKey,
@@ -127,6 +128,7 @@ describe('pull request Review linking', () => {
       files: [{ path: 'src/lib.rs' }],
       commits: [{ id: 'commit-1' }],
       threads: [{ id: 'thread-1' }],
+      limitations: ['gitee_commit_list_limit', 'provider_ci_head_unavailable'],
     } as ReviewPlatformPullRequestDetail;
     const overview = {
       baseRevision,
@@ -144,6 +146,7 @@ describe('pull request Review linking', () => {
     expect(merged.files).toBe(current.files);
     expect(merged.commits).toBe(current.commits);
     expect(merged.threads).toBe(current.threads);
+    expect(merged.limitations).toEqual(['gitee_commit_list_limit']);
   });
 
   it('drops cached sections when provider revisions change', () => {
@@ -154,6 +157,7 @@ describe('pull request Review linking', () => {
       files: [{ path: 'src/lib.rs' }],
       commits: [{ id: 'commit-1' }],
       threads: [{ id: 'thread-1' }],
+      limitations: ['gitee_commit_list_limit'],
     } as ReviewPlatformPullRequestDetail;
     const overview = {
       baseRevision,
@@ -167,6 +171,18 @@ describe('pull request Review linking', () => {
     const merged = mergeRevalidatedPullRequestOverview(current, overview);
 
     expect(merged).toBe(overview);
+    expect(merged.limitations).toBeUndefined();
+  });
+
+  it('keeps coverage warnings for other tabs and clears only refreshed section warnings', () => {
+    const files = mergePullRequestDetailLimitations(undefined, ['gitee_file_list_limit'], 'files');
+    const commits = mergePullRequestDetailLimitations(files, ['gitee_commit_list_limit'], 'commits');
+    expect(commits).toEqual(['gitee_file_list_limit', 'gitee_commit_list_limit']);
+    expect(mergePullRequestDetailLimitations(commits, undefined, 'reviews')).toEqual(commits);
+    expect(mergePullRequestDetailLimitations(commits, [], 'commits')).toEqual(['gitee_file_list_limit']);
+    expect(mergePullRequestDetailLimitations(commits, ['gitee_file_list_limit'], 'files')).toEqual([
+      'gitee_commit_list_limit', 'gitee_file_list_limit',
+    ]);
   });
 
   it('does not replace known change stats when overview enrichment fails', () => {
@@ -185,8 +201,8 @@ describe('pull request Review linking', () => {
     const overview = {
       baseRevision,
       headRevision,
-      additions: 133,
-      deletions: 22,
+      additions: 100,
+      deletions: 10,
       changedFiles: 0,
       changedFileCountKnown: false,
       ci: [],
@@ -199,6 +215,21 @@ describe('pull request Review linking', () => {
 
     expect(merged.changedFiles).toBe(13);
     expect(merged.changedFileCountKnown).toBe(true);
+    expect(merged.additions).toBe(133);
+    expect(merged.deletions).toBe(22);
+  });
+
+  it.each([undefined, true])('accepts zero line counts from a legacy overview with file-count flag %s', changedFileCountKnown => {
+    const current = {
+      baseRevision, headRevision, additions: 133, deletions: 22,
+      changedFiles: 13, changedFileCountKnown: true,
+      ci: [], files: [], commits: [], threads: [],
+    } as unknown as ReviewPlatformPullRequestDetail;
+    const overview = { ...current, additions: 0, deletions: 0, changedFiles: 0, changedFileCountKnown };
+    const merged = mergeRevalidatedPullRequestOverview(current, overview);
+    expect(merged.additions).toBe(0);
+    expect(merged.deletions).toBe(0);
+    expect(merged.lineStatsKnown).toBeUndefined();
   });
 
   it('keeps an authoritative zero when merging file counts', () => {

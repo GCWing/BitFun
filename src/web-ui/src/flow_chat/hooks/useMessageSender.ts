@@ -141,18 +141,18 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       textLength: trimmedMessage.length,
       contextCount: contexts.length,
       hasSession: !!sessionId,
-      agentType: currentAgentType || 'agentic',
+      agentType: currentAgentType || 'Standard',
     });
 
     try {
       const flowChatManager = FlowChatManager.getInstance();
-      let agentTypeForSend = currentAgentType || 'agentic';
+      let agentTypeForSend = currentAgentType || 'Standard';
       if (options?.execution?.kind === 'fresh_external_subagent' && contexts.length > 0) {
         throw new Error('External subagent command delegation does not accept composer context');
       }
 
       if (!sessionId) {
-        const agentType = currentAgentType || 'agentic';
+        const agentType = currentAgentType || 'Standard';
         const sessionConfig = flowChatSessionConfigForCurrentWorkspace();
 
         sessionId = await flowChatManager.createChatSession(sessionConfig, agentType);
@@ -286,7 +286,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     } catch (error) {
       log.error('Failed to send message', {
         sessionId,
-        agentType: currentAgentType || 'agentic',
+        agentType: currentAgentType || 'Standard',
         contextCount: contexts.length,
         error: (error as Error)?.message ?? 'unknown',
       });

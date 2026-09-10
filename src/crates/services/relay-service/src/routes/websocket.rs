@@ -25,19 +25,50 @@ use tokio::sync::{
 };
 use tracing::{debug, error, info, warn};
 
-use crate::relay::room::{send_outbound_message, ConnId, OutboundMessage, ResponsePayload};
+use crate::relay::transport::{send_outbound_message, ConnId, OutboundMessage};
 use crate::routes::api::AppState;
 
-const OUTBOUND_QUEUE_CAPACITY: usize = i32::MAX as usize;
-const MAX_WS_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
+const OUTBOUND_QUEUE_CAPACITY: usize = 128;
+// Authentication and heartbeats stay small. Device payloads are submitted over
+// HTTP, where admission reserves process-wide memory before buffering a body.
+// A per-socket 64 MiB allowance otherwise multiplies across idle connections.
+const MAX_WS_MESSAGE_BYTES: usize = 16 * 1024;
 const MAX_ENCRYPTED_PAYLOAD_BYTES: usize = 48 * 1024 * 1024;
 const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_DEVICE_NAME_BYTES: usize = 256;
-const MAX_PUBLIC_KEY_BYTES: usize = 512;
 const MAX_NONCE_BYTES: usize = 256;
 const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
-const MAX_MESSAGES_PER_WINDOW: u32 = i32::MAX as u32;
+const MAX_MESSAGES_PER_WINDOW: u32 = 12_000;
+const MAX_WEBSOCKET_CONNECTIONS: usize = 4096;
+const AUTHENTICATION_TIMEOUT: Duration = Duration::from_secs(10);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(15);
 const DEVICE_TOKEN_REVALIDATION_INTERVAL: Duration = Duration::from_secs(5);
+const SOCKET_CLOSE_GRACE: Duration = Duration::from_secs(5);
+
+const MAX_WEBSOCKET_CONNECTIONS_PER_IP: usize = 128;
+
+#[derive(Default)]
+struct IpConnectionSlots(
+    std::sync::Mutex<std::collections::HashMap<String, std::sync::Weak<tokio::sync::Semaphore>>>,
+);
+
+impl IpConnectionSlots {
+    fn acquire(&self, ip: &str) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        let mut slots = self.0.lock().unwrap_or_else(|error| error.into_inner());
+        slots.retain(|_, permits| permits.strong_count() > 0);
+        let permits = slots
+            .get(ip)
+            .and_then(std::sync::Weak::upgrade)
+            .unwrap_or_else(|| {
+                let permits = Arc::new(tokio::sync::Semaphore::new(
+                    MAX_WEBSOCKET_CONNECTIONS_PER_IP,
+                ));
+                slots.insert(ip.to_owned(), Arc::downgrade(&permits));
+                permits
+            });
+        permits.try_acquire_owned().ok()
+    }
+}
 
 struct ConnectionRateLimiter {
     window_started: Instant,
@@ -69,22 +100,8 @@ impl ConnectionRateLimiter {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InboundMessage {
-    CreateRoom {
-        room_id: Option<String>,
-        device_id: String,
-        #[allow(dead_code)]
-        device_type: String,
-        public_key: String,
-    },
-    /// Desktop responds to a bridged HTTP request.
-    RelayResponse {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     Heartbeat,
-    /// Account-authenticated connect (parallel to CreateRoom for the device
-    /// routing pathway). Validates the token and registers the device.
+    /// Authenticate the socket before admitting any device traffic.
     AuthConnect {
         token: String,
         device_name: String,
@@ -106,22 +123,6 @@ pub enum InboundMessage {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutboundProtocol {
-    RoomCreated {
-        room_id: String,
-    },
-    /// Mobile pairing request forwarded to desktop.
-    PairRequest {
-        correlation_id: String,
-        public_key: String,
-        device_id: String,
-        device_name: String,
-    },
-    /// Encrypted command from mobile forwarded to desktop.
-    Command {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     HeartbeatAck,
     Error {
         message: String,
@@ -157,15 +158,46 @@ pub async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
     headers: HeaderMap,
+    peer: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
 ) -> Response {
     if !is_websocket_origin_allowed(&headers, &state.cors_allow_origins) {
         warn!("Rejected WebSocket connection from a disallowed browser origin");
         return StatusCode::FORBIDDEN.into_response();
     }
-    ws.max_message_size(MAX_WS_MESSAGE_BYTES)
+    let ip = crate::routes::auth::client_ip(
+        &headers,
+        peer.map(|axum::Extension(axum::extract::ConnectInfo(addr))| addr),
+    );
+    if !state
+        .login_rate_limiter
+        .check_and_record("websocket-connect", &ip, 120, None)
+    {
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
+    static CONNECTIONS: std::sync::OnceLock<Arc<tokio::sync::Semaphore>> =
+        std::sync::OnceLock::new();
+    let permits = CONNECTIONS
+        .get_or_init(|| Arc::new(tokio::sync::Semaphore::new(MAX_WEBSOCKET_CONNECTIONS)));
+    let Ok(permit) = Arc::clone(permits).try_acquire_owned() else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    static IP_CONNECTIONS: std::sync::OnceLock<IpConnectionSlots> = std::sync::OnceLock::new();
+    let Some(ip_permit) = IP_CONNECTIONS
+        .get_or_init(IpConnectionSlots::default)
+        .acquire(&ip)
+    else {
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    };
+    ws.read_buffer_size(4 * 1024)
+        .write_buffer_size(0)
+        .max_message_size(MAX_WS_MESSAGE_BYTES)
         .max_frame_size(MAX_WS_MESSAGE_BYTES)
-        .max_write_buffer_size(MAX_WS_MESSAGE_BYTES)
-        .on_upgrade(move |socket| handle_socket(socket, state))
+        .max_write_buffer_size(64 * 1024 * 1024)
+        .on_upgrade(move |socket| async move {
+            let _permit = permit;
+            let _ip_permit = ip_permit;
+            handle_socket(socket, state).await;
+        })
 }
 
 fn is_websocket_origin_allowed(headers: &HeaderMap, allowed_origins: &[String]) -> bool {
@@ -211,8 +243,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (out_tx, mut out_rx) = mpsc::channel::<OutboundMessage>(OUTBOUND_QUEUE_CAPACITY);
     let (force_close_tx, mut force_close_rx) = watch::channel(false);
 
-    let conn_id = state.room_manager.next_conn_id();
+    let conn_id = state.device_manager.next_connection_id();
     let mut rate_limiter = ConnectionRateLimiter::new();
+    let authentication_deadline = tokio::time::Instant::now() + AUTHENTICATION_TIMEOUT;
     let mut token_expiry_task: Option<tokio::task::JoinHandle<()>> = None;
     info!("WebSocket connected: conn_id={conn_id}");
 
@@ -221,21 +254,24 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let write_task = tokio::spawn(async move {
         loop {
             tokio::select! {
+                biased;
                 changed = writer_force_close_rx.changed() => {
                     if changed.is_ok() && *writer_force_close_rx.borrow() {
                         info!("Closing revoked WebSocket connection");
-                        let _ = ws_sender.send(Message::Close(None)).await;
                     }
                     break;
                 }
                 msg = out_rx.recv() => {
                     let Some(msg) = msg else { break };
-                    if !msg.text.is_empty()
-                        && ws_sender
-                            .send(Message::Text(msg.text.into()))
-                            .await
-                            .is_err()
-                    {
+                    if msg.text.is_empty() {
+                        continue;
+                    }
+                    let sent = tokio::select! {
+                        biased;
+                        _ = writer_force_close_rx.changed() => break,
+                        result = tokio::time::timeout(WRITE_TIMEOUT, ws_sender.send(Message::Text(msg.text.into()))) => result,
+                    };
+                    if !matches!(sent, Ok(Ok(()))) {
                         // The read half can remain open after a write-half
                         // failure. Wake the owner loop so it promptly removes
                         // routing/presence instead of leaving a half-open
@@ -246,6 +282,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 }
             }
         }
+        // Receiving Close queues Tungstenite's acknowledgement on the shared
+        // socket. The split writer must flush it before either half is dropped.
+        // This also sends Close when the server initiates disconnection.
+        let _ = tokio::time::timeout(SOCKET_CLOSE_GRACE, ws_sender.close()).await;
     });
 
     loop {
@@ -255,6 +295,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if changed.is_ok() && *force_close_rx.borrow() {
                     info!("Revoked WebSocket connection: conn_id={conn_id}");
                 }
+                break;
+            }
+            _ = tokio::time::sleep_until(authentication_deadline),
+                if !state.device_manager.has_connection(conn_id) => {
+                warn!("WebSocket authentication deadline exceeded: conn_id={conn_id}");
                 break;
             }
             msg = ws_receiver.next() => {
@@ -314,14 +359,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         task.abort();
     }
 
-    state.room_manager.on_disconnect(conn_id);
     let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
     if let Some((user_id, device_id)) = state.device_manager.unregister(conn_id) {
         // Best-effort: mark the device offline in the DB and notify peers.
         if !state.device_manager.is_device_online(&user_id, &device_id) {
-            if let Some(db) = state.db.as_ref() {
-                let _ = crate::db::DeviceRow::set_online(db, &user_id, &device_id, false).await;
-            }
+            let _ = crate::db::DeviceRow::set_online(&state.db, &user_id, &device_id, false).await;
         }
         state
             .device_manager
@@ -334,18 +376,29 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
     drop(_presence_projection_guard);
     drop(out_tx);
-    let _ = write_task.await;
+    finish_socket_writer(write_task).await;
     info!("WebSocket disconnected: conn_id={conn_id}");
 }
 
+async fn finish_socket_writer(mut write_task: tokio::task::JoinHandle<()>) {
+    if tokio::time::timeout(SOCKET_CLOSE_GRACE, &mut write_task)
+        .await
+        .is_err()
+    {
+        // A peer that stopped reading must not retain a detached writer and
+        // its queued messages after routing and presence have been removed.
+        warn!("WebSocket writer exceeded close deadline");
+        write_task.abort();
+        let _ = write_task.await;
+    }
+}
+
 fn ensure_device_token_revalidator(state: &AppState) {
-    let Some(db) = state.db.clone() else {
-        return;
-    };
+    let db = Arc::downgrade(&state.db);
     if !state.device_manager.claim_token_revalidator_start() {
         return;
     }
-    let device_manager = Arc::clone(&state.device_manager);
+    let device_manager = Arc::downgrade(&state.device_manager);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(DEVICE_TOKEN_REVALIDATION_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -354,6 +407,9 @@ fn ensure_device_token_revalidator(state: &AppState) {
         interval.tick().await;
         loop {
             interval.tick().await;
+            let (Some(db), Some(device_manager)) = (db.upgrade(), device_manager.upgrade()) else {
+                break;
+            };
             if let Err(error) = revalidate_active_device_tokens_once(&db, &device_manager).await {
                 warn!(%error, "Failed to revalidate active device tokens");
             }
@@ -449,8 +505,6 @@ async fn handle_text_message(
         }
     };
     let message_type = match &msg {
-        InboundMessage::CreateRoom { .. } => "create_room",
-        InboundMessage::RelayResponse { .. } => "relay_response",
         InboundMessage::Heartbeat => "heartbeat",
         InboundMessage::AuthConnect { .. } => "auth_connect",
         InboundMessage::DeviceMessage { .. } => "device_message",
@@ -461,84 +515,14 @@ async fn handle_text_message(
     );
 
     match msg {
-        InboundMessage::CreateRoom {
-            room_id,
-            device_id,
-            device_type,
-            public_key,
-        } => {
-            if state.device_manager.conn_mapping(conn_id).is_some() {
-                return reject_protocol(
-                    out_tx,
-                    "an authenticated device connection cannot create a pairing room",
-                );
-            }
-            if !is_valid_identifier(&device_id)
-                || !is_valid_display_text(&device_type, 32)
-                || !is_valid_display_text(&public_key, MAX_PUBLIC_KEY_BYTES)
-                || room_id
-                    .as_deref()
-                    .is_some_and(|value| !crate::relay::room::is_valid_room_id(value))
-            {
-                return reject_protocol(out_tx, "invalid room parameters");
-            }
-            let room_id = room_id.unwrap_or_else(generate_room_id);
-            let ok = state.room_manager.create_room(
-                &room_id,
-                conn_id,
-                &device_id,
-                &public_key,
-                out_tx.clone(),
-            );
-            if ok {
-                send_json(out_tx, &OutboundProtocol::RoomCreated { room_id }).await
-            } else {
-                send_json(
-                    out_tx,
-                    &OutboundProtocol::Error {
-                        message: "failed to create room".into(),
-                    },
-                )
-                .await
-            }
-        }
-
-        InboundMessage::RelayResponse {
-            correlation_id,
-            encrypted_data,
-            nonce,
-        } => {
-            if !is_valid_identifier(&correlation_id)
-                || !is_valid_encrypted_payload(&encrypted_data, &nonce)
-            {
-                return reject_protocol(out_tx, "invalid relay response");
-            }
-            debug!("RelayResponse from desktop conn_id={conn_id} corr={correlation_id}");
-            if !state.room_manager.resolve_pending_from_conn(
-                conn_id,
-                &correlation_id,
-                ResponsePayload {
-                    encrypted_data,
-                    nonce,
-                },
-            ) {
-                return reject_protocol(out_tx, "relay response does not match this room");
-            }
-            true
-        }
-
         InboundMessage::Heartbeat => {
-            // Account-authenticated device connections have no room; treat
-            // heartbeat as a keepalive ack when the conn is registered.
-            if state.room_manager.heartbeat(conn_id)
-                || state.device_manager.conn_mapping(conn_id).is_some()
-            {
+            if state.device_manager.conn_mapping(conn_id).is_some() {
                 send_json_best_effort(out_tx, &OutboundProtocol::HeartbeatAck)
             } else {
                 send_json_best_effort(
                     out_tx,
                     &OutboundProtocol::Error {
-                        message: "Room not found or expired".into(),
+                        message: "Device is not authenticated".into(),
                     },
                 )
             }
@@ -549,9 +533,7 @@ async fn handle_text_message(
             device_name,
             device_kind,
         } => {
-            if state.room_manager.has_connection(conn_id)
-                || state.device_manager.has_connection(conn_id)
-            {
+            if state.device_manager.has_connection(conn_id) {
                 return reject_protocol(out_tx, "connection is already authenticated");
             }
             if !crate::db::is_valid_auth_token(&token)
@@ -562,14 +544,7 @@ async fn handle_text_message(
             {
                 return reject_protocol(out_tx, "invalid authentication parameters");
             }
-            let Some(db) = state.db.as_ref() else {
-                return send_json_best_effort(
-                    out_tx,
-                    &OutboundProtocol::AuthError {
-                        message: "account features disabled".into(),
-                    },
-                );
-            };
+            let db = state.db.as_ref();
             let auth = match crate::db::AuthToken::find(db, &token).await {
                 Ok(Some(a)) => a,
                 _ => {
@@ -671,9 +646,11 @@ async fn handle_text_message(
 
             // First check: is this a response to a pending HTTP RPC?
             // If so, resolve the pending future and don't forward via WS.
-            let rpc_response = crate::relay::device_manager::RpcResponse {
-                encrypted_data: encrypted_data.clone(),
-                nonce: nonce.clone(),
+            let Some(rpc_response) = crate::relay::device_manager::RpcResponse::try_new(
+                encrypted_data.clone(),
+                nonce.clone(),
+            ) else {
+                return reject_protocol(out_tx, "response memory budget exhausted");
             };
             if state.device_manager.resolve_rpc(
                 &correlation_id,
@@ -917,7 +894,10 @@ async fn activate_pending_device_if_authorized(
 
 async fn send_json<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
     match serde_json::to_string(msg) {
-        Ok(json) => send_outbound_message(tx, OutboundMessage::text(json)).await,
+        Ok(json) => match OutboundMessage::try_text(&json) {
+            Some(message) => send_outbound_message(tx, message).await,
+            None => false,
+        },
         Err(e) => {
             warn!("Failed to serialize outbound websocket message: {e}");
             false
@@ -927,14 +907,19 @@ async fn send_json<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) ->
 
 fn send_json_best_effort<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
     match serde_json::to_string(msg) {
-        Ok(json) => match tx.try_send(OutboundMessage::text(json)) {
-            Ok(()) => true,
-            Err(TrySendError::Full(_)) => {
-                warn!("Outbound websocket queue is full; dropping best-effort control response");
-                true
+        Ok(json) => {
+            let Some(message) = OutboundMessage::try_text(&json) else {
+                return false;
+            };
+            match tx.try_send(message) {
+                Ok(()) => true,
+                Err(TrySendError::Full(_)) => {
+                    warn!("Outbound websocket queue is full; closing slow connection");
+                    false
+                }
+                Err(TrySendError::Closed(_)) => false,
             }
-            Err(TrySendError::Closed(_)) => false,
-        },
+        }
         Err(e) => {
             warn!("Failed to serialize outbound websocket message: {e}");
             false
@@ -942,13 +927,23 @@ fn send_json_best_effort<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: 
     }
 }
 
-fn generate_room_id() -> String {
-    let bytes: [u8; 6] = rand::random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn connection_slots_limit_one_ip_and_release_after_disconnect() {
+        let slots = super::IpConnectionSlots::default();
+        let mut permits: Vec<_> = (0..super::MAX_WEBSOCKET_CONNECTIONS_PER_IP)
+            .map(|_| slots.acquire("one").unwrap())
+            .collect();
+        assert!(slots.acquire("one").is_none());
+        assert!(slots.acquire("two").is_some());
+        permits.pop();
+        assert!(slots.acquire("one").is_some());
+        drop(permits);
+        let _other = slots.acquire("three").unwrap();
+        assert_eq!(slots.0.lock().unwrap().len(), 1);
+    }
+
     use super::{
         activate_pending_device_if_authorized, complete_pending_device_activation_if_authorized,
         is_valid_display_text, is_valid_encrypted_payload, is_valid_identifier,
@@ -961,14 +956,74 @@ mod tests {
     use axum::http::{header, HeaderMap};
     use tokio::sync::{mpsc, watch};
 
+    #[tokio::test]
+    async fn disconnect_releases_a_stalled_writer() {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (released_tx, released_rx) = tokio::sync::oneshot::channel::<()>();
+        let writer = tokio::spawn(async move {
+            let _resource = released_tx;
+            let _ = started_tx.send(());
+            std::future::pending::<()>().await;
+        });
+        started_rx.await.unwrap();
+        tokio::time::timeout(
+            super::SOCKET_CLOSE_GRACE + std::time::Duration::from_secs(1),
+            super::finish_socket_writer(writer),
+        )
+        .await
+        .expect("stalled writer must be cancelled and joined");
+        assert!(
+            released_rx.await.is_err(),
+            "writer resources must be dropped"
+        );
+    }
+
+    #[tokio::test]
+    async fn client_close_receives_ack_without_leaking_socket() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::{
+            protocol::{frame::coding::CloseCode, CloseFrame},
+            Message,
+        };
+
+        let app = crate::build_relay_router(
+            std::sync::Arc::new(crate::MemoryAssetStore::new()),
+            std::time::Instant::now(),
+            std::sync::Arc::new(crate::db::connect(":memory:").await.unwrap()),
+            "test",
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let (mut client, _) = tokio_tungstenite::connect_async(format!("ws://{address}/ws"))
+            .await
+            .unwrap();
+        let close = CloseFrame {
+            code: CloseCode::Normal,
+            reason: "completed".into(),
+        };
+        client
+            .send(Message::Close(Some(close.clone())))
+            .await
+            .unwrap();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(2), client.next())
+            .await
+            .expect("close acknowledgement deadline")
+            .expect("close acknowledgement frame")
+            .expect("clean WebSocket close");
+        assert_eq!(response, Message::Close(Some(close)));
+        server.abort();
+        let _ = server.await;
+    }
+
     #[test]
     fn best_effort_control_response_does_not_block_on_full_queue() {
         let (tx, _rx) = mpsc::channel(1);
         assert!(send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck));
 
         assert!(
-            send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck),
-            "full queue should drop best-effort control response without closing read loop"
+            !send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck),
+            "full queue must close a slow reader without blocking"
         );
     }
 
@@ -984,12 +1039,14 @@ mod tests {
     }
 
     #[test]
-    fn websocket_message_rate_is_effectively_unbounded() {
-        assert_eq!(MAX_MESSAGES_PER_WINDOW, i32::MAX as u32);
+    fn websocket_message_rate_rejects_over_budget_and_recovers() {
         let mut limiter = ConnectionRateLimiter::new();
-        for _ in 0..64 {
+        for _ in 0..MAX_MESSAGES_PER_WINDOW {
             assert!(limiter.allow());
         }
+        assert!(!limiter.allow());
+        limiter.window_started -= super::RATE_LIMIT_WINDOW;
+        assert!(limiter.allow());
     }
 
     #[test]
@@ -1022,9 +1079,7 @@ mod tests {
     #[tokio::test]
     async fn token_revoked_between_initial_validation_and_activation_is_rejected() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
@@ -1068,9 +1123,7 @@ mod tests {
     #[tokio::test]
     async fn expired_token_disconnects_active_and_pending_without_ghost_online_projection() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
@@ -1153,9 +1206,7 @@ mod tests {
     #[tokio::test]
     async fn external_token_revocation_reaper_disconnects_idle_device_and_updates_presence() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
@@ -1246,9 +1297,7 @@ mod tests {
     #[tokio::test]
     async fn token_expiring_during_durable_projection_never_receives_auth_ok() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
@@ -1297,9 +1346,7 @@ mod tests {
     #[tokio::test]
     async fn stale_auth_connect_cannot_recreate_a_deleted_device() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();
@@ -1333,9 +1380,7 @@ mod tests {
     #[tokio::test]
     async fn pending_device_becomes_routable_only_after_durable_projection() {
         let db = connect(":memory:").await.unwrap();
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "device-a", "owner", "Device A", None, None)
             .await
             .unwrap();

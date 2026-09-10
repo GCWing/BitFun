@@ -116,9 +116,15 @@ VITE_BUILD_TARGET=web pnpm --dir src/web-ui run build
 已保存的模型不会被删除，也可以手动填写服务商支持的模型 ID。
 
 反重力通过账号的 `fetchAvailableModels` 接口获取模型；Codex 使用订阅模型目录，
-保留公共 API 不提供的订阅专属模型。OpenCode 按 Go/Zen 和请求格式分别展示。
-xAI、Hermes 查询各自的模型接口；Hermes 的 `anthropic/*` 模型使用 Messages 协议
-和 Nous OAuth Bearer 认证。
+保留公共 API 不提供的订阅专属模型。OpenCode 只需选择 Go/Zen 和模型，OpenBitFun
+根据账号目录自动匹配 Chat Completions、Responses 或 Messages 协议。
+xAI、Hermes 查询各自的模型接口。Hermes 所有模型（包括 `anthropic/*`）使用
+Chat Completions 和 Nous OAuth Bearer 认证，与上游在原生 Messages 缓存问题解决前的
+默认路由保持一致。已保存的模型 ID 和订阅凭据继续有效。
+
+订阅登录会自动提供必需的认证头和账号头，即使旧模型配置使用了“替换自定义请求头”模式，
+也无需在模型编辑器中手动粘贴令牌或提供商身份请求头。这些适配仅对订阅模型启用，
+API Key 模型继续使用原有请求配置。
 
 模型是否可用以当前账号接口返回的 ID 为准。旧名称不一定代表底层模型没有更新，
 服务商公布的新模型也不保证对每种订阅或 OAuth 客户端开放。获取失败时会显示错误，

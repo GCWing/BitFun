@@ -89,6 +89,22 @@ impl AppServerClient {
         self.rpc(|cx| Ok(cx.send_request(request))).await
     }
 
+    pub async fn account_github_start(
+        &self,
+        request: AccountGitHubStartRequest,
+    ) -> Result<AccountGitHubStartResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
+    pub async fn account_github_poll(
+        &self,
+        request: AccountGitHubPollRequest,
+    ) -> Result<AccountGitHubPollResponse, ClientError> {
+        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
+            .await
+    }
+
     pub async fn account_login(
         &self,
         request: AccountLoginRequest,
@@ -97,49 +113,10 @@ impl AppServerClient {
             .await
     }
 
-    pub async fn account_finalize_login(
-        &self,
-        request: AccountFinalizeLoginRequest,
-    ) -> Result<AccountSnapshotResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
     pub async fn account_logout(
         &self,
         request: AccountLogoutRequest,
     ) -> Result<AccountSnapshotResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
-    pub async fn settings_sync_start(
-        &self,
-        request: SettingsSyncStartRequest,
-    ) -> Result<SettingsSyncResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
-    pub async fn settings_sync_snapshot(
-        &self,
-        request: SettingsSyncSnapshotRequest,
-    ) -> agent_client_protocol::Result<SettingsSyncResponse> {
-        self.rpc(|cx| Ok(cx.send_request(request))).await
-    }
-
-    pub async fn settings_sync_cancel(
-        &self,
-        request: SettingsSyncCancelRequest,
-    ) -> Result<SettingsSyncResponse, ClientError> {
-        self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
-            .await
-    }
-
-    pub async fn settings_sync_local_changed(
-        &self,
-        request: SettingsSyncLocalChangedRequest,
-    ) -> Result<SettingsSyncResponse, ClientError> {
         self.request_with_timeout(|cx| Ok(cx.send_request(request)), SIDE_EFFECT_TIMEOUT)
             .await
     }

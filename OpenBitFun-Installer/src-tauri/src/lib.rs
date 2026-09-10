@@ -21,6 +21,7 @@ pub fn run() {
             commands::set_theme_preference,
             commands::uninstall,
             commands::launch_application,
+            commands::launch_legacy_data_migrator,
             commands::close_installer,
         ])
         .run(tauri::generate_context!())

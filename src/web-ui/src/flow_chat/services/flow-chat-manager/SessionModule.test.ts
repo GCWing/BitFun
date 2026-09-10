@@ -137,14 +137,14 @@ function createSession(overrides: Partial<Session> = {}): Session {
     title: 'Saved session',
     dialogTurns: [],
     status: 'idle',
-    config: { agentType: 'agentic' },
+    config: { agentType: 'Standard' },
     createdAt: 1,
     lastActiveAt: 1,
     error: null,
     isHistorical: true,
     historyState: 'metadata-only',
     todos: [],
-    mode: 'agentic',
+    mode: 'Standard',
     workspacePath: 'D:/workspace/OpenBitFun',
     sessionKind: 'normal',
     parentSessionId: undefined,
@@ -202,9 +202,9 @@ function createContext(
         isHistorical: false,
         historyState: 'ready',
         config: {
-          agentType: agentType ?? (config?.agentType as string | undefined) ?? 'agentic',
+          agentType: agentType ?? (config?.agentType as string | undefined) ?? 'Standard',
         },
-        mode: agentType ?? 'agentic',
+        mode: agentType ?? 'Standard',
         workspacePath: workspacePath ?? (config?.workspacePath as string | undefined) ?? session.workspacePath,
         remoteConnectionId,
         remoteSshHost,
@@ -286,28 +286,60 @@ describe('resolveAgentTypeForSessionCreation', () => {
     vi.clearAllMocks();
   });
 
-  it('uses the configured default mode for internal agentic session creation', async () => {
-    configApiMocks.getConfig.mockResolvedValue('PlannerPlus');
+  it('uses the configured fixed mode when the caller requests the default', async () => {
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'fixed',
+      default_mode_id: 'PlannerPlus',
+    });
     agentApiMocks.getAvailableModes.mockResolvedValue([
-      { id: 'agentic' },
+      { id: 'Standard' },
       { id: 'PlannerPlus' },
     ]);
 
-    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('PlannerPlus');
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('PlannerPlus');
   });
 
-  it('does not override explicit non-agentic modes', async () => {
+  it('does not override any explicit mode, including the Standard Harness id', async () => {
     await expect(resolveAgentTypeForSessionCreation('Cowork', null)).resolves.toBe('Cowork');
+    await expect(resolveAgentTypeForSessionCreation('Standard', null)).resolves.toBe('Standard');
 
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();
     expect(agentApiMocks.getAvailableModes).not.toHaveBeenCalled();
   });
 
-  it('falls back to agentic when the configured default mode is unavailable', async () => {
-    configApiMocks.getConfig.mockResolvedValue('MissingMode');
-    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+  it('follows the most recent explicit ChatInput selection', async () => {
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'follow_last',
+      default_mode_id: 'Ultimate',
+      last_mode_id: 'Creative',
+    });
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'Standard' },
+      { id: 'Creative' },
+      { id: 'Ultimate' },
+    ]);
 
-    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('Creative');
+  });
+
+  it('preserves the fixed meaning of legacy default_mode_id config', async () => {
+    configApiMocks.getConfig.mockResolvedValue({ default_mode_id: 'PlannerPlus' });
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'Standard' },
+      { id: 'PlannerPlus' },
+    ]);
+
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('PlannerPlus');
+  });
+
+  it('falls back to agentic when the configured default mode is unavailable', async () => {
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'fixed',
+      default_mode_id: 'MissingMode',
+    });
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'Standard' }]);
+
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('Standard');
   });
 });
 
@@ -315,7 +347,7 @@ describe('createChatSession', () => {
   beforeEach(() => {
     configApiMocks.getConfig.mockResolvedValue(null);
     configManagerMocks.getConfigs.mockResolvedValue({});
-    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'Standard' }]);
     agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
   });
 
@@ -336,8 +368,8 @@ describe('createChatSession', () => {
       workspacePath: '/home/wsp/projects/Test',
     }));
 
-    const firstCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
-    const secondCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+    const firstCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'Standard');
+    const secondCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'Standard');
 
     await Promise.resolve();
     expect(agentApiMocks.createSession).not.toHaveBeenCalled();
@@ -367,7 +399,7 @@ describe('createChatSession', () => {
       firstCreate = createChatSession(
         first.context,
         { workspacePath: '/shared/repo' },
-        'agentic',
+        'Standard',
       );
       await vi.waitFor(() => {
         expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
@@ -377,7 +409,7 @@ describe('createChatSession', () => {
       secondCreate = createChatSession(
         second.context,
         { workspacePath: '/shared/repo' },
-        'agentic',
+        'Standard',
       );
       await vi.waitFor(() => {
         expect(agentApiMocks.createSession).toHaveBeenCalledTimes(2);
@@ -417,7 +449,7 @@ describe('createChatSession', () => {
       modelId: 'model-b',
     });
 
-    await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+    await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'Standard');
 
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
@@ -430,7 +462,7 @@ describe('createChatSession', () => {
       undefined,
       expect.any(String),
       64000,
-      'agentic',
+      'Standard',
       '/home/wsp/projects/Test',
       undefined,
       undefined,
@@ -458,7 +490,7 @@ describe('createChatSession', () => {
     await createChatSession(context, {
       workspacePath: '/home/wsp/projects/Test',
       modelName: 'model-a',
-    }, 'agentic');
+    }, 'Standard');
 
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
@@ -471,7 +503,7 @@ describe('createChatSession', () => {
       undefined,
       expect.any(String),
       32000,
-      'agentic',
+      'Standard',
       '/home/wsp/projects/Test',
       undefined,
       undefined,
@@ -501,7 +533,7 @@ describe('createChatSession', () => {
         displayName: 'build-host',
       },
       dispatchApprovalPolicy: 'reject-and-report',
-    }, 'agentic');
+    }, 'Standard');
 
     expect(sessionId).toEqual(expect.any(String));
     expect(agentApiMocks.createSession).not.toHaveBeenCalled();
@@ -517,7 +549,7 @@ describe('createChatSession', () => {
       undefined,
       expect.any(String),
       128128,
-      'agentic',
+      'Standard',
       '/source/repo',
       undefined,
       undefined,
@@ -560,7 +592,7 @@ describe('forkChatSession', () => {
     sessionApiMocks.forkSession.mockResolvedValueOnce({
       sessionId: 'remote-fork',
       sessionName: 'Remote fork',
-      agentType: 'agentic',
+      agentType: 'Standard',
     });
 
     await expect(forkChatSession(context, source.sessionId, 'turn-1'))
@@ -649,6 +681,19 @@ describe('SessionModule historical session coordination', () => {
     await switching;
 
     expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+  });
+
+  it('does not select a hydrated session after its scene navigation was cancelled', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    let relevant = true;
+    const switching = switchChatSession(context, 'history-1', () => relevant);
+    await Promise.resolve();
+    relevant = false;
+    load.resolve();
+    await switching;
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
   });
 
   it('activates a metadata-only historical session immediately when a recent user open intent exists', async () => {
@@ -1207,7 +1252,10 @@ describe('SessionModule historical session coordination', () => {
     expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
   });
 
-  it('cancels a speculative history-open transition when deleting its target', async () => {
+  it.each([
+    ['deleting', deleteChatSession],
+    ['archiving', archiveChatSession],
+  ] as const)('cancels a speculative history-open transition when %s its target', async (_action, removeSession) => {
     const historicalSession = createSession({
       sessionId: 'history-delete',
       isHistorical: true,
@@ -1223,7 +1271,7 @@ describe('SessionModule historical session coordination', () => {
       sessionId: historicalSession.sessionId,
     });
 
-    await deleteChatSession(context, historicalSession.sessionId);
+    await removeSession(context, historicalSession.sessionId);
 
     expect(getHistorySessionOpenTransitionSnapshot()).toBeNull();
   });
@@ -1263,7 +1311,7 @@ describe('SessionModule historical session coordination', () => {
     const session = createSession({
       sessionId: 'dispatch-session',
       isHistorical: false,
-      config: { agentType: 'agentic' },
+      config: { agentType: 'Standard' },
     });
     dispatchStoreMocks.jobs = {
       'job-1': { sessionId: session.sessionId },

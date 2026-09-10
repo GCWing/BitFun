@@ -81,7 +81,7 @@ export const InlineAiPreviewBlock: React.FC<InlineAiPreviewBlockProps> = ({
         {canAccept && (
           <Button
             type="button"
-            variant="fill"
+            variant="primary"
             size="sm"
             disabled={!canAccept}
             data-testid="md-inline-ai-accept"
@@ -94,7 +94,7 @@ export const InlineAiPreviewBlock: React.FC<InlineAiPreviewBlockProps> = ({
         )}
         <Button
           type="button"
-          variant="outline"
+          variant="fill"
           size="sm"
           data-testid="md-inline-ai-reject"
           onClick={onReject}

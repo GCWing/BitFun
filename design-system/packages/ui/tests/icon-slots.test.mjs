@@ -18,6 +18,7 @@ const slots = [
   ["KeyHint", "icon", "inline-size", "1em"],
   ["Input", "leading", "inline-size", "var(--_field-icon-size)"],
   ["Input", "trailing", "inline-size", "var(--_field-icon-size)"],
+  ["SearchField", "icon", "inline-size", "100%"],
   ["Select", "leading", "inline-size", "100%"],
   ["Select", "indicator", "inline-size", "100%"],
   ["StatusPill", "leading", "inline-size", "100%"],

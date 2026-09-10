@@ -138,8 +138,38 @@ describe('ExecProcessToolCardView', () => {
     expect(container.textContent).not.toContain('Receiving parameters...');
   });
 
-  it('shows waiting confirmation instead of receiving params while confirmation is pending', () => {
+  it('treats a non-zero exit code as command result data, not an execution failure', () => {
+    const nonZeroExitModel: ExecProcessCardModel = {
+      ...model,
+      resultOutput: 'npm ERR! test failed',
+      exitCode: 2,
+      wallTimeSeconds: 1.25,
+    };
+
     act(() => {
+      root.render(
+        <ExecProcessToolCardView
+          toolItem={toolItem('completed')}
+          model={nonZeroExitModel}
+        />,
+      );
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLElement>('[data-openbitfun-part="surface"][data-openbitfun-attention="prominent"]')
+        ?.click();
+    });
+
+    const exitCodeItem = Array.from(
+      container.querySelectorAll('[data-openbitfun-part="footer"] > span'),
+    ).find((item) => item.textContent?.includes('Exit code: 2'));
+    expect(exitCodeItem?.getAttribute('data-tone')).toBe('neutral');
+    expect(container.querySelector('.duration-text--completed-error')).toBeNull();
+    expect(container.querySelector('.duration-text--completed-success')).not.toBeNull();
+  });
+
+  it('shows waiting confirmation instead of receiving params while confirmation is pending', () => {    act(() => {
       root.render(<ExecProcessToolCardView toolItem={toolItem('pending_confirmation', true)} model={model} />);
     });
 

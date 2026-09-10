@@ -1,3 +1,4 @@
+import { themeCssVariables, themes, type ThemeTokenName } from '@openbitfun/theme-openbitfun';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
@@ -27,7 +28,87 @@ function hashAppearance(appearance: unknown): string {
     .digest('hex');
 }
 
+function statusContrast(content: string, tint: string, background: string): number {
+  const parse = (value: string): number[] => value.startsWith('#')
+    ? [1, 3, 5].map(offset => Number.parseInt(value.slice(offset, offset + 2), 16))
+    : value.match(/[\d.]+/g)!.map(Number);
+  const backdrop = parse(background);
+  const surface = parse(tint);
+  const alpha = surface[3] ?? 1;
+  const luminance = (rgb: number[]): number => rgb.map(channel => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const first = luminance(parse(content));
+  const second = luminance(backdrop.map((channel, index) => surface[index] * alpha + channel * (1 - alpha)));
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
 describe('builtin appearance preset output', () => {
+  it('keeps published light field states in root and chrome while preserving named palettes', () => {
+    const settings = getBuiltinAppearance('openbitfun-light')?.renderers?.['theme-tokens']?.settings;
+    for (const tokens of [settings?.tokens, settings?.scopes?.chrome].filter(Boolean)) {
+      for (const [name, value] of Object.entries(themes.light)) {
+        if (name.startsWith('color.field.') || name === 'color.actionCard.background' || name.startsWith('color.composer.')) expect(tokens?.[themeCssVariables[name as ThemeTokenName]]).toBe(value);
+      }
+    }
+    expect(settings?.tokens['--openbitfun-color-number-badge-background']).toBe(themes.light['color.numberBadge.background']);
+    expect(settings?.tokens['--openbitfun-color-key-hint-content']).toBe(themes.light['color.keyHint.content']);
+    expect(settings?.tokens['--openbitfun-color-scrollbar-thumb']).toBe(themes.light['color.scrollbar.thumb']);
+    expect(settings?.tokens['--openbitfun-color-field-border']).toBe('rgba(0, 0, 0, 0.08)');
+    expect(settings?.tokens['--openbitfun-color-field-border-hover']).toBe('rgba(0, 0, 0, 0.20)');
+    expect(settings?.tokens['--openbitfun-color-field-border-active']).toBe('rgba(0, 0, 0, 0.20)');
+    expect(settings?.tokens['--openbitfun-color-field-border-focus']).toBe(themes.light['color.field.borderFocus']);
+    expect(settings?.tokens['--openbitfun-color-field-group-background']).toBe('rgba(0, 0, 0, 0.03)');
+    expect(settings?.tokens['--openbitfun-color-field-placeholder']).toBe('rgba(0, 0, 0, 0.40)');
+    for (const palette of builtinAppearancePalettes) {
+      if (palette.id === 'openbitfun-light') continue;
+      const tokens = getBuiltinAppearanceThemeTokens(palette.id);
+      expect(tokens['--openbitfun-color-action-card-background']).toBe(palette.colors.element.base);
+      expect(tokens['--openbitfun-color-field-border']).toBe(palette.colors.border.base);
+      expect(tokens['--openbitfun-color-field-border-focus']).toBe(palette.colors.accent[500]);
+      expect(tokens['--openbitfun-color-field-border-active']).toBe(palette.colors.accent[500]);
+      expect(tokens['--openbitfun-color-field-group-background']).toBe(palette.colors.background.tertiary);
+      expect(tokens['--openbitfun-color-field-placeholder']).toBe(palette.colors.text.muted);
+    }
+  });
+  it('uses the public Button palette in default appearances without changing shared action colors', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const appearance = getBuiltinAppearance(`openbitfun-${mode}`);
+      const settings = appearance?.renderers?.['theme-tokens']?.settings;
+      for (const [name, value] of Object.entries(themes[mode])) {
+        if (!name.startsWith('component.button.')) continue;
+        expect(settings?.tokens[themeCssVariables[name as ThemeTokenName]]).toBe(value);
+      }
+    }
+    const light = getBuiltinAppearanceThemeTokens('openbitfun-light');
+    expect(light['--openbitfun-component-button-content']).toBe('rgba(0, 0, 0, 0.80)');
+    expect(light['--openbitfun-component-button-text-content']).toBe('#059cb0');
+    expect(light['--openbitfun-color-action-primary-background']).toBe('#101a27');
+    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.80)');
+  });
+
+  it('preserves the action colors of branded presets through the Button contract', () => {
+    for (const palette of builtinAppearancePalettes) {
+      if (palette.id === 'openbitfun-light' || palette.id === 'openbitfun-dark') continue;
+      const tokens = getBuiltinAppearanceThemeTokens(palette.id);
+      expect(tokens['--openbitfun-component-button-primary-background']).toBe(tokens['--openbitfun-color-action-primary-background']);
+      expect(tokens['--openbitfun-component-button-text-content']).toBe(tokens['--openbitfun-color-accent-default']);
+      expect(tokens['--openbitfun-component-button-content']).toBe(tokens['--openbitfun-color-action-neutral-content']);
+    }
+  });
+
+  it('keeps menu label and caption colors consistent between the public light theme and product portals', () => {
+    const settings = getBuiltinAppearance('openbitfun-light')!.renderers!['theme-tokens']!.settings;
+    for (const tokens of [settings.tokens, ...(settings.scopes?.chrome ? [settings.scopes.chrome] : [])]) {
+      expect(tokens['--openbitfun-color-action-neutral-content']).toBe(themes.light['color.action.neutral.content']);
+      expect(tokens['--openbitfun-color-content-caption']).toBe(themes.light['color.content.caption']);
+    }
+    for (const palette of builtinAppearancePalettes.filter(p => p.id !== 'openbitfun-light')) {
+      expect(getBuiltinAppearanceThemeTokens(palette.id)['--openbitfun-color-action-neutral-content']).toBe(palette.colors.text.secondary);
+    }
+  });
+
   it('formats hex palette references as stable rgb strings', () => {
     expect(rgbFromHex('#00e6ff')).toBe('rgb(0, 230, 255)');
     expect(rgbaFromHex('#00e6ff', 0.12)).toBe('rgba(0, 230, 255, 0.12)');
@@ -36,27 +117,44 @@ describe('builtin appearance preset output', () => {
     expect(overlayWhite(0.08)).toBe('rgba(255, 255, 255, 0.08)');
   });
 
-  it('aliases staged git colors to added colors unless an appearance overrides them', () => {
-    expect(createGitColors({
-      branch: '#64748b',
-      branchBg: 'rgba(100, 116, 139, 0.1)',
-      changes: '#f59e0b',
-      added: '#22c55e',
-      deleted: '#ef4444',
-    })).toMatchObject({
-      staged: '#22c55e',
-    });
-
-    expect(createGitColors({
-      branch: '#64748b',
-      branchBg: 'rgba(100, 116, 139, 0.1)',
-      changes: '#f59e0b',
-      added: '#22c55e',
-      deleted: '#ef4444',
-      staged: '#10b981',
-    })).toMatchObject({
-      staged: '#10b981',
-    });
+  it('uses the shared design-system palette for every builtin status and git lifecycle', () => {
+    for (const appearance of builtinAppearancePalettes) {
+      const mode = appearance.type;
+      const values = themes[mode];
+      const tokens = getBuiltinAppearanceThemeTokens(appearance.id);
+      for (const [key, tone] of [['success', 'success'], ['warning', 'warning'], ['error', 'danger'], ['info', 'info']] as const) {
+        expect(appearance.colors.semantic[key]).toBe(values[`color.status.${tone}.content`]);
+        expect(appearance.colors.semantic[`${key}Bg`]).toBe(values[`color.status.${tone}.surface`]);
+        expect(appearance.colors.semantic[`${key}Border`]).toBe(values[`color.status.${tone}.border`]);
+        for (const role of ['emphasis', 'content', 'surface', 'border'] as const) {
+          expect(tokens[`--openbitfun-color-status-${tone}-${role}`]).toBe(values[`color.status.${tone}.${role}`]);
+        }
+      }
+      expect(appearance.colors.git).toMatchObject({
+        added: values['color.codeChange.added'],
+        staged: values['color.codeChange.added'],
+        deleted: values['color.codeChange.removed'],
+        changes: values['color.status.warning.emphasis'],
+      });
+      expect(createGitColors(mode, { branch: 'currentColor', branchBg: 'transparent' })).toMatchObject(
+        { ...appearance.colors.git, branch: 'currentColor', branchBg: 'transparent' },
+      );
+      expect(createSemanticColors(mode)).toEqual(appearance.colors.semantic);
+      const chromeTokens = getBuiltinAppearance(appearance.id)?.renderers?.['theme-tokens']?.settings.scopes?.chrome;
+      for (const tone of ['info', 'success', 'warning', 'danger'] as const) {
+        const contentKey = `--openbitfun-color-status-${tone}-content` as const;
+        const surfaceKey = `--openbitfun-color-status-${tone}-surface` as const;
+        for (const background of Object.values(appearance.colors.background)) {
+          expect(statusContrast(tokens[contentKey], tokens[surfaceKey], background), `${appearance.id} ${tone}`).toBeGreaterThanOrEqual(4.5);
+        }
+        if (chromeTokens && appearance.colors.chrome) {
+          expect(chromeTokens[contentKey]).toBe(themes[appearance.colors.chrome.type ?? mode][`color.status.${tone}.content`]);
+          for (const background of Object.values(appearance.colors.chrome.background)) {
+            expect(statusContrast(chromeTokens[contentKey], chromeTokens[surfaceKey], background), `${appearance.id} chrome ${tone}`).toBeGreaterThanOrEqual(4.5);
+          }
+        }
+      }
+    }
   });
 
   it('derives repeated palette families from compact authoring inputs', () => {
@@ -82,20 +180,6 @@ describe('builtin appearance preset output', () => {
       200: 'rgba(139, 92, 246, 0.15)',
       500: '#8b5cf6',
       600: '#7c3aed',
-    });
-
-    expect(createSemanticColors({
-      success: '#34d399',
-      warning: '#f59e0b',
-      error: '#ef4444',
-      info: '#a1a1aa',
-    })).toMatchObject({
-      successBg: 'rgba(52, 211, 153, 0.1)',
-      successBorder: 'rgba(52, 211, 153, 0.3)',
-      warningBg: 'rgba(245, 158, 11, 0.1)',
-      errorBorder: 'rgba(239, 68, 68, 0.3)',
-      infoBg: 'rgba(161, 161, 170, 0.1)',
-      infoBorder: 'rgba(161, 161, 170, 0.3)',
     });
   });
 
@@ -153,16 +237,7 @@ describe('builtin appearance preset output', () => {
           600: '#1c1c1f',
           700: '#000000',
         },
-        semantic: {
-          success: '#247344',
-          successBg: '#e1fbe9',
-          successBorder: '#247344',
-          error: '#a74352',
-          errorBg: 'rgba(167, 67, 82, 0.12)',
-          info: '#555555',
-          infoBg: '#f3f3f5',
-          infoBorder: 'rgba(16, 26, 39, 0.15)',
-        },
+        semantic: createSemanticColors('light'),
         border: {
           base: 'rgba(16, 26, 39, 0.15)',
         },
@@ -355,47 +430,47 @@ describe('builtin appearance preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "1fe3b2d75f26bcc2f5ba7a060798ccd4893ab0e6a243e4dbcbd1ea20b3774b05",
+          "hash": "7a71a12624784e4fa3ca06b77e7ad1b8386d28e05e9a478f27fd3e682463a1ca",
           "id": "openbitfun-light",
           "type": "light",
         },
         {
-          "hash": "3a0a60eabad8363abaded31051a4e5a7aaeb5a22ee12fbd81f81c6f2e1ed44a9",
+          "hash": "84df9245dff376b4169cb0c44109d9c44e48b2312d33df71f3d7d4ca384e82bb",
           "id": "openbitfun-monochrome",
           "type": "light",
         },
         {
-          "hash": "af8895255a3a21481063077505cf70d60c13105fbc446d8c6860a86041bd1e47",
+          "hash": "0bbe55d609c2f15b58da7d0aca7c23bc145aaadc96a9394a558c7eda8d4d4566",
           "id": "openbitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "bc97870416ab67aa59fa362f75b4f5bf3397112ea3d7c3ed7ec340cd031d70cb",
+          "hash": "1b5fb0a08134bdaaa9022f453532cffff4231df97dbcdc3a757cf2401b1cc638",
           "id": "openbitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "326680e416018b02899682a3903b6a17e81099e50553386bf018f22d21c8a13e",
+          "hash": "f1b0516be11dbd02eb1c3b204806e2212b3fa78d1fcf18912d2fee99f257d51d",
           "id": "openbitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "8b4f1e1437d1105c0033ec2ac7a3191e318ca0329521933a2bbe7f9aad715345",
+          "hash": "db979037b2785c346b5fa06905aa84db43bcb39217e123f26cd6aad2231248a8",
           "id": "openbitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "661f9bbd92c166cd3e18d931fa2072547223abbe2a39b03be81d3cdfea147b95",
+          "hash": "30a425ebcf4e4121e8a426c1dca981944d99b0523c21477cbe6c59b111e11b0e",
           "id": "openbitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "e06490cefa484ce9765e0ac199440f9d9ccedf05f3b5d35acd47ce3fd9a02257",
+          "hash": "b82c17ad7f03db017974d4a300294f4efd11bb06a56150c5217b24fa1be37614",
           "id": "openbitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "e6647f3450dba47be1059bea47c06bbc6463461636079e85b73446ae9a8afcb4",
+          "hash": "7016e6d424172f8ed84a4263263c09491ab905a829f26f970aad4a48d723b05d",
           "id": "openbitfun-tokyo-night",
           "type": "dark",
         },

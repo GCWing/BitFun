@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 ;
-import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 interface ShellNavWorkspaceSwitcherProps {
@@ -48,7 +48,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
         content={hasMultipleWorkspaces ? switchWorkspaceLabel : workspaceName}
         placement="bottom"
       >
-        <button
+        <button data-overflow-trigger
           ref={workspaceTriggerRef}
           type="button"
           className={`openbitfun-shell-nav__workspace-trigger${workspaceMenuOpen ? ' is-active' : ''}${hasMultipleWorkspaces ? ' is-switchable' : ''}`}
@@ -57,7 +57,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
           aria-expanded={hasMultipleWorkspaces ? workspaceMenuOpen : undefined}
         >
           <span className="openbitfun-shell-nav__workspace-separator">/</span>
-          <span className="openbitfun-shell-nav__workspace-name">{workspaceName}</span>
+          <OverflowText className="openbitfun-shell-nav__workspace-name">{workspaceName}</OverflowText>
           {hasMultipleWorkspaces ? (
             <Icon name="chevron-down" size="xs" className="openbitfun-shell-nav__workspace-trigger-icon" />
           ) : null}
@@ -86,7 +86,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
                     placement="right"
                     disabled={!workspace.rootPath}
                   >
-                    <MenuItem
+                    <MenuItem data-overflow-trigger
                       role="menuitemradio"
                       checked={isActive}
                       reserveLeadingSpace
@@ -97,7 +97,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
                       ) : undefined}
                       onClick={() => { void onSelectWorkspace(workspace.id); }}
                     >
-                      <span className="openbitfun-shell-nav__workspace-menu-text">{label}</span>
+                      <OverflowText className="openbitfun-shell-nav__workspace-menu-text">{label}</OverflowText>
                     </MenuItem>
                   </Tooltip>
                 );

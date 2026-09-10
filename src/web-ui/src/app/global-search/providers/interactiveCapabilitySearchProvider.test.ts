@@ -17,22 +17,18 @@ function request(query: string): GlobalSearchRequest {
 }
 
 describe('interactiveCapabilitySearchProvider', () => {
-  it('hides suspended Flashgrep controls while keeping session-title controls', async () => {
+  it('restores accelerated search in the settings catalog', () => {
     const capability = INTERACTIVE_CAPABILITY_CATALOG.capabilities.find(
       ({ id }) => id === 'setting.workspace.session',
     );
-    expect(capability?.options.map(({ id }) => id)).toEqual(['session-title-generation']);
-    expect(capability?.items.some(({ id }) => id === 'accelerated-search' || id === 'search-index'))
-      .toBe(false);
-    for (const query of ['Flashgrep', 'accelerated workspace search']) {
-      const result = await interactiveCapabilitySearchProvider.search(
-        request(query), new AbortController().signal,
-      );
-      if (query === 'Flashgrep') expect(result.items).toEqual([]);
-      expect(result.items.some(({ target }) => target.kind === 'capability'
-        && (target.itemId === 'accelerated-search' || target.itemId === 'search-index')))
-        .toBe(false);
-    }
+    expect(capability?.options.some(({ id }) => id === 'workspace-search')).toBe(true);
+    expect(capability?.items.some(({ id }) => id === 'accelerated-search')).toBe(true);
+  });
+  it('hides Flashgrep search entries for remote workspaces', async () => {
+    const query = request('Flashgrep');
+    query.currentWorkspace = { workspaceKind: 'remote' } as typeof query.currentWorkspace;
+    const result = await interactiveCapabilitySearchProvider.search(query, new AbortController().signal);
+    expect(result.items).toEqual([]);
   });
   it('uses the curated feature-and-settings contract', () => {
     expect(INTERACTIVE_CAPABILITY_CATALOG.capabilities).toHaveLength(

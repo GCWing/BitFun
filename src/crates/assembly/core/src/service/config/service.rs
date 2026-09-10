@@ -3,7 +3,7 @@
 //! Provides comprehensive configuration management functionality.
 
 use super::manager::{
-    validate_current_config_value, validate_openbitfun_product_version, ConfigManager,
+    validate_current_config_value, validate_openbitfun_product_identity, ConfigManager,
     ConfigManagerSettings, ConfigStatistics,
 };
 use super::types::*;
@@ -64,18 +64,8 @@ impl<'de> Deserialize<'de> for ConfigExport {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ConfigImportSource {
-    Explicit,
-    AccountSync,
-}
-
 fn validate_config_export(export: &ConfigExport) -> OpenBitFunResult<()> {
-    validate_openbitfun_product_version(
-        &export.product_id,
-        &export.version,
-        "Configuration export",
-    )?;
+    validate_openbitfun_product_identity(&export.product_id, "Configuration export")?;
     if export.format_version != CURRENT_CONFIG_EXPORT_FORMAT_VERSION {
         return Err(OpenBitFunError::validation(format!(
             "Configuration export format_version must be {CURRENT_CONFIG_EXPORT_FORMAT_VERSION}, found {}",
@@ -375,41 +365,6 @@ impl ConfigService {
         &self,
         export: ConfigExport,
     ) -> OpenBitFunResult<ConfigImportResult> {
-        self.import_config_from_source(export, ConfigImportSource::Explicit, None)
-            .await
-    }
-
-    /// Applies a complete current-format OpenBitFun account settings export.
-    pub async fn import_account_settings(
-        &self,
-        export: ConfigExport,
-    ) -> OpenBitFunResult<ConfigImportResult> {
-        self.import_config_from_source(export, ConfigImportSource::AccountSync, None)
-            .await
-    }
-
-    /// A periodic pull may spend seconds on the network. Apply its response
-    /// only if the local document still matches the pre-fetch snapshot, with
-    /// the comparison and import protected by the same manager write lock.
-    pub async fn import_account_settings_if_unchanged(
-        &self,
-        export: ConfigExport,
-        expected_local_config: serde_json::Value,
-    ) -> OpenBitFunResult<ConfigImportResult> {
-        self.import_config_from_source(
-            export,
-            ConfigImportSource::AccountSync,
-            Some(expected_local_config),
-        )
-        .await
-    }
-
-    async fn import_config_from_source(
-        &self,
-        export: ConfigExport,
-        source: ConfigImportSource,
-        expected_local_config: Option<serde_json::Value>,
-    ) -> OpenBitFunResult<ConfigImportResult> {
         if let Err(error) = validate_config_export(&export) {
             return Ok(ConfigImportResult {
                 success: false,
@@ -420,15 +375,6 @@ impl ConfigService {
         let config_data = serde_json::to_value(export.config)?;
         let import_result = {
             let mut manager = self.manager.write().await;
-            if let Some(expected) = expected_local_config {
-                if manager.export_config()? != expected {
-                    return Ok(ConfigImportResult {
-                        success: false,
-                        errors: vec!["Local settings changed while cloud settings were being fetched; skipped the stale response".to_string()],
-                        warnings: Vec::new(),
-                    });
-                }
-            }
             manager.import_config(config_data).await
         };
 
@@ -440,9 +386,7 @@ impl ConfigService {
                 .await;
                 #[cfg(feature = "web-tools")]
                 self.refresh_web_search_runtime().await;
-                if source == ConfigImportSource::Explicit {
-                    self.local_changes.send_replace(());
-                }
+                self.local_changes.send_replace(());
                 Ok(ConfigImportResult {
                     success: true,
                     errors: Vec::new(),
@@ -1044,91 +988,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prerelease_config_survives_load_save_and_restart() {
-        for version in ["1.0.0-beta.1", "1.0.0-nightly.20260906"] {
-            let name = "prerelease-config-restart";
-            let (service, dir) = test_service(name).await;
-            let mut config: GlobalConfig = service.get_config(None).await.unwrap();
-            config.version = version.to_string();
-            config.app.language = "zh-CN".to_string();
-            drop(service);
-
-            let config_file = dir.path().join(name).join("config").join("app.json");
-            let original = serde_json::to_string_pretty(&config).unwrap();
-            tokio::fs::write(&config_file, &original).await.unwrap();
-            let service = restart_test_service(&dir, name).await;
-            let loaded: GlobalConfig = service.get_config(None).await.unwrap();
-            assert_eq!(loaded.version, version);
-            assert_eq!(loaded.app.language, "zh-CN");
-            assert_eq!(
-                tokio::fs::read_to_string(&config_file).await.unwrap(),
-                original
-            );
-
-            service.set_config("app.language", &"en-US").await.unwrap();
-            drop(service);
-            let restarted = restart_test_service(&dir, name).await;
-            let saved: GlobalConfig = restarted.get_config(None).await.unwrap();
-            assert_eq!(saved.version, env!("CARGO_PKG_VERSION"));
-            assert_eq!(saved.app.language, "en-US");
-        }
-    }
-
-    #[tokio::test]
-    async fn prerelease_exports_support_explicit_import_and_account_settings() {
-        for version in ["1.0.0-beta.1", "1.0.0-nightly.20260906"] {
-            for account_sync in [false, true] {
-                let (service, _dir) = test_service("prerelease-config-import").await;
-                let mut export = current_export(GlobalConfig::default());
-                export.version = version.to_string();
-                export.config.version = version.to_string();
-                export.config.app.language = "zh-CN".to_string();
-                let export: ConfigExport =
-                    serde_json::from_str(&serde_json::to_string(&export).unwrap()).unwrap();
-
-                let imported = if account_sync {
-                    service.import_account_settings(export).await.unwrap()
-                } else {
-                    service.import_config(export).await.unwrap()
-                };
-                assert!(imported.success, "{:?}", imported.errors);
-                let config: GlobalConfig = service.get_config(None).await.unwrap();
-                assert_eq!(config.app.language, "zh-CN");
-                assert_eq!(config.version, env!("CARGO_PKG_VERSION"));
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn pre_1_0_exports_are_rejected_without_changing_current_config() {
-        for account_sync in [false, true] {
-            let (service, _dir) = test_service("pre-1-export-rejected").await;
-            let mut local = GlobalConfig::default();
-            local.app.hooks.enabled = false;
-            service.set_config("", &local).await.unwrap();
-            let before: serde_json::Value = service.get_config(None).await.unwrap();
-
-            let mut export = current_export(GlobalConfig::default());
-            export.version = "0.2.18".to_string();
-            let imported = if account_sync {
-                service.import_account_settings(export).await.unwrap()
-            } else {
-                service.import_config(export).await.unwrap()
-            };
-            assert!(!imported.success);
-            assert!(imported.errors[0].contains("predates OpenBitFun 1.0.0"));
-            let after: serde_json::Value = service.get_config(None).await.unwrap();
-            assert_eq!(after, before);
-        }
-    }
-
-    #[tokio::test]
     async fn imports_still_honor_explicit_deletions_and_default_elision_in_backups() {
-        for account_sync in [false, true] {
+        for typed_export in [false, true] {
             let (service, _dir) = test_service("import-explicit-deletions").await;
             // A raw backup intentionally omits these default values. Restoring
-            // it must still reset them, even though legacy missing fixed fields
-            // now retain their local values.
+            // it must still reset them to the declared defaults.
             let backup = service.create_backup().await.unwrap();
             let raw_backup: serde_json::Value =
                 serde_json::from_slice(&tokio::fs::read(backup).await.unwrap()).unwrap();
@@ -1153,7 +1017,7 @@ mod tests {
             local.app.notifications.enabled = false;
             service.set_config("", &local).await.unwrap();
 
-            let mut incoming = if account_sync {
+            let mut incoming = if typed_export {
                 serde_json::to_value(GlobalConfig::default()).unwrap()
             } else {
                 raw_backup
@@ -1162,11 +1026,7 @@ mod tests {
             incoming["ai"]["agent_model_defaults"]["subagents"]["builtin"] = serde_json::json!({});
             incoming["workspace"]["exclude_patterns"] = serde_json::json!([]);
             let export = current_export(serde_json::from_value(incoming).unwrap());
-            let result = if account_sync {
-                service.import_account_settings(export).await.unwrap()
-            } else {
-                service.import_config(export).await.unwrap()
-            };
+            let result = service.import_config(export).await.unwrap();
             assert!(result.success, "{:?}", result.errors);
             let saved: GlobalConfig = service.get_config(None).await.unwrap();
             assert!(saved.mcp_servers.is_none());
@@ -1196,127 +1056,137 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_change_notifications_cover_mutations_without_echoing_cloud_restores() {
-        let (service, _dir) = test_service("config-local-notifications").await;
-        let mut changes = service.subscribe_local_changes();
-        assert!(!changes.has_changed().unwrap());
+    async fn config_export_round_trip_covers_persisted_preference_groups() {
+        use serde_json::json;
 
-        service
-            .set_config("app.notifications.enabled", false)
-            .await
-            .unwrap();
-        assert!(changes.has_changed().unwrap());
-        changes.borrow_and_update();
-
-        service
-            .update_config("ai.skill_settings", |settings: &mut SkillSettingsConfig| {
-                settings
-                    .globally_disabled_user_skills
-                    .push("user::fixture".to_string());
-                Ok(())
-            })
-            .await
-            .unwrap();
-        assert!(changes.has_changed().unwrap());
-        changes.borrow_and_update();
-
-        let snapshot: serde_json::Value = service.get_config(None).await.unwrap();
-        assert!(
-            service
-                .import_account_settings(current_export(
-                    serde_json::from_value(snapshot.clone()).unwrap(),
-                ))
-                .await
-                .unwrap()
-                .success
-        );
-        service.reload().await.unwrap();
-        assert!(
-            !changes.has_changed().unwrap(),
-            "Cloud imports must not start an upload feedback loop"
-        );
-
-        assert!(
-            service
-                .import_config(current_export(serde_json::from_value(snapshot).unwrap()))
-                .await
-                .unwrap()
-                .success
-        );
-        assert!(changes.has_changed().unwrap());
-        changes.borrow_and_update();
-
-        service
-            .reset_config(Some("app.notifications"))
-            .await
-            .unwrap();
-        assert!(changes.has_changed().unwrap());
-        changes.borrow_and_update();
-
-        service
-            .install_runtime_ai_model(runtime_model("ephemeral", "runtime-fixture-key"))
-            .await
-            .unwrap();
-        assert!(
-            !changes.has_changed().unwrap(),
-            "Runtime-only credentials must not be synced"
-        );
-
-        service.save_cloud_speech_config(serde_json::from_value(serde_json::json!({
-            "preset": "custom", "name": "Speech fixture", "baseUrl": "https://example.com/v1",
-            "modelName": "speech-fixture", "apiKey": "speech-fixture-key"
-        })).unwrap()).await.unwrap();
-        assert!(changes.has_changed().unwrap());
-    }
-
-    #[tokio::test]
-    async fn stale_cloud_pull_cannot_overwrite_a_save_made_during_the_fetch() {
-        let name = "config-stale-cloud-pull";
-        let (service, dir) = test_service(name).await;
-        let before_fetch: serde_json::Value = service.get_config(None).await.unwrap();
-        let mut cloud = before_fetch.clone();
-        cloud["app"]["voice_call"]["api_key"] = serde_json::json!("old-cloud-fixture-key");
-
-        let (saved, imported) = race_config_operations(
-            &service,
-            service.set_config("app.voice_call.api_key", "new-local-fixture-key"),
-            service.import_account_settings_if_unchanged(
-                current_export(serde_json::from_value(cloud.clone()).unwrap()),
-                before_fetch,
+        let (source, _source_dir) = test_service("sync-coverage-source").await;
+        let (target, target_dir) = test_service("sync-coverage-target").await;
+        let mut changes = source.subscribe_local_changes();
+        let fixtures = vec![
+            ("app.language", json!("en-US")),
+            ("app.prevent_sleep", json!(true)),
+            ("app.notifications.enabled", json!(false)),
+            ("app.logging.include_sensitive_diagnostics", json!(true)),
+            ("app.sidebar.width", json!(280)),
+            ("app.right_panel.width", json!(420)),
+            ("app.flow_chat.show_permission_mode_control", json!(false)),
+            ("app.hooks.project_hooks_enabled", json!(true)),
+            (
+                "app.keybindings",
+                json!({"version": 1, "overrides": {"session.new": {"key": "n", "alt": true}}}),
             ),
-        )
-        .await;
-        saved.unwrap();
-        let imported = imported.unwrap();
-        assert!(!imported.success);
-        assert!(imported.errors[0].contains("Local settings changed"));
-        let restarted = restart_test_service(&dir, name).await;
-        assert_eq!(
-            restarted
-                .get_config::<String>(Some("app.voice_call.api_key"))
-                .await
-                .unwrap(),
-            "new-local-fixture-key"
-        );
-
-        // A later pull with a current snapshot is still authoritative.
-        let current = service.get_config(None).await.unwrap();
+            (
+                "app.user_tool_groups",
+                json!({"version": 1, "groups": [{"id": "tools", "name": "Tools", "toolNames": ["Read"]}]}),
+            ),
+            (
+                "app.user_skill_groups",
+                json!({"version": 1, "groups": [{"id": "skills", "name": "Skills", "skillKeys": ["user::fixture"]}]}),
+            ),
+            (
+                "app.ai_experience.quick_actions",
+                json!([{"id": "fixture", "label": "Fixture", "prompt": "Check changes", "enabled": false}]),
+            ),
+            (
+                "app.voice_call",
+                serde_json::to_value(realtime_voice_fixture()).unwrap(),
+            ),
+            ("editor.font_size", json!(18)),
+            ("editor.format_on_save", json!(true)),
+            ("terminal.font_size", json!(17)),
+            ("terminal.terminal_panel_position", json!("bottom")),
+            ("workspace.exclude_patterns", json!(["**/fixture-cache/**"])),
+            (
+                "ai.models",
+                serde_json::to_value(vec![runtime_model("fixture-model", "fixture-model-key")])
+                    .unwrap(),
+            ),
+            ("ai.default_models.primary", json!("fixture-model")),
+            (
+                "ai.agent_profiles",
+                json!({"fixture-profile": {"profile_id": "fixture-profile", "added_tools": ["Read"], "disabled_user_skills": ["user::fixture"]}}),
+            ),
+            (
+                "ai.skill_settings.globally_disabled_user_skills",
+                json!(["user::fixture"]),
+            ),
+            ("ai.subagent_max_concurrency", json!(3)),
+            ("ai.stream_idle_timeout_secs", json!(123)),
+            ("ai.web_search.provider", json!("tavily")),
+            ("ai.allow_tool_json_repair", json!(false)),
+            ("tool_permissions.interaction.auto_approve_ask", json!(true)),
+            ("memories.use_memories", json!(true)),
+            (
+                "mcp_servers",
+                json!({"mcpServers": {"fixture": {"command": "fixture", "env": {"TOKEN": "fixture-mcp-key"}}}}),
+            ),
+            (
+                "acp_clients",
+                json!({"acpClients": {"fixture": {"command": "fixture"}}}),
+            ),
+            (
+                "plugin",
+                json!([{"spec": "fixture-package@1.0.0", "options": {"enabled": true}}]),
+            ),
+            ("appearance.selection", json!("fixture-appearance")),
+            (
+                "font",
+                json!({"uiSize": {"level": "custom", "customPx": 17}}),
+            ),
+        ];
+        for (path, value) in &fixtures {
+            source.set_config(path, value).await.unwrap();
+            assert!(
+                changes.has_changed().unwrap(),
+                "Missing configuration change signal: {path}"
+            );
+            changes.borrow_and_update();
+        }
+        // Use the serialized wire payload, not a typed in-memory shortcut.
+        let payload = serde_json::to_string(&source.export_config().await.unwrap()).unwrap();
+        let target_changes = target.subscribe_local_changes();
+        let result = target
+            .import_config(serde_json::from_str(&payload).unwrap())
+            .await
+            .unwrap();
+        assert!(result.success, "{:?}", result.errors);
         assert!(
-            service
-                .import_account_settings_if_unchanged(
-                    current_export(serde_json::from_value(cloud).unwrap()),
-                    current,
-                )
-                .await
-                .unwrap()
-                .success
+            target_changes.has_changed().unwrap(),
+            "Explicit import must notify local changes"
         );
+        drop(target);
+        let restarted = restart_test_service(&target_dir, "sync-coverage-target").await;
+        for (path, expected) in fixtures {
+            let actual: serde_json::Value = restarted.get_config(Some(path)).await.unwrap();
+            // Agent profile defaults are materialized by serde; compare their
+            // complete source representation just like all other sections.
+            let source_value: serde_json::Value = source.get_config(Some(path)).await.unwrap();
+            assert_eq!(
+                actual, source_value,
+                "Settings lost in export/import/restart: {path}"
+            );
+            if path != "ai.agent_profiles" && path != "ai.models" {
+                assert_eq!(
+                    actual, expected,
+                    "Setting was dropped before export: {path}"
+                );
+            }
+        }
+        let mut source_config =
+            serde_json::to_value(source.export_config().await.unwrap().config).unwrap();
+        let mut target_config =
+            serde_json::to_value(restarted.export_config().await.unwrap().config).unwrap();
+        source_config
+            .as_object_mut()
+            .unwrap()
+            .remove("last_modified");
+        target_config
+            .as_object_mut()
+            .unwrap()
+            .remove("last_modified");
         assert_eq!(
-            service
-                .get_config::<String>(Some("app.voice_call.api_key"))
-                .await
-                .unwrap(),
-            "old-cloud-fixture-key"
+            source_config, target_config,
+            "Full settings document must round-trip"
         );
     }
 
@@ -1382,7 +1252,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn current_account_export_is_an_authoritative_replacement() {
+    async fn current_export_is_an_authoritative_replacement() {
         let name = "current-account-export";
         let (service, dir) = test_service(name).await;
         service
@@ -1393,7 +1263,7 @@ mod tests {
         let mut incoming = GlobalConfig::default();
         incoming.ai.models = vec![runtime_model("cloud-model", "fixture-cloud-model-key")];
         let imported = service
-            .import_account_settings(current_export(incoming))
+            .import_config(current_export(incoming))
             .await
             .unwrap();
         assert!(imported.success, "{:?}", imported.errors);
@@ -1411,7 +1281,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn realtime_voice_account_sync_updates_keys_and_backs_up_the_previous_file() {
+    async fn realtime_voice_import_updates_keys_and_backs_up_the_previous_file() {
         let name = "realtime-voice-account-update";
         let (service, dir) = test_service(name).await;
         service
@@ -1430,7 +1300,7 @@ mod tests {
             ..Default::default()
         };
         let imported = service
-            .import_account_settings(current_export(incoming))
+            .import_config(current_export(incoming))
             .await
             .unwrap();
         assert!(imported.success, "{:?}", imported.errors);
@@ -1547,7 +1417,7 @@ mod tests {
         for (path, value) in [
             ("product_id", serde_json::json!("another-product")),
             ("schema_version", serde_json::json!(2)),
-            ("version", serde_json::json!("0.2.18")),
+            ("version", serde_json::json!("tampered-build")),
             ("last_modified", serde_json::json!(0)),
         ] {
             let error = service.set_config(path, value).await.unwrap_err();
@@ -1908,8 +1778,8 @@ mod tests {
         config.ai.default_models.speech_recognition = Some("speech".to_string());
         let original = serde_json::to_string_pretty(&config).expect("serialize config");
         tokio::fs::write(path_manager.app_config_file(), &original)
-        .await
-        .expect("seed config");
+            .await
+            .expect("seed config");
 
         let error = match ConfigService::with_settings(ConfigManagerSettings {
             path_manager: Some(path_manager.clone()),
@@ -2370,8 +2240,8 @@ mod tests {
         let original =
             serde_json::to_string_pretty(&raw_config).expect("retired config should serialize");
         tokio::fs::write(path_manager.app_config_file(), &original)
-        .await
-        .expect("retired config should be written");
+            .await
+            .expect("retired config should be written");
 
         let error = match ConfigService::with_settings(settings()).await {
             Ok(_) => panic!("retired reasoning fields must fail startup"),

@@ -49,7 +49,7 @@ export const ConfigActionBar: React.FC<ConfigActionBarProps> = ({
         <div className="openbitfun-config-action-bar__actions">
           <Button
             size="sm"
-            variant="outline"
+            variant="fill"
             disabled={saving || discardDisabled}
             onClick={onDiscard}
           >

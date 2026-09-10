@@ -5,7 +5,7 @@
  * job list at top, inline editor expands below the selected job.
  */
 
-import { Icon, Button, Combobox, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Button, Combobox, Switch, IconButton, Input, Select, Textarea, Tooltip } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import {
@@ -592,9 +592,9 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
             data-openbitfun-part="target"
           >
             <span className="asv__target-kind">{targetTypeLabel}</span>
-            <span className="asv__target-main">{targetLabel}</span>
+            <OverflowText className="asv__target-main">{targetLabel}</OverflowText>
             {targetDescription?.trim() ? (
-              <span className="asv__target-sub">{targetDescription}</span>
+              <OverflowText className="asv__target-sub">{targetDescription}</OverflowText>
             ) : null}
           </div>
         ) : effectiveHeaderTitle ? (
@@ -603,7 +603,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="primary"
           className="asv__new-job"
           onClick={handleCreateNew}
           disabled={assistantWorkspaceMode ? !workspaceRef : targetKind === 'session' ? !canSave : !workspaceRef}
@@ -628,7 +628,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
             const isExpanded = expandedJobId === job.id;
             return (
               <React.Fragment key={job.id}>
-                <div
+                <div data-overflow-trigger
                   className={`asv__item${isExpanded ? ' is-expanded' : ''}`}
                   data-openbitfun-component="scheduled-jobs-view"
                   data-openbitfun-part="job"
@@ -647,7 +647,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 >
                   <div className="asv__item-body" data-openbitfun-component="scheduled-jobs-view" data-openbitfun-part="jobBody">
                     <div className="asv__item-top">
-                      <span className="asv__item-name">{job.name}</span>
+                      <OverflowText className="asv__item-name">{job.name}</OverflowText>
                       <div className="asv__item-actions" data-openbitfun-component="scheduled-jobs-view" data-openbitfun-part="jobActions">
                         <div
                           className="asv__switch-wrap"
@@ -676,15 +676,15 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                       </div>
                     </div>
                     <div className="asv__item-meta-row" data-openbitfun-component="scheduled-jobs-view" data-openbitfun-part="jobMeta">
-                      <div className="asv__item-meta">
+                      <div className="asv__item-meta"><OverflowText>
                         {formatJobMetaSummary(job, formatDate, t, {
                           showTarget: assistantWorkspaceMode,
                           resolveSessionLabel: sessionId => sessionLabelById.get(sessionId),
                         })}
-                      </div>
-                      <div className="asv__item-meta asv__item-meta--dim asv__item-next-run">
+                      </OverflowText></div>
+                      <div className="asv__item-meta asv__item-meta--dim asv__item-next-run"><OverflowText>
                         {t('nav.scheduledJobs.nextRunLabel')}: {formatTimestamp(getNextExecutionAtMs(job), formatDate, t)}
-                      </div>
+                      </OverflowText></div>
                     </div>
                     {job.state.lastError ? (
                       <div className="asv__item-error" data-openbitfun-component="scheduled-jobs-view" data-openbitfun-part="error">
@@ -994,7 +994,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           <Button
             size="sm"
             className="asv__action-btn"
-            variant="outline"
+            variant="fill"
             onClick={handleCloseEditor}
           >
             {t('nav.scheduledJobs.actions.cancel')}
@@ -1002,7 +1002,7 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
           <Button
             size="sm"
             className="asv__action-btn"
-            variant="fill"
+            variant="primary"
             onClick={() => { void handleSave(); }}
             disabled={!canSave}
             loading={saving}

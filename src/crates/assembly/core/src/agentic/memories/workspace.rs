@@ -2,6 +2,10 @@ use crate::agentic::memories::db::MemoryRow;
 use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use chrono::{DateTime, Utc};
+pub use openbitfun_services_core::memory_store::{
+    AD_HOC_EXTENSION_NAME, AD_HOC_NOTES_DIR_NAME, MEMORY_EXTENSIONS_DIR_NAME, MEMORY_FILE_NAME,
+    MEMORY_SUMMARY_FILE_NAME,
+};
 use openbitfun_services_core::session::MemoryWorkspaceGitError;
 pub use openbitfun_services_core::session::{
     MemoryWorkspaceChange, MemoryWorkspaceChangeStatus, MemoryWorkspaceDiff,
@@ -14,13 +18,8 @@ use uuid::Uuid;
 
 pub const MEMORY_ROOT_NAME: &str = "memories";
 pub const RAW_MEMORIES_FILENAME: &str = "raw_memories.md";
-pub const MEMORY_FILE_NAME: &str = "MEMORY.md";
-pub const MEMORY_SUMMARY_FILE_NAME: &str = "memory_summary.md";
 pub const PHASE2_WORKSPACE_DIFF_FILE_NAME: &str = "phase2_workspace_diff.md";
 pub const ROLLOUT_SUMMARIES_DIR_NAME: &str = "rollout_summaries";
-pub const MEMORY_EXTENSIONS_DIR_NAME: &str = "extensions";
-pub const AD_HOC_EXTENSION_NAME: &str = "ad_hoc";
-pub const AD_HOC_NOTES_DIR_NAME: &str = "notes";
 pub const AD_HOC_INSTRUCTIONS_FILE_NAME: &str = "instructions.md";
 const AD_HOC_INSTRUCTIONS: &str = r#"# Ad-hoc notes
 

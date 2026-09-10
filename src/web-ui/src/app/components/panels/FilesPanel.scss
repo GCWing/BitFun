@@ -126,9 +126,8 @@
     color: var(--openbitfun-color-content-secondary);
     line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -374,7 +373,6 @@
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__transfer-stats {

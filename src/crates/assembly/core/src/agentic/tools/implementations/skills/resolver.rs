@@ -26,6 +26,8 @@ mod tests {
             source_slot: "openbitfun-system".to_string(),
             source_id: "openbitfun".to_string(),
             source_label: "OpenBitFun".to_string(),
+            installation_source: None,
+            entry_file: None,
             dir_name: dir_name.to_string(),
             is_builtin: true,
             group_key: None,
@@ -47,6 +49,8 @@ mod tests {
             source_slot: "openbitfun".to_string(),
             source_id: "openbitfun".to_string(),
             source_label: "OpenBitFun".to_string(),
+            installation_source: None,
+            entry_file: None,
             dir_name: dir_name.to_string(),
             is_builtin: false,
             group_key: None,
@@ -65,11 +69,13 @@ mod tests {
 
         assert!(!resolve_skill_default_enabled_for_mode(
             &presentation,
-            "agentic"
+            "Standard"
         ));
         // Agentic and Cowork use ControlHub's browser domain by default, so
         // agent-browser remains opt-in for those modes.
-        assert!(!resolve_skill_default_enabled_for_mode(&browser, "agentic"));
+        assert!(!resolve_skill_default_enabled_for_mode(
+            &browser, "Standard"
+        ));
         assert!(resolve_skill_default_enabled_for_mode(
             &presentation,
             "Cowork"
@@ -82,7 +88,7 @@ mod tests {
         let custom = custom_user_skill("my-custom-skill");
         let state = resolve_skill_state_for_mode(
             &custom,
-            "agentic",
+            "Standard",
             &UserModeSkillOverrides::default(),
             &HashSet::new(),
         );
@@ -99,7 +105,7 @@ mod tests {
         let disabled_project = HashSet::new();
 
         let disabled_state =
-            resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&presentation, "Standard", &overrides, &disabled_project);
         assert!(!disabled_state.effective_enabled);
         assert_eq!(
             disabled_state.reason,
@@ -108,7 +114,7 @@ mod tests {
 
         overrides.enabled_skills.push(presentation.key.clone());
         let enabled_state =
-            resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&presentation, "Standard", &overrides, &disabled_project);
         assert!(enabled_state.effective_enabled);
         assert_eq!(
             enabled_state.reason,
@@ -123,13 +129,13 @@ mod tests {
         let disabled_project = HashSet::new();
 
         let default_state =
-            resolve_skill_state_for_mode(&canvas, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&canvas, "Standard", &overrides, &disabled_project);
         assert!(!default_state.default_enabled);
         assert!(!default_state.effective_enabled);
 
         overrides.enabled_skills.push(canvas.key.clone());
         let enabled_state =
-            resolve_skill_state_for_mode(&canvas, "agentic", &overrides, &disabled_project);
+            resolve_skill_state_for_mode(&canvas, "Standard", &overrides, &disabled_project);
         assert!(!enabled_state.default_enabled);
         assert!(enabled_state.effective_enabled);
         assert_eq!(

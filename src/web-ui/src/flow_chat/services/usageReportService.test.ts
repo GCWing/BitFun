@@ -29,14 +29,14 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   title: 'Session 1',
   dialogTurns: [],
   status: 'idle',
-  config: { agentType: 'agentic' },
+  config: { agentType: 'Standard' },
   createdAt: 1,
   lastActiveAt: 1,
   error: null,
   isHistorical: false,
   todos: [],
   maxContextTokens: 128128,
-  mode: 'agentic',
+  mode: 'Standard',
   workspacePath: 'D:/workspace/OpenBitFun',
   isTransient: false,
   ...overrides,
@@ -211,7 +211,7 @@ describe('runUsageReportCommand', () => {
 
   it('infers legacy model rows from the session model without showing raw missing-model copy', async () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: 'gpt-5.4' },
+      config: { agentType: 'Standard', modelName: 'gpt-5.4' },
     });
     sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
       models: [{
@@ -257,7 +257,7 @@ describe('runUsageReportCommand', () => {
       'model_1780555920188_0',
     ]) {
       const session = createSession({
-        config: { agentType: 'agentic', modelName: opaqueModelId },
+        config: { agentType: 'Standard', modelName: opaqueModelId },
       });
       sessionApiMocks.getSessionUsageReport.mockResolvedValueOnce(usageReport({
         models: [{
@@ -294,7 +294,7 @@ describe('runUsageReportCommand', () => {
 
   it('treats legacy model round placeholders as missing model identity', async () => {
     const session = createSession({
-      config: { agentType: 'agentic', modelName: '019e0c07-c7bc-73f1-b1d6-5260ed215fe0' },
+      config: { agentType: 'Standard', modelName: '019e0c07-c7bc-73f1-b1d6-5260ed215fe0' },
     });
     sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
       models: [{

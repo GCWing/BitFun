@@ -9,15 +9,18 @@ import { notificationService } from '@/shared/notification-system';
 import { fileTabManager } from '@/shared/services/FileTabManager';
 import { type LineRange } from '@/shared/editor/LineRange';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { openFileThroughSession } from '../../session-drivers/sessionFileNavigation';
 
 const log = createLogger('useFlowChatFileActions');
 
 interface UseFlowChatFileActionsOptions {
+  sessionId?: string;
   workspacePath?: string;
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
 }
 
 export function useFlowChatFileActions({
+  sessionId,
   workspacePath,
   onFileViewRequest,
 }: UseFlowChatFileActionsOptions) {
@@ -33,6 +36,9 @@ export function useFlowChatFileActions({
       hasExternalCallback: !!onFileViewRequest,
     });
 
+    if (openFileThroughSession(sessionId, filePath, fileName, lineRange)) {
+      return;
+    }
     if (onFileViewRequest) {
       onFileViewRequest(filePath, fileName, lineRange);
       return;
@@ -62,7 +68,7 @@ export function useFlowChatFileActions({
       log.error('File navigation failed', error);
       notificationService.error(`Unable to open file: ${absoluteFilePath}`);
     }
-  }, [onFileViewRequest, workspacePath]);
+  }, [sessionId, onFileViewRequest, workspacePath]);
 
   return {
     handleFileViewRequest,

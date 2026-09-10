@@ -50,7 +50,7 @@ export const HeaderWithActionsExample: React.FC = () => {
             <Button variant="outline" size="sm">
               {t('configPageHeaderExample.learning.import')}
             </Button>
-            <Button variant="fill" size="sm">
+            <Button variant="primary" size="sm">
               {t('configPageHeaderExample.learning.addMemory')}
             </Button>
           </>
@@ -73,7 +73,7 @@ export const CompleteConfigPageExample: React.FC = () => {
         title={t('configPageHeaderExample.agents.title')}
         subtitle={t('configPageHeaderExample.agents.subtitle')}
         extra={
-          <Button variant="fill" size="sm">
+          <Button variant="primary" size="sm">
             {t('configPageHeaderExample.agents.create')}
           </Button>
         }

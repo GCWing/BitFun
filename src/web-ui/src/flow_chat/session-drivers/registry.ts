@@ -11,7 +11,7 @@ import {
   type DriverResolvableSession,
   type SessionDriverId,
 } from './resolve';
-import type { SessionDriver } from './types';
+import type { SessionDriver, SessionDriverNavigationStatusSource } from './types';
 import { localSessionDriver } from './local/LocalSessionDriver';
 import { dispatchSessionDriver } from './dispatch/DispatchSessionDriver';
 
@@ -20,8 +20,17 @@ const drivers: Record<SessionDriverId, SessionDriver> = {
   dispatch: dispatchSessionDriver,
 };
 
+const navigationStatusSources = Array.from(new Set(Object.values(drivers)
+  .map(driver => driver.navigationStatusSource)
+  .filter((source): source is SessionDriverNavigationStatusSource => Boolean(source))));
+
 export function sessionDriverById(id: SessionDriverId): SessionDriver {
   return drivers[id];
+}
+
+/** Stable, deduplicated driver sources observed by shared session navigation. */
+export function sessionDriverNavigationStatusSources(): readonly SessionDriverNavigationStatusSource[] {
+  return navigationStatusSources;
 }
 
 export function driverForSession(

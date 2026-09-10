@@ -132,13 +132,13 @@ internal object MobileDesignGeometry {
     val MessageBubbleHorizontalPadding = 14.dp
     val MessageBubbleVerticalPadding = 11.dp
     val MessageBubbleRadius = 17.dp
-    val ComposerActionSize = 44.dp
+    val ComposerActionSize = 48.dp
     val ComposerInputHeight = 44.dp
     val ComposerExpandedInputHeight = 58.dp
     val ComposerCollapsedHeight = 56.dp
     val ComposerExpandedInputRowHeight = 60.dp
-    val ComposerExpandedActionRowHeight = 40.dp
-    val ComposerExpandedHeight = 108.dp
+    val ComposerExpandedActionRowHeight = 48.dp
+    val ComposerExpandedHeight = 120.dp
     val ComposerCollapsedRadius = 28.dp
     val ComposerExpandedRadius = 18.dp
     val ComposerModelSelectorWidth = 330.dp
@@ -153,7 +153,7 @@ internal object MobileDesignGeometry {
     val SheetActionHeight = 48.dp
     val SelectionTopRadius = 20.dp
     val SelectionRowHeight = 64.dp
-    val SelectionCloseSize = 32.dp
+    val SelectionCloseSize = 48.dp
     val PopoverWidth = 292.dp
     val PopoverRadius = 16.dp
     val PopoverPadding = 12.dp

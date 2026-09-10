@@ -24,6 +24,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@openbitfun/ui', () => ({
   Icon: ({ name }: { name: string }) => <span data-testid={`icon-${name}`} />,
+  OverflowText: ({ children, behavior: _behavior, marqueeActive: _marqueeActive, ...props }: any) => <span {...props}>{children}</span>,
   Tooltip: ({
     children,
     content,

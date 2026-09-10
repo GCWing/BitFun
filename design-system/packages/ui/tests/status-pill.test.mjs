@@ -10,7 +10,9 @@ test("StatusPill exposes semantic tone and independent label anatomy", () => {
 
   assert.match(markup, /data-openbitfun-component="status-pill"/);
   assert.match(markup, /data-tone="warning"/);
+  assert.match(markup, /data-emphasis="false"/);
   assert.match(markup, /data-openbitfun-part="label"/);
+  assert.match(markup, /data-overflow-behavior="marquee"/);
   assert.match(markup, />Review</);
 });
 
@@ -23,11 +25,12 @@ test("StatusPill renders the brand accent tone", () => {
 test("StatusPill keeps its optional leading indicator decorative", () => {
   const markup = renderToStaticMarkup(createElement(
     StatusPill,
-    { leading: createElement(Icon, { name: "circle" }) },
+    { emphasis: true, leading: createElement(Icon, { name: "circle" }) },
     "Ask",
   ));
 
   assert.match(markup, /data-tone="success"/);
+  assert.match(markup, /data-emphasis="true"/);
   assert.match(markup, /data-openbitfun-part="leading"/);
   assert.match(markup, /aria-hidden="true"/);
 });
@@ -40,5 +43,5 @@ test("StatusPill styles consume public semantic and geometry tokens", async () =
   assert.match(styles, /--openbitfun-control-status-pill-icon-size/);
   assert.match(styles, /--openbitfun-color-status-success-surface/);
   assert.match(styles, /--openbitfun-color-status-danger-content/);
-  assert.match(styles, /text-overflow:\s*ellipsis/);
+  assert.match(styles, /--openbitfun-layout-overflow-text-fade-extent/);
 });

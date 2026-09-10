@@ -108,9 +108,6 @@ export const useWorkspaceSessionViewStore = create<WorkspaceSessionViewState>()(
   ),
 );
 
-const getUpdatedTimestamp = (session: Session): number =>
-  session.updatedAt ?? session.lastFinishedAt ?? session.lastActiveAt ?? session.createdAt;
-
 export function deriveWorkspaceSessionStatus(
   session: Session,
   isRunning: boolean,
@@ -151,6 +148,7 @@ export function compareWorkspaceNavSessions(
   ordering: WorkspaceSessionOrdering,
   getTitle: (session: Session) => string,
   isRunning: (session: Session) => boolean = () => false,
+  getActivityTimestamp: (session: Session) => number = session => session.createdAt,
 ): number {
   if (ordering === 'name') {
     const titleDiff = getTitle(left).localeCompare(getTitle(right), undefined, {
@@ -163,14 +161,14 @@ export function compareWorkspaceNavSessions(
       - STATUS_ORDER[deriveWorkspaceSessionStatus(right, isRunning(right))];
     if (statusDiff !== 0) return statusDiff;
   } else {
-    const leftTimestamp = ordering === 'updated' ? getUpdatedTimestamp(left) : left.createdAt;
-    const rightTimestamp = ordering === 'updated' ? getUpdatedTimestamp(right) : right.createdAt;
+    const leftTimestamp = ordering === 'updated' ? getActivityTimestamp(left) : left.createdAt;
+    const rightTimestamp = ordering === 'updated' ? getActivityTimestamp(right) : right.createdAt;
     const timestampDiff = rightTimestamp - leftTimestamp;
     if (timestampDiff !== 0) return timestampDiff;
   }
 
-  const updatedDiff = getUpdatedTimestamp(right) - getUpdatedTimestamp(left);
-  return updatedDiff || right.createdAt - left.createdAt || left.sessionId.localeCompare(right.sessionId);
+  const activityDiff = ordering === 'status' ? getActivityTimestamp(right) - getActivityTimestamp(left) : 0;
+  return activityDiff || right.createdAt - left.createdAt || left.sessionId.localeCompare(right.sessionId);
 }
 
 export function matchesWorkspaceSessionView(

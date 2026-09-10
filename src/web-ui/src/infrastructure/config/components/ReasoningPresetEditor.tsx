@@ -1,4 +1,4 @@
-import { Button, Combobox, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, Select, Switch, Textarea, Tooltip, type ComboboxOption, type SelectOption } from '@openbitfun/ui';
+import { OverflowText, Button, Combobox, Icon, IconButton, Input, Listbox, ListboxEmpty, ListboxOption, Select, Switch, Textarea, Tooltip, type ComboboxOption, type SelectOption } from '@openbitfun/ui';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -633,18 +633,18 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                           />
                         </div>
                       ) : (
-                        <button
+                        <button data-overflow-trigger
                           type="button"
                           className="openbitfun-reasoning-preset-editor__row-name"
                           onClick={() => setExpandedPresetIndex(presetIndex)}
-                        >
+                        ><OverflowText>
                           {preset.label?.trim() || preset.id}
-                        </button>
+                        </OverflowText></button>
                       )}
                       {presetSummary && (
-                        <span className="openbitfun-reasoning-preset-editor__row-preview">
+                        <OverflowText className="openbitfun-reasoning-preset-editor__row-preview">
                           {presetSummary}
-                        </span>
+                        </OverflowText>
                       )}
                     </div>
                     <div className="openbitfun-reasoning-preset-editor__row-badges">

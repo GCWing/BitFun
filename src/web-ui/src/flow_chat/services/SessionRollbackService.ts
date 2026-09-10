@@ -20,6 +20,7 @@ import { requireSessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import type { Session } from '../types/flow-chat';
 import type { SessionTurnCatalog } from '@/shared/types/session-history';
 import { pendingQueueManager } from './flow-chat-manager/PendingQueueModule';
+import { resolveSessionDriverId } from '../session-drivers/resolve';
 import { SessionExecutionState, stateMachineManager } from '../state-machine';
 
 const log = createLogger('SessionRollbackService');
@@ -77,6 +78,9 @@ function validProjectedCatalogRevision(
 export async function rollbackSessionToTurn(
   request: RollbackSessionToTurnRequest,
 ): Promise<RollbackSessionToTurnResult> {
+  if (resolveSessionDriverId(request.sessionId, flowChatStore.getState().sessions.get(request.sessionId)) === 'dispatch') {
+    throw new Error('History rollback is unavailable for a detached remote session.');
+  }
   const lease = request.lease
     ?? tryBeginSessionMutation(request.sessionId, request.kind, request.targetTurnId);
   if (!lease) {

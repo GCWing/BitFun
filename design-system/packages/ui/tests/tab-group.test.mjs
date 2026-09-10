@@ -38,6 +38,8 @@ test("TabGroup exposes a single selected tab with native button behavior", () =>
   assert.match(markup, /tabindex="0"/);
   assert.match(markup, /tabindex="-1"/);
   assert.equal((markup.match(/type="button"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-overflow-behavior="marquee"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-overflow-trigger="true"/g) ?? []).length, 2);
 });
 
 test("controlled value and disabled items preserve selection and focus contracts", () => {
@@ -49,7 +51,7 @@ test("controlled value and disabled items preserve selection and focus contracts
     }),
   );
 
-  assert.match(markup, /Welcome<\/span><\/button>/);
+  assert.match(markup, /Welcome<\/span><\/span><\/button>/);
   assert.match(markup, /aria-disabled="true"/);
   assert.match(markup, /disabled=""/);
   assert.equal((markup.match(/aria-selected="true"/g) ?? []).length, 1);

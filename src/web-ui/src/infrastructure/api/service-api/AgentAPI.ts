@@ -1,3 +1,4 @@
+import { translateAgentIdentityFields } from '../../../../../shared/agent-harness/wire';
  
 
 import { api } from './ApiClient';
@@ -523,6 +524,8 @@ export interface BackgroundCommandOutputMetadata {
   workdir?: string;
   remote: boolean;
   tty: boolean;
+  /** Missing on legacy hosts (fixed 80x24); null explicitly means unknown. */
+  terminalSize?: { cols: number; rows: number } | null;
   status: BackgroundCommandOutputStatus;
   exitCode?: number;
   startedAt: number;
@@ -1682,9 +1685,7 @@ export class AgentAPI {
     remoteSshHost?: string;
   } = {}): Promise<ModeInfo[]> {
     try {
-      return await api.invoke<ModeInfo[]>('get_available_modes', {
-        request,
-      });
+      return translateAgentIdentityFields(await api.invoke<ModeInfo[]>('get_available_modes', { request }), 'canonical');
     } catch (error) {
       throw createTauriCommandError('get_available_modes', error);
     }

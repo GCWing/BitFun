@@ -3,10 +3,10 @@ import { Loader2 } from 'lucide-react';
 import { Composer, ComposerToolbar, IconButton, Icon } from '@openbitfun/ui';
 import { useImeOwnedKeyGuard } from '@/flow_chat/hooks/useImeOwnedKeyGuard';
 import type { ContextItem } from '@/shared/types/context';
-import { FileMentionPicker } from '../FileMentionPicker';
+import { ChatContextPicker } from '../ChatContextPicker';
 import {
   RichTextInput,
-  type MentionState,
+  type ContextTriggerState,
   type RichTextInputElement,
 } from '../RichTextInput';
 import {
@@ -50,11 +50,11 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   excludeSessionId,
 }) => {
   const editorRef = useRef<RichTextInputElement>(null);
-  const mentionAnchorRef = useRef<HTMLDivElement>(null);
+  const contextPickerAnchorRef = useRef<HTMLDivElement>(null);
   const [contexts, setContexts] = useState<ContextItem[]>(() => (
     composerPresentationContexts(presentation)
   ));
-  const [mentionState, setMentionState] = useState<MentionState>({
+  const [contextTriggerState, setContextTriggerState] = useState<ContextTriggerState>({
     isActive: false,
     query: '',
     startOffset: 0,
@@ -82,8 +82,8 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (mentionState.isActive) {
-        editorRef.current?.closeMention?.();
+      if (contextTriggerState.isActive) {
+        editorRef.current?.closeContextPicker?.();
       } else {
         onCancel();
       }
@@ -92,7 +92,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
 
     if (
       event.key === 'Enter' &&
-      !mentionState.isActive &&
+      !contextTriggerState.isActive &&
       !event.shiftKey &&
       !event.altKey &&
       !event.metaKey &&
@@ -101,7 +101,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
       event.preventDefault();
       handleSubmit();
     }
-  }, [handleSubmit, mentionState.isActive, onCancel]);
+  }, [contextTriggerState.isActive, handleSubmit, onCancel]);
 
   const handleRemoveContext = useCallback((id: string) => {
     setContexts(current => current.filter(context => context.id !== id));
@@ -112,7 +112,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
       current.some(item => item.id === context.id) ? current : [...current, context]
     ));
     requestAnimationFrame(() => {
-      editorRef.current?.insertTagReplacingMention?.(context);
+      editorRef.current?.insertContextTagReplacingTrigger?.(context);
       editorRef.current?.focus();
     });
   }, []);
@@ -169,7 +169,7 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
       )}
     >
       <div
-        ref={mentionAnchorRef}
+        ref={contextPickerAnchorRef}
         className="user-message-edit-composer__rich-input"
         data-openbitfun-product-component="user-message-edit-composer"
         data-openbitfun-product-part="input"
@@ -183,18 +183,19 @@ const RichUserMessageEditComposer: React.FC<RichUserMessageEditComposerProps> = 
           disabled={isSubmitting}
           contexts={contexts}
           onRemoveContext={handleRemoveContext}
-          onMentionStateChange={setMentionState}
+          onContextTriggerStateChange={setContextTriggerState}
         />
-        <FileMentionPicker
-          isOpen={mentionState.isActive}
-          searchQuery={mentionState.query}
+        <ChatContextPicker
+          isOpen={contextTriggerState.isActive}
+          searchQuery={contextTriggerState.query}
           workspacePath={workspacePath}
           workspaceId={workspaceId}
           remoteConnectionId={remoteConnectionId}
           excludeSessionId={excludeSessionId}
-          anchorRef={mentionAnchorRef}
-          onSelect={handleSelectContext}
-          onClose={() => editorRef.current?.closeMention?.()}
+          anchorRef={contextPickerAnchorRef}
+          entryView="files"
+          onSelectContext={handleSelectContext}
+          onClose={() => editorRef.current?.closeContextPicker?.()}
         />
       </div>
     </Composer>

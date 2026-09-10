@@ -11,6 +11,11 @@ Instead of relying on the generic NSIS wizard UI from Tauri's built-in bundler, 
 - **Full control** — Custom installation logic, right-click context menu, PATH integration
 - **Cross-platform potential** — Same codebase can target Windows, macOS, and Linux
 
+## Legacy data migration
+
+Data Migrator is distributed separately and is not included in this installer.
+To import legacy data, download and run the [standalone Data Migrator](../src/apps/data-migrator/README.md) after closing both applications.
+
 ## Common tasks
 
 Requires Node.js 22.12+ and pnpm 10.15.0, matching the workspace baseline.

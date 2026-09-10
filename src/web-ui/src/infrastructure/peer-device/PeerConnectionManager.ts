@@ -25,20 +25,16 @@ const log = createLogger('PeerConnectionManager');
 
 export const PEER_CONTROL_RPC_TIMEOUT_MS = 15_000;
 export const PEER_KEEPALIVE_INTERVAL_MS = 20_000;
-/** Consecutive keepalive/reconnect failures tolerated before a peer is lost. */
-export const PEER_MAX_KEEPALIVE_FAILURES = 3;
 export const PEER_RECONNECT_BASE_DELAY_MS = 1_000;
 export const PEER_RECONNECT_MAX_DELAY_MS = 15_000;
 
 /**
  * `connecting` → first handshake. `ready` → the peer answers. `degraded` → it
- * missed at least one ping and we are retrying; the attachment is still valid
- * and its work still runs. `lost` → terminal, nothing is retried; the consumer
- * decides whether to dispose.
+ * needs its control link checked/re-attached. Recovery keeps retrying with a
+ * capped delay until explicit disposal; connectivity never selects a different
+ * device surface or discards its cached work.
  */
-export type PeerConnectionHealth = 'connecting' | 'ready' | 'degraded' | 'lost';
-
-export type PeerConnectionLostReason = 'keepalive' | 'presence';
+export type PeerConnectionHealth = 'connecting' | 'ready' | 'degraded';
 
 export type PeerHostKind = 'desktop' | 'cli';
 
@@ -100,9 +96,8 @@ export interface PeerConnectionState {
   readonly surfaceId: DeviceSurfaceId;
   readonly health: PeerConnectionHealth;
   readonly capabilities: PeerHostCapabilities;
-  /** Failures since the last answered ping; drives the backoff schedule. */
+  /** Failed health checks since the last completed handshake; drives backoff. */
   readonly consecutiveFailures: number;
-  readonly lostReason: PeerConnectionLostReason | null;
 }
 
 /** Live handle. `adapter` is the product transport for this device. */
@@ -126,7 +121,6 @@ export interface PeerConnectionManagerOptions {
   getControllerDeviceId?: () => Promise<string>;
   controlRpcTimeoutMs?: number;
   keepaliveIntervalMs?: number;
-  maxKeepaliveFailures?: number;
   reconnectBaseDelayMs?: number;
   reconnectMaxDelayMs?: number;
 }
@@ -192,9 +186,10 @@ interface ConnectionEntry {
   health: PeerConnectionHealth;
   capabilities: PeerHostCapabilities;
   consecutiveFailures: number;
-  lostReason: PeerConnectionLostReason | null;
   timer: ReturnType<typeof setTimeout> | null;
   disposed: boolean;
+  presenceOnline: boolean | null;
+  healthCheckInFlight: Promise<void> | null;
   reattachInFlight: Promise<void> | null;
   handle: PeerConnection;
 }
@@ -215,7 +210,6 @@ export class PeerConnectionManager {
   private readonly resolveControllerDeviceId: () => Promise<string>;
   private readonly controlRpcTimeoutMs: number;
   private readonly keepaliveIntervalMs: number;
-  private readonly maxKeepaliveFailures: number;
   private readonly reconnectBaseDelayMs: number;
   private readonly reconnectMaxDelayMs: number;
   private controllerDeviceId: string | null = null;
@@ -229,7 +223,6 @@ export class PeerConnectionManager {
       ?? (async () => (await remoteConnectAPI.getDeviceInfo()).device_id);
     this.controlRpcTimeoutMs = options.controlRpcTimeoutMs ?? PEER_CONTROL_RPC_TIMEOUT_MS;
     this.keepaliveIntervalMs = options.keepaliveIntervalMs ?? PEER_KEEPALIVE_INTERVAL_MS;
-    this.maxKeepaliveFailures = options.maxKeepaliveFailures ?? PEER_MAX_KEEPALIVE_FAILURES;
     this.reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? PEER_RECONNECT_BASE_DELAY_MS;
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? PEER_RECONNECT_MAX_DELAY_MS;
   }
@@ -247,9 +240,6 @@ export class PeerConnectionManager {
     }
     const existing = this.entries.get(deviceId);
     if (existing) {
-      if (existing.health === 'lost') {
-        return Promise.reject(new Error(`Peer device '${deviceId}' is no longer reachable`));
-      }
       this.renameEntry(existing, deviceName);
       return Promise.resolve(existing.handle);
     }
@@ -339,29 +329,20 @@ export class PeerConnectionManager {
   }
 
   /**
-   * Account presence is the authority on reachability: a peer that dropped off
-   * cannot be running our work, so no amount of backoff will help it.
+   * Presence is a hint, not a lifetime boundary: a relay reconnect can briefly
+   * omit an otherwise running host. Retain the attachment and verify it with
+   * a handshake. Repeated roster updates must not postpone an existing retry.
    */
   reportPresence(onlineDeviceIds: Iterable<string>): void {
     const online = new Set(onlineDeviceIds);
-    for (const entry of Array.from(this.entries.values())) {
-      if (!online.has(entry.deviceId)) {
-        this.markLost(entry, 'presence');
-        continue;
-      }
-      // The device is back. `lost` is terminal and `connect` refuses a lost
-      // entry, so leaving it in place would keep a reachable device
-      // permanently unselectable — one presence blip during a burst of
-      // switching was enough to strand it for the rest of the session. Drop
-      // the dead entry so the next switch attaches a fresh one.
-      if (entry.health === 'lost' && entry.lostReason === 'presence') {
-        this.entries.delete(entry.deviceId);
-        this.legacyHostKinds.delete(entry.deviceId);
-        entry.adapter.disconnect().catch(() => undefined);
-        log.info('Peer device is reachable again; cleared its lost attachment', {
-          deviceId: entry.deviceId,
-        });
-        this.publish();
+    for (const entry of this.entries.values()) {
+      const wasOnline = entry.presenceOnline;
+      entry.presenceOnline = online.has(entry.deviceId);
+      if (!entry.presenceOnline && wasOnline !== false) {
+        this.requestRecovery(entry, 'presence');
+      } else if (entry.presenceOnline && wasOnline === false && entry.health === 'degraded') {
+        this.cancelTimer(entry);
+        void this.runHealthCheck(entry);
       }
     }
   }
@@ -371,12 +352,12 @@ export class PeerConnectionManager {
       deviceId,
       (target, commandJson, timeoutMs) => this.deviceRpc(target, commandJson, timeoutMs),
       {
-        // Successful product traffic proves the link as well as a ping does.
-        onHostInvokeSuccess: () => this.noteHealthy(deviceId),
-        onHostInvokeTransportFailure: error => {
+        // Product timeouts request a probe; they are not independent evidence
+        // of host loss and must not consume the health-check retry counter.
+        onHostInvokeTransportFailure: (_error, meta) => {
           const current = this.entries.get(deviceId);
-          if (current) {
-            this.noteFailure(current, error);
+          if (current?.adapter === adapter) {
+            this.requestRecovery(current, 'request', meta?.action);
           }
         },
       },
@@ -388,9 +369,10 @@ export class PeerConnectionManager {
       health: 'connecting',
       capabilities: NO_CAPABILITIES,
       consecutiveFailures: 0,
-      lostReason: null,
       timer: null,
       disposed: false,
+      presenceOnline: null,
+      healthCheckInFlight: null,
       reattachInFlight: null,
       handle: {
         deviceId,
@@ -553,19 +535,40 @@ export class PeerConnectionManager {
    * `peer_control_attach` because the host may have pruned this controller
    * during the gap that made us degraded in the first place.
    */
-  private async runHealthCheck(entry: ConnectionEntry): Promise<void> {
-    if (this.entries.get(entry.deviceId) !== entry || entry.health === 'lost') {
-      return;
+  private runHealthCheck(entry: ConnectionEntry): Promise<void> {
+    if (this.entries.get(entry.deviceId) !== entry || entry.disposed) {
+      return Promise.resolve();
     }
-    const reconnecting = entry.health === 'degraded';
+    if (entry.healthCheckInFlight) {
+      return entry.healthCheckInFlight;
+    }
+    this.cancelTimer(entry);
+    const check = this.checkHealth(entry).finally(() => {
+      if (entry.healthCheckInFlight !== check) return;
+      entry.healthCheckInFlight = null;
+      if (this.entries.get(entry.deviceId) !== entry || entry.disposed) return;
+      if (entry.health === 'ready') this.scheduleKeepalive(entry);
+      else this.scheduleReconnect(entry);
+    });
+    entry.healthCheckInFlight = check;
+    return check;
+  }
+
+  private async checkHealth(entry: ConnectionEntry): Promise<void> {
     try {
       const capabilities = await this.probeCapabilities(entry);
-      if (reconnecting) {
-        await this.sendAttach(entry.deviceId);
+      // A request/presence failure may have arrived while the ping was in
+      // flight. Check the current state, not the state at probe start.
+      if (entry.health === 'degraded') {
+        const reattach = this.sendAttach(entry.deviceId);
+        entry.reattachInFlight = reattach;
+        try {
+          await reattach;
+        } finally {
+          if (entry.reattachInFlight === reattach) entry.reattachInFlight = null;
+        }
       }
-      if (this.entries.get(entry.deviceId) !== entry) {
-        return;
-      }
+      this.assertEntryActive(entry);
       const previousCapabilities = entry.capabilities;
       entry.capabilities = capabilities;
       entry.adapter.setHostCapabilities({
@@ -579,7 +582,6 @@ export class PeerConnectionManager {
       entry.consecutiveFailures = 0;
       const recovered = entry.health !== 'ready';
       entry.health = 'ready';
-      this.scheduleKeepalive(entry);
       // Publish when the host's advertised capabilities changed too, not only
       // on recovery: a peer that stayed `ready` but restarted on a different
       // build mid-session must push a fresh React snapshot, or UI keeps gating
@@ -596,65 +598,34 @@ export class PeerConnectionManager {
     }
   }
 
-  /**
-   * A single miss on a weak link must not drop a peer that is mid-turn, so the
-   * first failure only degrades the connection. Only repeated failures mean the
-   * peer is really unreachable.
-   */
+  /** The dedicated handshake is the only source of the retry counter. */
   private noteFailure(entry: ConnectionEntry, error: unknown): void {
-    if (this.entries.get(entry.deviceId) !== entry || entry.health === 'lost') {
+    if (this.entries.get(entry.deviceId) !== entry || entry.disposed) {
       return;
     }
     entry.consecutiveFailures += 1;
-    log.warn('Peer keepalive failed', {
+    log.warn('Peer health check failed; retrying', {
       deviceId: entry.deviceId,
       consecutiveFailures: entry.consecutiveFailures,
       error,
     });
-    if (entry.consecutiveFailures >= this.maxKeepaliveFailures) {
-      this.markLost(entry, 'keepalive');
+    entry.health = 'degraded';
+    this.publish();
+  }
+
+  private requestRecovery(entry: ConnectionEntry, reason: 'presence' | 'request', action?: string): void {
+    if (this.entries.get(entry.deviceId) !== entry || entry.disposed || entry.health !== 'ready') {
       return;
     }
     entry.health = 'degraded';
-    this.scheduleReconnect(entry);
-    this.publish();
-  }
-
-  private noteHealthy(deviceId: string): void {
-    const entry = this.entries.get(deviceId);
-    // A lost connection is terminal: it is disposed, not silently revived.
-    if (!entry || entry.health !== 'degraded') {
-      return;
-    }
-    entry.consecutiveFailures = 0;
-    entry.health = 'ready';
-    this.scheduleKeepalive(entry);
-    this.publish();
-
-    // HostInvoke itself does not require an attachment, so successful product
-    // traffic proves reachability but not that DeviceEvents are still fanned
-    // out. Re-attach in the background before treating recovery as durable.
-    if (!entry.reattachInFlight) {
-      const reattach = this.sendAttach(deviceId)
-        .catch(error => this.noteFailure(entry, error))
-        .finally(() => {
-          if (entry.reattachInFlight === reattach) {
-            entry.reattachInFlight = null;
-          }
-        });
-      entry.reattachInFlight = reattach;
-    }
-  }
-
-  private markLost(entry: ConnectionEntry, reason: PeerConnectionLostReason): void {
-    if (entry.health === 'lost') {
-      return;
-    }
-    this.cancelTimer(entry);
-    this.legacyHostKinds.delete(entry.deviceId);
-    entry.health = 'lost';
-    entry.lostReason = reason;
-    log.warn('Peer connection lost', { deviceId: entry.deviceId, reason });
+    log.warn('Peer connection degraded; checking control link', {
+      deviceId: entry.deviceId,
+      reason,
+      action,
+    });
+    // One timer/probe owns recovery. A burst of failed product requests must
+    // neither start overlapping handshakes nor push the retry further away.
+    if (!entry.healthCheckInFlight) this.scheduleReconnect(entry);
     this.publish();
   }
 
@@ -714,7 +685,6 @@ export class PeerConnectionManager {
       health: entry.health,
       capabilities: entry.capabilities,
       consecutiveFailures: entry.consecutiveFailures,
-      lostReason: entry.lostReason,
     };
   }
 

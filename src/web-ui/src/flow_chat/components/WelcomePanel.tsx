@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, FolderPlus } from 'lucide-react';
-import { Menu, MenuItem, MenuSeparator, Icon } from '@openbitfun/ui';
+import { Menu, MenuItem, MenuSeparator, Icon, PageHeader } from '@openbitfun/ui';
 import { gitAPI } from '../../infrastructure/api';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
@@ -228,14 +228,13 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
       <div data-openbitfun-component="welcome-panel" data-openbitfun-part="content" className="welcome-panel__content">
         {/* Greeting */}
         <div data-openbitfun-component="welcome-panel" data-openbitfun-part="greeting" className="welcome-panel__greeting">
-          <div className="welcome-panel__greeting-inner">
-            <div className="welcome-panel__greeting-text">
-              <h1 data-openbitfun-component="welcome-panel" data-openbitfun-part="heading" className="welcome-panel__heading">
-                {greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}
-              </h1>
-              <p data-openbitfun-component="welcome-panel" data-openbitfun-part="tagline" className="welcome-panel__tagline">{tagline}</p>
-            </div>
-          </div>
+          <PageHeader
+            size="display"
+            title={<span data-openbitfun-component="welcome-panel" data-openbitfun-part="heading">
+              {greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}
+            </span>}
+            description={<span data-openbitfun-component="welcome-panel" data-openbitfun-part="tagline">{tagline}</span>}
+          />
         </div>
 
         <div data-openbitfun-component="welcome-panel" data-openbitfun-part="divider" className="welcome-panel__divider" />

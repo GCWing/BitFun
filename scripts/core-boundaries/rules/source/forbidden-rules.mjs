@@ -3,7 +3,7 @@
 import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
 
 const agentRuntimeRootUnexpectedLine = new RegExp(
-  `^(?!(?:[ \\t]*|[ \\t]*\\/\\/!.*|[ \\t]*#\\[cfg\\(feature = "(?:agent-runtime|deep-research|native-hook-settings)"\\)\\][ \\t]*|[ \\t]*pub mod (?:${agentRuntimeRootPublicModules.join('|')});[ \\t]*)\\r?$).+$`,
+  `^(?!(?:[ \\t]*|[ \\t]*\\/\\/!.*|[ \\t]*#\\[cfg\\(feature = "(?:agent-runtime|deep-research|native-hook-settings)"\\)\\][ \\t]*|[ \\t]*#\\[cfg\\(any\\(feature = "agent-runtime", feature = "definition-contracts"\\)\\)\\][ \\t]*|[ \\t]*pub mod (?:${agentRuntimeRootPublicModules.join('|')});[ \\t]*)\\r?$).+$`,
   'm',
 );
 
@@ -1568,19 +1568,19 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/agents/mod.rs',
     patterns: [
       {
-        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
+        regex: /\bpub const STANDARD_HARNESS_PROMPT_TEMPLATE\b/,
         message:
-          'core agent mode module must not own shared coding-mode prompt facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness prompt facts; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_ID\b/,
         message:
-          'core agent mode module must not own shared coding-mode config profile facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness config profile facts; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_IDS\b/,
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_MEMBERS\b/,
         message:
-          'core agent mode module must not own shared coding-mode membership facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness membership facts; use openbitfun-agent-runtime agents',
       },
       {
         regex: /\bpub fn resolve_mode_config_profile_id\b/,
@@ -1598,9 +1598,9 @@ export const forbiddenContentRules = [
           'core agent mode module must not own mode config profile labels; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
+        regex: /\bpub fn standard_harness_user_context_policy\b/,
         message:
-          'core agent mode module must not own shared coding-mode context policy; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness context policy; use openbitfun-agent-runtime agents',
       },
     ],
   },
@@ -1665,22 +1665,27 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/review_read_receipt.rs',
     patterns: [
       {
-        regex: /\bpub struct FileReadState\b/,
+        regex: /\bpub struct FileRevision\b/,
         message:
-          'core file_read_state must not own file-read state DTOs; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own file revision DTOs; use openbitfun-agent-runtime review_read_receipt',
       },
       {
-        regex: /\bpub struct FileReadStateStore\b/,
+        regex: /\bpub struct ReviewReadCoverage\b/,
         message:
-          'core file_read_state must not own in-memory file-read state store; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own review coverage DTOs; use openbitfun-agent-runtime review_read_receipt',
+      },
+      {
+        regex: /\bpub struct ReviewReadReceiptStore\b/,
+        message:
+          'core review_read_receipt must not own the receipt store; use openbitfun-agent-runtime review_read_receipt',
       },
       {
         regex: /\bDashMap\b/,
         message:
-          'core file_read_state must not own file-read state storage maps; use openbitfun-agent-runtime file_read_state',
+          'core review_read_receipt must not own receipt storage maps; use openbitfun-agent-runtime review_read_receipt',
       },
     ],
   },
@@ -2715,12 +2720,12 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/review_read_receipt_runtime.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
         message:
-          'file read-state runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+          'review read receipt runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
       },
     ],
   },
@@ -3044,16 +3049,6 @@ export const forbiddenContentRules = [
         regex: /\bdynamic_tools\s*:\s*IndexMap\b/,
         message:
           'core tool registry must not own the dynamic tool map; use openbitfun-agent-tools ToolRegistry',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
-    patterns: [
-      {
-        regex: /\bnormalize_string\b/,
-        message:
-          'core file read-state runtime must delegate pure freshness normalization to openbitfun-agent-tools',
       },
     ],
   },
@@ -4234,6 +4229,8 @@ export const forbiddenContentUnderRules = [
       regex: /\b(?:use\s+openbitfun_static_hook_support\b|extern\s+crate\s+openbitfun_static_hook_support\b|openbitfun_static_hook_support::)/,
       allowPaths: [
         'src/crates/adapters/static-hook-support/tests/parser.rs',
+        'src/crates/adapters/dsh-adapter/src/hook_source.rs',
+        'src/crates/adapters/pi-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/command_source.rs',
         'src/crates/adapters/opencode-adapter/src/agent_source.rs',
@@ -4445,9 +4442,22 @@ export const forbiddenContentUnderRules = [
     patterns: [
       {
         regex: /\brustls::crypto::(?:ring|aws_lc_rs)\b/,
-        allowPaths: ['src/crates/services/services-core/src/tls_provider.rs'],
+        allowPaths: [
+          'src/crates/services/services-core/src/tls_provider.rs',
+          // Independently built Relay binds ring to one client; the separate
+          // rule below still forbids process-wide installation in that owner.
+          'src/crates/services/relay-service/src/identity.rs',
+        ],
         message: 'delegate built-in Rustls provider selection to services-core::tls_provider',
       },
     ],
+  },
+  {
+    path: 'src/crates/services/relay-service/src/identity.rs',
+    reason: 'standalone Relay identity TLS must remain client-scoped',
+    patterns: [{
+      regex: /\binstall_default\b/,
+      message: 'Relay must not install or replace the process-wide TLS provider',
+    }],
   },
 ];

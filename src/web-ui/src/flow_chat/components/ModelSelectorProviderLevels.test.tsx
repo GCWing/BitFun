@@ -173,7 +173,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           sessionId={sessionId}
           reasoningTriggerPresentation="label"
         />,
@@ -221,7 +221,7 @@ describe('ModelSelector provider levels', () => {
   it('opens with model and reasoning settings while omitting speed and reset actions', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
       config: {
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'umbra-main',
         reasoningPreset: 'high',
       },
@@ -279,7 +279,7 @@ describe('ModelSelector provider levels', () => {
 
   it('opens generic reasoning defaults from the settings summary', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
-      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+      config: { agentType: 'Standard', modelName: 'umbra-main', reasoningPreset: 'high' },
     });
     aiApiMocks.getModelCatalog.mockResolvedValue({
       version: 1,
@@ -491,7 +491,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           onAvailabilityChange={onAvailabilityChange}
         />,
       );
@@ -530,7 +530,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           onAvailabilityChange={onAvailabilityChange}
         />,
       );
@@ -563,7 +563,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           onAvailabilityChange={onAvailabilityChange}
         />,
       );
@@ -594,7 +594,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           modeDefaultModelId="acme-fast"
           onAvailabilityChange={onAvailabilityChange}
         />,
@@ -634,7 +634,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           onAvailabilityChange={onAvailabilityChange}
         />,
       );
@@ -690,7 +690,7 @@ describe('ModelSelector provider levels', () => {
 
   it('opens native submenus only by click, keeps the parent stable, and toggles them explicitly', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
-      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+      config: { agentType: 'Standard', modelName: 'umbra-main', reasoningPreset: 'high' },
     });
     aiApiMocks.getModelCatalog.mockResolvedValue({
       version: 1,
@@ -750,7 +750,7 @@ describe('ModelSelector provider levels', () => {
 
   it('supports Right and Left Arrow navigation and closes both menus on outside click', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
-      config: { agentType: 'agentic', modelName: 'umbra-main', reasoningPreset: 'high' },
+      config: { agentType: 'Standard', modelName: 'umbra-main', reasoningPreset: 'high' },
     });
     aiApiMocks.getModelCatalog.mockResolvedValue({
       version: 1,

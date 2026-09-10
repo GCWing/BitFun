@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Icon, IconButton } from '@openbitfun/ui';
+import { OverflowText, Button, Card, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Database, FileText, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
-import { Tooltip } from '@openbitfun/ui';
 import { ToolProcessingDots } from '@openbitfun/ui/flow-chat';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
@@ -57,9 +56,9 @@ interface SessionUsageReportCardProps {
 const UsageMiniListFilePathLabel = React.forwardRef<HTMLSpanElement, { pathLabel: string }>(
   function UsageMiniListFilePathLabel({ pathLabel }, ref) {
     return (
-      <span data-openbitfun-component="session-usage-report-card" data-openbitfun-part="listRow" ref={ref} className="session-usage-report-card__mini-list-file-name">
+      <OverflowText data-openbitfun-component="session-usage-report-card" data-openbitfun-part="listRow" ref={ref} className="session-usage-report-card__mini-list-file-name">
         {getUsageFileNameFromPath(pathLabel)}
-      </span>
+      </OverflowText>
     );
   }
 );
@@ -203,28 +202,28 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         key: 'wall',
         label: t('usage.metrics.wall'),
         value: formatUsageDuration(report.time.wallTimeMs, t),
-        icon: UsageClockIcon,
+        icon: <Icon name="clock" size="sm" />,
         help: t('usage.help.wall'),
       },
       {
         key: 'active',
         label: t('usage.metrics.active'),
         value: formatUsageDuration(report.time.activeTurnMs, t),
-        icon: Activity,
+        icon: <Icon glyph={Activity} size="sm" />,
         help: t('usage.help.active'),
       },
       {
         key: 'files',
         label: t('usage.metrics.files'),
         value: getFileSummaryLabel(report, t),
-        icon: FileText,
+        icon: <Icon name="files" size="sm" />,
         help: fileMetricHelp,
       },
       {
         key: 'errors',
         label: t('usage.metrics.errors'),
         value: formatUsageNumber(report.errors.totalErrors, t),
-        icon: AlertTriangle,
+        icon: <Icon glyph={AlertTriangle} size="sm" />,
         tone: report.errors.totalErrors > 0 ? 'warning' : undefined,
         help: t('usage.help.errors'),
       },
@@ -247,28 +246,30 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         <div className="session-usage-report-card__header" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="header">
           <div className="session-usage-report-card__title-block" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="title">
             <div className="session-usage-report-card__meta">
-              <span>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</span>
-              <span>{t('usage.card.turns', { count: report.scope.turnCount })}</span>
-              <span>{workspacePathLabel}</span>
+              <OverflowText>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</OverflowText>
+              <OverflowText>{t('usage.card.turns', { count: report.scope.turnCount })}</OverflowText>
+            </div>
+            <div className="session-usage-report-card__compact-workspace">
+              <Icon name="folder" size="sm" />
+              <OverflowText title={workspacePathLabel}>{workspacePathLabel}</OverflowText>
             </div>
           </div>
           <div className="session-usage-report-card__actions" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="actions">
             <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
               <IconButton
-                className="session-usage-report-card__copy-action"
                 size="sm"
                 onClick={handleCopy}
                 data-testid="session-usage-copy"
                 aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-                icon={copied ? <Icon name="check-line" size="lg" style={{ width: 17, height: 17 }} /> : <Icon name="duplicate" size="lg" style={{ width: 17, height: 17 }} />}
+                icon={<Icon name={copied ? 'check-line' : 'duplicate'} size="sm" />}
               />
             </Tooltip>
             <Tooltip content={t('usage.actions.openDetails')}>
               <Button
                 type="button"
-                variant="outline"
+                variant="text"
                 size="sm"
-                trailingIcon={<Icon name="chevron-right" size="lg" style={{ width: 15, height: 15 }} aria-hidden />}
+                trailingIcon={<Icon name="chevron-right" size="sm" />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 data-testid="session-usage-details"
@@ -281,63 +282,61 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         </div>
 
         <div className="session-usage-report-card__compact-overview">
-          <section className="session-usage-report-card__compact-token" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="metric">
-            <div className="session-usage-report-card__compact-token-label">
-              <Database size={16} strokeWidth={1.8} aria-hidden />
-              <span>{t('usage.card.tokenUsage')}</span>
-            </div>
-            <div className="session-usage-report-card__compact-token-value">
-              {formatTokenCount(tokenTotal, t)}
-            </div>
-            <div className="session-usage-report-card__compact-model">
-              {primaryModelHelp ? (
-                <Tooltip content={primaryModelHelp}>
-                  <span className="session-usage-report-card__compact-model-name session-usage-report-card__compact-model-name--help">
-                    {primaryModelLabel}
-                  </span>
-                </Tooltip>
-              ) : (
-                <span className="session-usage-report-card__compact-model-name">{primaryModelLabel}</span>
-              )}
-              <span className="session-usage-report-card__compact-model-separator" aria-hidden />
-              <span>{t('usage.card.calls', { count: primaryModel?.callCount ?? 0 })}</span>
-            </div>
-            <div className="session-usage-report-card__compact-cache">
-              <Database size={15} strokeWidth={1.7} aria-hidden />
-              <span className="session-usage-report-card__compact-cache-label">{t('usage.metrics.cached')}</span>
-              <UsageMetricValue value={cachedTokenText} help={cachedTokenHelp} />
-            </div>
-          </section>
+          <Card appearance="subtle" padding="md">
+            <section className="session-usage-report-card__compact-token" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="metric">
+              <div className="session-usage-report-card__compact-token-label">
+                <Icon glyph={Database} size="sm" />
+                <span>{t('usage.card.tokenUsage')}</span>
+              </div>
+              <div className="session-usage-report-card__compact-token-value">
+                {formatTokenCount(tokenTotal, t)}
+              </div>
+              <div className="session-usage-report-card__compact-model">
+                {primaryModelHelp ? (
+                  <Tooltip content={primaryModelHelp}>
+                    <span className="session-usage-report-card__compact-model-name session-usage-report-card__compact-model-name--help">
+                      {primaryModelLabel}
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span className="session-usage-report-card__compact-model-name">{primaryModelLabel}</span>
+                )}
+                <span className="session-usage-report-card__compact-model-calls">{t('usage.card.calls', { count: primaryModel?.callCount ?? 0 })}</span>
+              </div>
+              <div className="session-usage-report-card__compact-cache">
+                <span className="session-usage-report-card__compact-cache-label">{t('usage.metrics.cached')}</span>
+                <UsageMetricValue value={cachedTokenText} help={cachedTokenHelp} />
+              </div>
+            </section>
+          </Card>
 
           <div className="session-usage-report-card__compact-metrics" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="metrics">
-            {compactMetrics.map(metric => {
-              const Icon = metric.icon;
-              return (
+            {compactMetrics.map(metric => (
+              <Card appearance="subtle" padding="sm" radius="sm" key={metric.key}>
                 <div
                   data-openbitfun-component="session-usage-report-card"
                   data-openbitfun-part="metric"
                   className={`session-usage-report-card__compact-metric${metric.tone ? ` session-usage-report-card__compact-metric--${metric.tone}` : ''}`}
-                  key={metric.key}
                 >
                   <div className="session-usage-report-card__compact-metric-label">
-                    <Icon size={18} strokeWidth={1.8} aria-hidden />
+                    {metric.icon}
                     <span>{metric.label}</span>
                   </div>
                   <UsageMetricValue value={metric.value} help={metric.help} />
                 </div>
-              );
-            })}
+              </Card>
+            ))}
           </div>
         </div>
 
         <section className="session-usage-report-card__compact-tools" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="lists">
           <div className="session-usage-report-card__compact-tools-header">
-            <h4>{t('usage.sections.tools')}</h4>
+            <h3>{t('usage.sections.tools')}</h3>
             {showAllTools && (
               <Tooltip content={showAllTools.ariaLabel}>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="text"
                   size="sm"
                   trailingIcon={<Icon name="chevron-right" size="sm" aria-hidden />}
                   onClick={showAllTools.onClick}
@@ -364,9 +363,9 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 <span className="session-usage-report-card__compact-tool-icon" aria-hidden>
                   {renderCompactToolIcon(tool.toolName, tool.category)}
                 </span>
-                <span className="session-usage-report-card__compact-tool-name">
+                <OverflowText className="session-usage-report-card__compact-tool-name" title={tool.redacted ? getRedactedLabel(t) : tool.toolName}>
                   {tool.redacted ? getRedactedLabel(t) : tool.toolName}
-                </span>
+                </OverflowText>
                 <span className="session-usage-report-card__compact-tool-calls">
                   {t('usage.card.calls', { count: tool.callCount })}
                 </span>
@@ -433,9 +432,9 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         <div className="session-usage-report-card__title-block" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="title">
           <h3 className="session-usage-report-card__title">{t('usage.card.heading')}</h3>
           <div className="session-usage-report-card__meta">
-            <span>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</span>
-            <span>{t('usage.card.turns', { count: report.scope.turnCount })}</span>
-            <span>{workspacePathLabel}</span>
+            <OverflowText>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</OverflowText>
+            <OverflowText>{t('usage.card.turns', { count: report.scope.turnCount })}</OverflowText>
+            <OverflowText>{workspacePathLabel}</OverflowText>
           </div>
         </div>
         <div className="session-usage-report-card__actions" data-openbitfun-component="session-usage-report-card" data-openbitfun-part="actions">
@@ -459,7 +458,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                   onChange={handleRedactExportPathsChange}
                   aria-label={t('usage.export.redactPaths')}
                 />
-                <span>{t('usage.export.redactPaths')}</span>
+                <OverflowText>{t('usage.export.redactPaths')}</OverflowText>
               </label>
             </Tooltip>
             <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
@@ -476,7 +475,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                trailingIcon={<Icon name="chevron-right" size="lg" style={{ width: 13, height: 13 }} aria-hidden />}
+                trailingIcon={<Icon name="chevron-right" aria-hidden />}
                 onClick={handleOpenDetails}
                 disabled={!onOpenDetails}
                 aria-label={t('usage.actions.openDetails')}
@@ -497,7 +496,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               key={metric.key}
             >
               <Icon size={14} aria-hidden />
-              <span className="session-usage-report-card__metric-label">{metric.label}</span>
+              <OverflowText className="session-usage-report-card__metric-label">{metric.label}</OverflowText>
               <UsageMetricValue value={metric.value} help={metric.help} />
             </div>
           );
@@ -590,7 +589,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 function renderCompactToolIcon(toolName: string, category?: string) {
   const normalizedName = toolName.toLowerCase();
   const catalogIcon = (name: 'browser' | 'edit' | 'git' | 'search' | 'terminal') => (
-    <Icon name={name} size="lg" style={{ width: 17, height: 17 }} />
+    <Icon name={name} size="sm" />
   );
 
   if (
@@ -627,9 +626,9 @@ function renderCompactToolIcon(toolName: string, category?: string) {
     || normalizedName.includes('file')
     || category === 'file'
   ) {
-    return <FileText size={17} strokeWidth={1.8} />;
+    return <Icon name="files" size="sm" />;
   }
-  return <Wrench size={17} strokeWidth={1.8} />;
+  return <Icon glyph={Wrench} size="sm" />;
 }
 
 function UsageMetricValue({ value, help }: { value: string; help?: string }) {
@@ -708,9 +707,9 @@ function UsageMiniListLabelView({ label }: { label: UsageMiniListLabel }) {
 
   const labelText = getMiniListLabelText(label);
   const node = (
-    <span className={`session-usage-report-card__mini-list-label${typeof label !== 'string' && label.help ? ' session-usage-report-card__mini-list-label--help' : ''}`}>
+    <OverflowText className={`session-usage-report-card__mini-list-label${typeof label !== 'string' && label.help ? ' session-usage-report-card__mini-list-label--help' : ''}`}>
       {labelText}
-    </span>
+    </OverflowText>
   );
 
   return typeof label !== 'string' && label.help
@@ -782,7 +781,7 @@ function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: 
           <div className="session-usage-report-card__mini-list-row" key={`${getMiniListLabelText(item.label)}-${item.value}`} data-openbitfun-component="session-usage-report-card" data-openbitfun-part="listRow">
             <UsageMiniListLabelView label={item.label} />
             <span className="session-usage-report-card__mini-list-value">{item.value}</span>
-            <span className="session-usage-report-card__mini-list-detail">{item.detail}</span>
+            <OverflowText className="session-usage-report-card__mini-list-detail">{item.detail}</OverflowText>
           </div>
         ))
       )}

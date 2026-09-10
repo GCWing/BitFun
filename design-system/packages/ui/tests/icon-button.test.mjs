@@ -68,6 +68,19 @@ test("loading preserves the label while disabling activation", () => {
   assert.match(markup, /data-loading="true"/);
 });
 
+test("outlined circles compose the standard size with disabled and loading states", () => {
+  for (const state of [{}, { disabled: true }, { loading: true }]) {
+    const markup = renderToStaticMarkup(createElement(IconButton, {
+      "aria-label": "Add", icon: createElement("svg"),
+      size: "standard", shape: "circle", variant: "outline", ...state,
+    }));
+    assert.match(markup, /data-size="standard"/);
+    assert.match(markup, /data-openbitfun-shape="circle"/);
+    assert.match(markup, /data-openbitfun-variant="outline"/);
+    if (state.disabled || state.loading) assert.match(markup, /disabled=""/);
+  }
+});
+
 test("IconButton styles consume shared action and geometry tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 

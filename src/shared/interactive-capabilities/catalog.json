@@ -241,6 +241,11 @@
     "htmlPreview": [
       "html_preview_create",
       "html_preview_release"
+    ],
+    "githubDeviceRouting": [
+      "account_get_credential_hint",
+      "account_login",
+      "account_token_expired"
     ]
   },
   "capabilities": [
@@ -2977,13 +2982,13 @@
             "reasonEn": "Market sign-in requires the account holder to confirm an external authentication flow; the Agent can open the exact entry but cannot complete that authentication for them."
           },
           "evidence": [
-            "command:miniapp_market_auth_start",
-            "command:miniapp_market_auth_poll",
+            "command:account_github_start",
+            "command:account_github_poll",
             "command:miniapp_market_set_favorite",
             "command:miniapp_market_set_rating",
             "command:miniapp_market_installed_origins",
-            "command:miniapp_market_logout",
-            "command:miniapp_market_me"
+            "command:account_logout",
+            "command:account_github_info"
           ]
         },
         {
@@ -4239,7 +4244,7 @@
         "微信",
         "多设备",
         "Peer Device",
-        "账户同步"
+        "GitHub"
       ],
       "keywordsEn": [
         "remote connect",
@@ -4250,32 +4255,31 @@
         "WeChat",
         "multi-device",
         "peer device",
-        "account sync"
+        "GitHub"
       ],
       "highlightsZh": [
-        "通过局域网、Ngrok 或自建 Relay 连接",
+        "通过局域网或官方 Relay 连接",
         "接入飞书、Telegram 或微信 Bot",
-        "登录账户、同步会话并进入 Peer Device Mode"
+        "使用 GitHub 身份管理设备并进入 Peer Device Mode"
       ],
       "highlightsEn": [
-        "Connect through LAN, Ngrok, or a self-hosted relay",
+        "Connect through LAN or the official Relay",
         "Use Feishu, Telegram, or WeChat bots",
-        "Sign in, sync sessions, and enter Peer Device Mode"
+        "Use GitHub identity to manage devices and enter Peer Device Mode"
       ],
       "items": [
         {
           "id": "connection-methods",
-          "titleZh": "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
-          "titleEn": "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server",
+          "titleZh": "选择局域网或官方 Relay",
+          "titleEn": "Choose LAN or the official Relay",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“选择局域网或官方 Relay”需要结合当前网络与设备状态，确认目标主机后才能连接；Agent 打开连接入口，由用户完成选择。",
+            "reasonEn": "“Choose LAN or the official Relay” depends on the current network and device state and requires the user to confirm the target host; the Agent opens the connection entry for that choice."
           },
           "evidence": [
-            "command:remote_connect_get_methods",
-            "command:remote_connect_configure_custom_server"
+            "command:remote_connect_get_methods"
           ]
         },
         {
@@ -4308,7 +4312,8 @@
           "evidence": [
             "command:remote_connect_get_lan_ip",
             "command:remote_connect_get_lan_network_info",
-            "command:remote_connect_get_form_state"
+            "command:remote_connect_get_form_state",
+            "command:remote_connect_set_form_state"
           ]
         },
         {
@@ -4331,44 +4336,21 @@
           ]
         },
         {
-          "id": "relay-wizard",
-          "titleZh": "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
-          "titleEn": "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“通过向导预检、安装 Docker、部署、注册并验证自建 Relay”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "command:relay_deploy_preflight",
-            "command:relay_deploy_install_docker",
-            "command:relay_deploy_start",
-            "command:relay_deploy_register",
-            "command:relay_deploy_verify",
-            "command:relay_deploy_cancel",
-            "command:relay_deploy_poll"
-          ]
-        },
-        {
           "id": "account",
-          "titleZh": "登录、退出并查看账户状态和凭据提示",
-          "titleEn": "Sign in, sign out, and inspect account status and credential hints",
+          "titleZh": "使用 GitHub 登录、退出并查看身份状态",
+          "titleEn": "Sign in with GitHub, sign out, and inspect identity status",
           "control": {
             "kind": "open",
             "reasonCode": "externalAuth",
-            "reasonZh": "OpenBitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
-            "reasonEn": "OpenBitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
+            "reasonZh": "GitHub 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
+            "reasonEn": "GitHub account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
           },
           "evidence": [
-            "command:account_login",
-            "command:account_finalize_login",
+            "command:account_github_start",
+            "command:account_github_poll",
+            "command:account_github_info",
             "command:account_logout",
-            "command:account_status",
-            "command:account_get_credential_hint",
-            "command:account_cancel_pending_login",
-            "command:account_delegate_to_paired",
-            "command:account_token_expired"
+            "command:account_status"
           ]
         },
         {
@@ -4388,44 +4370,6 @@
             "command:account_delete_device",
             "command:account_device_rpc",
             "command:account_execute_on_device"
-          ]
-        },
-        {
-          "id": "session-sync",
-          "titleZh": "同步、导出、导入、删除或发送会话到另一台设备",
-          "titleEn": "Sync, export, import, delete, or send sessions to another device",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“同步、导出、导入、删除或发送会话到另一台设备”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Sync, export, import, delete, or send sessions to another device” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "command:account_sync_session",
-            "command:account_export_local_session",
-            "command:account_import_remote_sessions",
-            "command:account_delete_synced_session",
-            "command:account_send_session_to_device",
-            "command:account_export_all_sessions",
-            "command:account_fetch_session_turns",
-            "command:account_fetch_synced_sessions"
-          ]
-        },
-        {
-          "id": "settings-sync",
-          "titleZh": "在设备间自动或手动同步 OpenBitFun 设置",
-          "titleEn": "Synchronize OpenBitFun settings across devices automatically or on demand",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“在设备间自动或手动同步 OpenBitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Synchronize OpenBitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          },
-          "evidence": [
-            "command:account_sync_settings",
-            "command:account_fetch_settings",
-            "command:account_auto_sync",
-            "command:remote_connect_set_form_state"
           ]
         },
         {
@@ -4802,12 +4746,12 @@
         }
       ],
       "stepsZh": [
-        "登录 OpenBitFun 账户",
+        "使用 GitHub 登录",
         "打开 Pages",
         "选择页面并确认发布与可见性"
       ],
       "stepsEn": [
-        "Sign in to a OpenBitFun account",
+        "Sign in to a GitHub account",
         "Open Pages",
         "Choose a page and confirm publishing and visibility"
       ],
@@ -7005,11 +6949,13 @@
       "categoryId": "assistant",
       "titleZh": "会话与工作区设置",
       "titleEn": "Session & workspace settings",
-      "summaryZh": "控制会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
-      "summaryEn": "Control session-title generation, accelerated workspace search, and project-context behavior.",
+      "summaryZh": "控制默认 Agent Harness、会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
+      "summaryEn": "Control the default Agent Harness, session-title generation, accelerated workspace search, and project-context behavior.",
       "keywordsZh": [
         "会话设置",
         "工作区设置",
+        "默认 Harness",
+        "上次选择",
         "标题生成",
         "项目搜索",
         "索引"
@@ -7017,21 +6963,40 @@
       "keywordsEn": [
         "session settings",
         "workspace settings",
+        "default Harness",
+        "last selection",
         "title generation",
         "project search",
         "index"
       ],
       "highlightsZh": [
+        "跟随上次选择或固定默认 Harness",
         "自动生成会话标题",
         "本地工作区加速搜索",
         "会话使用的标题模型"
       ],
       "highlightsEn": [
+        "Follow the last selection or fix a default Harness",
         "Automatic session titles",
         "Accelerated local-workspace search",
         "Model used for session titles"
       ],
       "items": [
+        {
+          "id": "default-agent-harness",
+          "titleZh": "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+          "titleEn": "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness”由会话设置页中的关联控件共同管理，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把选择保留在用户可见界面。",
+            "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user."
+          },
+          "evidence": [
+            "source:src/web-ui/src/infrastructure/config/components/DefaultHarnessConfig.tsx#DefaultHarnessConfig",
+            "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#defaultHarness.title"
+          ]
+        },
         {
           "id": "automatic-titles",
           "titleZh": "启用或停用根据会话内容自动生成标题",
@@ -7116,18 +7081,22 @@
       "stepsZh": [
         "打开设置",
         "进入“工作区 > 会话与工作区”",
-        "调整标题或搜索选项"
+        "调整默认 Harness、标题或搜索选项"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Workspace > Session & Workspace",
-        "Tune title or search controls"
+        "Tune the default Harness, title, or search controls"
       ],
       "agentExamplesZh": [
+        "让新会话跟随 ChatInput 上一次选择的 Harness",
+        "把新会话固定为 Ultimate Harness",
         "关闭自动生成会话标题",
         "启用工作区加速搜索"
       ],
       "agentExamplesEn": [
+        "Make new sessions follow the last Harness selected in ChatInput",
+        "Fix Ultimate as the Harness for new sessions",
         "Turn off automatic session titles",
         "Enable accelerated workspace search"
       ],
@@ -9443,9 +9412,6 @@
     "worktree": {
       "capabilityId": "feature.git"
     },
-    "relay_deploy": {
-      "capabilityId": "feature.remote-connect"
-    },
     "browser": {
       "capabilityId": "feature.browser"
     },
@@ -9535,6 +9501,9 @@
     },
     "context_upload": {
       "capabilityId": "feature.files-editor"
+    },
+    "account_identity": {
+      "capabilityId": "feature.remote-connect"
     }
   }
 }

@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 /**
  * Main application layout.
  *
@@ -8,11 +9,10 @@
  * TitleBar removed; window controls moved to NavBar, dialogs managed here.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef, useContext, lazy, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useContext, lazy, Suspense } from 'react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
-import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { usePermissionRequestNotify } from '../hooks/usePermissionRequestNotify';
 import { useApp } from '../hooks/useApp';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -35,9 +35,12 @@ import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
+import { startSessionSceneLifecycle } from '../services/sessionSceneLifecycle';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { notificationService } from '@/shared/notification-system';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { AppearanceBackgroundMediaLayer, appearanceRuntime, useAppearance } from '@/infrastructure/appearance';
+import { PeerConnectionStatus } from '@/infrastructure/peer-device/PeerConnectionStatus';
 import './AppLayout.scss';
 
 type TransitionDirection = 'entering' | 'returning' | null;
@@ -78,6 +81,7 @@ interface WindowModeHint {
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
+  useLayoutEffect(startSessionSceneLifecycle, []);
   const { t } = useI18n('components');
   const { t: tCommon } = useI18n('common');
   const currentAppearance = useAppearance().current;
@@ -99,7 +103,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       : 'local';
 
   const { isToolbarMode } = useToolbarModeContext();
-  const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
   const isMacOS = useMemo(() => {
     return isMacOSDesktopRuntime();
   }, []);
@@ -155,9 +158,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       try {
         const raw = await configManager.getOptionalConfig('app.keybindings');
         const overrides = parseStoredKeybindings(raw);
-        if (Object.keys(overrides).length > 0) {
-          shortcutManager.loadUserOverrides(overrides);
-        }
+        shortcutManager.loadUserOverrides(overrides);
       } catch {
         // No overrides stored yet — that's fine
       }
@@ -165,9 +166,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     void load();
 
-    const unsubscribe = configManager.onConfigChange((path) => {
-      if (path === 'app.keybindings') void load();
-    });
+    const unsubscribe = configManager.watch('app.keybindings', () => { void load(); });
 
     return () => unsubscribe();
   }, []);
@@ -331,7 +330,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           const initialSessionMode =
             currentWorkspace.workspaceKind === WorkspaceKind.Assistant
               ? 'Claw'
-              : explicitPreferredMode || 'agentic';
+              : explicitPreferredMode;
           sessionId = await flowChatManager.createChatSession(
             flowChatSessionConfigForWorkspace(currentWorkspace),
             initialSessionMode,
@@ -339,11 +338,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           if (cancelled) {
             return;
           }
-        }
-
-        const activeSessionId = sessionId || flowChatStore.getState().activeSessionId;
-        if (currentWorkspace.workspaceKind === WorkspaceKind.Assistant && activeSessionId) {
-          ensureAssistantBootstrapForWorkspace(currentWorkspace, activeSessionId);
         }
 
         const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
@@ -423,7 +417,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     currentWorkspace?.connectionId,
     currentWorkspace?.sshHost,
     remoteSshFlowChatKey,
-    ensureAssistantBootstrapForWorkspace,
     t,
   ]);
 
@@ -587,8 +580,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return () => window.removeEventListener('toolbar-cancel-task', handleToolbarCancelTask);
   }, []);
 
-  // Create one unified project session. Balanced Harness currently uses the
-  // existing agentic runtime path until the typed Harness contract lands.
+  // Create one unified project session using the user's default Harness policy.
   const handleCreateFlowChatSession = React.useCallback(async () => {
     try {
       if (!currentWorkspace?.rootPath) {
@@ -597,7 +589,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       }
       const flowChatManager = FlowChatManager.getInstance();
       const sessionConfig = flowChatSessionConfigForWorkspace(currentWorkspace);
-      await flowChatManager.createChatSession(sessionConfig, 'agentic');
+      const sessionId = await flowChatManager.createChatSession(sessionConfig);
+      await openMainSession(sessionId);
     } catch (error) {
       log.error('Failed to create FlowChat session', error);
     }
@@ -628,6 +621,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         : {};
       void FlowChatManager.getInstance()
         .createAcpChatSession(clientId, config)
+        .then(sessionId => openMainSession(sessionId))
         .catch(error => log.error('Failed to create ACP FlowChat session', error));
     };
     window.addEventListener('openbitfun:create-acp-session', handler);
@@ -716,6 +710,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           <Suspense fallback={null}>
             <ToolbarMode />
           </Suspense>
+          <PeerConnectionStatus />
         </div>
       </>
     );
@@ -747,7 +742,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             aria-live="polite"
           >
             <span className="openbitfun-window-mode-hint__title" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeTitle">{windowModeHint.title}</span>
-            <span className="openbitfun-window-mode-hint__detail" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeDetail">{windowModeHint.detail}</span>
+            <OverflowText className="openbitfun-window-mode-hint__detail" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeDetail">{windowModeHint.detail}</OverflowText>
           </div>
         )}
 
@@ -762,6 +757,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             isExiting={transitionDir === 'returning'}
           />
         </main>
+        <PeerConnectionStatus />
 
         {/* Hello stays available across every client scene, including Welcome. */}
         <Suspense fallback={null}>

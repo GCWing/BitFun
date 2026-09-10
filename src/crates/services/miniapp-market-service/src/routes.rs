@@ -233,6 +233,7 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
             submission_policy_state,
             enforce_submission_write_policy,
         ))
+        .layer(axum::middleware::from_fn(crate::auth_admission::admit))
         .with_state(state)
 }
 
@@ -555,8 +556,19 @@ async fn github_oauth_callback(
             )?;
             Ok(response)
         }
-        CompletedOAuth::Desktop => {
-            Ok(Redirect::to("/miniapp/auth/desktop-complete").into_response())
+        CompletedOAuth::Desktop {
+            session_token,
+            csrf_token,
+            expires_at,
+        } => {
+            let mut response = Redirect::to("https://auth.openbitfun.com/complete").into_response();
+            state.auth.append_web_session_cookies(
+                response.headers_mut(),
+                &session_token,
+                &csrf_token,
+                expires_at,
+            )?;
+            Ok(response)
         }
     }
 }

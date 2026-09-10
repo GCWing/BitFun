@@ -32,11 +32,11 @@ export const editableTokenCatalog: readonly EditableToken[] = [
 ];
 
 export const colorTokenCatalog: readonly EditableToken[] = editableTokenCatalog.filter(
-  (token) => token.category === "color",
+  (token) => token.type === "color",
 );
 
 export const nonColorTokenCatalog: readonly EditableToken[] = editableTokenCatalog.filter(
-  (token) => token.category !== "color",
+  (token) => token.type !== "color",
 );
 
 const categoryLabels: Readonly<Record<string, string>> = {

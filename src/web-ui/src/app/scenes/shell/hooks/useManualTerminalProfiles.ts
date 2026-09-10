@@ -11,6 +11,7 @@ import {
 
 interface UseManualTerminalProfilesReturn {
   profiles: ManualTerminalProfile[];
+  error: string | null;
   profilesBySessionId: Map<string, ManualTerminalProfile>;
   refreshProfiles: () => void;
   saveProfile: (input: ManualTerminalProfileInput) => ManualTerminalProfile | null;
@@ -22,15 +23,25 @@ interface UseManualTerminalProfilesReturn {
 export function useManualTerminalProfiles(
   workspacePath?: string,
 ): UseManualTerminalProfilesReturn {
-  const [profiles, setProfiles] = useState<ManualTerminalProfile[]>([]);
+  const [snapshot, setSnapshot] = useState<{
+    key: string | undefined; profiles: ManualTerminalProfile[]; error: string | null;
+  }>({ key: workspacePath, profiles: [], error: null });
+  const profiles = useMemo(() => snapshot.key === workspacePath ? snapshot.profiles : [], [snapshot, workspacePath]);
 
   const refreshProfiles = useCallback(() => {
     if (!workspacePath) {
-      setProfiles([]);
+      setSnapshot({ key: workspacePath, profiles: [], error: null });
       return;
     }
 
-    setProfiles(listManualTerminalProfiles(workspacePath));
+    try {
+      setSnapshot({ key: workspacePath, profiles: listManualTerminalProfiles(workspacePath), error: null });
+    } catch (error) {
+      setSnapshot(previous => ({
+        key: workspacePath, profiles: previous.key === workspacePath ? previous.profiles : [],
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }, [workspacePath]);
 
   useEffect(() => {
@@ -79,6 +90,7 @@ export function useManualTerminalProfiles(
 
   return {
     profiles,
+    error: snapshot.key === workspacePath ? snapshot.error : null,
     profilesBySessionId,
     refreshProfiles,
     saveProfile,

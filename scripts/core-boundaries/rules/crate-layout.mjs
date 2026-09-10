@@ -2,6 +2,7 @@
 // owns where workspace crates live under src/crates.
 
 export const crateLayoutRules = [
+  { crateName: 'config-contracts', layer: 'contracts', path: 'src/crates/contracts/config-contracts' },
   { crateName: 'core-types', layer: 'contracts', path: 'src/crates/contracts/core-types' },
   { crateName: 'events', layer: 'contracts', path: 'src/crates/contracts/events' },
   { crateName: 'product-domains', layer: 'contracts', path: 'src/crates/contracts/product-domains' },
@@ -23,6 +24,8 @@ export const crateLayoutRules = [
 
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },
+  { crateName: 'legacy-migration-adapters', layer: 'services', path: 'src/crates/services/legacy-migration-adapters' },
+  { crateName: 'legacy-migration', layer: 'services', path: 'src/crates/services/legacy-migration' },
   { crateName: 'miniapp-market-service', layer: 'services', path: 'src/crates/services/miniapp-market-service' },
   { crateName: 'skin-market-service', layer: 'services', path: 'src/crates/services/skin-market-service' },
   { crateName: 'relay-service', layer: 'services', path: 'src/crates/services/relay-service' },
@@ -40,6 +43,7 @@ export const crateLayoutRules = [
   { crateName: 'codex-adapter', layer: 'adapters', path: 'src/crates/adapters/codex-adapter' },
   { crateName: 'opencode-adapter', layer: 'adapters', path: 'src/crates/adapters/opencode-adapter' },
   { crateName: 'dsh-adapter', layer: 'adapters', path: 'src/crates/adapters/dsh-adapter' },
+  { crateName: 'pi-adapter', layer: 'adapters', path: 'src/crates/adapters/pi-adapter' },
   { crateName: 'opencode-plugin-host', layer: 'adapters', path: 'src/crates/adapters/opencode-plugin-host' },
   { crateName: 'static-hook-support', layer: 'adapters', path: 'src/crates/adapters/static-hook-support' },
   { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },

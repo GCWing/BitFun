@@ -2,24 +2,26 @@ import OpenBitFunMobileCore
 import SwiftUI
 
 struct PairingSheet: View {
-    private enum Step { case intro, scan }
+    private enum Step { case intro, account, scan }
 
     @ObservedObject var model: MobileAppModel
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .intro
     @State private var pairingURL = MobileLaunchConfiguration.pairingAccountPreview
-        ? "https://relay.example.com/#/pair?room=preview-room&pk=preview-key&auth=account&user=preview"
+        ? "https://remote.openbitfun.com/v/1.0.0/#/pair?did=preview-device"
         : ""
-    @State private var pairingUserID = ""
-    // Intentionally transient: pairing passwords must never enter saved scene state.
-    @State private var pairingPassword = ""
-    @State private var scannerOpen = false
     @State private var manualOpen = false
+    @State private var scanError: String?
+    @State private var switchingDeviceID: String?
     @FocusState private var focused: Bool
 
     var body: some View {
         return ZStack {
-            if step == .intro { introPage } else { scanPage }
+            switch step {
+            case .intro: introPage
+            case .account: accountDevicePage
+            case .scan: scanPage
+            }
             if manualOpen { manualPairingOverlay }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -27,28 +29,217 @@ struct PairingSheet: View {
         .onAppear {
             if model.pairingScanRequested {
                 step = .scan
-                scannerOpen = true
                 model.consumePairingScanRequest()
             } else if MobileLaunchConfiguration.pairingManualPreview ||
                 MobileLaunchConfiguration.pairingAccountPreview {
                 step = .scan
                 manualOpen = true
                 focused = !MobileLaunchConfiguration.pairingAccountPreview
+            } else if model.accountUser != nil {
+                step = .account
+                model.refreshRemoteDevices()
             }
         }
-        .fullScreenCover(isPresented: $scannerOpen) {
-            QRCodeScannerView { code in
-                pairingURL = code
-                scannerOpen = false
-                if PairingLinkHintsKt.inspectPairingLink(url: code).requiresAccount {
-                    manualOpen = true
-                    focused = true
+        .onChange(of: model.accountSelectedDeviceID) { selectedDeviceID in
+            guard step == .account, selectedDeviceID == switchingDeviceID else { return }
+            switchingDeviceID = nil
+            dismiss()
+        }
+        .onChange(of: model.coreErrorMessage) { error in
+            if step == .account, error != nil { switchingDeviceID = nil }
+        }
+    }
+
+    private var accountDevicePage: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .frame(width: 48, height: 48)
+                        .background(OpenBitFunTheme.card)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.localized("返回"))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.localized("选择桌面设备"))
+                        .font(MobileDesignTypography.headlineLarge.font)
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                    Text(model.localized("远程"))
+                        .font(MobileDesignTypography.bodySmall.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 18)
+            .frame(height: 92, alignment: .top)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(model.localized("选择一台在线桌面继续工作。"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+
+                    accountDeviceList
+
+                    Button {
+                        scanError = nil
+                        step = .scan
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "link")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(OpenBitFunTheme.muted.opacity(0.66))
+                                .frame(width: 22, height: 22)
+                            Text(model.localized("扫描二维码连接"))
+                                .font(MobileDesignTypography.bodyLarge.font.weight(.medium))
+                                .foregroundStyle(OpenBitFunTheme.ink)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(OpenBitFunTheme.muted.opacity(0.44))
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: 58)
+                        .background(OpenBitFunTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenBitFunTheme.line, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: 520)
+                .padding(.horizontal, 28)
+                .padding(.top, 10)
+                .padding(.bottom, 34)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .background(OpenBitFunTheme.page)
+    }
+
+    private var accountDeviceList: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(model.localized("账号设备"))
+                    .font(MobileDesignTypography.bodyLarge.font.weight(.bold))
+                    .foregroundStyle(OpenBitFunTheme.ink)
+                Spacer(minLength: 0)
+                Button(action: model.refreshRemoteDevices) {
+                    Text(model.localized(model.accountRefreshing ? "正在加载" : "刷新"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(model.accountRefreshing ? OpenBitFunTheme.muted : OpenBitFunTheme.accent)
+                        .frame(minWidth: 44, minHeight: 38, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.accountRefreshing)
+            }
+            .frame(height: 38)
+
+            Group {
+                if model.accountRefreshing && accountDesktopDevices.isEmpty {
+                    VStack(spacing: 0) {
+                        accountDeviceSkeleton
+                        accountDeviceSkeleton
+                    }
+                } else if accountDesktopDevices.isEmpty {
+                    Text(model.localized("暂无可连接的桌面设备"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 } else {
-                    model.submitPairing(url: code)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            ForEach(accountDesktopDevices) { device in
+                                accountDeviceRow(device)
+                            }
+                        }
+                    }
                 }
             }
-            .ignoresSafeArea()
+            .frame(height: 120)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(height: 174)
+        .background(OpenBitFunTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenBitFunTheme.line, lineWidth: 1))
+    }
+
+    private var accountDesktopDevices: [MobileAccountDevice] {
+        model.accountDevices.filter { model.localDeviceID.isEmpty || $0.id != model.localDeviceID }
+    }
+
+    private var accountDeviceSkeleton: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 5).fill(OpenBitFunTheme.soft).frame(width: 26, height: 22)
+            VStack(alignment: .leading, spacing: 7) {
+                RoundedRectangle(cornerRadius: 4).fill(OpenBitFunTheme.soft).frame(width: 142, height: 12)
+                RoundedRectangle(cornerRadius: 4).fill(OpenBitFunTheme.soft).frame(width: 52, height: 9)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .frame(height: 60)
+    }
+
+    private func accountDeviceRow(_ device: MobileAccountDevice) -> some View {
+        Button {
+            guard device.online, switchingDeviceID == nil else { return }
+            switchingDeviceID = device.id
+            model.selectRemoteDevice(device)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(OpenBitFunTheme.muted.opacity(device.online ? 0.68 : 0.38))
+                    .frame(width: 26, height: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(device.name.isEmpty ? device.id : device.name)
+                        .font(MobileDesignTypography.titleSmall.font)
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .lineLimit(1)
+                    Text(accountDeviceStatus(device))
+                        .font(MobileDesignTypography.bodySmall.font)
+                        .foregroundStyle(device.online ? OpenBitFunTheme.statusSuccess : OpenBitFunTheme.muted)
+                }
+                Spacer(minLength: 0)
+                if device.online && !(device.selected && model.connectionPhase == .connected) {
+                    Text(model.localized(switchingDeviceID == device.id ? "正在连接" : "连接"))
+                        .font(MobileDesignTypography.bodyMedium.font)
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(OpenBitFunTheme.soft)
+                        .clipShape(Capsule())
+                } else if device.online {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(OpenBitFunTheme.muted.opacity(0.44))
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 60)
+            .contentShape(Rectangle())
+            .opacity(device.online ? 1 : 0.64)
+        }
+        .buttonStyle(.plain)
+        .disabled(!device.online || switchingDeviceID != nil)
+    }
+
+    private func accountDeviceStatus(_ device: MobileAccountDevice) -> String {
+        if switchingDeviceID == device.id { return model.localized("正在连接") }
+        let presence = model.localized(device.online ? "在线" : "离线")
+        if device.selected && model.connectionPhase == .connected {
+            return "\(model.localized("当前控制")) · \(presence)"
+        }
+        if device.selected { return "\(model.localized("上次连接")) · \(presence)" }
+        return presence
     }
 
     private var introPage: some View {
@@ -71,10 +262,10 @@ struct PairingSheet: View {
             Spacer(minLength: 12)
             SignedOutConnectionActions(
                 scanTitle: model.localized("扫码连接"),
-                accountTitle: model.localized("登录 OpenBitFun 账号"),
+                accountTitle: model.localized("使用 GitHub 登录"),
                 onScan: {
+                    scanError = nil
                     step = .scan
-                    scannerOpen = true
                 },
                 onOpenAccount: model.openAccountFromPairing,
                 enabled: !model.pairingBusy,
@@ -89,30 +280,59 @@ struct PairingSheet: View {
 
     private var scanPage: some View {
         VStack(spacing: 0) {
-            hero(height: 252)
-            VStack(spacing: 22) {
-                Button { scannerOpen = true } label: {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(.system(size: 72, weight: .regular))
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 176, height: 176)
-                        .background(MobileDesignColors.connectHeroSurface)
-                        .overlay(RoundedRectangle(cornerRadius: 34).stroke(OpenBitFunTheme.line, lineWidth: 1.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 34))
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
-                Text(model.localized("扫描二维码"))
-                    .font(.system(size: 24, weight: .bold)).foregroundStyle(OpenBitFunTheme.ink)
-                if let error = model.pairingError {
-                    Text(error).font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.statusDanger)
-                        .multilineTextAlignment(.center)
-                }
             }
-            .offset(y: -50)
-            Spacer(minLength: 12)
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    Text(model.localized("扫描桌面端二维码"))
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .multilineTextAlignment(.center)
+                    Text(model.localized("在 OpenBitFun 桌面端点击「连接移动端」\n扫描二维码完成连接"))
+                        .font(MobileDesignTypography.bodyLarge.font)
+                        .foregroundStyle(OpenBitFunTheme.muted)
+                        .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
+
+                    inlineScanner
+
+                    if let error = scanError ?? model.pairingError {
+                        Text(error)
+                            .font(MobileDesignTypography.bodySmall.font)
+                            .foregroundStyle(scanError == nil
+                                ? OpenBitFunTheme.statusDanger
+                                : OpenBitFunTheme.muted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            .background(OpenBitFunTheme.soft)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .padding(.top, 16)
+                    }
+                }
+                .frame(maxWidth: 520)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 20)
+                .frame(maxWidth: .infinity)
+            }
+
             Button { manualOpen = true; focused = true } label: {
-                Text(model.localized("手动输入配对码"))
-                    .font(.system(size: 20, weight: .bold))
+                Text(model.localized("改为手动配对"))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .frame(maxWidth: .infinity, minHeight: 58)
                     .background(OpenBitFunTheme.card)
@@ -122,6 +342,57 @@ struct PairingSheet: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 44)
             .padding(.bottom, 34)
+        }
+        .background(OpenBitFunTheme.page)
+    }
+
+    private var inlineScanner: some View {
+        ZStack {
+            QRCodeScannerView(
+                paused: manualOpen,
+                showsCloseButton: false,
+                onCode: handleScannedCode,
+                onCancel: {},
+                onPermissionDenied: {
+                    scanError = model.localized(
+                        "需要相机权限才能扫码，请在系统设置中允许 OpenBitFun 访问相机，或改为手动配对。"
+                    )
+                },
+                onUnavailable: {
+                    scanError = model.localized(
+                        "无法打开相机，请检查权限后重试，或改为手动配对。"
+                    )
+                }
+            )
+            .frame(width: 248, height: 248)
+
+            ForEach(0..<4, id: \.self) { index in
+                PairingScanCorner()
+                    .stroke(MobileDesignColors.connectScanAccent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 52, height: 52)
+                    .rotationEffect(.degrees(Double(index) * 90))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: scanCornerAlignment(index))
+                    .padding(20)
+            }
+        }
+        .frame(width: 248, height: 248)
+        .background(OpenBitFunTheme.mediaBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(OpenBitFunTheme.line, lineWidth: 1))
+    }
+
+    private func handleScannedCode(_ code: String) {
+        pairingURL = code
+        scanError = nil
+        model.submitPairing(url: code)
+    }
+
+    private func scanCornerAlignment(_ index: Int) -> Alignment {
+        switch index {
+        case 0: .topLeading
+        case 1: .topTrailing
+        case 2: .bottomTrailing
+        default: .bottomLeading
         }
     }
 
@@ -133,7 +404,11 @@ struct PairingSheet: View {
                 endPoint: .bottomTrailing
             )
             Button {
-                if step == .scan { step = .intro } else { dismiss() }
+                if step == .scan {
+                    step = model.accountUser == nil ? .intro : .account
+                } else {
+                    dismiss()
+                }
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .medium))
@@ -149,31 +424,21 @@ struct PairingSheet: View {
     }
 
     private var manualPairingOverlay: some View {
-        let hints = PairingLinkHintsKt.inspectPairingLink(url: pairingURL)
-        let effectiveUserID = pairingUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? hints.suggestedUserId
-            : pairingUserID.trimmingCharacters(in: .whitespacesAndNewlines)
         let canSubmit = !model.pairingBusy &&
-            !pairingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            (!hints.requiresAccount || (!effectiveUserID.isEmpty && !pairingPassword.isEmpty))
+            !pairingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         return ZStack {
             OpenBitFunTheme.scrim
                 .ignoresSafeArea()
                 .onTapGesture {
                     if !model.pairingBusy {
-                        pairingPassword = ""
                         manualOpen = false
                     }
                 }
             VStack(alignment: .leading, spacing: 20) {
-                Text(model.localized(hints.requiresAccount ? "账号认证配对" : "手动输入配对码"))
+                Text(model.localized("手动输入配对码"))
                     .font(.system(size: 24, weight: .bold)).foregroundStyle(OpenBitFunTheme.ink)
-                Text(model.localized(
-                    hints.requiresAccount
-                        ? "此桌面要求使用 OpenBitFun 账号验证身份。"
-                        : "输入桌面端显示的配对链接或代码。"
-                ))
+                Text(model.localized("输入桌面端显示的配对链接或代码。"))
                     .font(.system(size: 17)).foregroundStyle(OpenBitFunTheme.muted).lineSpacing(5)
                 TextField(model.localized("配对码或连接链接"), text: $pairingURL)
                     .textInputAutocapitalization(.never)
@@ -184,51 +449,16 @@ struct PairingSheet: View {
                     .padding(.horizontal, 20).frame(minHeight: 62)
                     .background(OpenBitFunTheme.soft).clipShape(Capsule())
                     .focused($focused)
-                if hints.requiresAccount {
-                    TextField(
-                        hints.suggestedUserId.isEmpty
-                            ? model.localized("OpenBitFun 用户名")
-                            : hints.suggestedUserId,
-                        text: $pairingUserID
-                    )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textContentType(.username)
-                    .font(.system(size: 18)).foregroundStyle(OpenBitFunTheme.ink)
-                    .padding(.horizontal, 20).frame(minHeight: 56)
-                    .background(OpenBitFunTheme.soft).clipShape(Capsule())
-
-                    SecureField(model.localized("OpenBitFun 密码"), text: $pairingPassword)
-                        .textContentType(.password)
-                        .font(.system(size: 18)).foregroundStyle(OpenBitFunTheme.ink)
-                        .padding(.horizontal, 20).frame(minHeight: 56)
-                        .background(OpenBitFunTheme.soft).clipShape(Capsule())
-
-                    Text(model.localized("账号凭据只用于本次加密配对，不会保存。"))
-                        .font(.system(size: 13))
-                        .foregroundStyle(OpenBitFunTheme.muted)
-                        .lineSpacing(3)
-                }
                 if let error = model.pairingError {
                     Text(error).font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.statusDanger)
                 }
                 HStack(spacing: 12) {
                     pairingButton("取消", primary: false) {
-                        pairingPassword = ""
                         manualOpen = false
                         focused = false
                     }
                     pairingButton(model.pairingBusy ? "正在连接" : "配对", primary: true) {
-                        if hints.requiresAccount {
-                            model.submitPairing(
-                                url: pairingURL,
-                                userID: effectiveUserID,
-                                password: pairingPassword
-                            )
-                            pairingPassword = ""
-                        } else {
-                            model.submitPairing(url: pairingURL)
-                        }
+                        model.submitPairing(url: pairingURL)
                         focused = false
                     }
                     .disabled(!canSubmit)
@@ -253,5 +483,19 @@ struct PairingSheet: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct PairingScanCorner: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: 12))
+        path.addQuadCurve(
+            to: CGPoint(x: 12, y: 0),
+            control: CGPoint(x: 0, y: 0)
+        )
+        path.addLine(to: CGPoint(x: rect.width, y: 0))
+        return path
     }
 }

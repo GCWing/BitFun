@@ -260,17 +260,6 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
           {row('worktree', undefined, view.filters.hiddenWorktrees.length > 0)}
           {row('environment', undefined, view.filters.hiddenEnvironments.length > 0)}
           {row('source', undefined, view.filters.hiddenSources.length > 0)}
-          <MenuItem
-          role="menuitemcheckbox"
-            checked={!view.filters.hideArchived}
-            metadata={!view.filters.hideArchived ? <Icon name="check-line" size="sm" aria-hidden="true" /> : null}
-            onClick={() => {
-              setActiveSubmenu(null);
-              view.toggleArchived();
-            }}
-          >
-            {t('nav.sessions.viewMenu.archived')}
-          </MenuItem>
         </MenuSection>
         <MenuSeparator />
         {view.grouping === 'grouped' ? (

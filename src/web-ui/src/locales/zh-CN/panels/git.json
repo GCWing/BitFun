@@ -1,4 +1,13 @@
 {
+  "reviewPlatform": {
+    "stateFilterUnsupported": "当前主机不支持 Gitee 全仓库状态筛选。请更新所连接的主机后使用这些页签。",
+    "fileLimit": "Gitee 返回的文件列表可能已被截断，文件数和变更统计可能不完整。",
+    "commitLimit": "Gitee 最多返回 250 条提交记录，提交历史可能不完整。",
+    "commentsLimited": "仅加载了部分评论。",
+    "checksLimited": "仅加载了部分 CI 检查项。",
+    "ciHeadUnavailable": "此 PR 未提供准确的源提交版本，无法加载 CI 检查项。",
+    "limited": "部分平台数据不完整。"
+  },
   "title": "Git",
   "init": {
     "title": "初始化 Git",

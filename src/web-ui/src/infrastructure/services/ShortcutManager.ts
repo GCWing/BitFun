@@ -138,7 +138,7 @@ export class ShortcutManager {
   /**
    * All registrations, keyed by shortcut id.
    */
-  private registrations: Map<string, ShortcutRegistration> = new Map();
+  private registrations: Map<string, ShortcutRegistration & { defaultConfig: ShortcutConfig }> = new Map();
 
   /**
    * O(1) lookup index: mapKey → sorted registrations (descending priority).
@@ -199,8 +199,9 @@ export class ShortcutManager {
       this.removeFromLookupMap(existing);
     }
 
-    const registration: ShortcutRegistration = {
+    const registration: ShortcutRegistration & { defaultConfig: ShortcutConfig } = {
       id,
+      defaultConfig: { ...config },
       config: effectiveConfig,
       callback,
       description: options?.description,
@@ -394,7 +395,7 @@ export class ShortcutManager {
 
     // Re-apply overrides to all existing registrations
     for (const [id, registration] of this.registrations.entries()) {
-      const newConfig = this.applyOverride(id, registration.config);
+      const newConfig = this.applyOverride(id, registration.defaultConfig);
       this.removeFromLookupMap(registration);
       registration.config = newConfig;
       this.addToLookupMap(registration);

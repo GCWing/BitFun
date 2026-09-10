@@ -91,6 +91,17 @@ impl Database {
         .bind(now)
         .execute(&self.pool)
         .await?;
+        // Keep a bounded grace period for clients polling an expired sign-in.
+        // These are transient authorization transactions, never product records.
+        sqlx::query("DELETE FROM desktop_auth_transactions WHERE expires_at <= ?")
+            .bind(now - 3600)
+            .execute(&self.pool)
+            .await?;
+        // Retain unexpired revoked refresh tokens for replay-family revocation.
+        sqlx::query("DELETE FROM api_tokens WHERE expires_at <= ?")
+            .bind(now)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 

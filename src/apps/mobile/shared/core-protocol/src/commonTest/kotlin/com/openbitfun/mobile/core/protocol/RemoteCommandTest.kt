@@ -115,6 +115,25 @@ class RemoteCommandTest {
     }
 
     @Test
+    fun assistantFailureFieldsRemainOptionalAndDecodeWhenPresent() {
+        val current = RelayJson.decodeFromString(
+            SessionMessagesResponse.serializer(),
+            """{"resp":"ok","messages":[{"id":"m1","turn_id":"t1","role":"assistant","content":"","status":"failed","error":"process exited"}]}""",
+        ).messages.single()
+        val legacy = RelayJson.decodeFromString(
+            SessionMessagesResponse.serializer(),
+            """{"resp":"ok","messages":[{"role":"assistant","content":"done"}]}""",
+        ).messages.single()
+
+        assertEquals("t1", current.turnId)
+        assertEquals("failed", current.status)
+        assertEquals("process exited", current.error)
+        assertNull(legacy.turnId)
+        assertNull(legacy.status)
+        assertNull(legacy.error)
+    }
+
+    @Test
     fun sendMessageImagesKeepMimeAndLegacyImageFields() {
         val encoded = RelayJson.encodeToString(
             RemoteCommand.serializer(),

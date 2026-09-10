@@ -7,7 +7,7 @@ describe('acpSession utilities', () => {
     expect(
       acpAgentTypeFromSession({
         config: { agentType: 'acp:opencode' },
-        mode: 'agentic',
+        mode: 'Standard',
       } as any)
     ).toBe('acp:opencode');
   });
@@ -15,7 +15,7 @@ describe('acpSession utilities', () => {
   it('falls back to ACP mode for older or partial session state', () => {
     expect(
       acpAgentTypeFromSession({
-        config: { agentType: 'agentic' },
+        config: { agentType: 'Standard' },
         mode: 'acp:codex',
       } as any)
     ).toBe('acp:codex');
@@ -23,7 +23,7 @@ describe('acpSession utilities', () => {
 
   it('does not classify normal sessions as ACP sessions', () => {
     const session = {
-      config: { agentType: 'agentic' },
+      config: { agentType: 'Standard' },
       mode: 'Plan',
     } as any;
 

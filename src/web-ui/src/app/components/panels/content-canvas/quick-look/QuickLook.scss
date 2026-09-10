@@ -44,9 +44,8 @@
     flex: 1;
     min-width: 0;
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--openbitfun-type-label-md-font-size);
       font-weight: var(--openbitfun-type-label-sm-font-weight);

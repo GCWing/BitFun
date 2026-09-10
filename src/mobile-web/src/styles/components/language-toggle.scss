@@ -16,7 +16,6 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
-    transform: scale(0.96);
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }

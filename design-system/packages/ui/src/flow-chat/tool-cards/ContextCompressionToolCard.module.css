@@ -10,7 +10,6 @@
     min-inline-size: 0;
     color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-body-sm-font-size);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

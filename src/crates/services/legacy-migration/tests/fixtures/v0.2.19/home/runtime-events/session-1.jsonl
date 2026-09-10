@@ -1,0 +1,1 @@
+{"streamId":"fixture-stream","cursor":1,"event":{"type":"TextChunk","session_id":"session-1","turn_id":"turn-runtime-1","round_id":"round-runtime-1","text":"Synthetic in-flight output"}}

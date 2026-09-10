@@ -178,7 +178,6 @@
   .valueLabel,
   .placeholder {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -234,7 +233,6 @@
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-surface-tertiary);
     pointer-events: auto;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -244,7 +242,6 @@
 
   .tag > span {
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .clear,

@@ -24,7 +24,7 @@ each missing what the other had.
 | `flowChatLiveTailWindow.test.ts` | "does the transcript still reach the newest Turn" |
 | `flowChatViewportAnchor.test.ts` | anchor geometry and the DOM contract |
 | `useFlowChatViewportAnchor.test.tsx` | capture, restore, carry, the settle window |
-| `VirtualMessageList.session-boundary.test.tsx` | prepend compensation, the ask, and navigation-target current Turn with gesture/follow/session handoff |
+| `VirtualMessageList.session-boundary.test.tsx` | prepend compensation, the ask, navigation-target current Turn with gesture/follow/session handoff, and search placement only outside the readable viewport |
 | `ModernFlowChatContainer.history-state.test.tsx` | history presentation and the submission event |
 | `flowChatViewportOwnership.test.ts` | the priority order, preemption, expiry |
 | `../../../infrastructure/diagnostics/flowChatViewportDiagnostics.test.ts` | coalescing, placement sampling, the switch |
@@ -33,6 +33,10 @@ each missing what the other had.
 | `useFlowChatVirtualizer.aim.test.tsx` | the re-aim, and giving it up on takeover |
 | `VirtualMessageList.layout.test.ts` | the item-height estimate and the spacer |
 | `FlowChatTurnRail.test.tsx` | single-marker emphasis, neighboring hover fan, independent keyboard focus, reduced motion, and rail navigation |
+| `useFlowChatSearch.test.ts` | exact matching-block decoration, occurrence counting, and search navigation state |
+| `flowChatSearchDom.test.ts` | concrete text ranges and independent highlight ownership across rows and panes |
+| `flowChatSearchPresentation.test.ts` | visible source highlighting and single-line marker geometry, wrapping, scrolling, and clipping |
+| `FlowChatHeader.test.tsx` | shared SearchField composition, result controls, and input identity while expanding |
 
 ## Manual
 
@@ -205,6 +209,19 @@ group does not renumber the others.
    reaches the newest Turn, so there is nothing past its bottom to load. This
    is the case that showed "preparing the conversation history" under a
    complete transcript, permanently, and survived cancelling the Turn.
+
+### Session search
+
+1. In light and dark themes, focus the search field and enter a query. The
+   border stays quiet and neutral; the complete result panel has one frosted
+   surface. Reduced transparency and high contrast use the opaque fallback.
+2. Search for a single letter. Only the current line receives a neutral tint
+   and a short marker in the switch's activated color. Other hits retain word
+   highlights, and unrelated content receives no search border or background.
+3. Advance and go back between two hits on the same readable line. The
+   transcript stays still. A hit in an edge fade or behind the composer moves
+   into the readable viewport; an unmounted hit remains reachable. Scroll by
+   hand while a distant hit is resolving and confirm search stops positioning.
 
 ### Turn navigation
 

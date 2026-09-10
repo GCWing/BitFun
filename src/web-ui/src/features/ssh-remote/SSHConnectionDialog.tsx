@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following OpenBitFun design patterns
  */
 
-import {
+import { OverflowText,
   Alert,
   Button,
   Field,
@@ -826,7 +826,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             >
               <ScrollArea scrollbarVisibility="hidden" className="ssh-connection-dialog__saved-list" data-openbitfun-component="ssh-remote" data-openbitfun-part="connectionList">
                 {filteredSavedConnections.map((conn) => (
-                  <div
+                  <div data-overflow-trigger
                     key={conn.id}
                     className="ssh-connection-dialog__saved-item"
                     onClick={() => !isConnecting && handleQuickConnect(conn)}
@@ -838,14 +838,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       <Server size={16} />
                     </div>
                     <div className="ssh-connection-dialog__saved-info">
-                      <span className="ssh-connection-dialog__saved-name">{conn.name}</span>
-                      <span className="ssh-connection-dialog__saved-detail">
+                      <OverflowText className="ssh-connection-dialog__saved-name">{conn.name}</OverflowText>
+                      <OverflowText className="ssh-connection-dialog__saved-detail">
                         {conn.wsl
                           ? `WSL · ${conn.wsl.distribution}${conn.wsl.user ? ` · ${conn.wsl.user}` : ''}`
                           : conn.container?.local
                           ? `Docker · ${conn.container.name}`
                           : `${conn.username}@${conn.host}:${conn.port}${conn.container ? ` · ${conn.container.name}` : ''}${conn.proxyJump ? ` · ${t('ssh.remote.via')} ${conn.proxyJump}` : ''}`}
-                      </span>
+                      </OverflowText>
                     </div>
                     <div className="ssh-connection-dialog__saved-actions">
                       <IconButton
@@ -906,7 +906,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             >
               <ScrollArea scrollbarVisibility="hidden" className="ssh-connection-dialog__saved-list">
                 {filteredSSHConfigHosts.map((configHost) => (
-                  <div
+                  <div data-overflow-trigger
                     key={configHost.host}
                     className="ssh-connection-dialog__saved-item ssh-connection-dialog__saved-item--config"
                     data-openbitfun-component="ssh-remote"
@@ -920,10 +920,10 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                       <Server size={16} />
                     </div>
                     <div className="ssh-connection-dialog__saved-info">
-                      <span className="ssh-connection-dialog__saved-name">{configHost.host}</span>
-                      <span className="ssh-connection-dialog__saved-detail">
+                      <OverflowText className="ssh-connection-dialog__saved-name">{configHost.host}</OverflowText>
+                      <OverflowText className="ssh-connection-dialog__saved-detail">
                         {configHost.user || ''}@{configHost.hostname || configHost.host}:{configHost.port || 22}
-                      </span>
+                      </OverflowText>
                     </div>
                     <div className="ssh-connection-dialog__saved-actions">
                       <Button
@@ -1425,8 +1425,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     {stage.success
                       ? <Icon name="check-circle" size="sm" />
                       : <Icon name="xmark" size="sm" />}
-                    <span>{formatTestStageLabel(stage)}</span>
-                    {stage.error && <span title={stage.error}>{stage.error}</span>}
+                    <OverflowText>{formatTestStageLabel(stage)}</OverflowText>
+                    {stage.error && <OverflowText title={stage.error}>{stage.error}</OverflowText>}
                   </div>
                 ))}
                 {connectionTest.resolvedContainerAccess && (
@@ -1456,7 +1456,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               {t('ssh.remote.testConnection')}
             </Button>
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={onClose}
               disabled={isConnecting || status === 'connecting'}
@@ -1464,7 +1464,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               {t('actions.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={handleConnect}
               disabled={

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,6 +23,9 @@ struct TestState {
     saw_sampling_capability: Arc<AtomicBool>,
     saw_elicitation_capability: Arc<AtomicBool>,
     initialize_delay_ms: Arc<AtomicU64>,
+    ping_error: Arc<AtomicI32>,
+    tools_error: Arc<AtomicBool>,
+    tools_requests: Arc<AtomicU64>,
 }
 
 struct TestRequest {
@@ -206,6 +209,11 @@ async fn handle_post(
         // which should be treated as Accepted by the client.
         "notifications/initialized" => write_response(stream, "200 OK", &[], "").await,
         "tools/list" => {
+            state.tools_requests.fetch_add(1, Ordering::SeqCst);
+            if state.tools_error.load(Ordering::SeqCst) {
+                return write_response(stream, "500 Internal Server Error", &[], "unavailable")
+                    .await;
+            }
             let sid = headers
                 .get("mcp-session-id")
                 .map(String::as_str)
@@ -256,6 +264,17 @@ async fn handle_post(
                 list.retain(|tx| tx.send(payload.clone()).is_ok());
             }
             Ok(())
+        }
+        "ping" if state.ping_error.load(Ordering::SeqCst) != 0 => {
+            let response = json!({"jsonrpc": "2.0", "id": id,
+                "error": {"code": state.ping_error.load(Ordering::SeqCst), "message": "fixture ping error"}});
+            write_response(
+                stream,
+                "200 OK",
+                &[("Content-Type", "application/json")],
+                &response.to_string(),
+            )
+            .await
         }
         _ => {
             let response = json!({
@@ -491,4 +510,58 @@ async fn remote_mcp_streamable_http_accepts_202_and_delivers_response_via_sse() 
         state.saw_elicitation_capability.load(Ordering::SeqCst),
         "client should advertise elicitation capability"
     );
+}
+
+#[tokio::test]
+async fn remote_mcp_health_falls_back_only_for_unsupported_ping() {
+    let state = TestState::default();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_state = state.clone();
+    let server = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            let state = server_state.clone();
+            tokio::spawn(async move {
+                let _ = handle_connection(stream, state).await;
+            });
+        }
+    });
+    let connection = MCPConnection::new_remote(
+        "health-test",
+        format!("http://{addr}/mcp"),
+        Default::default(),
+        false,
+    )
+    .await
+    .unwrap();
+    connection
+        .initialize("OpenBitFunTest", "1.0.0")
+        .await
+        .unwrap();
+    if !state.sse_connected.load(Ordering::SeqCst) {
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            state.sse_connected_notify.notified(),
+        )
+        .await
+        .unwrap();
+    }
+    connection.ping().await.unwrap();
+    assert_eq!(state.tools_requests.load(Ordering::SeqCst), 0);
+    state.ping_error.store(-32601, Ordering::SeqCst);
+    connection
+        .ping()
+        .await
+        .expect("unsupported ping should use tools/list");
+    assert_eq!(state.tools_requests.load(Ordering::SeqCst), 1);
+    state.ping_error.store(-32603, Ordering::SeqCst);
+    assert!(connection.ping().await.is_err());
+    assert_eq!(state.tools_requests.load(Ordering::SeqCst), 1);
+    state.ping_error.store(-32601, Ordering::SeqCst);
+    state.tools_error.store(true, Ordering::SeqCst);
+    assert!(
+        connection.ping().await.is_err(),
+        "failed fallback must not report healthy"
+    );
+    server.abort();
 }

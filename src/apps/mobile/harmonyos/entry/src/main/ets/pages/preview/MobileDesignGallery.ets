@@ -19,6 +19,9 @@ struct MobileDesignGallery {
         return MobilePreviewScenarios.streamingDark;
       case 'reconnecting-wide':
         return MobilePreviewScenarios.reconnectingWide;
+      case 'narrow-multiline': return MobilePreviewScenarios.narrowMultiline;
+      case 'fold-context': return MobilePreviewScenarios.foldContext;
+      case 'long-reading': return MobilePreviewScenarios.longReading;
       case 'connected-conversation':
         return MobilePreviewScenarios.connectedConversation;
       default:
@@ -92,9 +95,9 @@ struct MobileDesignGallery {
         Blank()
       }
       Text(message.text)
-        .fontSize(MobileDesignTypography.bodyMedium.size)
+        .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(INK)
-        .lineHeight(MobileDesignTypography.bodyMedium.lineHeight)
+        .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
         .constraintSize({
           maxWidth: message.role === 'user' ? MobileDesignGeometry.messageBubbleMaxWidth : '100%'
         })

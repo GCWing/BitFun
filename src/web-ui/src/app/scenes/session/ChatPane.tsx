@@ -5,7 +5,9 @@
  * Renamed from panels/CenterPanel. All logic preserved.
  */
 
-import React, { useCallback, memo, useEffect, useRef } from 'react';
+import React, { useCallback, memo, useEffect, useRef, useState } from 'react';
+import { Icon } from '@openbitfun/ui';
+import { useI18n } from '@/infrastructure/i18n';
 import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
 import type { ChatInputRegistration } from '../../../flow_chat/components/chatInputRegistration';
@@ -56,6 +58,9 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   chatInputRegistration,
 }) => {
   const addTab = useCanvasStore(state => state.addTab);
+  const fileDropTargetRef = useRef<HTMLDivElement>(null);
+  const [isFileDragOver, setIsFileDragOver] = useState(false);
+  const { t } = useI18n('flow-chat');
   const deferredTaskDetailTimersRef = useRef<number[]>([]);
   const deferredTaskDetailIdleCallbacksRef = useRef<number[]>([]);
 
@@ -157,6 +162,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
 
   return (
     <div data-openbitfun-component="chat-pane" data-openbitfun-part="root"
+      ref={fileDropTargetRef}
       className="openbitfun-chat-pane__content"
       data-shortcut-scope="chat"
       data-fullscreen={isFullscreen}
@@ -176,9 +182,20 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
       />
       {showChatInput && (
         <ChatInput
+          fileDropTargetRef={fileDropTargetRef}
+          onFileDragOverChange={setIsFileDragOver}
           isSceneActive={isSceneActive}
           registration={chatInputRegistration}
         />
+      )}
+      {showChatInput && isSceneActive && isFileDragOver && (
+        <div className="openbitfun-chat-pane__drop-overlay" role="status"
+          data-testid="chat-pane-drop-overlay">
+          <span className="openbitfun-chat-pane__drop-hint">
+            <Icon name="upload" size="md" />
+            {t('context.dropToAdd')}
+          </span>
+        </div>
       )}
     </div>
   );

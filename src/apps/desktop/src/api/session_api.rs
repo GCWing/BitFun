@@ -52,6 +52,9 @@ pub struct ListPersistedSessionsRequest {
 pub struct ListPersistedSessionsPageRequest {
     pub workspace_path: String,
     pub limit: usize,
+    /// Optional compact status batch; omitted by older clients.
+    #[serde(default, alias = "sessionIds")]
+    pub session_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -388,6 +391,7 @@ pub async fn list_persisted_sessions_page(
             ),
             request.cursor.as_deref(),
             request.limit,
+            request.session_ids.as_deref(),
         )
         .await
         .map_err(|error| {
@@ -506,10 +510,7 @@ pub async fn save_session_turn(
         .map_err(|error| format!("Failed to save session turn: {error}"))?;
 
     // Notify the auto-sync background task (debounced upload to relay)
-    crate::api::remote_connect_api::notify_session_changed(
-        &request.turn_data.session_id,
-        &request.workspace_path,
-    );
+
     Ok(())
 }
 

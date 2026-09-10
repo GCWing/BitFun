@@ -10,6 +10,7 @@ import type {
   RuntimeLoggingInfo,
   ConfigValidationResult,
   SkillInfo,
+  SkillScanReport,
   SkillLevel,
   SkillMarketDownloadResult,
   SkillMarketItem,
@@ -25,6 +26,16 @@ export type { SaveCloudSpeechConfigRequest, SaveCloudSpeechConfigResult } from '
 export interface GetSkillConfigsParams {
   forceRefresh?: boolean;
   workspacePath?: string;
+}
+
+function normalizeSkillScanReport<T>(response: T[] | Omit<SkillScanReport<T>, 'diagnosticsAvailable'>): SkillScanReport<T> {
+  if (Array.isArray(response)) {
+    return { skills: response, diagnostics: [], diagnosticsAvailable: false };
+  }
+  if (!response || !Array.isArray(response.skills) || !Array.isArray(response.diagnostics)) {
+    throw new Error('Invalid Skill discovery response');
+  }
+  return { ...response, diagnosticsAvailable: true };
 }
 
 export interface GetModeSkillConfigsParams {
@@ -383,6 +394,30 @@ export class ConfigAPI {
         { modeId, forceRefresh, workspacePath },
         { timeout: SKILL_CONFIG_REQUEST_TIMEOUT_MS },
       );
+    } catch (error) {
+      throw createTauriCommandError('get_mode_skill_configs', error, { modeId, forceRefresh, workspacePath });
+    }
+  }
+
+  async getSkillScanReport({ forceRefresh, workspacePath }: GetSkillConfigsParams = {}): Promise<SkillScanReport> {
+    try {
+      const response = await api.invoke<SkillInfo[] | Omit<SkillScanReport, 'diagnosticsAvailable'>>(
+        'get_skill_configs', { forceRefresh, workspacePath, includeDiagnostics: true },
+        { timeout: SKILL_CONFIG_REQUEST_TIMEOUT_MS },
+      );
+      return normalizeSkillScanReport(response);
+    } catch (error) {
+      throw createTauriCommandError('get_skill_configs', error, { forceRefresh, workspacePath });
+    }
+  }
+
+  async getModeSkillScanReport({ modeId, forceRefresh, workspacePath }: GetModeSkillConfigsParams): Promise<SkillScanReport<ModeSkillInfo>> {
+    try {
+      const response = await api.invoke<ModeSkillInfo[] | Omit<SkillScanReport<ModeSkillInfo>, 'diagnosticsAvailable'>>(
+        'get_mode_skill_configs', { modeId, forceRefresh, workspacePath, includeDiagnostics: true },
+        { timeout: SKILL_CONFIG_REQUEST_TIMEOUT_MS },
+      );
+      return normalizeSkillScanReport(response);
     } catch (error) {
       throw createTauriCommandError('get_mode_skill_configs', error, { modeId, forceRefresh, workspacePath });
     }

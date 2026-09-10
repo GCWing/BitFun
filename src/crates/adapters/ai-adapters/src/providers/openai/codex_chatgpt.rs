@@ -24,7 +24,7 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
 use crate::trace::ModelExchangeTraceConfig;
-use crate::types::{Message, ReasoningPresetAction, ToolDefinition};
+use crate::types::{Message, ModelRequestContext, ReasoningPresetAction, ToolDefinition};
 use anyhow::Result;
 use log::debug;
 use serde_json::{json, Value};
@@ -74,6 +74,24 @@ pub(crate) fn try_build_request_body(
     tools_flat: Option<Vec<Value>>,
     extra_body: Option<Value>,
 ) -> Result<Value> {
+    try_build_request_body_with_context(
+        client,
+        instructions,
+        response_input,
+        tools_flat,
+        extra_body,
+        None,
+    )
+}
+
+fn try_build_request_body_with_context(
+    client: &AIClient,
+    instructions: Option<String>,
+    response_input: Vec<Value>,
+    tools_flat: Option<Vec<Value>>,
+    extra_body: Option<Value>,
+    request_context: Option<&ModelRequestContext>,
+) -> Result<Value> {
     let mut body = json!({
         "model": client.config.model,
         "input": response_input,
@@ -85,7 +103,7 @@ pub(crate) fn try_build_request_body(
     let resolved_instructions = instructions
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_INSTRUCTIONS.to_string());
-    body["instructions"] = Value::String(resolved_instructions);
+    body["instructions"] = Value::String(resolved_instructions.clone());
 
     // Reasoning — mirror hermes-agent: default effort `medium` when enabled,
     // clamp `minimal -> low`, request encrypted reasoning trace for chain
@@ -166,13 +184,43 @@ pub(crate) fn try_build_request_body(
         shared::apply_reasoning_actions(preset, &mut body, protected_keys, &[], compile)?;
     }
 
+    attach_tools(&mut body, tools_flat);
+    if client.subscription_provider_key() == Some("codex")
+        && shared::is_https_endpoint(
+            &client.config.request_url,
+            "chatgpt.com",
+            "/backend-api/codex",
+        )
+    {
+        // These are backend requirements even for legacy configs with a custom body.
+        body["store"] = json!(false);
+        body["stream"] = json!(true);
+        if body
+            .get("instructions")
+            .and_then(Value::as_str)
+            .is_none_or(|text| text.trim().is_empty())
+        {
+            body["instructions"] = json!(resolved_instructions);
+        }
+        if let Some(object) = body.as_object_mut() {
+            for unsupported in ["max_output_tokens", "max_tokens", "temperature", "top_p"] {
+                object.remove(unsupported);
+            }
+        }
+        if let Some(key) = request_context
+            .and_then(|context| context.prompt_cache_route_key.as_deref())
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+        {
+            body["prompt_cache_key"] = json!(key);
+        }
+    }
+
     shared::log_request_body(
         TARGET,
         "Codex ChatGPT request body (excluding tools):",
         &body,
     );
-
-    attach_tools(&mut body, tools_flat);
 
     Ok(body)
 }
@@ -184,6 +232,7 @@ pub(crate) async fn send_stream(
     extra_body: Option<Value>,
     max_tries: usize,
     trace: Option<ModelExchangeTraceConfig>,
+    request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = client.config.request_url.clone();
     debug!(
@@ -194,8 +243,14 @@ pub(crate) async fn send_stream(
     let (instructions, response_input) =
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
     let tools_flat = common::convert_tools_flat(tools);
-    let request_body =
-        try_build_request_body(client, instructions, response_input, tools_flat, extra_body)?;
+    let request_body = try_build_request_body_with_context(
+        client,
+        instructions,
+        response_input,
+        tools_flat,
+        extra_body,
+        request_context.as_ref(),
+    )?;
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 
@@ -206,7 +261,14 @@ pub(crate) async fn send_stream(
         max_tries,
         ttft_timeout,
         trace,
-        || common::apply_headers(client, client.client.post(&url)),
+        || {
+            shared::apply_affinity_headers(
+                client,
+                common::apply_headers(client, client.client.post(&url)),
+                &url,
+                request_context.as_ref(),
+            )
+        },
         move |response, tx, tx_raw, remaining_ttft_timeout| {
             handle_responses_stream(
                 response,
@@ -219,4 +281,97 @@ pub(crate) async fn send_stream(
         },
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_api_codex_endpoint_preserves_custom_body_and_does_not_gain_affinity() {
+        let client = AIClient::new(
+            serde_json::from_value(json!({
+                "name": "test", "base_url": "https://chatgpt.com/backend-api/codex",
+                "request_url": "https://chatgpt.com/backend-api/codex/responses",
+                "api_key": "synthetic", "model": "gpt-5.5", "format": "responses",
+                "context_window": 128000, "inline_think_in_text": false, "skip_ssl_verify": false
+            }))
+            .unwrap(),
+        );
+        let context = ModelRequestContext {
+            prompt_cache_route_key: Some("runtime".into()),
+            ..Default::default()
+        };
+        let custom = json!({"max_output_tokens": 8000, "max_tokens": 4000, "temperature": 0.5,
+            "top_p": 0.9, "prompt_cache_key": "user-managed"});
+        let before =
+            try_build_request_body(&client, None, vec![], None, Some(custom.clone())).unwrap();
+        let after = try_build_request_body_with_context(
+            &client,
+            None,
+            vec![],
+            None,
+            Some(custom.clone()),
+            Some(&context),
+        )
+        .unwrap();
+        assert_eq!(before, after);
+        for (key, value) in custom.as_object().unwrap() {
+            assert_eq!(&after[key], value);
+        }
+        let request = shared::apply_affinity_headers(
+            &client,
+            common::apply_headers(&client, client.client.post(&client.config.request_url)),
+            &client.config.request_url,
+            Some(&context),
+        )
+        .build()
+        .unwrap();
+        assert!(!request.headers().contains_key("session_id"));
+        assert!(!request.headers().contains_key("x-client-request-id"));
+        assert_eq!(request.headers()["authorization"], "Bearer synthetic");
+    }
+
+    #[cfg(feature = "subscription-auth")]
+    #[test]
+    fn legacy_custom_body_cannot_break_codex_contract_or_cache_routing() {
+        let client = AIClient::new(serde_json::from_value(json!({
+            "name": "test", "base_url": "https://chatgpt.com/backend-api/codex",
+            "request_url": "https://chatgpt.com/backend-api/codex/responses",
+            "api_key": "synthetic", "model": "gpt-5.5", "format": "responses", "context_window": 128000, "inline_think_in_text": false, "skip_ssl_verify": false
+        })).unwrap()).with_subscription_provider(crate::subscription_auth::SubscriptionProvider::Codex);
+        let context = ModelRequestContext {
+            prompt_cache_route_key: Some("conversation-a".into()),
+            ..Default::default()
+        };
+        let body = try_build_request_body_with_context(
+            &client, Some("Help with this task".into()), vec![],
+            Some(vec![json!({"type": "function", "name": "read_file", "parameters": {"type": "object"}})]),
+            Some(json!({"store": true, "stream": false, "instructions": "", "max_output_tokens": 8000,
+                "max_tokens": 8000, "temperature": 0.5, "top_p": 0.9, "prompt_cache_key": "stale"})), Some(&context),
+        ).unwrap();
+        assert_eq!(body["store"], false);
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["instructions"], "Help with this task");
+        assert_eq!(body["prompt_cache_key"], "conversation-a");
+        assert_eq!(body["tools"][0]["name"], "read_file");
+        for unsupported in ["max_output_tokens", "max_tokens", "temperature", "top_p"] {
+            assert!(body.get(unsupported).is_none());
+        }
+        let request = shared::apply_affinity_headers(
+            &client,
+            common::apply_headers(&client, client.client.post(&client.config.request_url)),
+            &client.config.request_url,
+            Some(&context),
+        )
+        .json(&body)
+        .build()
+        .unwrap();
+        assert_eq!(
+            request.headers()["x-client-request-id"],
+            body["prompt_cache_key"].as_str().unwrap()
+        );
+        assert_eq!(request.headers()["session_id"], "conversation-a");
+        assert_eq!(request.headers()["authorization"], "Bearer synthetic");
+    }
 }

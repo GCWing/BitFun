@@ -4,10 +4,12 @@ import type * as Monaco from 'monaco-editor';
 import { applyModelIndentation, readModelIndentation, setModelIndentation } from './ModelIndentation';
 
 let monaco: typeof Monaco;
+// Loading the real Monaco module graph can exceed 10 seconds on a cold Windows run.
+// Keep this setup allowance separate from the default timeout for each assertion.
 beforeAll(async () => {
   window.matchMedia ??= vi.fn().mockReturnValue({ matches: false, addEventListener() {}, removeEventListener() {} });
   monaco = await import('monaco-editor/esm/vs/editor/editor.api');
-});
+}, 60_000);
 
 const defaults = { tab_size: 4, insert_spaces: true, detect_indentation: true };
 

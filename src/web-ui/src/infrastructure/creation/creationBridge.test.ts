@@ -7,7 +7,13 @@ import { setPeerDeviceModeActiveFlag } from '../peer-device/peerModeFlag';
 import { api } from '../api/service-api/ApiClient';
 
 vi.mock('../api/service-api/ApiClient', () => ({ api: { listen: vi.fn(() => vi.fn()), invoke: vi.fn(async () => {}) } }));
-vi.mock('@/app/stores/sceneStore', () => ({ useSceneStore: { getState: () => ({ activeTabId: 'session' }), subscribe: () => vi.fn() } }));
+vi.mock('@/app/stores/sceneStore', async importOriginal => ({
+  ...await importOriginal<typeof import('@/app/stores/sceneStore')>(),
+  useSceneStore: {
+    getState: () => ({ activeTabId: 'session:workspace-test' }),
+    subscribe: () => vi.fn(),
+  },
+}));
 beforeEach(() => vi.stubGlobal('localStorage', new JSDOM('', { url: 'https://creation.test' }).window.localStorage));
 afterEach(() => { setPeerDeviceModeActiveFlag(false); document.body.innerHTML = ''; vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
@@ -20,6 +26,8 @@ it('delivers a correlated Agent request to a registered command and updates the 
   const detach = attachCreationRuntime(creation);
   const unlisten = listenForCreationRequests();
   const snapshot = await executeCreationRequest({ requestId: 'inspect-1', action: 'inspect' }) as ReturnType<typeof creation.inspect>;
+  expect(snapshot.scene).toBe('session');
+  expect(creation.api.getScene()).toBe('session');
   expect(snapshot.slots[0]).toEqual({ id: 'sidebar-footer', present: true, mounts: 1 });
   expect(snapshot.commands[0].id).toBe('counter.set');
   const [event, handler] = vi.mocked(api.listen).mock.calls[0];

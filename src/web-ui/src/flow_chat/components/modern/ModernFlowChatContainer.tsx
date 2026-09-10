@@ -604,6 +604,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const { handleToolConfirm, handleToolReject } = useFlowChatToolActions();
 
   const { handleFileViewRequest } = useFlowChatFileActions({
+    sessionId: activeSession?.sessionId,
     workspacePath,
     onFileViewRequest,
   });
@@ -625,9 +626,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     onSearchChange: setSearchQuery,
     matches: searchMatches,
-    matchIndices: searchMatchIndices,
+    matchesByVirtualIndex: searchMatchesByVirtualIndex,
     currentMatchIndex: searchCurrentMatchIndex,
-    currentMatchVirtualIndex: searchCurrentMatchVirtualIndex,
     goToNext: handleSearchNext,
     goToPrev: handleSearchPrev,
     clearSearch,
@@ -938,14 +938,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     pendingPermissionToolCallIds,
     exploreGroupStates,
     searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
+    searchMatchesByVirtualIndex,
+    searchCurrentMatch,
   }), [
     pendingPermissionToolCallIds,
     exploreGroupStates,
     searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
+    searchMatchesByVirtualIndex,
+    searchCurrentMatch,
   ]);
 
   const turnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
@@ -2505,7 +2505,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         try {
           await FlowChatManager.getInstance().createChatSession(
             flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
-            'agentic',
           );
         } catch (error) {
           log.error('Failed to create session from shortcut', { error });

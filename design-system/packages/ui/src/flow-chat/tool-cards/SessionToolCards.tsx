@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type { HTMLAttributes, ReactNode } from "react";
 import { Layers, MessageSquare } from "lucide-react";
 import {
@@ -72,7 +73,7 @@ function SessionToolCardBase({
           {sessions.map((session) => (
             <div className={styles.session} data-openbitfun-part="session" key={session.key}>
               <span className={styles.sessionId}>{session.id}</span>
-              {session.name && <span className={styles.sessionName}>{session.name}</span>}
+              {session.name && <OverflowText className={styles.sessionName}>{session.name}</OverflowText>}
               {session.agentType && <span className={styles.sessionAgent}>{session.agentType}</span>}
             </div>
           ))}

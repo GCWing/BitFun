@@ -39,22 +39,12 @@ class TestAppRootRuntime extends AppRootRuntime {
 
 export default function appRootLifecycleUnitTest() {
   describe('AppRootRuntime page hide lifecycle', () => {
-    it('keeps backgrounded general chat running on page hide', 0, () => {
+    it('keeps the controller rooted in the device directory across lifecycle changes', 0, () => {
       const runtime = new TestAppRootRuntime();
-      runtime.generalChatStreamLifecycleController.begin('session-1');
-
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
       runtime.onPageHide();
-
-      expect(runtime.generalChatStreamLifecycleController.hasActiveStream()).assertTrue();
-    });
-
-    it('still performs general chat cleanup when the app truly disappears', 0, () => {
-      const runtime = new TestAppRootRuntime();
-      runtime.generalChatStreamLifecycleController.begin('session-1');
-
       runtime.aboutToDisappear();
-
-      expect(runtime.generalChatStreamLifecycleController.hasActiveStream()).assertFalse();
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
     });
 
     it('routes HTTP Markdown links through the host without opening file preview', 0, async () => {
@@ -83,9 +73,8 @@ export default function appRootLifecycleUnitTest() {
       );
       await new Promise<void>((resolve: () => void) => setTimeout(resolve, 0));
 
-      expect(runtime.generalChatPageState.conversation.statusText)
+      expect(runtime.remotePageState.conversation.statusText)
         .assertEqual(RemoteI18n.t('errors.operationFailed'));
-      expect(runtime.remotePageState.conversation.statusText).assertEqual('');
     });
 
     it('closes preview before applying conversation navigation back', 0, () => {

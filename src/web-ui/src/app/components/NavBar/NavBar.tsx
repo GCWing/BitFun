@@ -17,7 +17,7 @@ import { useI18n } from '../../../infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { Icon, OverflowText, Tooltip } from '@openbitfun/ui';
 
 const log = createLogger('NavBar');
 
@@ -148,14 +148,14 @@ const NavBar: React.FC<NavBarProps> = ({
       </Tooltip>
 
       {title && (
-        <span
+        <OverflowText
           className="openbitfun-nav-bar__title"
           data-openbitfun-component="nav-bar"
           data-openbitfun-part="title"
           title={title}
         >
           {title}
-        </span>
+        </OverflowText>
       )}
     </div>
   );

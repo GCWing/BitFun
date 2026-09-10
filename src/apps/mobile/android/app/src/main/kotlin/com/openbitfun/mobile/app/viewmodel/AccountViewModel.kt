@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.openbitfun.mobile.app.platform.LogcatCoreLog
 import com.openbitfun.mobile.app.platform.LEGACY_MOBILE_DEVICE_NAMES
 import com.openbitfun.mobile.app.platform.deviceIdentity
-import com.openbitfun.mobile.core.feature.CloudSettingsSource
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountStore
 import com.openbitfun.mobile.core.feature.account.AccountUiState
@@ -65,7 +64,6 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
     }
 
     /** The handle General Chat reads the account's synced models through. */
-    fun cloudSettingsSource(): CloudSettingsSource? = store.cloudSettingsSource()
 
     fun dispatchSession(intent: RemoteSessionIntent) {
         remoteStore?.dispatch(intent)
@@ -89,6 +87,10 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
      */
     fun selectDevice(deviceId: String) {
         if (deviceId == activeTarget) bindTarget(deviceId) else store.dispatch(AccountIntent.SelectDevice(deviceId))
+    }
+
+    fun disconnectDevice() {
+        bindTarget(null)
     }
 
     private fun bindTarget(target: String?) {

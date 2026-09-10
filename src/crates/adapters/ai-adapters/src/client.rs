@@ -62,6 +62,8 @@ pub struct AIClient {
     pub(crate) stream_options: StreamOptions,
     pub(crate) model_reasoning_preset: Option<ReasoningPresetDescriptor>,
     pub(crate) selected_reasoning_preset: Option<ReasoningPresetDescriptor>,
+    #[cfg(feature = "subscription-auth")]
+    subscription_provider: Option<crate::subscription_auth::SubscriptionProvider>,
 }
 
 impl AIClient {
@@ -95,6 +97,31 @@ impl AIClient {
             stream_options,
             model_reasoning_preset: None,
             selected_reasoning_preset: None,
+            #[cfg(feature = "subscription-auth")]
+            subscription_provider: None,
+        }
+    }
+
+    /// Enable provider policy only after resolving an explicit subscription login.
+    /// This runtime identity is not inferred from URLs or serialized in AIConfig.
+    #[cfg(feature = "subscription-auth")]
+    pub fn with_subscription_provider(
+        mut self,
+        provider: crate::subscription_auth::SubscriptionProvider,
+    ) -> Self {
+        self.subscription_provider = Some(provider);
+        self
+    }
+
+    /// Explicit subscription identity; ordinary API-key clients return None.
+    pub fn subscription_provider_key(&self) -> Option<&'static str> {
+        #[cfg(feature = "subscription-auth")]
+        {
+            self.subscription_provider.map(|provider| provider.key())
+        }
+        #[cfg(not(feature = "subscription-auth"))]
+        {
+            None
         }
     }
 
@@ -196,15 +223,9 @@ impl AIClient {
     /// Clone this client with a different max output token limit while
     /// reusing the HTTP client.
     pub fn with_max_tokens(&self, max_tokens: Option<u32>) -> Self {
-        let mut config = self.config.clone();
-        config.max_tokens = max_tokens;
-        Self {
-            client: self.client.clone(),
-            config,
-            stream_options: self.stream_options.clone(),
-            model_reasoning_preset: self.model_reasoning_preset.clone(),
-            selected_reasoning_preset: self.selected_reasoning_preset.clone(),
-        }
+        let mut cloned = self.clone();
+        cloned.config.max_tokens = max_tokens;
+        cloned
     }
 
     pub async fn send_message_stream(
@@ -366,6 +387,8 @@ impl AIClient {
         trace: Option<ModelExchangeTraceConfig>,
         max_attempts: usize,
     ) -> Result<GeminiResponse> {
+        let request_context =
+            crate::providers::shared::prepare_request_context(self, request_context);
         for attempt in 0..max_attempts {
             let stream_response = match self
                 .send_message_stream_with_extra_body_and_max_attempts(

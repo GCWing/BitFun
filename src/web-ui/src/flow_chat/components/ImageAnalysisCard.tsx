@@ -3,7 +3,7 @@
  * Displays analysis progress and results.
  */
 
-import { Button, Icon } from '@openbitfun/ui';
+import { OverflowText, Button, Icon } from '@openbitfun/ui';
 import React, { useState } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import type { FlowImageAnalysisItem } from '../types/flow-chat';
@@ -43,9 +43,9 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
         </div>
         
         <div data-openbitfun-component="image-analysis-card" data-openbitfun-part="info" className="image-analysis-card__info">
-          <div data-openbitfun-component="image-analysis-card" data-openbitfun-part="filename" className="image-analysis-card__filename">
+          <div data-openbitfun-component="image-analysis-card" data-openbitfun-part="filename" className="image-analysis-card__filename"><OverflowText>
             {imageContext.imageName}
-          </div>
+          </OverflowText></div>
           
           {status === 'analyzing' && (
             <div data-openbitfun-component="image-analysis-card" data-openbitfun-part="status" className="image-analysis-card__status analyzing">

@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 import type { i18n as I18nApi } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import {
+import { OverflowText,
   Icon,
   NavigationPanel,
   NavigationPanelBody,
@@ -286,7 +286,7 @@ const SettingsNav: React.FC = () => {
               const selected = index === highlightedIndex;
               const path = [row.categoryLabel, row.pageLabel, row.viewLabel].filter(Boolean).join(' › ');
               return (
-                <NavigationPanelItem
+                <NavigationPanelItem data-overflow-trigger
                   key={`${row.destination.pageId}:${row.destination.viewId ?? ''}`}
                   id={`settings-nav-result-${index}`}
                   role="option"
@@ -308,12 +308,12 @@ const SettingsNav: React.FC = () => {
                   onFocus={() => preload(row.destination.pageId)}
                 >
                   <span className="openbitfun-settings-nav__search-result-copy">
-                    <span className="openbitfun-settings-nav__search-result-line">
+                    <OverflowText behavior="marquee" className="openbitfun-settings-nav__search-result-line">
                       {highlightFirstMatch(path, searchQuery)}
-                    </span>
-                    <span className="openbitfun-settings-nav__search-result-desc">
+                    </OverflowText>
+                    <OverflowText behavior="marquee" className="openbitfun-settings-nav__search-result-desc">
                       {highlightFirstMatch(row.description, searchQuery)}
-                    </span>
+                    </OverflowText>
                   </span>
                   {dirtyMarker(row.destination.pageId)}
                 </NavigationPanelItem>
@@ -343,7 +343,7 @@ const SettingsNav: React.FC = () => {
         >
           <div className="openbitfun-settings-nav__items" data-openbitfun-component="settings-nav" data-openbitfun-part="items">
           {category.pages.map((page) => (
-            <NavigationPanelItem
+            <NavigationPanelItem data-overflow-trigger
               key={page.id}
               data-testid="settings-nav-page"
               data-settings-page={page.id}
@@ -356,7 +356,7 @@ const SettingsNav: React.FC = () => {
               onPointerEnter={() => preload(page.id)}
               onFocus={() => preload(page.id)}
             >
-              <span className="openbitfun-settings-nav__item-label">{t(page.labelKey)}</span>
+              <OverflowText className="openbitfun-settings-nav__item-label">{t(page.labelKey)}</OverflowText>
               {dirtyMarker(page.id)}
             </NavigationPanelItem>
           ))}

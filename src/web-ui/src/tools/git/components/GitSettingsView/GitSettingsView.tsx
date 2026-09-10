@@ -346,7 +346,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <Icon name="settings" size="lg" />
           <h3>{t('settingsView.loadFailedTitle')}</h3>
           <p className="openbitfun-git-settings-view__error-message">{error}</p>
-          <Button onClick={loadConfig} variant="fill">
+          <Button onClick={loadConfig} variant="primary">
             {t('settingsView.retry')}
           </Button>
         </div>
@@ -375,7 +375,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
           <Button 
             onClick={saveConfig}
             disabled={saving}
-            variant="fill"
+            variant="primary"
             leadingIcon={<Save size={16} />}
           >
 

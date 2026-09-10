@@ -9,9 +9,9 @@ interface HarnessProfilePickerProps {
 }
 
 const PROFILES = [
-  { agentType: 'minimal', labelKey: 'sessions.harnessMinimal', density: 1 },
-  { agentType: 'agentic', labelKey: 'sessions.harnessStandard', density: 2 },
-  { agentType: 'Ultra', labelKey: 'sessions.harnessUltimate', density: 3 },
+  { agentType: 'Minimal', labelKey: 'sessions.harnessMinimal', density: 1 },
+  { agentType: 'Standard', labelKey: 'sessions.harnessStandard', density: 2 },
+  { agentType: 'Ultimate', labelKey: 'sessions.harnessUltimate', density: 3 },
 ] as const;
 
 /** Creation-time Harness selector shared by the home and workspace entry points. */

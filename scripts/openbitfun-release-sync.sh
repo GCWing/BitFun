@@ -541,10 +541,8 @@ main() {
   }
   log "Latest version: $VERSION"
 
-  # Resolve the exact tagged release directory from the updater URLs. Using
-# this base for the standalone installer avoids a latest-release race where
-# latest.json and the manual installer could otherwise resolve to different
-  # versions during publication.
+  # Resolve one immutable release directory for every artifact. Independent
+  # latest/download requests can cross versions while a release is published.
   RELEASE_ASSET_BASE_URL=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -556,6 +554,9 @@ print(bases.pop())
     log "ERROR: Failed to resolve the release asset base from latest.json"
     exit 1
   }
+
+  GITHUB_RELAY_IMAGE_URL="${RELEASE_ASSET_BASE_URL}/relay-image.json"
+  GITHUB_LINUX_BINARIES_URL="${RELEASE_ASSET_BASE_URL}/linux-binaries.json"
 
   INSTALLER_METADATA=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import json, sys

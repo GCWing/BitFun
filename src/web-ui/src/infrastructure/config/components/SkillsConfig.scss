@@ -27,14 +27,14 @@
     font-size: var(--openbitfun-type-label-md-font-size);
 
     &.is-valid {
-      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-success-content) 30%, transparent);
+      background: var(--openbitfun-color-status-success-surface);
+      border: 1px solid var(--openbitfun-color-status-success-border);
       color: var(--openbitfun-color-status-success-content);
     }
 
     &.is-invalid {
-      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 30%, transparent);
+      background: var(--openbitfun-color-status-danger-surface);
+      border: 1px solid var(--openbitfun-color-status-danger-border);
       color: var(--openbitfun-color-status-danger-content);
     }
   }
@@ -71,8 +71,8 @@
 
   &__covered-badge {
     color: var(--openbitfun-color-status-warning-content);
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 32%, var(--openbitfun-color-border-subtle));
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, var(--openbitfun-color-action-neutral-surface-hover));
+    border-color: var(--openbitfun-color-status-warning-border);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
   &__item--covered {
@@ -114,7 +114,7 @@
   }
 
   &__market-state--error {
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 40%, transparent);
+    border-color: var(--openbitfun-color-status-danger-border);
     color: var(--openbitfun-color-status-danger-content);
   }
 
@@ -158,10 +158,10 @@
     }
 
     &.is-installed {
-      border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 35%, transparent);
+      border-color: var(--openbitfun-color-status-success-border);
 
       &::before {
-        background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 78%, transparent);
+        background: color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 78%, transparent);
       }
     }
 
@@ -226,8 +226,8 @@
   }
 
   &__market-item-badge--installed {
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 35%, transparent);
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 14%, transparent);
+    border-color: var(--openbitfun-color-status-success-border);
+    background: color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 14%, transparent);
     color: var(--openbitfun-color-status-success-content);
   }
 
@@ -263,7 +263,6 @@
     color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__market-item-source {

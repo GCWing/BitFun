@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isMcpServerAvailable,
   matchesAssistantDefaultsFilter,
-  summarizeAssistantDefaults,
   type AssistantDefaultsFilterableItem,
 } from './assistantDefaultsPresentation';
 
@@ -28,14 +27,6 @@ const items: AssistantDefaultsFilterableItem[] = [
 ];
 
 describe('assistant defaults presentation', () => {
-  it('summarizes enabled, changed, and unavailable capabilities independently', () => {
-    expect(summarizeAssistantDefaults(items)).toEqual({
-      enabled: 1,
-      changed: 1,
-      unavailable: 1,
-    });
-  });
-
   it('matches names, descriptions, sources, and original ids', () => {
     expect(matchesAssistantDefaultsFilter(items[0], 'all', 'structured')).toBe(true);
     expect(matchesAssistantDefaultsFilter(items[0], 'all', 'openbitfun.web')).toBe(true);

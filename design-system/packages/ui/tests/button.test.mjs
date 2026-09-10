@@ -80,10 +80,10 @@ test("primary and text variants expose semantic emphasis without changing button
 
   assert.match(primaryMarkup, /data-openbitfun-variant="primary"/);
   assert.match(textMarkup, /data-openbitfun-variant="text"/);
-  assert.match(styles, /--openbitfun-color-action-primary-background/);
+  assert.match(styles, /--openbitfun-component-button-primary-background/);
   assert.match(styles, /--openbitfun-color-action-primary-content/);
-  assert.match(styles, /--openbitfun-color-accent-default/);
-  assert.match(styles, /--openbitfun-color-accent-disabled/);
+  assert.match(styles, /--openbitfun-component-button-text-content/);
+  assert.match(styles, /--openbitfun-component-button-text-content-disabled/);
   assert.match(styles, /text-decoration:underline/);
 });
 
@@ -100,7 +100,7 @@ test("secondary exposes the filled secondary-action contract", async () => {
   assert.match(styles, /--openbitfun-color-action-neutral-content/);
 });
 
-test("every Button variant is composited over an opaque surface", async () => {
+test("outline and text composite over the caller surface without changing their hit targets", async () => {
   const styles = await readFile(
     new URL("../src/components/Button/Button.module.css", import.meta.url),
     "utf8",
@@ -108,7 +108,7 @@ test("every Button variant is composited over an opaque surface", async () => {
 
   assert.match(
     styles,
-    /\.button\s*\{[^}]*background:\s*var\(--openbitfun-color-surface-tertiary\)/s,
+    /\.button\s*\{[^}]*background:\s*transparent/s,
   );
   assert.match(
     styles,
@@ -116,9 +116,13 @@ test("every Button variant is composited over an opaque surface", async () => {
   );
   assert.match(
     styles,
-    /\[data-openbitfun-variant="text"\]\s*\{[^}]*--_button-background:\s*var\(--openbitfun-color-surface-tertiary\)/s,
+    /\[data-openbitfun-variant="text"\]\s*\{[^}]*--_button-background:\s*transparent/s,
   );
-  assert.doesNotMatch(styles, /--_button-background(?:-hover|-active)?:\s*transparent/);
+  const textRule = styles.match(/\[data-openbitfun-variant="text"\]\s*\{([^}]+)\}/)?.[1] ?? "";
+  assert.match(textRule, /--_button-background-hover:\s*transparent/);
+  assert.match(textRule, /--_button-background-active:\s*transparent/);
+  assert.match(textRule, /border-radius:\s*0/);
+  assert.doesNotMatch(textRule, /(?:block-size|padding|font-size|icon-size):/);
   assert.doesNotMatch(styles, /\[data-openbitfun-variant="text"\][^}]*padding-inline:\s*0/s);
 });
 
@@ -194,11 +198,24 @@ test("real and preview active states share the semibold component rule", async (
   assert.equal((styles.match(/--openbitfun-type-label-selected-font-weight/g) ?? []).length, 1);
 });
 
-test("fill uses neutral semantic state colors and icons inherit content color", async () => {
+test("fill uses Button state colors and icons inherit content color", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
-  assert.match(styles, /--_button-background:\s*var\(--openbitfun-color-action-neutral-surface\)/);
-  assert.match(styles, /--_button-background-hover:\s*var\(--openbitfun-color-action-neutral-surface-hover\)/);
-  assert.match(styles, /--_button-background-active:\s*var\(--openbitfun-color-action-neutral-surface-pressed\)/);
+  assert.match(styles, /--_button-background:\s*var\(--openbitfun-component-button-fill-background\)/);
+  assert.match(styles, /--_button-background-hover:\s*var\(--openbitfun-component-button-fill-background-hover\)/);
+  assert.match(styles, /--_button-background-active:\s*var\(--openbitfun-component-button-fill-background-pressed\)/);
   assert.match(styles, /color:currentColor/);
+});
+
+test("native disabled and loading use variant-specific disabled content with a neutral danger fallback", async () => {
+  const styles = await readFile(new URL("../src/components/Button/Button.module.css", import.meta.url), "utf8");
+  assert.match(styles, /\.button:disabled\s*\{[^}]*color:\s*var\(--_button-content-disabled\)/);
+  for (const variant of ["primary", "text"]) {
+    const rule = styles.match(new RegExp(`\\[data-openbitfun-variant="${variant}"\\]\\s*\\{([^}]+)\\}`))?.[1] ?? "";
+    assert.match(rule, new RegExp(`--_button-content-disabled:\\s*var\\(--openbitfun-component-button-${variant}-content-disabled\\)`));
+    const markup = renderToStaticMarkup(createElement(Button, { variant, loading: true }, "Save"));
+    assert.match(markup, /disabled=""/);
+    assert.match(markup, /aria-busy="true"/);
+  }
+  assert.match(styles, /\[data-openbitfun-tone="danger"\]\s*\{[^}]*--_button-content-disabled:\s*var\(--openbitfun-color-action-neutral-content-disabled\)/);
 });

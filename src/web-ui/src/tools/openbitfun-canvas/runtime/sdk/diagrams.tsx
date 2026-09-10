@@ -110,6 +110,7 @@ function renderGraphSvg({
                   fill="var(--openbitfun-color-content-muted)"
                   fontSize="var(--openbitfun-type-micro-font-size)"
                 >
+                  <title>{String(meta.label)}</title>
                   {String(meta.label).slice(0, 18)}
                 </text>
               ) : null}
@@ -124,6 +125,7 @@ function renderGraphSvg({
         const color = toneColor(node?.tone);
         return (
           <g key={layoutNode.id} transform={`translate(${layoutNode.x} ${layoutNode.y})`}>
+            <title>{[label, description].filter(Boolean).join('\n')}</title>
             <rect
               width={layoutNode.width}
               height={layoutNode.height}

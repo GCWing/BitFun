@@ -3,7 +3,7 @@
  * Supports selecting existing branches or creating new branches
  */
 
-import { Button, Checkbox, Icon, IconButton, Input, ScrollArea, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Checkbox, Icon, IconButton, Input, ScrollArea, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -248,7 +248,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
             ) : (
               <>
                 {canCreateNewBranch && (
-                  <div
+                  <div data-overflow-trigger
                     data-openbitfun-component="branch-select-modal"
                     data-openbitfun-part="item"
                     data-openbitfun-state={selectedBranch === searchTerm && isNewBranch ? 'selected' : undefined}
@@ -259,9 +259,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                     onDoubleClick={() => handleDoubleClick(searchTerm.trim(), true)}
                   >
                     <Icon name="plus" size="sm" className="branch-select-dialog__item-icon branch-select-dialog__item-icon--new" />
-                    <span data-openbitfun-component="branch-select-modal" data-openbitfun-part="itemName" className="branch-select-dialog__item-name">
+                    <OverflowText behavior="marquee" data-openbitfun-component="branch-select-modal" data-openbitfun-part="itemName" className="branch-select-dialog__item-name">
                       {t('branchSelect.createNewLabel')} <strong>{searchTerm.trim()}</strong>
-                    </span>
+                    </OverflowText>
                   </div>
                 )}
 
@@ -270,7 +270,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                   const hasWorktree = branch.hasWorktree;
 
                   return (
-                    <div data-openbitfun-component="branch-select-modal" data-openbitfun-part="item"
+                    <div data-overflow-trigger data-openbitfun-component="branch-select-modal" data-openbitfun-part="item"
                       data-openbitfun-state={[
                         selectedBranch === branch.name && !isNewBranch && 'selected',
                         branch.current && 'current',
@@ -283,9 +283,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
                       onDoubleClick={() => !isDisabled && handleDoubleClick(branch.name, false)}
                     >
                       <Icon name="git" size="sm" className="branch-select-dialog__item-icon" />
-                      <span data-openbitfun-component="branch-select-modal" data-openbitfun-part="itemName" className="branch-select-dialog__item-name">
+                      <OverflowText data-openbitfun-component="branch-select-modal" data-openbitfun-part="itemName" className="branch-select-dialog__item-name">
                         {branch.name}
-                      </span>
+                      </OverflowText>
                       {branch.current && (
                         <span data-openbitfun-component="branch-select-modal" data-openbitfun-part="badge" className="branch-select-dialog__item-badge">{t('branch.current')}</span>
                       )}
@@ -320,13 +320,13 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
             </div>
           ) : null}
           <Button
-            variant="outline"
+            variant="fill"
             onClick={onClose}
           >
             {tCommon('actions.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             onClick={handleConfirm}
             disabled={!selectedBranch}
           >

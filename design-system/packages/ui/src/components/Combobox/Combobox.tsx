@@ -15,6 +15,7 @@ import { flushSync } from "react-dom";
 import { LoaderCircle } from "lucide-react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { useFieldSurface } from "../../internal/fieldSurface";
 import { useAnchoredLayer, type LayerPlacement } from "../../internal/useAnchoredLayer";
 import { Portal } from "../../overlay/Portal";
@@ -650,7 +651,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
           <span className={styles.tags} data-openbitfun-part="tags">
             {selectedOptions.slice(0, Math.max(1, maxVisibleTags)).map((option) => (
               <span className={styles.tag} data-openbitfun-part="tag" key={`${typeof option.value}:${option.value}`}>
-                <span>{option.label}</span>
+                <OverflowText>{option.label}</OverflowText>
                 <IconButton
                   aria-label={`${designSystem.messages.clearSelection}: ${option.label}`}
                   disabled={disabled}
@@ -672,7 +673,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
             )}
           </span>
         )}
-        <button
+        <button data-overflow-trigger
           aria-controls={resolvedOpen ? undefined : listboxId}
           aria-describedby={resolvedDescribedBy}
           aria-expanded={resolvedOpen ? undefined : false}
@@ -698,15 +699,15 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
         >
           <span className={styles.value} data-openbitfun-part="value">
             {!hasValue ? (
-              <span className={styles.placeholder}>{placeholder}</span>
+              <OverflowText className={styles.placeholder}>{placeholder}</OverflowText>
             ) : multiple ? (
-              <span className={styles.valueLabel}>{selectedOptions.map((option) => option.label).join(", ")}</span>
+              <OverflowText className={styles.valueLabel}>{selectedOptions.map((option) => option.label).join(", ")}</OverflowText>
             ) : (
               <span className={styles.singleValue}>
                 {singleOption?.leading && (
                   <span aria-hidden="true" className={styles.valueLeading}>{singleOption.leading}</span>
                 )}
-                <span className={styles.valueLabel}>{singleOption?.label}</span>
+                <OverflowText className={styles.valueLabel}>{singleOption?.label}</OverflowText>
               </span>
             )}
           </span>

@@ -31,7 +31,8 @@ export struct RemoteControlSettingsSheet {
   @Event onClose: () => void = () => {};
   @Event onOpenAccount: () => void = () => {};
   @Event onAddConnection: () => void = () => {};
-  @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
+  @Event cloudCancelLogin: () => void = () => {};
+  @Event cloudLogin: () => Promise<string> = async (): Promise<string> => '';
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
   @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
@@ -434,6 +435,7 @@ export struct RemoteControlSettingsSheet {
   private LoginPage() {
     OpenBitFunAccountLoginPage({
       cloudLogin: this.cloudLogin,
+      cloudCancelLogin: this.cloudCancelLogin,
       onClose: (): void => this.leaveAccountPage(),
       onLoginSuccess: (): void => {
         this.showLogin = false;

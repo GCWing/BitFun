@@ -77,11 +77,6 @@ export interface PeerDeviceSurfaceControllerDependencies {
   markSurfaceSwitched: () => void;
   discardSurfaceState: (surfaceId: DeviceSurfaceId) => void;
   clearDeviceActivity: (deviceId: string) => void;
-  emitAutoExit: (detail: {
-    deviceId: string;
-    deviceName: string;
-    reason: 'peer_offline' | 'rpc_failures';
-  }) => void;
   listenPresence: (
     listener: (onlineDeviceIds: readonly string[]) => void,
   ) => () => void;
@@ -120,7 +115,6 @@ function peerModeFor(target: SurfaceTarget): PeerModeState {
 export class PeerDeviceSurfaceController {
   private readonly dependencies: PeerDeviceSurfaceControllerDependencies;
   private readonly listeners = new Set<PeerDeviceSurfaceListener>();
-  private readonly lostConnectionsInFlight = new Set<string>();
   private currentTarget: SurfaceTarget = localTarget();
   /** False while the committed target still needs (or has lost) its hydrate. */
   private currentTargetReady = true;
@@ -179,7 +173,6 @@ export class PeerDeviceSurfaceController {
         deviceId: connection.deviceId,
         deviceName: connection.deviceName,
         health: connection.health,
-        lostReason: connection.lostReason,
         capabilities: connection.capabilities,
       })),
     };
@@ -483,9 +476,6 @@ export class PeerDeviceSurfaceController {
       scope,
       'connect peer device surface',
     );
-    if (connection.getState().health === 'lost') {
-      throw new Error(`Peer device '${target.deviceId}' is no longer reachable`);
-    }
     return { ...target, adapter: connection.adapter };
   }
 
@@ -507,7 +497,7 @@ export class PeerDeviceSurfaceController {
     let fallback = original;
     if (fallback.deviceId !== null) {
       const connection = this.dependencies.connectionManager.get(fallback.deviceId);
-      if (!connection || connection.getState().health === 'lost') {
+      if (!connection) {
         fallback = localTarget();
       }
     }
@@ -611,60 +601,8 @@ export class PeerDeviceSurfaceController {
     }
     this.publish();
 
-    for (const connection of connections) {
-      if (connection.health === 'lost' && !this.lostConnectionsInFlight.has(connection.deviceId)) {
-        this.lostConnectionsInFlight.add(connection.deviceId);
-        void this.handleLostConnection(connection)
-          .catch(error => {
-            log.warn('Failed to dispose a lost peer connection', {
-              deviceId: connection.deviceId,
-              error,
-            });
-          })
-          .finally(() => {
-            this.lostConnectionsInFlight.delete(connection.deviceId);
-          });
-      }
-    }
-  }
-
-  private async handleLostConnection(connection: PeerConnectionState): Promise<void> {
-    const wasRendered = this.currentTarget.deviceId === connection.deviceId;
-    const reason = connection.lostReason === 'presence'
-      ? 'peer_offline'
-      : 'rpc_failures';
-
-    if (wasRendered) {
-      try {
-        await this.switchToLocal(reason);
-        await this.waitForIdle();
-      } catch (error) {
-        log.warn('Failed to leave a lost peer device surface', {
-          deviceId: connection.deviceId,
-          error,
-        });
-      }
-    }
-
-    if (this.currentTarget.deviceId === connection.deviceId) {
-      return;
-    }
-
-    try {
-      await this.dependencies.connectionManager.dispose(connection.deviceId, {
-        notifyPeer: false,
-      });
-    } finally {
-      this.releaseDeviceState(connection.surfaceId, connection.deviceId);
-    }
-
-    if (wasRendered) {
-      this.dependencies.emitAutoExit({
-        deviceId: connection.deviceId,
-        deviceName: connection.deviceName || connection.deviceId,
-        reason,
-      });
-    }
+    // Connectivity changes update status only. The user owns surface selection;
+    // a peer that is reconnecting retains its transport, epoch and cached state.
   }
 
   private releaseDeviceState(surfaceId: DeviceSurfaceId, deviceId: string): void {

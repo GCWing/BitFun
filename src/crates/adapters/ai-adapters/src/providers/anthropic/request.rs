@@ -502,6 +502,7 @@ pub(crate) async fn send_stream(
     request_context: Option<ModelRequestContext>,
 ) -> Result<StreamResponse> {
     let url = client.config.request_url.clone();
+    let request_context = shared::prepare_request_context(client, request_context);
     debug!(
         "Anthropic config: model={}, request_url={}, max_tries={}",
         client.config.model, client.config.request_url, max_tries
@@ -530,7 +531,14 @@ pub(crate) async fn send_stream(
         max_tries,
         ttft_timeout,
         trace,
-        || apply_headers(client, client.client.post(&url), &url),
+        || {
+            shared::apply_affinity_headers(
+                client,
+                apply_headers(client, client.client.post(&url), &url),
+                &url,
+                request_context.as_ref(),
+            )
+        },
         move |response, tx, tx_raw, remaining_ttft_timeout| {
             handle_anthropic_stream(
                 response,

@@ -1,7 +1,7 @@
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Phone } from 'lucide-react';
-import { Icon } from '@openbitfun/ui';
+import { Icon, OverflowText } from '@openbitfun/ui';
 
 import { RealtimeVoiceCallPanel } from './RealtimeVoiceCallPanel';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
@@ -74,7 +74,7 @@ export function ConversationModeSurface({
           data-openbitfun-component="conversation-mode-surface"
           data-openbitfun-part="modeSwitch"
         >
-          <button
+          <button data-overflow-trigger
             type="button"
             className={`openbitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
             data-testid={switchTestId}
@@ -95,11 +95,11 @@ export function ConversationModeSurface({
             ) : (
               <Phone size={15} aria-hidden="true" />
             )}
-            <span>
+            <OverflowText>
               {t(isVoiceMode
                 ? 'voiceCall.call.switchToChat'
                 : 'voiceCall.call.switchToVoice')}
-            </span>
+            </OverflowText>
           </button>
         </footer>
       ) : null}

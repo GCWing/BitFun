@@ -1,26 +1,27 @@
-import {
+import { OverflowText,
   Button,
   Checkbox,
   Icon,
   ScrollArea,
+  Spinner,
   Dialog,
   DialogBody,
   DialogClose,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogHeading,
   DialogTitle,
 } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Bot, FolderKanban, Loader2 } from 'lucide-react';
+import { Archive, Bot } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionMetadata } from '@/shared/types/session-history';
 import { sessionBelongsToWorkspaceNavRow, compareSessionMetadataForDisplay } from '@/flow_chat/utils/sessionOrdering';
 import { deriveSessionRelationshipFromMetadata, resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { closeSessionSceneAfterActiveSessionArchive } from '@/flow_chat/services/sessionActivation';
-import { confirmWarning } from '@/infrastructure/confirm-dialog';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './WorkspaceSessionBatchModal.scss';
@@ -180,6 +181,7 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   const partiallySelected = selectedCount > 0 && selectedCount < allSessionIds.length;
   const isBusy = isLoading || actionKind !== null;
   const hasSessions = sessions.length > 0;
+  const canSelectSessions = hasSessions && !isBusy && !loadFailed;
 
   const toggleSessionSelection = useCallback((sessionId: string) => {
     setSelectedSessionIds(prev => {
@@ -218,16 +220,8 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     if (selectedCount === 0) {
       return;
     }
-    const confirmed = await confirmWarning(
-      t('nav.sessions.bulkArchiveConfirmTitle'),
-      t('nav.sessions.bulkArchiveConfirmMessage', { count: selectedCount })
-    );
-    if (!confirmed) {
-      return;
-    }
 
     const selectedIds = Array.from(selectedSessionIds);
-    const activeSessionIdBeforeArchive = flowChatStore.getState().activeSessionId;
     setActionKind('archive');
     try {
       const results = await Promise.allSettled(
@@ -236,7 +230,6 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
       const successCount = results.filter(result => result.status === 'fulfilled').length;
       if (successCount > 0) {
         await refreshWorkspaceSessions();
-        closeSessionSceneAfterActiveSessionArchive(activeSessionIdBeforeArchive);
         window.dispatchEvent(new CustomEvent('openbitfun:session-archived'));
         notificationService.success(t('nav.sessions.archivedAll', { count: successCount }), { duration: 3000 });
       }
@@ -263,9 +256,10 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     if (selectedCount === 0) {
       return;
     }
-    const confirmed = await confirmWarning(
+    const confirmed = await confirmDanger(
       t('nav.sessions.bulkDeleteConfirmTitle'),
-      t('nav.sessions.bulkDeleteConfirmMessage', { count: selectedCount })
+      t('nav.sessions.bulkDeleteConfirmMessage', { count: selectedCount }),
+      { confirmText: t('nav.sessions.deleteSelected') },
     );
     if (!confirmed) {
       return;
@@ -321,162 +315,176 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
         if (!nextOpen && !isBusy) onClose();
       }}
       size="xl"
+      className="workspace-session-batch-modal__dialog"
+      closeOnEscape={!isBusy}
       closeOnPointerOutside={!isBusy}
     >
       <DialogHeader>
         <DialogHeading>
           <DialogTitle>{t('nav.sessions.manage')}</DialogTitle>
+          <DialogDescription>{t('nav.sessions.batchManageDescription')}</DialogDescription>
         </DialogHeading>
-        <DialogClose />
+        <DialogClose disabled={isBusy} />
       </DialogHeader>
-      <DialogBody inset="none">
-        <div className="workspace-session-batch-modal__content-shell">
-      <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="root" className="workspace-session-batch-modal">
-        <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="hero" className="workspace-session-batch-modal__hero">
-          <div className="workspace-session-batch-modal__hero-icon">
-            <Icon glyph={FolderKanban} size="md" />
+      <DialogBody inset="none" className="workspace-session-batch-modal__body">
+        <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="root" className="workspace-session-batch-modal">
+          <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="hero" className="workspace-session-batch-modal__context">
+            <Icon name="folder" size="sm" />
+            <OverflowText className="workspace-session-batch-modal__workspace" title={workspacePath}>
+              {workspaceLabel}
+            </OverflowText>
           </div>
-          <div className="workspace-session-batch-modal__hero-copy">
-            <div className="workspace-session-batch-modal__workspace">{workspaceLabel}</div>
-            <div className="workspace-session-batch-modal__description">
-              {t('nav.sessions.batchManageDescription')}
-            </div>
-          </div>
-        </div>
 
-        <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="toolbar" className="workspace-session-batch-modal__toolbar">
-          <div className="workspace-session-batch-modal__toolbar-main">
-            <Checkbox
-              checked={allSelected}
-              indeterminate={partiallySelected}
-              onChange={() => { handleToggleSelectAll(); }}
-              disabled={isBusy || allSessionIds.length === 0}
-              label={allSelected ? t('actions.deselectAll') : t('actions.selectAll')}
-            />
-            {selectedCount > 0 ? (
+          <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="toolbar" className="workspace-session-batch-modal__toolbar">
+            <div className="workspace-session-batch-modal__toolbar-main">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={partiallySelected}
+                onChange={() => { handleToggleSelectAll(); }}
+                disabled={!canSelectSessions}
+                label={t('actions.selectAll')}
+              />
               <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="toolbarActions" className="workspace-session-batch-modal__toolbar-actions">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="text"
                   size="sm"
                   onClick={handleInvertSelection}
-                  disabled={isBusy || allSessionIds.length === 0}
+                  disabled={!canSelectSessions}
                 >
                   {t('actions.invertSelection')}
                 </Button>
               </div>
-            ) : null}
-            <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="summary" className="workspace-session-batch-modal__toolbar-summary">
-              {hasSessions
+            </div>
+            <div
+              data-openbitfun-component="workspace-session-batch-modal"
+              data-openbitfun-part="summary"
+              className="workspace-session-batch-modal__summary"
+              role="status"
+              aria-atomic="true"
+            >
+              {!isLoading && !loadFailed && hasSessions
                 ? t('nav.sessions.batchSelectionSummary', { count: selectedCount, total: sessions.length })
-                : t('nav.sessions.noSessionsToManage')}
+                : null}
             </div>
           </div>
-        </div>
 
-        <ScrollArea data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="list" className="workspace-session-batch-modal__list">
-          {isLoading ? (
-            <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" data-openbitfun-state="loading" className="workspace-session-batch-modal__state">
-              <Loader2 size={16} className="workspace-session-batch-modal__spinner" />
-              <span>{t('nav.sessions.loading')}</span>
-            </div>
-          ) : loadFailed ? (
-            <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" data-openbitfun-state="error" className="workspace-session-batch-modal__state is-error">
-              <span>{t('nav.sessions.batchLoadFailed')}</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => { void loadSessions(); }}>
-                {t('actions.retry')}
-              </Button>
-            </div>
-          ) : sessions.length === 0 ? (
-            <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" className="workspace-session-batch-modal__state">
-              <span>{t('nav.sessions.noSessionsToManage')}</span>
-            </div>
-          ) : (
-            sessions.map(({ metadata, displayAsChild }) => {
-              const isSelected = selectedSessionIds.has(metadata.sessionId);
-              const sessionPresentation = resolveSessionPresentation(metadata.agentType);
-              const sessionGlyph = sessionPresentation === 'assistant'
-                ? <Icon glyph={Bot} size="sm" />
-                : <Icon name="session" size="sm" />;
-              return (
-                <label data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="row"
-                  data-openbitfun-state={[isSelected && 'selected', displayAsChild && 'child'].filter(Boolean).join(' ') || undefined}
-                  key={metadata.sessionId}
-                  className={`workspace-session-batch-modal__row${displayAsChild ? ' is-child' : ''}${isSelected ? ' is-selected' : ''}`}
-                >
-                  <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="rowCheck" className="workspace-session-batch-modal__row-check">
-                    <Checkbox
-                      checked={isSelected}
-                      onChange={() => { toggleSessionSelection(metadata.sessionId); }}
-                      disabled={isBusy}
-                    />
-                  </div>
-                  <div className={`workspace-session-batch-modal__row-icon is-${sessionPresentation}`}>
-                    {sessionGlyph}
-                  </div>
-                  <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="rowContent" className="workspace-session-batch-modal__row-content">
-                    <div className="workspace-session-batch-modal__row-head">
-                      <div className="workspace-session-batch-modal__row-title">
-                        {metadata.sessionName || t('nav.sessions.untitled')}
-                      </div>
-                      <div
-                        className="workspace-session-batch-modal__row-updated"
-                        title={formatDate(metadata.lastActiveAt, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      >
-                        {formatRelativeTime(metadata.lastActiveAt)}
+          <ScrollArea
+            data-openbitfun-component="workspace-session-batch-modal"
+            data-openbitfun-part="list"
+            className="workspace-session-batch-modal__list"
+            aria-busy={isLoading}
+          >
+            {isLoading ? (
+              <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" data-openbitfun-state="loading" className="workspace-session-batch-modal__state" role="status">
+                <Spinner size="sm" />
+                <span>{t('nav.sessions.loading')}</span>
+              </div>
+            ) : loadFailed ? (
+              <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" data-openbitfun-state="error" className="workspace-session-batch-modal__state" role="alert">
+                <Icon name="info" size="md" />
+                <span>{t('nav.sessions.batchLoadFailed')}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { void loadSessions(); }}>
+                  {t('actions.retry')}
+                </Button>
+              </div>
+            ) : !hasSessions ? (
+              <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="state" className="workspace-session-batch-modal__state" role="status">
+                <Icon name="session" size="md" />
+                <span>{t('nav.sessions.noSessionsToManage')}</span>
+              </div>
+            ) : (
+              <div role="list" aria-label={t('nav.sessions.manage')}>
+                {sessions.map(({ metadata, displayAsChild }) => {
+                  const isSelected = selectedSessionIds.has(metadata.sessionId);
+                  const sessionPresentation = resolveSessionPresentation(metadata.agentType);
+                  const sessionName = metadata.sessionName || t('nav.sessions.untitled');
+                  return (
+                    <div
+                      data-openbitfun-component="workspace-session-batch-modal"
+                      data-openbitfun-part="row"
+                      data-openbitfun-state={[isSelected && 'selected', displayAsChild && 'child'].filter(Boolean).join(' ') || undefined}
+                      key={metadata.sessionId}
+                      role="listitem"
+                      className="workspace-session-batch-modal__row"
+                    >
+                      <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="rowCheck">
+                        <Checkbox
+                          className="workspace-session-batch-modal__row-control"
+                          checked={isSelected}
+                          onChange={() => { toggleSessionSelection(metadata.sessionId); }}
+                          disabled={isBusy}
+                          aria-label={sessionName}
+                          label={
+                            <span data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="rowContent" className="workspace-session-batch-modal__row-content">
+                              <span className="workspace-session-batch-modal__row-icon">
+                                {sessionPresentation === 'assistant'
+                                  ? <Icon glyph={Bot} size="sm" />
+                                  : <Icon name="session" size="sm" />}
+                              </span>
+                              <span className="workspace-session-batch-modal__row-head">
+                                <OverflowText className="workspace-session-batch-modal__row-title" title={sessionName}>
+                                  {sessionName}
+                                </OverflowText>
+                                {displayAsChild && (
+                                  <span className="workspace-session-batch-modal__row-meta">
+                                    {t('nav.sessions.batchChildSession')}
+                                  </span>
+                                )}
+                              </span>
+                              <span
+                                className="workspace-session-batch-modal__row-updated"
+                                title={formatDate(metadata.lastActiveAt, {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              >
+                                {formatRelativeTime(metadata.lastActiveAt)}
+                              </span>
+                            </span>
+                          }
+                        />
                       </div>
                     </div>
-                    {displayAsChild ? (
-                      <div className="workspace-session-batch-modal__row-meta">
-                        <span className="workspace-session-batch-modal__pill">
-                          {t('nav.sessions.batchChildSession')}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                </label>
-              );
-            })
-          )}
-        </ScrollArea>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      </DialogBody>
 
-        <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="footer" className="workspace-session-batch-modal__footer">
-          <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
+      <DialogFooter data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="footer" className="workspace-session-batch-modal__footer">
+        <Button
+          type="button"
+          variant="outline"
+          tone="danger"
+          onClick={() => { void handleDeleteSelected(); }}
+          disabled={!canSelectSessions || selectedCount === 0}
+          loading={actionKind === 'delete'}
+          leadingIcon={<Icon name="delete" />}
+        >
+          {t('nav.sessions.deleteSelected')}
+        </Button>
+        <div className="workspace-session-batch-modal__footer-actions">
+          <Button type="button" variant="fill" onClick={onClose} disabled={isBusy}>
             {t('actions.cancel')}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="primary"
             onClick={() => { void handleArchiveSelected(); }}
-            disabled={isBusy || selectedCount === 0}
+            disabled={!canSelectSessions || selectedCount === 0}
             loading={actionKind === 'archive'}
             leadingIcon={<Icon glyph={Archive} />}
           >
-
-            <span>{t('nav.sessions.archiveSelected')}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="fill"
-            tone="danger"
-            onClick={() => { void handleDeleteSelected(); }}
-            disabled={isBusy || selectedCount === 0}
-            loading={actionKind === 'delete'}
-            leadingIcon={<Icon name="delete" size="sm" />}
-          >
-
-            <span>{t('nav.sessions.deleteSelected')}</span>
+            {t('nav.sessions.archiveSelected')}
           </Button>
         </div>
-      </div>
-            </div>
-            </DialogBody>
+      </DialogFooter>
     </Dialog>
   );
 };

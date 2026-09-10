@@ -10,7 +10,12 @@ import { RelayHttpClient } from './services/RelayHttpClient';
 import {
   RemoteSessionManager,
 } from './services/RemoteSessionManager';
-import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
+import { reconcileAccountOwner } from './services/accountOwner';
+import {
+  clearMobileNavigation,
+  saveMobileNavigation,
+  type PairedNavigation,
+} from './services/MobileNavigationStore';
 import { ThemeProvider } from './theme';
 import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useMobileViewport } from './hooks/useMobileViewport';
@@ -45,17 +50,19 @@ const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
-  const [activeSessionAgentType, setActiveSessionAgentType] = useState('agentic');
+  const [activeSessionAgentType, setActiveSessionAgentType] = useState('Standard');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const isWideLayout = useWideLayout();
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
   const clientRef = useRef<RelayHttpClient | null>(null);
-  const delegatedOwnerUnlistenRef = useRef<(() => void) | null>(null);
+  const accountOwnerUnlistenRef = useRef<(() => void) | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
   const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
   const [accountDirectoryOpen, setAccountDirectoryOpen] = useState(false);
   const [preferredDeviceId, setPreferredDeviceId] = useState<string | undefined>();
+  const navigationRef = useRef<PairedNavigation | null>(null);
+  const controlTarget = useMobileStore((state) => state.controlTarget);
 
   // An authenticated account without a selected desktop has nothing to ping.
   useConnectionHealth(accountDirectoryOpen ? null : sessionMgr);
@@ -123,16 +130,23 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handlePaired = useCallback(
-    (client: RelayHttpClient, sessionMgr: RemoteSessionManager, preferredDeviceId?: string) => {
-      const needsDevice = client.hasDelegatedIdentity && !client.isPaired && !client.pairedDeviceId;
+    (
+      client: RelayHttpClient,
+      sessionMgr: RemoteSessionManager,
+      preferredDeviceId?: string,
+      navigation?: PairedNavigation,
+    ) => {
+      navigationRef.current = navigation ?? null;
+      const needsDevice = client.hasAccountIdentity && !client.targetDeviceId;
       setAccountDirectoryOpen(needsDevice);
       setPreferredDeviceId(preferredDeviceId);
-      delegatedOwnerUnlistenRef.current?.();
+      accountOwnerUnlistenRef.current?.();
       clientRef.current = client;
-      delegatedOwnerUnlistenRef.current = client.onDelegatedAccountOwnerChange((change) => {
+      accountOwnerUnlistenRef.current = client.onAccountOwnerChange((change) => {
         if (clientRef.current !== client) return;
-        const ownerScopedStateWasReset = reconcileDelegatedAccountOwner(change);
+        const ownerScopedStateWasReset = reconcileAccountOwner(change);
         if (!ownerScopedStateWasReset) return;
+        navigationRef.current = null;
 
         // A detail page can retain local IDs in addition to Zustand state.
         // Return to the session root before any stale completion can render
@@ -140,7 +154,7 @@ const AppContent: React.FC = () => {
         clearTimeout(timerRef.current);
         setActiveSessionId(null);
         setActiveSessionName('Session');
-        setActiveSessionAgentType('agentic');
+        setActiveSessionAgentType('Standard');
         setChatAutoFocus(false);
         setPrevPage(null);
         setNavDir(null);
@@ -215,7 +229,7 @@ const AppContent: React.FC = () => {
     sessionId: string,
     sessionName?: string,
     isNew?: boolean,
-    agentType = 'agentic',
+    agentType = 'Standard',
   ) => {
     setActiveSessionId(sessionId);
     setActiveSessionName(sessionName || 'Session');
@@ -244,9 +258,24 @@ const AppContent: React.FC = () => {
   const handleControlTargetChanged = useCallback(() => {
     setAccountDirectoryOpen(false);
     clearTimeout(timerRef.current);
+    const restored = navigationRef.current?.restored;
+    if (navigationRef.current) navigationRef.current.restored = null;
+    if (restored && restored.deviceId === clientRef.current?.targetDeviceId && restored.session) {
+      setActiveSessionId(restored.session.id);
+      setActiveSessionName(restored.session.name);
+      setActiveSessionAgentType(restored.session.agentType);
+      setChatAutoFocus(false);
+      setPrevPage(null);
+      setNavDir(null);
+      pageStackRef.current = ['pairing', 'sessions', 'chat'];
+      history.replaceState({ page: 'chat' }, '');
+      setPage('chat');
+      setCompactSidebarOpen(false);
+      return;
+    }
     setActiveSessionId(null);
     setActiveSessionName('Session');
-    setActiveSessionAgentType('agentic');
+    setActiveSessionAgentType('Standard');
     setChatAutoFocus(false);
     setPrevPage(null);
     setNavDir(null);
@@ -257,17 +286,19 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleDisconnect = useCallback(() => {
+    navigationRef.current = null;
+    clearMobileNavigation();
     setAccountDirectoryOpen(false);
     setPreferredDeviceId(undefined);
-    delegatedOwnerUnlistenRef.current?.();
-    delegatedOwnerUnlistenRef.current = null;
+    accountOwnerUnlistenRef.current?.();
+    accountOwnerUnlistenRef.current = null;
     clientRef.current?.resetConnectionIdentity();
     clientRef.current = null;
     sessionMgrRef.current = null;
     setSessionMgr(null);
     setActiveSessionId(null);
     setActiveSessionName('Session');
-    setActiveSessionAgentType('agentic');
+    setActiveSessionAgentType('Standard');
     setChatAutoFocus(false);
     setCompactSidebarOpen(false);
     setPrevPage(null);
@@ -280,9 +311,23 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => () => {
-    delegatedOwnerUnlistenRef.current?.();
-    delegatedOwnerUnlistenRef.current = null;
+    accountOwnerUnlistenRef.current?.();
+    accountOwnerUnlistenRef.current = null;
   }, []);
+
+  useEffect(() => {
+    const navigation = navigationRef.current;
+    if (!navigation || accountDirectoryOpen || page === 'pairing' || !controlTarget
+      || controlTarget.deviceId !== clientRef.current?.targetDeviceId) return;
+    saveMobileNavigation(navigation.scope, {
+      deviceId: controlTarget.deviceId,
+      session: page === 'chat' && activeSessionId ? {
+        id: activeSessionId,
+        name: activeSessionName,
+        agentType: activeSessionAgentType,
+      } : undefined,
+    });
+  }, [accountDirectoryOpen, activeSessionAgentType, activeSessionId, activeSessionName, controlTarget, page]);
 
   const isAnimating = navDir !== null;
   const currentPage: Page = page;

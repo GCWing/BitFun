@@ -669,6 +669,7 @@ public class GeneralChatStore internal constructor(
             tools = null,
             items = null,
             images = payload.images,
+            error = null,
         )
     }
 
@@ -727,6 +728,7 @@ public class GeneralChatStore internal constructor(
             tools = null,
             items = null,
             images = images,
+            error = null,
         )
 
         private const val AGENT_TYPE = "general_chat"

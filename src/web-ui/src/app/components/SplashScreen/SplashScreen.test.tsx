@@ -29,6 +29,22 @@ describe('SplashScreen', () => {
     dom.window.close();
   });
 
+  it('uses the reusable vector mark surface without theme-specific image elements', () => {
+    act(() => {
+      root.render(
+        <SplashScreen
+          isExiting={false}
+          onExited={() => {}}
+        />
+      );
+    });
+
+    const logo = container.querySelector('.splash-screen__logo');
+    expect(logo?.tagName).toBe('SPAN');
+    expect(logo?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelectorAll('img')).toHaveLength(0);
+  });
+
   it('reveals the subtle startup hint only after the delay', () => {
     act(() => {
       root.render(

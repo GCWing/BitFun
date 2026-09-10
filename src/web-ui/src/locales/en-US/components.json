@@ -41,6 +41,7 @@
     "emptyError": "This field cannot be empty"
   },
   "markdown": {
+    "remoteImageUnavailable": "Image preview is unavailable for dispatched tasks",
     "copySuccess": "Copied",
     "copyCode": "Copy code",
     "openInExplorer": "Open in Explorer",

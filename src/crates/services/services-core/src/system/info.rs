@@ -11,6 +11,9 @@ pub struct SystemInfo {
     pub arch: String,
     /// OS version
     pub os_version: Option<String>,
+    /// User home on the host serving this request, never on its controller.
+    #[serde(default)]
+    pub home_dir: Option<String>,
 }
 
 /// Gets system info.
@@ -42,5 +45,31 @@ pub fn get_system_info() -> SystemInfo {
         platform: platform.to_string(),
         arch: arch.to_string(),
         os_version: None,
+        home_dir: std::env::home_dir().and_then(|path| path.into_os_string().into_string().ok()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_system_info_without_home_remains_readable() {
+        let legacy =
+            serde_json::json!({"platform": "windows", "arch": "x86_64", "os_version": null});
+        let info: SystemInfo = serde_json::from_value(legacy.clone()).unwrap();
+        assert!(info.home_dir.is_none());
+        let round_trip: SystemInfo =
+            serde_json::from_value(serde_json::to_value(info).unwrap()).unwrap();
+        assert_eq!(round_trip.platform, legacy["platform"]);
+        assert!(round_trip.home_dir.is_none());
+    }
+
+    #[test]
+    fn reports_the_serving_hosts_home_directory() {
+        assert_eq!(
+            get_system_info().home_dir,
+            std::env::home_dir().and_then(|path| path.into_os_string().into_string().ok())
+        );
     }
 }

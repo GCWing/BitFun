@@ -4,6 +4,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./LauncherButton.module.css";
 
 export interface LauncherButtonProps
@@ -23,7 +24,7 @@ export const LauncherButton = forwardRef<
   ...props
 }, ref) {
   return (
-    <button
+    <button data-overflow-trigger
       {...props}
       className={classNames(styles.root, className)}
       data-openbitfun-component="launcher-button"
@@ -36,9 +37,9 @@ export const LauncherButton = forwardRef<
           {leadingIcon}
         </span>
       )}
-      <span className={styles.label} data-openbitfun-part="label">
+      <OverflowText className={styles.label} data-openbitfun-part="label">
         {children}
-      </span>
+      </OverflowText>
     </button>
   );
 });

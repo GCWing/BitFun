@@ -18,8 +18,6 @@ export const mobileConfirmSheetMeta = {
   states: ["closed", "open", "danger", "pending", "disabled", "narrow"],
   tokens: [
     "color.content.secondary",
-    "color.surface.tertiary",
-    "radius.pill",
     "space.2",
     "space.3",
   ],

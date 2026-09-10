@@ -14,14 +14,16 @@
     align-items: center;
     inline-size: 100%;
     min-inline-size: 0;
-    border: var(--openbitfun-border-width-default) solid transparent;
+    border: 0;
+    outline: var(--openbitfun-border-width-default) solid transparent;
+    outline-offset: calc(-1 * var(--openbitfun-border-width-default));
     border-radius: var(--openbitfun-control-action-card-radius);
     color: var(--openbitfun-color-action-neutral-content);
-    background: var(--openbitfun-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-card-background);
     transition:
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+      outline-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-size="sm"] {
@@ -33,7 +35,7 @@
   }
 
   .root:not([data-disabled="true"]):is(:hover, :has(.trigger[data-openbitfun-preview-state="hover"])) {
-    border-color: var(--openbitfun-color-border-default);
+    outline-color: var(--openbitfun-color-border-default);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
@@ -42,7 +44,7 @@
   }
 
   .root[data-selected="true"] {
-    border-color: var(--openbitfun-color-border-default);
+    outline-color: var(--openbitfun-color-border-default);
     background: var(--openbitfun-color-selection-surface);
   }
 
@@ -110,25 +112,24 @@
   .description {
     overflow: hidden;
     min-inline-size: 0;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .title {
     color: var(--openbitfun-color-content-primary);
-    font-family: var(--openbitfun-type-heading-card-font-family);
-    font-size: var(--openbitfun-type-heading-card-font-size);
-    font-weight: var(--openbitfun-type-heading-card-font-weight);
-    line-height: var(--openbitfun-type-body-sm-line-height);
-    letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
+    font-family: var(--openbitfun-type-heading-section-font-family);
+    font-size: var(--openbitfun-type-heading-section-font-size);
+    font-weight: var(--openbitfun-type-heading-section-font-weight);
+    line-height: var(--openbitfun-type-heading-section-line-height);
+    letter-spacing: var(--openbitfun-type-heading-section-letter-spacing);
   }
 
   .description {
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-content-primary);
     font-family: var(--openbitfun-type-body-sm-font-family);
     font-size: var(--openbitfun-type-body-sm-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
-    line-height: var(--openbitfun-type-body-sm-line-height);
+    line-height: var(--openbitfun-type-action-row-line-height);
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
@@ -149,7 +150,7 @@
 
   @media (forced-colors: active) {
     .root {
-      border-color: ButtonText;
+      outline-color: ButtonText;
     }
 
     .root:not([data-disabled="true"]):is(:hover, :active),

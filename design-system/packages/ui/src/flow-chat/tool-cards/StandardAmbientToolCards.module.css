@@ -83,7 +83,6 @@
   .fetchTitle {
     min-inline-size: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -204,8 +203,8 @@
   [data-openbitfun-tool-card="default"][data-openbitfun-confirmation="true"]
     > [data-openbitfun-component="flow-chat-tool-card"][data-openbitfun-part="surface"] {
     border-radius: var(--openbitfun-radius-sm);
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 6%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 24%, transparent);
+    background: var(--openbitfun-color-status-warning-surface);
+    box-shadow: inset 0 0 0 1px var(--openbitfun-color-status-warning-border);
   }
 
   .todoCompact {
@@ -239,7 +238,6 @@
     gap: var(--openbitfun-space-2);
     overflow: hidden;
     color: var(--openbitfun-color-content-muted);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -292,7 +290,6 @@
   .todoContent {
     min-inline-size: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

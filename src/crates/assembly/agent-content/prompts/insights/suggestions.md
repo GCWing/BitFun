@@ -49,16 +49,16 @@ Analyze this OpenBitFun usage data and suggest improvements.
      }
      ```
 
-4. **Agents and Skills**: Switch between Agentic and Cowork for different tasks, and use skills such as Plan for task-specific workflows.
+4. **Agents and Skills**: Switch between Standard and Cowork for different tasks, and use skills such as Plan for task-specific workflows.
    - How to use: Select the appropriate mode from the mode switcher based on your task.
    - Mode comparison:
      | Mode | Best for | AI behavior |
      |------|----------|-------------|
-     | **Agentic** | Autonomous implementation | AI plans and executes independently |
+     | **Standard** | Autonomous implementation | AI plans and executes independently |
      | **Cowork** | Collaborative editing | AI suggests, you approve each change |
      | **Plan** | Architecture & design | AI creates detailed plans before coding |
    - For work with independent branches, enable or invoke the built-in `multitask` skill so the Agent can coordinate parallel subagents without changing the session's main Agent.
-   - Tip: Use the Plan skill for complex tasks, then ask Agentic to implement the resulting plan.
+   - Tip: Use the Plan skill for complex tasks, then ask Standard to implement the resulting plan.
 
 5. **CLI Exec (Headless)**: Run OpenBitFun non-interactively from scripts and CI/CD pipelines.
    - How to use: `openbitfun exec "fix lint errors" --tools "Edit,Read,ExecCommand"`

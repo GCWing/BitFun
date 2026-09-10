@@ -95,9 +95,7 @@ extension MobileAppModel {
         remoteCreateRequestDeviceKey = nil
         remoteCreateError = nil
         remoteCreateDeviceError = nil
-        if directPairingConnected && targetKey == "pairing" {
-            updateDirectPairingDirectoryEntry()
-        }
+
     }
 
     func apply(directoryState state: DeviceDirectoryUiState, generation: UInt64) {
@@ -143,36 +141,22 @@ extension MobileAppModel {
     }
 
     func toggleDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {
-        if device.id == directPairingSidebarDeviceID {
-            directPairingDirectoryEntry = MobileDeviceDirectoryEntry(
-                id: device.id, name: device.name, online: device.online,
-                expanded: !device.expanded, status: device.status, error: device.error,
-                workspaces: device.workspaces, sessions: device.sessions
-            )
-            return
-        }
+
         coreAdapter?.toggleDeviceDirectory(device.id, expanded: !device.expanded)
     }
 
     func retryDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {
-        if device.id == directPairingSidebarDeviceID {
-            guard directPairingConnected else { return }
-            coreAdapter?.loadRemoteWorkspaces()
-            coreAdapter?.refreshRemoteSessions()
-            return
-        }
+
         coreAdapter?.retryDeviceDirectory(device.id)
     }
 
     private func directoryTargetKey(forRawDeviceKey rawDeviceKey: String) -> String {
-        rawDeviceKey == directPairingSidebarDeviceID ? "pairing" : "account:\(rawDeviceKey)"
+        "account:\(rawDeviceKey)"
     }
 
     private var authoritativeDirectoryRawDeviceKey: String? {
         guard let targetKey = remoteExpectedDeviceKey else { return nil }
-        if targetKey == "pairing" {
-            return directPairingConnected ? directPairingSidebarDeviceID : nil
-        }
+
         let prefix = "account:"
         guard targetKey.hasPrefix(prefix) else { return nil }
         let rawDeviceKey = String(targetKey.dropFirst(prefix.count))
@@ -187,27 +171,13 @@ extension MobileAppModel {
             showToast(localized("远程会话当前不可创建，请重试"))
             return
         }
-        let targetKey: String
-        let accountDevice: MobileAccountDevice?
-        if device.id == directPairingSidebarDeviceID {
-            guard device.online, directPairingConnected else {
-                showToast(localized("这台桌面设备当前离线"))
-                return
-            }
-            targetKey = "pairing"
-            accountDevice = nil
-        } else {
-            guard let matched = accountDevices.first(where: { $0.id == device.id }) else {
-                showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
-                return
-            }
-            guard matched.online, device.online else {
-                showToast(localized("这台桌面设备当前离线"))
-                return
-            }
-            targetKey = "account:\(matched.id)"
-            accountDevice = matched
+        guard let matched = accountDevices.first(where: { $0.id == device.id }),
+              matched.online, device.online else {
+            showToast(localized("这台桌面设备当前离线"))
+            return
         }
+        let targetKey = "account:\(matched.id)"
+        let accountDevice = matched
 
         pendingDirectorySession = nil
         pendingDirectoryWorkspace = nil
@@ -238,11 +208,7 @@ extension MobileAppModel {
             }
             return
         }
-        guard let accountDevice else {
-            pendingDirectoryRemoteDraft = nil
-            showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
-            return
-        }
+
         selectRemoteDevice(accountDevice)
     }
 
@@ -405,6 +371,20 @@ extension MobileAppModel {
         pendingRemoteAssistantCreate = true
         workspaceSelectionBusy = true
         coreAdapter?.selectRemoteAssistant(path: assistant.path)
+    }
+
+    /// Compact Remote Home follows HarmonyOS by creating an empty conversation
+    /// immediately, then letting the normal composer own the first message.
+    func createRemoteSessionFromHome() {
+        guard remoteCreateInteraction.canSubmit else {
+            showToast(localized("远程会话当前不可创建，请重试"))
+            return
+        }
+        if let workspace = remoteWorkspaces.first(where: \.selected) ?? remoteWorkspaces.first {
+            createRemoteSession(in: workspace, agentType: "code")
+        } else {
+            createRemoteAssistantSession()
+        }
     }
 
     func selectRemoteAssistant(_ assistant: MobileAssistantOption) {
@@ -732,9 +712,7 @@ extension MobileAppModel {
                 remoteCreateSubmitting = false
                 clearRemoteCreateRequestMetadata()
                 remoteCreateError = detail
-                if directPairingConnected && targetKey == "pairing" {
-                    updateDirectPairingDirectoryEntry()
-                }
+
             }
             return
         }
@@ -779,7 +757,7 @@ extension MobileAppModel {
                 workspacePath: session.workspacePath,
                 workspaceName: session.workspaceName,
                 createdAt: session.createdAt,
-                messageCount: Int(session.messageCount),
+                messageCount: Int(session.messageCount)
             )
         }
         if let committed, projectionDecision.protectCommittedRowAndSelection {
@@ -787,9 +765,7 @@ extension MobileAppModel {
             remoteSessions.insert(committed.session, at: 0)
         }
         rebuildRemoteWorkspaceGroups()
-        if directPairingConnected {
-            updateDirectPairingDirectoryEntry()
-        }
+
         if let protected = committedRemoteCreate,
            protected.targetKey == targetKey,
            protected.epoch == epoch {
@@ -901,9 +877,7 @@ extension MobileAppModel {
             MobileAssistantOption(path: $0.path, name: $0.name)
         }
         rebuildRemoteWorkspaceGroups()
-        if directPairingConnected {
-            updateDirectPairingDirectoryEntry()
-        }
+
         apply(filePreviewState: ready.preview)
         apply(downloadState: ready.download)
         if let pending = pendingRemoteWorkspaceCreate,
@@ -917,20 +891,6 @@ extension MobileAppModel {
             createRemoteSession(agentType: "Claw", title: "", instruction: "")
         }
         advancePendingDirectoryRemoteDraftIfReady()
-    }
-
-    private func updateDirectPairingDirectoryEntry() {
-        guard let name = directPairingDeviceName else { return }
-        directPairingDirectoryEntry = MobileDeviceDirectoryEntry(
-            id: directPairingSidebarDeviceID,
-            name: name,
-            online: remoteConnected,
-            expanded: directPairingDirectoryEntry?.expanded ?? true,
-            status: remoteConnected ? "READY" : "FAILED",
-            error: remoteConnected ? nil : "DISCONNECTED",
-            workspaces: remoteWorkspaces,
-            sessions: remoteSessions
-        )
     }
 
     func rebuildRemoteWorkspaceGroups() {

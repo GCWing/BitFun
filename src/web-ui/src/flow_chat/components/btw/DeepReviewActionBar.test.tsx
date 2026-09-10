@@ -292,6 +292,63 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(container.querySelector('[role="status"]')).toBeTruthy();
   });
 
+  it('localizes the stable dialog-start prefix without translating provider details', async () => {
+    const store = useReviewActionBarStore.getState();
+    store.showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix the provider failure.'],
+      },
+      phase: 'fix_failed',
+    });
+    store.updatePhase(
+      'fix_failed',
+      'Failed to start dialog turn: provider quota exhausted',
+      'child-session',
+    );
+
+    await act(async () => {
+      root.render(<ReviewActionBar childSessionId="child-session" />);
+    });
+
+    expect(container.textContent).toContain(
+      'Unable to start this action: provider quota exhausted',
+    );
+    expect(container.textContent).not.toContain('Failed to start dialog turn:');
+  });
+
+  it.each([
+    [new Error('Failed to start dialog turn: provider quota exhausted'), 'Unable to start this action: provider quota exhausted'],
+    [Object.assign(new Error('Network connection was interrupted before Review could start.'), {
+      launchErrorMessageKey: 'deepReviewActionBar.launchError.network',
+      originalMessage: 'Failed to start dialog turn: provider connection closed',
+    }), 'Network connection interrupted. Review failed to start.\nprovider connection closed'],
+  ])('shows the same launch error in the header and notification: %s', async (error, message) => {
+    const { notificationService } = await import('@/shared/notification-system');
+    sendMessageMock.mockRejectedValueOnce(error);
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix the provider failure.'],
+      },
+      phase: 'review_completed',
+    });
+    await act(async () => root.render(<ReviewActionBar childSessionId="child-session" />));
+    const startFixButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Start fixing'));
+    expect(startFixButton).toBeTruthy();
+    await act(async () => {
+      startFixButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    expect(notificationService.error).toHaveBeenCalledWith(message, { duration: 5000 });
+    expect(container.textContent).toContain(message);
+    expect(container.textContent).not.toContain('Failed to start dialog turn:');
+  });
+
   it('keeps remediation in progress after submitting a fix turn', async () => {
     flowChatSessionsMock.set('child-session', {
       sessionId: 'child-session',
@@ -1107,6 +1164,43 @@ describeWithJsdom('DeepReviewActionBar', () => {
     const [prompt] = sendMessageMock.mock.calls[0];
     expect(prompt).toContain('User chose option 2: Staged path');
     expect(prompt).not.toContain('Recommended option 2: Staged path');
+  });
+
+  it('toggles the Other group from partial selection and excludes completed items', async () => {
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Completed fix', 'Fix issue 1', 'Fix issue 2'],
+      },
+      phase: 'review_completed',
+      completedRemediationIds: new Set(['remediation-0']),
+    });
+    useReviewActionBarStore.getState().setSelectedRemediationIds(new Set(['remediation-1']));
+
+    await act(async () => {
+      root.render(<ReviewActionBar childSessionId="child-session" />);
+    });
+
+    const groupCheckbox = container.querySelector<HTMLInputElement>(
+      '.deep-review-action-bar__remediation-group-header input[type="checkbox"]',
+    )!;
+    expect(groupCheckbox.getAttribute('aria-checked')).toBe('mixed');
+
+    await act(async () => { groupCheckbox.click(); });
+    expect([...useReviewActionBarStore.getState().selectedRemediationIds].sort())
+      .toEqual(['remediation-1', 'remediation-2']);
+    expect(groupCheckbox.checked).toBe(true);
+
+    await act(async () => { groupCheckbox.click(); });
+    expect(useReviewActionBarStore.getState().selectedRemediationIds.size).toBe(0);
+    expect(groupCheckbox.checked).toBe(false);
+
+    await act(async () => { groupCheckbox.click(); });
+    expect([...useReviewActionBarStore.getState().selectedRemediationIds].sort())
+      .toEqual(['remediation-1', 'remediation-2']);
+    expect(groupCheckbox.checked).toBe(true);
   });
 
   it('marks completed remediation items when fix completes', async () => {

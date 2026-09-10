@@ -26,13 +26,13 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   title: 'Session 1',
   dialogTurns: [],
   status: 'idle',
-  config: { agentType: 'agentic' },
+  config: { agentType: 'Standard' },
   createdAt: 1,
   lastActiveAt: 1,
   error: null,
   isHistorical: false,
   maxContextTokens: 128128,
-  mode: 'agentic',
+  mode: 'Standard',
   workspacePath: '/workspace/OpenBitFun',
   workspaceId: 'workspace-1',
   sessionKind: 'normal',
@@ -58,7 +58,7 @@ describe('findReusableEmptySessionId', () => {
       activeSessionId: codeSession.sessionId,
     }));
 
-    expect(findReusableEmptySessionId(workspace, 'agentic')).toBeNull();
+    expect(findReusableEmptySessionId(workspace, 'Standard')).toBeNull();
   });
 });
 

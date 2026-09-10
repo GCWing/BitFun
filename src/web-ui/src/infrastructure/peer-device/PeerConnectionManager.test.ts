@@ -210,7 +210,7 @@ describe('PeerConnectionManager health', () => {
 
   it('reconnects with exponential backoff while degraded', async () => {
     const rpc = createRpc();
-    const manager = createManager(rpc.deviceRpc, { maxKeepaliveFailures: 4 });
+    const manager = createManager(rpc.deviceRpc);
     await manager.connect('peer-1', 'Studio');
 
     rpc.failNext(2);
@@ -238,7 +238,7 @@ describe('PeerConnectionManager health', () => {
 
   it('caps the reconnect delay', async () => {
     const rpc = createRpc();
-    const manager = createManager(rpc.deviceRpc, { maxKeepaliveFailures: 6 });
+    const manager = createManager(rpc.deviceRpc);
     await manager.connect('peer-1', 'Studio');
 
     rpc.failNext(5);
@@ -253,43 +253,50 @@ describe('PeerConnectionManager health', () => {
     expect(manager.get('peer-1')?.getState().consecutiveFailures).toBe(5);
   });
 
-  it('loses a peer after repeated failures and stops retrying', async () => {
+  it('retains the attachment through a long outage and resumes capped retries', async () => {
     const rpc = createRpc();
     const manager = createManager(rpc.deviceRpc);
-    await manager.connect('peer-1', 'Studio');
+    const connection = await manager.connect('peer-1', 'Studio');
 
     rpc.failAll();
-    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS + RECONNECT_BASE_MS + RECONNECT_BASE_MS * 2);
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS + 120_000);
 
-    expect(manager.get('peer-1')?.getState()).toMatchObject({
-      health: 'lost',
-      lostReason: 'keepalive',
-      consecutiveFailures: 3,
-    });
+    expect(manager.get('peer-1')).toBe(connection);
+    expect(connection.getState().health).toBe('degraded');
+    expect(connection.getState().consecutiveFailures).toBeGreaterThan(3);
+    expect(connection.adapter.isDisposed()).toBe(false);
+    expect(rpc.commands()).not.toContain('peer_control_detach');
 
-    const afterLoss = rpc.commands().length;
-    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS * 5);
-    expect(rpc.commands().length).toBe(afterLoss);
+    rpc.failNext(0);
+    await vi.advanceTimersByTimeAsync(RECONNECT_MAX_MS);
+    expect(manager.get('peer-1')).toBe(connection);
+    expect(connection.getState()).toMatchObject({ health: 'ready', consecutiveFailures: 0 });
+    expect(rpc.commands().filter(command => command === 'peer_control_attach')).toHaveLength(2);
+    await manager.disposeAll();
   });
 
-  it('loses a peer that dropped out of account presence', async () => {
+  it('recovers a 2.3 second presence gap on the same attachment', async () => {
     const rpc = createRpc();
     const manager = createManager(rpc.deviceRpc);
-    await manager.connect('peer-1', 'Studio');
+    const connection = await manager.connect('peer-1', 'Studio');
 
+    rpc.failAll();
     manager.reportPresence(['peer-2']);
+    expect(connection.getState()).toMatchObject({ health: 'degraded', consecutiveFailures: 0 });
+    await vi.advanceTimersByTimeAsync(2_300);
 
-    expect(manager.get('peer-1')?.getState()).toMatchObject({
-      health: 'lost',
-      lostReason: 'presence',
-    });
+    rpc.failNext(0);
+    manager.reportPresence(['peer-1', 'peer-2']);
+    await vi.advanceTimersByTimeAsync(0);
 
-    const afterLoss = rpc.commands().length;
-    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS * 3);
-    expect(rpc.commands().length).toBe(afterLoss);
+    expect(manager.get('peer-1')).toBe(connection);
+    expect(connection.adapter.isDisposed()).toBe(false);
+    expect(connection.getState()).toMatchObject({ health: 'ready', consecutiveFailures: 0 });
+    expect(rpc.commands()).not.toContain('peer_control_detach');
+    expect(rpc.commands().filter(command => command === 'peer_control_attach')).toHaveLength(2);
   });
 
-  it('treats successful product traffic as proof the link is alive', async () => {
+  it('waits for a recovery handshake even when a product request succeeds', async () => {
     const rpc = createRpc();
     const manager = createManager(rpc.deviceRpc);
     const connection = await manager.connect('peer-1', 'Studio');
@@ -300,27 +307,51 @@ describe('PeerConnectionManager health', () => {
 
     await connection.adapter.request('get_opened_workspaces', { request: {} });
 
+    expect(connection.getState().health).toBe('degraded');
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS);
     expect(connection.getState()).toMatchObject({ health: 'ready', consecutiveFailures: 0 });
     await vi.waitFor(() => {
       expect(rpc.commands().filter(c => c === 'peer_control_attach')).toHaveLength(2);
     });
   });
 
-  it('degrades after a product transport failure instead of waiting for keepalive', async () => {
+  it('coalesces product failures into a probe without consuming health retries', async () => {
     const rpc = createRpc();
     const manager = createManager(rpc.deviceRpc);
     const connection = await manager.connect('peer-1', 'Studio');
 
-    rpc.failNext(1);
-    await expect(connection.adapter.request('set_config', {
-      request: { path: 'ui.theme', value: 'dark' },
-    })).rejects.toThrow('relay unavailable');
+    rpc.failNext(8);
+    await Promise.all(Array.from({ length: 8 }, async () => {
+      await expect(connection.adapter.request('subscribe_permission_requests', {}))
+        .rejects.toThrow('relay unavailable');
+    }));
 
-    expect(connection.getState()).toMatchObject({
-      health: 'degraded',
-      consecutiveFailures: 1,
-    });
+    expect(connection.getState()).toMatchObject({ health: 'degraded', consecutiveFailures: 0 });
+    expect(rpc.commands().filter(command => command === 'peer_mode_ping')).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS);
+    expect(connection.getState()).toMatchObject({ health: 'ready', consecutiveFailures: 0 });
+    expect(rpc.commands().filter(command => command === 'peer_mode_ping')).toHaveLength(2);
+    expect(rpc.commands().filter(command => command === 'peer_control_attach')).toHaveLength(2);
   });
+
+  it('does not postpone a health retry when more product requests or presence updates fail', async () => {
+    const rpc = createRpc();
+    const manager = createManager(rpc.deviceRpc);
+    const connection = await manager.connect('peer-1', 'Studio');
+    rpc.failAll();
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+    expect(connection.getState().consecutiveFailures).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS / 2);
+    manager.reportPresence([]);
+    manager.reportPresence([]);
+    await expect(connection.adapter.request('subscribe_permission_requests', {})).rejects.toThrow();
+    expect(connection.getState().consecutiveFailures).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS / 2);
+    expect(connection.getState().consecutiveFailures).toBe(2);
+  });
+
 });
 
 describe('PeerConnectionManager disposal', () => {
@@ -402,6 +433,7 @@ describe('PeerConnectionManager disposal', () => {
     failNextPing = true;
     await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
     await connection.adapter.request('get_opened_workspaces', { request: {} });
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS);
     await vi.waitFor(() => {
       expect(commands.filter(command => command === 'peer_control_attach')).toHaveLength(2);
     });
@@ -520,7 +552,6 @@ describe('PeerConnectionManager disposal', () => {
 
 function createManager(
   deviceRpc: ReturnType<typeof createRpc>['deviceRpc'],
-  overrides: { maxKeepaliveFailures?: number } = {},
 ): PeerConnectionManager {
   return new PeerConnectionManager({
     deviceRpc,
@@ -528,7 +559,6 @@ function createManager(
     keepaliveIntervalMs: KEEPALIVE_MS,
     reconnectBaseDelayMs: RECONNECT_BASE_MS,
     reconnectMaxDelayMs: RECONNECT_MAX_MS,
-    maxKeepaliveFailures: overrides.maxKeepaliveFailures ?? 3,
   });
 }
 
@@ -666,28 +696,69 @@ function observe(manager: PeerConnectionManager) {
   };
 }
 
-describe('PeerConnectionManager presence recovery', () => {
-  it('clears a presence-lost attachment once the device is reachable again', async () => {
-    // `lost` is terminal and `connect` refuses a lost entry, so one presence
-    // blip during a burst of switching used to strand a healthy device for the
-    // rest of the session.
-    const manager = new PeerConnectionManager({
-      deviceRpc: async () => JSON.stringify({
-        resp: 'host_invoke_result',
-        ok: true,
-        value: { capabilities: {} },
-      }),
-      getControllerDeviceId: async () => 'controller-1',
+describe('PeerConnectionManager recovery races', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('serializes presence recovery and only marks ready after re-attach succeeds', async () => {
+    const rpc = createRpc();
+    const reattach = deferred<string>();
+    let attachCount = 0;
+    const deviceRpc = vi.fn(async (target: string, commandJson: string) => {
+      const command = JSON.parse(commandJson).command;
+      if (command === 'peer_control_attach' && ++attachCount === 2) return reattach.promise;
+      return rpc.deviceRpc(target, commandJson);
     });
-
-    await manager.connect('device-b', 'B');
+    const manager = createManager(deviceRpc);
+    const connection = await manager.connect('peer-1', 'Studio');
     manager.reportPresence([]);
-    expect(manager.get('device-b')?.getState().health).toBe('lost');
+    manager.reportPresence(['peer-1']);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(attachCount).toBe(2);
 
-    manager.reportPresence(['device-b']);
+    // These hints used to start competing recovery work or clear the failure
+    // state before event delivery was actually attached again.
+    manager.reportPresence([]);
+    manager.reportPresence(['peer-1']);
+    await connection.adapter.request('get_opened_workspaces', { request: {} });
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS * 2);
+    expect(attachCount).toBe(2);
+    expect(connection.getState().health).toBe('degraded');
 
-    expect(manager.has('device-b')).toBe(false);
-    await expect(manager.connect('device-b', 'B')).resolves.toBeDefined();
+    reattach.resolve(JSON.stringify({ resp: 'host_invoke_result', ok: true, value: null }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(connection.getState().health).toBe('ready');
   });
 
+  it('keeps a retry scheduled when online presence arrives as a failed probe settles', async () => {
+    const rpc = createRpc();
+    const manager = createManager(rpc.deviceRpc);
+    const connection = await manager.connect('peer-1', 'Studio');
+    manager.subscribe(states => {
+      if (states[0]?.consecutiveFailures === 1) manager.reportPresence(['peer-1']);
+    });
+    manager.reportPresence([]);
+    rpc.failNext(1);
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS);
+    expect(connection.getState().health).toBe('degraded');
+    await vi.advanceTimersByTimeAsync(RECONNECT_BASE_MS);
+    expect(connection.getState().health).toBe('ready');
+  });
+
+  it('re-attaches when presence drops during an already running keepalive', async () => {
+    const rpc = createRpc();
+    const ping = deferred<string>();
+    let pingCount = 0;
+    const manager = createManager(vi.fn(async (target: string, commandJson: string) => {
+      if (JSON.parse(commandJson).command === 'peer_mode_ping' && ++pingCount === 2) return ping.promise;
+      return rpc.deviceRpc(target, commandJson);
+    }));
+    const connection = await manager.connect('peer-1', 'Studio');
+    await vi.advanceTimersByTimeAsync(KEEPALIVE_MS);
+    manager.reportPresence([]);
+    ping.resolve(JSON.stringify({ resp: 'host_invoke_result', ok: true, value: { host_type: 'desktop', capabilities: {} } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(connection.getState().health).toBe('ready');
+    expect(rpc.commands().filter(command => command === 'peer_control_attach')).toHaveLength(2);
+  });
 });

@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { RotateCcw, Loader2, CircleUser } from 'lucide-react';
+import { RotateCcw, Loader2 } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
@@ -42,6 +42,7 @@ import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
 import { isRemoteWorkspaceSession } from '../../utils/sessionWorkspace';
+import { resolveSessionDriverId } from '../../session-drivers/resolve';
 import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
 import {
   composerPresentationToAccessibleText,
@@ -55,6 +56,7 @@ import {
 } from '../../utils/composerPresentation';
 import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
 import { UserMessagePresentationContent } from './UserMessagePresentationContent';
+import { UserMessageImage } from './UserMessageImage';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -130,6 +132,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const sentTime = useMemo(() => sentTimestamp === null ? null : formatDate(sentTimestamp, {
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
     }), [formatDate, sentTimestamp]);
     const sentAtLabel = useMemo(() => sentTimestamp === null ? null : t('message.sentAt', {
       time: formatDate(sentTimestamp, {
@@ -195,7 +198,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const actionTurnIndex = resolvedAbsoluteTurnIndex !== undefined
       ? resolvedAbsoluteTurnIndex - 1
       : -1;
-    const isRemoteSession = isRemoteWorkspaceSession(currentSession ?? undefined, null);
+    const isDispatchSession = resolveSessionDriverId(resolvedSessionId ?? '', currentSession ?? undefined) === 'dispatch';
+    const isRemoteSession = isRemoteWorkspaceSession(currentSession ?? undefined, null) || isDispatchSession;
     const isSystemTriggered = Boolean(
       message?.metadata?.triggerSource && message.metadata.triggerSource !== 'desktop_ui',
     );
@@ -218,7 +222,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !steeringStatus;
     const canEdit = canEditBase && isSessionIdle && !isEditSubmitting && !sessionMutation;
     const canShowEditAction = allowUserMessageEdit && !isFailed && !isThreadGoalSystemMessage;
-    const editDisabledReason = isRemoteSession
+    const editDisabledReason = isDispatchSession
+      ? t('message.editDisabledDispatch')
+      : isRemoteSession
       ? t('message.editDisabledRemote')
       : isSystemTriggered
         ? t('message.cannotEdit')
@@ -231,6 +237,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               : t('message.cannotEdit');
     const rollbackTooltip = canRollback
       ? t('message.rollbackTo', { index: actionTurnIndex + 1 })
+      : isDispatchSession
+        ? t('message.rollbackDisabledDispatch')
       : isRemoteSession
         ? t('message.rollbackDisabledRemote')
         : !isSessionIdle
@@ -525,7 +533,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }
     
     return (
-      <div className={`user-message-item-shell${sentTime ? ' user-message-item-shell--with-timestamp' : ''}`}>
+      <div className="user-message-item-shell">
         <div
           data-openbitfun-component="user-message-item"
           data-openbitfun-part="root"
@@ -558,11 +566,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           />
         ) : (
           <div className="user-message-item__main" data-openbitfun-component="user-message-item" data-openbitfun-part="main">
-            {isFailed && (
-            <span className="user-message-item__failed-avatar" aria-hidden>
-              <CircleUser size={18} strokeWidth={1.75} />
-            </span>
-          )}
           <div
             className={
               isFailed
@@ -627,14 +630,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
         {message.images && message.images.length > 0 && (
           <div className="user-message-item__images" data-openbitfun-component="user-message-item" data-openbitfun-part="images">
-            {message.images.map(img => {
-              const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
-              return src ? (
-                <div data-openbitfun-component="user-message-item" data-openbitfun-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
-                  <img src={src} alt={img.name} />
-                </div>
-              ) : null;
-            })}
+            {message.images.map(img => (
+              <UserMessageImage key={img.id} image={img} onPreview={setLightboxImage} />
+            ))}
           </div>
         )}
 
@@ -671,13 +669,16 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           )}
           {!isEditing && (
             <div className="user-message-item__actions" data-openbitfun-component="user-message-item" data-openbitfun-part="actions">
-              <button
-                className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                title={copied ? t('message.copyFailed') : t('message.copy')}
-              >
-                {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
-              </button>
+              <Tooltip content={copied ? t('message.copied') : t('message.copy')}>
+                <button
+                  type="button"
+                  className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
+                  onClick={handleCopy}
+                  aria-label={copied ? t('message.copied') : t('message.copy')}
+                >
+                  {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
+                </button>
+              </Tooltip>
               {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
                   <button
@@ -685,7 +686,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__edit-btn"
                     onClick={handleBeginEdit}
                     disabled={!canEdit}
-                    title={canEdit ? t('message.edit') : editDisabledReason}
+                    aria-label={canEdit ? t('message.edit') : editDisabledReason}
                   >
                     <Icon name="edit" size="sm" />
                   </button>
@@ -706,7 +707,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__rollback-btn"
                     onClick={handleRollback}
                     disabled={!canRollback}
-                    title={rollbackTooltip}
+                    aria-label={rollbackTooltip}
                   >
                     {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
                       <Loader2 size={14} className="user-message-item__rollback-spinner" />

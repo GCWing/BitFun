@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordInteractionModality } from '@/shared/utils/motionPreference';
-import { useSceneStore } from './sceneStore';
+import { registerSessionSceneNavigation, useSceneStore } from './sceneStore';
+import { getSessionSceneTabId } from '../components/SceneBar/types';
+const sessionTarget = { surfaceId: 'local', workspaceKey: 'project', sessionId: 'current' };
+const sessionTabId = getSessionSceneTabId(sessionTarget);
 import {
   discardAndContinueSettingsNavigation,
   getSettingsDraftSnapshot,
@@ -29,6 +32,101 @@ describe('sceneStore transition snapshots', () => {
     expect(state.navCursor).toBe(-1);
   });
 
+  it('uses the same resource activator for history and closing the active tab', async () => {
+    const a = { ...sessionTarget, workspaceKey: 'a', sessionId: 'a' };
+    const b = { ...sessionTarget, workspaceKey: 'b', sessionId: 'b' };
+    useSceneStore.getState().openSessionScene(a);
+    useSceneStore.getState().openSessionScene(b);
+    let active = b;
+    const activations: string[] = [];
+    const stop = registerSessionSceneNavigation({
+      current: () => active,
+      isActive: target => target.sessionId === active.sessionId,
+      activate: async target => { active = target; activations.push(target.sessionId); return true; },
+    });
+    try {
+      useSceneStore.getState().goBack();
+      await vi.waitFor(() => expect(useSceneStore.getState().activeTabId).toBe(getSessionSceneTabId(a)));
+      useSceneStore.getState().goForward();
+      await vi.waitFor(() => expect(useSceneStore.getState().activeTabId).toBe(getSessionSceneTabId(b)));
+      useSceneStore.getState().closeScene(getSessionSceneTabId(b));
+      await vi.waitFor(() => expect(useSceneStore.getState().activeTabId).toBe(getSessionSceneTabId(a)));
+      expect(activations).toEqual(['a', 'b', 'a']);
+      expect(useSceneStore.getState().navHistory).not.toContain(getSessionSceneTabId(b));
+    } finally { stop(); }
+  });
+
+  it('does not focus a session after a newer navigation supersedes its activation', async () => {
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().openScene('terminal');
+    let complete!: (activated: boolean) => void;
+    const activation = new Promise<boolean>(resolve => { complete = resolve; });
+    const stop = registerSessionSceneNavigation({
+      current: () => null,
+      isActive: () => false,
+      activate: () => activation,
+    });
+    try {
+      useSceneStore.getState().activateScene(sessionTabId);
+      expect(useSceneStore.getState().pendingTabId).toBe(sessionTabId);
+      useSceneStore.getState().openScene('settings');
+      complete(true);
+      await activation;
+      expect(useSceneStore.getState().activeTabId).toBe('settings');
+      expect(useSceneStore.getState().pendingTabId).toBeNull();
+    } finally { stop(); }
+  });
+
+  it('invalidates pending activation when its workspace tab is retired', async () => {
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().openScene('terminal');
+    let complete!: (activated: boolean) => void;
+    const activation = new Promise<boolean>(resolve => { complete = resolve; });
+    let isCurrent = () => true;
+    const stop = registerSessionSceneNavigation({
+      current: () => null,
+      isActive: () => false,
+      activate: (_target, current) => { isCurrent = current; return activation; },
+    });
+    try {
+      useSceneStore.getState().activateScene(sessionTabId);
+      useSceneStore.getState().reconcileSessionScenes(new Map());
+      expect(isCurrent()).toBe(false);
+      expect(useSceneStore.getState().pendingTabId).toBeNull();
+      complete(true);
+      await activation;
+      expect(useSceneStore.getState().activeTabId).toBe('terminal');
+      expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual(['terminal']);
+    } finally { stop(); }
+  });
+
+  it('keeps recoverable tabs when resource activation is unsuccessful', async () => {
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().openScene('terminal');
+    const stop = registerSessionSceneNavigation({
+      current: () => null,
+      isActive: () => false,
+      activate: async () => false,
+    });
+    try {
+      useSceneStore.getState().activateScene(sessionTabId);
+      await vi.waitFor(() => expect(useSceneStore.getState().pendingTabId).toBeNull());
+      expect(useSceneStore.getState().activeTabId).toBe('terminal');
+      expect(useSceneStore.getState().openTabs.some(tab => tab.id === sessionTabId)).toBe(true);
+    } finally { stop(); }
+  });
+
+  it('rekeys legacy workspace references without duplicating their slot or breaking history', () => {
+    const legacy = { ...sessionTarget, workspaceKey: 'legacy-path' };
+    useSceneStore.getState().openSessionScene(legacy);
+    useSceneStore.getState().openScene('terminal');
+    useSceneStore.getState().reconcileSessionScenes(new Map([[sessionTarget.sessionId, sessionTarget]]));
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([sessionTabId, 'terminal']);
+    useSceneStore.getState().goBack();
+    expect(useSceneStore.getState().activeTabId).toBe(sessionTabId);
+    expect(useSceneStore.getState().navHistory).not.toContain(getSessionSceneTabId(legacy));
+  });
+
   it('publishes the first scene switch atomically from the tabless welcome surface', () => {
     const snapshots: Array<{ activeTabId: string | null; openTabIds: string[] }> = [];
     const unsubscribe = useSceneStore.subscribe(state => {
@@ -52,7 +150,7 @@ describe('sceneStore transition snapshots', () => {
     expect(useSceneStore.getState().navigationMotion).toBe('pointer');
 
     recordInteractionModality('keyboard');
-    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
     expect(useSceneStore.getState().navigationMotion).toBe('instant');
   });
 
@@ -90,8 +188,8 @@ describe('sceneStore transition snapshots', () => {
   });
 
   it('closes the last session tab into the tabless welcome state', () => {
-    useSceneStore.getState().openScene('session');
-    useSceneStore.getState().closeScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().closeScene(sessionTabId);
 
     const state = useSceneStore.getState();
     expect(state.openTabs).toEqual([]);
@@ -102,19 +200,19 @@ describe('sceneStore transition snapshots', () => {
 
   it('keeps the session tab first while allowing it to close back to another scene', () => {
     useSceneStore.getState().openScene('settings');
-    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
 
     expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual([
-      'session',
+      sessionTabId,
       'settings',
     ]);
 
-    useSceneStore.getState().closeScene('session');
+    useSceneStore.getState().closeScene(sessionTabId);
 
     const state = useSceneStore.getState();
     expect(state.openTabs.map(tab => tab.id)).toEqual(['settings']);
     expect(state.activeTabId).toBe('settings');
-    expect(state.navHistory).not.toContain('session');
+    expect(state.navHistory).not.toContain(sessionTabId);
   });
 
   it('preserves close fallback and history navigation across many open tabs', () => {
@@ -152,7 +250,7 @@ describe('sceneStore transition snapshots', () => {
   });
 
   it('keeps Settings active until its draft is resolved before changing scenes', async () => {
-    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
     useSceneStore.getState().openScene('settings');
     registerSettingsDraft({
       id: 'settings-form',
@@ -163,12 +261,12 @@ describe('sceneStore transition snapshots', () => {
       discard: vi.fn(),
     });
 
-    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
     expect(useSceneStore.getState().activeTabId).toBe('settings');
     expect(getSettingsDraftSnapshot().pendingNavigation).not.toBeNull();
 
     await discardAndContinueSettingsNavigation();
-    expect(useSceneStore.getState().activeTabId).toBe('session');
+    expect(useSceneStore.getState().activeTabId).toBe(sessionTabId);
   });
 
   it('abandons device-owned drafts during the non-interactive peer reset', () => {
@@ -192,7 +290,7 @@ describe('sceneStore transition snapshots', () => {
 
   it('reveals a background Settings tab before asking whether to close its draft', async () => {
     useSceneStore.getState().openScene('settings');
-    useSceneStore.getState().openScene('session');
+    useSceneStore.getState().openSessionScene(sessionTarget);
     registerSettingsDraft({
       id: 'background-form',
       pageId: 'application.voice',
@@ -208,6 +306,6 @@ describe('sceneStore transition snapshots', () => {
 
     await discardAndContinueSettingsNavigation();
     expect(useSceneStore.getState().openTabs.some(tab => tab.id === 'settings')).toBe(false);
-    expect(useSceneStore.getState().activeTabId).toBe('session');
+    expect(useSceneStore.getState().activeTabId).toBe(sessionTabId);
   });
 });

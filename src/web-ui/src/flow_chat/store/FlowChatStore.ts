@@ -27,6 +27,7 @@ import {
   TokenUsage,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
+import { optimisticTurnAdoptionKey } from '../utils/optimisticTurnAdoption';
 import {
   isRemoteTraceContext,
   markPhaseAfterAnimationFrames,
@@ -34,9 +35,11 @@ import {
 } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
-import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
 import { persistedMayWriteTurn } from '@/flow_chat/session-stream/SessionStream';
+import { sessionCompletionReceipt } from '../utils/sessionCompletionReceipt';
+import { isTurnAwaitingRecovery } from '../utils/interruptedTurnRecovery';
+import { sessionActivityStore } from './sessionActivityStore';
 import {
   getActiveSurfaceId,
   getActiveSurfaceScope,
@@ -53,6 +56,7 @@ import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type {
   DialogTurnData,
   SessionContextUsage,
+  SessionActivitySummary,
   SessionKind,
   SessionTurnCatalog,
 } from '@/shared/types/session-history';
@@ -111,6 +115,7 @@ import {
   isProvisionalUsageReportTurn,
   isProjectedSessionEmpty,
   canonicalSessionTurns,
+  lastUserDialogTurn,
   projectedSessionTurnCount,
   resolveDialogTurnIdentity,
   resolveStorageTurnIndex,
@@ -319,14 +324,14 @@ function sameDispatchTargetIdentity(
 // Retired built-in ids remain readable for historical sessions and older peer
 // hosts; new-session selection filters them from the current Agent catalog.
 const VALID_AGENT_TYPES = new Set([
-  'agentic',
+  'Standard',
   'Multitask',
   'debug',
   'Plan',
   'Cowork',
   'Claw',
   'DeepResearch',
-  'Ultra',
+  'Ultimate',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
@@ -4087,7 +4092,7 @@ export class FlowChatStore {
         error: null,
         historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         workspacePath,
@@ -4176,7 +4181,7 @@ export class FlowChatStore {
         lastFinishedAt: undefined,
         error: null,
         maxContextTokens: 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         isHistorical: false,
@@ -4244,7 +4249,7 @@ export class FlowChatStore {
     });
     
     window.dispatchEvent(new CustomEvent('openbitfun:session-switched', {
-      detail: { sessionId, mode: sessionMode || 'agentic' }
+      detail: { sessionId, mode: sessionMode || 'Standard' }
     }));
 
     if (targetSessionExists && previousSessionId !== sessionId) {
@@ -4255,7 +4260,7 @@ export class FlowChatStore {
   /**
    * Update session mode
    * @param sessionId Session ID
-   * @param mode Mode ID (e.g., 'agentic', 'Plan')
+   * @param mode Mode ID (e.g., 'Standard', 'Plan')
    */
   public updateSessionMode(sessionId: string, mode: string): void {
     this.setState(prev => {
@@ -4752,6 +4757,7 @@ export class FlowChatStore {
       terminalDrained?: boolean;
     },
   ): DispatchSnapshotApplyResult {
+    let unreadCompletion: Session['hasUnreadCompletion'];
     let result: DispatchSnapshotApplyResult = {
       applied: false,
       cursor: this.state.sessions.get(sessionId)?.config.dispatchCursor ?? 0,
@@ -4789,6 +4795,11 @@ export class FlowChatStore {
         : null;
       let dialogTurns = session.dialogTurns;
       const lastTurn = dialogTurns[dialogTurns.length - 1];
+      if (terminalTurnStatus && (session.config.dispatchJobState !== effectiveState
+        || (lastTurn && lastTurn.status !== terminalTurnStatus))) {
+        unreadCompletion = terminalTurnStatus === 'completed' ? 'completed'
+          : terminalTurnStatus === 'error' ? 'error' : 'interrupted';
+      }
       if (terminalTurnStatus && lastTurn) {
         const settledTurn = settleDialogTurnToTerminalStatus(
           lastTurn,
@@ -4797,6 +4808,12 @@ export class FlowChatStore {
           terminalTurnStatus === 'error'
             ? snapshot.lastError || session.error || 'Dispatched task failed'
             : undefined,
+          {
+            // A cached optimistic turn has no executor-owned terminal event.
+            // A previous job snapshot can have settled it while its follow-up
+            // was being submitted; the current target outcome must repair it.
+            preserveTerminalOutcome: optimisticTurnAdoptionKey(lastTurn) !== snapshot.jobId,
+          },
         );
         if (settledTurn !== lastTurn) {
           dialogTurns = [...dialogTurns.slice(0, -1), settledTurn];
@@ -4810,6 +4827,7 @@ export class FlowChatStore {
         ...session,
         dialogTurns,
         error: terminalError,
+        hasUnreadCompletion: unreadCompletion ?? session.hasUnreadCompletion,
         lastActiveAt: settledAt,
         lastFinishedAt: terminal
           ? session.lastFinishedAt ?? settledAt
@@ -4826,6 +4844,7 @@ export class FlowChatStore {
       return { ...prev, sessions: newSessions };
     });
 
+    if (unreadCompletion) this.onPersistUnreadCompletion?.(sessionId, unreadCompletion);
     return result;
   }
 
@@ -6396,15 +6415,19 @@ export class FlowChatStore {
 
   public markSessionUnreadCompletion(
     sessionId: string,
-    completionKind: 'completed' | 'error' | 'interrupted'
+    completionKind: 'completed' | 'error' | 'interrupted',
+    turnId?: string,
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
+      const turn = turnId ? session.dialogTurns.find(candidate => candidate.id === turnId) : lastUserDialogTurn(session);
       const updatedSession: Session = {
         ...session,
         hasUnreadCompletion: completionKind,
+        unreadCompletionTurnId: turnId ?? turn?.id,
+        unreadCompletionGeneration: turn?.recovery?.executionGeneration ?? turn?.recoveryEpoch,
       };
 
       const newSessions = new Map(prev.sessions);
@@ -6415,15 +6438,32 @@ export class FlowChatStore {
     this.onPersistUnreadCompletion?.(sessionId, completionKind);
   }
 
-  public clearSessionUnreadCompletion(sessionId: string): void {
+  public clearSessionUnreadCompletion(
+    sessionId: string,
+    expected?: { surfaceId: DeviceSurfaceId; receipt: string },
+  ): void {
     let didClear = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session || !session.hasUnreadCompletion) return prev;
+      if (expected && (getActiveSurfaceId() !== expected.surfaceId
+        || sessionCompletionReceipt(session) !== expected.receipt)) return prev;
+      if (expected) {
+        const summary = sessionActivityStore.get(sessionId)?.summary;
+        const turn = lastUserDialogTurn(session);
+        if (summary && (summary.execution === 'running' || summary.execution === 'queued'
+          || (summary.unreadCompletion && summary.lastTurn && (summary.lastTurn.turnId !== turn?.id
+            || summary.lastTurn.status !== turn?.status
+            || summary.lastTurn.executionGeneration !== (turn?.recovery?.executionGeneration ?? turn?.recoveryEpoch)
+            || (summary.lastTurn.recoveryPending !== undefined
+              && summary.lastTurn.recoveryPending !== isTurnAwaitingRecovery(turn)))))) return prev;
+      }
 
       const updatedSession: Session = {
         ...session,
         hasUnreadCompletion: undefined,
+        unreadCompletionTurnId: undefined,
+        unreadCompletionGeneration: undefined,
       };
 
       const newSessions = new Map(prev.sessions);
@@ -6433,8 +6473,29 @@ export class FlowChatStore {
       return { ...prev, sessions: newSessions };
     });
     if (didClear) {
+      const turn = lastUserDialogTurn(this.state.sessions.get(sessionId));
+      if (turn) sessionActivityStore.acknowledge(sessionId, turn.id,
+        turn.recovery?.executionGeneration ?? turn.recoveryEpoch, isTurnAwaitingRecovery(turn));
       this.onPersistUnreadCompletion?.(sessionId, undefined);
     }
+  }
+
+  /** Mirror only the summary's read marker, never its state into the Turn model. */
+  public applySessionActivityReceipt(summary: SessionActivitySummary): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(summary.sessionId);
+      if (!session || session.config.dispatchJobId) return prev;
+      const turnId = summary.unreadCompletion ? summary.lastTurn?.turnId : undefined;
+      const generation = summary.unreadCompletion ? summary.lastTurn?.executionGeneration : undefined;
+      if (session.hasUnreadCompletion === summary.unreadCompletion && session.unreadCompletionTurnId === turnId
+        && session.unreadCompletionGeneration === generation) return prev;
+      const sessions = new Map(prev.sessions);
+      sessions.set(summary.sessionId, {
+        ...session, hasUnreadCompletion: summary.unreadCompletion, unreadCompletionTurnId: turnId,
+        unreadCompletionGeneration: generation,
+      });
+      return { ...prev, sessions };
+    });
   }
 
   public setSessionNeedsAttention(
@@ -6893,8 +6954,8 @@ export class FlowChatStore {
             return prev;
           }
 
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          const rawAgentType = metadata.agentType || 'Standard';
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
           const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
             ? undefined
             : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
@@ -7116,6 +7177,8 @@ export class FlowChatStore {
     remoteSshHost?: string,
     traceSource = 'unknown'
   ): Promise<SessionMetadataPage> {
+    const activityScope = getActiveSurfaceScope();
+    const activityRead = sessionActivityStore.beginRead(activityScope.surfaceId);
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
     const metadataListTraceId = `metadata-page-${Math.random().toString(36).slice(2, 8)}`;
@@ -7215,6 +7278,9 @@ export class FlowChatStore {
         remoteSshHost,
         modelConfigPromise,
       );
+      if (activityScope.isCurrent() && page.activities) {
+        sessionActivityStore.applyRead(activityRead, page.activities);
+      }
       startupTrace.markPhase('session_metadata_page_end', {
         remote,
         source: traceSource,
@@ -7349,8 +7415,8 @@ export class FlowChatStore {
               return prev;
             }
 
-            const rawAgentType = metadata.agentType || 'agentic';
-            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+            const rawAgentType = metadata.agentType || 'Standard';
+            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
             const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
               ? undefined
               : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
@@ -8054,50 +8120,6 @@ export class FlowChatStore {
       let restoredCurrentContextUsage: SessionContextUsage | null | undefined;
       let restoredRuntimeEventSnapshot: SessionRuntimeEventSnapshot | undefined;
 
-      // Finish or resume relay history import before Core restores its model
-      // context. Ordinary local sessions return after one metadata read, while
-      // an incomplete relay import fails closed instead of publishing a
-      // truncated UI/Core history pair.
-      //
-      // Peer Device Mode: cloud turn fetch is paused on the controller; session
-      // history must come from the peer host via restore_session_view.
-      if (!remote && storageWorkspacePath && !isPeerDeviceModeActive()) {
-        const relayImportStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_relay_import_start', {
-          remote,
-          sessionId,
-          sessionTraceId,
-        });
-        try {
-          const { remoteConnectAPI } = await import(
-            '@/infrastructure/api/service-api/RemoteConnectAPI'
-          );
-          const fetched = await remoteConnectAPI.accountFetchSessionTurns(
-            sessionId,
-            storageWorkspacePath
-          );
-          startupTrace.markPhase('historical_session_relay_import_end', {
-            remote,
-            sessionId,
-            sessionTraceId,
-            fetched,
-            durationMs: elapsedMs(relayImportStartedAt),
-          });
-        } catch (fetchErr) {
-          startupTrace.markPhase('historical_session_relay_import_failed', {
-            remote,
-            sessionId,
-            sessionTraceId,
-            durationMs: elapsedMs(relayImportStartedAt),
-          });
-          log.warn('Relay session history is incomplete; retry opening the session', {
-            sessionId,
-            error: fetchErr,
-          });
-          throw fetchErr;
-        }
-      }
-
       const stateMachineManagerPromise = import('../state-machine');
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
@@ -8764,6 +8786,7 @@ export class FlowChatStore {
         ? persistedFinishReason
         : normalizeRecoveredTurnFinishReason(turn.status, persistedFinishReason),
       recovery: turn.recovery,
+      recoveryEpoch: turn.recoveryEpoch,
       hasFinalResponse:
         typeof turn.hasFinalResponse === 'boolean'
           ? turn.hasFinalResponse

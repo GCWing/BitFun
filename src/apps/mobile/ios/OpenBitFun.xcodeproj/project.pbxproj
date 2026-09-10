@@ -43,7 +43,6 @@
     A10000000000000000000035 /* AccountSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035 /* AccountSettingsView.swift */; };
     A10000000000000000000036 /* MobilePresentationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* MobilePresentationModels.swift */; };
     A10000000000000000000037 /* MobileLaunchConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* MobileLaunchConfiguration.swift */; };
-    A10000000000000000000038 /* PairingFailureCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038 /* PairingFailureCopy.swift */; };
     A20000000000000000000001 /* RemoteCodeSessionSendUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* RemoteCodeSessionSendUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -89,7 +88,6 @@
     B10000000000000000000035 /* AccountSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsView.swift; sourceTree = "<group>"; };
     B10000000000000000000036 /* MobilePresentationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePresentationModels.swift; sourceTree = "<group>"; };
     B10000000000000000000037 /* MobileLaunchConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileLaunchConfiguration.swift; sourceTree = "<group>"; };
-    B10000000000000000000038 /* PairingFailureCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingFailureCopy.swift; sourceTree = "<group>"; };
     B20000000000000000000000 /* OpenBitFunUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenBitFunUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
     B20000000000000000000001 /* RemoteCodeSessionSendUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCodeSessionSendUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -110,7 +108,6 @@
     D10000000000000000000015 /* Account */ = {isa = PBXGroup; children = (B10000000000000000000035 /* AccountSettingsView.swift */); path = Account; sourceTree = "<group>"; };
     D10000000000000000000004 /* Chat */ = {isa = PBXGroup; children = (B10000000000000000000030 /* ConversationHomeViews.swift */, B10000000000000000000005 /* ConversationHeader.swift */, B10000000000000000000006 /* ChatTimelineView.swift */, B10000000000000000000007 /* ComposerBar.swift */); path = Chat; sourceTree = "<group>"; };
     D10000000000000000000005 /* Shell */ = {isa = PBXGroup; children = (B10000000000000000000003 /* OpenBitFunTheme.swift */, B10000000000000000000004 /* SidebarView.swift */, B10000000000000000000008 /* MobileShellView.swift */, B10000000000000000000019 /* SessionActionComponents.swift */, B10000000000000000000020 /* RemoteCreateSessionView.swift */, B10000000000000000000021 /* RemoteFilePreviewView.swift */, B10000000000000000000022 /* RemoteSettingsViews.swift */); path = Shell; sourceTree = "<group>"; };
-    D10000000000000000000008 /* Infrastructure */ = {isa = PBXGroup; children = (B10000000000000000000002 /* MobileAppModel.swift */, B10000000000000000000010 /* MobileCoreAdapter.swift */, B10000000000000000000017 /* MobileLocalization.swift */, B10000000000000000000024 /* MobileAppModel+FilePreview.swift */, B10000000000000000000025 /* MobileAppModel+Account.swift */, B10000000000000000000026 /* MobileAppModel+RemoteSession.swift */, B10000000000000000000027 /* MobileAppModel+GeneralChat.swift */, B10000000000000000000028 /* RemoteAuthorityGate.swift */, B10000000000000000000029 /* AccountFailureCopy.swift */, B10000000000000000000038 /* PairingFailureCopy.swift */, D10000000000000000000017 /* Platform */); path = Infrastructure; sourceTree = "<group>"; };
     D10000000000000000000011 /* Resources */ = {isa = PBXGroup; children = (B10000000000000000000016 /* Localizable.xcstrings */); path = Resources; sourceTree = "<group>"; };
     D10000000000000000000016 /* Presentation */ = {isa = PBXGroup; children = (D10000000000000000000018 /* Models */); path = Presentation; sourceTree = "<group>"; };
     D10000000000000000000018 /* Models */ = {isa = PBXGroup; children = (B10000000000000000000036 /* MobilePresentationModels.swift */); path = Models; sourceTree = "<group>"; };
@@ -118,6 +115,7 @@
     D10000000000000000000009 /* Products */ = {isa = PBXGroup; children = (B10000000000000000000000 /* OpenBitFun.app */, B20000000000000000000000 /* OpenBitFunUITests.xctest */); name = Products; sourceTree = "<group>"; };
     D20000000000000000000001 /* OpenBitFunUITests */ = {isa = PBXGroup; children = (B20000000000000000000001 /* RemoteCodeSessionSendUITests.swift */); path = OpenBitFunUITests; sourceTree = "<group>"; };
     D10000000000000000000010 /* DesignSystem */ = {isa = PBXGroup; children = (B10000000000000000000013 /* GeneratedMobileDesignTokens.swift */, B10000000000000000000014 /* GeneratedMobilePreviewScenarios.swift */, B10000000000000000000015 /* MobileDesignGallery.swift */, B10000000000000000000018 /* AdaptiveModalComponents.swift */); path = DesignSystem; sourceTree = "<group>"; };
+    D10000000000000000000008 /* Infrastructure */ = {isa = PBXGroup; children = (B10000000000000000000002 /* MobileAppModel.swift */, B10000000000000000000010 /* MobileCoreAdapter.swift */, B10000000000000000000017 /* MobileLocalization.swift */, B10000000000000000000024 /* MobileAppModel+FilePreview.swift */, B10000000000000000000025 /* MobileAppModel+Account.swift */, B10000000000000000000026 /* MobileAppModel+RemoteSession.swift */, B10000000000000000000027 /* MobileAppModel+GeneralChat.swift */, B10000000000000000000028 /* RemoteAuthorityGate.swift */, B10000000000000000000029 /* AccountFailureCopy.swift */, D10000000000000000000017 /* Platform */); path = Infrastructure; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */

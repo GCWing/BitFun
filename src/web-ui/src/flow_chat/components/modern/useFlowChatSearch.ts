@@ -32,6 +32,9 @@ export interface UseFlowChatSearchReturn {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   matches: SearchMatch[];
+  /** Concrete text sources grouped once for the rendered rows. */
+  matchesByVirtualIndex: ReadonlyMap<number, readonly SearchMatch[]>;
+  /** Only virtual items that contain a match, never their non-matching turn siblings. */
   matchIndices: ReadonlySet<number>;
   currentMatchIndex: number;
   currentMatchVirtualIndex: number;
@@ -149,17 +152,19 @@ export function useFlowChatSearch(virtualItems: VirtualItem[]): UseFlowChatSearc
     ? Math.min(currentMatchIndex, matches.length - 1)
     : 0;
 
-  const matchIndices = useMemo<ReadonlySet<number>>(() => {
-    if (matches.length === 0) return new Set();
-    const matchedTurnIds = new Set(matches.map(match => match.turnId));
-    const indices = new Set<number>();
-    virtualItems.forEach((item, index) => {
-      if (matchedTurnIds.has(item.turnId)) {
-        indices.add(index);
-      }
-    });
-    return indices;
-  }, [virtualItems, matches]);
+  const matchesByVirtualIndex = useMemo(() => {
+    const grouped = new Map<number, SearchMatch[]>();
+    for (const match of matches) {
+      const row = grouped.get(match.virtualItemIndex);
+      if (row) row.push(match);
+      else grouped.set(match.virtualItemIndex, [match]);
+    }
+    return grouped;
+  }, [matches]);
+
+  const matchIndices = useMemo<ReadonlySet<number>>(() => (
+    new Set(matchesByVirtualIndex.keys())
+  ), [matchesByVirtualIndex]);
 
   const currentMatchVirtualIndex = matches[resolvedCurrentMatchIndex]?.virtualItemIndex ?? -1;
 
@@ -193,6 +198,7 @@ export function useFlowChatSearch(virtualItems: VirtualItem[]): UseFlowChatSearc
     searchQuery,
     onSearchChange,
     matches,
+    matchesByVirtualIndex,
     matchIndices,
     currentMatchIndex: resolvedCurrentMatchIndex,
     currentMatchVirtualIndex,

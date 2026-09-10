@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { Composer, ComposerToolbar, Icon, IconButton } from '@openbitfun/ui';
+import { OverflowText, Composer, ComposerToolbar, Icon, IconButton } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -114,13 +114,13 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
                 data-openbitfun-part="footerLeft"
               >
                 <ModelSelector currentMode="Claw" className="aqi__model" />
-                <span
+                <OverflowText
                   className="aqi__hint"
                   data-openbitfun-component="assistant-quick-input"
                   data-openbitfun-part="hint"
                 >
                   {t('input.sendHint')}
-                </span>
+                </OverflowText>
               </div>
             )}
             trailing={(

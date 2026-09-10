@@ -124,8 +124,8 @@ private fun MarkdownBlockView(
             Spacer(Modifier.width(9.dp))
             InlineText(
                 inlines = block.inlines,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
+                fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
                 color = colors.onSurfaceVariant,
                 bold = false,
                 onOpenLink = onOpenLink,
@@ -140,8 +140,8 @@ private fun MarkdownBlockView(
 
         else -> InlineText(
             inlines = block.inlines,
-            fontSize = 14.sp,
-            lineHeight = 21.sp,
+            fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
             color = colors.onSurface,
             bold = false,
             onOpenLink = onOpenLink,
@@ -228,8 +228,8 @@ private fun MarkdownList(items: List<MarkdownListItem>, onOpenLink: (String, Str
             ) {
                 Text(
                     item.marker,
-                    fontSize = 14.sp,
-                    lineHeight = 21.sp,
+                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.End,
                     modifier = Modifier.width(20.dp),
@@ -237,8 +237,8 @@ private fun MarkdownList(items: List<MarkdownListItem>, onOpenLink: (String, Str
                 Box(Modifier.weight(1f)) {
                     InlineText(
                         inlines = item.inlines,
-                        fontSize = 14.sp,
-                        lineHeight = 21.sp,
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
                         color = MaterialTheme.colorScheme.onSurface,
                         bold = false,
                         onOpenLink = onOpenLink,
@@ -267,13 +267,13 @@ private fun CodeBlock(language: String, body: String, copyFullText: String?) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     language.ifBlank { "code" },
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     copyLabel,
-                    fontSize = 10.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickableText {
                         scope.launch {
@@ -310,8 +310,8 @@ private fun ScrollingMonospaceCard(body: String, header: (@Composable () -> Unit
             Box(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
                 Text(
                     body,
-                    fontSize = 10.sp,
-                    lineHeight = 15.sp,
+                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                    lineHeight = MaterialTheme.typography.labelSmall.lineHeight,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface,
                     softWrap = false,
@@ -328,14 +328,16 @@ private fun ScrollingMonospaceCard(body: String, header: (@Composable () -> Unit
 private fun Modifier.clickableText(onClick: () -> Unit): Modifier =
     clickable(onClick = onClick).padding(start = 8.dp)
 
+@Composable
 private fun headingFontSize(level: Int): TextUnit = when {
-    level <= 1 -> 16.sp
-    level == 2 -> 15.sp
-    else -> 14.sp
+    level <= 1 -> MaterialTheme.typography.headlineSmall.fontSize
+    level == 2 -> MaterialTheme.typography.titleMedium.fontSize
+    else -> MaterialTheme.typography.bodyLarge.fontSize
 }
 
+@Composable
 private fun headingLineHeight(level: Int): TextUnit = when {
-    level <= 1 -> 23.sp
-    level == 2 -> 22.sp
-    else -> 20.sp
+    level <= 1 -> MaterialTheme.typography.headlineSmall.lineHeight
+    level == 2 -> MaterialTheme.typography.titleMedium.lineHeight
+    else -> MaterialTheme.typography.bodyLarge.lineHeight
 }

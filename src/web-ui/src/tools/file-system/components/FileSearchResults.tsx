@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, startTransition, memo, useEffect, useRef } from 'react';
-import { Icon, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Icon, ScrollArea } from '@openbitfun/ui';
 import { FileText } from 'lucide-react';
 import type {
   FileSearchResult,
@@ -232,7 +232,7 @@ const FileGroup = memo<FileGroupProps>(({
   return (
     <div className="openbitfun-search-results__group">
       <div className="openbitfun-search-results__file">
-        <button
+        <button data-overflow-trigger
           type="button"
           className="openbitfun-search-results__file-main"
           onClick={() => onFileClick(target)}
@@ -251,11 +251,11 @@ const FileGroup = memo<FileGroupProps>(({
           </span>
           <span className="openbitfun-search-results__file-info">
             <span className="openbitfun-search-results__file-name">
-              <HighlightedText text={group.name} query={searchQuery} />
+                <OverflowText behavior="marquee"><HighlightedText text={group.name} query={searchQuery} /></OverflowText>
             </span>
-            <span className="openbitfun-search-results__file-path">
+            <OverflowText className="openbitfun-search-results__file-path">
               {group.path}
-            </span>
+            </OverflowText>
           </span>
         </button>
 

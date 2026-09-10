@@ -5,7 +5,7 @@
  * several rows with different times.
  */
 
-import { Icon, IconButton, Switch, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Switch, Tooltip } from '@openbitfun/ui';
 import React from 'react';
 import { CalendarClock } from 'lucide-react';
 
@@ -67,7 +67,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
   ].filter(Boolean).join(' ');
 
   return (
-    <div
+    <div data-overflow-trigger
       className={[
         'openbitfun-todos__row',
         isRunning ? 'openbitfun-todos__row--running' : '',
@@ -96,7 +96,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
 
       <div className="openbitfun-todos__row-body" data-openbitfun-scene="todos" data-openbitfun-part="rowBody">
         <div className="openbitfun-todos__row-title-line">
-          <span className="openbitfun-todos__row-name">{job.name}</span>
+          <OverflowText className="openbitfun-todos__row-name">{job.name}</OverflowText>
           {isRunning ? (
             <span
               className="openbitfun-todos__row-badge openbitfun-todos__row-badge--running"
@@ -120,7 +120,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
             </span>
           ) : null}
         </div>
-        <div className="openbitfun-todos__row-meta">
+        <div className="openbitfun-todos__row-meta"><OverflowText behavior="marquee">
           <span>{resolveJobWorkspaceLabel(job, workspaces)}</span>
           <span className="openbitfun-todos__row-meta-sep" aria-hidden="true">·</span>
           <span>{formatScheduleSummary(job.schedule, t, formatDate)}</span>
@@ -132,7 +132,7 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({
               <span title={timeLabel ?? undefined}>{relativeLabel}</span>
             </>
           ) : null}
-        </div>
+        </OverflowText></div>
         {job.state.lastError ? (
           <p className="openbitfun-todos__row-error" data-openbitfun-scene="todos" data-openbitfun-part="rowError">
             {job.state.lastError}

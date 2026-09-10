@@ -96,6 +96,7 @@ import {
   getFlowChatPreviewDefinition,
 } from "../preview/FlowChatPreviewRegistry";
 import { FlowChatToolGallery } from "../preview/FlowChatToolGallery";
+import { RollingTextPreview } from "../preview/RollingTextPreview";
 
 interface ComponentsPageProps {
   category?: ComponentMeta["category"];
@@ -215,7 +216,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
     case "Button":
       return (
         <Stack align="center" direction="horizontal" gap="2" wrap>
-          <Button variant="fill">{t("components.preview.primary")}</Button>
+          <Button variant="primary">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
         </Stack>
       );
@@ -646,6 +647,8 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           />
         </Stack>
       );
+    case "RollingText":
+      return <RollingTextPreview />;
     case "TabGroup":
       return (
         <TabGroup

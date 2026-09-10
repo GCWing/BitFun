@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -219,7 +219,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
               const deletedSuffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
               const titleWithDeleted = `${tab.title}${deletedSuffix}`;
               return (
-              <MenuItem
+              <MenuItem data-overflow-trigger
                 key={tab.id}
                 role="menuitemradio"
                 checked={activeTabId === tab.id}
@@ -236,7 +236,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                   onClick: (e) => { void handleCloseClick(e, tab.id); },
                 }]}
               >
-                <span
+                <OverflowText behavior="marquee"
                   data-openbitfun-component="canvas-tab-overflow"
                   data-openbitfun-part="itemTitle"
                   data-openbitfun-state={[
@@ -248,7 +248,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 >
                   {tab.state === 'preview' && <em>{titleWithDeleted}</em>}
                   {tab.state !== 'preview' && titleWithDeleted}
-                </span>
+                </OverflowText>
                 
                 {tab.isDirty && (
                   <span className="canvas-tab-overflow-menu__item-dirty">●</span>

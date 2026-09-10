@@ -1,7 +1,7 @@
 /**
  * SplashScreen styles.
  *
- * Full-screen opaque overlay. No rings.
+ * Full-screen opaque overlay with no separate loading spinner.
  * Exit: logo scales up and fades, backdrop dissolves.
  */
 // ── Container ────────────────────────────────────────────────────────────────
@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--openbitfun-color-surface-canvas);
+  background: var(--openbitfun-color-surface-chrome);
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────
@@ -41,30 +41,33 @@
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
 .splash-screen__logo-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
   animation: splash-logo-idle 3.2s ease-in-out infinite;
   // WebKit prefix for Linux WebKitGTK compatibility
   -webkit-animation: splash-logo-idle 3.2s ease-in-out infinite;
+  will-change: transform;
 }
 
 .splash-screen__logo {
   display: block;
-  width: 96px;
-  height: 96px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  height: 120px;
+  background-color: var(--openbitfun-color-content-on-light);
+  transform: translate(-50%, -50%);
+  -webkit-mask: url('/brand/openbitfun-mark.svg') center / contain no-repeat;
+  mask: url('/brand/openbitfun-mark.svg') center / contain no-repeat;
   user-select: none;
   // Ensure proper rendering on Linux
   -webkit-user-select: none;
 }
 
-.splash-screen__logo--light {
-  display: none;
-}
-
-[data-color-scheme='dark'] .splash-screen__logo--dark {
-  display: none;
-}
-
-[data-color-scheme='dark'] .splash-screen__logo--light {
-  display: block;
+[data-color-scheme='dark'] .splash-screen__logo {
+  background-color: var(--openbitfun-color-content-on-dark);
 }
 
 .splash-screen__message {
@@ -73,9 +76,12 @@
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--openbitfun-color-content-muted);
-  font-size: var(--openbitfun-type-label-sm-font-size);
-  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
+  color: var(--openbitfun-color-content-secondary);
+  font-family: var(--openbitfun-type-label-md-font-family);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-md-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
+  letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
   text-align: center;
   opacity: 0;
   transform: translate(-50%, -2px);
@@ -85,23 +91,38 @@
   pointer-events: none;
 }
 
+[data-color-scheme='dark'][data-contrast='standard'] .splash-screen__message {
+  color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 60%, transparent);
+}
+
 .splash-screen__message--visible {
-  opacity: 0.62;
+  opacity: 1;
   transform: translate(-50%, 0);
+  animation: splash-message-breathe 3.6s ease-in-out var(--openbitfun-motion-duration-base) infinite;
 }
 
 // ── Keyframes ─────────────────────────────────────────────────────────────────
 
-// Idle logo: soft opacity pulse with a slight breathing scale
-@keyframes splash-logo-idle {
+// Breathe as one line after its entrance transition has finished.
+@keyframes splash-message-breathe {
   0%,
   100% {
-    opacity: 0.42;
-    transform: scale(0.985);
+    opacity: 1;
   }
 
   50% {
-    opacity: 1;
+    opacity: 0.68;
+  }
+}
+
+// Idle logo: keep the requested tone stable and use only a slight breathing scale
+@keyframes splash-logo-idle {
+  0%,
+  100% {
+    transform: scale(0.99);
+  }
+
+  50% {
     transform: scale(1);
   }
 }
@@ -119,11 +140,8 @@
     animation: none;
   }
 
-  .splash-screen__logo {
-    filter: none;
-  }
-
   .splash-screen__message {
+    animation: none;
     transition: none;
   }
 

@@ -1,4 +1,4 @@
-﻿//! API module - Public interface for terminal operations
+//! API module - Public interface for terminal operations
 //!
 //! This module provides the public API for external consumers (Tauri, WebSocket, etc.)
 //! It defines request/response types and the main service interface.
@@ -69,6 +69,13 @@ pub struct SessionResponse {
     pub shell_type: ShellType,
     /// Current working directory
     pub cwd: String,
+    /// Immutable creation directory, used to associate the terminal with a workspace.
+    #[serde(
+        default,
+        rename = "initialCwd",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initial_cwd: Option<String>,
     /// Process ID (if running)
     pub pid: Option<u32>,
     /// Session status
@@ -87,12 +94,46 @@ impl From<TerminalSession> for SessionResponse {
             name: session.name,
             shell_type: session.shell_type,
             cwd: session.cwd,
+            initial_cwd: Some(session.initial_cwd),
             pid: session.pid,
             status: format!("{:?}", session.status),
             cols: session.cols,
             rows: session.rows,
             source: session.source,
         }
+    }
+}
+
+#[cfg(test)]
+mod workspace_origin_contract_tests {
+    use super::SessionResponse;
+    use serde_json::json;
+
+    #[test]
+    fn old_terminal_payload_round_trips_without_requiring_initial_cwd() {
+        let legacy = json!({
+            "id": "existing-terminal", "name": "Development", "shellType": "Bash",
+            "cwd": "/repo/src", "pid": null, "status": "Running", "cols": 80,
+            "rows": 24, "source": "manual"
+        });
+        let response: SessionResponse = serde_json::from_value(legacy.clone()).unwrap();
+        assert!(response.initial_cwd.is_none());
+        assert_eq!(serde_json::to_value(response).unwrap(), legacy);
+    }
+
+    #[test]
+    fn initial_directory_survives_current_directory_changes_and_serialization() {
+        let mut response: SessionResponse = serde_json::from_value(json!({
+            "id": "terminal", "name": "Development", "shellType": "Bash",
+            "cwd": "/repo", "initialCwd": "/repo", "pid": null, "status": "Running",
+            "cols": 80, "rows": 24, "source": "agent"
+        }))
+        .unwrap();
+        response.cwd = "/another-project".into();
+        let restored: SessionResponse =
+            serde_json::from_value(serde_json::to_value(response).unwrap()).unwrap();
+        assert_eq!(restored.initial_cwd.as_deref(), Some("/repo"));
+        assert_eq!(restored.cwd, "/another-project");
     }
 }
 

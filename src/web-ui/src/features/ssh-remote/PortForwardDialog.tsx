@@ -15,7 +15,7 @@
  * the local port is an allocation that moves when the number is taken.
  */
 
-import {
+import { OverflowText,
   Button,
   Checkbox,
   FieldGroup,
@@ -366,7 +366,7 @@ export const PortForwardDialog: React.FC<PortForwardDialogProps> = ({
                     <code className="port-forward-dialog__local">{localAddressOf(forward)}</code>
                     <span className="port-forward-dialog__meta">
                       {forward.label && (
-                        <span className="port-forward-dialog__label">{forward.label}</span>
+                        <OverflowText className="port-forward-dialog__label">{forward.label}</OverflowText>
                       )}
                       {forward.lastError ? (
                         <span

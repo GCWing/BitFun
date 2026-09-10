@@ -1,4 +1,4 @@
-//! Account login gate for tools that require a OpenBitFun account session.
+//! Account login gate for tools that require a GitHub account session.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -7,7 +7,7 @@ use std::sync::{Mutex, MutexGuard};
 
 static ACCOUNT_LOGIN_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
-/// Mark whether the current process has a fully logged-in OpenBitFun account session.
+/// Mark whether the current process has a fully logged-in GitHub account session.
 pub fn set_account_login_available(available: bool) {
     ACCOUNT_LOGIN_AVAILABLE.store(available, Ordering::SeqCst);
 }

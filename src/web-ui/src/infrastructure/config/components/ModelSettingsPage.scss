@@ -38,7 +38,6 @@
       overflow: hidden;
       color: var(--openbitfun-color-content-secondary);
       font-size: var(--openbitfun-type-label-sm-font-size);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -313,14 +312,17 @@
     border-radius: 999px;
     margin-left: 4px;
     flex-shrink: 0;
-    background: var(--openbitfun-color-content-muted);
+
+    &.is-testing {
+      background: var(--openbitfun-color-status-warning-emphasis);
+    }
 
     &.is-success {
-      background: var(--openbitfun-color-status-success-content);
+      background: var(--openbitfun-color-status-success-emphasis);
     }
 
     &.is-error {
-      background: var(--openbitfun-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 
@@ -422,6 +424,7 @@
     color: var(--openbitfun-color-status-warning-content);
 
     svg {
+      color: var(--openbitfun-color-status-warning-emphasis);
       flex-shrink: 0;
       margin-top: 1px;
     }
@@ -720,7 +723,6 @@
     color: var(--openbitfun-color-content-primary);
     margin-bottom: 2px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -731,7 +733,6 @@
     color: var(--openbitfun-color-content-secondary);
     line-height: var(--openbitfun-type-body-sm-line-height);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     
     padding: 2px 6px;
@@ -802,12 +803,12 @@
     }
 
     &--embedding {
-      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+      background: var(--openbitfun-color-status-success-surface);
       color: var(--openbitfun-color-status-success-content);
     }
 
     &--search {
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+      background: var(--openbitfun-color-status-warning-surface);
       color: var(--openbitfun-color-status-warning-content);
     }
 
@@ -903,13 +904,13 @@
 
     
     &.success {
-      border: 1px solid var(--openbitfun-color-status-success-content);
+      border: 1px solid var(--openbitfun-color-status-success-emphasis);
       color: var(--openbitfun-color-status-success-content);
     }
 
     
     &.error {
-      border: 1px solid var(--openbitfun-color-status-danger-content);
+      border: 1px solid var(--openbitfun-color-status-danger-emphasis);
       color: var(--openbitfun-color-status-danger-content);
     }
   }
@@ -967,7 +968,7 @@
       &:hover:not(:disabled) {
         background: var(--openbitfun-color-surface-subtle);
         border-style: solid;
-        border-color: var(--openbitfun-color-status-danger-content);
+        border-color: var(--openbitfun-color-status-danger-emphasis);
         color: var(--openbitfun-color-status-danger-content);
 
         svg {
@@ -1170,7 +1171,6 @@
     min-width: 0;
     flex: 1;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1415,17 +1415,11 @@
   &__form--modal {
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+    flex: 0 0 auto;
   }
 
-  &__form-scrollable {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    padding: var(--openbitfun-space-5) var(--openbitfun-space-6);
-    scroll-padding-block: var(--openbitfun-space-5);
+  &__form-content {
+    padding-inline: var(--openbitfun-space-6);
     display: flex;
     flex-direction: column;
     gap: var(--openbitfun-space-6);
@@ -1531,13 +1525,14 @@
     padding: var(--openbitfun-space-3);
     background: transparent;
     
-    border: 1px dashed color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
+    border: 1px dashed var(--openbitfun-color-status-warning-border);
     border-radius: var(--openbitfun-radius-sm);
     margin-top: var(--openbitfun-space-2);
     color: var(--openbitfun-color-status-warning-content);
     font-size: var(--openbitfun-type-label-md-font-size);
 
     svg {
+      color: var(--openbitfun-color-status-warning-emphasis);
       flex-shrink: 0;
       margin-top: 1px;
     }
@@ -1890,10 +1885,6 @@
       padding: 0;
       gap: 2px;
       overflow-x: auto;
-      
-      &::-webkit-scrollbar {
-        height: 2px;
-      }
     }
 
     &__tab {
@@ -2103,7 +2094,7 @@
     background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
 
     &--failed {
-      border-color: var(--openbitfun-color-status-danger-content);
+      border-color: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 

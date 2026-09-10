@@ -31,11 +31,11 @@ import {
   GalleryPageHeader,
   GallerySkeleton,
 } from '@/app/components';
-import { useApp } from '@/app/hooks/useApp';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
-import { MarketAccountControls } from '@/features/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type {
   MiniAppMeta,
@@ -59,7 +59,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -113,11 +113,10 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspace, workspacePath } = useCurrentWorkspace();
   const notification = useNotification();
-  const { switchLeftPanelTab } = useApp();
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
   const { t, formatNumber, currentLanguage } = useI18n('scenes/miniapp');
   const miniAppActivities = useMiniAppActivity();
-  const { me } = useMarketAccount();
+  const { me } = useAccountIdentity();
 
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<MiniAppCategory>('all');
@@ -417,13 +416,12 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
 
     setCreatingWithCreative(true);
     closeImportMenu();
-    openScene('session');
-    switchLeftPanelTab('sessions');
     try {
-      await flowChatManager.createChatSession(
+      const sessionId = await flowChatManager.createChatSession(
         flowChatSessionConfigForCurrentWorkspace(workspace),
         'Creative',
       );
+      await openMainSession(sessionId);
       notification.success(t('creationMode.started'));
     } catch (error) {
       log.error('Failed to start Creative MiniApp session', error);
@@ -435,8 +433,6 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
     closeImportMenu,
     creatingWithCreative,
     notification,
-    openScene,
-    switchLeftPanelTab,
     t,
     workspace,
   ]);
@@ -764,7 +760,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         subtitle={t('subtitle')}
         actions={(
           <div className="miniapp-gallery__header-actions">
-            <MarketAccountControls
+            <AccountIdentityControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
               onIdentityChanged={refreshPersonalizedDetail}

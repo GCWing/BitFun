@@ -26,7 +26,7 @@ function createMetadata(overrides: Record<string, unknown> = {}) {
   return {
     sessionId: 'session-1',
     sessionName: 'Test Session',
-    agentType: 'agentic',
+    agentType: 'Standard',
     modelName: 'primary',
     createdAt: 1000,
     lastActiveAt: 1000,
@@ -45,7 +45,7 @@ function createStoreSession(overrides: Record<string, unknown> = {}) {
     title: 'Test Session',
     dialogTurns: [],
     status: 'idle',
-    config: { agentType: 'agentic', modelName: 'primary' },
+    config: { agentType: 'Standard', modelName: 'primary' },
     createdAt: 1000,
     lastActiveAt: 1000,
     error: null,
@@ -154,7 +154,7 @@ describe('ReviewActionBarPersistenceService', () => {
       const [metadata, workspacePath, fields] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
       expect(metadata.sessionId).toBe('session-1');
       expect(metadata.sessionName).toBe('Existing Session');
-      expect(metadata.agentType).toBe('agentic');
+      expect(metadata.agentType).toBe('Standard');
       expect(metadata.modelName).toBe('primary');
       expect(metadata.reviewActionState).toEqual({
         version: 1,
@@ -209,7 +209,7 @@ describe('ReviewActionBarPersistenceService', () => {
       expect(metadata).toMatchObject({
         sessionId: 'session-1',
         sessionName: 'Fresh Review',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'primary',
         status: 'active',
         reviewActionState: {

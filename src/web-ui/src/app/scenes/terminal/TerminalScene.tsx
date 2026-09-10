@@ -22,10 +22,6 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
   const { activeSessionId, setActiveSession } = useTerminalSceneStore();
   const { t } = useTranslation('panels/terminal');
 
-  const handleExit = useCallback(() => {
-    setActiveSession(null);
-  }, [setActiveSession]);
-
   const handleClose = useCallback(() => {
     setActiveSession(null);
   }, [setActiveSession]);
@@ -49,8 +45,8 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
           autoFocus={isActive}
           showToolbar
           showStatusBar
-          onExit={handleExit}
           onClose={handleClose}
+          closeBehavior="detach"
         />
       ) : (
         <div className="openbitfun-terminal-scene__empty" data-testid="shell-command-list" data-openbitfun-scene="terminal" data-openbitfun-part="empty">

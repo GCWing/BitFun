@@ -1,6 +1,6 @@
 .aqi {
-  // Horizontal inset: shadow fade + align with .acp-sessions-area
-  padding: var(--openbitfun-space-4) var(--openbitfun-space-6) var(--openbitfun-space-5);
+  // Keep composer and session rows on the same content edge.
+  padding: var(--openbitfun-space-2) var(--openbitfun-space-1) var(--openbitfun-space-4);
 
   &__composer {
     width: 100%;
@@ -26,11 +26,9 @@
   &__hint {
     font-size: var(--openbitfun-type-meta-font-size);
     color: var(--openbitfun-color-content-muted);
-    opacity: 0.72;
     user-select: none;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__send {

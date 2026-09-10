@@ -58,6 +58,9 @@ $_section-header-height: 22px;
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
+      // Keep sticky headers below SceneNav even when reduced motion removes
+      // the transform that otherwise establishes this stacking context.
+      isolation: isolate;
       opacity: 1;
       transform: translate3d(0, 0, 0);
       transition: none;
@@ -394,9 +397,8 @@ $_section-header-height: 22px;
                 color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
                 transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -552,7 +554,6 @@ $_section-header-height: 22px;
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     transition: color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
@@ -592,9 +593,8 @@ $_section-header-height: 22px;
       flex-shrink: 0;
     }
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -662,7 +662,6 @@ $_section-header-height: 22px;
   &__assistant-entry-label {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-label-md-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
@@ -762,7 +761,6 @@ $_section-header-height: 22px;
   &__miniapp-entry-title {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-label-md-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
@@ -803,7 +801,6 @@ $_section-header-height: 22px;
     }
 
     &:hover {
-      transform: translateY(-2px) scale(1.06);
       box-shadow: 0 10px 20px color-mix(in srgb, var(--openbitfun-color-content-on-light) 24%, transparent);
       filter: saturate(1);
       opacity: 1;
@@ -934,7 +931,6 @@ $_section-header-height: 22px;
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1000,7 +996,6 @@ $_section-header-height: 22px;
     gap: 0.3em;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1009,7 +1004,6 @@ $_section-header-height: 22px;
     flex: 0 0 auto;
     max-width: min(26ch, 52%);
     overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-label-md-font-size);
   }
@@ -1025,7 +1019,6 @@ $_section-header-height: 22px;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__workspace-menu-empty {
@@ -1207,7 +1200,6 @@ $_section-header-height: 22px;
   &__item-label {
     flex: 1;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     line-height: var(--openbitfun-type-modifier-leading-none-line-height);
   }
@@ -1223,7 +1215,6 @@ $_section-header-height: 22px;
     margin-left: auto;
     max-width: 80px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     line-height: var(--openbitfun-type-label-md-line-height);
 
@@ -1464,7 +1455,6 @@ $_section-header-height: 22px;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--openbitfun-color-content-primary);
   font-size: var(--openbitfun-type-label-sm-font-size);
@@ -1472,8 +1462,8 @@ $_section-header-height: 22px;
   line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
 }
 
-// Attached remote parties are shown once per device kind. Message-app marks
-// stay unframed and inherit the theme foreground; connection state is already
+// Attached remote parties are shown once per device kind with unframed icons.
+// Message-app marks inherit the theme foreground; connection state is already
 // communicated by the device overview rather than by recoloring the brand.
 .openbitfun-nav-panel__footer-device-status-attached {
   display: flex;
@@ -1492,9 +1482,6 @@ $_section-header-height: 22px;
   justify-content: center;
   gap: 1px;
   box-sizing: border-box;
-  border: 1px solid var(--openbitfun-color-border-subtle);
-  border-radius: var(--openbitfun-radius-sm);
-  background: var(--openbitfun-color-surface-subtle);
   line-height: var(--openbitfun-type-modifier-leading-none-line-height);
 
   &[data-openbitfun-device-kind='message-app'] {
@@ -1645,7 +1632,6 @@ $_section-header-height: 22px;
   display: block;
   max-width: 82px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1724,7 +1710,6 @@ $_section-header-height: 22px;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-body-md-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
@@ -1749,7 +1734,6 @@ $_section-header-height: 22px;
   font-size: var(--openbitfun-type-micro-font-size);
   font-weight: var(--openbitfun-type-label-selected-font-weight);
   line-height: var(--openbitfun-type-meta-line-height);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1790,7 +1774,6 @@ $_section-header-height: 22px;
   font-size: var(--openbitfun-type-label-md-font-size);
   font-weight: var(--openbitfun-type-label-sm-font-weight);
   line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1965,7 +1948,6 @@ $_section-header-height: 22px;
     color: var(--openbitfun-color-content-primary);
     font-size: var(--openbitfun-type-label-md-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -2000,49 +1982,10 @@ $_section-header-height: 22px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: var(--openbitfun-radius-sm);
-  background: var(--openbitfun-color-action-quiet-hover);
   color: var(--openbitfun-color-content-primary);
 
   svg {
     flex-shrink: 0;
-  }
-}
-
-.openbitfun-device-overview__service {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  margin: var(--openbitfun-space-4) var(--openbitfun-space-5) 0;
-  padding: 5px 8px;
-  border-radius: var(--openbitfun-radius-sm);
-  background: var(--openbitfun-color-surface-subtle);
-  color: var(--openbitfun-color-content-muted);
-  font-size: var(--openbitfun-type-micro-font-size);
-
-  strong {
-    grid-column: 2;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--openbitfun-color-content-secondary);
-    font-size: var(--openbitfun-type-label-sm-font-size);
-    font-weight: var(--openbitfun-type-label-selected-font-weight);
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  small {
-    grid-column: 2 / -1;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--openbitfun-color-content-muted);
-    font-size: var(--openbitfun-type-overline-sm-font-size);
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 }
 
@@ -2166,11 +2109,6 @@ $_section-header-height: 22px;
     transition: none;
   }
 
-  .openbitfun-nav-panel__top-action-btn:hover .openbitfun-nav-panel__top-action-icon-circle,
-  .openbitfun-nav-panel__top-action-btn:active .openbitfun-nav-panel__top-action-icon-circle {
-    transform: scale(1);
-  }
-
   .openbitfun-nav-panel__top-action-btn:not(.openbitfun-nav-panel__top-action-btn--sub) .openbitfun-nav-panel__top-action-icon-slot {
     transition: none;
   }
@@ -2205,43 +2143,6 @@ $_section-header-height: 22px;
   gap: var(--openbitfun-space-1);
   width: 100%;
   min-width: 0;
-}
-
-.openbitfun-nav-panel__utility-action {
-  flex: 0 0 auto;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid;
-  @include shell-surfaces.sidebar-hairline-color;
-  border-radius: var(--openbitfun-radius-pill);
-  background: var(--openbitfun-color-surface-scene);
-  color: var(--openbitfun-color-content-secondary);
-  cursor: pointer;
-  transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-              border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-              color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-  &:hover,
-  &:focus-visible {
-    background: var(--openbitfun-color-content-primary);
-    border-color: var(--openbitfun-color-content-primary);
-    color: var(--openbitfun-color-surface-scene);
-
-    > svg {
-      color: var(--openbitfun-color-surface-scene);
-      stroke: currentColor;
-    }
-  }
-
-  &:focus-visible {
-    outline: 1px solid var(--openbitfun-color-accent-default);
-    outline-offset: 1px;
-  }
 }
 
 .openbitfun-nav-panel__count-badge {
@@ -2334,12 +2235,11 @@ $_section-header-height: 22px;
   transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
               color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-  // Only the label span should grow; icon / chevron wrappers must NOT get flex: 1
-  > span:not(.openbitfun-nav-panel__top-action-icon-circle):not(.openbitfun-nav-panel__top-action-icon-slot):not(.openbitfun-nav-panel__top-action-expand-icons):not(.openbitfun-nav-panel__count-badge):not(.openbitfun-nav-panel__top-action-unseen) {
+  // Only the label span:not([data-overflow-content]) should grow; icon / chevron wrappers must NOT get flex: 1
+  > span:not([data-overflow-content]):not(.openbitfun-nav-panel__top-action-icon-circle):not(.openbitfun-nav-panel__top-action-icon-slot):not(.openbitfun-nav-panel__top-action-expand-icons):not(.openbitfun-nav-panel__count-badge):not(.openbitfun-nav-panel__top-action-unseen) {
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -2445,8 +2345,6 @@ $_section-header-height: 22px;
   background: var(--openbitfun-color-action-primary-background);
   color: var(--openbitfun-color-action-primary-content);
   box-shadow: var(--openbitfun-shadow-sm);
-  transform: scale(1);
-  transform-origin: center;
 
   .openbitfun-nav-panel__top-action-btn:hover & {
     background: var(--openbitfun-color-action-primary-hover);
@@ -2459,7 +2357,6 @@ $_section-header-height: 22px;
     background: var(--openbitfun-color-action-primary-pressed);
     color: var(--openbitfun-color-action-primary-content);
     box-shadow: var(--openbitfun-shadow-xs);
-    transform: scale(0.86);
   }
 }
 
@@ -2515,11 +2412,10 @@ $_section-header-height: 22px;
     font-size: var(--openbitfun-type-meta-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
 
-    > span:first-child {
+    > span:not([data-overflow-content]):first-child {
       flex: 1;
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -2567,7 +2463,6 @@ $_section-header-height: 22px;
       color 120ms ease;
 
     &:active {
-      transform: scale(0.985);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
@@ -2592,10 +2487,6 @@ $_section-header-height: 22px;
 
     .openbitfun-nav-panel__top-action-btn:hover & {
       transform: none;
-    }
-
-    .openbitfun-nav-panel__top-action-btn:active & {
-      transform: scale(0.95);
     }
   }
 
@@ -2631,10 +2522,6 @@ $_section-header-height: 22px;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease;
-
-    &--interactive:active {
-      transform: scale(0.985);
-    }
   }
 
   &__section-label {
@@ -2650,10 +2537,6 @@ $_section-header-height: 22px;
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       color 120ms ease,
       background 120ms ease;
-
-    &:active {
-      transform: scale(0.94);
-    }
   }
 
   &__item-slot {
@@ -2682,10 +2565,6 @@ $_section-header-height: 22px;
       background 120ms ease,
       color 120ms ease,
       opacity 120ms ease;
-
-    &:active {
-      transform: scale(0.985);
-    }
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
@@ -2734,10 +2613,6 @@ $_section-header-height: 22px;
     &.is-active {
       box-shadow: none;
     }
-
-    &:active {
-      transform: scale(0.985);
-    }
   }
 
   &__pages-entry.is-active,
@@ -2757,12 +2632,7 @@ $_section-header-height: 22px;
       filter 120ms ease;
 
     &:hover {
-      transform: scale(1.05);
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.94);
     }
   }
 
@@ -2777,10 +2647,6 @@ $_section-header-height: 22px;
     &:hover {
       transform: none;
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.985);
     }
   }
 
@@ -2815,11 +2681,6 @@ $_section-header-height: 22px;
     color 120ms ease;
 }
 
-.openbitfun-nav-panel__footer-btn--icon:active,
-.openbitfun-nav-panel__footer .openbitfun-notification-btn:active {
-  transform: scale(0.94);
-}
-
 .openbitfun-nav-panel__workspace-menu,
 .openbitfun-nav-panel__footer-menu,
 .openbitfun-nav-panel__appearance-submenu {
@@ -2837,10 +2698,6 @@ $_section-header-height: 22px;
     border-color 120ms ease,
     background 120ms ease,
     color 120ms ease;
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
 }
 
 @keyframes openbitfun-nav-popover-in {
@@ -2925,12 +2782,10 @@ $_section-header-height: 22px;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__search-trigger__icon,
-  &__utility-action,
   &__section-action,
   &__item-action,
   &__footer-btn--icon {

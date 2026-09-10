@@ -39,7 +39,6 @@
     min-width: 0;
     margin-inline-start: var(--openbitfun-space-1);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     text-align: start;
     color: var(--openbitfun-color-content-primary);
@@ -78,7 +77,6 @@
     }
 
     &:active:not(.is-inactive) {
-      transform: scale(0.96);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 

@@ -169,6 +169,43 @@ test('openbitfun sync mirrors both products and their checksums', () => {
   assert.match(syncScript, /WEBSITE_RELEASE_DIR.*relay-image\.json/);
 });
 
+test('release sync pins Relay and Linux metadata to the updater release during latest rotation', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-release-metadata-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const urls = path.join(temp, 'urls');
+  const releaseBase = 'https://github.com/GCWing/OpenBitFun/releases/download/v1.0.0';
+  const result = spawnSync('bash', ['-c', `
+    source "$SYNC_SCRIPT"
+    flock() { return 0; }
+    curl() { printf '%s' "$TEST_LATEST_JSON"; }
+    mirror_relay_image_descriptor() { printf '%s\\n' "$GITHUB_RELAY_IMAGE_URL" >> "$TEST_URLS"; }
+    mirror_linux_binaries() { printf '%s\\n' "$GITHUB_LINUX_BINARIES_URL" >> "$TEST_URLS"; }
+    mirror_dispatch_macos_cli_archives() { :; }
+    download_asset() { :; }
+    mirror_windows_installer() { :; }
+    write_website_download_manifest() { :; }
+    publish_file_atomically() { :; }
+    main
+  `], {
+    cwd: repoRoot, encoding: 'utf8', windowsHide: true,
+    env: {
+      ...process.env,
+      SYNC_SCRIPT: path.join(repoRoot, 'scripts/openbitfun-release-sync.sh'),
+      OPENBITFUN_RELEASE_CHANNEL: 'stable',
+      WEBSITE_RELEASE_DIR: path.join(temp, 'release'),
+      OPENBITFUN_RELEASE_SYNC_LOCK: path.join(temp, 'sync.lock'),
+      TEST_URLS: urls,
+      TEST_LATEST_JSON: JSON.stringify({ version: '1.0.0', platforms: {
+        'linux-x86_64': { url: `${releaseBase}/OpenBitFun_1.0.0_linux-x86_64.AppImage` },
+      } }),
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(fs.readFileSync(urls, 'utf8').trim().split('\n'), [
+    `${releaseBase}/relay-image.json`, `${releaseBase}/linux-binaries.json`,
+  ]);
+});
+
 test('openbitfun sync mirrors the website installer from the exact updater release', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-windows-installer-mirror-'));
   const versionDir = path.join(temp, 'release', '1.2.3');

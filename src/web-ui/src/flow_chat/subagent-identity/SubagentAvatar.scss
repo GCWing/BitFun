@@ -40,19 +40,19 @@
 
   &--running &__status,
   &--finishing &__status {
-    background: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-emphasis);
   }
 
   &--waiting &__status {
-    background: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-emphasis);
   }
 
   &--error &__status,
   &--cancelled &__status {
-    background: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-emphasis);
   }
 
   &--completed &__status {
-    background: var(--openbitfun-color-status-info-content);
+    background: var(--openbitfun-color-status-info-emphasis);
   }
 }

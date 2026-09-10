@@ -30,7 +30,28 @@ export type SceneTabId =
   | 'insights'
   | 'shell'
   | 'panel-view'
+  | `session:${string}`
   | `miniapp:${string}`;
+
+/** A tab owns a resource reference, never a copy of the runtime session. */
+export interface SessionSceneTarget {
+  surfaceId: string;
+  workspaceKey: string;
+  sessionId: string;
+}
+
+export function isSessionSceneId(id: string | null | undefined): boolean {
+  return id === 'session' || Boolean(id?.startsWith('session:'));
+}
+
+/** Several workspace tabs share the one active-session presentation host. */
+export function getSceneViewId(id: SceneTabId): SceneTabId {
+  return isSessionSceneId(id) ? 'session' : id;
+}
+
+export function getSessionSceneTabId(target: SessionSceneTarget): SceneTabId {
+  return `session:${encodeURIComponent(JSON.stringify([target.surfaceId, target.workspaceKey]))}`;
+}
 
 /** Static definition (from registry) for a scene tab type */
 export interface SceneTabDef {
@@ -43,7 +64,7 @@ export interface SceneTabDef {
   pinned: boolean;
   /** If false, the user cannot close the tab. Defaults to true. */
   closable?: boolean;
-  /** Only one instance allowed */
+  /** One presentation host; resource tabs may share that host. */
   singleton: boolean;
   /** Open on app start */
   defaultOpen: boolean;
@@ -52,6 +73,7 @@ export interface SceneTabDef {
 /** Runtime instance of an open scene. */
 export interface SceneTab {
   id: SceneTabId;
+  session?: SessionSceneTarget;
   /** Last-used timestamp for activate/close fallback (e.g. which tab to activate after close). */
   lastUsed: number;
 }

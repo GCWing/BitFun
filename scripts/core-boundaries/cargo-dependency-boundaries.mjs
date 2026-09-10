@@ -135,6 +135,7 @@ function isProcMacroPackage(pkg) {
 }
 
 const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
+  ['account-identity', ['rt', 'sync']],
   ['announcement', ['fs', 'sync']],
   ['models-dev', ['fs', 'sync', 'time']],
   ['browser-control', ['time']],
@@ -145,6 +146,7 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
   ['mcp', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
   ['miniapp-loopx', ['fs', 'io-util', 'macros', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-storage', ['fs', 'time']],
   ['miniapp-runtime', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
   ['miniapp-market', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
   ['plugin-source', ['fs', 'rt', 'sync', 'time']],
@@ -177,6 +179,7 @@ const SERVICES_INTEGRATIONS_TOKIO_AGGREGATES = new Set(['product-full']);
 const SERVICES_CORE_TOKIO_AGGREGATES = new Set(['session-git', 'token-usage-statistics']);
 const CORE_TOKIO_FEATURES = new Map([
   ['agent-runtime', ['io-util', 'macros', 'rt', 'time']],
+  ['legacy-migration', []],
   ['mcp-runtime', ['io-util', 'macros', 'rt', 'rt-multi-thread', 'time']],
   ['browser-control', ['net', 'rt', 'time']],
 ]);
@@ -330,6 +333,11 @@ const REQWEST_PACKAGE_PROFILES = new Map([
     dependencyFeatures: ['form', 'http2', 'json', 'rustls-no-provider'],
     optional: false,
     tlsProviderDependency: 'openbitfun-services-core',
+  }],
+  // Relay verifies global identity over bounded JSON HTTPS; no streaming or form API.
+  ['openbitfun-relay-service', {
+    dependencyFeatures: ['json', 'rustls-no-provider'],
+    optional: false,
   }],
   ['openbitfun-skin-market-service', {
     dependencyFeatures: ['http2', 'json', 'rustls-no-provider'],
@@ -561,6 +569,12 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
     label: 'Tokio Tungstenite',
     packages: new Map([
       ['openbitfun-core', dependencyProfile([], { optional: true })],
+      // Loopback WebSocket lifecycle regressions only; the relay runtime is
+      // an Axum server and does not acquire a TLS/client capability.
+      ['openbitfun-relay-service', dependencyProfile(['connect', 'handshake'], {
+        kind: 'dev',
+        useDefaultFeatures: false,
+      })],
       ['openbitfun-services-integrations', dependencyProfile([], {
         optional: true,
         ownerFeatureCapabilities: new Map([
@@ -1019,6 +1033,7 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
   const featureGraph = pkg.features ?? {};
   const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
   const ownerFeatureReferences = new Map([
+    ['account-identity', ['reqwest/json']],
     ['announcement', ['reqwest/json']],
     ['browser-control', ['reqwest/json']],
     ['mcp', ['reqwest/json', 'reqwest/stream']],

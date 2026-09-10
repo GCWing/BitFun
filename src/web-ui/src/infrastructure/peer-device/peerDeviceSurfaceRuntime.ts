@@ -173,9 +173,6 @@ function createDependencies(): PeerDeviceSurfaceControllerDependencies {
       workspaceManager.discardDeviceSurface(surfaceId);
     },
     clearDeviceActivity,
-    emitAutoExit: detail => {
-      window.dispatchEvent(new CustomEvent('peer-mode:auto-exit', { detail }));
-    },
     listenPresence: listener => api.listen<{
       devices: Array<{ device_id: string }>;
     }>('account://device-presence', payload => {

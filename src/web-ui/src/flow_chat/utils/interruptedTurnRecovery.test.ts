@@ -11,7 +11,7 @@ function interruptedSession(overrides: Partial<Session> = {}): Session {
     dialogTurns: [{
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'finish the task', timestamp: 1 },
       modelRounds: [],
       status: 'cancelled',
@@ -25,11 +25,11 @@ function interruptedSession(overrides: Partial<Session> = {}): Session {
       startTime: 1,
     }],
     status: 'idle',
-    config: { agentType: 'agentic', modelName: 'model-a', workspacePath: 'D:/workspace' },
+    config: { agentType: 'Standard', modelName: 'model-a', workspacePath: 'D:/workspace' },
     createdAt: 1,
     lastActiveAt: 1,
     error: null,
-    mode: 'agentic',
+    mode: 'Standard',
     sessionKind: 'normal',
     ...overrides,
   };
@@ -64,7 +64,7 @@ describe('selectInterruptedTurnRecovery', () => {
     ['ACP session', { acpSession: true }],
     ['active goal', {}, { threadGoal: { goalId: 'goal-1', objective: 'ship', status: 'active' } }],
     ['mode change', {}, { mode: 'review' }],
-    ['model change', {}, { config: { agentType: 'agentic', modelName: 'model-b' } }],
+    ['model change', {}, { config: { agentType: 'Standard', modelName: 'model-b' } }],
     ['pending mode update', { modeChangePending: true }],
   ])('hides recovery for %s', (_label, optionOverrides, sessionOverrides = {}) => {
     expect(selectInterruptedTurnRecovery(

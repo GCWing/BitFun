@@ -41,6 +41,17 @@ export function canonicalSessionTurns(
   return session.dialogTurns.filter(turn => !isProvisionalUsageReportTurn(turn));
 }
 
+/** Maintenance and local commands do not replace a user execution's result. */
+export function lastUserDialogTurn(session: Pick<Session, 'dialogTurns'> | undefined): DialogTurn | undefined {
+  const turns = session?.dialogTurns;
+  if (!turns) return undefined;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (!turn.kind || turn.kind === 'user_dialog') return turn;
+  }
+  return undefined;
+}
+
 export function validSessionTurnCatalog(session: TurnIdentitySession) {
   return session.turnCatalog?.sessionId === session.sessionId
     ? session.turnCatalog

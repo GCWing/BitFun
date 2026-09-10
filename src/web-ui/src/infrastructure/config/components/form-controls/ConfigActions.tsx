@@ -87,7 +87,7 @@ export const ConfigActionButtons: React.FC<ConfigActionButtonsProps> = ({
       {showCancel && onCancel && (
         <Button
           onClick={onCancel}
-          variant="outline"
+          variant="fill"
           disabled={isSaving}
         >
           {resolvedCancelText}
@@ -107,7 +107,7 @@ export const ConfigActionButtons: React.FC<ConfigActionButtonsProps> = ({
       {showSave && onSave && (
         <Button
           onClick={onSave}
-          variant="fill"
+          variant="primary"
           disabled={!hasChanges || isSaving}
           loading={isSaving}
         >

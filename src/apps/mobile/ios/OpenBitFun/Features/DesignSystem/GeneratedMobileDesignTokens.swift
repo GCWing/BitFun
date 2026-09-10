@@ -5,10 +5,20 @@ import UIKit
 struct MobileTypographyToken {
     let size: CGFloat
     let lineHeight: CGFloat
-    let weight: Font.Weight
+    let weight: UIFont.Weight
+    let textStyle: UIFont.TextStyle
 
-    var font: Font { .system(size: size, weight: weight) }
-    var lineSpacing: CGFloat { max(0, lineHeight - UIFont.systemFont(ofSize: size).lineHeight) }
+    private var scaledFont: UIFont {
+        UIFontMetrics(forTextStyle: textStyle).scaledFont(
+            for: UIFont.systemFont(ofSize: size, weight: weight)
+        )
+    }
+
+    var font: Font { Font(scaledFont) }
+    var lineSpacing: CGFloat {
+        let scaledLineHeight = UIFontMetrics(forTextStyle: textStyle).scaledValue(for: lineHeight)
+        return max(0, scaledLineHeight - scaledFont.lineHeight)
+    }
 }
 
 enum MobileDesignColors {
@@ -73,22 +83,22 @@ enum MobileDesignColors {
 }
 
 enum MobileDesignTypography {
-    static let displayLarge = MobileTypographyToken(size: 24, lineHeight: 30, weight: .bold)
-    static let displayMedium = MobileTypographyToken(size: 22, lineHeight: 28, weight: .bold)
-    static let displaySmall = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold)
-    static let headlineLarge = MobileTypographyToken(size: 22, lineHeight: 28, weight: .bold)
-    static let headlineMedium = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold)
-    static let headlineSmall = MobileTypographyToken(size: 18, lineHeight: 24, weight: .bold)
-    static let titleLarge = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold)
-    static let conversationHeaderTitle = MobileTypographyToken(size: 17, lineHeight: 22, weight: .medium)
-    static let titleMedium = MobileTypographyToken(size: 17, lineHeight: 22, weight: .medium)
-    static let titleSmall = MobileTypographyToken(size: 15, lineHeight: 20, weight: .medium)
-    static let bodyLarge = MobileTypographyToken(size: 16, lineHeight: 24, weight: .regular)
-    static let bodyMedium = MobileTypographyToken(size: 14, lineHeight: 21, weight: .regular)
-    static let bodySmall = MobileTypographyToken(size: 13, lineHeight: 19, weight: .regular)
-    static let labelLarge = MobileTypographyToken(size: 15, lineHeight: 20, weight: .medium)
-    static let labelMedium = MobileTypographyToken(size: 14, lineHeight: 18, weight: .medium)
-    static let labelSmall = MobileTypographyToken(size: 12, lineHeight: 16, weight: .regular)
+    static let displayLarge = MobileTypographyToken(size: 24, lineHeight: 30, weight: .bold, textStyle: .largeTitle)
+    static let displayMedium = MobileTypographyToken(size: 22, lineHeight: 28, weight: .bold, textStyle: .title1)
+    static let displaySmall = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold, textStyle: .title2)
+    static let headlineLarge = MobileTypographyToken(size: 22, lineHeight: 28, weight: .bold, textStyle: .title1)
+    static let headlineMedium = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold, textStyle: .title2)
+    static let headlineSmall = MobileTypographyToken(size: 18, lineHeight: 24, weight: .bold, textStyle: .title3)
+    static let titleLarge = MobileTypographyToken(size: 20, lineHeight: 26, weight: .bold, textStyle: .title2)
+    static let conversationHeaderTitle = MobileTypographyToken(size: 17, lineHeight: 22, weight: .medium, textStyle: .headline)
+    static let titleMedium = MobileTypographyToken(size: 17, lineHeight: 22, weight: .medium, textStyle: .headline)
+    static let titleSmall = MobileTypographyToken(size: 15, lineHeight: 20, weight: .medium, textStyle: .subheadline)
+    static let bodyLarge = MobileTypographyToken(size: 16, lineHeight: 24, weight: .regular, textStyle: .body)
+    static let bodyMedium = MobileTypographyToken(size: 14, lineHeight: 21, weight: .regular, textStyle: .callout)
+    static let bodySmall = MobileTypographyToken(size: 13, lineHeight: 19, weight: .regular, textStyle: .footnote)
+    static let labelLarge = MobileTypographyToken(size: 15, lineHeight: 20, weight: .medium, textStyle: .subheadline)
+    static let labelMedium = MobileTypographyToken(size: 14, lineHeight: 18, weight: .medium, textStyle: .footnote)
+    static let labelSmall = MobileTypographyToken(size: 12, lineHeight: 16, weight: .regular, textStyle: .caption1)
 }
 
 enum MobileDesignGeometry {
@@ -103,13 +113,13 @@ enum MobileDesignGeometry {
     static let messageBubbleHorizontalPadding: CGFloat = 14
     static let messageBubbleVerticalPadding: CGFloat = 11
     static let messageBubbleRadius: CGFloat = 17
-    static let composerActionSize: CGFloat = 44
+    static let composerActionSize: CGFloat = 48
     static let composerInputHeight: CGFloat = 44
     static let composerExpandedInputHeight: CGFloat = 58
     static let composerCollapsedHeight: CGFloat = 56
     static let composerExpandedInputRowHeight: CGFloat = 60
-    static let composerExpandedActionRowHeight: CGFloat = 40
-    static let composerExpandedHeight: CGFloat = 108
+    static let composerExpandedActionRowHeight: CGFloat = 48
+    static let composerExpandedHeight: CGFloat = 120
     static let composerCollapsedRadius: CGFloat = 28
     static let composerExpandedRadius: CGFloat = 18
     static let composerModelSelectorWidth: CGFloat = 330
@@ -124,7 +134,7 @@ enum MobileDesignGeometry {
     static let sheetActionHeight: CGFloat = 48
     static let selectionTopRadius: CGFloat = 20
     static let selectionRowHeight: CGFloat = 64
-    static let selectionCloseSize: CGFloat = 32
+    static let selectionCloseSize: CGFloat = 48
     static let popoverWidth: CGFloat = 292
     static let popoverRadius: CGFloat = 16
     static let popoverPadding: CGFloat = 12

@@ -317,11 +317,11 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
         )}
 
         <div className="ssh-auth-prompt-dialog__actions" data-openbitfun-component="ssh-remote" data-openbitfun-part="authActions">
-          <Button variant="outline" size="sm" onClick={onCancel} disabled={isConnecting}>
+          <Button variant="fill" size="sm" onClick={onCancel} disabled={isConnecting}>
             {t('actions.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             onClick={handleSubmit}
             disabled={!canSubmit() || isConnecting}

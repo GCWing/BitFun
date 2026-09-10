@@ -1301,7 +1301,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
               >
                 <Button
                   type="button"
-                  variant="fill"
+                  variant="primary"
                   size="sm"
                   className="m-editor-inline-ai__quick-action"
                   leadingIcon={<Icon name="edit" size="sm" />}
@@ -1347,7 +1347,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
               >
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="fill"
                   size="sm"
                   onClick={handleRejectInlineContinue}
                 >

@@ -34,7 +34,7 @@ describe('dispatchApi', () => {
       includeUncommitted: false,
       jobId: 'job-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       prompt: 'Inspect the repository',
       approvalPolicy: 'reject-and-report',
       model: 'target-model',

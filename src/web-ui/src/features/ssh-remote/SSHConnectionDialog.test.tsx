@@ -54,6 +54,7 @@ vi.mock('./SSHAuthPromptDialog', () => ({
 vi.mock('@openbitfun/ui', () => ({
   Alert: () => null,
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  OverflowText: ({ children, behavior: _behavior, marqueeActive: _marqueeActive, ...props }: any) => <span {...props}>{children}</span>,
   Dialog: ({
     open,
     children,

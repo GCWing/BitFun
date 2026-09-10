@@ -41,6 +41,7 @@
     "emptyError": "此字段不能為空"
   },
   "markdown": {
+    "remoteImageUnavailable": "派發任務暫不支援圖片預覽",
     "copySuccess": "複製成功",
     "copyCode": "複製代碼",
     "openInExplorer": "在檔案總管中開啟",

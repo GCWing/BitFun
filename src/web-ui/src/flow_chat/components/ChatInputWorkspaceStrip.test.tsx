@@ -1184,7 +1184,7 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.querySelector('[data-testid="chat-input-branch-trigger"]')).toBeNull();
   });
 
-  it('keeps the local execution breadcrumb visible but locked outside a Git workspace', async () => {
+  it('keeps the local execution breadcrumb visible but omits Git branch info outside a Git workspace', async () => {
     mocks.useGitState.mockReturnValue({
       currentBranch: '',
       isRepository: false,
@@ -1207,6 +1207,8 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="branch"]')).toBeNull();
+    expect(container.querySelector('.openbitfun-chat-input-workspace-strip__chip--branch')).toBeNull();
     const dispatchTrigger = container.querySelector<HTMLElement>(
       '[data-testid="chat-input-dispatch-trigger"]',
     );

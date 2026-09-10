@@ -25,14 +25,12 @@ export struct ConnectManualPairingOverlay {
         .onClick(this.onCancel)
 
       Column({ space: 20 }) {
-        Text(this.requiresAccountAuth ?
-          RemoteI18n.t('connect.accountPairTitle') : RemoteI18n.t('connect.manualPair'))
+        Text(RemoteI18n.t('connect.manualPair'))
           .fontSize(MobileDesignTypography.displayLarge.size)
           .fontWeight(FontWeight.Bold)
           .fontColor(INK)
           .width('100%')
-        Text(this.requiresAccountAuth ?
-          RemoteI18n.t('connect.accountPairIntro') : RemoteI18n.t('connect.manualPairBody'))
+        Text(RemoteI18n.t('connect.manualPairBody'))
           .fontSize(MobileDesignTypography.titleMedium.size)
           .lineHeight(MobileDesignTypography.titleMedium.lineHeight)
           .fontColor(MUTED)
@@ -48,37 +46,6 @@ export struct ConnectManualPairingOverlay {
           .padding({ left: 20, right: 20 })
           .defaultFocus(true)
           .onChange(this.onRemoteUrlChange)
-        if (this.requiresAccountAuth) {
-          TextInput({
-            placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'),
-            text: this.userIdInput
-          })
-            .height(56)
-            .fontSize(MobileDesignTypography.bodyLarge.size)
-            .fontColor(INK)
-            .backgroundColor(CARD)
-            .border({ width: 0.5, color: LINE })
-            .borderRadius(28)
-            .shadow({ radius: 14, color: SHADOW_FAINT, offsetY: 5 })
-            .padding({ left: 20, right: 20 })
-            .onChange(this.onUserIdChange)
-          TextInput({ placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'), text: this.password })
-            .height(56)
-            .fontSize(MobileDesignTypography.bodyLarge.size)
-            .fontColor(INK)
-            .backgroundColor(CARD)
-            .border({ width: 0.5, color: LINE })
-            .borderRadius(28)
-            .shadow({ radius: 14, color: SHADOW_FAINT, offsetY: 5 })
-            .padding({ left: 20, right: 20 })
-            .type(InputType.Password)
-            .onChange(this.onPasswordChange)
-          Text(RemoteI18n.t('connect.accountPairBody'))
-            .fontSize(MobileDesignTypography.bodySmall.size)
-            .lineHeight(MobileDesignTypography.bodySmall.lineHeight)
-            .fontColor(MUTED)
-            .width('100%')
-        }
         Row({ space: 12 }) {
           AppActionButton({
             label: RemoteI18n.t('common.cancel'),

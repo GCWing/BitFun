@@ -112,7 +112,8 @@
   "permissionMode": {
     "ask": "Ask",
     "allowOnce": "Auto approve",
-    "rejectOnce": "Auto reject"
+    "legacyRejectWarning": "Some agents still have Auto reject saved. The editor replaces it with Ask. Save and apply your current choices to make them take effect; until then, those agents will continue to reject requests automatically.",
+    "saveAndApply": "Save and apply"
   },
   "requirements": {
     "tool": "CLI",

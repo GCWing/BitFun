@@ -906,6 +906,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
             subagentSessionId={toolItem.subagentSessionId}
             defaultTimeoutDisabled={defaultTimeoutDisabled}
             completedDurationMs={taskDurationMs}
+            showCompletedDuration={displayIsExpanded}
             completedStatus={completedDurationStatus}
             completedFailureReason={hasFailedOutcome ? visibleTaskErrorMessage ?? undefined : undefined}
           />

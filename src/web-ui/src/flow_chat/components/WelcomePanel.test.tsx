@@ -93,7 +93,7 @@ describe('WelcomePanel Git summary loading', () => {
     gitApiMock.isGitRepository.mockReturnValue(repositoryProbe.promise);
 
     await act(async () => {
-      root.render(<WelcomePanel sessionMode="agentic" />);
+      root.render(<WelcomePanel sessionMode='Standard' />);
     });
 
     expect(gitApiMock.isGitRepository).toHaveBeenCalledWith('D:/workspace/OpenBitFun');
@@ -114,7 +114,7 @@ describe('WelcomePanel Git summary loading', () => {
     gitApiMock.isGitRepository.mockResolvedValue(true);
 
     await act(async () => {
-      root.render(<WelcomePanel sessionMode="agentic" />);
+      root.render(<WelcomePanel sessionMode='Standard' />);
     });
 
     expect(gitApiMock.getStatus).toHaveBeenCalledWith('D:/workspace/OpenBitFun', 'welcome_panel');
@@ -134,7 +134,7 @@ describe('WelcomePanel Git summary loading', () => {
   it('portals the workspace menu outside the scrollable welcome panel', async () => {
     gitApiMock.isGitRepository.mockResolvedValue(false);
     await act(async () => {
-      root.render(<WelcomePanel sessionMode="agentic" />);
+      root.render(<WelcomePanel sessionMode='Standard' />);
     });
 
     const trigger = container.querySelector<HTMLButtonElement>('[data-openbitfun-part="workspaceAction"]');

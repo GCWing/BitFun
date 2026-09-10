@@ -1,4 +1,4 @@
-import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { Bot, Loader2, MicOff, PhoneOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
@@ -45,7 +45,7 @@ export function RealtimeVoiceCallPanel() {
           data-openbitfun-part="heading"
         >
           <strong>{t('voiceCall.call.title')}</strong>
-          <small>{controller.status}</small>
+          <small><OverflowText>{controller.status}</OverflowText></small>
         </span>
         <span
           className="openbitfun-realtime-call__live-dot"

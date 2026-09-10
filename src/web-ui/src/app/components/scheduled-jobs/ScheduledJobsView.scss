@@ -58,7 +58,6 @@
   &__target-sub {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -187,7 +186,6 @@
     font-weight: var(--openbitfun-type-label-selected-font-weight);
     color: var(--openbitfun-color-content-primary);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -205,7 +203,6 @@
     line-height: var(--openbitfun-type-body-lg-line-height);
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 
     &--dim {
@@ -370,7 +367,6 @@
   &__agent-option-description {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

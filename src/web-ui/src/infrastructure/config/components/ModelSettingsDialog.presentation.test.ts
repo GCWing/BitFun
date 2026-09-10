@@ -27,15 +27,20 @@ describe('ModelSettingsPage dialog presentation', () => {
     expect(editorDialog).toContain('size="xl"');
     expect(editorDialog).not.toContain('size="2xl"');
     expect(editorDialog).toMatch(
-      /\{!reasoningPanelDraft && \(\s*<DialogFooter>/,
+      /\{!reasoningPanelDraft && \(\s*<DialogFooter appearance="floating">/,
     );
-    expect(editorDialog).not.toContain('appearance="floating"');
+    expect(editorDialog).toContain('appearance="floating"');
     expect(editorDialog).toContain(
-      '<Button variant="outline" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
+      '<Button variant="fill" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>',
+    );
+    expect(editorDialog).toMatch(
+      /<Button\s+data-testid="settings-model-save-btn"\s+variant="primary"\s+size="sm"/,
     );
     expect(editorDialog).toContain('<DialogClose disabled={isEditorSaving} />');
     expect(editorDialog).toContain('loading={isEditorSaving}');
     expect(editingForm.match(/fieldSurface="default"/g)).toHaveLength(2);
+    expect(editingForm).not.toContain('<ScrollArea');
+    expect(editingForm).toContain('className="openbitfun-model-settings__form-content"');
     expect(editorDialog).not.toContain('openbitfun-model-settings__editor-dialog-footer');
     expect(editorDialog).not.toContain('openbitfun-model-settings__editor-dialog-cancel');
     expect(styles).toMatch(

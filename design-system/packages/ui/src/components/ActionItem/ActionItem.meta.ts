@@ -17,6 +17,7 @@ export const actionItemMeta = {
   ],
   states: ["default", "hover", "active", "focus-visible", "disabled", "danger"],
   tokens: [
+    "opacity.iconArtwork",
     "color.action.neutral.content",
     "color.action.neutral.contentDisabled",
     "color.action.neutral.surface",
@@ -27,6 +28,8 @@ export const actionItemMeta = {
     "color.status.danger.surface",
     "control.height.sm",
     "type.label.md.fontSize",
+    "type.actionRow.lineHeight",
+    "color.action.neutral.surfaceHover",
     "type.label.selected.fontWeight",
     "type.meta.fontSize",
     "radius.base",

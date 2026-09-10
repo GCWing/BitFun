@@ -20,7 +20,7 @@ Two concepts, deliberately independent:
 |---|---|---|
 | What it is | A live control link to a peer | The one device this window draws |
 | How many | Any number, concurrently | Exactly one |
-| Ends when | Explicit disconnect, peer offline, logout | Replaced by the next switch |
+| Ends when | Explicit disconnect or logout | Replaced by the next switch |
 | Effect on the peer's agent | Keeps it running and fanning out | None |
 
 This split is what makes several devices usable at once: dispatch a turn on B,
@@ -69,9 +69,22 @@ requests coalesce to the last target, a committed-but-superseded hydrate is
 invalidated before the next target proceeds, and a real activation failure
 rolls back to the previously rendered reachable surface. Separately,
 `PeerConnectionManager` owns each attachment's
-`connecting`/`ready`/`degraded`/`lost` lifecycle, keepalive and bounded backoff;
+`connecting`/`ready`/`degraded` lifecycle, keepalive and capped backoff;
 React only subscribes to snapshots. Attachment disposal is the only operation
 that discards a peer's cached surface state.
+
+Presence gaps and product RPC transport failures move an established attachment
+into `degraded`; they never select the local surface. Only a dedicated
+`peer_mode_ping` plus recovery `peer_control_attach` handshake changes it back
+to `ready`. Product timeouts do not count as independent failed health checks.
+Recovery uses one in-flight handshake per device, retries with exponential
+backoff capped at 15 seconds, and continues until explicit disconnect/logout.
+A device returning to account presence accelerates a pending retry without
+claiming the control link is already restored. Cached capabilities, the surface
+epoch, requests' target device and session projections stay with that peer;
+recovery neither reboots the surface nor resubmits a Turn. The window displays
+a persistent reconnecting notice with a manual return-to-local action while its
+selected peer is degraded. Background peers recover without switching the view.
 
 Because the local surface can now miss its own events while another device is
 rendered, Session attachment is no longer Peer-only. After this window's first
@@ -171,6 +184,32 @@ applying or uploading settings, a host fans out `account://settings-applied`
 to attached controllers; the controller re-emits it locally so the frontend
 config cache and model selectors refresh without reconnecting.
 
+The account settings payload is the complete `ConfigExport.config` document,
+not a whitelist assembled by the login UI. Its scope is:
+
+| Persisted configuration | Account sync coverage |
+|---|---|
+| `app` | Language, startup/window preferences, logging, notifications, layout, FlowChat, AI experience/quick actions, voice input/call settings, keybindings, tool/Skill groups, hook enablement gates, worktree defaults |
+| `ai` | Persisted models and credentials, default/task/subagent model selectors, Agent profile overrides, Skill availability, Review Teams, concurrency/timeouts, proxy, browser/tool preferences, non-secret WebSearch settings |
+| `editor`, `terminal`, `workspace` | Preferences in the global document; workspace files and machine connection records are separate |
+| `tool_permissions`, `memories` | User permission policy and memory preferences; project permission files and generated memory content are separate |
+| `mcp_servers`, `acp_clients`, `plugin`, `project` | Declarations present in the global document; external executables, installed packages and separately stored project overlays are not copied |
+| `appearance`, `font` | Appearance selection and UI font preferences; imported skin assets are stored separately |
+
+The frontend refreshes the config cache and the appearance, font and language
+runtimes after a settings-applied event. Keybindings register a path watcher
+even when their initial value came from the bootstrap hint, and an empty or
+removed override restores the registered default. Applying these preferences
+does not save them again. An unavailable imported skin keeps the persisted
+selection and exposes the existing degraded/unavailable state.
+
+This is settings synchronization, not a user-home backup: custom Agent and Skill
+source files, `hooks.json` declarations/scripts, plugin packages, skin/pet
+assets, local credential-vault entries, SSH profiles and browser storage are
+outside this payload. A synchronized declaration or asset path does not imply
+that its dependency is installed or usable on another host. Runtime-only model
+credentials are also excluded. Session backup upload has a separate lifecycle.
+
 The sync engine subscribes to successful local mutations at `ConfigService`,
 in addition to legacy host notifications. This covers model, Skill, Agent
 profile, and individual preference mutations through Desktop and CLI. Failed
@@ -179,21 +218,21 @@ local-change signal. Pending local edits take priority over the periodic pull;
 a fetched blob is applied only if the local document still matches its
 pre-fetch snapshot. The comparison and import share the config write lock.
 
-Older settings snapshots may omit fixed fields introduced by a newer build.
-Imports preserve those local fields instead of replacing them with defaults.
-Supplied arrays and dynamic maps remain authoritative, so deleted models,
-profiles and list entries are not resurrected. Optional/default-elided fields
-retain their existing reset semantics; an explicit raw backup restore also
-honors omitted default memory and AI preferences. Legacy renamed fields still
-pass through their migrations before values at the new names are preserved.
+Imports validate the OpenBitFun product identity, export format and config
+schema, then replace the document. Within the supported schema, omitted fields
+with serde defaults acquire those defaults; they do not retain the receiving
+host's prior value. Arrays and dynamic maps remain authoritative, so deleted
+models, profiles and list entries are not resurrected. Pre-OpenBitFun formats
+and retired fields require the explicit migration tool. Configuration write
+timestamps and informational build versions are excluded from the sync content
+hash so a reload or unchanged save does not cause a redundant upload.
 
 Realtime voice credentials live in `app.voice_call` in the same persisted
 configuration and export/backup format as model settings. Account settings
-apply preserves the controller's existing voice fields when an older payload
-omits them, and an empty voice API key from an unconfigured host does not erase
-a configured local key. Non-empty synced keys still replace the local key.
-Explicit file imports can restore or clear a supplied key; local voice saves
-and resets can also clear it. A valid whole-config import creates a raw
+apply is authoritative here too: a supplied empty voice key clears the local
+key, and absent voice fields receive defaults. Explicit file imports can
+restore or clear a supplied key; local voice saves and resets can also clear
+it. A valid whole-config import creates a raw
 `app_pre-import_*.json` backup before replacement, under the existing backup
 retention policy. Config reload and model-reference reconciliation serialize
 their reads and writes with local saves so stale snapshots cannot undo a
@@ -245,8 +284,8 @@ FS) and must not be mixed with Peer Device Mode.
   lifetime. Disconnect joins cancellation; replacing or dropping the client
   retires the old socket and its reconnect attempts. A generation fence prevents
   an old connection from publishing state into its replacement. Initial dial
-  failure returns to `Disconnected`. Reconnect restores room/account context,
-  including a server-assigned room id, before admitting new outgoing commands.
+  failure returns to `Disconnected`. Reconnect verifies the selected Relay account and device context before
+  admitting new outgoing commands. Anonymous room contexts are not supported.
   The outgoing queue holds at most 64 messages and reports saturation explicitly;
   its failed-socket contents are never replayed. Dial/write deadlines are 15s,
   heartbeat cadence is 30s, with due heartbeats taking priority over queued

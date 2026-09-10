@@ -97,7 +97,7 @@ mod tests {
     fn transcript(workspace_path: &str) -> SessionTranscript {
         SessionTranscript {
             session_id: "same-session".to_string(),
-            agent_type: "Agentic".to_string(),
+            agent_type: "Standard".to_string(),
             session_name: "Session".to_string(),
             workspace_path: Some(workspace_path.to_string()),
             last_activity_unix_secs: 10,

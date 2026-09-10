@@ -45,7 +45,10 @@ import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SettingsPageId } from '@/app/scenes/settings/settingsTypes';
-import { formatElapsedTime } from './actionBarFormatting';
+import {
+  getReviewActionErrorMessage,
+  formatElapsedTime,
+} from './actionBarFormatting';
 import { CapacityQueueNotice } from './CapacityQueueNotice';
 import { DecisionExecutionGate } from './DecisionExecutionGate';
 import { buildInterruptionDiagnostics } from './interruptionDiagnostics';
@@ -440,9 +443,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     store.toggleAllRemediation(childSessionId ?? undefined);
   }, [childSessionId, store]);
 
-  const handleToggleGroup = useCallback((groupId: string) => {
-    if (groupId === 'ungrouped') return;
-    store.toggleGroupRemediation(groupId as RemediationGroupId, childSessionId ?? undefined);
+  const handleToggleGroup = useCallback((groupId: RemediationGroupId | 'ungrouped') => {
+    store.toggleGroupRemediation(groupId, childSessionId ?? undefined);
   }, [childSessionId, store]);
 
   const handleToggleDecisionExpansion = useCallback((id: string) => {
@@ -510,20 +512,17 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
               : 'Start fixing review findings',
           }),
         'ReviewFixer',
-        'agentic',
+        'Standard',
       );
     } catch (error) {
       log.error('Failed to start review remediation', { childSessionId, reviewMode, error });
       const msg = error instanceof Error ? error.message : String(error);
       const isTimeout = /timeout/i.test(msg);
-      store.updatePhase(isTimeout ? 'fix_timeout' : 'fix_failed', msg, childSessionId);
+      const message = getReviewActionErrorMessage(error, t, t('deepReviewActionBar.actionStartFailed'));
+      store.updatePhase(isTimeout ? 'fix_timeout' : 'fix_failed', message, childSessionId);
       store.restore(childSessionId ?? undefined);
       notificationService.error(
-        error instanceof Error
-          ? error.message
-          : t('toolCards.codeReview.reviewFailed', {
-              error: t('toolCards.codeReview.unknownError'),
-            }),
+        message,
         { duration: 5000 },
       );
     } finally {
@@ -657,7 +656,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         reviewMode,
         error,
       });
-      const message = normalizeActionErrorMessage(error);
+      const message = getReviewActionErrorMessage(error, t, t('deepReviewActionBar.actionStartFailed'));
       notificationService.error(message, { duration: 5000 });
     } finally {
       store.setActiveAction(null, undefined, childSessionId);
@@ -716,14 +715,12 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
           count: retryableSlices.length,
         }),
         'DeepReview',
-        'agentic',
+        'Standard',
       );
       store.minimize(childSessionId);
     } catch (error) {
       log.error('Failed to start DeepReview retry coverage', { childSessionId, error });
-      const message = error instanceof Error
-        ? error.message
-        : t('deepReviewActionBar.retryIncompleteFailed');
+      const message = getReviewActionErrorMessage(error, t, t('deepReviewActionBar.retryIncompleteFailed'));
       notificationService.error(message, { duration: 5000 });
     } finally {
       store.setActiveAction(null, undefined, childSessionId);
@@ -829,6 +826,12 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     }
   }, []);
 
+  const displayErrorMessage = useMemo(() => {
+    if (!errorMessage) return null;
+
+    return getReviewActionErrorMessage(errorMessage, t, t('deepReviewActionBar.actionStartFailed'));
+  }, [errorMessage, t]);
+
   const handleCopyDiagnostics = useCallback(async () => {
     const detail = interruption?.errorDetail;
     if (!detail) return;
@@ -924,7 +927,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         PhaseIcon={PhaseIcon}
         phaseIconClass={phaseConfig.iconClass}
         phaseTitle={phaseTitle}
-        errorMessage={errorMessage}
+        errorMessage={displayErrorMessage}
         minimizeLabel={t('deepReviewActionBar.minimize')}
         onMinimize={handleMinimize}
       />

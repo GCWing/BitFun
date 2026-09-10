@@ -8,17 +8,8 @@
       "key": "#1a1b26 <-> #1c1c1f",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "Tokyo Night primary background uses the canonical Tokyo base hue; #1c1c1f is the default dark/china/slate neutral surface. Merging would flatten cross-theme identity rather than remove an app-level duplicate.",
-      "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct primary background identity."
-    },
-    {
-      "root": "src/web-ui",
-      "domain": "themePreset",
-      "key": "#1c1c1f <-> #212019",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "China Night secondary background also feeds Monaco lineHighlight through the theme projection. Merging it into the primary background removes the visible current-line cue and flattens adjacent ink surfaces.",
-      "reevaluateWhen": "Only if China Night gets a separate editor lineHighlight token or visual review proves the current-line cue remains visible."
+      "reason": "Tokyo Night structural chrome uses the canonical Tokyo base hue around storm-indigo content; #1c1c1f is the default dark/china/slate neutral surface. Merging would flatten cross-theme identity rather than remove an app-level duplicate.",
+      "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct structural chrome identity."
     },
     {
       "root": "src/web-ui",
@@ -26,7 +17,7 @@
       "key": "#2b2d30 <-> #313335",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/appearance/builtins",
-      "reason": "Midnight background, tertiary surface, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
+      "reason": "Midnight content, raised panels, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
       "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
     },
     {

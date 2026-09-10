@@ -14,6 +14,14 @@
 
 // ==================== Footer Buttons ====================
 
+.terminal-edit-dialog__error {
+  margin: 0;
+  color: var(--openbitfun-color-status-danger-content);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  line-height: var(--openbitfun-type-body-sm-line-height);
+  overflow-wrap: anywhere;
+}
+
 .terminal-edit-dialog__footer {
   flex-shrink: 0;
   display: flex;
@@ -44,10 +52,6 @@
     &:hover {
       background: var(--openbitfun-color-action-quiet-hover);
     }
-    
-    &:active {
-      transform: scale(0.97);
-    }
   }
 
   &--confirm {
@@ -58,10 +62,6 @@
       background: var(--openbitfun-color-accent-hover);
     }
     
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;

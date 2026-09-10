@@ -54,7 +54,7 @@ test("Input styles consume semantic field and status tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--openbitfun-color-field-background/);
-  assert.match(styles, /--openbitfun-color-field-border-focus/);
+  assert.match(styles, /--openbitfun-color-field-border-active/);
   assert.match(styles, /--openbitfun-color-content-muted/);
   assert.match(styles, /--openbitfun-color-status-danger-border/);
   assert.match(styles, /--openbitfun-control-height-sm/);

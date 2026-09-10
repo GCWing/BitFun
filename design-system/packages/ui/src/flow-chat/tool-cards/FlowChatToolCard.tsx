@@ -12,6 +12,7 @@ import {
 } from "react";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./FlowChatToolCard.module.css";
 
 export type FlowChatToolStatus =
@@ -316,6 +317,7 @@ export function ProminentToolCard({
         data-openbitfun-expandable={expandable ? "true" : "false"}
         data-openbitfun-interactive={onToggle ? "true" : "false"}
         data-openbitfun-part="surface"
+        data-overflow-trigger
         data-openbitfun-state={appearanceState}
         data-openbitfun-status={status}
         data-testid={onToggle ? toggleTestId : undefined}
@@ -446,6 +448,7 @@ export function AmbientToolCard({
         data-openbitfun-expandable={expandable ? "true" : "false"}
         data-openbitfun-interactive={interactive ? "true" : "false"}
         data-openbitfun-part="surface"
+        data-overflow-trigger
         data-openbitfun-state={appearanceState}
         data-openbitfun-status={status}
         data-testid={interactive ? toggleTestId : undefined}
@@ -705,7 +708,9 @@ export function ProminentToolCardSummary({
           data-openbitfun-component="flow-chat-tool-card"
           data-openbitfun-part="content"
         >
-          {content}
+          {typeof content === "string" || typeof content === "number"
+            ? <OverflowText>{content}</OverflowText>
+            : content}
         </span>
       )}
       {extra !== undefined && extra !== null && extra !== false && (
@@ -825,7 +830,9 @@ export function AmbientToolCardHeader({
           data-openbitfun-component="flow-chat-tool-card"
           data-openbitfun-part="content"
         >
-          {content}
+          {typeof content === "string" || typeof content === "number"
+            ? <OverflowText>{content}</OverflowText>
+            : content}
         </span>
       )}
       {extra !== undefined && extra !== null && extra !== false && (

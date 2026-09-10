@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 /** Static section title row with optional actions. */
 
 import React from 'react';
@@ -9,7 +10,7 @@ interface SectionHeaderProps {
 
 const SectionHeader: React.FC<SectionHeaderProps> = ({ label, actions }) => (
   <div className="openbitfun-nav-panel__section-header">
-    <span className="openbitfun-nav-panel__section-label">{label}</span>
+    <OverflowText className="openbitfun-nav-panel__section-label">{label}</OverflowText>
     {actions ? (
       <div className="openbitfun-nav-panel__section-actions">
         {actions}

@@ -1,49 +1,25 @@
-/**
- * Account ("My OpenBitFun") panel inside the Remote Connect dialog.
- *
- * Views: login → overwrite (optional) → devices
- * Unlike the old standalone dialog, a successful login keeps the panel open
- * and lands on the devices view so sync progress stays visible in place.
- *
- * Sync-choice invariants (do not regress):
- * - When the relay already has cloud settings, `account_login` keeps the
- *   session memory-only until `account_finalize_login`. Canceling the
- *   overwrite view, switching away from this panel, or closing the dialog
- *   must conditionally cancel its opaque owner so a killed process does not
- *   restore login.
- * - One-click deploy opens `RelayDeployWizard` (same feature as the Network
- *   group), not an external README. See `src/features/relay-deploy/README.md`.
- */
+/** Account login and authenticated device connections. */
 
-import { Alert, Button, Field, Icon, IconButton, Input, ScrollArea, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Alert, Button, Icon, IconButton, ScrollArea, StatusPill } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import {
   confirmDanger,
-  confirmWarning,
 } from '@/infrastructure/confirm-dialog';
-import { Lock, Server, LogIn, Monitor, CloudDownload, EyeOff, Rocket } from 'lucide-react';
+import { LogIn, Monitor } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
-  AccountHint,
   AccountDeviceInfo,
   OnlineDeviceInfo,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
-import { RelayDeployWizard } from '@/features/relay-deploy';
-import type { RelayDeployResult } from '@/features/relay-deploy';
-import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { accountIdentityService, useAccountIdentity } from '@/infrastructure/account-identity';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { usePeerDeviceMode } from '@/infrastructure/peer-device/peerDeviceContextState';
-import { useAccountSyncStore, ensureAccountSyncProgressListener } from '@/infrastructure/account/accountSyncStore';
-import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore';
 import {
   isAccountAuthFailure,
   isRelayUnreachable,
 } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
-import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountPanel.scss';
 
@@ -53,7 +29,6 @@ const DEVICE_POLL_FALLBACK_MS = 30_000;
 const DEVICE_CONNECT_MAX_ATTEMPTS = 5;
 const DEVICE_CONNECT_RECOVERY_INTERVAL_MS = 30_000;
 const DEVICE_LIST_FAILURE_THRESHOLD = 3;
-const ACCOUNT_TRANSITION_MAX_ATTEMPTS = 4;
 
 async function connectDevicesWithRetry(
   isCurrent: () => boolean,
@@ -83,162 +58,30 @@ async function connectDevicesWithRetry(
   throw lastError;
 }
 
-function parseRelayServer(value: string): URL | null {
-  try {
-    const url = new URL(value.trim());
-    if (!['http:', 'https:'].includes(url.protocol)
-      || !url.hostname
-      || url.username
-      || url.password
-      || url.search
-      || url.hash) {
-      return null;
-    }
-    return url;
-  } catch {
-    return null;
-  }
-}
-
-async function cancelPendingLoginWithRetry(pendingLoginId: string): Promise<boolean> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= ACCOUNT_TRANSITION_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      return await remoteConnectAPI.accountCancelPendingLogin(pendingLoginId);
-    } catch (error) {
-      lastError = error;
-      if (attempt === ACCOUNT_TRANSITION_MAX_ATTEMPTS) break;
-      log.warn(
-        `Pending login cancel attempt ${attempt}/${ACCOUNT_TRANSITION_MAX_ATTEMPTS} was ambiguous; retrying`,
-        error,
-      );
-      await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
-    }
-  }
-  throw lastError;
-}
-
-async function finalizePendingLoginWithRetry(pendingLoginId: string): Promise<void> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= ACCOUNT_TRANSITION_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      await remoteConnectAPI.accountFinalizeLogin(pendingLoginId);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt === ACCOUNT_TRANSITION_MAX_ATTEMPTS) break;
-      log.warn(
-        `Pending login finalize attempt ${attempt}/${ACCOUNT_TRANSITION_MAX_ATTEMPTS} was ambiguous; retrying`,
-        error,
-      );
-      await new Promise(resolve => setTimeout(resolve, 250 * (2 ** (attempt - 1))));
-    }
-  }
-  throw lastError;
-}
-
-/** Quota / payload-limit failures will not succeed on blind retry. */
-function isNonRetryableSyncError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '');
-  const lower = msg.toLowerCase();
-  return (
-    lower.includes('http 507')
-    || lower.includes('insufficient storage')
-    || lower.includes('quota is full')
-    || lower.includes('http 413')
-    || lower.includes('payload too large')
-  );
-}
-
-function syncFailureMessage(
-  t: (key: string, options?: Record<string, string | number>) => string,
-  error: unknown,
-): string {
-  if (isNonRetryableSyncError(error)) {
-    const msg = error instanceof Error ? error.message : String(error ?? '');
-    if (
-      msg.toLowerCase().includes('http 413')
-      || msg.toLowerCase().includes('payload too large')
-    ) {
-      return t('accountLogin.syncPayloadTooLarge');
-    }
-    return t('accountLogin.syncQuotaFull');
-  }
-  return t('accountLogin.syncFailed');
-}
-
-function syncPhaseLabel(
-  t: (key: string, options?: Record<string, string | number>) => string,
-  phase: AccountSyncPhase,
-  current: number | null,
-  total: number | null,
-): string {
-  switch (phase) {
-    case 'uploading_settings':
-      return t('accountLogin.syncPhaseUploadingSettings');
-    case 'downloading_settings':
-      return t('accountLogin.syncPhaseDownloadingSettings');
-    case 'applying_settings':
-      return t('accountLogin.syncPhaseApplyingSettings');
-    case 'settings_done':
-      return t('accountLogin.syncPhaseSettingsDone');
-    case 'listing_sessions':
-      return t('accountLogin.syncPhaseListingSessions');
-    case 'exporting_sessions':
-      return t('accountLogin.syncPhaseExportingSessions', {
-        current: current ?? 0,
-        total: total ?? 0,
-      });
-    case 'done':
-      return t('accountLogin.syncDoneShort');
-    case 'failed':
-      return t('accountLogin.syncFailed');
-    case 'starting':
-    default:
-      return t('accountLogin.syncing');
-  }
-}
-
 interface AccountPanelProps {
   /** Close the whole Remote Connect dialog (used when entering peer mode). */
   onCloseDialog: () => void;
 }
 
-type View = 'login' | 'overwrite' | 'devices';
+type View = 'login' | 'devices';
 
 export const AccountPanel: React.FC<AccountPanelProps> = ({
   onCloseDialog,
 }) => {
   const { t, formatRelativeTime } = useI18n('common');
-  const { success, info, warning } = useNotification();
-  const { workspacePath } = useCurrentWorkspace();
+  const { success } = useNotification();
   const { peerMode, switchToDevice, switchToLocal } = usePeerDeviceMode();
-  const syncStatus = useAccountSyncStore((s) => s.status);
-  const syncProgress = useAccountSyncStore((s) => s.progress);
-  const lastSyncError = useAccountSyncStore((s) => s.lastError);
-  const lastSyncIsFirstLogin = useAccountSyncStore((s) => s.lastSyncIsFirstLogin);
-  const setSyncing = useAccountSyncStore((s) => s.setSyncing);
-  const setSyncDone = useAccountSyncStore((s) => s.setDone);
-  const setSyncFailed = useAccountSyncStore((s) => s.setFailed);
-  const clearSync = useAccountSyncStore((s) => s.clear);
-
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [authServer, setAuthServer] = useState('');
+  const identity = useAccountIdentity();
+  const username = identity.me?.user.login ?? '';
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [view, setView] = useState<View>('login');
-  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   /** True after either device presence or a list_devices response is available. */
   const [devicesReady, setDevicesReady] = useState(false);
   const [relayError, setRelayError] = useState<string | null>(null);
-  /** Relay URL of the current account session, shown in the devices view. */
-  const [accountRelayUrl, setAccountRelayUrl] = useState('');
-  const [copiedServerUrl, setCopiedServerUrl] = useState(false);
   /** Account epoch whose presence events may update the device list. */
   const [activeAccountEpoch, setActiveAccountEpoch] = useState<number | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -253,14 +96,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   const deviceListFailureCountRef = useRef(0);
   /** Coalesce manual and background recovery so they never replace each other's WS. */
   const deviceReconnectInFlightRef = useRef(false);
-  /** Prevent overlapping background syncs from rapid clicks. */
-  const syncInFlightRef = useRef(false);
-  /** Opaque backend owner ID for the memory-only overwrite decision. */
-  const pendingLoginIdRef = useRef<string | null>(null);
-  /** Track the overwrite view for conditional unmount cleanup. */
-  const viewRef = useRef<View>(view);
-  viewRef.current = view;
-
   const invalidateAccountRequests = useCallback(() => {
     accountEpochRef.current += 1;
     refreshRequestRef.current += 1;
@@ -289,39 +124,22 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setLocalDeviceId(null);
     setDevicesReady(false);
     setRelayError(null);
-    setAccountRelayUrl('');
-    setCopiedServerUrl(false);
     refreshInFlightRef.current = null;
     deviceRoutingReadyRef.current = false;
     deviceListFailureCountRef.current = 0;
     if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
   }, []);
 
-  const handleCopyRelayUrl = useCallback(async () => {
-    if (!accountRelayUrl) return;
-    const copied = await copyTextToClipboard(accountRelayUrl);
-    if (copied) {
-      setCopiedServerUrl(true);
-      window.setTimeout(() => setCopiedServerUrl(false), 1500);
-    } else {
-      warning(t('accountLogin.copyServerFailed'));
-    }
-  }, [accountRelayUrl, t, warning]);
-
   const handleSessionExpired = useCallback(async (_error: unknown, expectedEpoch: number) => {
     if (!isAccountEpochCurrent(expectedEpoch)) return;
     invalidateAccountRequests();
-    // Invalidate detached retries before the logout request yields control.
-    syncInFlightRef.current = false;
-    pendingLoginIdRef.current = null;
-    clearSync();
     // Authenticated backend commands invalidate only the generation/token that
     // produced their 401. Do not issue a second unconditional logout here: a
     // late frontend response must never clear a newer login.
     resetState();
     setView('login');
     setError(t('accountLogin.sessionExpired'));
-  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
+  }, [invalidateAccountRequests, isAccountEpochCurrent, resetState, t]);
 
   const markRelayUnreachable = useCallback(() => {
     setDevicesReady(false);
@@ -532,7 +350,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
-    ensureAccountSyncProgressListener();
     return () => {
       mountedRef.current = false;
       accountEpochRef.current += 1;
@@ -540,43 +357,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     };
   }, []);
 
-  // Unmounting (dialog close or group switch) during the sync-choice step
-  // abandons the incomplete login — pair with `account_finalize_login`.
-  // The dialog tree unmounts this panel directly, so this must be a cleanup,
-  // not an effect gated on a prop flip.
-  useEffect(() => {
-    return () => {
-      if (viewRef.current === 'overwrite') {
-        syncInFlightRef.current = false;
-        clearSync();
-        const pendingLoginId = pendingLoginIdRef.current;
-        if (pendingLoginId) {
-          void cancelPendingLoginWithRetry(pendingLoginId)
-            .then(() => {
-              if (pendingLoginIdRef.current === pendingLoginId) {
-                pendingLoginIdRef.current = null;
-              }
-            })
-            .catch((e) => {
-              log.warn('pending login cancel on overwrite abandon failed', e);
-            });
-        }
-      }
-    };
-  }, [clearSync]);
-
   useEffect(() => {
     const epoch = accountEpochRef.current;
     remoteConnectAPI.getDeviceInfo().then((info) => {
       if (isAccountEpochCurrent(epoch)) setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
-    remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
-      if (hint && isAccountEpochCurrent(epoch)) {
-        setUsername(hint.username);
-        setAuthServer(hint.relay_url);
-        setAccountRelayUrl(hint.relay_url);
-      }
-    });
     remoteConnectAPI.accountStatus().then(async (status) => {
       if (isAccountEpochCurrent(epoch) && status.logged_in && status.user_id) {
         setActiveAccountEpoch(epoch);
@@ -625,296 +410,38 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     return unlistenPresence;
   }, [activeAccountEpoch, applyPresenceOnline, isAccountEpochCurrent]);
 
-  const validate = useCallback(() => {
-    if (!username.trim() || !password || !authServer.trim()) {
-      setError(t('accountLogin.emptyFields'));
-      return false;
-    }
-    if (username.trim().length > 128 || password.length > 1024) {
-      setError(t('accountLogin.invalidCredentialsLength'));
-      return false;
-    }
-    if (!parseRelayServer(authServer)) {
-      setError(t('accountLogin.invalidServer'));
-      return false;
-    }
-    setError(null);
-    return true;
-  }, [username, password, authServer, t]);
-
-  /**
-   * Run cloud sync + device connect in the background. Progress is visible
-   * in the devices view while it continues.
-   */
-  const startBackgroundSync = useCallback((isFirstLogin: boolean) => {
-    if (syncInFlightRef.current) {
-      log.warn('Account sync already in flight; skipping duplicate start');
-      return;
-    }
-    syncInFlightRef.current = true;
-    ensureAccountSyncProgressListener();
-    setSyncing(isFirstLogin);
-    const operationId = useAccountSyncStore.getState().operationId;
-    const isCurrentOperation = () => (
-      useAccountSyncStore.getState().operationId === operationId
-    );
-    info(t('accountLogin.syncStarted'));
-
-    void (async () => {
-      try {
-        let configJson = '{}';
-        if (isFirstLogin) {
-          useAccountSyncStore.getState().applyProgress({
-            operation_id: operationId,
-            phase: 'uploading_settings',
-            percent: 2,
-          });
-          try {
-            const exported = await configAPI.exportConfig();
-            configJson = JSON.stringify(exported);
-          } catch (e) {
-            log.warn('export config failed', e);
-          }
-          if (!isCurrentOperation()) return;
-        }
-        const wp = workspacePath || '/';
-        // AccountClient owns transient Relay retries with one shared deadline.
-        // Replaying this entire workflow would also repeat deterministic local
-        // config/filesystem work and multiply the transport retry budget.
-        const result = await remoteConnectAPI.accountAutoSync(
-          isFirstLogin,
-          wp,
-          configJson,
-          operationId,
-        );
-        if (!isCurrentOperation()) return;
-        log.info(
-          `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported}`,
-        );
-        if (result.settings_synced && !isFirstLogin) {
-          if (!isCurrentOperation()) return;
-          try {
-            await configAPI.reloadConfig();
-            if (!isCurrentOperation()) return;
-            configManager.clearCache();
-            success(t('accountLogin.settingsApplied'));
-          } catch (e) {
-            log.warn('reloadConfig after sync failed', e);
-          }
-        }
-        if (!isCurrentOperation()) return;
-        setSyncDone(result);
-        success(t('accountLogin.syncDone', {
-          exported: result.sessions_exported,
-        }));
-      } catch (e) {
-        if (!isCurrentOperation()) return;
-        log.error('Auto-sync failed', e);
-        setSyncFailed(e instanceof Error ? e.message : String(e));
-        warning(syncFailureMessage(t, e));
-      } finally {
-        if (isCurrentOperation()) {
-          syncInFlightRef.current = false;
-        }
-      }
-    })();
-  }, [
-    info,
-    setSyncDone,
-    setSyncFailed,
-    setSyncing,
-    success,
-    t,
-    warning,
-    workspacePath,
-  ]);
-
-  const handleRetrySync = useCallback(() => {
-    if (syncStatus !== 'failed' || syncInFlightRef.current) return;
-    startBackgroundSync(lastSyncIsFirstLogin ?? false);
-  }, [lastSyncIsFirstLogin, startBackgroundSync, syncStatus]);
-
-  /** Landing path after a completed login: devices view + background sync. */
+  /** Show the authenticated device list and connect routing. */
   const completeLogin = useCallback((
-    relayUrl: string,
-    isFirstLogin: boolean,
     accountEpoch: number,
   ) => {
     if (!isAccountEpochCurrent(accountEpoch)) return;
     setActiveAccountEpoch(accountEpoch);
-    setAccountRelayUrl(relayUrl);
     setView('devices');
     void initializeDevices();
-    startBackgroundSync(isFirstLogin);
-  }, [initializeDevices, isAccountEpochCurrent, startBackgroundSync]);
-
-  const performLogin = useCallback(async (server: string, user: string, pass: string) => {
-    const epoch = invalidateAccountRequests();
-    // Invalidate detached sync retries before the backend begins replacing the
-    // account. The store operation id fences any completion from the old run.
-    syncInFlightRef.current = false;
-    clearSync();
-    setLoading(true); setError(null);
-    try {
-      const stalePendingLoginId = pendingLoginIdRef.current;
-      if (stalePendingLoginId) {
-        await cancelPendingLoginWithRetry(stalePendingLoginId);
-        if (pendingLoginIdRef.current === stalePendingLoginId) {
-          pendingLoginIdRef.current = null;
-        }
-        if (!isAccountEpochCurrent(epoch)) return;
-      }
-      const result = await remoteConnectAPI.accountLogin(server, user, pass);
-      if (!isAccountEpochCurrent(epoch)) {
-        if (result.pending_login_id) {
-          await cancelPendingLoginWithRetry(result.pending_login_id);
-        }
-        return;
-      }
-      if (result.has_cloud_settings) {
-        if (!result.pending_login_id) {
-          throw new Error(t('accountLogin.sessionExpired'));
-        }
-        pendingLoginIdRef.current = result.pending_login_id;
-        setView('overwrite');
-        setLoading(false);
-        return;
-      }
-      success(t('accountLogin.loginSuccess', { user_id: user }));
-      completeLogin(server, true, epoch);
-    } catch (e: unknown) {
-      if (!isAccountEpochCurrent(epoch)) return;
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      // The account session has its own token after this call; retaining the
-      // password in React state while the device list is open is unnecessary.
-      if (isAccountEpochCurrent(epoch)) {
-        setPassword('');
-        setLoading(false);
-      }
-    }
-  }, [clearSync, completeLogin, invalidateAccountRequests, isAccountEpochCurrent, success, t]);
+  }, [initializeDevices, isAccountEpochCurrent]);
 
   const handleLogin = useCallback(async () => {
-    if (!validate()) return;
-    const relayUrl = parseRelayServer(authServer);
-    if (!relayUrl) return;
-    const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
-    if (relayUrl.protocol === 'http:' && !isLoopback) {
-      const confirmed = await confirmWarning(
-        t('accountLogin.insecureServerTitle'),
-        t('accountLogin.insecureServerConfirm'),
-        {
-          confirmText: t('accountLogin.continueInsecure'),
-          cancelText: t('accountLogin.cancel'),
-        },
-      );
-      if (!confirmed) return;
-    }
-    await performLogin(authServer.trim(), username.trim(), password);
-  }, [validate, authServer, username, password, performLogin, t]);
-
-  /**
-   * Deploy wizard finished: relay deployed and the first account registered.
-   * Fill the form and sign in against the new relay right away.
-   */
-  const handleRelayRegistered = useCallback((result: RelayDeployResult) => {
-    setShowRelayDeploy(false);
-    setAuthServer(result.relayUrl);
-    setUsername(result.username);
-    setPassword(result.password);
-    void performLogin(result.relayUrl, result.username, result.password);
-  }, [performLogin]);
-
-  const finalizeAndSync = useCallback(async (isFirstLogin: boolean) => {
-    const epoch = accountEpochRef.current;
-    const pendingLoginId = pendingLoginIdRef.current;
-    if (!pendingLoginId) {
-      setError(t('accountLogin.sessionExpired'));
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    const epoch = invalidateAccountRequests();
+    setLoading(true); setError(null);
     try {
-      // The backend records the exact pending owner after commit, so retrying
-      // the same opaque owner remains fenced from a replacement account.
-      await finalizePendingLoginWithRetry(pendingLoginId);
+      const me = await accountIdentityService.signIn();
       if (!isAccountEpochCurrent(epoch)) return;
-      if (pendingLoginIdRef.current === pendingLoginId) {
-        pendingLoginIdRef.current = null;
-      }
-      success(t('accountLogin.loginSuccess', { user_id: username }));
-      completeLogin(authServer.trim(), isFirstLogin, epoch);
+      await remoteConnectAPI.accountLogin();
+      if (!isAccountEpochCurrent(epoch)) return;
+      success(t('accountLogin.loginSuccess', { user_id: me.user.login }));
+      completeLogin(epoch);
     } catch (e: unknown) {
-      if (!isAccountEpochCurrent(epoch)) return;
-      if (isAccountAuthFailure(e)) {
-        await handleSessionExpired(e, epoch);
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-      // Stop any detached work before accountLogout can yield.
-      syncInFlightRef.current = false;
-      clearSync();
-      const cleanupEpoch = invalidateAccountRequests();
-      try {
-        await cancelPendingLoginWithRetry(pendingLoginId);
-        if (pendingLoginIdRef.current === pendingLoginId) {
-          pendingLoginIdRef.current = null;
-        }
-      } catch (cancelErr) {
-        log.warn('pending login cancel after finalize failure failed', cancelErr);
-        if (isAccountEpochCurrent(cleanupEpoch)) setLoading(false);
-        return;
-      }
-      if (!isAccountEpochCurrent(cleanupEpoch)) return;
-      resetState();
-      setView('login');
-      setLoading(false);
+      if (isAccountEpochCurrent(epoch)) setError(e instanceof Error ? e.message : String(e));
     } finally {
       if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
-  }, [authServer, clearSync, completeLogin, handleSessionExpired, invalidateAccountRequests, isAccountEpochCurrent, resetState, success, t, username]);
-
-  const handleConfirmOverwrite = useCallback(() => {
-    void finalizeAndSync(false);
-  }, [finalizeAndSync]);
-
-  const handleUseLocalOverwrite = useCallback(() => {
-    void finalizeAndSync(true);
-  }, [finalizeAndSync]);
-
-  const handleCancelOverwrite = useCallback(async () => {
-    const epoch = invalidateAccountRequests();
-    syncInFlightRef.current = false;
-    clearSync();
-    const pendingLoginId = pendingLoginIdRef.current;
-    if (pendingLoginId) {
-      try {
-        await cancelPendingLoginWithRetry(pendingLoginId);
-        if (pendingLoginIdRef.current === pendingLoginId) {
-          pendingLoginIdRef.current = null;
-        }
-      } catch (e) {
-        log.warn('pending login cancel failed', e);
-        if (isAccountEpochCurrent(epoch)) {
-          setError(e instanceof Error ? e.message : String(e));
-        }
-        return;
-      }
-    }
-    if (!isAccountEpochCurrent(epoch)) return;
-    resetState();
-    setView('login');
-  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState]);
+  }, [completeLogin, invalidateAccountRequests, isAccountEpochCurrent, success, t]);
 
   const handleLogout = useCallback(async () => {
     const epoch = invalidateAccountRequests();
     setLoading(true);
-    syncInFlightRef.current = false;
-    clearSync();
-    pendingLoginIdRef.current = null;
     try {
-      await remoteConnectAPI.accountLogout();
+      await accountIdentityService.logout();
       if (!isAccountEpochCurrent(epoch)) return;
       resetState();
       setView('login');
@@ -927,7 +454,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     } finally {
       if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
-  }, [clearSync, invalidateAccountRequests, isAccountEpochCurrent, resetState]);
+  }, [invalidateAccountRequests, isAccountEpochCurrent, resetState]);
 
   const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
     const isLocal = localDeviceId === deviceId;
@@ -947,17 +474,9 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       },
     );
     if (!confirmed) return;
-    const previousSyncStatus = syncStatus;
-    const previousSyncDirection = lastSyncIsFirstLogin;
     setLoading(true);
     setError(null);
     const epoch = isLocal ? invalidateAccountRequests() : accountEpochRef.current;
-    if (isLocal) {
-      // A current-device removal is also a logout. Invalidate retries and
-      // late progress before the backend request yields.
-      syncInFlightRef.current = false;
-      clearSync();
-    }
     try {
       await remoteConnectAPI.accountDeleteDevice(deviceId);
       if (!isAccountEpochCurrent(epoch)) return;
@@ -977,33 +496,18 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
         const message = e instanceof Error ? e.message : String(e);
         if (isLocal) setActiveAccountEpoch(epoch);
         setError(message);
-        if (
-          isLocal
-          && previousSyncDirection !== null
-          && (previousSyncStatus === 'syncing' || previousSyncStatus === 'failed')
-        ) {
-          // Preserve the direction so Retry remains meaningful after a failed
-          // current-device removal invalidated the previous generation.
-          setSyncing(previousSyncDirection);
-          setSyncFailed(message);
-        }
       }
     } finally {
       if (isAccountEpochCurrent(epoch)) setLoading(false);
     }
   }, [
-    clearSync,
     handleSessionExpired,
     invalidateAccountRequests,
     isAccountEpochCurrent,
-    lastSyncIsFirstLogin,
     localDeviceId,
     refreshDevices,
     resetState,
-    setSyncFailed,
-    setSyncing,
     success,
-    syncStatus,
     t,
   ]);
 
@@ -1012,11 +516,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     // Picking this machine is a normal surface switch back, not a no-op: the
     // window may currently be rendering a peer.
     const isLocalDevice = Boolean(localDeviceId) && device.device_id === localDeviceId;
-    if (!isLocalDevice) {
-      if (syncStatus === 'failed') {
-        warning(t('accountLogin.syncFailedPeerHint'));
-      }
-    }
     setLoading(true);
     setError(null);
     try {
@@ -1046,9 +545,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     success,
     switchToDevice,
     switchToLocal,
-    syncStatus,
     t,
-    warning,
   ]);
 
   return (
@@ -1069,220 +566,39 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
         {view === 'login' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
-            <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
-            <div className="account-panel__form" data-openbitfun-component="remote-account-panel" data-openbitfun-part="form">
-              <Field
-                className="account-panel__field"
-                controlWidth="fill"
-                label={t('accountLogin.username')}
-              >
-                <Input
-                  className="account-panel__input"
-                  disabled={loading}
-                  leading={<Icon name="user" size="lg" />}
-                  onValueChange={setUsername}
-                  size="sm"
-                  type="text"
-                  value={username}
-                />
-              </Field>
-              <Field
-                className="account-panel__field"
-                controlWidth="fill"
-                label={t('accountLogin.password')}
-              >
-                <Input
-                  className="account-panel__input"
-                  disabled={loading}
-                  leading={<Lock />}
-                  onValueChange={setPassword}
-                  size="sm"
-                  trailing={
-                    <IconButton
-                      aria-label={showPassword
-                        ? t('accountLogin.hidePassword')
-                        : t('accountLogin.showPassword')}
-                      icon={showPassword ? <EyeOff /> : <Icon name="eye" size="lg" />}
-                      onClick={() => setShowPassword(s => !s)}
-                      size="sm"
-                      variant="quiet"
-                    />
-                  }
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                />
-              </Field>
-              <Field
-                className="account-panel__field"
-                controlWidth="fill"
-                label={t('accountLogin.authServer')}
-              >
-                <Input
-                  className="account-panel__input"
-                  disabled={loading}
-                  leading={<Server />}
-                  onValueChange={setAuthServer}
-                  placeholder={t('accountLogin.authServerPlaceholder')}
-                  size="sm"
-                  type="url"
-                  value={authServer}
-                />
-              </Field>
+            <div className="account-panel__login-card" data-openbitfun-component="remote-account-panel" data-openbitfun-part="form">
+              <span className="account-panel__login-icon" aria-hidden="true"><Icon name="user" size="lg" /></span>
+              <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
               <p className="account-panel__security-note">{t('accountLogin.securityNote')}</p>
-              <div className="account-panel__deploy-entry">
-                <span>{t('relayDeploy.entryHint')}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  leadingIcon={<Rocket />}
-                  onClick={() => setShowRelayDeploy(true)}
-                  disabled={loading}
-                >
-                  {t('relayDeploy.entryAction')}
+              <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
+                <Button variant="primary" size="sm" leadingIcon={<LogIn />} onClick={handleLogin} loading={loading}>
+                  {loading ? t('accountLogin.processing') : t('accountLogin.login')}
                 </Button>
               </div>
-            </div>
-            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-              <Button
-                variant="fill"
-                size="sm"
-                leadingIcon={<LogIn />}
-                onClick={handleLogin}
-                disabled={loading}
-              >
-                {loading ? t('accountLogin.processing') : t('accountLogin.login')}
-              </Button>
-            </div>
-          </ScrollArea>
-        )}
-
-        {view === 'overwrite' && (
-          <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
-            <div className="account-panel__overwrite-notice">
-              <CloudDownload size={32} />
-              <p>{t('accountLogin.cloudOverwriteWarning')}</p>
-            </div>
-            <div className="account-panel__sync-options" data-openbitfun-component="remote-account-panel" data-openbitfun-part="syncOptions">
-              <button
-                className="account-panel__sync-option"
-                data-openbitfun-component="remote-account-panel"
-                data-openbitfun-part="syncOption"
-                onClick={handleUseLocalOverwrite}
-                disabled={loading}
-              >
-                <Icon name="upload" size="lg" />
-                <div className="account-panel__sync-option-text">
-                  <span className="account-panel__sync-option-title">{t('accountLogin.useLocalTitle')}</span>
-                  <span className="account-panel__sync-option-desc">{t('accountLogin.useLocalDesc')}</span>
-                </div>
-              </button>
-              <button
-                className="account-panel__sync-option"
-                data-openbitfun-component="remote-account-panel"
-                data-openbitfun-part="syncOption"
-                onClick={handleConfirmOverwrite}
-                disabled={loading}
-              >
-                <CloudDownload size={20} />
-                <div className="account-panel__sync-option-text">
-                  <span className="account-panel__sync-option-title">{t('accountLogin.useCloudTitle')}</span>
-                  <span className="account-panel__sync-option-desc">{t('accountLogin.useCloudDesc')}</span>
-                </div>
-              </button>
-            </div>
-            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-              <Button variant="outline" size="sm" onClick={handleCancelOverwrite} disabled={loading}>
-                {t('accountLogin.disagree')}
-              </Button>
             </div>
           </ScrollArea>
         )}
 
         {view === 'devices' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
+            <div className="account-panel__identity-line">
+              <Icon name="user" size="lg" aria-hidden="true" />
+              <span className="account-panel__identity-copy">
+                <span className="account-panel__identity-label">{t('accountLogin.signedInAccount')}</span>
+                <OverflowText className="account-panel__identity-name" title={username}>{username.trim()}</OverflowText>
+              </span>
+              <Button variant="text" size="sm" onClick={handleLogout} disabled={loading}>
+                {t('accountLogin.logout')}
+              </Button>
+            </div>
+            <div className="account-panel__section-heading">
+              <h3>{t('accountLogin.linkedDevices')}</h3>
+              <Button variant="text" size="sm" leadingIcon={<Icon name="refresh" size="sm" />}
+                onClick={relayError ? handleRetryConnect : refreshDevices} disabled={loading}>
+                {t(relayError ? 'accountLogin.retryConnect' : 'accountLogin.refreshDevices')}
+              </Button>
+            </div>
             <div className="account-panel__devices-card">
-              {username.trim() && (
-                <div className="account-panel__identity-line">
-                  <Icon name="user" size="lg" />
-                  <span className="account-panel__server-copy">
-                    <span className="account-panel__server-label">{t('accountLogin.signedInAccount')}</span>
-                    <span className="account-panel__identity-name">{username.trim()}</span>
-                  </span>
-                </div>
-              )}
-              {accountRelayUrl && (
-                <div className="account-panel__server-line" data-openbitfun-component="remote-account-panel" data-openbitfun-part="server">
-                  <Server size={20} aria-hidden="true" />
-                  <span className="account-panel__server-copy">
-                    <span className="account-panel__server-label">{t('accountLogin.authServer')}</span>
-                    <span className="account-panel__server-url" title={accountRelayUrl}>
-                      {accountRelayUrl}
-                    </span>
-                  </span>
-                  <IconButton
-                    aria-label={t('accountLogin.copyServerUrl')}
-                    icon={copiedServerUrl ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
-                    onClick={handleCopyRelayUrl}
-                    size="sm"
-                    title={t('accountLogin.copyServerUrl')}
-                    variant="quiet"
-                  />
-                </div>
-              )}
-              {syncStatus !== 'idle' && !relayError && (
-                <div className={`account-panel__sync-indicator ${syncStatus}`} data-openbitfun-component="remote-account-panel" data-openbitfun-part="syncStatus" data-openbitfun-state={syncStatus === 'syncing' ? 'syncing' : undefined}>
-                  <div className="account-panel__sync-indicator-row">
-                    {syncStatus === 'syncing' && <Icon name="refresh" size="sm" className="spinning" />}
-                    {syncStatus === 'done' && <Icon name="check-line" size="sm" />}
-                    {syncStatus === 'failed' && <Icon name="info" size="sm" />}
-                    <span className="account-panel__sync-indicator-text">
-                      {syncStatus === 'syncing' && syncPhaseLabel(
-                        t,
-                        syncProgress.phase,
-                        syncProgress.current,
-                        syncProgress.total,
-                      )}
-                      {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
-                      {syncStatus === 'failed' && syncFailureMessage(t, lastSyncError)}
-                    </span>
-                    {syncStatus === 'failed' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leadingIcon={<Icon name="refresh" size="lg" />}
-                        className="account-panel__sync-retry"
-                        onClick={handleRetrySync}
-                        disabled={loading}
-                      >
-                        {t('accountLogin.retrySync')}
-                      </Button>
-                    )}
-                    {syncStatus === 'syncing' && (
-                      <span className="account-panel__sync-indicator-percent">
-                        {t('accountLogin.syncProgressPercent', { percent: syncProgress.percent })}
-                      </span>
-                    )}
-                  </div>
-                  {syncStatus === 'syncing' && (
-                    <div
-                      className="account-panel__sync-progress-track"
-                      data-openbitfun-component="remote-account-panel"
-                      data-openbitfun-part="progressTrack"
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={syncProgress.percent}
-                    >
-                      <div
-                        className="account-panel__sync-progress-fill"
-                        data-openbitfun-component="remote-account-panel"
-                        data-openbitfun-part="progressFill"
-                        style={{ width: `${Math.max(2, syncProgress.percent)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
               {relayError && (
                 <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
                   <Alert
@@ -1332,15 +648,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       <Monitor size={16} />
                       <span className="account-panel__device-info">
                         <span className="account-panel__device-name">
-                          <span title={displayName}>{displayName}</span>
+                          <OverflowText title={displayName}>{displayName}</OverflowText>
                           {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
                         </span>
                         <span className="account-panel__device-meta">
-                          <span className="account-panel__device-id">
-                            {d.device_id.slice(0, 8)}
-                          </span>
                           <span className="account-panel__device-status">
-                            {' · '}
                             {d.online
                               ? t('accountLogin.online')
                               : d.last_seen_at
@@ -1359,7 +671,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       icon={<Icon name="delete" size="sm" />}
                       onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
                       size="sm"
-                      tone="danger"
                       title={removeLabel}
                       variant="quiet"
                     />
@@ -1367,45 +678,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                   );
                 })}
               </div>
-              <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-                {relayError && (
-                  <Button
-                    variant="fill"
-                    size="sm"
-                    leadingIcon={<Icon name="refresh" size="lg" />}
-                    onClick={handleRetryConnect}
-                    disabled={loading}
-                  >
-                    {t('accountLogin.retryConnect')}
-                  </Button>
-                )}
-                {!relayError && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leadingIcon={<Icon name="refresh" size="lg" />}
-                    onClick={refreshDevices}
-                    disabled={loading}
-                  >
-                    {t('accountLogin.refreshDevices')}
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={handleLogout} disabled={loading}>
-                  {t('accountLogin.logout')}
-                </Button>
-              </div>
             </div>
           </ScrollArea>
         )}
       </div>
 
-      {showRelayDeploy && (
-        <RelayDeployWizard
-          isOpen={showRelayDeploy}
-          onClose={() => setShowRelayDeploy(false)}
-          onRegistered={handleRelayRegistered}
-        />
-      )}
+
     </>
   );
 };

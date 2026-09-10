@@ -2,6 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const toolGroupPickerAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'tool-group-picker',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' }, { id: 'head' }, { id: 'sections' }, { id: 'section' },
     { id: 'group' }, { id: 'groupHeader' }, { id: 'groupActions' },

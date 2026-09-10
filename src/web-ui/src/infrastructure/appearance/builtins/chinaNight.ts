@@ -14,17 +14,15 @@ import {
   rgbaFromHex,
 } from './paletteHelpers';
 
-const CHINA_NIGHT_BACKGROUND = '#1c1c1f';
-const CHINA_NIGHT_BACKGROUND_SECONDARY = '#212019';
+const CHINA_NIGHT_CHROME = '#1c1c1f';
+const CHINA_NIGHT_BACKGROUND = '#262626';
+const CHINA_NIGHT_BACKGROUND_SECONDARY = '#313335';
 const CHINA_NIGHT_TEXT_PRIMARY = '#e8e8e8';
 const CHINA_NIGHT_BUTTON_TEXT = '#c5c3be';
 const CHINA_NIGHT_ACCENT = '#73a5cc';
 const CHINA_NIGHT_ACCENT_HOVER = '#5a8bb3';
 const CHINA_NIGHT_GREEN = '#96c6b4';
 const CHINA_NIGHT_GREEN_HOVER = '#7eb09b';
-const CHINA_NIGHT_SUCCESS = '#6bc072';
-const CHINA_NIGHT_WARNING = '#f5b555';
-const CHINA_NIGHT_ERROR = '#e85555';
 
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
 const chinaNightAccent = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT, alpha);
@@ -36,23 +34,25 @@ export const openBitFunChinaNightPalette: AppearancePalette = {
   type: 'dark',
   description: 'Chinese dark appearance - Starlit ink night, moonlight like water, serene and elegant',
   author: 'OpenBitFun Team',
-  version: '1.0.0',
+  version: '1.1.0',
 
 
   colors: {
     background: {
+      // Ink chrome, charcoal content, and lifted panels share a neutral ramp.
       primary: CHINA_NIGHT_BACKGROUND,
       secondary: CHINA_NIGHT_BACKGROUND_SECONDARY,
-      tertiary: '#262626',
-      elevated: '#262626',
-      workbench: CHINA_NIGHT_BACKGROUND,
+      tertiary: CHINA_NIGHT_CHROME,
+      elevated: CHINA_NIGHT_BACKGROUND_SECONDARY,
+      workbench: CHINA_NIGHT_CHROME,
       scene: CHINA_NIGHT_BACKGROUND,
+      chrome: CHINA_NIGHT_CHROME,
     },
 
     text: {
       primary: CHINA_NIGHT_TEXT_PRIMARY,
       secondary: '#c5c3be',
-      muted: '#928f89',
+      muted: '#a1a1aa',
       disabled: '#555555',
     },
 
@@ -60,36 +60,27 @@ export const openBitFunChinaNightPalette: AppearancePalette = {
 
     purple: createSecondaryAccentScale({ base: CHINA_NIGHT_GREEN, hover: CHINA_NIGHT_GREEN_HOVER }),
 
-    semantic: createSemanticColors({
-      success: CHINA_NIGHT_SUCCESS,
-      warning: CHINA_NIGHT_WARNING,
-      error: CHINA_NIGHT_ERROR,
-      info: CHINA_NIGHT_ACCENT,
-      bgAlpha: 0.12,
-    }),
+    semantic: createSemanticColors('dark'),
 
     border: {
-      subtle: chinaNightText(0.1),
-      base: chinaNightText(0.16),
-      medium: chinaNightText(0.22),
-      strong: chinaNightText(0.28),
-      prominent: chinaNightText(0.38),
+      subtle: chinaNightText(0.14),
+      base: chinaNightText(0.2),
+      medium: chinaNightText(0.26),
+      strong: chinaNightText(0.32),
+      prominent: chinaNightText(0.42),
     },
 
     element: {
-      subtle: chinaNightAccent(0.06),
-      soft: chinaNightAccent(0.09),
-      base: chinaNightAccent(0.12),
-      medium: chinaNightAccent(0.16),
-      strong: chinaNightAccent(0.2),
+      subtle: chinaNightText(0.04),
+      soft: chinaNightText(0.07),
+      base: chinaNightText(0.1),
+      medium: chinaNightText(0.15),
+      strong: chinaNightText(0.2),
     },
 
-    git: createGitColors({
+    git: createGitColors('dark', {
       branch: rgbFromHex(CHINA_NIGHT_ACCENT),
       branchBg: chinaNightAccent(0.12),
-      changes: rgbFromHex(CHINA_NIGHT_WARNING),
-      added: rgbFromHex(CHINA_NIGHT_SUCCESS),
-      deleted: rgbFromHex(CHINA_NIGHT_ERROR),
     }),
   },
 

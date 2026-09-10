@@ -17,6 +17,13 @@ required-features = ["agent-runtime"]
 
 [features]
 default = []
+definition-contracts = [
+    "dep:openbitfun-core-types",
+    "dep:regex",
+    "dep:serde",
+    "dep:serde_yaml",
+    "dep:thiserror",
+]
 native-hook-settings = ["dep:regex", "dep:serde_json"]
 native-hook-runtime = [
     "native-hook-settings",
@@ -33,6 +40,7 @@ native-hook-runtime = [
     "tokio/time",
 ]
 agent-runtime = [
+    "definition-contracts",
     "native-hook-runtime",
     "dep:async-trait",
     "dep:openbitfun-agent-stream",

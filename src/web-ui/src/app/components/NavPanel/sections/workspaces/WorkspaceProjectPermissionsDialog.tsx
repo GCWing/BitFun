@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Icon,
   IconButton,
@@ -288,8 +288,8 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
               return (
                 <div data-openbitfun-component="workspace-project-permissions-dialog" data-openbitfun-part="grant" key={key} className="workspace-project-permissions-dialog__grant-row">
                   <div className="workspace-project-permissions-dialog__grant-copy">
-                    <code>{grant.action}</code>
-                    <code title={grant.resource}>{grant.resource}</code>
+                    <code><OverflowText>{grant.action}</OverflowText></code>
+                    <code title={grant.resource}><OverflowText>{grant.resource}</OverflowText></code>
                     <span>{formatDate(grant.createdAtMs, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </div>
                   <Tooltip content={t('projectPermissions.removeGrant')}>
@@ -403,12 +403,12 @@ export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermiss
 
           {rulesDirty ? (
             <div data-openbitfun-component="workspace-project-permissions-dialog" data-openbitfun-part="footer" className="workspace-project-permissions-dialog__footer">
-              <Button type="button" variant="outline" onClick={handleDiscardRules} disabled={isBusy}>
+              <Button type="button" variant="fill" onClick={handleDiscardRules} disabled={isBusy}>
                 {t('projectPermissions.cancel')}
               </Button>
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 loading={rulesSaving}
                 disabled={!rulesValid || rulesRevision === null || isBusy}
                 onClick={() => void handleSaveRules()}

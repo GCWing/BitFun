@@ -190,6 +190,10 @@ protocol version before submitting or inspecting jobs. See the
 [detached task architecture](../../../docs/architecture/detached-task-dispatch.md)
 for the transport and workspace-snapshot contract.
 
+The `remote` approval policy lets a controller answer pending tool permissions.
+Interactive questions from `AskUserQuestion` are unavailable for dispatch jobs;
+provide required task choices in the prompt instead of waiting for a question.
+
 ### App server
 
 `openbitfun server` starts the OpenBitFun App Server surface over stdio. stdout carries

@@ -201,7 +201,7 @@ const DateTimePickerPopover: React.FC<DateTimePickerPopoverProps> = ({
         <Button size="sm" variant="outline" onClick={() => onSelect(new Date())}>
           {t('dateTimeField.now')}
         </Button>
-        <Button size="sm" variant="outline" onClick={onClose}>
+        <Button size="sm" variant="fill" onClick={onClose}>
           {t('dateTimeField.close')}
         </Button>
       </footer>

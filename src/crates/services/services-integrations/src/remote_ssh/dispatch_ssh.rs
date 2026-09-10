@@ -2039,6 +2039,12 @@ async fn invoke_json_at_path(
     verb: &'static str,
     request: &Value,
 ) -> Result<Value> {
+    use openbitfun_core_types::agent_identity_wire::{
+        translate_agent_identity_command, translate_agent_identity_response, AgentIdentityDialect,
+    };
+    let request =
+        translate_agent_identity_command(verb, request.clone(), AgentIdentityDialect::Legacy)
+            .map_err(anyhow::Error::msg)?;
     let request_dir = product_data_path(home, &["dispatch", "requests"]);
     exec_ok(
         manager,
@@ -2052,7 +2058,7 @@ async fn invoke_json_at_path(
     )
     .await?;
     let request_path = format!("{request_dir}/{}.json", uuid::Uuid::new_v4().as_simple());
-    let request_bytes = serde_json::to_vec(request).context("serialize dispatch request")?;
+    let request_bytes = serde_json::to_vec(&request).context("serialize dispatch request")?;
     // Pre-create with 0600 before SFTP opens it. Creating first and chmodding
     // afterwards would leave a prompt briefly governed by the server's umask
     // (commonly 0644).
@@ -2098,12 +2104,19 @@ async fn invoke_json_at_path(
             &result.stderr,
         ));
     }
-    serde_json::from_str(result.stdout.trim()).with_context(|| {
+    let response = serde_json::from_str(result.stdout.trim()).with_context(|| {
         format!(
             "dispatch {verb} returned invalid JSON: {}",
             bounded_detail(&result.stdout)
         )
-    })
+    })?;
+    translate_agent_identity_response(
+        verb,
+        response,
+        &Value::Null,
+        AgentIdentityDialect::Canonical,
+    )
+    .map_err(anyhow::Error::msg)
 }
 
 fn dispatch_command(cli_path: &str, verb: &str, request_path: &str) -> String {

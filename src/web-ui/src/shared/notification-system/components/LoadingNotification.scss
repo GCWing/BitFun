@@ -47,18 +47,15 @@
     justify-content: center;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
     font-size: var(--openbitfun-type-micro-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
 
     &--success {
-      background: var(--openbitfun-color-status-success-surface);
-      color: var(--openbitfun-color-status-success-content);
+      color: var(--openbitfun-color-status-success-emphasis);
     }
 
     &--error {
-      background: var(--openbitfun-color-status-danger-surface);
-      color: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 

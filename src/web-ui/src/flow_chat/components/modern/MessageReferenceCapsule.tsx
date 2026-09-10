@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { AtSign, Code2, File, MessageCircle } from 'lucide-react';
 import type { ContextType } from '@/shared/types/context';
 import './MessageReferenceCapsule.scss';
@@ -55,7 +55,7 @@ export const MessageReferenceCapsule: React.FC<{
       {children ?? (type === 'skill' || type === 'widget'
         ? messageInlineTokenIcon(type)
         : messageContextIcon(type))}
-      <span className="message-reference-capsule__label user-message-item__reference-label">{label}</span>
+      <OverflowText className="message-reference-capsule__label user-message-item__reference-label">{label}</OverflowText>
     </span>
   );
 };

@@ -4,6 +4,9 @@
   .root[data-tone="warning"] { border-color: var(--openbitfun-color-status-warning-border); color: var(--openbitfun-color-status-warning-content); background: var(--openbitfun-color-status-warning-surface); }
   .root[data-tone="danger"] { border-color: var(--openbitfun-color-status-danger-border); color: var(--openbitfun-color-status-danger-content); background: var(--openbitfun-color-status-danger-surface); }
   .icon { display: grid; inline-size: 20px; block-size: 20px; flex: 0 0 20px; place-items: center; }
+  .root[data-tone="info"] .icon { color: var(--openbitfun-color-status-info-emphasis); }
+  .root[data-tone="warning"] .icon { color: var(--openbitfun-color-status-warning-emphasis); }
+  .root[data-tone="danger"] .icon { color: var(--openbitfun-color-status-danger-emphasis); }
   .content { min-inline-size: 0; flex: 1; }
   .action { flex: 0 0 auto; }
 }

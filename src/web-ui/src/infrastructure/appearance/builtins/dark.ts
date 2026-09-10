@@ -13,7 +13,6 @@ import {
   createStandardRadius,
   createStandardSpacing,
   overlayWhite,
-  rgbFromHex,
   STATIC_WHITE,
 } from './paletteHelpers';
 import {
@@ -29,9 +28,6 @@ const DARK_ACCENT = getDesignSystemThemeString('dark', 'color.accent.default');
 const DARK_ACCENT_HOVER = getDesignSystemThemeString('dark', 'color.accent.hover');
 const DARK_PURPLE = '#8b5cf6';
 const DARK_PURPLE_HOVER = '#7c3aed';
-const DARK_SUCCESS = getDesignSystemThemeString('dark', 'color.status.success.content');
-const DARK_WARNING = getDesignSystemThemeString('dark', 'color.status.warning.content');
-const DARK_ERROR = getDesignSystemThemeString('dark', 'color.status.danger.content');
 
 export const openBitFunDarkPalette: AppearancePalette = {
 
@@ -64,22 +60,7 @@ export const openBitFunDarkPalette: AppearancePalette = {
 
     purple: createSecondaryAccentScale({ base: DARK_PURPLE, hover: DARK_PURPLE_HOVER }),
 
-    semantic: createSemanticColors({
-      success: DARK_SUCCESS,
-      warning: DARK_WARNING,
-      error: DARK_ERROR,
-      info: '#a1a1aa',
-      overrides: {
-        successBg: getDesignSystemThemeString('dark', 'color.status.success.surface'),
-        successBorder: getDesignSystemThemeString('dark', 'color.status.success.border'),
-        warningBg: getDesignSystemThemeString('dark', 'color.status.warning.surface'),
-        warningBorder: getDesignSystemThemeString('dark', 'color.status.warning.border'),
-        errorBg: getDesignSystemThemeString('dark', 'color.status.danger.surface'),
-        errorBorder: getDesignSystemThemeString('dark', 'color.status.danger.border'),
-        infoBg: getDesignSystemThemeString('dark', 'color.status.info.surface'),
-        infoBorder: getDesignSystemThemeString('dark', 'color.status.info.border'),
-      },
-    }),
+    semantic: createSemanticColors('dark'),
 
     border: {
       ...createDarkNeutralBorder(),
@@ -97,12 +78,9 @@ export const openBitFunDarkPalette: AppearancePalette = {
       strong: getDesignSystemThemeString('dark', 'color.action.neutral.surfacePressed'),
     },
 
-    git: createGitColors({
+    git: createGitColors('dark', {
       branch: '#a1a1aa',
       branchBg: overlayWhite(0.06),
-      changes: rgbFromHex(DARK_WARNING),
-      added: 'rgb(34, 197, 94)',
-      deleted: rgbFromHex(DARK_ERROR),
     }),
 
     scrollbar: createDarkNeutralScrollbar(),
@@ -206,7 +184,6 @@ export const openBitFunDarkPalette: AppearancePalette = {
     },
   },
 };
-
 
 
 

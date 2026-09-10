@@ -138,7 +138,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: var(--openbitfun-radius-sm);
   cursor: pointer;
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 160ms ease,
     color 160ms ease,
     opacity 160ms ease;
@@ -146,11 +145,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &:hover:not(:disabled) {
     background: var(--openbitfun-color-action-secondary-hover);
     color: var(--openbitfun-color-accent-default);
-    transform: scale(1.1);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.95);
   }
 
   &:disabled {
@@ -200,7 +194,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
 }
@@ -226,22 +219,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--openbitfun-color-content-muted) 45%, transparent) transparent;
   -ms-overflow-style: auto;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--openbitfun-color-content-muted) 40%, transparent);
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
 }
 
 .openbitfun-toolbar-mode__session-dropdown {
@@ -312,7 +290,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   transition: background 0.1s ease;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 
   &:hover {
@@ -357,7 +334,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -408,7 +384,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   display: block;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--openbitfun-color-content-secondary);
 
   &--streaming {
@@ -444,7 +419,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--openbitfun-color-content-muted);
   }
@@ -470,7 +444,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--openbitfun-color-content-secondary);
   }
@@ -541,10 +514,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &:hover {
     background: var(--openbitfun-color-action-neutral-surface-pressed);
     color: var(--openbitfun-color-content-primary);
-  }
-
-  &:active {
-    transform: scale(0.95);
   }
 
   &--confirm {

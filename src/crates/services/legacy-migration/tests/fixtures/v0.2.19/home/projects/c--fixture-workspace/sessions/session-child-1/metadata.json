@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "sessionId": "session-child-1",
+  "sessionName": "Subagent: Synthetic helper",
+  "agentType": "Explore",
+  "createdBy": "session-1",
+  "sessionKind": "subagent",
+  "memoryMode": "enabled",
+  "modelName": "fixture-model",
+  "createdAt": 1,
+  "lastActiveAt": 2,
+  "lastFinishedAt": 2,
+  "turnCount": 1,
+  "messageCount": 1,
+  "toolCallCount": 0,
+  "status": "completed",
+  "tags": [],
+  "relationship": {
+    "kind": "subagent",
+    "parentSessionId": "session-1",
+    "parentDialogTurnId": "turn-1",
+    "parentToolCallId": "call-1",
+    "subagentType": "Explore"
+  },
+  "workspacePath": "C:\\fixture\\workspace",
+  "workspaceHostname": "localhost"
+}

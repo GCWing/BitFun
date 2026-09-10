@@ -171,12 +171,11 @@
     gap: var(--openbitfun-space-2);
     width: min(236px, calc(100vw - 48px));
 
-    > span {
+    > span:not([data-overflow-content]) {
       overflow: hidden;
       color: var(--openbitfun-color-content-secondary);
       font-size: var(--openbitfun-type-label-sm-font-size);
       line-height: var(--openbitfun-type-meta-line-height);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -533,7 +532,6 @@
       overflow: hidden;
       color: var(--openbitfun-color-content-muted);
       font-size: var(--openbitfun-type-label-sm-font-size);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -552,7 +550,6 @@
     strong {
       overflow: hidden;
       font-size: var(--openbitfun-type-label-md-font-size);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -621,10 +618,9 @@
     }
 
     strong,
-    span,
+    span:not([data-overflow-content]),
     small {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -800,10 +796,6 @@
       background: var(--openbitfun-color-surface-subtle);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.992);
-    }
-
     &:disabled {
       cursor: default;
       opacity: var(--openbitfun-opacity-disabled);
@@ -894,10 +886,9 @@
     padding: var(--openbitfun-space-3);
 
     strong,
-    span,
+    span:not([data-overflow-content]),
     p {
       overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     strong,
@@ -1093,7 +1084,6 @@
     dd {
       margin: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--openbitfun-type-label-sm-font-size);
     }
@@ -1375,10 +1365,6 @@
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-    &:active {
-      transform: scale(0.97);
-    }
 
     svg {
       width: 12px;

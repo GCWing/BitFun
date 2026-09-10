@@ -63,7 +63,7 @@ describe('FlowChat transcript rhythm', () => {
     const userMessageStyles = readSource('./UserMessageItem.scss');
 
     expect(rendererStyles).toMatch(
-      /\[data-item-type='user-message'\]:not\(\[data-virtual-index='0'\]\)\s*\{\s*padding-top: var\(--openbitfun-control-flow-chat-turn-gap\);/,
+      /\[data-item-type='user-message'\]:not\(\[data-virtual-index='0'\]\)\s*\{\s*padding-top: calc\(var\(--openbitfun-control-flow-chat-turn-gap\) \+ var\(--openbitfun-space-4\)\);/,
     );
     expect(rendererStyles).toContain(
       "&[data-turn-boundary-after='true']",

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FilePlus } from 'lucide-react';
-import { Tooltip, Icon } from '@openbitfun/ui';
+import { OverflowText, Tooltip, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
@@ -379,7 +379,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
         <div data-openbitfun-component="session-file-modifications-bar" data-openbitfun-part="list" className="session-file-modifications-bar__list">
           {Array.from(fileStats.values()).map((stat) => (
             <Tooltip key={`${stat.sourceSessionId}:${stat.filePath}`} content={stat.filePath} placement="left">
-              <div
+              <div data-overflow-trigger
                 data-openbitfun-component="session-file-modifications-bar"
                 data-openbitfun-part="file"
                 data-openbitfun-operation={stat.operationType}
@@ -391,7 +391,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
                   {getOperationIcon(stat.operationType)}
                 </span>
 
-                <span data-openbitfun-component="session-file-modifications-bar" data-openbitfun-part="fileName" className="file-row__name">{stat.fileName}</span>
+                <OverflowText data-openbitfun-component="session-file-modifications-bar" data-openbitfun-part="fileName" className="file-row__name">{stat.fileName}</OverflowText>
                 {stat.sourceKind !== 'parent' ? (
                   <span data-openbitfun-component="session-file-modifications-bar" data-openbitfun-part="fileSource" className="file-row__source">
                     {stat.sourceKind === 'deep_review'

@@ -105,6 +105,29 @@ Code/Codex 文件。请使用**刷新**或 `/hooks refresh` 检查来源变化�
 OpenCode 插件 Hooks 明确不在本次范围内。其 JavaScript 回调依赖 OpenCode 插件执行域；
 当前 OpenCode Hook 目录仍只用于发现和静态预览，不能执行。
 
+兼容性页面现也发现 **DeepSeek Harness** 与 **PI** 的 Hook。Hook 管理页只读显示
+来源、原生事件、禁用或不支持状态及发现诊断，刷新不会加载或导入第三方代码。
+
+- DeepSeek Harness：读取 `$DSH_HOME/cordis.patch.yml`（默认 `~/.dsh`）、
+  `profiles/*/cordis.yml`、`cordis.patch.yml` 以及当前工作区的 Cordis 配置。
+  显式 `dsh-hooks-claude-code` / `dsh-hooks-codex` 行通过 `config.configPath`
+  指向 Hook 文件；相对路径以当前选定的启动工作区解析，没有工作区时明确显示无法解析。
+  支持 insert/group 行及组禁用状态。Codex 桥接仅支持其五个事件，不支持异步命令；
+  bundle 组装与运行时 Cordis 注册仍需原生运行时确认。
+- PI：读取 `~/.pi/agent/extensions`（可用 `PI_CODING_AGENT_DIR` 覆盖）、
+  `.pi/extensions` 与相应 `settings.json` 的扩展路径。支持 `.ts` / `.js` 文件、
+  目录中的 `index.ts` / `index.js` 和本地 `package.json` 的 `pi.extensions`。
+  默认导出函数或箭头函数里的字面量 `pi.on(...)` 事件仅作为原生声明显示；间接导出、
+  动态注册、包安装与解析、动态选择器仍需 PI 自身处理。
+
+Skill 标准根新增 `.dsh/skills`、`$DSH_HOME/skills`、`.pi/skills` 与
+`$PI_CODING_AGENT_DIR/skills`（默认 `~/.pi/agent/skills`），追加到现有来源顺序。
+DSH 支持直接子目录包和平铺 Markdown，PI 还支持嵌套分组和省略 frontmatter 名称。
+平铺文件保留独立稳定键和入口文件名；旧目录数据仍默认使用 `SKILL.md`。自定义配置路径、
+包提供或运行时发布的 Skill 不在本次标准根发现范围内；项目根使用当前工作区，不重现
+原应用的祖先目录或 profile 解析。远程项目 Skill 通过工作区文件接口读取；远程工作区的
+Hook 目录继续明确返回不支持。对应上游版本与源码链接见本页英文版。
+
 根 CLI 对应命令如下：
 
 ```text

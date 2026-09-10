@@ -1,54 +1,75 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+const repositoryRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
 const stylesheet = readFileSync(
-  fileURLToPath(new URL('./utilities/scrollbar.css', import.meta.url)),
+  resolve(repositoryRoot, 'design-system/packages/ui/src/styles/scrollbars.css'),
   'utf8',
 ).replace(/\r\n?/g, '\n');
 
-describe('global scrollbar presentation', () => {
-  it('keeps all WebKit and Chromium non-thumb surfaces transparent', () => {
+describe('shared native scrollbar presentation', () => {
+  it('keeps every non-thumb WebKit surface transparent', () => {
+    expect(stylesheet).toMatch(/::-webkit-scrollbar\s*\{[^}]*background:\s*transparent;/s);
+
+    for (const part of ['track', 'track-piece', 'corner', 'button']) {
+      expect(stylesheet).toContain(`::-webkit-scrollbar-${part}`);
+    }
+    expect(stylesheet).toMatch(/::-webkit-resizer\s*\{\s*background:\s*transparent;/s);
     expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar\s*\{[^}]*background:\s*transparent;/s,
+      /::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /::-webkit-scrollbar-thumb:hover\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb-hover\);/s,
+    );
+  });
+
+  it('hides idle mouse viewports through paint without changing their geometry', () => {
+    const interactionRules = stylesheet.slice(
+      stylesheet.indexOf('@media (hover: hover)'),
+      stylesheet.indexOf('/* Explicit hidden viewports'),
     );
 
-    for (const selector of [
-      '*::-webkit-scrollbar-track',
-      '*::-webkit-scrollbar-track-piece',
-      '*::-webkit-scrollbar-corner',
-      '*::-webkit-scrollbar-button',
-      '*::-webkit-resizer',
-    ]) {
-      expect(stylesheet).toContain(selector);
+    expect(interactionRules).toContain('(pointer: fine) and (forced-colors: none)');
+    expect(interactionRules).toContain(
+      ':not(:hover, :focus-visible, :has(:focus-visible), [data-openbitfun-scrollbar-visibility="always"])',
+    );
+    expect(interactionRules).toContain('background: transparent;');
+    expect(interactionRules).toContain('scrollbar-color: transparent transparent;');
+    expect(interactionRules).not.toMatch(/(?:overflow|width|height|display|scrollbar-gutter)\s*:/);
+    expect(stylesheet).not.toMatch(/\.is-scrolling|:focus-within|!important/);
+  });
+
+  it('guards standard width and color together so Safari 18 keeps the WebKit path', () => {
+    expect(stylesheet).toMatch(
+      /@supports \(scrollbar-color: transparent transparent\)\s*\{[^{}]+\{\s*scrollbar-width:\s*thin;\s*scrollbar-color:\s*var\(--openbitfun-color-scrollbar-thumb\) transparent;/,
+    );
+    expect(stylesheet.match(/scrollbar-width:\s*thin/g)).toHaveLength(1);
+    expect(stylesheet).toMatch(
+      /@media \(forced-colors: active\)[\s\S]*scrollbar-color:\s*auto;[\s\S]*background:\s*CanvasText;/,
+    );
+  });
+
+  it('keeps native scrollbar paint in one owner across product and component styles', () => {
+    const roots = [
+      'src/web-ui/src',
+      'design-system/packages/ui/src/components',
+      'design-system/packages/ui/src/flow-chat',
+    ];
+    const overrides: string[] = [];
+
+    for (const root of roots) {
+      const directory = resolve(repositoryRoot, root);
+      for (const relative of readdirSync(directory, { recursive: true })) {
+        if (typeof relative !== 'string' || !/\.(css|scss)$/.test(relative)) continue;
+        const content = readFileSync(resolve(directory, relative), 'utf8');
+        if (/scrollbar-color\s*:|scrollbar-width\s*:\s*thin|::-webkit-scrollbar-thumb\b/.test(content)) {
+          overrides.push(`${root}/${relative}`);
+        }
+      }
     }
 
-    expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar-track,[^}]*\{\s*background:\s*transparent;/s,
-    );
-  });
-
-  it('keeps the thumb visible and the standard track channel transparent', () => {
-    expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb\);/s,
-    );
-    expect(stylesheet).toMatch(
-      /\*::-webkit-scrollbar-thumb:hover\s*\{[^}]*background:\s*var\(--openbitfun-color-scrollbar-thumb-hover\);/s,
-    );
-    expect(stylesheet).toContain(
-      '@supports (scrollbar-color: transparent transparent)',
-    );
-    expect(stylesheet).toMatch(
-      /\*\s*\{[^}]*scrollbar-color:\s*var\(--openbitfun-color-scrollbar-thumb\)\s+transparent;/s,
-    );
-    expect(stylesheet).not.toMatch(
-      /^\s*scrollbar-color:\s*transparent\s+transparent\s*;/m,
-    );
-  });
-
-  it('keeps Safari 18 on the transparent WebKit scrollbar path', () => {
-    expect(stylesheet).toMatch(
-      /@supports selector\(::-webkit-scrollbar\)[\s\S]*?@supports not \(scrollbar-color: transparent transparent\)[\s\S]*?scrollbar-width:\s*auto !important;/,
-    );
+    expect(overrides).toEqual([]);
   });
 });

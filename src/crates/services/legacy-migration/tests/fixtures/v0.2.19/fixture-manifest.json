@@ -1,0 +1,39 @@
+{
+  "fixtureVersion": 1,
+  "sourceProduct": "bitfun",
+  "sourceVersion": "0.2.19",
+  "sourceRevision": "845b4b4d2925f7c41e7e03a4a618606fbd0da8b6",
+  "domains": [
+    "settings_and_credentials",
+    "agents_skills_and_miniapps",
+    "workspaces_sessions_and_tasks",
+    "memory",
+    "remote_connections_and_devices"
+  ],
+  "expectedIncluded": [
+    "user-root/config/app.json",
+    "user-root/agents/researcher.md",
+    "user-root/skills/user-skill/SKILL.md",
+    "user-root/data/miniapps/custom-notes/meta.json",
+    "user-root/data/workspace_data.json",
+    "user-root/data/agent-runtime/coordination.sql",
+    "user-root/data/memories/memories.sql",
+    "home/projects/c--fixture-workspace/sessions/session-1/metadata.json",
+    "home/projects/c--fixture-workspace/sessions/session-child-1/metadata.json",
+    "home/runtime-events/session-1.jsonl",
+    "home/memories/MEMORY.md",
+    "home/device_identity.json",
+    "home/remote_connect_persistence.json",
+    "ssh/ssh_connections.json",
+    "ssh/remote_workspace.json",
+    "ssh/known_hosts"
+  ],
+  "expectedExcluded": [
+    "user-root/skills/.system/builtin/SKILL.md",
+    "user-root/data/miniapps/builtin-gomoku/index.html",
+    "user-root/data/agent-runtime/ownership/writer.lock",
+    "user-root/data/agent-runtime/ipc-v17/discovery.json",
+    "user-root/logs/legacy.log",
+    "home/projects/c--fixture-workspace/sessions/session-1/request-traces/trace.json"
+  ]
+}

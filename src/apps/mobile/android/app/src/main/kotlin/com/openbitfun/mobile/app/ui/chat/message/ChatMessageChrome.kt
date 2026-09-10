@@ -131,8 +131,7 @@ internal fun ChatUserMessageBubble(
                 if (visibleText.isNotEmpty()) {
                     Text(
                         visibleText,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }

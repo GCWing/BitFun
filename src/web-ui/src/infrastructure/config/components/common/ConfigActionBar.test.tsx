@@ -38,6 +38,8 @@ describe('ConfigActionBar', () => {
     expect(container.querySelector('[data-openbitfun-part="fieldStatus"]')?.textContent).toBe('changeStatus.unsaved');
     const buttons = container.querySelectorAll('button');
     expect(buttons).toHaveLength(2);
+    expect(buttons[0].getAttribute('data-openbitfun-variant')).toBe('fill');
+    expect(buttons[1].getAttribute('data-openbitfun-variant')).toBe('primary');
     act(() => (buttons[0] as HTMLButtonElement).click());
     act(() => (buttons[1] as HTMLButtonElement).click());
     expect(onDiscard).toHaveBeenCalledOnce();
@@ -57,6 +59,8 @@ describe('ConfigActionBar', () => {
     const buttons = container.querySelectorAll<HTMLButtonElement>('button');
     expect(buttons[0].disabled).toBe(true);
     expect(buttons[1].disabled).toBe(true);
+    expect(buttons[1].getAttribute('data-openbitfun-variant')).toBe('primary');
+    expect(buttons[1].getAttribute('aria-busy')).toBe('true');
   });
 
   it('stays out of the page when there is no pending change or status message', () => {

@@ -3,7 +3,7 @@
  * Shows a branch's commits and supports cherry-pick when applicable.
  */
 
-import { Button, Icon, IconButton, SearchField, Select, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SearchField, Select, ScrollArea } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Square, CheckSquare } from 'lucide-react';
@@ -374,7 +374,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
           {canCherryPick && (
             <Button
               size="sm"
-              variant="fill"
+              variant="primary"
               onClick={handleCherryPick}
               disabled={isCherryPicking || selectedCommits.size === 0}
               loading={isCherryPicking}
@@ -415,7 +415,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                   key={commit.hash}
                   className={`git-branch-history-view__commit ${isExpanded ? 'git-branch-history-view__commit--expanded' : ''} ${isSelected ? 'git-branch-history-view__commit--selected' : ''}`}
                 >
-                  <div 
+                  <div data-overflow-trigger
                     data-openbitfun-component="git-branch-history"
                     data-openbitfun-part="commitMain"
                     className="git-branch-history-view__commit-main"
@@ -444,13 +444,13 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                     </div>
                     
                     <div data-openbitfun-component="git-branch-history" data-openbitfun-part="commitInfo" className="git-branch-history-view__commit-info">
-                      <div className="git-branch-history-view__commit-message">
+                      <div className="git-branch-history-view__commit-message"><OverflowText>
                         {commit.message}
-                      </div>
+                      </OverflowText></div>
                       <div className="git-branch-history-view__commit-meta">
-                        <span className="git-branch-history-view__commit-author">
+                        <OverflowText className="git-branch-history-view__commit-author">
                           {commit.author}
-                        </span>
+                        </OverflowText>
                         <span className="git-branch-history-view__commit-time">
                           {formatRelativeTime(commit.timestamp)}
                         </span>

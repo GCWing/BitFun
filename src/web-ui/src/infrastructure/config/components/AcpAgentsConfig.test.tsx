@@ -97,21 +97,6 @@ vi.mock('@openbitfun/ui', async importOriginal => ({
     onChange?: React.ChangeEventHandler<HTMLInputElement>;
     placeholder?: string;
   }) => <input value={value} onChange={onChange} placeholder={placeholder} />,
-  Select: ({
-    value,
-    onChange,
-    options,
-  }: {
-    value?: string;
-    onChange?: (value: string) => void;
-    options?: Array<{ value: string; label: string }>;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {(options ?? []).map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
-      ))}
-    </select>
-  ),
   TabGroup: ({
     items,
     onValueChange,
@@ -244,6 +229,19 @@ async function openView(container: HTMLElement, label: string): Promise<void> {
   });
 }
 
+async function selectPermission(container: HTMLElement, value: string): Promise<void> {
+  const trigger = container.querySelector<HTMLButtonElement>(
+    '[data-openbitfun-part="confirmation"] button[role="combobox"]',
+  );
+  expect(trigger).not.toBeNull();
+  await act(async () => trigger!.click());
+  const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+  expect(options.map(option => option.dataset.value)).toEqual(['ask', 'allow_once']);
+  const selected = options.find(option => option.dataset.value === value);
+  expect(selected).toBeTruthy();
+  await act(async () => selected!.click());
+}
+
 describe('AcpAgentsConfig', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -298,6 +296,116 @@ describe('AcpAgentsConfig', () => {
     container?.remove();
     resetSettingsDraftRegistryForTests();
     vi.clearAllMocks();
+  });
+
+  it.each([
+    ['ask', 'ask'],
+    ['allow_once', 'allow_once'],
+  ])('loads and saves permission mode %s as %s with only supported choices', async (storedMode, expectedMode) => {
+    loadJsonConfigMock.mockResolvedValue(JSON.stringify({
+      acpClients: {
+        opencode: { command: 'opencode', args: ['acp'], permissionMode: storedMode },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    expect(container.textContent).not.toContain('permissionMode.legacyRejectWarning');
+    await selectPermission(container, expectedMode);
+    expect(saveJsonConfigMock).not.toHaveBeenCalled();
+
+    await openView(container, 'views.json');
+    const editor = container.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+        ?.call(editor, `${editor.value}\n`);
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const saveButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'actions.saveJson');
+    expect(saveButton?.disabled).toBe(false);
+    await act(async () => {
+      saveButton!.click();
+    });
+
+    const savedConfig = JSON.parse(saveJsonConfigMock.mock.calls[0][0]);
+    expect(savedConfig.acpClients.opencode).toMatchObject({
+      command: 'opencode', args: ['acp'], permissionMode: expectedMode,
+    });
+  });
+
+  it.each([
+    ['local', true],
+    ['ssh', true],
+    ['json', true],
+    ['local', false],
+  ])('explicitly applies a legacy permission from %s (wrapped config: %s)', async (view, wrapped) => {
+    const legacyClient = {
+      command: 'opencode', args: ['acp'], env: { ACP_TEST: 'preserved' }, permissionMode: 'reject_once',
+    };
+    const otherClient = { command: 'custom-agent', args: [], permissionMode: 'allow_once' };
+    const acpClients = { opencode: legacyClient, custom: otherClient };
+    loadJsonConfigMock.mockResolvedValue(JSON.stringify(wrapped ? { acpClients } : acpClients));
+    saveJsonConfigMock.mockImplementation(async (rawConfig: string) => {
+      loadJsonConfigMock.mockResolvedValue(rawConfig);
+      window.dispatchEvent(new Event('openbitfun:acp-clients-changed'));
+    });
+
+    await act(async () => root.render(<AcpAgentsConfig />));
+    expect(container.querySelector('[data-openbitfun-part="confirmation"]')?.textContent)
+      .toContain('permissionMode.ask');
+    expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain('permissionMode.legacyRejectWarning');
+    expect(saveJsonConfigMock).not.toHaveBeenCalled();
+
+    // The real Select does not emit a change when Ask is already selected.
+    await selectPermission(container, 'ask');
+    expect(Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'actions.save')).toBeUndefined();
+    if (view !== 'local') await openView(container, `views.${view}`);
+    expect(saveJsonConfigMock).not.toHaveBeenCalled();
+
+    const applyButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'permissionMode.saveAndApply');
+    expect(applyButton?.disabled).toBe(false);
+    await act(async () => applyButton!.click());
+
+    expect(saveJsonConfigMock).toHaveBeenCalledTimes(1);
+    const savedConfig = JSON.parse(saveJsonConfigMock.mock.calls[0][0]);
+    expect(savedConfig.acpClients.opencode).toMatchObject({ ...legacyClient, permissionMode: 'ask' });
+    expect(savedConfig.acpClients.custom).toMatchObject(otherClient);
+    expect(container.textContent).not.toContain('permissionMode.legacyRejectWarning');
+    expect(container.textContent).not.toContain('permissionMode.saveAndApply');
+
+    await act(async () => {
+      window.dispatchEvent(new Event('openbitfun:acp-clients-changed'));
+    });
+    expect(container.textContent).not.toContain('permissionMode.legacyRejectWarning');
+    expect(saveJsonConfigMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the migration action after a failed save and applies the current selection on retry', async () => {
+    loadJsonConfigMock.mockResolvedValue(JSON.stringify({
+      acpClients: { opencode: { command: 'opencode', permissionMode: 'reject_once' } },
+    }));
+    saveJsonConfigMock.mockRejectedValueOnce(new Error('Save failed'));
+    await act(async () => root.render(<AcpAgentsConfig />));
+    await selectPermission(container, 'allow_once');
+    const applyButton = () => Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'permissionMode.saveAndApply');
+
+    await act(async () => applyButton()!.click());
+    expect(notifyErrorMock).toHaveBeenCalledWith('Save failed', expect.anything());
+    expect(container.textContent).toContain('permissionMode.legacyRejectWarning');
+    expect(applyButton()?.disabled).toBe(false);
+
+    await act(async () => applyButton()!.click());
+    expect(saveJsonConfigMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(saveJsonConfigMock.mock.calls[1][0]).acpClients.opencode.permissionMode)
+      .toBe('allow_once');
+    expect(container.textContent).not.toContain('permissionMode.legacyRejectWarning');
   });
 
   it('probes requirements when opened and does not treat missing probe data as invalid config', async () => {

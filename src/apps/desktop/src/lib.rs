@@ -1389,7 +1389,6 @@ pub async fn run() {
             // paired bots start listening immediately on app startup.
             let step_started = Instant::now();
             api::remote_connect_api::init_on_startup();
-            api::remote_connect_api::init_auto_sync();
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "remote_connect_init_on_startup",
@@ -1981,38 +1980,26 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_status,
             api::remote_connect_api::remote_connect_get_form_state,
             api::remote_connect_api::remote_connect_set_form_state,
-            api::remote_connect_api::remote_connect_configure_custom_server,
             api::remote_connect_api::remote_connect_configure_bot,
             api::remote_connect_api::remote_connect_weixin_qr_start,
             api::remote_connect_api::remote_connect_weixin_qr_poll,
             api::remote_connect_api::remote_connect_get_bot_verbose_mode,
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // Account API
+            api::account_identity_api::account_github_start,
+            api::account_identity_api::account_github_poll,
+            api::account_identity_api::account_github_info,
             api::remote_connect_api::account_login,
-            api::remote_connect_api::account_finalize_login,
-            api::remote_connect_api::account_cancel_pending_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,
             api::remote_connect_api::account_connect_devices,
             api::remote_connect_api::account_online_devices,
-            api::remote_connect_api::account_send_session_to_device,
-            api::remote_connect_api::account_sync_session,
-            api::remote_connect_api::account_fetch_synced_sessions,
-            api::remote_connect_api::account_delete_synced_session,
-            api::remote_connect_api::account_sync_settings,
-            api::remote_connect_api::account_fetch_settings,
-            api::remote_connect_api::account_export_local_session,
-            api::remote_connect_api::account_export_all_sessions,
-            api::remote_connect_api::account_import_remote_sessions,
-            api::remote_connect_api::account_fetch_session_turns,
             api::remote_connect_api::account_execute_on_device,
-            api::remote_connect_api::account_auto_sync,
             api::remote_connect_api::account_get_credential_hint,
             api::remote_connect_api::account_token_expired,
             api::remote_connect_api::account_list_devices,
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
-            api::remote_connect_api::account_delegate_to_paired,
             // OpenBitFun Page API
             api::pages_api::page_publish,
             api::pages_api::page_save_version,
@@ -2072,11 +2059,7 @@ pub async fn run() {
             api::miniapp_api::miniapp_decline_builtin_update,
             api::miniapp_market_api::miniapp_market_browse,
             api::miniapp_market_api::miniapp_market_get_listing,
-            api::miniapp_market_api::miniapp_market_auth_start,
-            api::miniapp_market_api::miniapp_market_auth_poll,
             api::miniapp_market_api::miniapp_market_capture_window,
-            api::miniapp_market_api::miniapp_market_me,
-            api::miniapp_market_api::miniapp_market_logout,
             api::miniapp_market_api::miniapp_market_set_rating,
             api::miniapp_market_api::miniapp_market_set_favorite,
             api::miniapp_market_api::miniapp_market_list_submissions,
@@ -2194,13 +2177,6 @@ pub async fn run() {
             api::dispatch_api::dispatch_load_transcript,
             api::dispatch_api::dispatch_save_transcript,
             // Relay self-deploy API
-            api::relay_deploy_api::relay_deploy_preflight,
-            api::relay_deploy_api::relay_deploy_install_docker,
-            api::relay_deploy_api::relay_deploy_start,
-            api::relay_deploy_api::relay_deploy_poll,
-            api::relay_deploy_api::relay_deploy_cancel,
-            api::relay_deploy_api::relay_deploy_register,
-            api::relay_deploy_api::relay_deploy_verify,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
             api::announcement_api::mark_announcement_seen,
@@ -2589,14 +2565,6 @@ fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
     path
 }
 
-/// Return the session whose durable metadata must be synchronized for an event.
-fn session_changed_id_for_sync(event: &AgenticEvent) -> Option<&str> {
-    match event {
-        AgenticEvent::SessionTitleGenerated { session_id, .. } => Some(session_id),
-        _ => None,
-    }
-}
-
 /// Deliver one event to the WebView and, when peer controllers are attached,
 /// fan it out to paired devices. Text chunks arrive here already coalesced by
 /// `TextChunkCoalescer`.
@@ -2605,9 +2573,6 @@ async fn deliver_event_to_webview(
     event: AgenticEvent,
     session_event_journal: &SessionEventJournal,
 ) {
-    if let Some(session_id) = session_changed_id_for_sync(&event) {
-        api::remote_connect_api::notify_session_changed(session_id, "");
-    }
     let cursor = session_event_journal.record(&event);
     let Some(mut projected) = openbitfun_events::project_agentic_frontend_event(event) else {
         log::warn!("Unhandled AgenticEvent type in desktop delivery");
@@ -3063,21 +3028,6 @@ mod event_loop_driver_tests {
             attempt_index: None,
             text: text.to_string(),
         }
-    }
-
-    #[test]
-    fn session_title_events_request_durable_session_sync() {
-        let title_event = AgenticEvent::SessionTitleGenerated {
-            session_id: "renamed-session".to_string(),
-            title: "Renamed".to_string(),
-            method: "manual".to_string(),
-        };
-
-        assert_eq!(
-            session_changed_id_for_sync(&title_event),
-            Some("renamed-session")
-        );
-        assert_eq!(session_changed_id_for_sync(&text_chunk("hello")), None);
     }
 
     /// Regression test for the P1 scheduling issue: the window timer is only

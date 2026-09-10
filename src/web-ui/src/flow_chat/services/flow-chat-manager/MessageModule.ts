@@ -317,7 +317,7 @@ export async function sendMessage(
 
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
-    const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
+    const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'Standard').trim();
     const acpClientId = acpClientIdFromMode(currentAgentType);
     const driver = driverForSession(sessionId, refreshedSession);
     if (

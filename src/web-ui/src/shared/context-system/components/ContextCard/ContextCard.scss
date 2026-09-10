@@ -114,7 +114,6 @@
     
     
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   
@@ -126,7 +125,6 @@
     gap: var(--openbitfun-space-1);
     
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   
@@ -198,10 +196,6 @@
     &:hover {
       background: var(--openbitfun-color-action-neutral-surface-hover);
       color: var(--openbitfun-color-content-secondary);
-    }
-    
-    &:active {
-      transform: scale(0.95);
     }
   }
   

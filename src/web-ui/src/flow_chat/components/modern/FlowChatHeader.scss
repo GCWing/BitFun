@@ -19,6 +19,10 @@
   position: relative;
   z-index: 10;
 
+  &--searching {
+    justify-content: flex-end;
+  }
+
   &__chrome-actions {
     min-width: 0;
     height: 100%;
@@ -38,9 +42,9 @@
   }
 
   &__chrome-actions &__search {
-    width: clamp(180px, 30cqi, 420px);
+    width: clamp(180px, 30cqi, 300px);
     min-width: 0;
-    max-width: 420px;
+    max-width: 300px;
   }
 
   &__btw-back {
@@ -71,7 +75,7 @@
       &:not(:disabled):hover,
       &.flowchat-header__session-overview-trigger--active {
         color: var(--openbitfun-color-status-success-content);
-        background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+        background: var(--openbitfun-color-status-success-surface);
       }
     }
   }
@@ -99,10 +103,10 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 92%, var(--openbitfun-color-content-on-dark) 8%);
+    background: var(--openbitfun-color-status-success-emphasis);
     box-shadow:
       0 0 0 1px var(--openbitfun-color-surface-raised),
-      0 0 0 0 color-mix(in srgb, var(--openbitfun-color-status-success-content) 42%, transparent);
+      0 0 0 0 color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 42%, transparent);
     animation: flowchat-header-session-overview-pulse 1.45s ease-out infinite;
   }
 
@@ -113,7 +117,7 @@
       opacity: 0.9;
       box-shadow:
         0 0 0 1px var(--openbitfun-color-surface-raised),
-        0 0 0 0 color-mix(in srgb, var(--openbitfun-color-status-success-content) 40%, transparent);
+        0 0 0 0 color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 40%, transparent);
     }
 
     50% {
@@ -121,7 +125,7 @@
       opacity: 1;
       box-shadow:
         0 0 0 1px var(--openbitfun-color-surface-raised),
-        0 0 0 5px color-mix(in srgb, var(--openbitfun-color-status-success-content) 0%, transparent);
+        0 0 0 5px color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 0%, transparent);
     }
   }
 
@@ -131,8 +135,7 @@
     }
   }
 
-  &__search-btn,
-  &__search-close {
+  &__search-btn {
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
@@ -141,77 +144,39 @@
   }
 
   &__search {
-    display: flex;
-    align-items: center;
-    gap: var(--openbitfun-space-1);
-    min-width: min(320px, 38vw);
-    max-width: min(420px, 42vw);
+    position: relative;
+    width: min(300px, 56vw);
+    min-width: 0;
+    max-width: 100%;
+    // Only the input row participates in header layout; results float over the transcript.
+    height: var(--openbitfun-control-height-sm);
   }
 
   &__search-field {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  &__search-controls {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  &__search-status {
     flex: 1;
     min-width: 0;
+    padding-inline: var(--openbitfun-space-1);
+    font-variant-numeric: tabular-nums;
   }
 
-  &__search-prefix-icon {
-    flex-shrink: 0;
-    color: var(--openbitfun-color-content-secondary);
-    opacity: 0.75;
-  }
-
-  &__search-inline-controls {
-    display: flex;
+  &__search-navigation {
+    display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 0;
-    padding-left: 2px;
-    margin-left: 2px;
-    border-left: 1px solid var(--openbitfun-color-border-subtle);
-  }
-
-  &__search-count {
-    flex-shrink: 0;
-    padding: 0 3px;
-    color: var(--openbitfun-color-content-secondary);
-    font-size: var(--openbitfun-type-flow-support-font-size);
-    white-space: nowrap;
-
-    &:empty {
-      display: none;
-    }
-  }
-
-  &__search-nav {
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    overflow: hidden;
-    border-radius: 3px;
-  }
-
-  &__search-nav-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 10px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--openbitfun-color-content-secondary);
-    cursor: pointer;
-    opacity: 0.8;
-    transition: opacity var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard), background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
-    line-height: 0;
-
-    &:hover:not(:disabled) {
-      opacity: 1;
-      background: var(--openbitfun-color-action-quiet-hover);
-    }
-
-    &:disabled {
-      opacity: 0.25;
-      cursor: default;
-    }
+    gap: var(--openbitfun-space-1);
   }
 
   &__session-overview-panel {
@@ -249,10 +214,9 @@
   &__session-overview-panel-heading {
     flex: 1;
 
-    > span {
+    > span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -320,7 +284,6 @@
     color: var(--openbitfun-color-content-primary);
     font-size: var(--openbitfun-type-flow-control-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -336,7 +299,7 @@
     height: 5px;
     flex: 0 0 5px;
     border-radius: 50%;
-    background: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-emphasis);
   }
 
   &__session-overview-section-actions {
@@ -401,12 +364,11 @@
     cursor: pointer;
     transition: background var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
 
-    > span {
+    > span:not([data-overflow-content]) {
       min-width: 0;
       flex: 1;
       display: block;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -522,7 +484,6 @@
     color: inherit;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
 
     svg,
     [data-openbitfun-component='icon'] {
@@ -531,10 +492,9 @@
       opacity: 0.82;
     }
 
-    span {
+    span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
   }
 
@@ -544,7 +504,6 @@
     color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   // ==================== Actions ====================

@@ -7,6 +7,9 @@ const expectedScenarioIds = [
   'connected-conversation',
   'streaming-dark',
   'reconnecting-wide',
+  'narrow-multiline',
+  'fold-context',
+  'long-reading',
 ];
 const requiredScenarioFields = [
   'id',
@@ -33,7 +36,7 @@ const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 test('mobile preview scenarios satisfy the deterministic contract', () => {
   const scenarios = mobilePreviewScenarios.scenarios;
 
-  assert.equal(scenarios.length, 3);
+  assert.equal(scenarios.length, expectedScenarioIds.length);
   assert.deepEqual(
     scenarios.map((scenario) => scenario.id),
     expectedScenarioIds,

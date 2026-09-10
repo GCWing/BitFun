@@ -20,7 +20,6 @@ import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneStore } from '../../../stores/sceneStore';
 import { activateProductAction } from '@/app/global-search/productActionActivator';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
-import { useNotification } from '@/shared/notification-system';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import { RemoteConnectDisclaimerContent } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
@@ -43,22 +42,6 @@ const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
   const activeTabId = useSceneStore((s) => s.activeTabId);
   const { enableToolbarMode } = useToolbarModeContext();
-  const { warning } = useNotification();
-
-  useEffect(() => {
-    const onAutoExit = (event: Event) => {
-      const detail = (event as CustomEvent<{ deviceName?: string; reason?: string }>).detail;
-      const name = detail?.deviceName || 'peer';
-      if (detail?.reason === 'peer_offline') {
-        warning(t('accountLogin.peerAutoExitOffline', { name }));
-      } else if (detail?.reason === 'rpc_failures') {
-        warning(t('accountLogin.peerAutoExitRpc', { name }));
-      }
-    };
-    window.addEventListener('peer-mode:auto-exit', onAutoExit);
-    return () => window.removeEventListener('peer-mode:auto-exit', onAutoExit);
-  }, [t, warning]);
-
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [appearanceSubmenuOpen, setAppearanceSubmenuOpen] = useState(false);

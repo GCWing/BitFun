@@ -127,11 +127,10 @@ $track-item-gap: 10px;
 
       max-width: 142px;
 
-      > span {
+      > span:not([data-overflow-content]) {
         min-width: 0;
         overflow: hidden;
         padding-bottom: 1px;
-        text-overflow: ellipsis;
       }
     }
   }
@@ -178,11 +177,10 @@ $track-item-gap: 10px;
       color: var(--openbitfun-color-accent-default);
     }
 
-    > span {
+    > span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
       padding-bottom: 1px;
-      text-overflow: ellipsis;
     }
   }
 
@@ -205,11 +203,11 @@ $track-item-gap: 10px;
     // is dropped on a narrow composer, so its soft body turns to the error
     // tint — the track's only risk-coloured body, which is the point.
     &--full_access {
-      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+      background: var(--openbitfun-color-status-danger-surface);
 
       &:hover:not(:disabled),
-      &--open:not(:disabled) {
-        background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 16%, transparent);
+      &[aria-expanded='true']:not(:disabled) {
+        background: color-mix(in srgb, var(--openbitfun-color-status-danger-emphasis) 16%, transparent);
       }
     }
   }
@@ -220,15 +218,15 @@ $track-item-gap: 10px;
     color: var(--openbitfun-color-content-muted);
 
     .openbitfun-chat-input-workspace-strip__permission-trigger--ask & {
-      color: var(--openbitfun-color-status-success-content);
+      color: var(--openbitfun-color-status-success-emphasis);
     }
 
     .openbitfun-chat-input-workspace-strip__permission-trigger--auto & {
-      color: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-emphasis);
     }
 
     .openbitfun-chat-input-workspace-strip__permission-trigger--full_access & {
-      color: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-emphasis);
     }
 
     .openbitfun-chat-input-workspace-strip__permission-trigger--reject &,
@@ -244,7 +242,6 @@ $track-item-gap: 10px;
     max-width: 88px;
     overflow: hidden;
     padding-bottom: 1px;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
@@ -253,15 +250,15 @@ $track-item-gap: 10px;
     flex: none;
 
     &--ask {
-      color: var(--openbitfun-color-status-success-content);
+      color: var(--openbitfun-color-status-success-emphasis);
     }
 
     &--auto {
-      color: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-emphasis);
     }
 
     &--full_access {
-      color: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 
@@ -425,7 +422,6 @@ $track-item-gap: 10px;
   &__workspace-name {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     padding-bottom: 1px;
   }
 
@@ -466,7 +462,6 @@ $track-item-gap: 10px;
     font-weight: inherit;
     flex: 1 1 auto;
     overflow: hidden;
-    text-overflow: ellipsis;
     padding-bottom: 1px;
   }
 
@@ -494,7 +489,6 @@ $track-item-gap: 10px;
   &__workspace-option-detail {
     overflow: hidden;
     min-width: 0;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

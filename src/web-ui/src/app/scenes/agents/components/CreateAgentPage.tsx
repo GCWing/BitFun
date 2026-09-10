@@ -1,4 +1,4 @@
-import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconSource } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconSource } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
@@ -514,7 +514,7 @@ const CreateAgentPage: React.FC = () => {
         <ScrollArea className="th__list-body">
           <div className="th__list-inner">
             <p className="th-create-panel__error" data-openbitfun-component="create-agent-page" data-openbitfun-part="error" role="alert">{detailError}</p>
-            <Button variant="outline" size="sm" onClick={openHome}>
+            <Button variant="fill" size="sm" onClick={openHome}>
               {t('agentsOverview.form.cancel')}
             </Button>
           </div>
@@ -536,7 +536,7 @@ const CreateAgentPage: React.FC = () => {
               <Button
                 className="th-create-page__action"
                 type="button"
-                variant="outline"
+                variant="fill"
                 size="sm"
                 onClick={openHome}
                 disabled={submitting}
@@ -547,7 +547,7 @@ const CreateAgentPage: React.FC = () => {
                 className="th-create-page__action"
                 type="submit"
                 form="custom-agent-form"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 disabled={submitting || toolsEditing}
                 aria-busy={submitting}
@@ -615,7 +615,7 @@ const CreateAgentPage: React.FC = () => {
                             onClick={() => setKind(candidateKind)}
                           >
                             {candidateKind === 'mode'
-                              ? t('filters.mode')
+                              ? t('filters.agent')
                               : t('filters.subagent')}
                           </button>
                         </Tooltip>
@@ -763,7 +763,7 @@ const CreateAgentPage: React.FC = () => {
                           <div className="th-create-panel__tool-edit-actions">
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="fill"
                               size="sm"
                               onClick={() => {
                                 setToolsEditing(false);
@@ -775,7 +775,7 @@ const CreateAgentPage: React.FC = () => {
                             </Button>
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="primary"
                               size="sm"
                               onClick={() => {
                                 setSelectedTools(new Set(pendingTools ?? selectedTools));
@@ -863,7 +863,7 @@ const CreateAgentPage: React.FC = () => {
                           placement="top"
                           interactive
                         >
-                          <button
+                          <button data-overflow-trigger
                             type="button"
                             className={`th-create-panel__context-option${isSelected ? ' is-on' : ''}`}
                             data-openbitfun-component="create-agent-page"
@@ -874,7 +874,7 @@ const CreateAgentPage: React.FC = () => {
                             aria-pressed={isSelected}
                           >
                             <Icon {...contextIcon} size="sm" />
-                            <span>{label}</span>
+                            <OverflowText>{label}</OverflowText>
                           </button>
                         </Tooltip>
                       );

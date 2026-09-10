@@ -109,7 +109,12 @@ vi.mock('../../services/flow-chat-manager/PeerSessionRefreshModule', () => ({
   installPeerSessionRefresh: vi.fn(() => () => {}),
 }));
 
+vi.mock('../../services/sessionNavStatusService', () => ({
+  installSessionNavStatusService: vi.fn(() => () => {}),
+}));
+
 const flowChatStoreMock = vi.hoisted(() => ({
+  registerPersistUnreadCompletionCallback: vi.fn(),
   getState: vi.fn(() => ({
     sessions: new Map(),
     activeSessionId: null,
@@ -259,13 +264,13 @@ describe('UserMessageItem steering tag', () => {
     const meta = container.querySelector('.user-message-item__meta');
     const time = container.querySelector<HTMLTimeElement>('[data-testid="chat-user-message-timestamp"]');
 
-    expect(shell?.classList.contains('user-message-item-shell--with-timestamp')).toBe(true);
+    expect(shell?.classList.contains('user-message-item-shell')).toBe(true);
     expect(meta?.parentElement).toBe(shell);
     expect(time?.parentElement).toBe(meta);
     expect(container.querySelector('.user-message-item__actions')?.parentElement).toBe(meta);
     expect(time?.parentElement).not.toBe(bubble);
     expect(time?.dateTime).toBe('2026-09-03T06:32:08.000Z');
-    expect(time?.textContent?.trim()).not.toBe('');
+    expect(time?.textContent?.trim()).toMatch(/\d{2}:\d{2}:\d{2}/);
   });
 
   it('does not invent a send time when the persisted timestamp is invalid', () => {
@@ -281,7 +286,9 @@ describe('UserMessageItem steering tag', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-user-message-timestamp"]')).toBeNull();
-    expect(container.querySelector('.user-message-item-shell--with-timestamp')).toBeNull();
+    const meta = container.querySelector('.user-message-item__meta');
+    expect(meta?.parentElement).toBe(container.querySelector('.user-message-item-shell'));
+    expect(container.querySelector('.user-message-item__actions')?.parentElement).toBe(meta);
   });
 
   it('does not render a steering tag after steering is triggered', () => {
@@ -541,13 +548,15 @@ describe('UserMessageItem steering tag', () => {
     });
   });
 
-  it('disables file-consistent rollback and message editing for remote workspaces', () => {
+  it.each([
+    { binding: { remoteConnectionId: 'ssh:user@example.com:22', remoteSshHost: 'example.com', config: {} }, reason: 'Remote' },
+    { binding: { config: { dispatchJobId: 'job-a100' } }, reason: 'Dispatch' },
+    { binding: { config: { dispatchTarget: { kind: 'device', deviceId: 'target', workspacePath: '/w', displayName: 'Target' } } }, reason: 'Dispatch' },
+  ])('disables file-consistent rollback and message editing for $reason sessions', ({ binding, reason }) => {
     activeSessionRef.current = {
       sessionId: 'remote-session',
       sessionKind: 'normal',
-      remoteConnectionId: 'ssh:user@example.com:22',
-      remoteSshHost: 'example.com',
-      config: {},
+      ...binding,
       dialogTurns: [
         {
           id: 'turn-1',
@@ -583,9 +592,11 @@ describe('UserMessageItem steering tag', () => {
     const editButton = container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn');
 
     expect(rollbackButton?.disabled).toBe(true);
-    expect(rollbackButton?.title).toContain('message.rollbackDisabledRemote');
+    expect(rollbackButton?.getAttribute('aria-label')).toContain(`message.rollbackDisabled${reason}`);
+    expect(rollbackButton?.hasAttribute('title')).toBe(false);
     expect(editButton?.disabled).toBe(true);
-    expect(editButton?.title).toContain('message.editDisabledRemote');
+    expect(editButton?.getAttribute('aria-label')).toContain(`message.editDisabled${reason}`);
+    expect(editButton?.hasAttribute('title')).toBe(false);
   });
 
   it('hides the edit button when the panel context disables user message editing', () => {

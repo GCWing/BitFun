@@ -74,10 +74,10 @@ export const MiniAppPermissionDiffDialog: React.FC<MiniAppPermissionDiffDialogPr
           <PermissionList title={t('customize.permissionDialog.expanded')} items={diff?.expanded ?? []} />
           <PermissionList title={t('customize.permissionDialog.removed')} items={diff?.removed ?? []} />
           <div className="miniapp-permission-dialog__actions">
-            <Button variant="outline" size="sm" onClick={onCancel} disabled={applying}>
+            <Button variant="fill" size="sm" onClick={onCancel} disabled={applying}>
               {t('customize.permissionDialog.cancel')}
             </Button>
-            <Button variant="fill" tone="danger" size="sm" onClick={onConfirm} loading={applying}>
+            <Button variant="primary" tone="danger" size="sm" onClick={onConfirm} loading={applying}>
               {t('customize.permissionDialog.confirm')}
             </Button>
           </div>

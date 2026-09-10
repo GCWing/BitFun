@@ -24,6 +24,7 @@ import type {
   SessionCascadeRemoval,
   SessionCreationSeed,
   SessionDriver,
+  SessionDriverNavigationStatusSource,
   StartTurnInput,
   StartTurnResult,
   SubmissionDraft,
@@ -41,6 +42,7 @@ import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { forgetDispatchTranscript } from '@/features/dispatch/dispatchTranscriptCache';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
+import { openDispatchSessionFile } from '@/features/dispatch/dispatchFileNavigation';
 import { cleanupSaveState } from '../../services/flow-chat-manager/PersistenceModule';
 import { cleanupSessionBuffers } from '../../services/flow-chat-manager/TextChunkModule';
 import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
@@ -73,6 +75,17 @@ function jobIdForSession(sessionId: string): string | undefined {
   return Object.values(dispatchJobStore.getState().jobs)
     .find(job => job.sessionId === sessionId)?.jobId;
 }
+
+const dispatchNavigationStatusSource: SessionDriverNavigationStatusSource = {
+  subscribe: listener => dispatchJobStore.subscribe(listener),
+  getSnapshot: sessionId => {
+    const jobId = jobIdForSession(sessionId);
+    const reachability = jobId
+      ? dispatchJobStore.getState().transportByJobId[jobId]?.reachability
+      : undefined;
+    return reachability ? { reachability } : {};
+  },
+};
 
 /**
  * Convert composer image contexts into inline wire attachments. Throws when a
@@ -164,7 +177,7 @@ async function continueDispatchJob(
   const followUpSession =
     context.flowChatStore.getState().sessions.get(sessionId) ?? input.readySession;
   const followUpAgentType =
-    (input.currentAgentType?.trim() || followUpSession.mode || 'agentic').trim();
+    (input.currentAgentType?.trim() || followUpSession.mode || 'Standard').trim();
   // The composer edits these between turns; the follow-up carries them as
   // per-turn overrides which the target persists onto the job.
   const turnModel = followUpSession.config.dispatchModel?.trim() || undefined;
@@ -296,7 +309,9 @@ function removeProjectionLocally(
 }
 
 export const dispatchSessionDriver: SessionDriver = {
+  fileAccess: { open: openDispatchSessionFile },
   id: 'dispatch',
+  navigationStatusSource: dispatchNavigationStatusSource,
 
   async createSession(context: FlowChatContext, seed: SessionCreationSeed): Promise<string> {
     const {

@@ -131,7 +131,6 @@
   .metadata {
     overflow: hidden;
     font-family: var(--openbitfun-type-label-md-font-family);
-    text-overflow: ellipsis;
   }
 
   .label {

@@ -15,7 +15,8 @@ export default class EntryAbility extends UIAbility {
     const scenarioId = want.parameters?.['openbitfunDesignPreview'];
     if (scenarioId === 'connected-conversation' ||
       scenarioId === 'streaming-dark' ||
-      scenarioId === 'reconnecting-wide') {
+      scenarioId === 'reconnecting-wide' || scenarioId === 'narrow-multiline' ||
+      scenarioId === 'fold-context' || scenarioId === 'long-reading') {
       this.initialPage = 'pages/preview/MobileDesignGallery';
       this.previewStorage = new LocalStorage();
       this.previewStorage.setOrCreate('scenarioId', scenarioId);

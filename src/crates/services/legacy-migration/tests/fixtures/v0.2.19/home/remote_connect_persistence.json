@@ -1,0 +1,30 @@
+{
+  "connections": [
+    {
+      "bot_type": "telegram",
+      "chat_id": "fixture-chat",
+      "config": {
+        "bot_type": "telegram",
+        "bot_token": ""
+      },
+      "chat_state": {
+        "chat_id": "fixture-chat",
+        "paired": false,
+        "current_workspace": "/srv/fixture-workspace",
+        "current_assistant": null,
+        "current_assistant_name": null,
+        "current_session_id": null,
+        "display_mode": "assistant",
+        "account_remote_context": true
+      },
+      "connected_at": 0
+    }
+  ],
+  "form_state": {
+    "custom_server_url": "https://relay.example.invalid",
+    "telegram_bot_token": "",
+    "feishu_app_id": "",
+    "feishu_app_secret": ""
+  },
+  "verbose_mode": false
+}

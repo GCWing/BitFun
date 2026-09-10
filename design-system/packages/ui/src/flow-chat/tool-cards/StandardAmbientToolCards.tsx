@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type {
   HTMLAttributes,
   MouseEvent as ReactMouseEvent,
@@ -178,7 +179,7 @@ export function WebFetchToolCard({
       header={(
         <AmbientToolCardHeader
           action={action}
-          content={<span className={styles.fetchTitle} title={typeof title === "string" ? title : undefined}>{title}</span>}
+          content={<OverflowText className={styles.fetchTitle} title={typeof title === "string" ? title : undefined}>{title}</OverflowText>}
           icon={(
             <ToolCardStatusSlot
               defaultIcon={status === "completed" || status === "error" ? "tool" : "status"}
@@ -431,7 +432,7 @@ export function TodoToolCard({
   const hasItems = items.length > 0;
   const headerSummary = (
     <span className={styles.todoSummary} data-openbitfun-part="summary">
-      <span>{summary}</span>
+      <OverflowText>{summary}</OverflowText>
       {hasItems && <span className={styles.todoStats}>({completedCount}/{totalCount})</span>}
     </span>
   );
@@ -450,7 +451,7 @@ export function TodoToolCard({
               key={item.key}
             >
               <span className={styles.todoIcon}><TodoStatusIcon status={item.status} /></span>
-              <span className={styles.todoContent}>{item.content}</span>
+              <OverflowText className={styles.todoContent}>{item.content}</OverflowText>
             </div>
           ))}
         </div>

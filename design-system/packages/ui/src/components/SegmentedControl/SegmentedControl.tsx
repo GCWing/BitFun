@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./SegmentedControl.module.css";
 
 export interface SegmentedControlOption {
@@ -140,7 +141,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
         {options.map((option, index) => {
           const selected = option.value === selectedValue;
           return (
-            <button
+            <button data-overflow-trigger
               aria-checked={selected}
               className={styles.segment}
               data-openbitfun-part="segment"
@@ -161,7 +162,7 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
                   {option.icon}
                 </span>
               )}
-              <span className={styles.label} data-openbitfun-part="label">{option.label}</span>
+              <OverflowText className={styles.label} data-openbitfun-part="label">{option.label}</OverflowText>
             </button>
           );
         })}

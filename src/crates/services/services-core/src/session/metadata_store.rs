@@ -362,6 +362,28 @@ impl SessionMetadataStore {
         Ok(index.sessions)
     }
 
+    /// Read a bounded selection from the shared index without stat-ing every
+    /// Session directory or opening any Turn/state files.
+    pub async fn metadata_by_ids(
+        &self,
+        session_ids: &[String],
+    ) -> Result<Vec<SessionMetadata>, SessionMetadataStoreError> {
+        if !self.sessions_root().exists() || session_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let lock = self.get_index_lock().await;
+        let _guard = lock.lock().await;
+        let _file_guard = self.lock_index_file().await?;
+        let (index, _) = self.read_or_rebuild_index_locked().await?;
+        let selected: std::collections::HashSet<_> =
+            session_ids.iter().map(String::as_str).collect();
+        Ok(index
+            .sessions
+            .into_iter()
+            .filter(|entry| selected.contains(entry.session_id.as_str()))
+            .collect())
+    }
+
     pub async fn list_metadata_page(
         &self,
         cursor: Option<&str>,
@@ -602,7 +624,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
             format!("Session {session_id}"),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         metadata.last_active_at = last_active_at;
@@ -629,6 +651,29 @@ mod tests {
         let listed = store.list_metadata().await.expect("list metadata");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "session-a");
+    }
+
+    #[tokio::test]
+    async fn activity_selection_needs_only_metadata_and_leaves_transcripts_unloaded() {
+        let dir = tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&metadata("session-a", 10))
+            .await
+            .unwrap();
+        store
+            .save_metadata(&metadata("session-b", 20))
+            .await
+            .unwrap();
+        // No state sidecars or Turn files exist. A navigation read must work
+        // solely from the index and keep unrelated sessions out of its reply.
+        let selected = store
+            .metadata_by_ids(&["session-a".to_string(), "missing".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].session_id, "session-a");
+        assert!(store.metadata_by_ids(&[]).await.unwrap().is_empty());
     }
 
     #[tokio::test]

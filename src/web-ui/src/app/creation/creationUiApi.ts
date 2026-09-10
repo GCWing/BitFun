@@ -3,7 +3,7 @@ import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { createCreationCapabilities } from '@/infrastructure/creation/creationCapabilities';
 import type { ProductControlCapabilityId, ProductControlOperationId, ProductControlOptionId } from '@/infrastructure/api/generated/productControl';
-import { useSceneStore } from '../stores/sceneStore';
+import { selectActiveSceneId, useSceneStore } from '../stores/sceneStore';
 
 export const CREATION_PARTS = Object.freeze({
   shell: '[data-openbitfun-component="app-layout"][data-openbitfun-part="root"]',
@@ -29,7 +29,7 @@ export function createCreationUiApi(signal: AbortSignal) {
     assertActive();
     return {
       ...capabilities.inspect(),
-      scene: useSceneStore.getState().activeTabId,
+      scene: selectActiveSceneId(useSceneStore.getState()),
       parts: Object.fromEntries(Object.entries(CREATION_PARTS).map(([name, selector]) =>
         [name, { selector, present: document.querySelector(selector) !== null }])),
       slots: CREATION_SLOTS.map(id => {
@@ -40,7 +40,7 @@ export function createCreationUiApi(signal: AbortSignal) {
   };
   cleanups.add(useSceneStore.subscribe((state, previous) => {
     if (!signal.aborted && !disposed && !isPeerDeviceModeActive() && state.activeTabId !== previous.activeTabId) {
-      void capabilities.events.emit('scene.changed', { scene: state.activeTabId });
+      void capabilities.events.emit('scene.changed', { scene: selectActiveSceneId(state) });
     }
   }));
   const api = Object.freeze({
@@ -61,11 +61,11 @@ export function createCreationUiApi(signal: AbortSignal) {
       cleanups.add(() => root.remove());
       return root;
     },
-    getScene() { assertActive(); return useSceneStore.getState().activeTabId; },
+    getScene() { assertActive(); return selectActiveSceneId(useSceneStore.getState()); },
     onSceneChange(listener: (id: string | null) => void) {
       assertActive();
       const unsubscribe = useSceneStore.subscribe((state, previous) => {
-        if (!signal.aborted && !isPeerDeviceModeActive() && state.activeTabId !== previous.activeTabId) listener(state.activeTabId);
+        if (!signal.aborted && !isPeerDeviceModeActive() && state.activeTabId !== previous.activeTabId) listener(selectActiveSceneId(state));
       });
       cleanups.add(unsubscribe);
       return unsubscribe;

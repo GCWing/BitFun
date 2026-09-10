@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const sourceUrl = new URL("../src/components/ConfirmDialog/ConfirmDialog.tsx", import.meta.url);
+const stylesUrl = new URL("../src/components/ConfirmDialog/ConfirmDialog.module.css", import.meta.url);
 
 test("ConfirmDialog composes semantic content and actions on Dialog", async () => {
   const source = await readFile(sourceUrl, "utf8");
@@ -44,14 +45,27 @@ test("ConfirmDialog owns async pending and dismissal guards", async () => {
   assert.match(source, /designSystem\.messages\.confirmAction/);
 });
 
+test("ConfirmDialog presents semantic icons as bare glyphs", async () => {
+  const styles = await readFile(stylesUrl, "utf8");
+  const iconRule = styles.match(/\.icon\s*\{[^}]+\}/)?.[0];
+
+  assert.ok(iconRule, "missing ConfirmDialog icon rule");
+  assert.match(iconRule, /flex:\s*0 0 var\(--openbitfun-layout-confirm-dialog-icon-glyph-size\)/);
+  assert.match(iconRule, /block-size:\s*1lh/);
+  assert.doesNotMatch(
+    styles,
+    /\.icon(?:\[[^\]]+\])?\s*\{[^}]*(?:background|border-radius)\s*:/,
+  );
+});
+
 test("ConfirmDialog styles use public status, layout, and typography tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--openbitfun-layout-confirm-dialog-content-gap/);
-  assert.match(styles, /--openbitfun-layout-confirm-dialog-icon-size/);
+  assert.match(styles, /--openbitfun-layout-confirm-dialog-icon-glyph-size/);
   assert.match(styles, /--openbitfun-layout-confirm-dialog-preview-max-block-size/);
   assert.match(styles, /--openbitfun-layout-confirm-dialog-preview-padding-inline/);
-  assert.match(styles, /--openbitfun-color-status-warning-content/);
-  assert.match(styles, /--openbitfun-color-status-danger-surface/);
+  assert.match(styles, /--openbitfun-color-status-warning-emphasis/);
+  assert.match(styles, /--openbitfun-color-status-danger-emphasis/);
   assert.match(styles, /--openbitfun-type-code-sm-font-family/);
 });

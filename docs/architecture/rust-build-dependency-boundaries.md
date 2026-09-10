@@ -101,6 +101,7 @@ Plugin Source 和完整 domain feature 集合一起带回 Agent Runtime。产品
 - 真正创建 client 的 app、service 或 adapter 必须在自身依赖声明中显式选择实际使用的 Reqwest feature 和 provider-neutral 的 `reqwest/rustls-no-provider`；只使用 `reqwest::Url` 的 contract/assembly 路径不加载传输能力；
 - capability crate 的每个 Reqwest owner feature 必须独立带齐自己的数据/传输 feature、`reqwest/rustls-no-provider` 和进程级 TLS provider owner，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
 - workspace 级 `rustls` 只统一兼容版本并关闭默认 feature；`services-core/tls-provider` 是内置 crypto provider 的唯一 owner，精确选择并安装 `ring`、`std` 和 `tls12`。产品进程入口或集中 client helper 必须在构造 TLS client 前确保该 provider 已安装；
+- 独立 Docker 构建的 Relay 身份校验器是限定例外：它不链接 workspace 服务 facade，只能将显式 ring `ClientConfig` 绑定到自己的 Reqwest client，不能安装或替换进程级 provider。该例外只覆盖 `relay-service/src/identity.rs`，边界检查同时强制 client 绑定并禁止 `install_default`；嵌入式产品的进程 provider 仍由 `services-core` 拥有。
 - 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest/Rustls feature union，拒绝缺失 provider、同时选择多个 provider、传递依赖重新激活 AWS-LC 或 Native TLS，以及绕过集中 helper 的 Reqwest client 构造；
 - 不并列启用 Native TLS 或 AWS-LC 兼容栈。只有真实产品场景无法由当前 Ring/Rustls 平台证书验证承载时，才以明确行为证据评审替换方案；替换时由同一 owner 切换 provider，不能在同一产品闭包叠加第二后端。
 
@@ -246,3 +247,19 @@ cargo check -p <product> --timings
 
 当前硬边界由 `scripts/check-core-boundaries.mjs` 统一执行。不要为同一 Cargo 架构事实增加第二个 checker；新增规则先证明当前树满足、fixture 能捕获回归，并保持错误消息可直接定位到 owner manifest。
 检查器必须保持工作树只读；读取独立 manifest 的声明事实时不得生成新的 lockfile、target artifact 或格式化改动。
+
+## 独立数据迁移工具的依赖边界
+
+Data Migrator 是独立发布的本地离线工具，不依赖 Core、Product Assembly、Desktop 或 Web UI。
+主应用不检测、启动或捆绑迁移器。两者在同一源码工作区复用稳定的数据格式与存储实现：
+
+- contracts/config-contracts：配置 DTO、默认值、版本校验及到共享模型 DTO 的纯转换；Core 原路径保留转发，ConfigProvider 仍在 Core。
+- services-core 的 workspace-persistence、coordination-store、session-event-format：工作区记录、注册表校验、SQLite 物理 schema 和会话日志格式。
+- services/legacy-migration-adapters：旧版读取、转换、引用修复；只调用共享存储 owner。
+- services/legacy-migration：快照、锁、暂存、备份、原子写入、日志恢复和无时效交接依赖的任务存储。
+
+本次只移动数据/存储 owner，不移动 WorkspaceManager、会话生命周期、权限、事件或远程执行。
+WorkspaceInfo/WorkspaceIdentity 的运行操作由 Core 的 runtime extension traits 保留，稳定记录无需导入这些能力。
+原 Core 存储入口保留错误映射；可选 legacy-migration facade 保留旧导入路径，但不再由 product-full 启用。
+远程四种场景不提供迁移工具的执行入口；仅转换本机保存的连接记录，不连接远端。
+使用与发行契约以 [独立迁移器说明](../../src/apps/data-migrator/README.zh-CN.md) 为准。

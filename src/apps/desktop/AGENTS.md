@@ -26,14 +26,14 @@ Peer Device Mode ownership and boundaries:
 Frontend regression guards:
 `src/web-ui/src/infrastructure/peer-device/README.md`.
 
-Account login (pending sync choice / finalize) lives in
-`src/api/remote_connect_api.rs` (`PENDING_SYNC_CHOICE`, `account_login`,
-`account_finalize_login`). Do not persist a session before the user chooses
-cloud vs local settings.
+GitHub identity is shared through `account_identity_api.rs`. Relay device
+registration and lifecycle live in `src/api/remote_connect_api.rs`; settings
+remain on their owning device and there is no cloud/local sync choice.
 
-One-click relay deploy: Tauri surface `src/api/relay_deploy_api.rs`, orchestration
-in `openbitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
-`src/web-ui/src/features/relay-deploy/README.md`.
+The Relay deployment wizard is retired. Preserve the developer scripts under
+`src/apps/relay-server` and their [operator guide](../relay-server/README.md).
+The retained Tauri wrapper and services orchestration are compatibility tools,
+not an entry point to restore in the product UI.
 
 If a change affects behavior shared by multiple runtimes, place stable contracts,
 execution policy, and services in their owning lower-layer crates. Keep only
@@ -55,6 +55,10 @@ pnpm run desktop:dev
 pnpm run desktop:preview:debug
 pnpm run prepare:dsh-profile   # optional: local DeepSeek Harness sessions
 ```
+
+Data Migrator runs independently. Desktop development launchers do not build,
+launch, or supervise the migrator; use its own development and release entry
+points under `src/apps/data-migrator`.
 
 ## Fast builds
 
@@ -90,7 +94,7 @@ Also note: builtin miniapp assets (for example the `bitfun-loopx` `ui.js`/`worke
 
 All commands that pass `--no-bundle` emit a staged runtime tree rather than a
 single-file application. The executable depends on the adjacent `frontend`,
-`mobile-web`, and `resources` directories. Use
+`flashgrep`, `mobile-web`, and `resources` directories. Use
 `pnpm run desktop:build:nsis` for a distributable Windows installer.
 
 ## DevTools feature (model rule)
@@ -108,8 +112,12 @@ The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When
 cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
 
+For skill discovery response compatibility and timeouts, use
+`cargo test -p openbitfun-desktop --lib api::skill_api::tests`.
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
+For peer system-info response compatibility, run
+`cargo test -p openbitfun-desktop --lib system_info_home_contract`.
 After changing updater command registration, also run
 `cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
 
@@ -135,3 +143,11 @@ concurrent builds cannot replace its lazy modules. It uses temporary product sto
 the private test store intentionally does not survive process exit.
 That debug-only switch takes effect only with the existing E2E storage guard;
 release builds always use the packaged protocol.
+
+For alternate dev-server ports and preview startup URL changes, run
+`node --test scripts/dev-startup.test.mjs` and
+`cargo test -p openbitfun-desktop --no-default-features --lib appearance::development_frontend_tests`.
+`OPENBITFUN_DEV_PORT` selects the HTTP port; `OPENBITFUN_DEV_HMR_PORT` defaults
+to the previous port. Desktop and Vite must use the same values. Development
+launchers reuse the locked Sherpa library/archive cache across Git worktrees,
+or download the archive through curl when absent; explicit SHERPA_ONNX overrides win.

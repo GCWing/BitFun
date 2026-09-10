@@ -53,3 +53,6 @@ pub mod miniapp;
 
 #[cfg(feature = "function-agents")]
 pub mod function_agents;
+
+#[cfg(feature = "legacy-migration")]
+pub mod legacy_migration;

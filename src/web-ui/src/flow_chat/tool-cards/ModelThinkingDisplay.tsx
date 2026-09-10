@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -52,6 +52,11 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   /** Frame the follow has booked, and the sign that it is still travelling. */
   const tailFollowFrameRef = useRef<number | null>(null);
   const touchScrollStartYRef = useRef<number | null>(null);
+  const lastScrollPositionRef = useRef<{
+    top: number;
+    height: number;
+    viewport: number;
+  } | null>(null);
 
   const isActive = isStreaming || status === 'streaming';
   const { displayText: displayContent, isRevealing } = useTypewriter(
@@ -98,6 +103,38 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     tailFollowFrameRef.current = null;
   }, []);
 
+  const pauseTailFollowForUserScroll = useCallback(() => {
+    shouldFollowTailRef.current = false;
+    tailFollowPauseVersionRef.current += 1;
+    tailFollowUserPauseUntilMsRef.current = performance.now() + 700;
+    stopTailFollow();
+  }, [stopTailFollow]);
+
+  const recordScrollPosition = useCallback((el: HTMLElement) => {
+    lastScrollPositionRef.current = {
+      top: el.scrollTop,
+      height: el.scrollHeight,
+      viewport: el.clientHeight,
+    };
+  }, []);
+
+  const detectUpwardScroll = useCallback((el: HTMLElement) => {
+    const previous = lastScrollPositionRef.current;
+    // Scrollbar drags have no wheel/key event. Compare with our last actual
+    // offset, allowing rounding noise and excluding layout-driven movement.
+    const movedUp = isExpanded && previous !== null &&
+      el.scrollHeight >= previous.height &&
+      el.clientHeight === previous.viewport &&
+      el.scrollTop < previous.top - 1;
+    recordScrollPosition(el);
+    if (movedUp) pauseTailFollowForUserScroll();
+    return movedUp;
+  }, [isExpanded, pauseTailFollowForUserScroll, recordScrollPosition]);
+
+  useLayoutEffect(() => {
+    lastScrollPositionRef.current = null;
+  }, [isExpanded]);
+
   /**
    * Follow the tail across the frames it is given, rather than in one write.
    *
@@ -119,6 +156,8 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       tailFollowFrameRef.current = null;
       const el = contentRef.current;
       if (!el) return;
+      // The browser may update the offset before delivering its scroll event.
+      if (detectUpwardScroll(el)) return;
       if (expectedPauseVersion !== tailFollowPauseVersionRef.current) return;
       if (!shouldFollowTailRef.current) return;
 
@@ -132,6 +171,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         : { offsetPx: targetPx, outcome: 'snapped' as const };
 
       el.scrollTop = step.offsetPx;
+      recordScrollPosition(el);
       // Read back rather than taken from the step: the browser clamps to the
       // scrollable range, and a platform without fractional scroll offsets
       // rounds the last part of an ease away entirely. Believing the step there
@@ -155,23 +195,17 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     };
 
     tailFollowFrameRef.current = requestAnimationFrame(runFrame);
-  }, []);
+  }, [detectUpwardScroll, recordScrollPosition]);
 
   /** A follow in flight outlives neither the card nor its collapse. */
   useEffect(() => stopTailFollow, [isExpanded, stopTailFollow]);
-
-  const pauseTailFollowForUserScroll = useCallback(() => {
-    shouldFollowTailRef.current = false;
-    tailFollowPauseVersionRef.current += 1;
-    tailFollowUserPauseUntilMsRef.current = performance.now() + 700;
-  }, []);
 
   // Auto-scroll to bottom while content grows.
   useEffect(() => {
     if (isExpanded && contentRef.current) {
       const el = contentRef.current;
       const gap = getThinkingScrollGap(el);
-      const wasNearBottom = gap < 80;
+      const wasNearBottom = gap < 20;
       const userPauseActive = performance.now() <= tailFollowUserPauseUntilMsRef.current;
       if (wasNearBottom && !userPauseActive) {
         shouldFollowTailRef.current = true;
@@ -215,6 +249,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const checkScrollState = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
+    detectUpwardScroll(el);
     const gap = getThinkingScrollGap(el);
     const nextScrollState = {
       hasScroll: el.scrollHeight > el.clientHeight,
@@ -249,7 +284,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           atBottom: nextScrollState.atBottom,
         }
     ));
-  }, [getThinkingScrollGap]);
+  }, [detectUpwardScroll, getThinkingScrollGap]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -337,7 +372,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       data-reasoning-kind={thinkingItem.reasoningKind ?? 'reasoning'}
       className={wrapperClassName}
      data-openbitfun-component="model-thinking-display" data-openbitfun-part="root" data-openbitfun-context={displayContext} data-openbitfun-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
-      <div
+      <div data-overflow-trigger
         data-openbitfun-component="model-thinking-display"
         data-openbitfun-part="header"
         data-testid="chat-thinking-toggle"
@@ -354,14 +389,14 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           <Icon name="chevron-right" size="sm" className="thinking-leading-icon__collapsed-hover" />
           <Icon name="chevron-down" size="sm" className="thinking-leading-icon__expanded" />
         </span>
-        <span
+        <OverflowText
           data-openbitfun-component="model-thinking-display"
           data-openbitfun-part="label"
           className="thinking-label"
           title={isSummary && !isExpanded ? headerLabel : undefined}
         >
           {headerLabel}
-        </span>
+        </OverflowText>
       </div>
 
       <div

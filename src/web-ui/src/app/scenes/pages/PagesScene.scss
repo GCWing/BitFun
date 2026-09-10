@@ -105,7 +105,6 @@ $pages-gutter: clamp(24px, 4vw, 56px);
       flex: 1;
       overflow: hidden;
       color: var(--openbitfun-color-content-secondary);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -188,7 +187,6 @@ $pages-gutter: clamp(24px, 4vw, 56px);
       font-size: var(--openbitfun-type-flow-title-font-size);
       font-weight: var(--openbitfun-type-label-selected-font-weight);
       line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -202,7 +200,6 @@ $pages-gutter: clamp(24px, 4vw, 56px);
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-label-sm-font-size);
     line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

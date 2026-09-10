@@ -487,6 +487,48 @@ async fn open_workspace_with_snapshot(
 }
 
 #[cfg(feature = "remote-connect")]
+async fn ensure_remote_workspace_runtime_ownership(
+    coordinator: &ConversationCoordinator,
+    workspace_path: &std::path::Path,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Result<(), String> {
+    if let Some(connection_id) = remote_connection_id {
+        let workspace_service = crate::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| "Workspace service not available".to_string())?;
+        coordinator
+            .ensure_known_remote_workspace_runtime_ownership(
+                workspace_service.as_ref(),
+                workspace_path,
+                connection_id,
+                remote_ssh_host,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    } else {
+        coordinator
+            .ensure_workspace_runtime_ownership(workspace_path, None, remote_ssh_host)
+            .map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(feature = "remote-connect")]
+async fn ensure_remote_binding_runtime_ownership(
+    coordinator: &ConversationCoordinator,
+    binding: &WorkspaceBinding,
+) -> Result<(), String> {
+    ensure_remote_workspace_runtime_ownership(
+        coordinator,
+        binding.logical_workspace_path(),
+        binding.connection_id(),
+        binding
+            .is_remote()
+            .then_some(binding.session_identity.hostname.as_str()),
+    )
+    .await
+}
+
+#[cfg(feature = "remote-connect")]
 async fn load_remote_session_metadata_for_workspace(
     workspace_path: &std::path::Path,
     workspace_identity: RemoteSessionWorkspaceIdentity,
@@ -1672,16 +1714,17 @@ impl CoreServiceAgentRuntime {
             }
         }
 
+        let binding = Self::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        ensure_remote_binding_runtime_ownership(coordinator, &binding).await?;
         if coordinator
             .get_session_manager()
             .get_session(session_id)
             .is_none()
         {
-            let Some(binding) = Self::resolve_session_workspace_binding(session_id).await else {
-                return Err(format!(
-                    "Session workspace binding not available for session: {session_id}"
-                ));
-            };
             coordinator
                 .restore_session_for_workspace(
                     session_storage_request_from_binding(&binding),
@@ -2414,6 +2457,13 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         session_id: &str,
         workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
+        ensure_remote_workspace_runtime_ownership(
+            self.coordinator.as_ref(),
+            std::path::Path::new(&workspace.workspace_path),
+            workspace.remote_connection_id.as_deref(),
+            workspace.remote_ssh_host.as_deref(),
+        )
+        .await?;
         self.coordinator
             .restore_session_for_workspace(
                 SessionStoragePathRequest {
@@ -2431,6 +2481,20 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
         use terminal_core::session::SessionSource;
         use terminal_core::{TerminalApi, TerminalBindingOptions};
+
+        let Some(session) = self
+            .coordinator
+            .get_session_manager()
+            .get_session(&request.session_id)
+        else {
+            return;
+        };
+        if session.config.remote_connection_id.is_some() || session.config.remote_ssh_host.is_some()
+        {
+            // SSH execution prepares its terminal through RemoteExecPort. The
+            // local terminal binding has no target identity and must not run here.
+            return;
+        }
 
         let sid = request.session_id;
         let binding_workspace_for_terminal = request.binding_workspace;
@@ -2489,6 +2553,15 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         let remote_ssh_host = binding_workspace
             .as_ref()
             .and_then(|binding| binding.remote_ssh_host.clone());
+        if let Some(path) = workspace_path.as_deref() {
+            ensure_remote_workspace_runtime_ownership(
+                self.coordinator.as_ref(),
+                std::path::Path::new(path),
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await?;
+        }
 
         self.runtime
             .submit_dialog_turn(AgentDialogTurnRequest {
@@ -2666,6 +2739,12 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     }
 
     async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String> {
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        ensure_remote_binding_runtime_ownership(self.coordinator.as_ref(), &binding).await?;
         if self
             .coordinator
             .get_session_manager()
@@ -2675,14 +2754,6 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             return Ok(());
         }
 
-        let Some(binding) =
-            CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id).await
-        else {
-            return Err(format!(
-                "Session workspace binding not available for session: {}",
-                session_id
-            ));
-        };
         self.coordinator
             .restore_session_for_workspace(
                 session_storage_request_from_binding(&binding),
@@ -2722,17 +2793,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             .ok_or_else(|| {
                 format!("Session workspace binding not available for session: {session_id}")
             })?;
-        self.coordinator
-            .ensure_workspace_runtime_ownership(
-                binding.logical_workspace_path(),
-                binding.connection_id(),
-                if binding.is_remote() {
-                    Some(binding.session_identity.hostname.as_str())
-                } else {
-                    None
-                },
-            )
-            .map_err(|error| error.to_string())?;
+        ensure_remote_binding_runtime_ownership(self.coordinator.as_ref(), &binding).await?;
         self.coordinator
             .delete_session(session_storage_dir, session_id)
             .await
@@ -2919,6 +2980,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
             .ok_or_else(|| {
                 format!("Session workspace binding not available for session: {session_id}")
             })?;
+        ensure_remote_binding_runtime_ownership(self.coordinator.as_ref(), &binding).await?;
         self.coordinator
             .restore_session_for_workspace(
                 session_storage_request_from_binding(&binding),
@@ -3137,7 +3199,7 @@ mod tests {
             .nth(1)
             .and_then(|source| source.split("fn remove_tracker").next())
             .expect("remote session delete");
-        assert!(delete.contains("ensure_workspace_runtime_ownership"));
+        assert!(delete.contains("ensure_remote_binding_runtime_ownership"));
     }
 
     #[test]
@@ -3373,7 +3435,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "session-model-scope".to_string(),
             "Model scope".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
 

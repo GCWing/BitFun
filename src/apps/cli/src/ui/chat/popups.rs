@@ -756,6 +756,15 @@ impl ChatView {
         self.login_form.handle_key_event(key)
     }
 
+    pub(crate) fn login_form_set_authorization(
+        &mut self,
+        authorization: openbitfun_product_domains::account::GitHubAuthStart,
+    ) {
+        self.login_form.set_authorization(authorization);
+    }
+    pub(crate) fn login_form_set_status(&mut self, status: &str) {
+        self.login_form.set_status(status);
+    }
     pub(crate) fn login_form_set_error(&mut self, message: impl Into<String>) {
         self.login_form.set_error(message);
     }
@@ -768,24 +777,9 @@ impl ChatView {
         &mut self,
         info: openbitfun_product_domains::account::AccountInfo,
         devices: Vec<openbitfun_product_domains::account::AccountDevice>,
-        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
     ) {
-        self.login_form.show_account(info, devices, sync_progress);
+        self.login_form.show_account(info, devices);
         self.popup_stack.push(PopupType::LoginForm);
-    }
-
-    pub(crate) fn show_sync_choice_panel(&mut self, user_id: &str, relay_url: &str) {
-        self.login_form.show_sync_choice(user_id, relay_url);
-        self.popup_stack.push(PopupType::LoginForm);
-    }
-
-    pub(crate) fn update_account_panel_progress(
-        &mut self,
-        devices: Option<Vec<openbitfun_product_domains::account::AccountDevice>>,
-        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
-    ) {
-        self.login_form
-            .update_account_progress(devices, sync_progress);
     }
 }
 
@@ -802,11 +796,11 @@ mod tests {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
         view.show_agent_selector(
             vec![AgentItem {
-                id: "agentic".to_string(),
+                id: "Standard".to_string(),
                 route_key: None,
                 description: "General purpose".to_string(),
             }],
-            Some("agentic".to_string()),
+            Some("Standard".to_string()),
             true,
             true,
         );
@@ -822,11 +816,11 @@ mod tests {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
         view.show_agent_modes_only(
             vec![AgentItem {
-                id: "agentic".to_string(),
+                id: "Standard".to_string(),
                 route_key: None,
                 description: "General purpose".to_string(),
             }],
-            Some("agentic".to_string()),
+            Some("Standard".to_string()),
             true,
         );
 
@@ -835,7 +829,7 @@ mod tests {
         let state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         let mut terminal = Terminal::new(TestBackend::new(80, 20)).expect("test terminal");

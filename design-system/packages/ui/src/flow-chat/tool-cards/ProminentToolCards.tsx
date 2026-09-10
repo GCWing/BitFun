@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type {
   HTMLAttributes,
   MouseEvent as ReactMouseEvent,
@@ -104,7 +105,7 @@ export function GitToolCard({
               key={index}
             >
               {item.label && <span className={styles.footerLabel}>{item.label}</span>}
-              <span className={styles.footerValue}>{item.value}</span>
+              <OverflowText className={styles.footerValue}>{item.value}</OverflowText>
             </span>
           ))}
         </div>
@@ -122,9 +123,9 @@ export function GitToolCard({
         <ProminentToolCardSummary
           action={action}
           actions={actions ? <ToolCardActions>{actions}</ToolCardActions> : undefined}
-          content={<code className={styles.command}>{command}</code>}
+          content={<code className={styles.command}><OverflowText>{command}</OverflowText></code>}
           extra={statusSummary ? (
-            <span className={styles.summary} data-tone={statusTone}>{statusSummary}</span>
+            <OverflowText className={styles.summary} data-tone={statusTone}>{statusSummary}</OverflowText>
           ) : undefined}
           icon={<GitBranch aria-hidden="true" />}
           statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
@@ -186,14 +187,14 @@ export function FileDiffToolCard({
         <ProminentToolCardSummary
           action={action}
           content={(
-            <span
+            <OverflowText
               className={styles.diffPath}
               data-path={path}
               data-openbitfun-part="path"
               title={path}
             >
               {pathLabel}
-            </span>
+            </OverflowText>
           )}
           extra={changeSummary ? (
             <ToolCardChangeSummary
@@ -327,7 +328,7 @@ function PageLifecycleToolCardBase({
       summary={(
         <ProminentToolCardSummary
           action={action}
-          content={<span className={styles.command}>{subject}{version ? ` @ ${version}` : ""}</span>}
+          content={<OverflowText className={styles.command}>{subject}{version ? ` @ ${version}` : ""}</OverflowText>}
           icon={<Rocket aria-hidden="true" />}
           statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}
         />
@@ -416,9 +417,9 @@ export function AgentControlToolCard({
 
   const identity = (
     <span className={styles.agentIdentity} data-openbitfun-part="agentIdentity">
-      <span className={styles.agentName} data-openbitfun-part="agentName">{agentName}</span>
+      <OverflowText className={styles.agentName} data-openbitfun-part="agentName">{agentName}</OverflowText>
       {agentModel !== undefined && agentModel !== null && agentModel !== false && (
-        <span className={styles.agentModel} data-openbitfun-part="agentModel">{agentModel}</span>
+        <OverflowText className={styles.agentModel} data-openbitfun-part="agentModel">{agentModel}</OverflowText>
       )}
     </span>
   );
@@ -452,17 +453,17 @@ export function AgentControlToolCard({
             </ToolCardActions>
           ) : undefined}
           content={summary !== undefined && summary !== null && summary !== false ? (
-            <span className={styles.agentSummary} data-openbitfun-part="agentSummary">{summary}</span>
+            <OverflowText className={styles.agentSummary} data-openbitfun-part="agentSummary">{summary}</OverflowText>
           ) : undefined}
           extra={hasExtra ? (
             <span className={styles.agentExtra} data-openbitfun-part="agentExtra">
               {statusMeta !== undefined && statusMeta !== null && statusMeta !== false && (
-                <span className={styles.agentMeta} data-openbitfun-part="agentMeta">{statusMeta}</span>
+                <OverflowText className={styles.agentMeta} data-openbitfun-part="agentMeta">{statusMeta}</OverflowText>
               )}
               {statusLabel !== undefined && statusLabel !== null && statusLabel !== false && (
-                <span className={styles.agentStatus} data-openbitfun-part="agentStatus" data-tone={statusTone}>
+                <OverflowText className={styles.agentStatus} data-openbitfun-part="agentStatus" data-tone={statusTone}>
                   {statusLabel}
-                </span>
+                </OverflowText>
               )}
             </span>
           ) : undefined}

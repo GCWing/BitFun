@@ -33,19 +33,25 @@ struct RecordsBatch {
 
 impl TokenUsageService {
     pub async fn new(base_dir: PathBuf) -> Result<Self, String> {
-        let service = Self {
-            base_dir,
-            model_stats: Arc::new(RwLock::new(HashMap::new())),
-            session_cache: Arc::new(RwLock::new(HashMap::new())),
-            record_batches: Arc::new(Mutex::new(HashMap::new())),
-            usage_lifecycle: Arc::new(RwLock::new(())),
-        };
+        let service = Self::for_queries(base_dir);
 
         service.init_storage().await?;
         service.load_model_stats().await?;
 
         info!("Token usage service initialized");
         Ok(service)
+    }
+
+    /// Read persisted records without initializing directories or repairing
+    /// aggregate statistics. Runtime writers must use `new` instead.
+    pub fn for_queries(base_dir: PathBuf) -> Self {
+        Self {
+            base_dir,
+            model_stats: Arc::new(RwLock::new(HashMap::new())),
+            session_cache: Arc::new(RwLock::new(HashMap::new())),
+            record_batches: Arc::new(Mutex::new(HashMap::new())),
+            usage_lifecycle: Arc::new(RwLock::new(())),
+        }
     }
 
     pub fn base_dir(&self) -> &Path {
@@ -800,7 +806,12 @@ mod tests {
             .await
             .expect("unrelated record");
 
-        let records = service
+        // A separate short-lived query process has no runtime subscriber or
+        // in-memory usage cache. Aggregate corruption must not trigger repair.
+        let stats_path = dir.path().join(MODEL_STATS_FILE);
+        std::fs::write(&stats_path, "unreadable legacy aggregate").unwrap();
+        let reader = TokenUsageService::for_queries(dir.path().to_path_buf());
+        let records = reader
             .query_records_for_sessions(
                 TokenUsageQuery {
                     model_id: None,
@@ -818,6 +829,11 @@ mod tests {
 
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].session_id, "parent-session");
+        assert_eq!(
+            std::fs::read_to_string(&stats_path).unwrap(),
+            "unreadable legacy aggregate"
+        );
+        assert!(!stats_path.with_extension("json.bak").exists());
     }
 
     #[cfg(feature = "token-usage-statistics")]

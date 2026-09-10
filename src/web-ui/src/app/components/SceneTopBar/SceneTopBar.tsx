@@ -1,7 +1,7 @@
-import React, { useCallback, useRef } from 'react';
-import { Toolbar } from '@openbitfun/ui';
+import React, { useCallback } from 'react';
+import { Toolbar, ToolbarSeparator } from '@openbitfun/ui';
 import { WindowControls } from '@/app/components/WindowControls';
-import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
+import { startNativeWindowDragging, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '../../stores/sceneStore';
 import SceneBar from '../SceneBar/SceneBar';
@@ -11,11 +11,23 @@ import './SceneTopBar.scss';
 const log = createLogger('SceneTopBar');
 
 const INTERACTIVE_SELECTOR =
-  'button, input, textarea, select, a, [role="button"], [contenteditable="true"], .window-controls';
+  'button, input, textarea, select, a, [role="button"], [role="tab"], [role="menu"], [contenteditable]:not([contenteditable="false"]), [draggable="true"], .window-controls';
 
-function blocksWindowChromeInteraction(target: HTMLElement): boolean {
-  const interactive = target.closest<HTMLElement>(INTERACTIVE_SELECTOR);
-  return interactive !== null && interactive.getAttribute('role') !== 'tab';
+function blocksWindowChromeInteraction(
+  event: React.MouseEvent<HTMLDivElement>,
+  allowTabDragging: boolean,
+): boolean {
+  const target = event.target;
+  if (event.defaultPrevented || !(target instanceof Element) || !event.currentTarget.contains(target)) {
+    return true;
+  }
+
+  // Tab count changes the tab hit target, never the surrounding window chrome.
+  if (!allowTabDragging && target.closest('[data-openbitfun-component="tab-group"] [data-openbitfun-part="item"]')) {
+    return true;
+  }
+  const interactive = target.closest(INTERACTIVE_SELECTOR);
+  return interactive !== null && !(allowTabDragging && interactive.getAttribute('role') === 'tab');
 }
 
 interface SceneTopBarProps {
@@ -37,35 +49,21 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
   const hasTabs = openTabCount > 0;
   const isSingleTab = openTabCount <= 1;
   const canDragWindow = supportsNativeWindowDragging();
-  const lastMouseDownTimeRef = useRef(0);
   const hasWindowControls = Boolean(onMinimize && onMaximize && onClose);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!canDragWindow || !isSingleTab || event.button !== 0) return;
-    const target = event.target as HTMLElement | null;
-    if (!target || blocksWindowChromeInteraction(target)) return;
+    if (!canDragWindow || event.button !== 0 || event.detail > 1) return;
+    if (blocksWindowChromeInteraction(event, isSingleTab)) return;
 
-    const now = Date.now();
-    const timeSinceLastMouseDown = now - lastMouseDownTimeRef.current;
-    lastMouseDownTimeRef.current = now;
-    if (timeSinceLastMouseDown < 500 && timeSinceLastMouseDown > 50) return;
-
-    void (async () => {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().startDragging();
-      } catch (error) {
-        log.debug('startDragging failed', error);
-      }
-    })();
+    void startNativeWindowDragging().catch(error => {
+      log.debug('startDragging failed', { error });
+    });
   }, [canDragWindow, isSingleTab]);
 
   const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!isSingleTab) return;
-    const target = event.target as HTMLElement | null;
-    if (!target || blocksWindowChromeInteraction(target)) return;
+    if (!canDragWindow || event.button !== 0 || blocksWindowChromeInteraction(event, isSingleTab)) return;
     onMaximize?.();
-  }, [isSingleTab, onMaximize]);
+  }, [canDragWindow, isSingleTab, onMaximize]);
 
   return (
     <Toolbar
@@ -75,28 +73,36 @@ const SceneTopBar: React.FC<SceneTopBarProps> = ({
       onDoubleClick={handleDoubleClick}
       data-openbitfun-scene="workbench"
       data-openbitfun-part="topBar"
-      leading={<SceneBar />}
+      leading={<>
+        <SceneBar />
+        {canDragWindow && (
+          <div className="openbitfun-scene-top-bar__drag-space" aria-hidden="true" />
+        )}
+      </>}
       size="md"
       trailing={<>
-      <SceneChromeHost
-        className="openbitfun-scene-top-bar__actions"
-        data-openbitfun-scene="workbench"
-        data-openbitfun-part="sceneActions"
-      />
-      {hasWindowControls ? (
-        <div
-          className="openbitfun-scene-top-bar__window-controls"
-          data-openbitfun-component="scene-bar"
-          data-openbitfun-part="controls"
-        >
-          <WindowControls
-            onMinimize={onMinimize!}
-            onToggleMaximize={onMaximize!}
-            onClose={onClose!}
-            maximized={isMaximized}
-          />
-        </div>
-      ) : null}
+        <SceneChromeHost
+          className="openbitfun-scene-top-bar__actions"
+          data-openbitfun-scene="workbench"
+          data-openbitfun-part="sceneActions"
+        />
+        {hasWindowControls ? (
+          <>
+            <ToolbarSeparator className="openbitfun-scene-top-bar__actions-divider" />
+            <div
+              className="openbitfun-scene-top-bar__window-controls"
+              data-openbitfun-component="scene-bar"
+              data-openbitfun-part="controls"
+            >
+              <WindowControls
+                onMinimize={onMinimize!}
+                onToggleMaximize={onMaximize!}
+                onClose={onClose!}
+                maximized={isMaximized}
+              />
+            </div>
+          </>
+        ) : null}
       </>}
     />
   );

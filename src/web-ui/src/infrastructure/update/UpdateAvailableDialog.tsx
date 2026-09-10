@@ -126,7 +126,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
         <div className="openbitfun-update-available__actions" data-openbitfun-component="update" data-openbitfun-part="actions">
           {variant === 'daily' ? (
             <>
-              <Button variant="outline" size="md" onClick={onLater}>
+              <Button variant="fill" size="md" onClick={onLater}>
                 {t('update.later')}
               </Button>
               {onSkip ? (
@@ -134,16 +134,16 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
                   {t('update.skipVersion')}
                 </Button>
               ) : null}
-              <Button variant="fill" size="md" onClick={onInstall}>
+              <Button variant="primary" size="md" onClick={onInstall}>
                 {t('update.backgroundInstall')}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" size="md" onClick={onLater}>
+              <Button variant="fill" size="md" onClick={onLater}>
                 {t('update.cancel')}
               </Button>
-              <Button variant="fill" size="md" onClick={onInstall}>
+              <Button variant="primary" size="md" onClick={onInstall}>
                 {t('update.backgroundInstall')}
               </Button>
             </>

@@ -36,7 +36,6 @@
     color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__sections {
@@ -64,7 +63,6 @@
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     color: var(--openbitfun-color-content-primary);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

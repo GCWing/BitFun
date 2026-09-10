@@ -4,11 +4,15 @@ import {
   Checkbox,
   Icon,
   Input,
-  ScrollArea,
   Dialog,
   DialogBody,
   DialogClose,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
+  DialogHeading,
+  DialogTitle,
+  Disclosure,
 } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -395,29 +399,25 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       aria-labelledby={DIALOG_TITLE_ID}
       data-testid="dispatch-install-dialog"
     >
-      <DialogHeader>
-        {!targetMutationInProgress && <DialogClose />}
-      </DialogHeader>
-      <DialogBody inset="none">
       <div
         className="dispatch-install-dialog"
         data-openbitfun-component="dispatch-install-dialog"
         data-openbitfun-part="root"
       >
-        <div
-          className="dispatch-install-dialog__header"
+        <DialogHeader
           data-openbitfun-component="dispatch-install-dialog"
           data-openbitfun-part="header"
         >
-          <h2 id={DIALOG_TITLE_ID} className="dispatch-install-dialog__title">
-            {t('dispatch.configureTitle', { target: target?.displayName ?? '' })}
-          </h2>
-          <span className="dispatch-install-dialog__subtitle">
-            {t('dispatch.configureSubtitle')}
-          </span>
-        </div>
+          <DialogHeading>
+            <DialogTitle id={DIALOG_TITLE_ID}>
+              {t('dispatch.configureTitle', { target: target?.displayName ?? '' })}
+            </DialogTitle>
+            <DialogDescription>{t('dispatch.configureSubtitle')}</DialogDescription>
+          </DialogHeading>
+          {!targetMutationInProgress && <DialogClose />}
+        </DialogHeader>
 
-        <ScrollArea
+        <DialogBody
           className="dispatch-install-dialog__body"
           data-openbitfun-component="dispatch-install-dialog"
           data-openbitfun-part="body"
@@ -504,7 +504,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     {t('dispatch.oneClickDeployDescription')}
                   </span>
                   <Button
-                    variant="fill"
+                    variant="primary"
                     size="sm"
                     disabled={targetMutationInProgress || probing}
                     onClick={() => void prepareTarget()}
@@ -521,14 +521,16 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                         : t('dispatch.oneClickDeploy')}
                   </Button>
                 </div>
-                <details className="dispatch-install-dialog__details">
-                  <summary>{t('dispatch.installDetails')}</summary>
+                <Disclosure
+                  className="dispatch-install-dialog__details"
+                  summary={t('dispatch.installDetails')}
+                >
                   <dl>
                     <div><dt>{t('dispatch.version')}</dt><dd>{probe.release.version}</dd></div>
                     <div><dt>{t('dispatch.downloadUrl')}</dt><dd>{probe.release.url}</dd></div>
                     <div><dt>{t('dispatch.integrity')}</dt><dd>{probe.release.sha256}</dd></div>
                   </dl>
-                </details>
+                </Disclosure>
               </>
             ) : null}
             {installUnavailable ? (
@@ -592,6 +594,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               </span>
               <Input
                 type="text"
+                size="md"
                 value={baseRef}
                 disabled={targetMutationInProgress || validatingBaseRef}
                 spellCheck={false}
@@ -617,15 +620,16 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               description={t('dispatch.includeUncommittedHint')}
             />
           </section>
-        </ScrollArea>
+        </DialogBody>
 
         <div
           className="dispatch-install-dialog__actions"
           data-openbitfun-component="dispatch-install-dialog"
           data-openbitfun-part="actions"
         >
+          <DialogFooter>
           <Button
-            variant="outline"
+            variant="fill"
             size="sm"
             disabled={
               preparationPhase === 'provisioning'
@@ -644,7 +648,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                 : t('dispatch.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             disabled={
               !ready
@@ -660,9 +664,9 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
             ) : null}
             {t('dispatch.useTarget')}
           </Button>
+          </DialogFooter>
         </div>
       </div>
-          </DialogBody>
     </Dialog>
   );
 };

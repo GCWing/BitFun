@@ -13,7 +13,6 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const ISSUER: &str = "https://auth.openai.com";
@@ -60,13 +59,8 @@ struct DeviceAuthorizationResponse {
     code_verifier: String,
 }
 
-fn opencode_user_agent() -> String {
-    format!(
-        "opencode/{} ({}; {})",
-        super::OPENCODE_COMPAT_VERSION,
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    )
+fn user_agent() -> String {
+    crate::providers::shared::product_user_agent()
 }
 
 fn device_poll_interval(value: &serde_json::Value) -> u64 {
@@ -89,7 +83,7 @@ fn build_authorize_url(pkce: &Pkce, state: &str, redirect_uri: &str) -> String {
         ("id_token_add_organizations", "true"),
         ("codex_cli_simplified_flow", "true"),
         ("state", state),
-        ("originator", "opencode"),
+        ("originator", "openbitfun"),
     ];
     let query = params
         .iter()
@@ -119,6 +113,8 @@ async fn exchange_code(
     ];
     let resp = client
         .post(format!("{ISSUER}/oauth/token"))
+        .header(reqwest::header::USER_AGENT, user_agent())
+        .header(reqwest::header::ACCEPT, "application/json")
         .form(&params)
         .send()
         .await
@@ -142,6 +138,8 @@ async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Resu
     ];
     let resp = client
         .post(format!("{ISSUER}/oauth/token"))
+        .header(reqwest::header::USER_AGENT, user_agent())
+        .header(reqwest::header::ACCEPT, "application/json")
         .form(&params)
         .send()
         .await
@@ -157,7 +155,7 @@ async fn refresh(refresh_token: &str, options: &SubscriptionHttpOptions) -> Resu
 async fn request_device_code(options: &SubscriptionHttpOptions) -> Result<DeviceCodeResponse> {
     let response = http_client(options)?
         .post(DEVICE_USER_CODE_URL)
-        .header(reqwest::header::USER_AGENT, opencode_user_agent())
+        .header(reqwest::header::USER_AGENT, user_agent())
         .json(&serde_json::json!({ "client_id": CLIENT_ID }))
         .send()
         .await
@@ -190,7 +188,7 @@ async fn poll_device_authorization(
     loop {
         let response = http_client(options)?
             .post(DEVICE_TOKEN_URL)
-            .header(reqwest::header::USER_AGENT, opencode_user_agent())
+            .header(reqwest::header::USER_AGENT, user_agent())
             .json(&serde_json::json!({
                 "device_auth_id": device.device_auth_id,
                 "user_code": device.user_code,
@@ -461,12 +459,11 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, Opti
 pub(crate) async fn resolve(options: &SubscriptionHttpOptions) -> Result<ResolvedCredential> {
     let (access, account_id, expires) = ensure_fresh(options).await?;
     let mut headers = HashMap::new();
-    if let Some(account) = account_id {
+    if let Some(account) = account_id.or_else(|| jwt::chatgpt_account_id(&access)) {
         headers.insert("ChatGPT-Account-ID".to_string(), account);
     }
-    headers.insert("originator".to_string(), "opencode".to_string());
-    headers.insert("session-id".to_string(), Uuid::new_v4().to_string());
-    headers.insert("User-Agent".to_string(), opencode_user_agent());
+    headers.insert("originator".to_string(), "openbitfun".to_string());
+    headers.insert("User-Agent".to_string(), user_agent());
     if let Some(residency) = jwt::chatgpt_compute_residency(&access) {
         headers.insert("x-openai-internal-codex-residency".to_string(), residency);
     }
@@ -489,8 +486,8 @@ pub(crate) fn suggested() -> (&'static str, &'static str, &'static str) {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_authorize_url, device_poll_interval, opencode_user_agent, redirect_uri,
-        CALLBACK_PORT, DEFAULT_MODEL,
+        build_authorize_url, device_poll_interval, redirect_uri, user_agent, CALLBACK_PORT,
+        DEFAULT_MODEL,
     };
     use crate::subscription_auth::pkce::Pkce;
 
@@ -511,7 +508,10 @@ mod tests {
         assert_eq!(device_poll_interval(&serde_json::json!(2)), 2);
         assert_eq!(device_poll_interval(&serde_json::json!(0)), 5);
         assert_eq!(DEFAULT_MODEL, "gpt-5.5");
-        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.25");
-        assert!(opencode_user_agent().starts_with("opencode/1.18.25 ("));
+        assert!(
+            build_authorize_url(&Pkce::generate(), "state", &redirect_uri(CALLBACK_PORT))
+                .contains("originator=openbitfun")
+        );
+        assert!(user_agent().starts_with("OpenBitFun/"));
     }
 }

@@ -53,10 +53,10 @@ export interface ConfirmDialogProps {
 }
 
 const defaultIcons: Record<ConfirmDialogType, ReactNode> = {
-  error: <AlertCircle aria-hidden="true" />,
+  error: <Icon glyph={AlertCircle} />,
   info: <Icon name="info" />,
   success: <Icon name="check-circle" />,
-  warning: <TriangleAlert aria-hidden="true" />,
+  warning: <Icon glyph={TriangleAlert} />,
 };
 
 export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
@@ -206,7 +206,7 @@ export const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(
             onClick={() => void runAction("confirm", onConfirm)}
             ref={confirmButtonRef}
             tone={confirmDanger || type === "error" ? "danger" : "neutral"}
-            variant={confirmDanger || type === "error" ? "primary" : "fill"}
+            variant="primary"
           >
             {resolvedConfirmText}
           </Button>

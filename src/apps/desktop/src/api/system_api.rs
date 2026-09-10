@@ -238,6 +238,8 @@ pub struct SystemInfoResponse {
     pub platform: String,
     pub arch: String,
     pub os_version: Option<String>,
+    #[serde(default)]
+    pub home_dir: Option<String>,
 }
 
 #[tauri::command]
@@ -248,6 +250,7 @@ pub async fn get_system_info() -> Result<SystemInfoResponse, String> {
         platform: info.platform,
         arch: info.arch,
         os_version: info.os_version,
+        home_dir: info.home_dir,
     })
 }
 
@@ -591,6 +594,7 @@ pub struct ToggleMainWindowFullscreenResponse {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StartupWindowControlAction {
+    GetState,
     Minimize,
     ToggleMaximize,
     Close,
@@ -600,6 +604,12 @@ pub enum StartupWindowControlAction {
 #[serde(rename_all = "camelCase")]
 pub struct StartupWindowControlRequest {
     pub action: StartupWindowControlAction,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupWindowControlResponse {
+    pub is_maximized: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -720,19 +730,20 @@ pub async fn startup_window_control(
     startup_trace: State<'_, DesktopStartupTrace>,
     app: tauri::AppHandle,
     request: StartupWindowControlRequest,
-) -> Result<(), String> {
+) -> Result<StartupWindowControlResponse, String> {
     let Some(window) = app.get_webview_window("main") else {
         return Err("Main window not found".to_string());
     };
 
+    let mut is_maximized = window.is_maximized().unwrap_or(false);
     match request.action {
+        StartupWindowControlAction::GetState => {}
         StartupWindowControlAction::Minimize => {
             window.minimize().map_err(|error| {
                 format!("Failed to minimize main window during startup: {}", error)
             })?;
         }
         StartupWindowControlAction::ToggleMaximize => {
-            let is_maximized = window.is_maximized().unwrap_or(false);
             if is_maximized {
                 window.unmaximize().map_err(|error| {
                     format!("Failed to restore main window during startup: {}", error)
@@ -742,6 +753,7 @@ pub async fn startup_window_control(
                     format!("Failed to maximize main window during startup: {}", error)
                 })?;
             }
+            is_maximized = !is_maximized;
         }
         StartupWindowControlAction::Close => {
             let behavior = state
@@ -771,7 +783,7 @@ pub async fn startup_window_control(
         }
     }
 
-    Ok(())
+    Ok(StartupWindowControlResponse { is_maximized })
 }
 
 /// Toggle OS-level fullscreen for the Desktop main window.
@@ -1022,6 +1034,42 @@ fn activate_main_window_from_notification(app: &tauri::AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn system_info_home_contract_accepts_legacy_and_reports_serving_host() {
+        let legacy =
+            serde_json::json!({"platform": "windows", "arch": "x86_64", "osVersion": null});
+        let old: super::SystemInfoResponse = serde_json::from_value(legacy).unwrap();
+        assert!(old.home_dir.is_none());
+        let round_trip: super::SystemInfoResponse =
+            serde_json::from_value(serde_json::to_value(old).unwrap()).unwrap();
+        assert_eq!(round_trip.platform, "windows");
+        assert!(round_trip.home_dir.is_none());
+
+        let response = serde_json::to_value(super::get_system_info().await.unwrap()).unwrap();
+        assert_eq!(
+            response["homeDir"],
+            serde_json::json!(super::system::get_system_info().home_dir)
+        );
+        assert!(response.get("home_dir").is_none());
+    }
+
+    #[test]
+    fn startup_window_control_contract_exposes_the_native_maximize_state() {
+        let request: super::StartupWindowControlRequest =
+            serde_json::from_value(serde_json::json!({ "action": "get_state" }))
+                .expect("get_state request");
+        assert!(matches!(
+            request.action,
+            super::StartupWindowControlAction::GetState
+        ));
+
+        let response = super::StartupWindowControlResponse { is_maximized: true };
+        assert_eq!(
+            serde_json::to_value(response).expect("serialize response"),
+            serde_json::json!({ "isMaximized": true })
+        );
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
     fn notification_body_click_activates_main_window_but_dismissal_does_not() {

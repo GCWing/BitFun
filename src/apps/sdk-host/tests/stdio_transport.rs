@@ -106,7 +106,7 @@ impl AgentSubmissionPort for MinimalOwner {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 
@@ -169,7 +169,7 @@ impl AgentSubmissionPort for BlockingCreateOwner {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 

@@ -123,6 +123,17 @@ describe('Markdown file links', () => {
     vi.clearAllMocks();
   });
 
+  it.each([false, true])('keeps fullwidth parentheses outside bare web links (escaped=%s)', async escaped => {
+    const url = 'http://127.0.0.1:8000';
+    const bare = escaped ? url.replace(':', '\\:') : url;
+    const content = `\uff08Link1 ${bare}\uff09\uff08Link2 [${url}](${url}) \uff09`;
+    await act(async () => root.render(<MarkdownRenderer content={content} />));
+    const links = [...container.querySelectorAll('a')];
+    expect(links.map(link => link.getAttribute('href'))).toEqual([url, url]);
+    expect(links.map(link => link.textContent)).toEqual([url, url]);
+    expect(container.textContent).toContain(`\uff08Link1 ${url}\uff09\uff08Link2 ${url} \uff09`);
+  });
+
   it('does not resolve workspace path for markdown without local file links', async () => {
     await act(async () => {
       root.render(
@@ -415,6 +426,24 @@ describe('Markdown file links', () => {
     }));
   });
 
+  it('routes detached HTML and unknown file types through the target callback and disables host actions', async () => {
+    container.className = 'openbitfun-session-scene modern-flowchat-container';
+    await act(async () => {
+      root.render(<MarkdownRenderer content={'[Preview](page.html) [Binary](result.bin)'} basePath="/target" fileActionsViaCallbackOnly onFileViewRequest={onFileViewRequest} />);
+    });
+    const links = container.querySelectorAll<HTMLButtonElement>('button.file-link');
+    act(() => links[1].click());
+    expect(onFileViewRequest).toHaveBeenCalledWith('/target/result.bin', 'result.bin', undefined);
+    act(() => links[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+    const items = mocks.showContextMenu.mock.calls[0][1] as MenuItem[];
+    expect(items.find(item => item.id === 'markdown-open-in-explorer')?.disabled).toBe(true);
+    expect(items.some(item => item.id === 'markdown-open-html-in-system-browser')).toBe(false);
+    await items.find(item => item.id === 'markdown-open-remote-file')?.onClick?.(mocks.showContextMenu.mock.calls[0][2]);
+    expect(onFileViewRequest).toHaveBeenCalledWith('/target/page.html', 'page.html', undefined);
+    expect(mocks.openFileInBestTarget).not.toHaveBeenCalled();
+    expect(mocks.revealInExplorer).not.toHaveBeenCalled();
+  });
+
   it('routes same-label relative, absolute, and computer links independently', async () => {
     const content = [
       '1. [README.md](.\\README.md)',
@@ -561,6 +590,46 @@ describe('Markdown file links', () => {
       undefined,
     );
     expect(image?.src).toBe('data:image/png;base64,cmVsdS1wbmc=');
+    expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
+  });
+
+  it.each(['dispatch-private.png', '/srv/private/dispatch-private.png'])(
+    'does not read controller images or resolve its workspace for dispatch observers: %s',
+    async (imagePath) => {
+      await act(async () => {
+        root.render(<MarkdownRenderer content={`![Target image](${imagePath})`} fileActionsViaCallbackOnly />);
+      });
+
+      expect(mocks.readFileContent).not.toHaveBeenCalled();
+      expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.textContent).toContain('Target image');
+      expect(container.textContent).toContain('components:markdown.remoteImageUnavailable');
+    },
+  );
+
+  it('does not reuse a cached controller image when switching to a dispatch observer', async () => {
+    const content = '![Private controller image](cached-controller-image.png)';
+    await act(async () => {
+      root.render(<MarkdownRenderer content={content} basePath="/srv/project" />);
+    });
+    expect(mocks.readFileContent).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('img')?.src).toContain('data:image/png;base64,');
+
+    await act(async () => {
+      root.render(<MarkdownRenderer content={content} basePath="/srv/project" fileActionsViaCallbackOnly />);
+    });
+    expect(container.querySelector('img')).toBeNull();
+    expect(mocks.readFileContent).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('components:markdown.remoteImageUnavailable');
+  });
+
+  it('keeps externally hosted images available to dispatch observers', async () => {
+    await act(async () => {
+      root.render(<MarkdownRenderer content="![Public image](https://example.com/image.png)" fileActionsViaCallbackOnly />);
+    });
+    expect(container.querySelector('img')?.src).toBe('https://example.com/image.png');
+    expect(mocks.readFileContent).not.toHaveBeenCalled();
     expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 

@@ -35,7 +35,7 @@ function counterSession(overrides: Partial<Session>): Session {
     createdAt: 1,
     lastActiveAt: 1,
     error: null,
-    mode: 'agentic',
+    mode: 'Standard',
     sessionKind: 'normal',
     ...overrides,
   } as Session;
@@ -65,7 +65,7 @@ describe('sessionTitle', () => {
     const untouchedMetadata: SessionMetadata = {
       sessionId: 'session-1',
       sessionName: 'New Code Session 3',
-      agentType: 'agentic',
+      agentType: 'Standard',
       modelName: 'primary',
       createdAt: 1,
       lastActiveAt: 2,
@@ -112,14 +112,14 @@ describe('sessionTitle', () => {
         sessionId: 'a-code-1',
         workspaceId: 'workspace-a',
         workspacePath: 'D:/workspace/a',
-        mode: 'agentic',
+        mode: 'Standard',
         titleI18nParams: { count: 1 },
       }),
       counterSession({
         sessionId: 'b-code-1',
         workspaceId: 'workspace-b',
         workspacePath: 'D:/workspace/b',
-        mode: 'agentic',
+        mode: 'Standard',
         titleI18nParams: { count: 1 },
       }),
       counterSession({

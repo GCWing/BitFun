@@ -119,13 +119,14 @@
 
   .leading,
   .indicator {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 var(--openbitfun-control-select-indicator-size);
     align-items: center;
     justify-content: center;
     inline-size: var(--openbitfun-control-select-indicator-size);
     block-size: var(--openbitfun-control-select-indicator-size);
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-field-placeholder);
     pointer-events: none;
   }
 
@@ -143,12 +144,11 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .placeholder {
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-field-placeholder);
   }
 
   .indicator {

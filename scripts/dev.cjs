@@ -22,7 +22,7 @@ const {
   printBlank,
 } = require('./console-style.cjs');
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DEV_SERVER_PORT = 1422;
+let DEV_SERVER_PORT = 1422;
 const DEV_SERVER_HOSTS = ['localhost', '127.0.0.1', '::1'];
 const DESKTOP_PREVIEW_REBUILD_INPUTS = [
   path.join(ROOT_DIR, 'Cargo.toml'),
@@ -125,6 +125,7 @@ function spawnCommand(cmd, args, cwd = ROOT_DIR, envOverrides = {}, shell = fals
     const child = spawn(cmd, args, {
       cwd,
       stdio: 'inherit',
+      windowsHide: true,
       shell,
       env: {
         ...process.env,
@@ -153,6 +154,7 @@ function runCommandPrefixed(prefix, cmd, args, cwd = ROOT_DIR, envOverrides = {}
   return new Promise((resolve) => {
     const spawnOptions = {
       cwd,
+      windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -198,6 +200,7 @@ function spawnBackgroundCommand(cmd, args, cwd = ROOT_DIR, env = process.env) {
   return spawn(cmd, args, {
     cwd,
     stdio: 'inherit',
+    windowsHide: true,
     env,
   });
 }
@@ -214,6 +217,7 @@ function spawnWindowsCommandArgs(command, args, cwd = ROOT_DIR, env = process.en
   return spawn(process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', ['/d', '/s', '/c', command, ...args], {
     cwd,
     stdio: 'inherit',
+    windowsHide: true,
     env,
   });
 }
@@ -651,6 +655,8 @@ async function ensureLoopxSidecar() {
  * Main entry
  */
 async function main() {
+  const { resolveDevServerPorts } = await import('./dev-server-ports.mjs');
+  DEV_SERVER_PORT = resolveDevServerPorts().port;
   const startTime = Date.now();
   let mode = process.argv[2] || 'web'; // web | desktop
   const extraArgs = process.argv.slice(3);
@@ -676,7 +682,8 @@ async function main() {
   let currentStep = 1;
 
   // Step 1: Run all independent preparation tasks in parallel.
-  // copy-monaco / generate-version / mobile-web / plugin-host / loopx have no
+  // copy-monaco / generate-version / mobile-web / flashgrep / plugin-host / loopx
+  // have no
   // dependencies on each other; each task's output is line-prefixed so the
   // interleaved logs stay attributable. The DeepSeek bridge is not prepared
   // here: it is not a compile-time Tauri resource. Official desktop:build
@@ -685,7 +692,7 @@ async function main() {
     currentStep++,
     totalSteps,
     desktopMode
-      ? 'Prepare resources (parallel: monaco, version, mobile-web, plugin-host, loopx)'
+      ? 'Prepare resources (parallel: monaco, version, mobile-web, flashgrep, plugin-host, loopx)'
       : 'Prepare resources (parallel: monaco, version)'
   );
 
@@ -714,6 +721,32 @@ async function main() {
     prepTasks.push({
       name: 'Prepare loopx CLI sidecar',
       promise: ensureLoopxSidecar(),
+    });
+    prepTasks.push({
+      name: 'Prepare speech libraries',
+      promise: (async () => {
+        try {
+          const { prepareSherpaDev } = await import('./prepare-sherpa-dev.mjs');
+          prepareSherpaDev(ROOT_DIR);
+          return { ok: true, code: 0 };
+        } catch (error) {
+          return { ok: false, code: null, error };
+        }
+      })(),
+    });
+    prepTasks.push({
+      name: 'Prepare workspace search daemon',
+      promise: (async () => {
+        try {
+          const { ensureFlashgrepBinary } = await import(
+            pathToFileURL(path.join(__dirname, 'prepare-flashgrep-resource.mjs')).href
+          );
+          process.env.FLASHGREP_DAEMON_BIN = ensureFlashgrepBinary();
+          return { ok: true, code: 0 };
+        } catch (error) {
+          return { ok: false, code: null, error };
+        }
+      })(),
     });
     prepTasks.push({
       name: 'Build mobile-web',
@@ -802,15 +835,16 @@ async function main() {
         OPENBITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
       };
       try {
+        const args = ['dev', '--config', tauriConfig, '--config', JSON.stringify({ build: { devUrl: `http://localhost:${DEV_SERVER_PORT}` } })];
         if (process.platform === 'win32') {
           // Running the generated .cmd shim directly via spawn is flaky on Windows.
           // Use cmd.exe with an explicit args array so the desktop app directory
           // stays the Tauri project root without pnpm workspace path rewriting.
           const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
-          await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, tauriDevEnv);
+          await runWindowsCommandArgs(tauriBin, args, desktopDir, tauriDevEnv);
         } else {
           const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
-          await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir, {
+          await spawnCommand(tauriBin, args, desktopDir, {
             CARGO_PROFILE_DEV_CODEGEN_UNITS: tauriDevEnv.CARGO_PROFILE_DEV_CODEGEN_UNITS,
             OPENBITFUN_MOBILE_WEB_DIR: tauriDevEnv.OPENBITFUN_MOBILE_WEB_DIR,
           });

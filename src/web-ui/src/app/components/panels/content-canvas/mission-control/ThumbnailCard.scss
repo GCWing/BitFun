@@ -84,9 +84,8 @@
     align-items: center;
     gap: 4px;
 
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--openbitfun-type-meta-font-size);
       font-weight: var(--openbitfun-type-label-sm-font-weight);

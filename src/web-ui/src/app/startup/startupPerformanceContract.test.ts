@@ -24,42 +24,48 @@ function staticImportSpecifiers(source: string): string[] {
 }
 
 describe('startup performance contract', () => {
-  it('keeps the pre-React startup fallback logo-only', () => {
+  it('keeps the pre-React startup fallback vector-only', () => {
     const source = readSource('../../../index.html');
 
     expect(source).toContain('<link rel="icon" type="image/png" href="/brand/openbitfun-app-icon.png" />');
     expect(source).not.toContain('rel="preload" as="image"');
-    expect(source).toContain('class="openbitfun-preload__logo openbitfun-preload__logo--dark"');
-    expect(source).toContain('src="/brand/openbitfun-mark-dark-128.png"');
-    expect(source).toContain('src="/brand/openbitfun-mark-light-128.png"');
-    expect(source).toContain('fetchpriority="low"');
+    expect(source).toContain('class="openbitfun-preload__logo"');
+    expect(source).toContain("url('/brand/openbitfun-mark.svg')");
+    expect(source).not.toContain('src="/brand/openbitfun-mark-dark-128.png"');
+    expect(source).not.toContain('src="/brand/openbitfun-mark-light-128.png"');
     expect(source).not.toContain('Loading workspace...');
     expect(source).not.toContain('openbitfun-preload__spinner');
     expect(source).not.toContain('aria-live="polite"');
 
     expect(source.indexOf('<script type="module" src="/src/main.tsx"></script>')).toBeLessThan(
-      source.indexOf('class="openbitfun-preload__logo openbitfun-preload__logo--dark"'),
+      source.indexOf('class="openbitfun-preload__logo"'),
     );
   });
 
-  it('keeps the startup logo asset transparent without the desktop icon backing plate', async () => {
-    const { default: sharp } = await import('sharp');
-    const assetPath = fileURLToPath(new URL('../../../public/brand/openbitfun-mark-dark-128.png', import.meta.url));
-    const { data, info } = await sharp(assetPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const alphaAt = (x: number, y: number): number => data[(y * info.width + x) * info.channels + 3] ?? 0;
+  it('keeps the startup mark as a reusable transparent vector asset', () => {
+    const asset = readSource('../../../public/brand/openbitfun-mark.svg');
 
-    expect(info.width).toBe(128);
-    expect(info.height).toBe(128);
-    expect(alphaAt(8, 8)).toBe(0);
-    expect(alphaAt(12, 12)).toBe(0);
-    expect(alphaAt(20, 20)).toBe(0);
-    // The fine-line rim crosses this band; a single pixel from the former
-    // filled mark can land between antialiased strokes in the new artwork.
-    const topRimAlpha = Array.from({ length: 15 }, (_, x) =>
-      Array.from({ length: 9 }, (_, y) => alphaAt(57 + x, 12 + y)),
-    ).flat();
-    expect(Math.max(...topRimAlpha)).toBeGreaterThan(240);
-    expect(alphaAt(64, 64)).toBe(0);
+    expect(asset).toContain('viewBox="0 0 120 120"');
+    expect(asset).toContain('fill="none"');
+    expect(asset).toContain('stroke="currentColor"');
+    expect(asset.match(/<path\b/g)).toHaveLength(15);
+    expect(asset).not.toContain('<rect');
+  });
+
+  it('uses semantic startup tones and the reference mark geometry', () => {
+    const source = readSource('../../../index.html');
+    const componentStyles = readSource('../components/SplashScreen/SplashScreen.scss');
+
+    for (const styles of [source, componentStyles]) {
+      expect(styles).toContain('width: 120px;');
+      expect(styles).not.toContain('width: 144px;');
+      expect(styles).toContain('background-color: var(--openbitfun-color-content-on-light);');
+      expect(styles).toContain('background-color: var(--openbitfun-color-content-on-dark);');
+      expect(styles).toContain('color: var(--openbitfun-color-content-secondary);');
+      expect(styles).not.toContain('var(--openbitfun-color-content-on-dark) 80%, transparent');
+      expect(styles).toContain('var(--openbitfun-color-content-on-dark) 60%, transparent');
+      expect(styles).toContain('font-size: var(--openbitfun-type-label-md-font-size);');
+    }
   });
 
   it('keeps the startup overlay exit short enough for a fast visual handoff', () => {
@@ -415,8 +421,11 @@ describe('startup performance contract', () => {
     );
     expect(backgroundCommandOutputPanelSource).not.toMatch(/from\s+['"]@\/tools\/terminal\/components['"]/);
     expect(backgroundCommandOutputPanelSource).toContain(
-      "from '@/tools/terminal/components/LazyTerminalOutputRenderer'"
+      "React.lazy(() => import('./BackgroundTerminalProjection'))"
     );
+    expect(backgroundCommandOutputPanelSource).toContain("await import('./backgroundTerminalReplay')");
+    expect(backgroundCommandOutputPanelSource).not.toMatch(/from\s+['"]@xterm\//);
+    expect(backgroundCommandOutputPanelSource).not.toMatch(/import\s+\{[^}]*BackgroundTerminalReplay[^}]*\}\s+from/);
     expect(lazyTerminalOutputSource).toContain("import('./TerminalOutputRenderer')");
   });
 

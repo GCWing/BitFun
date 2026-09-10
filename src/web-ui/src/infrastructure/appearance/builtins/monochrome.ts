@@ -59,6 +59,7 @@ export const openBitFunMonochromePalette: AppearancePalette = {
       thumbHover: content.colors.border.strong,
     },
     chrome: {
+      type: chrome.type,
       background: {
         primary: chrome.colors.background.primary,
         secondary: chrome.colors.background.secondary,

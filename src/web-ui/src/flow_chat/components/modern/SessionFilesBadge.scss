@@ -44,7 +44,6 @@
 
     &:active:not(:disabled) {
       background: var(--openbitfun-color-action-neutral-surface);
-      transform: scale(0.98);
     }
 
     &:disabled {
@@ -231,7 +230,6 @@
     color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__popover-summary-stats {
@@ -248,25 +246,6 @@
     overflow-y: auto;
     padding: 4px 6px 6px;
 
-    scrollbar-width: thin;
-    scrollbar-color: var(--openbitfun-color-border-subtle) transparent;
-
-    &::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background-color: var(--openbitfun-color-border-subtle);
-      border-radius: 2px;
-
-      &:hover {
-        background-color: var(--openbitfun-color-field-border-hover);
-      }
-    }
   }
 
   // ==================== File item ====================
@@ -342,7 +321,6 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: var(--openbitfun-type-body-sm-font-weight);
   }

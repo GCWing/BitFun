@@ -4,6 +4,7 @@ mod lineage;
 mod memory_workspace;
 mod metadata;
 mod metadata_store;
+mod offline_import;
 pub mod page;
 pub mod types;
 mod write_lock;
@@ -22,14 +23,17 @@ pub use memory_workspace::{
     MemoryWorkspaceDiff, MemoryWorkspaceGitError,
 };
 pub use metadata::{
-    build_session_index_snapshot, build_session_metadata, estimate_turn_message_count,
-    merge_session_custom_metadata, normalized_session_relationship,
+    apply_session_unread_completion, build_session_index_snapshot, build_session_metadata,
+    estimate_turn_message_count, merge_session_custom_metadata, normalized_session_relationship,
     refresh_session_metadata_from_turns, remove_session_index_entry, set_deep_review_cache,
     set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
     SessionMetadataBuildFacts,
 };
 pub use metadata_store::{SessionMetadataStore, SessionMetadataStoreError};
+pub use offline_import::{
+    OfflineSessionBundle, OfflineSessionImportError, OfflineSessionImportStore,
+};
 pub use openbitfun_core_types::{SessionKind, SESSION_PROVIDER_ACP, SESSION_PROVIDER_METADATA_KEY};
 pub use page::{build_session_metadata_page, empty_session_metadata_page, SessionMetadataPage};
 pub use types::*;

@@ -517,6 +517,7 @@
     "referenceCheckFailed": "OpenBitFun could not verify whether other settings still reference this model, so deletion was cancelled",
     "providerReferenceCheckFailed": "OpenBitFun could not verify whether other settings still reference this provider's models, so deletion was cancelled",
     "loadFailed": "Failed to load AI configuration",
+    "testing": "Testing…",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",
     "testUnsupportedOnHost": "Configuration saved; the current CLI device does not support model connection tests",

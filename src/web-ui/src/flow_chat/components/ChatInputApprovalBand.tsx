@@ -11,15 +11,29 @@
  * their own; those surfaces intentionally omit the optional typed reason.
  */
 
-import React, { useState } from 'react';
-import { Button } from '@openbitfun/ui';
+import React, { useId, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  Icon,
+  IconButton,
+  NumberBadge,
+  OverflowText,
+  ScrollArea,
+  SegmentedControl,
+  Stack,
+  Tooltip,
+} from '@openbitfun/ui';
 import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Icon } from '@openbitfun/ui';
 import type {
   PermissionReplyKind,
   PermissionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import { CopyableTextPreview } from './CopyableTextPreview';
 import './ChatInputApprovalBand.scss';
 
@@ -108,6 +122,7 @@ function permissionRisk(
 }
 
 type ApprovalScope = 'this' | 'all';
+type ApprovalAnswer = PermissionReplyKind | 'rejectWithReason';
 
 export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
   requests,
@@ -118,9 +133,11 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
   onRespondBatch,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const grantDescriptionId = useId();
   const [scope, setScope] = useState<ApprovalScope>('this');
-  const [responding, setResponding] = useState(false);
+  const [pendingAnswer, setPendingAnswer] = useState<ApprovalAnswer | null>(null);
   const [error, setError] = useState(false);
+  const responding = pendingAnswer !== null;
 
   const request = requests[0];
   const pendingCount = Math.max(totalPendingCount ?? requests.length, requests.length);
@@ -129,18 +146,47 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
   const canAnswerAll = pendingCount > 1;
   const effectiveScope: ApprovalScope = canAnswerAll ? scope : 'this';
   const reason = rejectReason.trim();
+  const resourceSummary = request?.resources.join('\n') ?? '';
+  const { copied, copy } = useCopyTextAction({
+    getText: () => resourceSummary,
+    successMessage: t('toolCards.common.copied'),
+    failureMessage: t('toolCards.common.copyFailed'),
+    showSuccessNotification: false,
+  });
+  const copyLabel = copied ? t('toolCards.common.copied') : t('toolCards.common.copy');
 
   if (!request) return null;
 
   const risk = permissionRisk(request, t);
-  const alwaysAllowTooltip = request.saveResources?.length
+  // Built-in tool names repeat the action. External identities and delegated
+  // owners provide additional context that the action label cannot express.
+  const showSourceIdentity = request.source.kind !== 'tool_call'
+    || request.action === 'mcp'
+    || request.action === 'custom_tool'
+    || !PERMISSION_ACTION_LABEL_KEYS[request.action];
+  const ownerLabel = request.delegation
+    ? t('permission.subagentOwner', { subagent: request.delegation.subagentType })
+    : showSourceIdentity ? request.source.identity : undefined;
+  const saveResources = request.saveResources ?? [];
+  const isExactCommandGrant = request.action === 'bash'
+    && request.resources.length === 1
+    && saveResources.length === 1
+    && saveResources[0] === request.resources[0];
+  const alwaysAllowLabel = isExactCommandGrant
+    ? t('permission.allowAlwaysCommand')
+    : t('permission.allowAlways');
+  const savedResourceSummary = saveResources.join('\n');
+  const alwaysAllowTooltip = saveResources.length
     ? request.projectPath?.trim()
-      ? t('permission.allowAlwaysTooltip', { projectPath: request.projectPath.trim() })
-      : t('permission.allowAlwaysTooltipCurrentProject')
+      ? t('permission.allowAlwaysTooltip', {
+        projectPath: request.projectPath.trim(),
+        resources: savedResourceSummary,
+      })
+      : t('permission.allowAlwaysTooltipCurrentProject', { resources: savedResourceSummary })
     : t('permission.allowAlwaysTooltipNoGrant');
 
   const answer = async (reply: PermissionReplyKind, withReason: boolean) => {
-    setResponding(true);
+    setPendingAnswer(withReason ? 'rejectWithReason' : reply);
     setError(false);
     const feedback = reply === 'reject' && withReason && reason ? reason : undefined;
     try {
@@ -156,11 +202,10 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
     } catch {
       setError(true);
     } finally {
-      setResponding(false);
+      setPendingAnswer(null);
     }
   };
 
-  const resourceSummary = request.resources.join(', ');
   const answersAll = effectiveScope === 'all';
   const allowLabel = answersAll
     ? t('permission.allowCurrentAndFollowing')
@@ -177,170 +222,189 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
       className="openbitfun-chat-input-approval"
       role="group"
       aria-label={t('permission.title')}
+      aria-busy={responding || undefined}
       data-testid="chat-input-approval-band"
       data-approval-scope={effectiveScope}
     >
-      <div
-        data-openbitfun-component="permission-request-panel"
-        data-openbitfun-part="request"
-        className="openbitfun-chat-input-approval__request"
+      <Card
+        appearance="raised"
+        padding="sm"
+        gap="sm"
+        className="openbitfun-chat-input-approval__surface"
       >
-        <ShieldAlert
-          className="openbitfun-chat-input-approval__icon"
-          size={14}
-          strokeWidth={2.1}
-          aria-hidden
-        />
-        <span className="openbitfun-chat-input-approval__action">
-          {permissionActionLabel(request.action, t)}
-        </span>
-        <span className="openbitfun-chat-input-approval__separator" aria-hidden>·</span>
-        <CopyableTextPreview
-          as="code"
-          text={resourceSummary}
-          emptyText=""
-          className="openbitfun-chat-input-approval__resource copyable-text-preview--theme-font"
-          tooltipContent={request.resources.join('\n') || undefined}
-          tooltipPlacement="top"
-        />
-        {request.delegation ? (
-          <span className="openbitfun-chat-input-approval__owner">
-            {t('permission.subagentOwner', { subagent: request.delegation.subagentType })}
-          </span>
-        ) : (
-          <span className="openbitfun-chat-input-approval__owner">{request.source.identity}</span>
-        )}
-        {canAnswerAll ? (
-          <Tooltip content={t('permission.batchCount', { count: pendingCount })} placement="top">
-            <span
-              className="openbitfun-chat-input-approval__count"
-              data-testid="chat-input-approval-pending-count"
-            >
-              +{pendingCount - 1}
-            </span>
-          </Tooltip>
-        ) : null}
-      </div>
-
-      {/* The risk is the reason to read the band at all, so it keeps its own
-          line rather than hiding in a tooltip. */}
-      {error ? (
-        <p
+        <div
           data-openbitfun-component="permission-request-panel"
-          data-openbitfun-part="error"
-          className="openbitfun-chat-input-approval__note openbitfun-chat-input-approval__note--error"
-          role="alert"
+          data-openbitfun-part="request"
         >
-          {t('permission.responseFailed')}
-        </p>
-      ) : risk ? (
-        <p
-          data-openbitfun-component="permission-request-panel"
-          data-openbitfun-part="risk"
-          className="openbitfun-chat-input-approval__note"
-        >
-          {risk}
-        </p>
-      ) : null}
+          <CardHeader
+            align="center"
+            leading={<Icon glyph={ShieldAlert} size="sm" tone="warning" />}
+            title={
+              <Stack direction="horizontal" align="center" gap="2">
+                <span className="openbitfun-chat-input-approval__title">
+                  {permissionActionLabel(request.action, t)}
+                </span>
+                {ownerLabel ? (
+                  <OverflowText className="openbitfun-chat-input-approval__owner">
+                    {ownerLabel}
+                  </OverflowText>
+                ) : null}
+              </Stack>
+            }
+            actions={canAnswerAll ? (
+              <Tooltip content={t('permission.batchCount', { count: pendingCount })} placement="top">
+                <NumberBadge
+                  value={`+${pendingCount - 1}`}
+                  aria-label={t('permission.batchCount', { count: pendingCount })}
+                  data-testid="chat-input-approval-pending-count"
+                />
+              </Tooltip>
+            ) : undefined}
+          />
+        </div>
 
-      <div
-        data-openbitfun-component="permission-request-panel"
-        data-openbitfun-part="actions"
-        className="openbitfun-chat-input-approval__actions"
-      >
-        {canAnswerAll ? (
+        <Card appearance="neutral" padding="sm" radius="sm">
+          <Stack direction="horizontal" align="center" gap="2">
+            <ScrollArea className="openbitfun-chat-input-approval__resource" tabIndex={0}>
+              <CopyableTextPreview as="code" multiline text={resourceSummary} emptyText="" />
+            </ScrollArea>
+            {resourceSummary.trim() ? (
+              <Tooltip content={copyLabel} placement="top">
+                <IconButton
+                  aria-label={copyLabel}
+                  data-testid="chat-input-approval-copy"
+                  variant="quiet"
+                  size="xs"
+                  icon={
+                    <Icon
+                      name={copied ? 'check-line' : 'duplicate'}
+                      size="xs"
+                      tone={copied ? 'success' : 'inherit'}
+                    />
+                  }
+                  onClick={copy}
+                />
+              </Tooltip>
+            ) : null}
+          </Stack>
+        </Card>
+
+        {/* Keep the risk visible while a failed response is retried. */}
+        {risk ? (
           <div
             data-openbitfun-component="permission-request-panel"
-            data-openbitfun-part="scope"
-            className="openbitfun-chat-input-approval__scope"
-            role="radiogroup"
-            aria-label={t('permission.scopeLabel')}
+            data-openbitfun-part="risk"
+            className="openbitfun-chat-input-approval__note"
           >
-            {(['this', 'all'] as const).map(option => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={effectiveScope === option}
-                className={[
-                  'openbitfun-chat-input-approval__scope-option',
-                  effectiveScope === option && 'openbitfun-chat-input-approval__scope-option--active',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={responding}
-                data-testid={`chat-input-approval-scope-${option}`}
-                onClick={() => setScope(option)}
-              >
-                {option === 'this' ? t('permission.scopeThis') : t('permission.scopeAll')}
-              </button>
-            ))}
+            <Alert tone="warning" message={risk} />
+          </div>
+        ) : null}
+        {error ? (
+          <div
+            data-openbitfun-component="permission-request-panel"
+            data-openbitfun-part="error"
+            className="openbitfun-chat-input-approval__note"
+          >
+            <Alert tone="error" message={t('permission.responseFailed')} />
           </div>
         ) : null}
 
-        <span className="openbitfun-chat-input-approval__spacer" />
+        {isExactCommandGrant && !answersAll ? (
+          <p
+            id={grantDescriptionId}
+            data-openbitfun-component="permission-request-panel"
+            data-openbitfun-part="grantScope"
+            className="openbitfun-chat-input-approval__grant-note"
+          >
+            {t('permission.allowAlwaysCommandDescription')}
+          </p>
+        ) : null}
 
-        {/* Rejecting is the safe answer, so it leads and never depends on
-            anything else being in the right state. */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          leadingIcon={<Icon name="xmark" size="lg" style={{ width: 13, height: 13 }} />}
-          disabled={responding}
-          data-testid="chat-input-approval-reject"
-          onClick={() => void answer('reject', false)}
+        <div
+          data-openbitfun-component="permission-request-panel"
+          data-openbitfun-part="actions"
         >
-          {rejectLabel}
-        </Button>
-        {/* The composer is the reason field. It is offered rather than assumed,
-            so a half-typed next message cannot become a rejection reason and
-            typing one cannot block the allow buttons. */}
-        {reason ? (
-          <Tooltip content={t('permission.rejectWithReasonTooltip')} placement="top">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              leadingIcon={<Icon name="xmark" size="lg" style={{ width: 13, height: 13 }} />}
-              disabled={responding}
-              data-testid="chat-input-approval-reject-with-reason"
-              onClick={() => void answer('reject', true)}
-            >
-              {t('permission.rejectWithReason')}
-            </Button>
-          </Tooltip>
-        ) : null}
-        <Button
-          type="button"
-          variant="fill"
-          size="sm"
-          leadingIcon={<Icon name="check-line" size="lg" style={{ width: 13, height: 13 }} />}
-          disabled={responding}
-          data-testid="chat-input-approval-allow"
-          onClick={() => void answer('once', false)}
-        >
-          {allowLabel}
-        </Button>
-        {/* "Always" writes a saved grant, so it is only offered when this
-            request has a scope to save, and only for the request in front of
-            the reader — a saved grant is not something to apply in bulk to
-            requests they have not read. */}
-        {request.saveResources?.length && !answersAll ? (
-          <Tooltip content={alwaysAllowTooltip} placement="top">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={responding}
-              data-testid="chat-input-approval-allow-always"
-              onClick={() => void answer('always', false)}
-            >
-              {t('permission.allowAlways')}
-            </Button>
-          </Tooltip>
-        ) : null}
-      </div>
+          <CardFooter align="between" className="openbitfun-chat-input-approval__actions">
+            {canAnswerAll ? (
+              <div
+                data-openbitfun-component="permission-request-panel"
+                data-openbitfun-part="scope"
+              >
+                <SegmentedControl
+                  aria-label={t('permission.scopeLabel')}
+                  data-testid="chat-input-approval-scope"
+                  size="sm"
+                  tone="neutral"
+                  value={effectiveScope}
+                  disabled={responding}
+                  options={[
+                    { value: 'this', label: t('permission.scopeThis') },
+                    { value: 'all', label: t('permission.scopeAll') },
+                  ]}
+                  onValueChange={value => setScope(value === 'all' ? 'all' : 'this')}
+                />
+              </div>
+            ) : null}
+
+            <div className="openbitfun-chat-input-approval__buttons">
+              {/* Rejecting is the safe answer, so it leads. */}
+              <Button
+                variant="fill"
+                size="sm"
+                leadingIcon={<Icon name="xmark" size="sm" />}
+                disabled={responding}
+                loading={pendingAnswer === 'reject'}
+                data-testid="chat-input-approval-reject"
+                onClick={() => void answer('reject', false)}
+              >
+                {rejectLabel}
+              </Button>
+              {/* A draft becomes a reason only through this explicit action. */}
+              {reason ? (
+                <Tooltip content={t('permission.rejectWithReasonTooltip')} placement="top">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={responding}
+                    loading={pendingAnswer === 'rejectWithReason'}
+                    data-testid="chat-input-approval-reject-with-reason"
+                    onClick={() => void answer('reject', true)}
+                  >
+                    {t('permission.rejectWithReason')}
+                  </Button>
+                </Tooltip>
+              ) : null}
+              {/* Saved grants apply only to the request the reader has seen. */}
+              {saveResources.length > 0 && !answersAll ? (
+                <Tooltip content={alwaysAllowTooltip} placement="top">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={responding}
+                    loading={pendingAnswer === 'always'}
+                    aria-describedby={isExactCommandGrant ? grantDescriptionId : undefined}
+                    data-testid="chat-input-approval-allow-always"
+                    onClick={() => void answer('always', false)}
+                  >
+                    {alwaysAllowLabel}
+                  </Button>
+                </Tooltip>
+              ) : null}
+              <Button
+                variant="primary"
+                size="sm"
+                leadingIcon={<Icon name="check-line" size="sm" />}
+                disabled={responding}
+                loading={pendingAnswer === 'once'}
+                data-testid="chat-input-approval-allow"
+                onClick={() => void answer('once', false)}
+              >
+                {allowLabel}
+              </Button>
+            </div>
+          </CardFooter>
+        </div>
+      </Card>
     </div>
   );
 };

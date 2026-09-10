@@ -97,25 +97,21 @@
     height: 26px;
     padding: 0.2rem;
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       opacity 140ms ease;
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:hover {
     background: transparent;
     color: var(--openbitfun-color-content-muted);
-    transform: scale(1.08);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:active {
     background: transparent;
     color: var(--openbitfun-color-content-muted);
-    transform: scale(1.02);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
     color: var(--openbitfun-color-status-success-content);
-    transform: scale(1.08);
   }
 
   .text-content {

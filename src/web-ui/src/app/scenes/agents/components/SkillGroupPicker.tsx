@@ -1,51 +1,21 @@
-import {
-  Button,
-  Icon,
-  IconButton,
-  Input,
-  ScrollArea,
-  Switch,
-  Tooltip,
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogHeader,
-  DialogHeading,
-  DialogTitle,
-} from '@openbitfun/ui';
-import React, { useMemo, useState } from 'react';
-import type { TFunction } from 'i18next';
-
-import { useTranslation } from 'react-i18next';
-
-import { confirmDanger } from '@/infrastructure/confirm-dialog';
+import { Button, Checkbox, FieldGroup, FieldRow, FormSection, OverflowText, StatusPill, Toolbar } from '@openbitfun/ui';
+import React, { useMemo } from 'react';
+import { useI18n, type UseI18nReturn } from '@/infrastructure/i18n/hooks/useI18n';
 import type { UserSkillGroup } from '@/infrastructure/config/types';
-import { useNotification } from '@/shared/notification-system';
 import {
-  type GroupableSkill,
-  type ResolvedSkillGroup,
-  builtinSkillGroupLabelKey,
-  resolveSkillGroupSummary,
-  resolveSkillGroups,
-  setSkillGroupSelection,
-  skillGroupKeys,
-  toggleSkillSelection,
-  unavailableUserSkillKeys,
-} from './skillGroups';
-import {
-  AgentCapabilityTooltip,
-  type AgentCapabilityTooltipField,
-} from './AgentCapabilityTooltip';
+  type GroupableSkill, type ResolvedSkillGroup, builtinSkillGroupLabelKey,
+  resolveSkillGroupSummary, resolveSkillSelectionGroups, setSkillGroupSelection,
+  skillGroupKeys, toggleSkillSelection,
+} from '@/features/skill-groups/skillGroups';
+import { AgentCapabilityTooltip, type AgentCapabilityTooltipField } from './AgentCapabilityTooltip';
 import { capabilityTooltipAriaLabel } from './agentCapabilityTooltipUtils';
 import './SkillGroupPicker.scss';
 
 interface SkillGroupPickerProps {
   skills: GroupableSkill[];
-  managementSkills?: GroupableSkill[];
   selectedSkillKeys: readonly string[];
   userGroups: UserSkillGroup[];
   onSelectionChange: (skillKeys: string[]) => void;
-  onSaveUserGroups: (groups: UserSkillGroup[]) => Promise<void>;
   disabled?: boolean;
   testId?: string;
 }
@@ -54,28 +24,6 @@ interface SkillGroupSummaryProps {
   skills: GroupableSkill[];
   selectedSkillKeys: readonly string[];
   userGroups: UserSkillGroup[];
-}
-
-export interface SkillGroupManagerModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  skills: GroupableSkill[];
-  groups: UserSkillGroup[];
-  onSaveGroups: (groups: UserSkillGroup[]) => Promise<void>;
-}
-
-function createGroupId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `skill_group_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function hasDuplicateName(groups: UserSkillGroup[], name: string, exceptId?: string): boolean {
-  const normalized = name.trim().toLocaleLowerCase();
-  return groups.some((group) => (
-    group.id !== exceptId && group.name.trim().toLocaleLowerCase() === normalized
-  ));
 }
 
 function isGroupEnabled(group: ResolvedSkillGroup, selectedSkillKeys: readonly string[]): boolean {
@@ -88,12 +36,12 @@ function selectedGroupSkillCount(group: ResolvedSkillGroup, selectedSkillKeys: r
   return group.skills.filter((skill) => selected.has(skill.key)).length;
 }
 
-function builtinGroupLabel(groupKey: string, t: TFunction<'scenes/agents'>): string {
+function builtinGroupLabel(groupKey: string, t: UseI18nReturn['t']): string {
   const labelKey = builtinSkillGroupLabelKey(groupKey);
   return labelKey ? t(`agentsOverview.skillGroups.${labelKey}`) : groupKey;
 }
 
-function groupSectionLabel(group: ResolvedSkillGroup, t: TFunction<'scenes/agents'>): string {
+function groupSectionLabel(group: ResolvedSkillGroup, t: UseI18nReturn['t']): string {
   switch (group.kind) {
     case 'user':
       return t('agentsOverview.skillGroupPicker.myGroups');
@@ -122,7 +70,7 @@ function skillDisplayName(skill: GroupableSkill, duplicateNames: Set<string>): s
 
 function skillTooltipFields(
   skill: GroupableSkill,
-  t: TFunction<'scenes/agents'>,
+  t: UseI18nReturn['t'],
 ): AgentCapabilityTooltipField[] {
   const source = [skill.sourceLabel ?? skill.sourceSlot, skill.level].filter(Boolean).join('/');
   return [
@@ -146,318 +94,17 @@ function skillTooltipFields(
   ];
 }
 
-export const SkillGroupManagerModal: React.FC<SkillGroupManagerModalProps> = ({
-  isOpen,
-  onClose,
-  skills,
-  groups,
-  onSaveGroups,
-}) => {
-  const { t } = useTranslation('scenes/agents');
-  const notification = useNotification();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [nameError, setNameError] = useState(false);
-  const [skillKeys, setSkillKeys] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const duplicateNames = useMemo(() => duplicateSkillNames(skills), [skills]);
-  const selectableSkills = useMemo(
-    () => [...skills].sort((left, right) => left.name.localeCompare(right.name) || left.key.localeCompare(right.key)),
-    [skills],
-  );
-  const editingGroup = groups.find((group) => group.id === editingId) ?? null;
-  const isEditing = editingId !== null;
-
-  const closeEditor = () => {
-    setEditingId(null);
-    setName('');
-    setNameError(false);
-    setSkillKeys(new Set());
-  };
-
-  const startCreate = () => {
-    setEditingId('__new__');
-    setName('');
-    setNameError(false);
-    setSkillKeys(new Set());
-  };
-
-  const startEdit = (group: UserSkillGroup) => {
-    setEditingId(group.id);
-    setName(group.name);
-    setNameError(false);
-    setSkillKeys(new Set(group.skillKeys));
-  };
-
-  const toggleSkill = (skillKey: string) => {
-    setSkillKeys((current) => {
-      const next = new Set(current);
-      if (next.has(skillKey)) {
-        next.delete(skillKey);
-      } else {
-        next.add(skillKey);
-      }
-      return next;
-    });
-  };
-
-  const saveEditor = async () => {
-    const trimmedName = name.trim();
-    const selectedKeys = Array.from(skillKeys);
-    const existingId = editingGroup?.id;
-    if (!trimmedName) {
-      setNameError(true);
-      return;
-    }
-    if (hasDuplicateName(groups, trimmedName, existingId)) {
-      notification.error(t('agentsOverview.skillGroupPicker.validation.nameDuplicate'));
-      return;
-    }
-    if (selectedKeys.length === 0) {
-      notification.error(t('agentsOverview.skillGroupPicker.validation.skillsRequired'));
-      return;
-    }
-
-    const nextGroup: UserSkillGroup = {
-      id: existingId ?? createGroupId(),
-      name: trimmedName,
-      skillKeys: selectedKeys,
-    };
-    const nextGroups = existingId
-      ? groups.map((group) => group.id === existingId ? nextGroup : group)
-      : [...groups, nextGroup];
-
-    setSaving(true);
-    try {
-      await onSaveGroups(nextGroups);
-      closeEditor();
-    } catch {
-      notification.error(t('agentsOverview.skillGroupPicker.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteGroup = async (group: UserSkillGroup) => {
-    const confirmed = await confirmDanger(
-      t('agentsOverview.skillGroupPicker.deleteTitle'),
-      t('agentsOverview.skillGroupPicker.deleteMessage', { name: group.name }),
-      { confirmText: t('agentsOverview.skillGroupPicker.deleteConfirm') },
-    );
-    if (!confirmed) {
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSaveGroups(groups.filter((candidate) => candidate.id !== group.id));
-      if (editingId === group.id) {
-        closeEditor();
-      }
-    } catch {
-      notification.error(t('agentsOverview.skillGroupPicker.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const moveGroup = async (index: number, direction: -1 | 1) => {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= groups.length) {
-      return;
-    }
-    const nextGroups = [...groups];
-    [nextGroups[index], nextGroups[nextIndex]] = [nextGroups[nextIndex], nextGroups[index]];
-    setSaving(true);
-    try {
-      await onSaveGroups(nextGroups);
-    } catch {
-      notification.error(t('agentsOverview.skillGroupPicker.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          closeEditor();
-          onClose();
-        }
-      }}
-      size="lg"
-      data-testid="skill-group-manager"
-    >
-      <DialogHeader>
-        <DialogHeading>
-          <DialogTitle>{t('agentsOverview.skillGroupPicker.manageTitle')}</DialogTitle>
-        </DialogHeading>
-        <DialogClose />
-      </DialogHeader>
-      <DialogBody>
-      <div className="skill-group-manager" data-openbitfun-component="skill-group-picker" data-openbitfun-part="manager">
-        {isEditing ? (
-          <div className="skill-group-manager__editor" data-openbitfun-component="skill-group-picker" data-openbitfun-part="managerEditor">
-            <div className="skill-group-manager__field">
-              <label htmlFor="skill-group-name">{t('agentsOverview.skillGroupPicker.groupName')}</label>
-              <Input
-                id="skill-group-name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (nameError) {
-                    setNameError(false);
-                  }
-                }}
-                placeholder={t('agentsOverview.skillGroupPicker.groupNamePlaceholder')}
-                invalid={nameError}
-                disabled={saving}
-                size="sm"
-              />
-            </div>
-            <div className="skill-group-manager__field">
-              <span>{t('agentsOverview.skillGroupPicker.groupSkills')}</span>
-              <ScrollArea className="skill-group-manager__token-grid" data-openbitfun-component="skill-group-picker" data-openbitfun-part="tokenGrid">
-                {selectableSkills.map((skill) => {
-                  const selected = skillKeys.has(skill.key);
-                  const tooltipFields = skillTooltipFields(skill, t);
-                  return (
-                    <AgentCapabilityTooltip
-                      key={skill.key}
-                      title={skillDisplayName(skill, duplicateNames)}
-                      description={skill.description}
-                      fields={tooltipFields}
-                      placement="top"
-                    >
-                      <button
-                        type="button"
-                        className={`skill-group-manager__token${selected ? ' is-on' : ''}`}
-                        data-openbitfun-component="skill-group-picker"
-                        data-openbitfun-part="token"
-                        data-openbitfun-state={selected ? 'selected' : undefined}
-                        onClick={() => toggleSkill(skill.key)}
-                        disabled={saving}
-                        aria-label={capabilityTooltipAriaLabel(
-                          skillDisplayName(skill, duplicateNames),
-                          skill.description,
-                          tooltipFields,
-                        )}
-                        aria-pressed={selected}
-                      >
-                        {skillDisplayName(skill, duplicateNames)}
-                      </button>
-                    </AgentCapabilityTooltip>
-                  );
-                })}
-              </ScrollArea>
-            </div>
-            <div className="skill-group-manager__footer">
-              <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
-                {t('agentsOverview.cancel')}
-              </Button>
-              <Button variant="fill" size="sm" onClick={() => void saveEditor()} loading={saving}>
-                {isEditing && editingGroup
-                  ? t('agentsOverview.skillGroupPicker.saveGroup')
-                  : t('agentsOverview.skillGroupPicker.createGroup')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="skill-group-manager__head">
-              <span>{t('agentsOverview.skillGroupPicker.manageSubtitle')}</span>
-              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Icon name="plus" size="sm" />}>
-
-                {t('agentsOverview.skillGroupPicker.createGroup')}
-              </Button>
-            </div>
-            {groups.length === 0 ? (
-              <p className="skill-group-manager__empty">{t('agentsOverview.skillGroupPicker.noUserGroups')}</p>
-            ) : (
-              <ScrollArea className="skill-group-manager__list" data-openbitfun-component="skill-group-picker" data-openbitfun-part="managerList">
-                {groups.map((group, index) => {
-                  const unavailable = unavailableUserSkillKeys(group, skills);
-                  return (
-                    <div data-openbitfun-component="skill-group-picker" data-openbitfun-part="managerGroup" key={group.id} className="skill-group-manager__group-row">
-                      <div className="skill-group-manager__group-copy">
-                        <span className="skill-group-manager__group-name">{group.name}</span>
-                        <span className="skill-group-manager__group-meta">
-                          {t('agentsOverview.skillGroupPicker.groupCount', { count: group.skillKeys.length })}
-                          {unavailable.length > 0
-                            ? ` · ${t('agentsOverview.skillGroupPicker.unavailableCount', { count: unavailable.length })}`
-                            : ''}
-                        </span>
-                      </div>
-                      <div className="skill-group-manager__group-actions" data-openbitfun-component="skill-group-picker" data-openbitfun-part="groupActions">
-                        <Tooltip content={t('agentsOverview.skillGroupPicker.moveUp')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.skillGroupPicker.moveUp')}
-                            onClick={() => void moveGroup(index, -1)}
-                            disabled={saving || index === 0}
-                            icon={<Icon name="arrow-up" size="xs" />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.skillGroupPicker.moveDown')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.skillGroupPicker.moveDown')}
-                            onClick={() => void moveGroup(index, 1)}
-                            disabled={saving || index === groups.length - 1}
-                            icon={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.skillGroupPicker.editGroup')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.skillGroupPicker.editGroup')}
-                            onClick={() => startEdit(group)}
-                            disabled={saving}
-                            icon={<Icon name="edit" size="xs" />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.skillGroupPicker.deleteGroup')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.skillGroupPicker.deleteGroup')}
-                            onClick={() => void deleteGroup(group)}
-                            disabled={saving}
-                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
-                          />
-                        </Tooltip>
-                      </div>
-                    </div>
-                  );
-                })}
-              </ScrollArea>
-            )}
-          </>
-        )}
-      </div>
-          </DialogBody>
-    </Dialog>
-  );
-};
-
 export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
   skills,
-  managementSkills,
   selectedSkillKeys,
   userGroups,
   onSelectionChange,
-  onSaveUserGroups,
   disabled = false,
   testId,
 }) => {
-  const { t } = useTranslation('scenes/agents');
-  const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const { t, formatNumber } = useI18n('scenes/agents');
   const duplicateNames = useMemo(() => duplicateSkillNames(skills), [skills]);
-  const groups = useMemo(() => resolveSkillGroups(skills, userGroups, {
+  const groups = useMemo(() => resolveSkillSelectionGroups(skills, userGroups, {
     builtin: (groupKey) => builtinGroupLabel(groupKey, t),
     other: t('agentsOverview.skillGroupPicker.otherSkills'),
   }), [skills, t, userGroups]);
@@ -474,115 +121,114 @@ export const SkillGroupPicker: React.FC<SkillGroupPickerProps> = ({
   }, [groups, t]);
 
   return (
-    <div data-openbitfun-component="skill-group-picker" data-openbitfun-part="root" className="skill-group-picker" data-testid={testId}>
-      <div className="skill-group-picker__head" data-openbitfun-component="skill-group-picker" data-openbitfun-part="head">
-        <span className="skill-group-picker__selected-count">
+    <div data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="root" className="skill-group-picker" data-testid={testId}>
+      <Toolbar
+        bordered={false}
+        data-openbitfun-product-component="skill-group-picker"
+        data-openbitfun-product-part="head"
+        leading={<span className="skill-group-picker__selected-count">
           {t('agentsOverview.skillGroupPicker.selectedCount', { count: selectedCount })}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsManagerOpen(true)}
-          disabled={disabled}
-          leadingIcon={<Icon name="settings" size="sm" />}
-        >
-
-          {t('agentsOverview.skillGroupPicker.manageGroups')}
-        </Button>
-      </div>
-      <div className="skill-group-picker__sections" data-openbitfun-component="skill-group-picker" data-openbitfun-part="sections">
+        </span>}
+      />
+      <div className="skill-group-picker__sections" data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="sections">
         {sections.map(([sectionLabel, sectionGroups]) => (
-          <section key={sectionLabel} className="skill-group-picker__section" data-openbitfun-component="skill-group-picker" data-openbitfun-part="section">
-            <span className="skill-group-picker__section-label">{sectionLabel}</span>
+          <FormSection key={sectionLabel} headingAs="h4" title={sectionLabel}
+            data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="section">
             {sectionGroups.map((group) => {
               const selectedInGroup = selectedGroupSkillCount(group, selectedSkillKeys);
               const allSelected = isGroupEnabled(group, selectedSkillKeys);
               return (
-                <div data-openbitfun-component="skill-group-picker" data-openbitfun-part="group" key={group.id} className="skill-group-picker__group">
-                  <div className="skill-group-picker__group-head" data-openbitfun-component="skill-group-picker" data-openbitfun-part="groupHeader">
-                    <div className="skill-group-picker__group-title-wrap">
-                      <span className="skill-group-picker__group-name">{group.label}</span>
-                      <span className="skill-group-picker__group-count">
-                        {selectedInGroup}/{group.skills.length}
-                      </span>
-                    </div>
-                    <div className="skill-group-picker__group-actions" data-openbitfun-component="skill-group-picker" data-openbitfun-part="groupActions">
-                      {selectedInGroup > 0 && !allSelected ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onSelectionChange(
-                            setSkillGroupSelection(selectedSkillKeys, skillGroupKeys(group), false),
-                          )}
-                          disabled={disabled}
-                        >
-                          {t('agentsOverview.clearGroup')}
-                        </Button>
-                      ) : null}
-                      <Switch
-                        checked={allSelected}
-                        onChange={(event) => onSelectionChange(
-                          setSkillGroupSelection(
-                            selectedSkillKeys,
-                            skillGroupKeys(group),
-                            event.target.checked,
-                          ),
+                <FieldGroup data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="group" key={group.id}>
+                  <FieldRow data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="groupHeader">
+                    <div className="skill-group-picker__group-head">
+                      <div className="skill-group-picker__group-title-wrap">
+                        <OverflowText className="skill-group-picker__group-name">{group.label}</OverflowText>
+                        <span className="skill-group-picker__group-count">
+                          {formatNumber(selectedInGroup)}/{formatNumber(group.skills.length)}
+                        </span>
+                        {group.unavailableSkillKeys.length > 0 && (
+                          <span className="skill-group-picker__unavailable">
+                            {t('agentsOverview.skillGroupPicker.unavailableCount', { count: group.unavailableSkillKeys.length })}
+                          </span>
                         )}
-                        disabled={disabled}
-                        aria-label={allSelected
-                          ? t('agentsOverview.skillGroupPicker.clearGroupSkills', { name: group.label })
-                          : t('agentsOverview.skillGroupPicker.enableGroupSkills', { name: group.label })}
-                      />
-                    </div>
-                  </div>
-                  <div className="skill-group-picker__token-grid" data-openbitfun-component="skill-group-picker" data-openbitfun-part="tokenGrid">
-                    {group.skills.map((skill) => {
-                      const selected = selectedSkillKeys.includes(skill.key);
-                      const tooltipFields = skillTooltipFields(skill, t);
-                      return (
-                        <AgentCapabilityTooltip
-                          key={skill.key}
-                          title={skillDisplayName(skill, duplicateNames)}
-                          description={skill.description}
-                          fields={tooltipFields}
-                          placement="top"
-                        >
-                          <button
-                            type="button"
-                            className={`skill-group-picker__token${selected ? ' is-on' : ''}`}
-                            data-openbitfun-component="skill-group-picker"
-                            data-openbitfun-part="token"
-                            data-openbitfun-state={selected ? 'selected' : undefined}
+                      </div>
+                      <div className="skill-group-picker__group-actions" data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="groupActions">
+                        {selectedInGroup > 0 && !allSelected ? (
+                          <Button
+                            variant="text"
+                            size="xs"
                             onClick={() => onSelectionChange(
-                              toggleSkillSelection(selectedSkillKeys, skill.key),
+                              setSkillGroupSelection(selectedSkillKeys, skillGroupKeys(group), false),
                             )}
                             disabled={disabled}
-                            aria-label={capabilityTooltipAriaLabel(
-                              skillDisplayName(skill, duplicateNames),
-                              skill.description,
-                              tooltipFields,
-                            )}
-                            aria-pressed={selected}
                           >
-                            {skillDisplayName(skill, duplicateNames)}
-                          </button>
-                        </AgentCapabilityTooltip>
-                      );
-                    })}
-                  </div>
-                </div>
+                            {t('agentsOverview.clearGroup')}
+                          </Button>
+                        ) : null}
+                        <Checkbox
+                          size="sm"
+                          indeterminate={selectedInGroup > 0 && !allSelected}
+                          checked={allSelected}
+                          onCheckedChange={(checked) => onSelectionChange(
+                            setSkillGroupSelection(
+                              selectedSkillKeys,
+                              skillGroupKeys(group),
+                              checked,
+                            ),
+                          )}
+                          disabled={disabled || group.skills.length === 0}
+                          aria-label={allSelected
+                            ? t('agentsOverview.skillGroupPicker.clearGroupSkills', { name: group.label })
+                            : t('agentsOverview.skillGroupPicker.enableGroupSkills', { name: group.label })}
+                        />
+                      </div>
+                    </div>
+                  </FieldRow>
+                  <FieldRow align="start">
+                    <div className="skill-group-picker__token-grid" data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="tokenGrid">
+                      {group.skills.map((skill) => {
+                        const selected = selectedSkillKeys.includes(skill.key);
+                        const tooltipFields = skillTooltipFields(skill, t);
+                        return (
+                          <AgentCapabilityTooltip
+                            key={skill.key}
+                            title={skillDisplayName(skill, duplicateNames)}
+                            description={skill.description}
+                            fields={tooltipFields}
+                            placement="top"
+                          >
+                            <Button
+                              type="button"
+                              className="skill-group-picker__token"
+                              variant={selected ? 'secondary' : 'outline'}
+                              size="sm"
+                              data-openbitfun-product-component="skill-group-picker"
+                              data-openbitfun-product-part="token"
+                              data-openbitfun-state={selected ? 'selected' : undefined}
+                              onClick={() => onSelectionChange(
+                                toggleSkillSelection(selectedSkillKeys, skill.key),
+                              )}
+                              disabled={disabled}
+                              aria-label={capabilityTooltipAriaLabel(
+                                skillDisplayName(skill, duplicateNames),
+                                skill.description,
+                                tooltipFields,
+                              )}
+                              aria-pressed={selected}
+                            >
+                              {skillDisplayName(skill, duplicateNames)}
+                            </Button>
+                          </AgentCapabilityTooltip>
+                        );
+                      })}
+                    </div>
+                  </FieldRow>
+                </FieldGroup>
               );
             })}
-          </section>
+          </FormSection>
         ))}
       </div>
-      <SkillGroupManagerModal
-        isOpen={isManagerOpen}
-        onClose={() => setIsManagerOpen(false)}
-        skills={managementSkills ?? skills}
-        groups={userGroups}
-        onSaveGroups={onSaveUserGroups}
-      />
     </div>
   );
 };
@@ -592,7 +238,7 @@ export const SkillGroupSummary: React.FC<SkillGroupSummaryProps> = ({
   selectedSkillKeys,
   userGroups,
 }) => {
-  const { t } = useTranslation('scenes/agents');
+  const { t } = useI18n('scenes/agents');
   const duplicateNames = useMemo(() => duplicateSkillNames(skills), [skills]);
   const groups = useMemo(() => resolveSkillGroupSummary(skills, userGroups, selectedSkillKeys, {
     builtin: (groupKey) => builtinGroupLabel(groupKey, t),
@@ -600,14 +246,14 @@ export const SkillGroupSummary: React.FC<SkillGroupSummaryProps> = ({
   }), [selectedSkillKeys, skills, t, userGroups]);
 
   if (groups.length === 0) {
-    return <span data-openbitfun-component="skill-group-picker" data-openbitfun-part="empty" className="agent-card__empty-inline">{t('agentsOverview.noSkills')}</span>;
+    return <span data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="empty" className="skill-group-summary__empty">{t('agentsOverview.noSkills')}</span>;
   }
 
   return (
-    <div data-openbitfun-component="skill-group-picker" data-openbitfun-part="summary" className="skill-group-summary">
+    <div data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="summary" className="skill-group-summary">
       {groups.map((group) => (
-        <div key={group.id} className="skill-group-summary__group" data-openbitfun-component="skill-group-picker" data-openbitfun-part="summaryGroup">
-          <span className="skill-group-summary__label">{group.label}</span>
+        <FormSection key={group.id} headingAs="h4" title={group.label}
+          data-openbitfun-product-component="skill-group-picker" data-openbitfun-product-part="summaryGroup">
           <div className="skill-group-summary__skills">
             {group.skills.map((skill) => {
               const tooltipFields = skillTooltipFields(skill, t);
@@ -618,14 +264,14 @@ export const SkillGroupSummary: React.FC<SkillGroupSummaryProps> = ({
                   description={skill.description}
                   fields={tooltipFields}
                 >
-                  <span className="agent-card__chip">
+                  <StatusPill tone="neutral" className="skill-group-summary__item">
                     {skillDisplayName(skill, duplicateNames)}
-                  </span>
+                  </StatusPill>
                 </AgentCapabilityTooltip>
               );
             })}
           </div>
-        </div>
+        </FormSection>
       ))}
     </div>
   );

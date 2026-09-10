@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Card,
   CardBody,
@@ -39,8 +39,8 @@ import {
   type MarketSort,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { marketImageUrl, retryOriginalMarketImage } from '@/infrastructure/api/service-api/MarketImage';
-import { MarketAccountControls } from '@/features/market-account';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -73,7 +73,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
   const { openScene, activateScene, openTabs } = useSceneManager();
   const upsertApp = useMiniAppStore((state) => state.upsertApp);
   const setMarketOrigin = useMiniAppStore((state) => state.setMarketOrigin);
-  const { me } = useMarketAccount();
+  const { me } = useAccountIdentity();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [sort, setSort] = useState<MarketSort>('newest');
@@ -283,7 +283,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
               placeholder={t('market.search')}
               size="sm"
             />
-            <MarketAccountControls
+            <AccountIdentityControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
               onIdentityChanged={refreshPersonalizedDetail}
@@ -312,7 +312,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             />
           )}
         >
-          <SegmentedControl
+          <SegmentedControl size="md"
             className="miniapp-market-native__categories"
             options={CATEGORIES.map((value) => ({
               label: categoryLabel(value, t),
@@ -360,7 +360,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
                       clip
                       radius="lg"
                     >
-                      <button
+                      <button data-overflow-trigger
                         type="button"
                         className="miniapp-market-card__trigger"
                         data-openbitfun-component="miniapp-market-view"
@@ -390,8 +390,8 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
                             <span>{categoryLabel(item.category, t)}</span>
                             <span>v{item.latestRelease}</span>
                           </div>
-                          <strong>{name}</strong>
-                          <p>{description}</p>
+                          <strong><OverflowText>{name}</OverflowText></strong>
+                          <OverflowText as="p" lines={2}>{description}</OverflowText>
                           <div className="miniapp-market-card__stats">
                             <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
                             <span><Icon name="arrow-down" size="xs" /> {formatNumber(item.downloadCount)}</span>
@@ -458,7 +458,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             {installed ? (
               <Button
                 size="sm"
-                variant={canUpdate ? 'outline' : 'fill'}
+                variant={canUpdate ? 'outline' : 'primary'}
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => openInstalledApp(installed.appId)}
                 leadingIcon={<Icon name="arrow-up-right" size="sm" />}
@@ -470,7 +470,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             {!installed || canUpdate ? (
               <Button
                 size="sm"
-                variant="fill"
+                variant="primary"
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FolderOpen, FileText, Loader2 } from 'lucide-react';
-import { Icon, Input } from '@openbitfun/ui';
+import { OverflowText, Icon, Input } from '@openbitfun/ui';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
@@ -182,7 +182,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   };
 
   return (
-    <div 
+    <div data-overflow-trigger
       className={`openbitfun-file-explorer__node-content ${isSelected ? 'openbitfun-file-explorer__node-content--selected' : ''} ${node.isDirectory ? 'openbitfun-file-explorer__node-content--directory' : ''} ${isCompressed ? 'openbitfun-file-explorer__node-content--compressed' : ''} ${className}`}
       style={{ paddingLeft: `${indentPx}px` }}
       onClick={handleClick}
@@ -221,9 +221,9 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
       ) : renderContent ? (
         renderContent(node, level)
       ) : (
-        <span className={`openbitfun-file-explorer__node-name ${isCompressed ? 'openbitfun-file-explorer__compressed-path' : ''}`}>
+        <OverflowText className={`openbitfun-file-explorer__node-name ${isCompressed ? 'openbitfun-file-explorer__compressed-path' : ''}`}>
           {node.name}
-        </span>
+        </OverflowText>
       )}
 
       {renderActions ? (

@@ -44,6 +44,7 @@ Run the focused mobile-web checks after changes:
 ```bash
 pnpm --dir src/mobile-web run test:ui-components
 pnpm --dir src/mobile-web run test:account-login # account login without an online desktop
+pnpm --dir src/mobile-web run test:workspace-identity # SSH host scope and legacy cache records
 pnpm --dir src/mobile-web run type-check
 pnpm run build:mobile-web
 ```

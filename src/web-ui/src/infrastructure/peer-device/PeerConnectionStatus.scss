@@ -1,0 +1,12 @@
+.peer-connection-status {
+  flex-shrink: 0;
+  margin: 8px 12px;
+
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+}

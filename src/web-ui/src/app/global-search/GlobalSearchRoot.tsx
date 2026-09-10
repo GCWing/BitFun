@@ -8,7 +8,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
-import {
+import { OverflowText,
   ActionCard,
   Button,
   Icon,
@@ -526,11 +526,11 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     const resultCopy = (
                       <span className="global-search__result-copy">
                         <span className="global-search__result-title-row">
-                          <span className="global-search__result-title">{item.title}</span>
+                          <OverflowText className="global-search__result-title">{item.title}</OverflowText>
                           {item.badge ? <span className="global-search__badge">{item.badge}</span> : null}
                         </span>
                         {item.subtitle && !(defaultActionGroup && itemVariant === 'action') ? (
-                          <span className="global-search__result-subtitle">{item.subtitle}</span>
+                          <OverflowText className="global-search__result-subtitle">{item.subtitle}</OverflowText>
                         ) : null}
                       </span>
                     );
@@ -590,7 +590,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                     }
 
                     return (
-                      <button
+                      <button data-overflow-trigger
                         key={item.id}
                         id={`${instanceId}-option-${item.id}`}
                         data-search-result-id={item.id}
@@ -608,7 +608,7 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                         </span>
                         {resultCopy}
                         {item.context ? (
-                          <span className="global-search__result-context">{item.context}</span>
+                          <OverflowText className="global-search__result-context">{item.context}</OverflowText>
                         ) : null}
                       </button>
                     );
@@ -624,13 +624,13 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           || snapshot.diagnostics.length > 0) ? (
         <footer className="global-search__footer" data-openbitfun-component="global-search" data-openbitfun-part="footer">
           {snapshot.diagnostics.length > 0 ? (
-            <span
+            <OverflowText
               className="global-search__footer-status"
               role="status"
               data-testid={`${testIdPrefix}-partial-status`}
             >
               {tCommon('nav.search.partialUnavailable')}
-            </span>
+            </OverflowText>
           ) : null}
           <span className="global-search__footer-keys" aria-hidden="true">
             <KeyHint>↑↓</KeyHint> {tCommon('nav.search.footer.navigate')}

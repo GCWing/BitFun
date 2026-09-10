@@ -269,6 +269,7 @@ export const Icon = forwardRef<HTMLSpanElement, IconProps>(function Icon({
       data-openbitfun-component="icon"
       data-openbitfun-name={name}
       data-openbitfun-source={name ? "catalog" : "line"}
+      data-openbitfun-artwork={name && name !== "progress-25" && name !== "turn" ? "monochrome" : undefined}
       data-openbitfun-tone={tone}
       data-size={size}
       ref={ref}

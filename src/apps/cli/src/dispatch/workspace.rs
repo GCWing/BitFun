@@ -1896,7 +1896,8 @@ mod tests {
 
     fn init_source_repository(path: &Path) -> String {
         fs::create_dir_all(path).expect("source directory");
-        git(path, &["init", "--quiet", "--initial-branch=main"]).expect("init");
+        git(path, &["init", "--quiet"]).expect("init");
+        git(path, &["symbolic-ref", "HEAD", "refs/heads/main"]).expect("initial branch");
         git(path, &["config", "user.email", "dispatch@example.com"]).expect("email");
         git(path, &["config", "user.name", "Dispatch Test"]).expect("name");
         fs::write(path.join("file.txt"), b"base").expect("seed file");

@@ -74,8 +74,11 @@ class RemoteResponseMapperTest {
         val message = RemoteResponseMapper.chatMessage(
             ChatMessageResponse(
                 id = "m1",
+                turnId = "turn-m1",
                 role = "assistant",
                 content = "",
+                status = "failed",
+                error = "Desktop process exited",
                 thinking = "Thinking out loud",
                 timestamp = "2026-06-10T12:00:00.000Z",
                 items = listOf(
@@ -96,7 +99,9 @@ class RemoteResponseMapperTest {
         assertEquals("m1", message.id)
         assertEquals("", message.text)
         assertEquals("Thinking out loud", message.thinking)
-        assertEquals("done", message.status)
+        assertEquals("failed", message.status)
+        assertEquals("turn-m1", message.turnId)
+        assertEquals("Desktop process exited", message.error)
         assertEquals("shell · pending\nedit · done", message.detail)
         assertEquals(2, message.tools?.size)
     }
@@ -107,6 +112,7 @@ class RemoteResponseMapperTest {
             ActiveTurnSnapshotResponse(
                 turnId = "turn-1",
                 status = "active",
+                error = "Connection interrupted",
                 items = listOf(ChatMessageItemResponse(type = "text", content = "Working on it")),
                 tools = listOf(RemoteToolStatusResponse(id = "tool-3", name = "read_file", status = "running")),
             ),
@@ -116,6 +122,7 @@ class RemoteResponseMapperTest {
         assertEquals("turn-1", message.turnId)
         assertEquals("Working on it", message.text)
         assertEquals("read_file · running", message.detail)
+        assertEquals("Connection interrupted", message.error)
     }
 
     @Test

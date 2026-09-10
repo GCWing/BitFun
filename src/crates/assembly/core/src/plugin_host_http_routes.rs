@@ -769,7 +769,7 @@ mod tests {
             session_id: "session-a".to_string(),
             timestamp: 10,
             kind: Default::default(),
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             user_message: crate::service::session::UserMessageData {
                 id: "user-message".to_string(),
                 content: "hello".to_string(),
@@ -830,6 +830,7 @@ mod tests {
                 name: "PTY A".to_string(),
                 shell_type: ShellType::Bash,
                 cwd: "/workspace".to_string(),
+                initial_cwd: None,
                 pid: Some(42),
                 status: status.to_string(),
                 cols: 80,

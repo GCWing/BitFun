@@ -18,7 +18,7 @@ test("ActionItem exposes native trigger semantics and independent content areas"
   assert.match(markup, /data-openbitfun-component="action-item"/);
   assert.match(markup, /<button[^>]+role="menuitem"/);
   assert.match(markup, /data-openbitfun-part="leading"/);
-  assert.match(markup, /data-openbitfun-part="label">AI Assistant<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>AI Assistant<\/span><\/span>/);
   assert.match(markup, /data-openbitfun-part="shortcut"/);
   assert.match(markup, /<kbd/);
 });
@@ -88,7 +88,7 @@ test("ActionItem styles share action state and focus tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--openbitfun-color-action-neutral-surface/);
-  assert.match(styles, /--openbitfun-color-action-neutral-surface-pressed/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface-hover/);
   assert.match(styles, /--openbitfun-color-action-neutral-content-disabled/);
   assert.match(styles, /--openbitfun-color-focus-ring/);
   assert.match(styles, /--openbitfun-control-height-sm/);

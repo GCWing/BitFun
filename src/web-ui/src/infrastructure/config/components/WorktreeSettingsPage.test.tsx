@@ -71,6 +71,7 @@ vi.mock('@/shared/notification-system', () => ({
 
 vi.mock('@openbitfun/ui', () => ({
   Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  OverflowText: ({ children, behavior: _behavior, marqueeActive: _marqueeActive, ...props }: any) => <span {...props}>{children}</span>,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({ children, disabled, onClick }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" disabled={disabled} onClick={onClick}>{children}</button>

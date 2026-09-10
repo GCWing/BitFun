@@ -165,7 +165,7 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
               <p>{t('toolCards.computerUse.permissionDeniedHint')}</p>
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="gear" size="xs" />}
                 className="computer-use-tool-card__settings-button"

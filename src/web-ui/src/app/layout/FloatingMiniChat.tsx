@@ -19,7 +19,7 @@ import type {
   ChatInputRegistration,
   ChatInputSubmission,
 } from '@/flow_chat/components/chatInputRegistration';
-import { Icon, IconButton, LauncherButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, LauncherButton, Tooltip } from '@openbitfun/ui';
 
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { SessionMenu, useFlowChatSessions } from '../../flow_chat/components/session-menu';
@@ -641,7 +641,7 @@ export const FloatingMiniChat: React.FC = () => {
 
           <div className="openbitfun-fmc__title-wrapper" data-openbitfun-component="floating-mini-chat" data-openbitfun-part="title">
             <div className="openbitfun-fmc__title-display" title={popupTitle}>
-              <span className="openbitfun-fmc__title-text">{popupTitle}</span>
+              <OverflowText className="openbitfun-fmc__title-text">{popupTitle}</OverflowText>
             </div>
           </div>
 

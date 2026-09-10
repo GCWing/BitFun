@@ -7,6 +7,7 @@ import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useR
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { Tooltip } from '@openbitfun/ui';
 import remarkGfm from 'remark-gfm';
+import { remarkAutolinkBoundaries } from './remarkAutolinkBoundaries';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { visit } from 'unist-util-visit';
@@ -834,6 +835,8 @@ export interface MarkdownRendererProps {
   expandDetailsByDefault?: boolean;
   onOpenVisualization?: (visualization: any) => void;
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
+  /** File IO belongs to the supplied callback; host explorer/browser actions are unavailable. */
+  fileActionsViaCallbackOnly?: boolean;
   onTabOpen?: (tabInfo: any) => void;
   onHttpLinkClick?: (url: string, event: React.MouseEvent<HTMLAnchorElement>) => boolean | void;
   traceContext?: MarkdownTraceContext;
@@ -856,6 +859,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   expandDetailsByDefault = false,
   onOpenVisualization,
   onFileViewRequest,
+  fileActionsViaCallbackOnly = false,
   onTabOpen,
   onHttpLinkClick,
   traceContext,
@@ -875,6 +879,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const expandDetailsByDefaultRef = useLiveValueRef(expandDetailsByDefault);
   const onOpenVisualizationRef = useLiveValueRef(onOpenVisualization);
   const onFileViewRequestRef = useLiveValueRef(onFileViewRequest);
+  const fileActionsViaCallbackOnlyRef = useLiveValueRef(fileActionsViaCallbackOnly);
   const onTabOpenRef = useLiveValueRef(onTabOpen);
   const onHttpLinkClickRef = useLiveValueRef(onHttpLinkClick);
   const traceContextRef = useLiveValueRef(traceContext);
@@ -915,7 +920,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   );
 
   useEffect(() => {
-    if (!needsWorkspacePathForLinks || currentWorkspacePath || basePath) {
+    if (fileActionsViaCallbackOnly || !needsWorkspacePathForLinks || currentWorkspacePath || basePath) {
       return;
     }
 
@@ -934,7 +939,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     return () => {
       cancelled = true;
     };
-  }, [basePath, currentWorkspacePath, needsWorkspacePathForLinks]);
+  }, [basePath, currentWorkspacePath, fileActionsViaCallbackOnly, needsWorkspacePathForLinks]);
 
   const markdownFeatureProfile = useMemo(() => ({
     contentLength: markdownContent.length,
@@ -980,6 +985,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   }, [onTabOpenRef]);
 
   const handleRevealInExplorer = useCallback(async (filePath: string) => {
+    if (fileActionsViaCallbackOnlyRef.current) return;
     const latestBasePath = basePathRef.current;
     const latestWorkspacePath = currentWorkspacePathRef.current;
     let targetPath = resolveDisplayFilePath(filePath, latestBasePath, latestWorkspacePath);
@@ -997,7 +1003,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     } catch (error) {
       log.error('Failed to reveal file in explorer', { filePath: targetPath, error });
     }
-  }, [basePathRef, currentWorkspacePathRef]);
+  }, [basePathRef, currentWorkspacePathRef, fileActionsViaCallbackOnlyRef]);
 
   const showLinkContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,
@@ -1078,7 +1084,14 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     const items: MenuItem[] = [];
     const isHtmlFile = isHtmlFilePath(filePath) && canOpenInBuiltInBrowser(event.currentTarget);
 
-    if (isHtmlFile) {
+    if (fileActionsViaCallbackOnlyRef.current) {
+      items.push({
+        id: 'markdown-open-remote-file',
+        label: i18nService.t('common:actions.open'),
+        icon: 'FileText',
+        onClick: () => handleFileViewRequest(filePath, fileName, lineRange),
+      });
+    } else if (isHtmlFile) {
       const workspacePath = currentWorkspacePathRef.current || basePathRef.current;
       const remoteConnectionId = remoteConnectionIdRef.current;
       const openFileOptions = {
@@ -1126,6 +1139,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
         id: 'markdown-open-in-explorer',
         label: translateMarkdownLabel('markdown.openInExplorer'),
         icon: 'FolderOpen',
+        disabled: fileActionsViaCallbackOnlyRef.current,
         onClick: () => handleRevealInExplorer(displayPath || filePath),
       },
       {
@@ -1145,6 +1159,8 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     canOpenInBuiltInBrowser,
     currentWorkspacePathRef,
     handleRevealInExplorer,
+    handleFileViewRequest,
+    fileActionsViaCallbackOnlyRef,
     handleCopyLink,
     remoteConnectionIdRef,
     showLinkContextMenu,
@@ -1343,7 +1359,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (shouldRevealInExplorer) {
+                if (shouldRevealInExplorer && !fileActionsViaCallbackOnlyRef.current) {
                   void handleRevealInExplorer(displayFilePath || filePath);
                   return;
                 }
@@ -1547,6 +1563,22 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     },
 
     img({ node: _node, ...props }: any) {
+      // Dispatch observers have no local filesystem ownership. Do not mount
+      // MarkdownImage here: even its initial state can reuse controller bytes
+      // from the local image cache before its read effect runs.
+      if (fileActionsViaCallbackOnlyRef.current && !/^(https?:|data:)/i.test(props.src || '')) {
+        const label = translateMarkdownLabel('markdown.remoteImageUnavailable');
+        return (
+          <span
+            className="markdown-image-fallback"
+            data-openbitfun-component="markdown"
+            data-openbitfun-part="imageFallback"
+            title={label}
+          >
+            {props.alt ? `${props.alt} — ${label}` : label}
+          </span>
+        );
+      }
       return (
         <MarkdownImage
           {...props}
@@ -1595,6 +1627,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     basePathRef,
     currentWorkspacePathRef,
     expandDetailsByDefaultRef,
+    fileActionsViaCallbackOnlyRef,
     isLightRef,
     markdownContentRef,
     onHttpLinkClickRef,
@@ -1608,7 +1641,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const wrapperClassName = `markdown-renderer ${className}`.trim();
   const basicMarkdownRenderer = (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkAutolinkInternalLinks]}
+      remarkPlugins={[remarkGfm, remarkAutolinkBoundaries, remarkAutolinkInternalLinks]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], [rehypeSourceRange, sourceRange]]}
       urlTransform={markdownUrlTransform}
       components={components}

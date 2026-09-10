@@ -54,6 +54,7 @@ impl TelegramBot {
         }
     }
 
+    #[cfg(test)]
     pub fn new(config: TelegramConfig) -> Self {
         Self::new_fenced(config, BotRuntimeFence::standalone())
     }
@@ -491,6 +492,7 @@ impl TelegramBot {
     async fn persist_chat_state(&self, chat_id: i64, state: &BotChatState) {
         let snapshot = self.runtime_fence.persistence_snapshot(state);
         let connection = SavedBotConnection {
+            account_user_id: self.runtime_fence.account_user_id(),
             bot_type: "telegram".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Telegram {

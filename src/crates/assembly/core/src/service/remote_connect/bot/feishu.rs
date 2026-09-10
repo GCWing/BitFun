@@ -87,6 +87,7 @@ impl FeishuBot {
         }
     }
 
+    #[cfg(test)]
     pub fn new(config: FeishuConfig) -> Self {
         Self::new_fenced(config, BotRuntimeFence::standalone())
     }
@@ -660,6 +661,7 @@ impl FeishuBot {
     async fn persist_chat_state(&self, chat_id: &str, state: &BotChatState) {
         let snapshot = self.runtime_fence.persistence_snapshot(state);
         let connection = SavedBotConnection {
+            account_user_id: self.runtime_fence.account_user_id(),
             bot_type: "feishu".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Feishu {

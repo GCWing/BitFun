@@ -225,7 +225,7 @@ describe('Mini App card presentation', () => {
     expect(tag).toContain('display: block;');
     expect(tag).toContain('flex: 0 1 auto;');
     expect(tag).toContain('box-sizing: border-box;');
-    expect(tag).toContain('text-overflow: ellipsis;');
+    expect(tag).not.toContain('text-overflow: ellipsis;');
     expect(source).toContain('V{marketReleaseNumber ?? app.version}');
     expect(source).toContain('localizedTags.slice(0, 4)');
   });

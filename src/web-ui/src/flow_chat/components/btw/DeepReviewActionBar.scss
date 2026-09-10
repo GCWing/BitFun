@@ -126,8 +126,9 @@
 
   /* Status header */
   &__status {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
     gap: 6px;
     padding-right: 136px;
   }
@@ -154,19 +155,19 @@
   }
 
   &__status-title {
+    min-width: 0;
     font-weight: var(--openbitfun-type-label-selected-font-weight);
     font-size: var(--openbitfun-type-flow-control-font-size);
     color: var(--openbitfun-color-content-primary);
   }
 
   &__error-message {
-    margin-left: auto;
+    grid-column: 2;
+    min-width: 0;
     font-size: var(--openbitfun-type-flow-control-font-size);
     color: var(--openbitfun-color-status-danger-content);
-    max-width: 50%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 
   /* Remediation section */

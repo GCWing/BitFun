@@ -1,8 +1,6 @@
 use crate::api::app_state::AppState;
 use openbitfun_core::infrastructure::{FileSearchResult, FileSearchResultGroup, SearchMatchType};
-use openbitfun_core::service::remote_ssh::workspace_state::{
-    is_remote_path, lookup_remote_connection,
-};
+use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use openbitfun_core::service::search::{
     remote_workspace_search_service_for_path, workspace_search_daemon_available,
     workspace_search_feature_enabled, ContentSearchRequest, ContentSearchResult,
@@ -94,21 +92,11 @@ fn repo_status_error_message(error: impl std::fmt::Display) -> String {
 }
 
 async fn workspace_search_unavailable_message(
-    state: &State<'_, AppState>,
+    _state: &State<'_, AppState>,
     root_path: &str,
 ) -> Option<String> {
     if is_remote_path(root_path.trim()).await {
-        if lookup_remote_connection(root_path.trim()).await.is_none() {
-            return Some(
-                "Remote workspace is not registered with OpenBitFun SSH state".to_string(),
-            );
-        }
-        if state.get_ssh_manager_async().await.is_err()
-            || state.get_remote_file_service_async().await.is_err()
-        {
-            return Some("Remote workspace search services are unavailable".to_string());
-        }
-        return None;
+        return Some("Flashgrep is not supported for remote workspaces".to_string());
     }
 
     if !workspace_search_feature_enabled().await {

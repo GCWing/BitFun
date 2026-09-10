@@ -79,7 +79,6 @@
   &__search-result-line {
     width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
     line-height: var(--openbitfun-type-meta-line-height);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
@@ -89,7 +88,6 @@
 
     width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
     font-size: var(--openbitfun-type-meta-font-size);
     line-height: var(--openbitfun-type-meta-line-height);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
@@ -129,7 +127,6 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
   }
@@ -139,6 +136,6 @@
     height: 6px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-emphasis);
   }
 }

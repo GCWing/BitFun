@@ -50,7 +50,7 @@ Still to migrate, in order: the interaction mailbox, then history positions.
      request dedup and capability caches must therefore use
      `(DeviceSurfaceId, local identity)`. `activateSurface` commits transport,
      event routing and container selection before notifying observers. A normal
-     switch preserves every container; only explicit/lost attachment disposal
+     switch preserves every container; only explicit attachment disposal
      may call `discardSurfaceState`.
    - **In-flight submissions must survive the switch.** `startTurn` has an
      async window between adding the projection turn and re-reading the
@@ -255,8 +255,16 @@ Still to migrate, in order: the interaction mailbox, then history positions.
     interaction that can suspend execution is incomplete until its owner
     exposes equivalent replayable attach state and a negotiated response path.
 
-13. **Weak links use bounded, idempotency-aware recovery.** Default Peer
-    HostInvoke concurrency is four with one slot reserved from normal/low
+13. **Weak links use bounded, idempotency-aware recovery.** Presence gaps
+    and product RPC timeouts keep an attached peer's surface selected and show
+    a reconnecting notice. A single dedicated handshake owns recovery and its
+    retry counter; concurrent product failures must not consume it or postpone
+    the timer. Retry delay is capped, not retry lifetime. A successful recovery
+    re-attaches event delivery before publishing `ready`, without changing the
+    surface epoch, discarding state, or resubmitting work. Only explicit
+    disconnect or logout disposes an attachment.
+
+    Default Peer HostInvoke concurrency is four with one slot reserved from normal/low
     traffic. Read-only commands have a real 10s deadline and four
     exponential-backoff retries. Mutations have a 30s deadline and are never
     replayed automatically without an idempotency contract. Dialog submission

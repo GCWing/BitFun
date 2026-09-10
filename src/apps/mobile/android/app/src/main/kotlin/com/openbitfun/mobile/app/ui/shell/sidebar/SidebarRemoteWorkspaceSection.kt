@@ -81,25 +81,8 @@ internal fun SidebarRemoteWorkspaceSection(
 ) {
     val connected = ConnectionStatusPresenter.canReachSessions(connectionPhase)
     val addConnectionLabel = stringResource(R.string.sidebar_add_connection)
-    val transientDeviceKey = remember(deviceName) { "qr:$deviceName" }
-    val projectedDevices = remember(devices, controlSource, deviceName) {
-        if (
-            controlSource == RemoteControlSource.QR_PAIRING &&
-            deviceName.isNotBlank() &&
-            devices.none { it.name == deviceName }
-        ) {
-            listOf(AccountDeviceUi(transientDeviceKey, deviceName, true, null)) + devices
-        } else {
-            devices
-        }
-    }
-    val activeDeviceId = when (controlSource) {
-        RemoteControlSource.QR_PAIRING -> projectedDevices.firstOrNull {
-            it.id == transientDeviceKey || it.name == deviceName
-        }?.id
-        RemoteControlSource.ACCOUNT_DEVICE -> selectedDeviceId
-        RemoteControlSource.NONE -> null
-    }
+    val projectedDevices = devices
+    val activeDeviceId = if (controlSource == RemoteControlSource.ACCOUNT_DEVICE) selectedDeviceId else null
     var expandedDeviceIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var visibleDeviceCount by rememberSaveable { mutableStateOf(DEVICES_PER_BATCH) }
     var cachedRemoteStates by remember {
@@ -183,8 +166,6 @@ internal fun SidebarRemoteWorkspaceSection(
             projectedDevices.take(visibleDeviceCount).forEach { device ->
                 val expanded = device.id in expandedDeviceIds
                 val active = device.id == activeDeviceId
-                val transient = controlSource == RemoteControlSource.QR_PAIRING &&
-                    device.id == activeDeviceId
                 val cachedRemote = cachedRemoteStates[device.id]
                 val cachedWorkspace = cachedWorkspaceStates[device.id]
                 val shownRemote = if (active) {
@@ -219,7 +200,7 @@ internal fun SidebarRemoteWorkspaceSection(
                             } else {
                                 expandedDeviceIds + device.id
                             }
-                        } else if (device.online && !transient) {
+                        } else if (device.online) {
                             activeDeviceId?.let { currentId ->
                                 (remoteState as? RemoteSessionUiState.Ready)?.let { ready ->
                                     cachedRemoteStates = cachedRemoteStates + (currentId to ready)

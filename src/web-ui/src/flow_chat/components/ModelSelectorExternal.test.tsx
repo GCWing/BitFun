@@ -5,7 +5,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ModelSelector } from './ModelSelector';
+import { ModelSelector, type ExternalModelSelection } from './ModelSelector';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { setRecentReasoningPreset } from '../utils/reasoningPresets';
@@ -203,7 +203,7 @@ describe('ModelSelector external transport reuse', () => {
       workspacePath: '/tmp/miniapp-runtime',
       projectWorkspacePath: '/tmp/project',
       config: {
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'model-a',
         reasoningPreset: 'medium',
       },
@@ -274,7 +274,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           sessionId="miniapp-session"
           persistSharedModeDefault={false}
           reasoningTriggerPresentation="label"
@@ -368,7 +368,7 @@ describe('ModelSelector external transport reuse', () => {
       .mockResolvedValueOnce(updatedCatalog);
 
     await act(async () => {
-      root.render(<ModelSelector currentMode="agentic" sessionId="session-a" />);
+      root.render(<ModelSelector currentMode='Standard' sessionId="session-a" />);
       await Promise.resolve();
     });
     expect(catalogUpdated).toBeTypeOf('function');
@@ -401,7 +401,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a', 'model-b'],
             defaultModelId: 'model-a',
@@ -438,7 +438,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: [],
             includeLocalCatalog: true,
@@ -473,7 +473,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['remote-only'],
             selectedModelId: 'remote-only',
@@ -495,7 +495,7 @@ describe('ModelSelector external transport reuse', () => {
     )).toBeNull();
   });
 
-  it('reads reasoning presets from this device when the target reported none', async () => {
+  it('does not infer target reasoning from a controller catalog after restoring a dispatch session', async () => {
     aiApiMocks.getModelCatalog.mockResolvedValueOnce({
       version: 1,
       default_models: { primary: 'model-a' },
@@ -525,7 +525,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: [],
             includeLocalCatalog: true,
@@ -539,25 +539,23 @@ describe('ModelSelector external transport reuse', () => {
       await Promise.resolve();
     });
 
-    const trigger = container.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    expect(container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')).toBeNull();
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]');
+    await act(async () => { trigger?.click(); });
+    const reasoningRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
     );
-    expect(trigger).not.toBeNull();
-    await act(async () => {
-      trigger?.click();
-    });
-    await act(async () => {
-      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
-      await Promise.resolve();
-    });
-    expect(onSelectReasoningPreset).toHaveBeenCalledWith('high');
+    expect(reasoningRow).toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-option"][data-model-id="model-a"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')).toBeNull();
+    expect(onSelectReasoningPreset).not.toHaveBeenCalled();
   });
 
   it('hides reasoning when the target did not report a catalog', async () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a'],
             selectedModelId: 'model-a',
@@ -580,7 +578,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a'],
             selectedModelId: 'model-a',
@@ -626,13 +624,15 @@ describe('ModelSelector external transport reuse', () => {
       await Promise.resolve();
     });
 
-    const trigger = container.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    expect(container.querySelector('[data-testid="chat-reasoning-preset-selector-btn"]')).toBeNull();
+    const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]');
+    await act(async () => { trigger?.click(); });
+    const reasoningRow = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-settings-reasoning"]',
     );
-    expect(trigger).not.toBeNull();
-    await act(async () => {
-      trigger?.click();
-    });
+    expect(reasoningRow).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-settings-model"]')).not.toBeNull();
+    await act(async () => { reasoningRow?.click(); });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
       await Promise.resolve();
@@ -670,4 +670,106 @@ describe('ModelSelector external transport reuse', () => {
     });
     expect(configManager.setConfig).not.toHaveBeenCalled();
   });
+
+  const targetSelection = (overrides: Partial<ExternalModelSelection> = {}): ExternalModelSelection => ({
+    models: ['remote-model', 'remote-plain'],
+    selectedModelId: 'remote-model',
+    selectedReasoningPreset: 'high',
+    providerLabel: 'a100',
+    reasoningCatalog: {
+      version: 1, default_models: {}, models: [{
+        id: 'remote-model',
+        reasoning: {
+          status: 'known', default_preset: 'medium',
+          presets: [
+            { id: 'medium', label: 'Medium', order: 10, source: 'models_dev', actions: [{ type: 'effort', value: 'medium' }] },
+            { id: 'high', label: 'High', order: 20, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+          ],
+        },
+      }],
+    },
+    onSelect: vi.fn(), onSelectReasoningPreset: vi.fn(), ...overrides,
+  });
+  const renderTarget = async (selection: ExternalModelSelection) => {
+    await act(async () => {
+      root.render(<ModelSelector currentMode='Standard' externalSelection={selection} reasoningTriggerPresentation="label" />);
+    });
+  };
+  const clickControl = async (testId: string) => {
+    const control = document.body.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
+    expect(control).not.toBeNull();
+    await act(async () => { control?.click(); });
+  };
+
+  it('clears a dispatch override through the target callback and rehydrates its selected state', async () => {
+    const selection = targetSelection();
+    await renderTarget(selection);
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-reasoning');
+    expect(document.body.querySelector('[data-preset-id="high"]')?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-preset-id="auto"]')?.click(); });
+    expect(selection.onSelectReasoningPreset).toHaveBeenCalledWith(null);
+    expect(agentAPI.updateSessionModel).not.toHaveBeenCalled();
+    expect(configManager.setConfig).not.toHaveBeenCalled();
+    await renderTarget({ ...selection, selectedReasoningPreset: 'auto' });
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-reasoning');
+    expect(document.body.querySelector('[data-preset-id="auto"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
+      .toContain('reasoningSelector.levels.medium');
+  });
+
+  it('switches dispatch models through the shared settings without retaining unsupported reasoning', async () => {
+    const selection = targetSelection();
+    await renderTarget(selection);
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-model');
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-model-id="remote-plain"]')?.click();
+    });
+    expect(selection.onSelect).toHaveBeenCalledWith('remote-plain');
+    await renderTarget({ ...selection, selectedModelId: 'remote-plain' });
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')).toBeNull();
+    await clickControl('chat-model-selector-btn');
+    expect(document.body.querySelector('[data-testid="chat-model-selector-settings-reasoning"]')).toBeNull();
+    expect(document.body.querySelector('[data-model-id="remote-plain"]')?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes a reasoning flyout when a refreshed target catalog no longer offers presets', async () => {
+    const selection = targetSelection();
+    await renderTarget(selection);
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-reasoning');
+    await renderTarget({ ...selection, reasoningCatalog: undefined });
+    expect(document.body.querySelector('[data-testid="chat-model-selector-reasoning-option"]')).toBeNull();
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('prevents changes when dispatch submission locks an already open menu', async () => {
+    const selection = targetSelection();
+    await renderTarget(selection);
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-reasoning');
+    await renderTarget({ ...selection, disabled: true });
+    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-preset-id="medium"]')?.click(); });
+    expect(selection.onSelectReasoningPreset).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.disabled).toBe(true);
+  });
+
+  it('preserves the dispatch selection and unlocks the trigger after a failed update', async () => {
+    const selection = targetSelection({ onSelectReasoningPreset: vi.fn().mockRejectedValueOnce(new Error('Offline')) });
+    await renderTarget(selection);
+    await clickControl('chat-model-selector-btn');
+    await clickControl('chat-model-selector-settings-reasoning');
+    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-preset-id="medium"]')?.click(); });
+    expect(selection.onSelectReasoningPreset).toHaveBeenCalledWith('medium');
+    expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
+      .toContain('reasoningSelector.levels.high');
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')?.disabled).toBe(false);
+  });
+
 });

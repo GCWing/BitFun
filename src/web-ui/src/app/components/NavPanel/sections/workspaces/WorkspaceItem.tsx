@@ -52,7 +52,7 @@ import {
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
-import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   getWorkspaceGitBasicInfoOptions,
@@ -122,6 +122,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   );
   useGitBasicInfo(workspace.rootPath, gitBasicInfoOptions);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuContextPoint, setMenuContextPoint] = useState<{ x: number; y: number } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
@@ -150,7 +151,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const menuPopoverRef = useRef<HTMLDivElement>(null);
   const acpSubmenuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const menuPosition = useSideAnchoredPopoverPosition({
+    open: menuOpen,
+    anchorRef: menuAnchorRef,
+    anchorPoint: menuContextPoint,
+    popoverRef: menuPopoverRef,
+    layoutRevision: `${acpClientsLoading}:${acpClients.length}`,
+  });
   const isDefaultAssistantWorkspace =
     workspace.workspaceKind === WorkspaceKind.Assistant &&
     (workspace.id === primaryAssistantWorkspaceId ||
@@ -168,13 +175,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     WORKSPACE_SEARCH_AVAILABLE
     && isActive
     && workspaceSearchEnabled
-    && (
-      workspace.workspaceKind === WorkspaceKind.Normal
-      || workspace.workspaceKind === WorkspaceKind.Remote
-    );
+    && !workspaceIsRemote
+    && workspace.workspaceKind === WorkspaceKind.Normal;
   const workspaceSearchIndex = useWorkspaceSearchIndex({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
+    isRemote: workspaceIsRemote,
   });
 
   useEffect(() => {
@@ -252,7 +258,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     return {
       status,
       statusLabel,
-      hostLabel,
+      connectionLabel,
       /** A green dot already reads as "fine"; spell out only the states that need attention. */
       showStatusText: status !== 'connected',
       tooltip: t('nav.workspaces.remote.tooltip', {
@@ -261,7 +267,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         status: statusLabel,
       }),
       ariaLabel: t('nav.workspaces.remote.ariaLabel', {
-        connection: hostLabel,
+        connection: connectionLabel,
         status: statusLabel,
       }),
     };
@@ -440,29 +446,18 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     );
   }, [tFiles, workspaceSearchIndex]);
 
-  const updateMenuPosition = useCallback(() => {
-    const anchor = menuAnchorRef.current;
-    if (!anchor) return;
-
-    const rect = anchor.getBoundingClientRect();
-    const viewportPadding = 8;
-    const gap = 6;
-    const fallbackWidth = 240;
-    const fallbackHeight = 260;
-
-    const apply = () => {
-      const menuEl = menuPopoverRef.current;
-      const w = menuEl?.offsetWidth ?? fallbackWidth;
-      const h = menuEl?.offsetHeight ?? fallbackHeight;
-      setMenuPosition(computeFixedPopoverPosition(rect, w, h, gap, viewportPadding));
-    };
-
-    apply();
-    requestAnimationFrame(apply);
+  const handleMenuTriggerClick = useCallback(() => {
+    setMenuContextPoint(null);
+    setMenuOpen(open => !open);
   }, []);
 
-  const handleMenuTriggerClick = useCallback(() => {
-    setMenuOpen(open => !open);
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // Portalled menus bubble through the card without belonging to its DOM subtree.
+    if (!event.currentTarget.contains(event.target as Node)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuContextPoint({ x: event.clientX, y: event.clientY });
+    setMenuOpen(true);
   }, []);
 
   useEffect(() => {
@@ -479,21 +474,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [menuOpen]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    updateMenuPosition();
-
-    const handleViewportChange = () => updateMenuPosition();
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
-
-    return () => {
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
-    };
-  }, [menuOpen, updateMenuPosition]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -544,15 +524,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const handleCollapseToggle = useCallback(() => {
     setSessionsCollapsed(prev => !prev);
   }, []);
-
-  const handleCardNameClick = useCallback(async () => {
-    if (!isActive) {
-      await setActiveWorkspace(workspace.id);
-      setSessionsCollapsed(false);
-    } else {
-      setSessionsCollapsed(prev => !prev);
-    }
-  }, [isActive, setActiveWorkspace, workspace.id]);
 
   const handleCloseWorkspace = useCallback(async () => {
     setMenuOpen(false);
@@ -664,13 +635,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
 
     setIsResettingWorkspace(true);
+    setResetDialogOpen(false);
     try {
       await resetAssistantWorkspace(workspace.id);
       await flowChatManager.resetWorkspaceSessions(workspace, {
         reinitialize: isActive,
         preferredMode: 'Claw',
-        ensureAssistantBootstrap:
-          isActive && workspace.workspaceKind === WorkspaceKind.Assistant,
       });
       notificationService.success(t('nav.workspaces.workspaceReset'), { duration: 2500 });
     } catch (error) {
@@ -711,7 +681,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [t, workspace.rootPath]);
 
-  const handleCreateSession = useCallback(async (mode?: 'agentic' | 'Cowork' | 'Claw') => {
+  const handleCreateSession = useCallback(async (mode?: 'Standard' | 'Cowork' | 'Claw') => {
     setMenuOpen(false);
     const resolvedMode = mode ?? (workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined);
     try {
@@ -752,7 +722,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   ]);
 
   const handleCreateProjectSession = useCallback(() => {
-    void handleCreateSession('agentic');
+    void handleCreateSession();
   }, [handleCreateSession]);
 
   const handleCreateAcpSession = useCallback(async (client: AcpClientInfo) => {
@@ -866,7 +836,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           draggable={draggable}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          onClick={() => { void handleCardNameClick(); }}
+          onClick={handleCollapseToggle}
+          onContextMenu={handleContextMenu}
           style={{ cursor: 'pointer' }}
           data-testid="nav-workspace-card"
           data-workspace-id={workspace.id}
@@ -892,21 +863,35 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </span>
           </button>
           <Tooltip content={workspace.rootPath} placement="right" followCursor>
-            <button
+            <button data-overflow-trigger
               data-openbitfun-component="workspace-item"
               data-openbitfun-part="name"
               type="button"
               className="openbitfun-nav-panel__assistant-item-name-btn"
-              onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
+              onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
               data-testid="nav-workspace-name-btn"
               data-workspace-id={workspace.id}
             >
-              <span className="openbitfun-nav-panel__assistant-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">{workspaceDisplayName}</span>
+              <OverflowText className="openbitfun-nav-panel__assistant-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">{workspaceDisplayName}</OverflowText>
             </button>
           </Tooltip>
 
           <div className="openbitfun-nav-panel__assistant-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef} onClick={e => e.stopPropagation()}>
-            <Tooltip content={t('nav.items.project')} placement="right" followCursor>
+            <Tooltip content={t('nav.workspaces.actions.newSession')} placement="right" followCursor>
+              <button
+                data-openbitfun-component="workspace-item"
+                data-openbitfun-part="action"
+                type="button"
+                className="openbitfun-nav-panel__assistant-item-menu-trigger"
+                onClick={() => { void handleCreateSession(); }}
+                aria-label={t('nav.workspaces.actions.newSession')}
+                data-testid="nav-workspace-new-session-btn"
+                data-workspace-id={workspace.id}
+              >
+                <Icon name="plus" size="xs" />
+              </button>
+            </Tooltip>
+            <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"
                 data-openbitfun-part="action"
@@ -933,11 +918,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               </button>
             </div>
 
-            {menuOpen && menuPosition && createPortal(
+            {menuOpen && createPortal(
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
-                style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
+                style={{
+                  top: menuPosition?.top ?? 0,
+                  left: menuPosition?.left ?? 0,
+                  visibility: menuPosition ? 'visible' : 'hidden',
+                }}
                 data-testid="nav-workspace-item-menu"
                 data-workspace-id={workspace.id}
               >
@@ -984,9 +973,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 >
                   {t('nav.workspaces.actions.reveal')}
                 </MenuItem>
+                <MenuSeparator />
+                <MenuItem
+                  leading={<Icon glyph={ListChecks} />}
+                  onClick={handleOpenSessionBatchModal}
+                  data-testid="nav-workspace-menu-manage-sessions"
+                >
+                  {t('nav.sessions.manage')}
+                </MenuItem>
                 {(isDefaultAssistantWorkspace || isDeletableAssistantWorkspace) ? (
                   <>
-                    <MenuSeparator />
                     {isDefaultAssistantWorkspace ? (
                       <MenuItem
                         leading={<Icon glyph={RotateCcw} />}
@@ -1056,6 +1052,18 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
         />
+        <RetainedMountBoundary present={sessionBatchModalOpen}>
+          <Suspense fallback={null}>
+            <WorkspaceSessionBatchModal
+              isOpen={sessionBatchModalOpen}
+              onClose={() => setSessionBatchModalOpen(false)}
+              workspacePath={workspace.rootPath}
+              workspaceLabel={workspaceDisplayName}
+              remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+              remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+            />
+          </Suspense>
+        </RetainedMountBoundary>
         <RetainedMountBoundary present={scheduledJobsModalOpen}>
           <Suspense fallback={null}>
             <ScheduledJobsModal
@@ -1131,7 +1139,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         draggable={draggable}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        onClick={() => { void handleCardNameClick(); }}
+        onClick={handleCollapseToggle}
+        onContextMenu={handleContextMenu}
         style={{ cursor: 'pointer' }}
         data-testid="nav-workspace-card"
         data-workspace-id={workspace.id}
@@ -1167,27 +1176,23 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <button
                   data-openbitfun-component="workspace-item"
                   data-openbitfun-part="name"
+                  data-overflow-trigger
                   type="button"
                   className="openbitfun-nav-panel__workspace-item-name-btn"
-                  onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
+                  onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
                   data-testid="nav-workspace-name-btn"
                   data-workspace-id={workspace.id}
                 >
                   <span className="openbitfun-nav-panel__workspace-item-name-line">
-                    {workspaceIsRemote ? (
-                      <OverflowText
-                        behavior="marquee"
-                        className="openbitfun-nav-panel__workspace-item-label"
-                        data-openbitfun-component="workspace-item"
-                        data-openbitfun-part="label"
-                      >
-                        {workspaceDisplayName}
-                      </OverflowText>
-                    ) : (
-                      <span className="openbitfun-nav-panel__workspace-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">
-                        {workspaceDisplayName}
-                      </span>
-                    )}
+                    <OverflowText
+                      behavior="marquee"
+                      className="openbitfun-nav-panel__workspace-item-label"
+                      data-openbitfun-component="workspace-item"
+                      data-openbitfun-part="label"
+                      title=""
+                    >
+                      {workspaceDisplayName}
+                    </OverflowText>
                     {relatedPathCount > 0 ? (
                       <span className="openbitfun-nav-panel__workspace-item-badge" data-openbitfun-component="workspace-item" data-openbitfun-part="badge">
                         {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}
@@ -1343,7 +1348,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       aria-hidden="true"
                     />
                     <span className="openbitfun-nav-panel__workspace-item-remote-host">
-                      {remoteMeta.hostLabel}
+                      {remoteMeta.connectionLabel}
                     </span>
                     {remoteMeta.showStatusText ? (
                       <span className="openbitfun-nav-panel__workspace-item-remote-status">
@@ -1359,7 +1364,21 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
         <div className="openbitfun-nav-panel__workspace-item-actions" onClick={e => e.stopPropagation()}>
           <div className="openbitfun-nav-panel__workspace-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef}>
-            <Tooltip content={t('nav.items.project')} placement="right" followCursor>
+            <Tooltip content={t('nav.sessions.newSession')} placement="right" followCursor>
+              <button
+                data-openbitfun-component="workspace-item"
+                data-openbitfun-part="action"
+                type="button"
+                className="openbitfun-nav-panel__workspace-item-menu-trigger"
+                onClick={handleCreateProjectSession}
+                aria-label={t('nav.sessions.newSession')}
+                data-testid="nav-workspace-new-session-btn"
+                data-workspace-id={workspace.id}
+              >
+                <Icon name="plus" size="xs" />
+              </button>
+            </Tooltip>
+            <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"
                 data-openbitfun-part="menuTrigger"
@@ -1388,11 +1407,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               </button>
             </div>
 
-            {menuOpen && menuPosition && createPortal(
+            {menuOpen && createPortal(
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
-                style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
+                style={{
+                  top: menuPosition?.top ?? 0,
+                  left: menuPosition?.left ?? 0,
+                  visibility: menuPosition ? 'visible' : 'hidden',
+                }}
                 data-testid="nav-workspace-item-menu"
                 data-workspace-id={workspace.id}
               >
@@ -1470,7 +1493,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   {t('nav.workspaces.actions.reveal')}
                 </MenuItem>
                 <MenuSeparator />
-                <MenuItem leading={<Icon glyph={ListChecks} />} onClick={handleOpenSessionBatchModal}>
+                <MenuItem
+                  leading={<Icon glyph={ListChecks} />}
+                  onClick={handleOpenSessionBatchModal}
+                  data-testid="nav-workspace-menu-manage-sessions"
+                >
                   {t('nav.sessions.manage')}
                 </MenuItem>
                 <MenuItem

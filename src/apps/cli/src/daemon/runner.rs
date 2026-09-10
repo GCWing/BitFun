@@ -49,7 +49,6 @@ pub(crate) async fn run_daemon() -> Result<()> {
     // Continuous account settings sync (30s pull + debounced push) so this
     // always-on host converges with cloud changes made on other devices and
     // attached controllers see fresh config without reconnecting.
-    account.start_settings_sync_loop();
 
     pid::write_pid_file()?;
     tracing::info!("openbitfun daemon running (pid {})", std::process::id());

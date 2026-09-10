@@ -1,11 +1,43 @@
 {
   "$description": "High-contrast overrides for the dark scheme.",
+  "component": {
+    "button": {
+      "$description": "Button-specific state colors. Keep shared action colors stable for other controls and preserve contrast-mode feedback.",
+      "content": { "$type": "color", "$value": "{color.action.neutral.content}" },
+      "textContent": { "$type": "color", "$value": "{color.accent.default}" },
+      "textContentHover": { "$type": "color", "$value": "{color.accent.hover}" },
+      "textContentDisabled": { "$type": "color", "$value": "{color.accent.disabled}" },
+      "outlineBorder": { "$type": "color", "$value": "{color.action.neutral.border}" },
+      "outlineBorderInteractive": { "$type": "color", "$value": "{color.action.neutral.border}" },
+      "fillBackground": { "$type": "color", "$value": "{color.action.neutral.surface}" },
+      "fillBackgroundHover": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "fillBackgroundPressed": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
+      "primaryBackground": { "$type": "color", "$value": "{color.action.primary.background}" },
+      "primaryBackgroundHover": { "$type": "color", "$value": "{color.action.primary.hover}" },
+      "primaryBackgroundPressed": { "$type": "color", "$value": "{color.action.primary.pressed}" },
+      "primaryContentDisabled": { "$type": "color", "$value": "{color.action.neutral.contentDisabled}" }
+    }
+  },
   "color": {
+    "composer": {
+      "border": { "$type": "color", "$value": "{color.field.border}" },
+      "contextBackground": { "$type": "color", "$value": "{color.surface.subtle}" }
+    },
+    "keyHint": {
+      "content": { "$type": "color", "$value": "{color.content.muted}" }
+    },
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
+    "actionCard": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.gray.1000}" },
       "panel": { "$type": "color", "$value": "{ref.color.gray.900}" }
     },
     "content": {
+      "caption": { "$description": "Menu and navigation group captions; carries final opacity without attenuating primary text again.", "$type": "color", "$value": "{color.content.muted}" },
       "primary": { "$type": "color", "$value": "{ref.color.gray.0}" },
       "secondary": { "$type": "color", "$value": "{ref.color.gray.50}" },
       "muted": { "$type": "color", "$value": "{ref.color.gray.150}" }
@@ -33,6 +65,9 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "{color.surface.tertiary}" },
+      "borderActive": { "$type": "color", "$value": "{color.field.borderFocus}" },
+      "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "border": { "$type": "color", "$value": "{ref.color.gray.250}" },
       "borderHover": { "$type": "color", "$value": "{ref.color.gray.0}" },
       "borderFocus": { "$type": "color", "$value": "{ref.color.amber.400}" }
@@ -52,8 +87,18 @@
       "ring": { "$type": "color", "$value": "{ref.color.amber.400}" }
     },
     "status": {
+      "info": {
+        "content": { "$type": "color", "$value": "color-mix(in srgb, {color.status.info.emphasis} 40%, {ref.color.neutral.0})" }
+      },
+      "success": {
+        "content": { "$type": "color", "$value": "color-mix(in srgb, {color.status.success.emphasis} 35%, {ref.color.neutral.0})" }
+      },
       "warning": {
-        "emphasis": { "$type": "color", "$value": "{ref.color.amber.400}" }
+        "content": { "$type": "color", "$value": "color-mix(in srgb, {color.status.warning.emphasis} 75%, {ref.color.neutral.0})" },
+        "surface": { "$type": "color", "$value": "color-mix(in srgb, {color.status.warning.emphasis} 4%, transparent)" }
+      },
+      "danger": {
+        "content": { "$type": "color", "$value": "color-mix(in srgb, {color.status.danger.emphasis} 40%, {ref.color.neutral.0})" }
       }
     }
   }

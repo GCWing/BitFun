@@ -10,7 +10,7 @@
  * - Reset button restores all defaults
  */
 
-import { Button, Icon, IconButton, SearchField, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SearchField, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
@@ -657,7 +657,7 @@ const KeyboardShortcutsTab: React.FC = () => {
             ) : null}
             {hasPendingChanges && (
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 onClick={handleApply}
                 disabled={saving || hasBlockingConflicts}
@@ -721,7 +721,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                     key="tab-switch-merged"
                   >
                     <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
-                      <span className="kb-shortcuts__item-name">{t('keyboard.shortcuts.tab.switchMerged')}</span>
+                      <OverflowText className="kb-shortcuts__item-name">{t('keyboard.shortcuts.tab.switchMerged')}</OverflowText>
                       <span className="kb-shortcuts__item-hint">{t('keyboard.shortcuts.tab.switchMergedHint')}</span>
                       {mergedTabConflict && (
                         <span className="kb-shortcuts__item-conflict-hint">
@@ -783,7 +783,7 @@ const KeyboardShortcutsTab: React.FC = () => {
                     key="scene-focus-merged"
                   >
                     <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
-                      <span className="kb-shortcuts__item-name">{t('keyboard.shortcuts.scene.focusMerged')}</span>
+                      <OverflowText className="kb-shortcuts__item-name">{t('keyboard.shortcuts.scene.focusMerged')}</OverflowText>
                       <span className="kb-shortcuts__item-hint">{t('keyboard.shortcuts.scene.focusMergedHint')}</span>
                       {mergedSceneConflict && (
                         <span className="kb-shortcuts__item-conflict-hint">
@@ -850,9 +850,9 @@ const KeyboardShortcutsTab: React.FC = () => {
                       ].filter(Boolean).join(' ')}
                     >
                       <div className="kb-shortcuts__item-label" data-openbitfun-component="keyboard-shortcuts" data-openbitfun-part="label">
-                        <span className="kb-shortcuts__item-name">
+                        <OverflowText className="kb-shortcuts__item-name">
                           {displayName}
-                        </span>
+                        </OverflowText>
                         {conflict && (
                           <span className="kb-shortcuts__item-conflict-hint">
                             {t('keyboard.conflict')}: {shortcutDisplayName(conflict, t)}

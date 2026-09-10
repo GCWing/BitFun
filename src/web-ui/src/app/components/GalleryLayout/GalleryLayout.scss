@@ -13,19 +13,6 @@ $content-max: 936px;
   &__body {
     flex: 1;
     overflow-x: hidden;
-
-    &::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--openbitfun-color-border-subtle);
-      border-radius: 2px;
-    }
   }
 
   &__body-inner {
@@ -279,10 +266,6 @@ $content-max: 936px;
     cursor: not-allowed;
   }
 
-  &:active:not(:disabled) {
-    transform: scale(0.975);
-  }
-
   &:focus-visible {
     outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: -1px;
@@ -354,10 +337,6 @@ $content-max: 936px;
   &:focus-visible {
     outline: 2px solid var(--openbitfun-color-accent-default);
     outline-offset: -1px;
-  }
-
-  &:active {
-    transform: scale(0.975);
   }
 }
 

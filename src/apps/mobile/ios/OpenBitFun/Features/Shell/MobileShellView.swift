@@ -53,8 +53,8 @@ struct MobileShellView: View {
                             session: session,
                             presentation: .popover,
                             canViewDetails: true,
-                            canArchive: !remote,
-                            canExport: !remote,
+                            canArchive: false,
+                            canExport: false,
                             canDelete: true,
                             onViewDetails: {
                                 sidebarActionSession = nil
@@ -62,11 +62,10 @@ struct MobileShellView: View {
                                     model.showSessionDetails(session)
                                 }
                             },
-                            onArchive: { if !remote { model.archiveLocalSession(session) } },
-                            onExport: { if !remote { model.exportLocalSession(session) } },
+                            onArchive: {},
+                            onExport: {},
                             onDelete: {
-                                if remote { model.deleteRemoteSession(session) }
-                                else { model.deleteLocalSession(session) }
+                                model.deleteRemoteSession(session)
                             },
                             onClose: { sidebarActionSession = nil }
                         )
@@ -104,14 +103,7 @@ struct MobileShellView: View {
             case .failure: model.finishDownloadExport(success: false)
             }
         }
-        .fileExporter(
-            isPresented: $model.generalExportOpen,
-            document: MobileDownloadDocument(data: model.generalExportData),
-            contentType: UTType(filenameExtension: "md") ?? .plainText,
-            defaultFilename: model.generalExportName
-        ) { _ in
-            model.finishGeneralExport()
-        }
+
     }
 
     @ViewBuilder
@@ -335,7 +327,9 @@ struct MobileShellView: View {
                 sidebarAction: sidebarAction,
                 sidebarActionLabel: sidebarActionLabel
             )
-            if model.connectionPhase != .connected {
+            if model.surface == .remote,
+               model.remoteSessionSelected,
+               model.connectionPhase != .connected {
                 ConnectionStatusBar(
                     phase: model.connectionPhase,
                     detail: model.coreErrorMessage,
@@ -344,12 +338,8 @@ struct MobileShellView: View {
             }
             if model.surface == .remote && !model.remoteConnected {
                 RemoteHomeView(model: model)
-                ComposerBar(model: model)
             } else if model.surface == .remote && !model.remoteSessionSelected {
                 RemoteConnectedHomeView(model: model)
-                ComposerBar(model: model)
-            } else if model.surface == .local && !model.localSessionSelected {
-                LocalHomeView()
                 ComposerBar(model: model)
             } else {
                 ChatTimelineView(model: model)

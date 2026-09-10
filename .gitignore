@@ -121,3 +121,7 @@ src/apps/mobile/android/.kotlin/
 /src/apps/mobile/ios/build/
 .openbitfun/
 .bitfun/
+
+# Downloaded Flashgrep release assets (metadata stays tracked).
+/resources/flashgrep/flashgrep-*
+/resources/flashgrep/*.download-*

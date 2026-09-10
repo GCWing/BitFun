@@ -7,7 +7,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Keyboard, Square } from 'lucide-react';
-import { Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Tooltip } from '@openbitfun/ui';
 import {
   SceneChromeContribution,
   useSceneChromeContext,
@@ -146,7 +146,17 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       title: command.title.trim() || t('flowChatHeader.backgroundCommandUntitled'),
     }))
   ), [backgroundCommands, t]);
-  const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
+  const hasSearchQuery = searchQuery.trim().length > 0;
+  const hasNoResults = hasSearchQuery && searchMatchCount === 0;
+  const searchStatus = !hasSearchQuery
+    ? ''
+    : hasNoResults
+      ? t('flowChatHeader.searchNoResults')
+      : t('flowChatHeader.searchResult', {
+        current: searchCurrentMatch,
+        total: searchMatchCount,
+      });
+  const isSearchMode = visible && isSearchOpen;
   const hasOpenBackgroundCommandMenu =
     isBackgroundCommandSectionMenuOpen ||
     openBackgroundCommandMenuId !== null;
@@ -301,9 +311,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   useEffect(() => {
     if (searchOpenRequest > 0 && searchOpenRequest !== prevSearchOpenRequestRef.current) {
       prevSearchOpenRequestRef.current = searchOpenRequest;
+      closeSessionOverview(false);
       setIsSearchOpen(true);
     }
-  }, [searchOpenRequest]);
+  }, [closeSessionOverview, searchOpenRequest]);
 
   useEffect(() => {
     if (hasBackgroundCommands) return;
@@ -327,8 +338,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }, [isSceneChromeActive, isSearchOpen, visible]);
 
   const handleOpenSearch = useCallback(() => {
+    closeSessionOverview(false);
     setIsSearchOpen(true);
-  }, []);
+  }, [closeSessionOverview]);
 
   const handleCloseSearch = useCallback(() => {
     setIsSearchOpen(false);
@@ -336,14 +348,16 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }, [onSearchClose]);
 
   const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.defaultPrevented) return;
+
       if (e.key === 'Escape') {
         handleCloseSearch();
         e.preventDefault();
         return;
       }
 
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && e.target === searchInputRef.current) {
         if (e.shiftKey) {
           onSearchPrev?.();
         } else {
@@ -574,78 +588,85 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       data-openbitfun-component="flow-chat-header"
       data-openbitfun-part="actions"
     >
-        {visible ? (isSearchOpen ? (
+        {isSearchMode ? (
           <div
             className="flowchat-header__search"
             role="search"
+            onKeyDown={handleSearchKeyDown}
             data-testid="flowchat-header-search-bar"
             data-openbitfun-component="flow-chat-header"
             data-openbitfun-part="search"
+            data-openbitfun-state="active"
           >
-            <Input
+            <SearchField
               ref={searchInputRef}
               className="flowchat-header__search-field"
-              leading={<Icon name="search" size="xs" className="flowchat-header__search-prefix-icon" />}
+              variant={hasSearchQuery ? 'panel' : 'default'}
+              leadingIcon={<Icon name="search" size="sm" />}
+              footer={hasSearchQuery ? (
+                <>
+                  <span className="flowchat-header__search-status" aria-hidden="true">
+                    <OverflowText>{searchStatus}</OverflowText>
+                  </span>
+                  <span className="flowchat-header__search-navigation">
+                    <Tooltip content={t('flowChatHeader.searchPrevious')}>
+                      <IconButton
+                        size="xs"
+                        shape="circle"
+                        variant="fill"
+                        disabled={hasNoResults || !onSearchPrev}
+                        onClick={onSearchPrev}
+                        onMouseDown={event => event.preventDefault()}
+                        aria-label={t('flowChatHeader.searchPrevious')}
+                        icon={<Icon name="arrow-up" />}
+                      />
+                    </Tooltip>
+                    <Tooltip content={t('flowChatHeader.searchNext')}>
+                      <IconButton
+                        size="xs"
+                        shape="circle"
+                        variant="fill"
+                        disabled={hasNoResults || !onSearchNext}
+                        onClick={onSearchNext}
+                        onMouseDown={event => event.preventDefault()}
+                        aria-label={t('flowChatHeader.searchNext')}
+                        icon={<Icon name="arrow-down" />}
+                      />
+                    </Tooltip>
+                  </span>
+                </>
+              ) : undefined}
               trailing={
                 <span
-                  className="flowchat-header__search-inline-controls"
+                  className="flowchat-header__search-controls"
                   data-openbitfun-component="flow-chat-header"
                   data-openbitfun-part="searchControls"
                 >
-                  <span className="flowchat-header__search-count" aria-live="polite">
-                    {searchQuery.trim()
-                      ? hasNoResults
-                        ? t('flowChatHeader.searchNoResults')
-                        : t('flowChatHeader.searchResult', {
-                          current: searchCurrentMatch,
-                          total: searchMatchCount
-                        })
-                      : null}
-                  </span>
-                  <span className="flowchat-header__search-nav">
-                    <button
-                      className="flowchat-header__search-nav-btn"
-                      onClick={onSearchPrev}
-                      disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchPrevious')}
-                      aria-label={t('flowChatHeader.searchPrevious')}
-                      type="button"
-                    >
-                      <Icon name="chevron-up" size="xs" style={{ width: 10, height: 10 }} />
-                    </button>
-                    <button
-                      className="flowchat-header__search-nav-btn"
-                      onClick={onSearchNext}
-                      disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchNext')}
-                      aria-label={t('flowChatHeader.searchNext')}
-                      type="button"
-                    >
-                      <Icon name="chevron-down" size="xs" style={{ width: 10, height: 10 }} />
-                    </button>
-                  </span>
+                  <Tooltip content={t('flowChatHeader.searchClose')}>
+                    <IconButton
+                      className="flowchat-header__search-close"
+                      size="xs"
+                      shape="circle"
+                      variant="quiet"
+                      onClick={handleCloseSearch}
+                      onMouseDown={event => event.preventDefault()}
+                      aria-label={t('flowChatHeader.searchClose')}
+                      icon={<Icon name="xmark" />}
+                    />
+                  </Tooltip>
                 </span>
               }
-              type="text"
               value={searchQuery}
               onChange={e => onSearchChange?.(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
               placeholder={t('flowChatHeader.searchPlaceholder')}
               aria-label={t('flowChatHeader.searchPlaceholder')}
-              invalid={hasNoResults}
               size="sm"
             />
-            <Tooltip content={t('flowChatHeader.searchClose')}>
-              <IconButton
-                className="flowchat-header__search-close"
-                size="xs"
-                onClick={handleCloseSearch}
-                aria-label={t('flowChatHeader.searchClose')}
-                icon={<Icon name="xmark" size="sm" />}
-              />
-            </Tooltip>
+            <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {searchStatus}
+            </span>
           </div>
-        ) : (
+        ) : visible ? (
           <Tooltip content={t('flowChatHeader.searchOpen')}>
             <IconButton
               className="flowchat-header__search-btn"
@@ -656,13 +677,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               icon={<Icon name="search" size="sm" />}
             />
           </Tooltip>
-        )) : null}
-        <div
-          className="flowchat-header__session-overview"
-          ref={sessionOverviewRootRef}
-          data-openbitfun-component="flow-chat-header"
-          data-openbitfun-part="sessionOverview"
-        >
+        ) : null}
+        {!isSearchMode ? (
+          <div
+            className="flowchat-header__session-overview"
+            ref={sessionOverviewRootRef}
+            data-openbitfun-component="flow-chat-header"
+            data-openbitfun-part="sessionOverview"
+          >
           <Tooltip content={sessionOverviewLabel}>
             <IconButton
               ref={sessionOverviewTriggerRef}
@@ -713,7 +735,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             >
               <div className="flowchat-header__session-overview-panel-header">
                 <div className="flowchat-header__session-overview-panel-heading">
-                  <span>{t('flowChatHeader.sessionOverview')}</span>
+                  <OverflowText>{t('flowChatHeader.sessionOverview')}</OverflowText>
                 </div>
               </div>
 
@@ -734,7 +756,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                     aria-label={`${t('flowChatHeader.agentTree')}, ${agentOverviewSummary}`}
                   >
                     <span className="flowchat-header__session-overview-section-title">
-                      {t('flowChatHeader.agentTree')}
+                      <OverflowText>{t('flowChatHeader.agentTree')}</OverflowText>
                       {hasActiveSessionTreeDescendants ? (
                         <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
                       ) : null}
@@ -774,7 +796,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                     aria-label={`${t('flowChatHeader.backgroundCommandOverview')}, ${backgroundOverviewSummary}`}
                   >
                     <span className="flowchat-header__session-overview-section-title">
-                      {t('flowChatHeader.backgroundCommandOverview')}
+                      <OverflowText>{t('flowChatHeader.backgroundCommandOverview')}</OverflowText>
                       {runningBackgroundCommandCount > 0 ? (
                         <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
                       ) : null}
@@ -835,23 +857,23 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           key={command.execSessionKey}
                           className="flowchat-header__background-command-list-item"
                         >
-                          <button
+                          <button data-overflow-trigger
                             type="button"
                             className="flowchat-header__background-command-list-item-button flowchat-header__background-command-open-button"
                             onClick={() => handleCommandSelect(command)}
                           >
                             <span className="flowchat-header__background-command-list-title">
                               <Icon name="terminal" size="xs" aria-hidden="true" />
-                              <span>{command.title}</span>
+                              <OverflowText>{command.title}</OverflowText>
                             </span>
-                            <span className="flowchat-header__background-command-list-meta">
+                            <OverflowText className="flowchat-header__background-command-list-meta">
                               {[
                                 t('flowChatHeader.backgroundCommandSession', { id: command.execSessionId }),
                                 command.status === 'running'
                                   ? t('flowChatHeader.backgroundCommandStatusRunning')
                                   : t('flowChatHeader.backgroundCommandStatusFinished'),
                               ].filter(Boolean).join(' · ')}
-                            </span>
+                            </OverflowText>
                           </button>
                           {renderBackgroundCommandActions(command)}
                         </div>
@@ -877,16 +899,16 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   data-openbitfun-state={isPullRequestOverviewUnavailable ? 'unavailable' : pullRequestOverview.status}
                   data-testid="flowchat-header-pull-requests"
                 >
-                  <button
+                  <button data-overflow-trigger
                     type="button"
                     className="flowchat-header__session-overview-section-header flowchat-header__session-overview-section-header--action"
                     onClick={handleOpenPullRequests}
                     aria-label={`${t('flowChatHeader.pullRequests')}, ${pullRequestOverviewSummary}`}
                     disabled={isPullRequestOverviewUnavailable}
                   >
-                    <span className="flowchat-header__session-overview-section-title">
+                    <OverflowText className="flowchat-header__session-overview-section-title">
                       {t('flowChatHeader.pullRequests')}
-                    </span>
+                    </OverflowText>
                     {pullRequestOverview.status === 'loaded' ? (
                       <span className="flowchat-header__session-overview-section-count" aria-hidden="true">
                         {pullRequestOverview.totalCount}
@@ -938,7 +960,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   ) : (
                     <div className="flowchat-header__pull-request-list">
                       {pullRequestOverview.items.map(pullRequest => (
-                        <button
+                        <button data-overflow-trigger
                           key={`${pullRequest.providerId ?? 'auto'}:${pullRequest.id}`}
                           type="button"
                           className="flowchat-header__pull-request-item"
@@ -946,7 +968,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           title={`#${pullRequest.number} ${pullRequest.title}`}
                           data-testid="flowchat-header-pull-request-item"
                         >
-                          <span>#{pullRequest.number} {pullRequest.title}</span>
+                          <OverflowText>#{pullRequest.number} {pullRequest.title}</OverflowText>
                           <Icon name="chevron-right" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />
                         </button>
                       ))}
@@ -957,8 +979,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             </div>,
             getAppearanceOverlayHost(),
           )}
-        </div>
-        {onToggleRightPanel ? (
+          </div>
+        ) : null}
+        {!isSearchMode && onToggleRightPanel ? (
           <Tooltip content={rightPanelLabel}>
             <IconButton
               className={[
@@ -989,7 +1012,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           data-openbitfun-component="flow-chat-header"
           data-openbitfun-part="root"
         >
-          {leftActions}
+          {!isSearchMode ? leftActions : null}
           {rightActions}
         </div>
       </SceneChromeContribution>
@@ -1002,11 +1025,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
   return (
     <div
-      className="flowchat-header"
+      className={[
+        'flowchat-header',
+        isSearchMode && 'flowchat-header--searching',
+      ].filter(Boolean).join(' ')}
       data-openbitfun-component="flow-chat-header"
       data-openbitfun-part="root"
     >
-      {leftActions}
+      {!isSearchMode ? leftActions : null}
       {rightActions}
     </div>
   );

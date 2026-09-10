@@ -97,6 +97,9 @@ jobs:
       - name: Verify release and version-generation contracts
         run: node --test scripts/release-channel.test.mjs scripts/tauri-release-manifest.test.mjs scripts/linux-binaries-manifest.test.mjs scripts/version-generation.test.mjs
 
+      - name: Validate Relay deployment and packaging contracts
+        run: node --test scripts/relay/*.test.mjs
+
       - name: Verify minisign download fallback
         run: |
           set -euo pipefail
@@ -371,6 +374,14 @@ jobs:
       # The suite is behind a non-default feature and would otherwise never run.
       - name: Run file watch contract tests
         run: cargo test --locked -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+
+      # Exercise native child cleanup outside the Tauri test harness. In
+      # particular, Windows update/restart cleanup must leave the host alive.
+      - name: Run process lifecycle contract tests
+        shell: bash
+        run: |
+          cargo test --locked -p openbitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+          cargo test --locked -p openbitfun-services-core --no-default-features --features process-runtime --lib process_tree::tests::
 
       # Search tools share matching but retain provider-specific path and
       # symlink handling. Keep the search module in the full OS matrix.

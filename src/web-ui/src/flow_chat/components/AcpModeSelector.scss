@@ -44,7 +44,6 @@
 
   &__label {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -95,7 +94,6 @@
 
   &__header-hint {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: var(--openbitfun-type-body-sm-font-weight);
     opacity: 0.8;
@@ -106,7 +104,6 @@
 
     strong {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
       letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
       font-size: var(--openbitfun-type-flow-support-font-size);

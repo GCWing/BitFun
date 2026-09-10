@@ -15,7 +15,9 @@ import {
   useProjectCanvasStore,
   useGitCanvasStore,
   useBottomTerminalCanvasStore,
+  usePanelViewCanvasStore,
 } from '../stores';
+import type { CanvasStoreMode } from '../stores/canvasStore';
 import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
 import { TAB_EVENTS } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
@@ -27,11 +29,11 @@ import { destroyTerminalSession } from '@/shared/services/destroyTerminalSession
 const log = createLogger('useTabLifecycle');
 interface UseTabLifecycleOptions {
   /** App mode / target canvas */
-  mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
+  mode?: CanvasStoreMode;
   /** Override the external tab creation event for specialized canvases. */
   createTabEventName?: string;
-  /** Override the panel expansion event dispatched after tab activation. */
-  expandPanelEventName?: string;
+  /** Only the containing host decides whether opening content reveals a panel. */
+  onReveal?: () => void;
 }
 
 interface UseTabLifecycleReturn {
@@ -61,7 +63,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
   const {
     mode = 'agent',
     createTabEventName,
-    expandPanelEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
+    onReveal,
   } = options;
   const { t } = useI18n('components');
   const canvasStoreApi =
@@ -71,7 +73,9 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
         ? useGitCanvasStore
         : mode === 'bottom-terminal'
           ? useBottomTerminalCanvasStore
-          : useAgentCanvasStore;
+          : mode === 'panel-view'
+            ? usePanelViewCanvasStore
+            : useAgentCanvasStore;
   
   const {
     addTab,
@@ -89,6 +93,9 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
 
   const closeTerminalSession = useCallback(async (tab: { content: PanelContent }): Promise<boolean> => {
     if (tab.content.type !== 'terminal') return true;
+    // Workspace terminals outlive their views. Older/specialized tabs retain
+    // their explicit process-lifecycle contract.
+    if (tab.content.metadata?.terminalCloseBehavior === 'detach') return true;
 
     const sessionId = tab.content.data?.sessionId;
     if (!sessionId) return true;
@@ -114,13 +121,15 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
       if (existing) {
         // Switch to existing tab
         switchToTab(existing.tab.id, existing.groupId);
+        onReveal?.();
         return;
       }
     }
     
     // Add preview tab (auto-replaces current preview tab)
     addTab(content, 'preview', targetGroupId);
-  }, [activeGroupId, findTabByMetadata, switchToTab, addTab]);
+    onReveal?.();
+  }, [activeGroupId, findTabByMetadata, switchToTab, addTab, onReveal]);
 
   /**
    * Open directly in active state.
@@ -137,13 +146,15 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
         if (existing.tab.state === 'preview') {
           promoteTab(existing.tab.id, existing.groupId);
         }
+        onReveal?.();
         return;
       }
     }
     
     // Add active tab
     addTab(content, 'active', targetGroupId);
-  }, [activeGroupId, findTabByMetadata, switchToTab, promoteTab, addTab]);
+    onReveal?.();
+  }, [activeGroupId, findTabByMetadata, switchToTab, promoteTab, addTab, onReveal]);
 
   /**
    * Promote to active on edit.
@@ -254,48 +265,41 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Remove tabs when their terminal session is destroyed by any surface.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore
-                : mode === 'git' ? useGitCanvasStore
-                : mode === 'bottom-terminal' ? useBottomTerminalCanvasStore
-                : useAgentCanvasStore;
-    
     const handleTerminalSessionDestroyed = (event: CustomEvent<{ sessionId: string }>) => {
       const { sessionId } = event.detail ?? {};
       if (sessionId) {
-        store.getState().closeTerminalTabBySessionId(sessionId);
+        canvasStoreApi.getState().closeTerminalTabBySessionId(sessionId);
       }
     };
     window.addEventListener('terminal-session-destroyed', handleTerminalSessionDestroyed as EventListener);
     return () => {
       window.removeEventListener('terminal-session-destroyed', handleTerminalSessionDestroyed as EventListener);
     };
-  }, [mode]);
+  }, [canvasStoreApi]);
 
   /**
    * Keep terminal tab titles synchronized with session renames.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore
-                : mode === 'git' ? useGitCanvasStore
-                : mode === 'bottom-terminal' ? useBottomTerminalCanvasStore
-                : useAgentCanvasStore;
-    
     const handleTerminalSessionRenamed = (event: CustomEvent<{ sessionId: string; newName: string }>) => {
       const { sessionId, newName } = event.detail ?? {};
       if (sessionId && newName) {
-        store.getState().renameTerminalTabBySessionId(sessionId, newName);
+        canvasStoreApi.getState().renameTerminalTabBySessionId(sessionId, newName);
       }
     };
     window.addEventListener('terminal-session-renamed', handleTerminalSessionRenamed as EventListener);
     return () => {
       window.removeEventListener('terminal-session-renamed', handleTerminalSessionRenamed as EventListener);
     };
-  }, [mode]);
+  }, [canvasStoreApi]);
 
   /**
    * Listen for external tab creation events.
    */
   useEffect(() => {
+    // Popped-out tabs are transferred directly into their independent store.
+    // This host must not also consume the session's tab-open requests.
+    if (mode === 'panel-view' && !createTabEventName) return;
     const eventName = createTabEventName ??
       (mode === 'project'
         ? TAB_EVENTS.PROJECT_CREATE_TAB
@@ -344,7 +348,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
           // Switch to existing tab
           switchToTab(existing.tab.id, existing.groupId);
           
-          window.dispatchEvent(new CustomEvent(expandPanelEventName));
+          onReveal?.();
           return;
         }
       }
@@ -355,14 +359,14 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
       // Open all tabs in active state by default (no preview replacement)
       addTab(content, 'active', groupId);
       
-      window.dispatchEvent(new CustomEvent(expandPanelEventName));
+      onReveal?.();
     };
 
     window.addEventListener(eventName, handleCreateTab as EventListener);
 
     // Drain any tab events that were enqueued before this listener was
     // registered (happens when the scene was just mounted for the first time).
-    if (mode !== 'bottom-terminal') {
+    if (mode !== 'bottom-terminal' && mode !== 'panel-view') {
       const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
       const pending = drainPendingTabs(pendingMode);
       pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
@@ -371,7 +375,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
     return () => {
       window.removeEventListener(eventName, handleCreateTab as EventListener);
     };
-  }, [mode, createTabEventName, expandPanelEventName, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode]);
+  }, [mode, createTabEventName, onReveal, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode]);
 
   return {
     openPreview,

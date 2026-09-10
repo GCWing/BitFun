@@ -69,7 +69,6 @@
   &__group-name {
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -123,7 +122,6 @@
     color: var(--openbitfun-color-content-primary);
     line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

@@ -4,7 +4,7 @@
  * Uses the shared prominent FlowChat framework.
  */
 
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -80,13 +80,13 @@ const ReviewReportSection: React.FC<ReviewReportSectionProps> = ({
     data-openbitfun-part="group"
     data-openbitfun-state={expanded ? 'expanded' : undefined}
   >
-    <button
+    <button data-overflow-trigger
       type="button"
       className="review-report-section__header"
       onClick={onToggle}
       aria-expanded={expanded}
     >
-      <span className="review-report-section__title">{title}</span>
+      <OverflowText className="review-report-section__title">{title}</OverflowText>
       {summary && <span className="review-report-section__summary">{summary}</span>}
       {expanded ? <Icon name="chevron-up" size="lg" style={{ width: 13, height: 13 }} /> : <Icon name="chevron-down" size="lg" style={{ width: 13, height: 13 }} />}
     </button>
@@ -702,9 +702,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                             <span className="issue-source">{coverageSource}</span>
                           )}
                           {issue.file && (
-                            <span className="issue-location">
+                            <OverflowText className="issue-location">
                               {issue.file}{issue.line ? `:${issue.line}` : ''}
-                            </span>
+                            </OverflowText>
                           )}
                         </div>
                         <span className="issue-certainty">
@@ -854,19 +854,19 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                               {issue.severity && (
                                 <div>
                                   <span>{t('toolCards.codeReview.remediationActions.severity')}</span>
-                                  <strong>{t(`toolCards.codeReview.severities.${issue.severity}`, { defaultValue: issue.severity })}</strong>
+                                  <strong><OverflowText>{t(`toolCards.codeReview.severities.${issue.severity}`, { defaultValue: issue.severity })}</OverflowText></strong>
                                 </div>
                               )}
                               {issue.certainty && (
                                 <div>
                                   <span>{t('toolCards.codeReview.remediationActions.certainty')}</span>
-                                  <strong>{t(`toolCards.codeReview.certainties.${issue.certainty}`, { defaultValue: issue.certainty })}</strong>
+                                  <strong><OverflowText>{t(`toolCards.codeReview.certainties.${issue.certainty}`, { defaultValue: issue.certainty })}</OverflowText></strong>
                                 </div>
                               )}
                               {location && (
                                 <div>
                                   <span>{t('toolCards.codeReview.remediationActions.location')}</span>
-                                  <strong>{location}</strong>
+                                  <strong><OverflowText>{location}</OverflowText></strong>
                                 </div>
                               )}
                             </div>

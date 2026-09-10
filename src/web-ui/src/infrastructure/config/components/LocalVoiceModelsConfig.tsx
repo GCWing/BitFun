@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Icon,
   IconButton,
@@ -344,7 +344,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                   <span>{t(resourceHintKey)}</span>
                 </div>
                 {model.error ? (
-                  <div className="voice-input-config__model-error">{model.error}</div>
+                  <div className="voice-input-config__model-error"><OverflowText>{model.error}</OverflowText></div>
                 ) : null}
                 {isDownloading ? (
                   <div className="voice-input-config__progress">
@@ -368,7 +368,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
               >
                 {isUsable && !isSelected ? (
                   <Button
-                    variant="fill"
+                    variant="primary"
                     size="sm"
                     onClick={() => void updateVoiceInput({
                       provider: 'local',
@@ -382,7 +382,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
 
                 {isDownloading ? (
                   <Button
-                    variant="outline"
+                    variant="fill"
                     size="sm"
                     onClick={() => void handleCancelDownload(model)}
                     loading={busyKey === 'cancel'}
@@ -392,7 +392,7 @@ const LocalVoiceModelsConfig: React.FC<LocalVoiceModelsConfigProps> = ({
                   </Button>
                 ) : canInstall ? (
                   <Button
-                    variant="fill"
+                    variant="primary"
                     size="sm"
                     onClick={() => handleDownload(model)}
                     disabled={busyAction !== null || anyDownloading}

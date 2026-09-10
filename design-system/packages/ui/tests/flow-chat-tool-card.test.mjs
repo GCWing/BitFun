@@ -190,7 +190,7 @@ test("cancelled and rejected tool cards rely on status copy instead of a duplica
       }),
     );
 
-    assert.match(agentMarkup, new RegExp(`data-openbitfun-part="agentStatus"[^>]*>${statusLabel}<`));
+    assert.match(agentMarkup, new RegExp(`data-openbitfun-part="agentStatus"[^>]*><span[^>]*>${statusLabel}<`));
     assert.doesNotMatch(agentMarkup, /data-openbitfun-part="status"/);
     assert.doesNotMatch(agentMarkup, /lucide-x/);
   }

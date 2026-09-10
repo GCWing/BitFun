@@ -35,7 +35,7 @@ import {
   type TokenOverrides,
 } from "@openbitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
-import { NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern } from "./ReferencePatterns";
+import { IndicatorsPattern, FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
 
 interface PatternsPageProps {
   colorScheme: ColorScheme;
@@ -80,9 +80,11 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
           <p>{t("patterns.description")}</p>
         </header>
 
+        <IndicatorsPattern />
+
         <PatternSection description={t("patterns.settings.description")} index="01" title={t("patterns.settings.title")}>
           <Card appearance="raised" className="pattern-settings" data-openbitfun-pattern="settings-form" padding="md" radius="md">
-            <PageHeader description={t("components.preview.appearanceDescription")} level={3} size="lg" title={t("components.preview.appearance")} />
+            <PageHeader description={t("components.preview.appearanceDescription")} level={3} size="md" title={t("components.preview.appearance")} />
             <CardBody>
               <FormSection description={t("patterns.settings.description")} headingAs="h4" title={t("components.preview.appearance")}>
                 <FieldGroup appearance="subtle" dividers>
@@ -93,7 +95,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
                   </FieldRow>
                   <FieldRow>
                     <Field controlWidth="fill" description={t("patterns.settings.themeDescription")} label={t("patterns.settings.theme")} labelWidth="md" orientation="horizontal">
-                      <SegmentedControl onValueChange={setAppearance} options={[{ label: t("patterns.settings.system"), value: "system" }, { label: t("settings.light"), value: "light" }, { label: t("settings.dark"), value: "dark" }]} value={appearance} />
+                      <SegmentedControl size="md" onValueChange={setAppearance} options={[{ label: t("patterns.settings.system"), value: "system" }, { label: t("settings.light"), value: "light" }, { label: t("settings.dark"), value: "dark" }]} value={appearance} />
                     </Field>
                   </FieldRow>
                   <FieldRow>
@@ -107,7 +109,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
                 <FieldGroup appearance="subtle">
                   <FieldRow>
                     <Field controlWidth="fill" description={t("patterns.settings.fontSizeDescription")} label={t("patterns.settings.fontSize")} labelWidth="md" orientation="horizontal">
-                      <SegmentedControl onValueChange={setFontSize} options={[{ label: t("settings.compact"), value: "small" }, { label: t("settings.comfortable"), value: "medium" }, { label: t("settings.touch"), value: "large" }]} value={fontSize} />
+                      <SegmentedControl size="md" onValueChange={setFontSize} options={[{ label: t("settings.compact"), value: "small" }, { label: t("settings.comfortable"), value: "medium" }, { label: t("settings.touch"), value: "large" }]} value={fontSize} />
                     </Field>
                   </FieldRow>
                 </FieldGroup>
@@ -115,6 +117,8 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
             </CardBody>
           </Card>
         </PatternSection>
+
+        <FormTypographyPattern />
 
         <PatternSection description={t("patterns.navigation.description")} index="02" title={t("patterns.navigation.title")}>
           <div className="pattern-navigation-stage" data-openbitfun-pattern="navigation-panel">
@@ -145,7 +149,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
               </NavigationPanelFooter>
             </NavigationPanel>
             <div className="pattern-navigation-copy">
-              <PageHeader description={t("patterns.navigation.description")} level={3} size="lg" title={t("patterns.navigation.workspace")} />
+              <PageHeader description={t("patterns.navigation.description")} level={3} size="display" title={t("patterns.navigation.workspace")} />
               <p>{t("patterns.navigation.status")}</p>
             </div>
           </div>
@@ -153,7 +157,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
 
         <PatternSection description={t("patterns.search.description")} index="03" title={t("patterns.search.title")}>
           <Card appearance="raised" className="pattern-command" data-openbitfun-pattern="search-command-surface" gap="md" padding="md" radius="md">
-            <CardHeader actions={<SegmentedControl onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
+            <CardHeader actions={<SegmentedControl size="md" onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
             <SearchField aria-label={t("patterns.search.searchPlaceholder")} clearLabel={t("components.preview.close")} leadingIcon={<Icon name="search" />} onClear={() => setQuery("")} onValueChange={setQuery} placeholder={t("patterns.search.searchPlaceholder")} shortcut={<KeyHint>Ctrl K</KeyHint>} value={query} />
             <CardBody>
               <div className="pattern-action-grid">
@@ -172,11 +176,12 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
           <Card appearance="subtle" className="pattern-device-card" data-openbitfun-pattern="device-card" gap="md" padding="md" radius="md">
             <CardHeader actions={<IconButton aria-label={t("patterns.device.refresh")} icon={<Icon name="refresh" />} size="sm" variant="quiet" />} description="macOS · 127.0.0.1" leading={<span className="pattern-device-icon"><Icon name="device-mac" size="lg" /></span>} title="MacBook Pro" />
             <CardBody><StatusPill leading={<Icon name="unselected" />} tone="success">{t("patterns.device.online")}</StatusPill></CardBody>
-            <Button leadingIcon={<Icon name="link" />} size="sm" variant="fill">{t("patterns.device.connect")}</Button>
+            <Button leadingIcon={<Icon name="link" />} size="sm" variant="primary">{t("patterns.device.connect")}</Button>
           </Card>
         </PatternSection>
         <PatternSection description={t("patterns.provider.description")} index="05" title={t("patterns.provider.title")}>
           <ProviderConfigurationPattern />
+          <WorkspaceConfigurationPattern />
         </PatternSection>
         <PatternSection description={t("patterns.toolbar.description")} index="06" title={t("patterns.toolbar.title")}>
           <SceneToolbarPattern />

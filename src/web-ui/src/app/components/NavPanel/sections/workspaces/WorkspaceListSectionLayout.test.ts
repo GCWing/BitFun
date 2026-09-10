@@ -73,7 +73,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceNameButton).toContain('flex: 0 1 auto;');
     expect(workspaceNameButton).toContain('overflow: hidden;');
     expect(workspaceNameButton).not.toContain('58px');
-    expect(stylesheet).toContain('padding-right: 52px;');
+    expect(stylesheet).toContain('padding-right: 76px;');
     expect(stylesheet).toContain('&__workspace-item:hover &__workspace-item-name-stack');
     expect(stylesheet).toContain('&__workspace-item.is-menu-open &__workspace-item-name-stack');
     expect(stylesheet).not.toContain('&__workspace-item.is-active &__workspace-item-name-btn');
@@ -81,7 +81,11 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceTitle).toContain('flex: 1 1 0;');
     expect(workspaceTitle).toContain('max-width: 100%;');
     expect(workspaceLabel).toContain('flex: 1 1 0;');
-    expect(workspaceLabel).toContain('text-overflow: ellipsis;');
+    expect(workspaceLabel).toContain('overflow: hidden;');
+    expect(workspaceLabel).not.toContain('text-overflow: ellipsis;');
+    expect(readWorkspaceItemSource()).toMatch(
+      /<OverflowText\s+behavior="marquee"\s+className="openbitfun-nav-panel__workspace-item-label"/,
+    );
     expect(workspaceActions).toContain('position: absolute;');
     expect(workspaceActions).toContain('right: 4px;');
     expect(workspaceActions).toContain('gap: 4px;');
@@ -106,12 +110,12 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantNameButton).toContain('overflow: hidden;');
     expect(assistantNameButton).not.toContain('58px');
     expect(stylesheet).toContain('&__assistant-item:hover &__assistant-item-name-btn');
-    expect(stylesheet).toContain('padding-right: 52px;');
+    expect(stylesheet.match(/padding-right: 76px;/g)).toHaveLength(2);
     expect(stylesheet).not.toContain('padding-right: 48px;');
     expect(stylesheet).toContain('&__assistant-item.is-menu-open &__assistant-item-name-btn');
     expect(stylesheet).not.toContain('&__assistant-item.is-active &__assistant-item-name-btn');
     expect(assistantLabel).toContain('flex: 1 1 0;');
-    expect(assistantLabel).toContain('text-overflow: ellipsis;');
+    expect(assistantLabel).not.toContain('text-overflow: ellipsis;');
     expect(assistantMenu).toContain('position: absolute;');
     expect(assistantMenu).toContain('right: 4px;');
     expect(assistantMenu).toContain('gap: 4px;');
@@ -142,8 +146,9 @@ describe('WorkspaceListSection layout styles', () => {
     );
   });
 
-  it('keeps workspace and assistant menu triggers at the compact row size', () => {
+  it('keeps all three workspace hover actions at the compact row size', () => {
     const stylesheet = readWorkspaceListStylesheet();
+    const source = readWorkspaceItemSource();
     const workspaceTrigger = extractBlock(stylesheet, '&__workspace-item-menu-trigger');
     const assistantTrigger = extractBlock(stylesheet, '&__assistant-item-menu-trigger');
 
@@ -151,6 +156,7 @@ describe('WorkspaceListSection layout styles', () => {
       expect(block).toContain('width: 20px;');
       expect(block).toContain('height: 20px;');
     }
+    expect(source.match(/data-testid="nav-workspace-new-session-btn"/g)).toHaveLength(2);
   });
 
   it('keeps workspace and assistant rows flat on hover', () => {
@@ -222,7 +228,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(source).toContain('behavior="marquee"');
     expect(searchIndicatorStart).toBeGreaterThan(remoteNameStart);
     expect(remoteMetaStart).toBeGreaterThan(searchIndicatorStart);
-    expect(remoteMetaMarkup).toContain('remoteMeta.hostLabel');
+    expect(remoteMetaMarkup).toContain('remoteMeta.connectionLabel');
     expect(remoteMetaMarkup.indexOf('workspace-item-status-dot'))
       .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-remote-host'));
     expect(source).not.toContain('workspace-item-subtitle');

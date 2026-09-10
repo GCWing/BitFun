@@ -15,6 +15,7 @@ import { TurnCompletionNoticeItem } from './TurnCompletionNoticeItem';
 import { TurnFailureNoticeItem } from './TurnFailureNoticeItem';
 import './VirtualItemRenderer.scss';
 import { getVirtualItemStableKey } from './virtualItemIdentity';
+import { useFlowChatSearchPresentation } from './useFlowChatSearchPresentation';
 
 interface VirtualItemRendererProps {
   item: VirtualItem;
@@ -33,13 +34,17 @@ interface VirtualItemRendererProps {
 
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   ({ item, index, endsBeforeUserTurn = false, continuesAmbientToolRunAfter = false, measureRef }) => {
-    const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatVolatileContext();
-    const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
-      ? searchMatchIndices.has(index)
-      : false;
-    const isSearchCurrent = searchCurrentMatchVirtualIndex != null && searchCurrentMatchVirtualIndex >= 0
-      ? searchCurrentMatchVirtualIndex === index
-      : false;
+    const { searchQuery, searchMatchesByVirtualIndex, searchCurrentMatch } = useFlowChatVolatileContext();
+    const matches = searchMatchesByVirtualIndex?.get(index);
+    const currentMatch = searchCurrentMatch?.virtualItemIndex === index ? searchCurrentMatch : undefined;
+    const isSearchMatch = Boolean(matches?.length);
+    const isSearchCurrent = Boolean(currentMatch);
+    const [wrapper, setWrapper] = React.useState<HTMLDivElement | null>(null);
+    const rowRef = React.useCallback((element: HTMLDivElement | null) => {
+      setWrapper(element);
+      measureRef?.(element);
+    }, [measureRef]);
+    const searchLine = useFlowChatSearchPresentation(wrapper, searchQuery, matches, currentMatch);
 
     const content = (() => {
       switch (item.type) {
@@ -115,18 +120,13 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
     // A4-like layout: wrap with a max-width container.
     // Render the container even when content is empty to avoid zero-size issues.
     // data-turn-id is used for long-image export.
-    const wrapperClassName = [
-      'virtual-item-wrapper',
-      isSearchCurrent ? 'virtual-item-wrapper--search-current' : isSearchMatch ? 'virtual-item-wrapper--search-match' : '',
-    ].filter(Boolean).join(' ');
-
     return (
       <div
-        ref={measureRef}
+        ref={rowRef}
         data-openbitfun-component="virtual-item"
         data-openbitfun-part="root"
         data-openbitfun-state={[isSearchMatch && 'searchMatch', isSearchCurrent && 'searchCurrent'].filter(Boolean).join(' ')}
-        className={wrapperClassName}
+        className="virtual-item-wrapper"
         data-testid="flowchat-message-item"
         data-turn-id={item.turnId}
         data-item-type={item.type}
@@ -137,6 +137,14 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
         data-item-index={index}
       >
         {content || <div style={{ minHeight: '1px' }} />}
+        <span
+          aria-hidden="true"
+          hidden={!searchLine}
+          className="flowchat-search-line"
+          data-openbitfun-component="virtual-item"
+          data-openbitfun-part="searchLine"
+          style={searchLine ?? undefined}
+        />
       </div>
     );
   },

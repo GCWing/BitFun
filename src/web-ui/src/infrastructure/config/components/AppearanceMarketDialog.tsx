@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Icon,
   ScrollArea,
@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, PackageCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
-import { MarketAccountControls } from '@/features/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
   type AppearanceMarketBrowseRequest,
@@ -35,7 +35,7 @@ import {
   useAppearance,
   type AppearanceCatalogEntry,
 } from '@/infrastructure/appearance';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { notificationService } from '@/shared/notification-system';
 import { getVersionInfo } from '@/shared/utils/version';
 import {
@@ -105,7 +105,7 @@ function requiresNewerOpenBitFun(minimum: string): boolean {
 
 export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDialogProps) {
   const { t } = useTranslation('settings/appearance');
-  const account = useMarketAccount();
+  const account = useAccountIdentity();
   const {
     appearances,
     selectedAppearanceId,
@@ -333,8 +333,8 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
           </div>
           <p>{detail.description}</p>
           <dl className="appearance-market__facts">
-            <div><dt>{t('package.market.minimumVersion')}</dt><dd>{detail.minOpenBitFunVersion}</dd></div>
-            <div><dt>{t('package.market.license')}</dt><dd>{detail.license.spdxExpression || t('package.market.customLicense')}</dd></div>
+            <div><dt><OverflowText>{t('package.market.minimumVersion')}</OverflowText></dt><dd><OverflowText>{detail.minOpenBitFunVersion}</OverflowText></dd></div>
+            <div><dt><OverflowText>{t('package.market.license')}</OverflowText></dt><dd><OverflowText>{detail.license.spdxExpression || t('package.market.customLicense')}</OverflowText></dd></div>
           </dl>
           {detail.requiredCapabilities.length > 0 && (
             <div className="appearance-market__capabilities">
@@ -408,7 +408,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               && !updateAvailable
               && !linkedToOtherListing ? (
               <Button
-                variant={active ? 'outline' : 'fill'}
+                variant={active ? 'outline' : 'primary'}
                 disabled={active
                   || unsupported
                   || incompatibleVersion
@@ -421,7 +421,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               </Button>
             ) : (
               <Button
-                variant="fill"
+                variant="primary"
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >
@@ -457,7 +457,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
     >
       <DialogHeader>
         <DialogHeading>
-          <DialogTitle>{t('package.market.title')}{<MarketAccountControls />}</DialogTitle>
+          <DialogTitle>{t('package.market.title')}{<AccountIdentityControls />}</DialogTitle>
         </DialogHeading>
         <DialogClose />
       </DialogHeader>
@@ -601,7 +601,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                       && item.latestRelease > local.marketOrigin.releaseNumber,
                     );
                     return (
-                      <button
+                      <button data-overflow-trigger
                         key={item.listingId}
                         type="button"
                         className="appearance-market__card"
@@ -634,9 +634,9 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                           data-openbitfun-component="appearance-settings"
                           data-openbitfun-part="marketCardBody"
                         >
-                          <strong>{item.name}</strong>
-                          <span>{item.author || item.owner.login} · v{item.packageVersion}</span>
-                          <p>{item.description}</p>
+                          <strong><OverflowText>{item.name}</OverflowText></strong>
+                          <OverflowText>{item.author || item.owner.login} · v{item.packageVersion}</OverflowText>
+                          <OverflowText as="p" lines={2}>{item.description}</OverflowText>
                         </div>
                         {local && (
                           <span

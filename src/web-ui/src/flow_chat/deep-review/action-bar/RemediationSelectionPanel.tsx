@@ -19,7 +19,7 @@ interface RemediationSelectionPanelProps {
   selectionDisabled?: boolean;
   onToggleRemediation: (id: string) => void;
   onToggleAll: () => void;
-  onToggleGroup: (groupId: string) => void;
+  onToggleGroup: (groupId: RemediationGroupId | 'ungrouped') => void;
   onToggleList: () => void;
   onToggleDecisionExpansion: (id: string) => void;
   onSetDecisionSelection: (id: string, optionIndex: number) => void;
@@ -78,7 +78,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
   }, [remediationItems]);
 
   const groupOrder = useMemo(() => {
-    const ordered: string[] = [];
+    const ordered: Array<RemediationGroupId | 'ungrouped'> = [];
     for (const gid of REMEDIATION_GROUP_ORDER) {
       if (groupedItems[gid]?.length) ordered.push(gid);
     }
@@ -183,7 +183,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                         />
                         <span
                           className="deep-review-action-bar__remediation-text"
-                          title={item.decisionContext ? item.plan : undefined}
+                          title={item.decisionContext ? `${item.decisionContext.question}\n${item.plan}` : item.plan}
                         >
                           {isCompleted && (
                             <Icon name="check-circle" size="xs" className="deep-review-action-bar__completed-icon" />

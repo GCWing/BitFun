@@ -12,9 +12,9 @@ export interface IconButtonProps
   icon: ReactNode;
   loading?: boolean;
   shape?: "circle" | "square";
-  size?: "xs" | "sm" | "md" | "lg";
+  size?: "xs" | "standard" | "sm" | "md" | "lg";
   tone?: "danger" | "neutral";
-  variant?: "fill" | "primary" | "quiet";
+  variant?: "fill" | "outline" | "primary" | "quiet";
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({

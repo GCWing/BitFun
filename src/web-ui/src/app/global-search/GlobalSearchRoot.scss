@@ -317,7 +317,6 @@
   &__result-subtitle,
   &__result-context {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -397,7 +396,6 @@
     margin-right: auto;
     overflow: hidden;
     color: var(--openbitfun-color-content-muted);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -463,7 +461,6 @@
   min-width: 0;
   overflow: hidden;
   color: inherit;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

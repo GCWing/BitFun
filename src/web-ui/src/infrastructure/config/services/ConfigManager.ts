@@ -804,7 +804,8 @@ class ConfigManagerImpl implements IConfigManager {
   /**
    * Re-read every cached/watched path after the backend applied an external
    * config change (e.g. account cloud sync), then notify listeners only for
-   * paths whose value actually changed so config-driven UI refreshes.
+   * paths whose value changed or had no cached baseline (including bootstrap
+   * and optional reads) so config-driven UI refreshes.
    */
   async applyExternalReload(): Promise<void> {
     const trackedPaths = new Set<string>([
@@ -835,7 +836,7 @@ class ConfigManagerImpl implements IConfigManager {
     for (const path of trackedPaths) {
       const oldValue = previousValues.get(path);
       const newValue = this.configCache.get(path);
-      if (!configValuesEqual(oldValue, newValue)) {
+      if (!previousValues.has(path) || !configValuesEqual(oldValue, newValue)) {
         this.notifyConfigChange(path, oldValue, newValue);
       }
     }

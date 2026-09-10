@@ -1,31 +1,12 @@
 import { CloudAccountClient, CloudAccountSession } from './CloudAccountClient';
 import { CommandStatusResponse, RemoteCommand } from '../model/RemoteModels';
-import { RelayHttpClient } from './RelayHttpClient';
 
 /** Interactive directory rows must fail fast enough to leave a usable retry. */
 export const INTERACTIVE_DIRECTORY_TIMEOUT_MS: number = 15000;
-/** Relay room commands may legitimately wait up to 60 s for the desktop. */
-export const ROOM_COMMAND_TIMEOUT_MS: number = 65000;
 
 export interface RemoteCommandTransport {
   send<T extends CommandStatusResponse>(command: RemoteCommand, timeoutMs?: number): Promise<T>;
   reset(): void;
-}
-
-export class RoomRemoteCommandTransport implements RemoteCommandTransport {
-  private readonly client: RelayHttpClient;
-
-  constructor(client: RelayHttpClient) {
-    this.client = client;
-  }
-
-  async send<T extends CommandStatusResponse>(command: RemoteCommand, timeoutMs: number = ROOM_COMMAND_TIMEOUT_MS): Promise<T> {
-    return this.client.sendCommand<T>(command, timeoutMs);
-  }
-
-  reset(): void {
-    this.client.reset();
-  }
 }
 
 export class AccountDeviceCommandTransport implements RemoteCommandTransport {

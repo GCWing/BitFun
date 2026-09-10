@@ -76,7 +76,7 @@ export class AppErrorBoundary extends Component<Props, State> {
           <p style={{ margin: '12px 0 0', opacity: 0.9 }}>{firstLine}</p>
           <div style={{ marginTop: 16 }}>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={this.handleReload}
             >

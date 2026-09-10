@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { compile } from 'sass';
 import { describe, expect, it } from 'vitest';
 
-const navSource = readFileSync(resolve(__dirname, 'FileViewerNav.tsx'), 'utf8').replace(
+const navSource = readFileSync(resolve(__dirname, '../workspace-resources/WorkspaceResourcePanel.tsx'), 'utf8').replace(
   /\r\n/g,
   '\n',
 );

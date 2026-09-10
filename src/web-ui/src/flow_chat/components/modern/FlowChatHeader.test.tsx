@@ -40,18 +40,28 @@ vi.mock('@openbitfun/ui', async importOriginal => {
     ),
     IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
       icon?: React.ReactNode;
+      shape?: string;
       size?: string;
       tooltip?: string;
       variant?: string;
     }>(({
       children,
       icon,
+      shape,
       size,
       tooltip,
       variant,
       ...props
     }, ref) => (
-      <button ref={ref} type="button" title={tooltip} data-size={size} {...props}>
+      <button
+        ref={ref}
+        type="button"
+        title={tooltip}
+        data-openbitfun-shape={shape}
+        data-openbitfun-variant={variant}
+        data-size={size}
+        {...props}
+      >
         {icon}
         {children}
       </button>
@@ -189,9 +199,10 @@ describe('FlowChatHeader', () => {
 
   it('toggles the host-owned right panel from the session header', () => {
     const onToggleRightPanel = vi.fn();
+    const onSearchClose = vi.fn();
 
     act(() => {
-      root.render(<FlowChatHeader {...createProps({ onToggleRightPanel })} />);
+      root.render(<FlowChatHeader {...createProps({ onSearchClose, onToggleRightPanel })} />);
     });
 
     const trigger = container.querySelector<HTMLButtonElement>(
@@ -201,8 +212,10 @@ describe('FlowChatHeader', () => {
     expect(trigger?.getAttribute('aria-pressed')).toBe('false');
     expect(trigger?.getAttribute('data-openbitfun-state')).toBe('collapsed');
     expect(trigger?.querySelector('[data-openbitfun-name="sidebar-right"]')).not.toBeNull();
-    const rightActions = container.querySelectorAll('.flowchat-header__actions')[1];
-    const actionTestIds = () => [...(rightActions?.children ?? [])].map((action) => (
+    const getRightActions = () => container.querySelector(
+      '.flowchat-header__actions:not(.flowchat-header__actions--left)',
+    );
+    const actionTestIds = () => [...(getRightActions()?.children ?? [])].map((action) => (
       action.getAttribute('data-testid')
       ?? action.querySelector('[data-testid]')?.getAttribute('data-testid')
     ));
@@ -211,22 +224,42 @@ describe('FlowChatHeader', () => {
       'flowchat-header-session-overview',
       'flowchat-header-right-panel',
     ]);
-    expect(rightActions?.lastElementChild).toBe(trigger);
+    expect(getRightActions()?.lastElementChild).toBe(trigger);
 
     act(() => {
       container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-search"]')?.click();
     });
+    expect(actionTestIds()).toEqual(['flowchat-header-search-bar']);
+    expect(container.querySelector('.flowchat-header')?.classList.contains('flowchat-header--searching')).toBe(true);
+    expect(container.querySelector('[data-testid="session-files-badge"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-session-overview"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-right-panel"]')).toBeNull();
+
+    const searchBar = container.querySelector('[data-testid="flowchat-header-search-bar"]');
+    const searchField = searchBar?.querySelector('[data-openbitfun-component="search-field"]');
+    const searchInput = searchField?.querySelector('input');
+    const searchClose = searchBar?.querySelector<HTMLButtonElement>('.flowchat-header__search-close');
+    expect(searchField).not.toBeNull();
+    expect(searchBar?.getAttribute('data-openbitfun-state')).toBe('active');
+    expect(searchInput?.type).toBe('search');
+    expect(searchInput?.placeholder).toBe('flowChatHeader.searchPlaceholder');
+    expect(searchBar?.querySelector('[data-openbitfun-part="searchControls"]')).not.toBeNull();
+    expect(searchClose?.getAttribute('data-openbitfun-shape')).toBe('circle');
+    expect(searchClose?.querySelector('[data-openbitfun-name="xmark"]')).not.toBeNull();
+
+    act(() => {
+      searchClose?.click();
+    });
+    expect(onSearchClose).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-testid="session-files-badge"]')).not.toBeNull();
     expect(actionTestIds()).toEqual([
-      'flowchat-header-search-bar',
+      'flowchat-header-search',
       'flowchat-header-session-overview',
       'flowchat-header-right-panel',
     ]);
-    expect(rightActions?.lastElementChild).toBe(
-      container.querySelector('[data-testid="flowchat-header-right-panel"]'),
-    );
 
     act(() => {
-      trigger?.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-right-panel"]')?.click();
     });
     expect(onToggleRightPanel).toHaveBeenCalledTimes(1);
 
@@ -249,6 +282,125 @@ describe('FlowChatHeader', () => {
     expect(openTrigger?.getAttribute('data-openbitfun-state')).toBe('open');
     expect(openTrigger?.classList.contains('flowchat-header__right-panel-trigger--active')).toBe(true);
     expect(openTrigger?.querySelector('[data-openbitfun-name="sidebar-right"]')).not.toBeNull();
+  });
+
+  it('keeps match navigation on Enter while the compact search field is open', () => {
+    const onSearchClose = vi.fn();
+    const onSearchNext = vi.fn();
+    const onSearchPrev = vi.fn();
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({
+        onSearchClose,
+        onSearchNext,
+        onSearchPrev,
+      })} />);
+    });
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-search"]')?.click();
+    });
+
+    const searchInput = container.querySelector<HTMLInputElement>(
+      '[data-testid="flowchat-header-search-bar"] input',
+    );
+    act(() => {
+      searchInput?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+      searchInput?.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        key: 'Enter',
+        shiftKey: true,
+      }));
+    });
+    expect(onSearchNext).toHaveBeenCalledTimes(1);
+    expect(onSearchPrev).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      searchInput?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(onSearchClose).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-testid="flowchat-header-search-bar"]')).toBeNull();
+  });
+
+  it('expands results without replacing the input and disables navigation for no matches', () => {
+    const onSearchClose = vi.fn();
+    const onSearchNext = vi.fn();
+    const onSearchPrev = vi.fn();
+    const renderSearch = (searchQuery = '', searchMatchCount = 0, searchCurrentMatch = 0) => {
+      act(() => {
+        root.render(<FlowChatHeader {...createProps({
+          searchOpenRequest: 1,
+          searchQuery,
+          searchMatchCount,
+          searchCurrentMatch,
+          onSearchClose,
+          onSearchNext,
+          onSearchPrev,
+        })} />);
+      });
+    };
+
+    renderSearch();
+    const searchField = container.querySelector('[data-openbitfun-component="search-field"]');
+    const searchInput = searchField?.querySelector('input');
+    expect(searchField?.getAttribute('data-variant')).toBe('default');
+    expect(searchField?.querySelector('[data-openbitfun-part="footer"]')).toBeNull();
+    searchInput?.focus();
+
+    renderSearch('device', 7, 1);
+    expect(searchField?.getAttribute('data-variant')).toBe('panel');
+    expect(searchField?.querySelector('input')).toBe(searchInput);
+    expect(document.activeElement).toBe(searchInput);
+    expect(searchField?.querySelector('.flowchat-header__search-status')?.textContent)
+      .toBe('flowChatHeader.searchResult');
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('flowChatHeader.searchResult');
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+
+    const previous = searchField?.querySelector<HTMLButtonElement>('[aria-label="flowChatHeader.searchPrevious"]');
+    const next = searchField?.querySelector<HTMLButtonElement>('[aria-label="flowChatHeader.searchNext"]');
+    expect(previous?.querySelector('[data-openbitfun-name="arrow-up"]')).not.toBeNull();
+    expect(next?.querySelector('[data-openbitfun-name="arrow-down"]')).not.toBeNull();
+    expect(previous?.disabled).toBe(false);
+    expect(next?.disabled).toBe(false);
+
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    act(() => {
+      previous?.dispatchEvent(mouseDown);
+      previous?.click();
+      next?.click();
+    });
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(searchInput);
+    expect(onSearchPrev).toHaveBeenCalledTimes(1);
+    expect(onSearchNext).toHaveBeenCalledTimes(1);
+
+    renderSearch('missing');
+    expect(searchField?.getAttribute('data-variant')).toBe('panel');
+    expect(searchField?.querySelector('.flowchat-header__search-status')?.textContent)
+      .toBe('flowChatHeader.searchNoResults');
+    expect(previous?.disabled).toBe(true);
+    expect(next?.disabled).toBe(true);
+    act(() => {
+      previous?.click();
+      next?.click();
+    });
+    expect(onSearchPrev).toHaveBeenCalledTimes(1);
+    expect(onSearchNext).toHaveBeenCalledTimes(1);
+
+    renderSearch('   ');
+    expect(searchField?.getAttribute('data-variant')).toBe('default');
+    expect(searchField?.querySelector('[data-openbitfun-part="footer"]')).toBeNull();
+    expect(searchField?.querySelector('input')).toBe(searchInput);
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('');
+    expect(container.querySelector('[data-testid="flowchat-header-session-overview"]')).toBeNull();
+
+    renderSearch('device', 7, 2);
+    act(() => {
+      searchField?.querySelector<HTMLButtonElement>('[aria-label="flowChatHeader.searchNext"]')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(onSearchClose).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-testid="flowchat-header-search-bar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-session-overview"]')).not.toBeNull();
   });
 
   it('shows Agents, background terminals, and pull requests as one default list', async () => {

@@ -29,7 +29,7 @@
   }
 
   .field:focus-within {
-    border-color: var(--openbitfun-color-field-border-focus);
+    border-color: var(--openbitfun-color-field-border-active);
     box-shadow: none;
   }
 
@@ -45,6 +45,10 @@
   .field[data-size="md"] {
     --_field-height: var(--openbitfun-control-height-md);
     --_field-icon-size: 16px;
+  }
+
+  .field[data-disabled="true"] :is(.leading, .trailing) {
+    color: var(--openbitfun-color-content-disabled);
   }
 
   .field[data-size="lg"] {
@@ -71,7 +75,7 @@
   }
 
   .input::placeholder {
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-field-placeholder);
     opacity: 1;
   }
 
@@ -85,16 +89,18 @@
 
   .leading,
   .trailing {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-field-placeholder);
   }
 
   .leading > :where(svg, img),
   .trailing > :where(svg, img),
   .leading > [data-openbitfun-component="icon"],
+  .leading > [data-openbitfun-part="icon"],
   .trailing > [data-openbitfun-component="icon"] {
     display: block;
     inline-size: var(--_field-icon-size);

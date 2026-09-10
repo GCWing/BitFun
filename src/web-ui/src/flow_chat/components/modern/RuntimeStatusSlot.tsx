@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Spinner } from '@openbitfun/ui';
+import { OverflowText, Spinner } from '@openbitfun/ui';
 import { useRuntimeStatusStore } from '../../store/runtimeStatusStore';
 import './RuntimeStatusSlot.scss';
 
@@ -50,13 +50,13 @@ export const RuntimeStatusSlot: React.FC<RuntimeStatusSlotProps> = ({
         data-openbitfun-part="content"
       >
         <Spinner size="sm" />
-        <span
+        <OverflowText
           className="runtime-status-slot__hint"
           data-openbitfun-component="runtime-status-slot"
           data-openbitfun-part="hint"
         >
           {hint}
-        </span>
+        </OverflowText>
       </div>
     </div>
   );

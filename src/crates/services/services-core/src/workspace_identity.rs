@@ -323,3 +323,29 @@ pub fn unresolved_remote_session_storage_dir(
         .join(key)
         .join("sessions")
 }
+
+pub fn build_project_runtime_slug(canonical: &str) -> String {
+    let slug: String = canonical
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    let slug = slug.trim_matches('-');
+    let slug = if slug.is_empty() { "workspace" } else { slug };
+
+    if slug.len() <= 120 {
+        return slug.to_string();
+    }
+
+    let hash = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+    let suffix = &hash[..12];
+    let max_prefix_len = 120_usize.saturating_sub(suffix.len() + 1);
+    let prefix = slug[..max_prefix_len].trim_end_matches('-');
+    format!("{}-{}", prefix, suffix)
+}

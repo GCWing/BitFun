@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { AlertTriangle } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ProminentToolCard, ProminentToolCardSummary } from '@openbitfun/ui/flow-chat';
@@ -229,9 +229,9 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
           />
         </div>
       )}
-      <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="meta" className="canvas-tool-card__meta">
+      <div data-openbitfun-component="canvas-tool-card" data-openbitfun-part="meta" className="canvas-tool-card__meta"><OverflowText behavior="marquee">
         <span>{metaText}</span>
-      </div>
+      </OverflowText></div>
       {diagnostics.length > 0 && (
         <ul data-openbitfun-component="canvas-tool-card" data-openbitfun-part="diagnosticList" className="canvas-tool-card__diagnostic-list">
           {diagnostics.slice(0, 3).map((diagnostic, index) => (

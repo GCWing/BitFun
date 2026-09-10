@@ -286,9 +286,10 @@ export class AppearanceCompiler {
       const partAttribute = resolvedSurfaceAttribute === 'data-openbitfun-product-component'
         ? 'data-openbitfun-product-part'
         : 'data-openbitfun-part';
+      const hostSelectorId = descriptor.hostSelectorId ?? surfaceId;
       const resolvedParts: Record<string, ResolvedAppearanceStyle[]> = {};
       Object.entries(definition.parts).forEach(([partId, partRule]) => {
-        const baseSelector = `:root[data-openbitfun-appearance="${context.pkg.id}"][data-openbitfun-appearance-revision="${context.revision}"] [${resolvedSurfaceAttribute}="${surfaceId}"][${partAttribute}="${partId}"]`;
+        const baseSelector = `:root[data-openbitfun-appearance="${context.pkg.id}"][data-openbitfun-appearance-revision="${context.revision}"] [${resolvedSurfaceAttribute}="${hostSelectorId}"][${partAttribute}="${partId}"]`;
         const compiled = this.compilePart(baseSelector, partRule, descriptor, materials, context);
         resolvedParts[partId] = compiled.map(rule => rule.style);
         rules.push(...compiled);

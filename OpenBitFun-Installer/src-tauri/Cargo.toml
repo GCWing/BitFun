@@ -27,13 +27,16 @@ anyhow = "1.0"
 log = "0.4"
 dirs = "5.0"
 zip = "0.6"
-chrono = "0.4"
 openbitfun-core-types = { path = "../../src/crates/contracts/core-types" }
 openbitfun-ai-adapters = { path = "../../src/crates/adapters/ai-adapters" }
+openbitfun-services-core = { path = "../../src/crates/services/services-core", features = ["json-io"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 mslnk = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

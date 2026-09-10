@@ -64,6 +64,22 @@ Desktop bootstrap 和产品前端也不能反向定义公共主题值。
 Primitive/reference 色值只存在于主题 authoring、明确的主题 preset 或专用 renderer owner 中。普通组件
 不得直接消费 reference ramp，也不得自行定义“看起来差不多”的局部颜色。
 
+### 状态色与增删行色
+
+普通 UI 的状态色统一由设计系统定义。成功强调色引用 `color.codeChange.added`（`#1aa73e`），
+错误/危险强调色引用 `color.codeChange.removed`（`#ec221f`）；警告固定使用 `#ff8c00`，
+信息/进行中复用已有的清亮蓝 `ref.color.blue.550`（`#2e7eff`）。这组鲜明色相搭配淡着色背景，
+避免在不同页面或内置皮肤中混入灰绿、粉红和另一套橙黄色。
+
+- `color.status.*.emphasis` 用于图标和短强调，与增删行等源色对齐。
+- `content` 从同一 emphasis 混入黑/白来保证长文本可读，`surface` 和 `border` 分别使用 10% 与 30% 着色。
+  高对比模式可以增强文字和底色的对比，但不改动强调色锚点。
+- 三个新增 emphasis Token（info/success/danger）由 Icon、Alert、ConfirmDialog、StatusPill 和工具卡状态图标
+  消费；它们区分图形强调与可读文本，不能用于重新建立局部色板。
+- 状态源文件保留 Token 引用和混色关系，主题构建将它们解析为 hex/RGBA，以便 CSS 与专用 renderer
+  使用同一结果。内置 Appearance 和 Installer 只选取这些状态值，不再接受私有状态色覆盖；Git 增删、暂存和
+  变更状态也由相同源色派生。第三方 Appearance 的现有 Token 名称与导入格式保持可读。
+
 新增颜色按以下顺序判断：
 
 1. 语义相同，直接复用现有 semantic Token。
@@ -121,6 +137,18 @@ Web UI Appearance 的当前 schema 固定为 v2。颜色入口是 `theme-tokens`
 - Widget、Desktop 首屏 bootstrap 和生成式 UI 提示只消费同一 canonical 源生成的 allowlist 产物，
   不能反向成为主题 owner。
 
+### 内置主题的工作区层级
+
+侧栏与导航由 `color.surface.chrome` 承载，主内容由 `color.surface.scene` 承载。两者相邻且常驻，
+不能只依靠阴影或拖拽时出现的边线区分。参照 Light 的中性灰外壳与白色内容关系，命名主题在自身色调内
+拉开明度：墨韵使用暖灰宣纸外壳、浅宣纸内容与白色浮层；墨夜和午夜使用深墨外壳、炭灰内容与更亮的面板；
+Tokyo Night 使用夜靛外壳、storm 靛蓝内容与蓝紫浮层。Cyber 保留黑底与霓虹强调，其浮层比内容更亮。
+
+`color.surface.tertiary` 与 `color.surface.workbench` 用于内嵌分组及工作台；hover、selection、focus
+继续使用已有交互 Token。Monaco 当前行与输入面板保留独立色阶。辅助文字和边框按新的相邻底色调整，
+而不通过局部组件色值修补。上述配色由 builtin palette 声明，并同步生成启动页和生成式 UI 配色清单；
+不为每款主题新增 Token 名称或主题专属布局分支。
+
 旧 CSS-token adapter、Token 投影层、`css-tokens` renderer 和 `--openbitfun-appearance-token-*`
 运行时变量均已退休并从源码删除。不得为第三方包、旧组件或测试重新引入这些接口。
 
@@ -171,6 +199,13 @@ Mobile Web 直接消费 `@openbitfun/theme-openbitfun`。`ThemeProvider` 与首�
 静态包必须由这一源码重新构建，不能保留旧 Vite 产物作为隐式第二套主题实现。
 
 ### Desktop bootstrap 与 Native Mobile 预览
+
+Data Migrator 的独立静态界面直接消费设计系统公开的字体、间距、控件和语义颜色 Token。
+`generate-data-migrator-theme.mjs` 构建设计系统的 Token/主题包，并将公开 CSS 入口及其依赖打包为
+`src/apps/data-migrator/ui/generated/design-system.css`，随迁移程序离线交付。原生控件只使用 canonical
+Token；`theme.js` 在首屏绘制前选择系统浅色/深色和高对比模式，并监听系统设置变化。
+仅独立迁移器打包刷新该资源，开发者也可显式运行生成命令；Desktop 开发和打包不依赖迁移器。
+统一颜色审计同时检查源码和生成物漂移。
 
 Desktop 的更新确认页和启动页只消费 `src/apps/desktop/src/generated/bootstrap_theme.css` 发布的 canonical
 `--openbitfun-*`，不得内联另一套启动色。该 CSS 和两个 Appearance manifest 一起由

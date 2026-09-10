@@ -1,0 +1,21 @@
+.session-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--openbitfun-space-5);
+  block-size: var(--openbitfun-space-5);
+
+  &[data-status='running'] > [data-openbitfun-component='icon'] {
+    animation: session-status-running 1.4s linear infinite;
+  }
+}
+
+@keyframes session-status-running {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-status-indicator[data-status='running'] > [data-openbitfun-component='icon'] {
+    animation: none;
+  }
+}

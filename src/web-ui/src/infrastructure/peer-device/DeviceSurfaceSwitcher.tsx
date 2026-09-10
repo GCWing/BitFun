@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActionItem, Icon, Menu, MenuItem, MenuSection, MenuSeparator } from '@openbitfun/ui';
+import { OverflowText, ActionItem, Icon, Menu, MenuItem, MenuSection, MenuSeparator } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { Monitor, MonitorSmartphone, Loader2, Unplug } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -155,7 +155,7 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
 
   return (
     <>
-      <ActionItem
+      <ActionItem data-overflow-trigger
         ref={triggerRef}
         className={[
           'openbitfun-device-switcher',
@@ -191,13 +191,13 @@ export const DeviceSurfaceSwitcher: React.FC = () => {
         )}
         onClick={() => setOpen(value => !value)}
       >
-        <span
+        <OverflowText
           className="openbitfun-device-switcher__label"
           data-openbitfun-component="peer-device"
           data-openbitfun-part="switcherLabel"
         >
           {currentLabel}
-        </span>
+        </OverflowText>
       </ActionItem>
 
       {open && createPortal(

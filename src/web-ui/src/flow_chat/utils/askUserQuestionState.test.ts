@@ -85,7 +85,7 @@ function createSessionWithTwoTurns(): Session {
       createQueuedTurn('turn-B'),
     ],
     status: 'idle',
-    config: { agentType: 'agentic' },
+    config: { agentType: 'Standard' },
     createdAt: 900,
     lastActiveAt: 2000,
     updatedAt: 2000,

@@ -1,7 +1,7 @@
  
 
 import React, { useMemo } from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { ContextItem } from '../../../types/context';
 import { contextRegistry } from '../../../services/ContextRegistry';
@@ -56,9 +56,9 @@ export const ContextCard: React.FC<ContextCardProps> = ({
           <AlertCircle size={20} />
         </div>
         <div className="openbitfun-context-card__content">
-          <div className="openbitfun-context-card__title">
+          <div className="openbitfun-context-card__title"><OverflowText>
             {t('contextSystem.contextCard.unknownType', { type: context.type })}
-          </div>
+          </OverflowText></div>
         </div>
       </div>
     );

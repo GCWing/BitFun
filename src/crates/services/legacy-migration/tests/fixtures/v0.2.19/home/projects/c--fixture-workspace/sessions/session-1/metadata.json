@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "sessionId": "session-1",
+  "sessionName": "Synthetic migration fixture",
+  "agentType": "Agentic",
+  "sessionKind": "standard",
+  "memoryMode": "enabled",
+  "modelName": "fixture-model",
+  "createdAt": 1,
+  "lastActiveAt": 2,
+  "lastFinishedAt": 2,
+  "turnCount": 1,
+  "messageCount": 1,
+  "toolCallCount": 0,
+  "status": "active",
+  "tags": [],
+  "workspacePath": "C:\\fixture\\workspace",
+  "workspaceHostname": "localhost"
+}

@@ -12,6 +12,11 @@ function remoteWorkspace(id: string, connectionId: string): WorkspaceInfo {
 }
 
 describe('findWorkspaceForSession', () => {
+  it('resolves a stale workspace id by path when given an opened-workspace iterator', () => {
+    const workspace = { id: 'new-id', rootPath: '/project' } as WorkspaceInfo;
+    expect(findWorkspaceForSession({ workspaceId: 'old-id', workspacePath: '/project' },
+      new Map([[workspace.id, workspace]]).values())).toBe(workspace);
+  });
   it('uses remote identity instead of an ambiguous POSIX path', () => {
     const first = remoteWorkspace('workspace-a', 'connection-a');
     const second = remoteWorkspace('workspace-b', 'connection-b');

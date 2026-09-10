@@ -21,7 +21,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@openbitfun/ui', () => ({
+vi.mock('@openbitfun/ui', async (importOriginal) => ({
+  Disclosure: (await importOriginal<typeof import('@openbitfun/ui')>()).Disclosure,
   Icon: ({ name }: { name: string }) => <span data-openbitfun-component="icon" data-openbitfun-name={name} />,
   Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
   ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
@@ -40,6 +41,10 @@ vi.mock('@openbitfun/ui', () => ({
   DialogBody: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogClose: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" {...props} />,
   DialogHeader: ({ children }: React.PropsWithChildren) => <header>{children}</header>,
+  DialogHeading: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
+  DialogFooter: ({ children }: React.PropsWithChildren) => <footer>{children}</footer>,
 }));
 
 const SYNCED = {
@@ -102,7 +107,7 @@ describe('DispatchResultDialog Git sync', () => {
 
     expect(container.textContent).toContain('openbitfun/dispatch/job-1');
     expect(container.textContent).toContain('/home/me/.openbitfun/worktrees/repo/dispatch-job-1');
-    expect(container.querySelector('details')?.open).toBe(false);
+    expect(container.querySelector('[data-openbitfun-component="disclosure"] button[aria-expanded]')?.getAttribute('aria-expanded')).toBe('false');
     expect(mocks.syncResult).not.toHaveBeenCalled();
 
     await act(async () => {

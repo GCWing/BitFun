@@ -1,0 +1,20 @@
+{
+  "app": {
+    "language": "zh-CN",
+    "auto_update": false,
+    "telemetry": false
+  },
+  "appearance": {
+    "theme_id": "bitfun-dark"
+  },
+  "ai": {
+    "agent_profiles": {
+      "coding_shared": {
+        "enabled_skills": ["user::bitfun::user-skill"]
+      }
+    }
+  },
+  "schema_version": 1,
+  "version": "0.2.19",
+  "last_modified": 0
+}

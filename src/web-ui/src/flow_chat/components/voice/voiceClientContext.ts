@@ -1,4 +1,5 @@
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { selectActiveSceneId, useSceneStore } from '@/app/stores/sceneStore';
+import { getSceneViewId } from '@/app/components/SceneBar/types';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import type { Session } from '@/flow_chat/types/flow-chat';
@@ -101,8 +102,8 @@ export function buildVoiceClientContext(
       workspace_path: callTarget.workspacePath ?? null,
       task_routing: 'miniapp_conversation',
     } : null,
-    active_scene: sceneState.activeTabId || null,
-    open_scenes: sceneState.openTabs.map(tab => tab.id),
+    active_scene: selectActiveSceneId(sceneState),
+    open_scenes: [...new Set(sceneState.openTabs.map(tab => getSceneViewId(tab.id)))],
     active_workspace_id: activeWorkspace?.id ?? null,
     active_workspace: activeWorkspace ? {
       id: activeWorkspace.id,

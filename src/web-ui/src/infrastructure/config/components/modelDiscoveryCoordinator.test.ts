@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ModelDiscoveryCoordinator, openCodeOfferingModels } from './modelDiscoveryCoordinator';
+import { ModelDiscoveryCoordinator, openCodeOfferingModels, openCodeModelOffering } from './modelDiscoveryCoordinator';
 import type { SubscriptionApiOffering } from '@/infrastructure/api/service-api/AIApi';
 
 describe('model discovery', () => {
@@ -27,16 +27,18 @@ describe('model discovery', () => {
     expect(coordinator.isCurrent(third)).toBe(true);
   });
 
-  it('keeps OpenCode plan and protocol aligned and preserves the legacy route', () => {
+  it('lists a plan across wires and infers protocol from the chosen model', () => {
     const offerings: SubscriptionApiOffering[] = [
       { plan: 'zen', format: 'openai', base_url: '', suggested_model: '', models: [{ id: 'zen-chat' }] },
       { plan: 'go', format: 'openai', base_url: '', suggested_model: '', models: [{ id: 'go-chat' }] },
       { plan: 'go', format: 'anthropic', base_url: '', suggested_model: '', models: [{ id: 'go-messages' }] },
       { plan: 'zen', format: 'responses', base_url: '', suggested_model: '', models: [{ id: 'zen-responses' }] },
     ];
-    expect(openCodeOfferingModels(offerings, 'go', 'anthropic')).toEqual([{ id: 'go-messages' }]);
-    expect(openCodeOfferingModels(offerings, 'zen', 'response')).toEqual([{ id: 'zen-responses' }]);
-    expect(openCodeOfferingModels(offerings, undefined, 'responses')).toEqual([{ id: 'zen-chat' }]);
-    expect(openCodeOfferingModels(offerings, 'go', 'responses')).toEqual([]);
+    expect(openCodeOfferingModels(offerings, 'go')).toEqual([{ id: 'go-chat' }, { id: 'go-messages' }]);
+    expect(openCodeOfferingModels(offerings, undefined)).toEqual([{ id: 'zen-chat' }, { id: 'zen-responses' }]);
+    expect(openCodeModelOffering(offerings, 'go', 'go-messages', 'openai')?.format).toBe('anthropic');
+    expect(openCodeModelOffering(offerings, undefined, 'zen-responses')?.format).toBe('responses');
+    expect(openCodeModelOffering(offerings, 'go', 'zen-responses')).toBeUndefined();
+    expect(openCodeModelOffering(offerings, undefined, 'manual-legacy-model')).toBeUndefined();
   });
 });

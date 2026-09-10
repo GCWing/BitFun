@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { HARNESS_PRESENTATION } from '@/shared/agents/harnessPresentation';
 
 function readLocalFile(name: string): string {
   return readFileSync(fileURLToPath(new URL(`./${name}`, import.meta.url)), 'utf8')
@@ -71,7 +72,7 @@ describe('composer context track layout', () => {
       /branch-quick-switch__item \{[\s\S]*?min-height: var\(--openbitfun-control-height-sm\);/,
     );
     expect(branchPicker).toMatch(
-      /branch-quick-switch__list \[data-openbitfun-part='list'\] \{\n  gap: calc\(var\(--openbitfun-space-1\) \/ 2\);/,
+      /branch-quick-switch__list \[data-openbitfun-part='list'\] \{[\s\S]*?gap: calc\(var\(--openbitfun-space-1\) \/ 2\);/,
     );
     expect(targetPicker).toMatch(
       /&__option-row \{[\s\S]*?min-height: var\(--openbitfun-control-height-md\);/,
@@ -93,6 +94,20 @@ describe('composer context track layout', () => {
     );
     expect(targetPicker).toMatch(
       /small \{[\s\S]*?color: var\(--openbitfun-color-content-muted\);[\s\S]*?opacity: 0\.5;/,
+    );
+  });
+
+  it('reserves one responsive branch-list height across loading and loaded states', () => {
+    const branchPicker = readBranchQuickSwitchStylesheet();
+
+    expect(branchPicker).toMatch(
+      /branch-quick-switch__list \{[\s\S]*?block-size: clamp\(0px, calc\(100vh - 96px\), 280px\);/,
+    );
+    expect(branchPicker).toMatch(
+      /branch-quick-switch__list \[data-openbitfun-part='list'\] \{[\s\S]*?min-block-size: 100%;/,
+    );
+    expect(branchPicker).toMatch(
+      /branch-quick-switch__loading,[\s\S]*?branch-quick-switch__empty \{[\s\S]*?flex: 1 1 auto;/,
     );
   });
 
@@ -315,11 +330,11 @@ describe('composer context track layout', () => {
       'composer.setValue(newSessionId, transferredDraft.value)',
     );
     expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
-    expect(chatInput).not.toContain("modeState.current !== 'agentic'");
+    expect(chatInput).not.toContain("modeState.current !== 'Standard'");
     expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 
-  it('groups quick skill modes in one second-level menu immediately after Harness', () => {
+  it('groups quick skill modes after Harness while keeping them out of Assistant sessions', () => {
     const chatInput = readLocalFile('ChatInput.tsx');
     const menuHarnessIndex = chatInput.indexOf('presentation="menu-item"');
     const additionalModesIndex = chatInput.indexOf("label={t('chatInput.boostAdditionalModes')}");
@@ -342,6 +357,7 @@ describe('composer context track layout', () => {
     expect(chatInput).toContain(
       'resolveChatInputQuickSkillShortcuts(resolvedModeSkills)',
     );
+    expect(chatInput).toContain("chatInputModePolicy.fixedModeId !== 'Claw'");
     expect(chatInput).toContain('layoutRevision: boostMenuLayoutRevision');
     expect(chatInput).toContain('skillName: shortcut.skill.name');
     expect(chatInput).toContain('selectAdditionalMode(item.skillName)');
@@ -457,7 +473,7 @@ describe('composer context track layout', () => {
     );
   });
 
-  it('uses the scaled 45px capsule and keeps 25px controls stable across layouts', () => {
+  it('uses the 42px compact surface and keeps 24px controls stable across layouts', () => {
     const component = readLocalFile('ChatInput.tsx');
     const stylesheet = readChatInputStylesheet();
     const compactControls = stylesheet.slice(
@@ -487,11 +503,16 @@ describe('composer context track layout', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
-    expect(component).toMatch(/minimal: 'minimal',[\s\S]*?balanced: 'standard',[\s\S]*?ultimate: 'ultimate',[\s\S]*?creative: 'creative',/);
+    expect(HARNESS_PRESENTATION).toEqual({
+      Minimal: { icon: 'minimal', gear: 1 },
+      Standard: { icon: 'standard', gear: 2 },
+      Ultimate: { icon: 'ultimate', gear: 3 },
+      Creative: { icon: 'creative', gear: 'creative' },
+    });
     expect(component).toContain(
-      'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
+      'data-harness-density={densityProfile ? HARNESS_PRESENTATION[densityProfile].gear : 0}',
     );
-    expect(component).toContain('name={PROFILE_ICONS[profile]}');
+    expect(component).toContain('name={HARNESS_PRESENTATION[profile].icon}');
     expect(component).not.toContain('className="openbitfun-harness-selector__density-core"');
     expect(component).toContain('<HarnessProfileMark profile={id} />');
     expect(component).toContain('<HarnessProfileMark profile={knownSelectedProfile} />');
@@ -524,15 +545,15 @@ describe('composer context track layout', () => {
       stylesheet.indexOf('&__permission-label {'),
     );
     expect(riskRamp).toContain('permission-trigger--ask &');
-    expect(riskRamp).toContain('var(--openbitfun-color-status-success-content)');
+    expect(riskRamp).toContain('var(--openbitfun-color-status-success-emphasis)');
     expect(riskRamp).toContain('permission-trigger--auto &');
-    expect(riskRamp).toContain('var(--openbitfun-color-status-warning-content)');
+    expect(riskRamp).toContain('var(--openbitfun-color-status-warning-emphasis)');
     expect(riskRamp).toContain('permission-trigger--full_access &');
-    expect(riskRamp).toContain('var(--openbitfun-color-status-danger-content)');
+    expect(riskRamp).toContain('var(--openbitfun-color-status-danger-emphasis)');
     // Full access keeps a body of its own so the risk survives the label being
     // dropped on a narrow composer.
     expect(stylesheet).toMatch(
-      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?color-status-danger-content\) 10%/,
+      /&__permission-trigger \{[\s\S]*?&--full_access \{[\s\S]*?background: var\(--openbitfun-color-status-danger-surface\);/,
     );
   });
 
@@ -565,7 +586,7 @@ describe('composer context track layout', () => {
     expect(component).toContain('!showDispatchPicker ? renderWorktreeToggle() : null');
     expect(targetPicker).toContain('data-testid="dispatch-target-local-option"');
     expect(targetPicker).toContain('data-testid="dispatch-target-new-worktree-option"');
-    expect(targetPicker).toContain('<strong>{localWorktreeControl.label}</strong>');
+    expect(targetPicker).toContain('<strong><OverflowText>{localWorktreeControl.label}</OverflowText></strong>');
     expect(targetPicker).toContain('role="menuitemradio"');
     expect(component).toContain('role="switch"');
     expect(component).toContain('__worktree-toggle');

@@ -105,6 +105,9 @@ describe('ToolTimeoutIndicator', () => {
     expect(durationRule).toContain('font: inherit;');
     expect(durationRule).toContain('font-variant-numeric: proportional-nums;');
     expect(timeoutIndicatorStyles).not.toContain('tabular-nums');
+    expect(timeoutIndicatorStyles).toMatch(
+      /\.duration-text--completed-success\s*\{\s*color:\s*var\(--openbitfun-color-code-change-added\);/,
+    );
     expect(taskToolStyles).not.toMatch(/\.duration-text(?:--[\w-]+)?\s*\{/);
   });
 
@@ -136,6 +139,20 @@ describe('ToolTimeoutIndicator', () => {
     expect(html).toContain('duration-text--completed-success');
     expect(html).toContain('Completed in 1.3s');
     expect(html).toContain('1.3s');
+    expect(html).not.toContain('<svg');
+  });
+
+  it('hides completed duration when the card is collapsed', () => {
+    const html = renderIndicator(
+      <ToolTimeoutIndicator
+        isRunning={false}
+        completedDurationMs={1250}
+        completedStatus="success"
+        showCompletedDuration={false}
+      />,
+    );
+
+    expect(html).toBe('');
   });
 
   it('uses an error affordance with the failure reason in the hover text', () => {
@@ -151,6 +168,7 @@ describe('ToolTimeoutIndicator', () => {
     expect(html).toContain('duration-text--completed-error');
     expect(html).toContain('Failed after 2.4s: provider timed out');
     expect(html).toContain('2.4s');
+    expect(html).not.toContain('<svg');
   });
 
   it('does not render an ignore-timeout control before the subagent session is known', () => {

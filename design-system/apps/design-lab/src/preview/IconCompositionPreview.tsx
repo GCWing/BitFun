@@ -8,6 +8,24 @@ export function IconCompositionPreview() {
     <section className="component-icon-composition" aria-label={t("detail.iconComposition")}>
       <h3>{t("detail.iconComposition")}</h3>
       <p>{t("detail.iconCompositionHint")}</p>
+      {(["panel", "tertiary"] as const).map(surface => (
+        <div className="component-icon-composition__surface" data-surface={surface} key={surface}>
+          {(["outline", "primary"] as const).flatMap(variant => [false, true].map(disabled => (
+            <div className="component-icon-composition__row" key={`${variant}-${disabled}`}>
+              <code>{variant} / {disabled ? "disabled" : "default"}</code>
+              <Button variant={variant} disabled={disabled} leadingIcon={<Icon name="session" />} trailingIcon={<Icon name="chevron-down" />}>{label}</Button>
+              <Button variant={variant} disabled={disabled} leadingIcon={<SessionIcon aria-hidden="true" />} trailingIcon={<Icon name="chevron-right" />}>{label}</Button>
+            </div>
+          )))}
+          {(["default", "hover", "active", "disabled"] as const).map(state => (
+            <div className="component-icon-composition__row" key={state}>
+              <code>IconButton / {state}</code>
+              <IconButton aria-label={`22px / ${state}`} icon={<Icon name="session" />} size="xs" disabled={state === "disabled"} data-openbitfun-preview-state={state} />
+              <IconButton aria-label={`30px / ${state}`} icon={<Icon name="session" />} size="standard" shape="circle" variant="outline" disabled={state === "disabled"} data-openbitfun-preview-state={state} />
+            </div>
+          ))}
+        </div>
+      ))}
       {(["xs", "sm", "md", "lg"] as const).map(size => (
         <div className="component-icon-composition__row" key={size}>
           <code>Button / {size}</code>

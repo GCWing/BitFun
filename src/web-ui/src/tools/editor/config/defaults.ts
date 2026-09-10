@@ -32,7 +32,7 @@ export const DEFAULT_GUIDES_CONFIG: GuidesConfig = {
 
 export const DEFAULT_SCROLLBAR_CONFIG: ScrollbarConfig = {
   vertical: 'auto',
-  horizontal: 'visible',
+  horizontal: 'auto',
   verticalScrollbarSize: 10,
   horizontalScrollbarSize: 12,
   useShadows: false,

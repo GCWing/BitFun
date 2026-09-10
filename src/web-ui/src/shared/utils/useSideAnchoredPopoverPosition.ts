@@ -19,6 +19,8 @@ export interface SideAnchoredPopoverLayout {
 interface UseSideAnchoredPopoverPositionOptions {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
+  /** Viewport point used when a context menu is opened by right click. */
+  anchorPoint?: { x: number; y: number } | null;
   popoverRef: RefObject<HTMLElement | null>;
   preferredPlacement?: SideAnchoredPopoverPlacement;
   gap?: number;
@@ -35,10 +37,11 @@ const sameLayout = (
   && current.placement === next.placement
   && current.alignment === next.alignment;
 
-/** Keeps a portalled submenu beside its owning menu item without viewport clipping. */
+/** Keeps a portalled menu beside its trigger or context point without viewport clipping. */
 export function useSideAnchoredPopoverPosition({
   open,
   anchorRef,
+  anchorPoint,
   popoverRef,
   preferredPlacement = 'right',
   gap = 6,
@@ -51,12 +54,16 @@ export function useSideAnchoredPopoverPosition({
   const updatePosition = useCallback(() => {
     const anchor = anchorRef.current;
     const popover = popoverRef.current;
-    if (!anchor || !popover || typeof window === 'undefined') return;
+    if ((!anchor && !anchorPoint) || !popover || typeof window === 'undefined') return;
 
-    const anchorBounds = anchor.getBoundingClientRect();
+    const anchorBounds = anchorPoint
+      ? { left: anchorPoint.x, right: anchorPoint.x, top: anchorPoint.y, bottom: anchorPoint.y }
+      : anchor!.getBoundingClientRect();
     const popoverBounds = popover.getBoundingClientRect();
-    const popoverWidth = popoverBounds.width || popover.offsetWidth || popover.scrollWidth;
-    const popoverHeight = popoverBounds.height || popover.offsetHeight || popover.scrollHeight;
+    // Opening animations can scale the painted bounds. Position against the
+    // layout dimensions so the fully expanded menu still clears the viewport.
+    const popoverWidth = popover.offsetWidth || popoverBounds.width || popover.scrollWidth;
+    const popoverHeight = popover.offsetHeight || popoverBounds.height || popover.scrollHeight;
     const rightLeft = anchorBounds.right + gap;
     const leftLeft = anchorBounds.left - gap - popoverWidth;
     const fitsRight = rightLeft + popoverWidth <= window.innerWidth - padding;
@@ -84,7 +91,7 @@ export function useSideAnchoredPopoverPosition({
       alignment,
     };
     setLayout(current => sameLayout(current, nextLayout) ? current : nextLayout);
-  }, [anchorRef, gap, padding, popoverRef, preferredPlacement]);
+  }, [anchorPoint, anchorRef, gap, padding, popoverRef, preferredPlacement]);
 
   const schedulePositionUpdate = useCallback(() => {
     if (frameRef.current !== null) return;

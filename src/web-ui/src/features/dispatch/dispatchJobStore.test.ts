@@ -22,7 +22,7 @@ function registerJob(state: 'running' | 'succeeded' = 'running'): void {
     },
     sourceWorkspacePath: '/source',
     title: 'Dispatch test',
-    agentType: 'agentic',
+    agentType: 'Standard',
     approvalPolicy: 'reject-and-report',
     cursor: 10,
     state,
@@ -40,6 +40,55 @@ function registerJob(state: 'running' | 'succeeded' = 'running'): void {
 describe('dispatchJobStore', () => {
   beforeEach(() => {
     dispatchJobStore.getState().clear();
+  });
+
+  it.each(['generated', 'manual'] as const)('preserves a %s title across reload and an old outbound payload', async (source) => {
+    registerJob();
+    dispatchJobStore.getState().updateTitle('job-1', 'Investigate build failure', source);
+    const storage = dispatchJobStore.persist.getOptions().storage!;
+    const saved = (await storage.getItem('openbitfun-dispatch-jobs-v1'))!;
+    dispatchJobStore.setState({ jobs: {} });
+    await storage.setItem('openbitfun-dispatch-jobs-v1', saved);
+    await dispatchJobStore.persist.rehydrate();
+    const job = dispatchJobStore.getState().jobs['job-1'];
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: job.jobId,
+      sessionId: job.sessionId,
+      target: job.target,
+      sourceWorkspacePath: '/source',
+      workspacePath: '/repo',
+      promptPreview: 'Dispatch test',
+      title: 'Dispatch test',
+      lastCursor: 900,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      title: 'Investigate build failure', titleSource: source,
+    });
+  });
+
+  it('preserves legacy manual names without titleSource when the index still has the submission name', async () => {
+    registerJob();
+    const storage = dispatchJobStore.persist.getOptions().storage!;
+    const legacy = (await storage.getItem('openbitfun-dispatch-jobs-v1'))!;
+    legacy.state.jobs['job-1'].title = 'My investigation';
+    delete legacy.state.jobs['job-1'].titleSource;
+    await storage.setItem('openbitfun-dispatch-jobs-v1', legacy);
+    await dispatchJobStore.persist.rehydrate();
+    const job = dispatchJobStore.getState().jobs['job-1'];
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: job.jobId, sessionId: job.sessionId, target: job.target,
+      sourceWorkspacePath: '/source', workspacePath: '/repo',
+      promptPreview: 'Dispatch test', title: 'Dispatch test',
+      lastCursor: 10, lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z', updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+    dispatchJobStore.getState().updateTitle('job-1', 'Replayed generated name', 'generated');
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      title: 'My investigation', titleSource: 'manual',
+    });
   });
 
   it('keeps cursors monotonic and clears terminal-drained state on progress', () => {
@@ -313,7 +362,7 @@ describe('dispatchJobStore', () => {
       target: record.target,
       sourceWorkspacePath: '/wrong/current/workspace',
       title: 'Prompt preview',
-      agentType: 'agentic',
+      agentType: 'Standard',
       approvalPolicy: 'reject-and-report',
       cursor: 0,
       state: 'running',

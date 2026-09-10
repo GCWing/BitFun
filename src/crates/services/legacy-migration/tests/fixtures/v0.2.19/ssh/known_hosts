@@ -1,0 +1,9 @@
+[
+  {
+    "host": "example.invalid",
+    "port": 22,
+    "key_type": "ssh-ed25519",
+    "fingerprint": "SHA256:fixture-only-host-fingerprint",
+    "public_key": "00010203040506070809"
+  }
+]

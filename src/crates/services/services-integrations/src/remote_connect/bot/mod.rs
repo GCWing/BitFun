@@ -56,6 +56,8 @@ pub struct BotPairingInfo {
 /// Persisted bot connection — saved to disk so reconnect survives restarts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedBotConnection {
+    #[serde(default)]
+    pub account_user_id: String,
     pub bot_type: String,
     pub chat_id: String,
     pub config: BotConfig,
@@ -66,7 +68,6 @@ pub struct SavedBotConnection {
 /// Persisted remote-connect form values shown in the desktop dialog.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemoteConnectFormState {
-    pub custom_server_url: String,
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,
@@ -511,9 +512,12 @@ fn load_bot_persistence_unlocked() -> BotPersistenceData {
     let Some(path) = bot_persistence_path() else {
         return BotPersistenceData::default();
     };
-    match std::fs::read_to_string(&path) {
-        Ok(data) => serde_json::from_str(&data).unwrap_or_default(),
-        Err(_) => {
+    match crate::remote_persistence::read_bot_persistence(&path) {
+        Ok(Some(data)) => serde_json::to_value(data)
+            .ok()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default(),
+        Ok(None) | Err(_) => {
             // A backup without the canonical file means the process stopped
             // during the Windows replace dance. Fail closed instead of
             // restoring a pre-clear account context.
@@ -600,7 +604,12 @@ fn save_bot_persistence_unlocked(data: &BotPersistenceData) {
         return;
     };
     if let Ok(json) = serde_json::to_string_pretty(data) {
-        if let Err(e) = write_bot_persistence_atomic(&path, json.as_bytes()) {
+        let owner_valid =
+            serde_json::from_str::<crate::remote_persistence::BotPersistenceRecord>(&json)
+                .is_ok_and(|value| value.validate().is_ok());
+        if !owner_valid {
+            log::error!("Failed to save bot persistence: owner validation failed");
+        } else if let Err(e) = write_bot_persistence_atomic(&path, json.as_bytes()) {
             log::error!("Failed to save bot persistence: {e}");
         }
     }

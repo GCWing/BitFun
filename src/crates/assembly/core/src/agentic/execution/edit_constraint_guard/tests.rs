@@ -847,7 +847,7 @@ fn local_recursive_delete_fallback_finds_protected_descendant() {
     fs::write(target.join("tests/example.rs"), "test").expect("create test file");
     let context = ToolUseContext {
         tool_call_id: Some("tool-call-1".to_string()),
-        agent_type: Some("agentic".to_string()),
+        agent_type: Some("Standard".to_string()),
         session_id: None,
         dialog_turn_id: Some("turn-1".to_string()),
         workspace: Some(WorkspaceBinding::new(None, root.clone())),

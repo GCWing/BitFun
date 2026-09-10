@@ -16,6 +16,11 @@ import ChatPane from './ChatPane';
 import AuxPane, { type AuxPaneRef } from './AuxPane';
 import BottomTerminalPane from './BottomTerminalPane';
 import {
+  collapseSessionBottomTerminalPane,
+  expandSessionAuxPane,
+  expandSessionBottomTerminalPane,
+} from './sessionPanelLayout';
+import {
   getCachedTerminalPanelPosition,
   onTerminalPanelPositionChange,
   refreshTerminalPanelPosition,
@@ -57,7 +62,6 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     updateRightPanelWidth,
     toggleRightPanel,
     updateBottomTerminalPanelHeight,
-    toggleBottomTerminalPanel,
   } = useApp();
   const auxPaneRef = useRef<AuxPaneRef>(null);
 
@@ -80,8 +84,6 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const auxPaneElementRef = useRef<HTMLDivElement>(null);
   const bottomTerminalPaneElementRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const bottomExpandPendingRef = useRef(false);
-  const bottomCollapsePendingRef = useRef(false);
   const rightPanelTransitionTimerRef = useRef<number | null>(null);
   const bottomPanelTransitionTimerRef = useRef<number | null>(null);
   const previousRightTransitionKeyRef = useRef<string | null>(null);
@@ -149,9 +151,9 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   // Keep right panel visible when chat is hidden
   useEffect(() => {
     if (state.layout.chatCollapsed && state.layout.rightPanelCollapsed) {
-      toggleRightPanel();
+      expandSessionAuxPane();
     }
-  }, [state.layout.chatCollapsed, state.layout.rightPanelCollapsed, toggleRightPanel]);
+  }, [state.layout.chatCollapsed, state.layout.rightPanelCollapsed]);
 
   const calculateValidRightWidth = useCallback((newWidth: number): number => {
     if (!containerRef.current) return newWidth;
@@ -313,31 +315,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT,
       BOTTOM_TERMINAL_PANEL_CONFIG.COMFORTABLE_DEFAULT,
     );
-    updateBottomTerminalPanelHeight(calculateValidBottomHeight(saved));
-
-    if (state.layout.bottomTerminalPanelCollapsed && !bottomExpandPendingRef.current) {
-      bottomExpandPendingRef.current = true;
-      requestAnimationFrame(() => {
-        toggleBottomTerminalPanel();
-        bottomExpandPendingRef.current = false;
-      });
-    }
-  }, [
-    calculateValidBottomHeight,
-    state.layout.bottomTerminalPanelCollapsed,
-    toggleBottomTerminalPanel,
-    updateBottomTerminalPanelHeight,
-  ]);
-
-  const collapseBottomTerminalPanel = useCallback(() => {
-    if (!state.layout.bottomTerminalPanelCollapsed && !bottomCollapsePendingRef.current) {
-      bottomCollapsePendingRef.current = true;
-      requestAnimationFrame(() => {
-        toggleBottomTerminalPanel();
-        bottomCollapsePendingRef.current = false;
-      });
-    }
-  }, [state.layout.bottomTerminalPanelCollapsed, toggleBottomTerminalPanel]);
+    expandSessionBottomTerminalPane(calculateValidBottomHeight(saved));
+  }, [calculateValidBottomHeight]);
 
   // Responsive resize — also validate on mount to clamp widths restored from
   // localStorage that may exceed the current (non-maximized) window size.
@@ -656,9 +635,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             <BottomTerminalPane
               workspacePath={workspacePath}
               isSceneActive={isActive}
-              isCollapsed={state.layout.bottomTerminalPanelCollapsed}
               onExpand={expandBottomTerminalPanel}
-              onCollapse={collapseBottomTerminalPanel}
+              onCollapse={collapseSessionBottomTerminalPane}
               terminalResizeSuspended={isBottomTerminalPanelTransitioning || isDraggingBottom}
             />
           </div>

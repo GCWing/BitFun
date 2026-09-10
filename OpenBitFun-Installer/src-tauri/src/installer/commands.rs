@@ -7,11 +7,17 @@ use super::types::{
     RemoteModelInfo,
 };
 use super::MAIN_APP_EXE;
-use openbitfun_core_types::product_identity::{data_namespace, hidden_data_directory};
+use openbitfun_core_types::{
+    installer_config_handoff::{
+        InstallerConfigHandoff, InstallerModelHandoff, INSTALLER_CONFIG_HANDOFF_FILE_NAME,
+    },
+    product_identity::{data_namespace, hidden_data_directory},
+};
+use openbitfun_services_core::json_store::JsonFileStore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -29,15 +35,15 @@ struct WindowsInstallState {
 
 const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
-const REQUIRED_PAYLOAD_FILES: [&str; 5] = [
+const REQUIRED_PAYLOAD_FILES: [&str; 6] = [
     MAIN_APP_EXE,
     "frontend/dist/index.html",
     "mobile-web/dist/index.html",
     "resources/ext-host/extension-host.js",
     "resources/worker_host.js",
+    "flashgrep/flashgrep-x86_64-pc-windows-msvc.exe",
 ];
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
-const DEFAULT_MODEL_CONTEXT_WINDOW: u64 = 200_000;
 const EMBEDDED_PAYLOAD_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_payload.zip"));
 
@@ -471,7 +477,7 @@ pub(crate) async fn start_installation(
     #[cfg(target_os = "windows")]
     let mut windows_state = WindowsInstallState::default();
 
-    let result: Result<(), String> = (|| {
+    let result: Result<(), String> = async {
         // Step 1: Create target directory
         emit_progress(&window, "prepare", 5, "Creating installation directory...");
         std::fs::create_dir_all(&install_path)
@@ -621,14 +627,14 @@ pub(crate) async fn start_installation(
             }
         }
 
-        // Step 4: Save first-launch language preference for OpenBitFun.
+        // Step 4: Pass startup preferences to the desktop configuration manager,
+        // which remains the only writer of the canonical app.json.
         emit_progress(&window, "config", 92, "Applying startup preferences...");
         apply_first_launch_language(&options.app_language)
-            .map_err(|e| format!("Failed to apply startup preferences: {}", e))?;
-        // Step 5: Done
-        emit_progress(&window, "complete", 100, "Installation complete!");
-        Ok(())
-    })();
+            .await
+            .map_err(|e| format!("Failed to apply startup preferences: {}", e))
+    }
+    .await;
 
     if let Err(err) = result {
         #[cfg(target_os = "windows")]
@@ -639,6 +645,7 @@ pub(crate) async fn start_installation(
     }
 
     persist_last_install_path(&install_path);
+    emit_progress(&window, "complete", 100, "Installation complete!");
 
     Ok(())
 }
@@ -830,6 +837,19 @@ pub(crate) fn launch_application(install_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Retain the old command as an explicit unsupported response for older clients.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct LaunchLegacyDataMigratorRequest {}
+
+#[tauri::command]
+pub(crate) fn launch_legacy_data_migrator(
+    request: LaunchLegacyDataMigratorRequest,
+) -> Result<bool, String> {
+    let _ = request;
+    Err("Data Migrator is distributed separately. Download and run OpenBitFun Data Migrator to import legacy data.".to_string())
+}
+
 /// Close the installer window.
 #[tauri::command]
 pub(crate) fn close_installer(window: Window) {
@@ -838,7 +858,7 @@ pub(crate) fn close_installer(window: Window) {
 
 /// Save theme preference for first launch (called after installation).
 #[tauri::command]
-pub(crate) fn set_theme_preference(theme_preference: String) -> Result<(), String> {
+pub(crate) async fn set_theme_preference(theme_preference: String) -> Result<(), String> {
     let allowed = [
         "system",
         "openbitfun-dark",
@@ -854,27 +874,14 @@ pub(crate) fn set_theme_preference(theme_preference: String) -> Result<(), Strin
         return Err("Unsupported theme preference".to_string());
     }
 
-    let app_config_file = ensure_app_config_path()?;
-    let mut root = read_or_create_root_config(&app_config_file)?;
-
-    let root_obj = root
-        .as_object_mut()
-        .ok_or_else(|| "Invalid root config object".to_string())?;
-
-    let themes_obj = root_obj
-        .entry("themes".to_string())
-        .or_insert_with(|| Value::Object(Map::new()))
-        .as_object_mut()
-        .ok_or_else(|| "Invalid themes config object".to_string())?;
-    themes_obj.insert("current".to_string(), Value::String(theme_preference));
-
-    write_root_config(&app_config_file, &root)
+    let handoff_path = installer_config_handoff_path()?;
+    apply_theme_preference_at(&handoff_path, &theme_preference).await
 }
 
 /// Save default model configuration for first launch (called after installation).
 #[tauri::command]
-pub(crate) fn set_model_config(model_config: ModelConfig) -> Result<(), String> {
-    apply_first_launch_model(&model_config)
+pub(crate) async fn set_model_config(model_config: ModelConfig) -> Result<(), String> {
+    apply_first_launch_model(&model_config).await
 }
 
 /// Validate model configuration connectivity from installer (same stack as desktop `test_ai_config_connection`).
@@ -1248,22 +1255,22 @@ fn directory_has_entries(path: &Path) -> Result<bool, String> {
         .is_some())
 }
 
-fn ensure_app_config_path() -> Result<PathBuf, String> {
+fn ensure_config_directory() -> Result<PathBuf, String> {
     let config_root = dirs::config_dir()
         .ok_or_else(|| "Failed to get user config directory".to_string())?
         .join(data_namespace())
         .join("config");
     std::fs::create_dir_all(&config_root)
         .map_err(|e| format!("Failed to create OpenBitFun config directory: {}", e))?;
-    Ok(config_root.join("app.json"))
+    Ok(config_root)
+}
+
+fn installer_config_handoff_path() -> Result<PathBuf, String> {
+    Ok(ensure_config_directory()?.join(INSTALLER_CONFIG_HANDOFF_FILE_NAME))
 }
 
 fn installer_state_path() -> Result<PathBuf, String> {
-    let app_config_file = ensure_app_config_path()?;
-    let parent = app_config_file
-        .parent()
-        .ok_or_else(|| "Invalid app config path".to_string())?;
-    Ok(parent.join(INSTALLER_STATE_FILE))
+    Ok(ensure_config_directory()?.join(INSTALLER_STATE_FILE))
 }
 
 fn read_last_install_path() -> Option<String> {
@@ -1301,7 +1308,17 @@ fn persist_last_install_path(install_path: &Path) {
 }
 
 fn read_saved_app_language() -> Option<String> {
-    let app_config_file = ensure_app_config_path().ok()?;
+    let config_directory = ensure_config_directory().ok()?;
+    let handoff_path = config_directory.join(INSTALLER_CONFIG_HANDOFF_FILE_NAME);
+    if let Ok(content) = std::fs::read_to_string(&handoff_path) {
+        if let Ok(handoff) = serde_json::from_str::<InstallerConfigHandoff>(&content) {
+            if let Some(language) = handoff.language.as_deref().and_then(normalize_app_language) {
+                return Some(language.to_string());
+            }
+        }
+    }
+
+    let app_config_file = config_directory.join("app.json");
     if !app_config_file.exists() {
         return None;
     }
@@ -1329,53 +1346,55 @@ fn normalize_app_language(lang: &str) -> Option<&'static str> {
         })
 }
 
-fn read_or_create_root_config(app_config_file: &Path) -> Result<Value, String> {
-    let mut root = if app_config_file.exists() {
-        let content = std::fs::read_to_string(app_config_file)
-            .map_err(|e| format!("Failed to read app config: {}", e))?;
-        serde_json::from_str(&content).unwrap_or_else(|_| Value::Object(Map::new()))
-    } else {
-        Value::Object(Map::new())
-    };
-
-    if !root.is_object() {
-        root = Value::Object(Map::new());
-    }
-    Ok(root)
+async fn update_installer_handoff_at(
+    handoff_path: &Path,
+    update: impl FnOnce(&mut InstallerConfigHandoff),
+) -> Result<(), String> {
+    JsonFileStore
+        .update_locked(handoff_path, InstallerConfigHandoff::default(), update)
+        .await
+        .map(|_| ())
+        .map_err(|error| format!("Failed to write installer handoff: {error}"))
 }
 
-fn write_root_config(app_config_file: &Path, root: &Value) -> Result<(), String> {
-    let formatted = serde_json::to_string_pretty(root)
-        .map_err(|e| format!("Failed to serialize app config: {}", e))?;
-    std::fs::write(app_config_file, formatted)
-        .map_err(|e| format!("Failed to write app config: {}", e))
+async fn apply_first_launch_language(app_language: &str) -> Result<(), String> {
+    let handoff_path = installer_config_handoff_path()?;
+    apply_first_launch_language_at(&handoff_path, app_language).await
 }
 
-fn apply_first_launch_language(app_language: &str) -> Result<(), String> {
+async fn apply_first_launch_language_at(
+    handoff_path: &Path,
+    app_language: &str,
+) -> Result<(), String> {
     let Some(app_language) = normalize_app_language(app_language) else {
         return Err("Unsupported app language".to_string());
     };
 
-    let app_config_file = ensure_app_config_path()?;
-    let mut root = read_or_create_root_config(&app_config_file)?;
-
-    let root_obj = root
-        .as_object_mut()
-        .ok_or_else(|| "Invalid root config object".to_string())?;
-    let app_obj = root_obj
-        .entry("app".to_string())
-        .or_insert_with(|| Value::Object(Map::new()))
-        .as_object_mut()
-        .ok_or_else(|| "Invalid app config object".to_string())?;
-    app_obj.insert(
-        "language".to_string(),
-        Value::String(app_language.to_string()),
-    );
-
-    write_root_config(&app_config_file, &root)
+    update_installer_handoff_at(handoff_path, |handoff| {
+        handoff.language = Some(app_language.to_string());
+    })
+    .await
 }
 
-fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
+async fn apply_theme_preference_at(
+    handoff_path: &Path,
+    theme_preference: &str,
+) -> Result<(), String> {
+    update_installer_handoff_at(handoff_path, |handoff| {
+        handoff.appearance_selection = Some(theme_preference.to_string());
+    })
+    .await
+}
+
+async fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
+    let handoff_path = installer_config_handoff_path()?;
+    apply_first_launch_model_at(&handoff_path, model).await
+}
+
+async fn apply_first_launch_model_at(
+    handoff_path: &Path,
+    model: &ModelConfig,
+) -> Result<(), String> {
     if model.provider.trim().is_empty()
         || model.api_key.trim().is_empty()
         || model.base_url.trim().is_empty()
@@ -1384,135 +1403,58 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
         return Ok(());
     }
 
-    let app_config_file = ensure_app_config_path()?;
-    let mut root = read_or_create_root_config(&app_config_file)?;
-    let root_obj = root
-        .as_object_mut()
-        .ok_or_else(|| "Invalid root config object".to_string())?;
-
-    let ai_obj = root_obj
-        .entry("ai".to_string())
-        .or_insert_with(|| Value::Object(Map::new()))
-        .as_object_mut()
-        .ok_or_else(|| "Invalid ai config object".to_string())?;
-
-    let model_id = format!(
-        "installer_{}_{}",
-        model.provider,
-        chrono::Utc::now().timestamp()
-    );
-    let display_name = model
-        .config_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| format!("{} - {}", model.provider, model.model_name));
-
     let _ = parse_custom_request_body(&model.custom_request_body)?;
-    let stored_fmt = storage_format(model);
-    let request_url = resolve_stored_request_url(model.base_url.trim(), &stored_fmt);
-    let mut model_map = Map::new();
-    model_map.insert("id".to_string(), Value::String(model_id.clone()));
-    model_map.insert("name".to_string(), Value::String(display_name));
-    model_map.insert("provider".to_string(), Value::String(stored_fmt));
-    model_map.insert(
-        "model_name".to_string(),
-        Value::String(model.model_name.trim().to_string()),
-    );
-    model_map.insert(
-        "base_url".to_string(),
-        Value::String(model.base_url.trim().to_string()),
-    );
-    model_map.insert("request_url".to_string(), Value::String(request_url));
-    model_map.insert(
-        "api_key".to_string(),
-        Value::String(model.api_key.trim().to_string()),
-    );
-    model_map.insert("enabled".to_string(), Value::Bool(true));
-    model_map.insert(
-        "category".to_string(),
-        Value::String("general_chat".to_string()),
-    );
-    model_map.insert(
-        "capabilities".to_string(),
-        Value::Array(vec![
-            Value::String("text_chat".to_string()),
-            Value::String("function_calling".to_string()),
-        ]),
-    );
-    model_map.insert("recommended_for".to_string(), Value::Array(Vec::new()));
-    model_map.insert("metadata".to_string(), Value::Null);
-    model_map.insert("inline_think_in_text".to_string(), Value::Bool(false));
-    model_map.insert(
-        "context_window".to_string(),
-        Value::Number(DEFAULT_MODEL_CONTEXT_WINDOW.into()),
-    );
-
-    if let Some(skip_ssl_verify) = model.skip_ssl_verify {
-        model_map.insert("skip_ssl_verify".to_string(), Value::Bool(skip_ssl_verify));
+    let provider = storage_format(model);
+    if provider.is_empty() {
+        return Err("Model format is required".to_string());
     }
-    if let Some(headers) = &model.custom_headers {
-        let mut header_map = Map::new();
-        for (key, value) in headers {
-            let key_trimmed = key.trim();
-            if key_trimmed.is_empty() {
-                continue;
-            }
-            header_map.insert(
-                key_trimmed.to_string(),
-                Value::String(value.trim().to_string()),
-            );
-        }
-        if !header_map.is_empty() {
-            model_map.insert("custom_headers".to_string(), Value::Object(header_map));
-            let mode = model
-                .custom_headers_mode
-                .as_deref()
-                .unwrap_or("merge")
-                .trim()
-                .to_ascii_lowercase();
-            if mode == "merge" || mode == "replace" {
-                model_map.insert("custom_headers_mode".to_string(), Value::String(mode));
-            }
-        }
-    }
-    if let Some(raw) = &model.custom_request_body {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            model_map.insert(
-                "custom_request_body".to_string(),
-                Value::String(trimmed.to_string()),
-            );
-        }
-    }
+    let custom_headers = model.custom_headers.as_ref().and_then(|headers| {
+        let headers = headers
+            .iter()
+            .filter_map(|(key, value)| {
+                let key = key.trim();
+                (!key.is_empty()).then(|| (key.to_string(), value.trim().to_string()))
+            })
+            .collect::<HashMap<_, _>>();
+        (!headers.is_empty()).then_some(headers)
+    });
+    let custom_headers_mode = custom_headers.as_ref().and_then(|_| {
+        let mode = model
+            .custom_headers_mode
+            .as_deref()
+            .unwrap_or("merge")
+            .trim()
+            .to_ascii_lowercase();
+        matches!(mode.as_str(), "merge" | "replace").then_some(mode)
+    });
+    let model_handoff = InstallerModelHandoff {
+        name: model
+            .config_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{} - {}", model.provider, model.model_name)),
+        provider: provider.clone(),
+        model_name: model.model_name.trim().to_string(),
+        base_url: model.base_url.trim().to_string(),
+        request_url: resolve_stored_request_url(&model.base_url, &provider),
+        api_key: model.api_key.trim().to_string(),
+        custom_headers,
+        custom_headers_mode,
+        skip_ssl_verify: model.skip_ssl_verify.unwrap_or(false),
+        custom_request_body: model
+            .custom_request_body
+            .as_deref()
+            .map(str::trim)
+            .filter(|body| !body.is_empty())
+            .map(str::to_string),
+    };
 
-    let model_json = Value::Object(model_map);
-
-    let models_entry = ai_obj
-        .entry("models".to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
-    if !models_entry.is_array() {
-        *models_entry = Value::Array(Vec::new());
-    }
-    let models_arr = models_entry
-        .as_array_mut()
-        .ok_or_else(|| "Invalid ai.models type".to_string())?;
-    models_arr.push(model_json);
-
-    let default_models_entry = ai_obj
-        .entry("default_models".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !default_models_entry.is_object() {
-        *default_models_entry = Value::Object(Map::new());
-    }
-    let default_models_obj = default_models_entry
-        .as_object_mut()
-        .ok_or_else(|| "Invalid ai.default_models type".to_string())?;
-    default_models_obj.insert("primary".to_string(), Value::String(model_id.clone()));
-    default_models_obj.insert("fast".to_string(), Value::String(model_id));
-
-    write_root_config(&app_config_file, &root)
+    update_installer_handoff_at(handoff_path, move |handoff| {
+        handoff.model = Some(model_handoff);
+    })
+    .await
 }
 
 fn preflight_validate_payload_zip_bytes(
@@ -1940,12 +1882,22 @@ fn rollback_installation(install_path: &Path, install_dir_was_absent: bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_app_language, preflight_validate_payload_zip_archive,
-        INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY, MAIN_APP_EXE, MIN_WINDOWS_APP_EXE_BYTES,
-        REQUIRED_PAYLOAD_FILES,
+        apply_first_launch_language_at, apply_theme_preference_at, normalize_app_language,
+        preflight_validate_payload_zip_archive, INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY,
+        MAIN_APP_EXE, MIN_WINDOWS_APP_EXE_BYTES, REQUIRED_PAYLOAD_FILES,
+    };
+    use openbitfun_core_types::installer_config_handoff::{
+        InstallerConfigHandoff, INSTALLER_CONFIG_HANDOFF_FILE_NAME,
     };
     use std::io::{Cursor, Write};
     use zip::write::FileOptions;
+
+    #[test]
+    fn legacy_migration_command_reports_the_independent_distribution() {
+        let result =
+            super::launch_legacy_data_migrator(super::LaunchLegacyDataMigratorRequest::default());
+        assert!(result.unwrap_err().contains("distributed separately"));
+    }
 
     #[test]
     fn language_alias_priority_is_descending_and_stable_for_equal_lengths() {
@@ -1991,6 +1943,34 @@ mod tests {
     fn normalize_app_language_rejects_unknown_language_codes() {
         assert_eq!(normalize_app_language("fr-FR"), None);
         assert_eq!(normalize_app_language(""), None);
+    }
+
+    #[test]
+    fn installer_preferences_do_not_create_app_config() {
+        tauri::async_runtime::block_on(async {
+            let temp = tempfile::tempdir().unwrap();
+            let config_dir = temp.path().join("config");
+            let handoff_path = config_dir.join(INSTALLER_CONFIG_HANDOFF_FILE_NAME);
+
+            apply_first_launch_language_at(&handoff_path, "en")
+                .await
+                .unwrap();
+            apply_theme_preference_at(&handoff_path, "openbitfun-light")
+                .await
+                .unwrap();
+
+            assert!(!config_dir.join("app.json").exists());
+            let handoff: InstallerConfigHandoff = serde_json::from_slice(
+                &std::fs::read(&handoff_path).expect("handoff should be persisted"),
+            )
+            .expect("handoff should be valid JSON");
+            assert_eq!(handoff.language.as_deref(), Some("en-US"));
+            assert_eq!(
+                handoff.appearance_selection.as_deref(),
+                Some("openbitfun-light")
+            );
+            assert!(handoff.model.is_none());
+        });
     }
 
     #[test]

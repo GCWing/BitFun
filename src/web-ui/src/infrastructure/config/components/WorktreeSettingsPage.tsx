@@ -1,4 +1,4 @@
-import { Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, ConfirmDialog, Icon, IconButton, Input, NumberInput, Switch, Tooltip } from '@openbitfun/ui';
 import React, {
   useCallback,
   useEffect,
@@ -591,7 +591,7 @@ const WorktreeSettingsPage: React.FC = () => {
         <div className="openbitfun-worktree-settings__worktree-main">
           <div className="openbitfun-worktree-settings__worktree-copy">
             <div className="openbitfun-worktree-settings__worktree-heading">
-              <h5 className="openbitfun-worktree-settings__worktree-title">{branchLabel}</h5>
+              <h5 className="openbitfun-worktree-settings__worktree-title"><OverflowText>{branchLabel}</OverflowText></h5>
               <div className="openbitfun-worktree-settings__metadata">
                 {worktree.lifecycle !== 'managed' && <span>{lifecycleLabel}</span>}
                 {worktree.dirty && <span>{t('management.state.dirty')}</span>}
@@ -602,9 +602,9 @@ const WorktreeSettingsPage: React.FC = () => {
                 {worktree.missing && <span>{t('management.state.missing')}</span>}
               </div>
             </div>
-            <code className="openbitfun-worktree-settings__path" title={worktree.path}>
+            <code className="openbitfun-worktree-settings__path" title={worktree.path}><OverflowText>
               {worktree.path}
-            </code>
+            </OverflowText></code>
             {worktree.associatedSessionCount > 0 && (
               <div
                 className="openbitfun-worktree-settings__sessions-summary"
@@ -618,7 +618,7 @@ const WorktreeSettingsPage: React.FC = () => {
                 </span>
                 <span className="openbitfun-worktree-settings__session-links">
                   {worktree.sessions.map(session => (
-                    <button
+                    <button data-overflow-trigger
                       key={session.sessionId}
                       type="button"
                       className="openbitfun-worktree-settings__session-link"
@@ -638,11 +638,11 @@ const WorktreeSettingsPage: React.FC = () => {
                           aria-hidden
                         />
                       )}
-                      <span>{session.sessionName}</span>
+                      <OverflowText>{session.sessionName}</OverflowText>
                       {session.archived && (
-                        <span className="openbitfun-worktree-settings__session-link-state">
+                        <OverflowText className="openbitfun-worktree-settings__session-link-state">
                           {t('management.sessions.status.archived')}
-                        </span>
+                        </OverflowText>
                       )}
                     </button>
                   ))}
@@ -723,9 +723,9 @@ const WorktreeSettingsPage: React.FC = () => {
             <header className="openbitfun-worktree-settings__project-header">
               <div className="openbitfun-worktree-settings__project-identity">
                 <h4>{workspaceName(project.projectWorkspacePath)}</h4>
-                <code title={project.projectWorkspacePath}>
+                <code title={project.projectWorkspacePath}><OverflowText>
                   {project.projectWorkspacePath}
-                </code>
+                </OverflowText></code>
               </div>
               <span>
                 {t('management.worktreeCount', { count: project.worktrees.length })}

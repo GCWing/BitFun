@@ -98,6 +98,14 @@ test("Switch is explicit and unknown components never silently become switches",
   assert.doesNotMatch(preview, /data-openbitfun-component="switch"/);
 });
 
+test("RollingText exposes real standalone and TabGroup replacement specimens", () => {
+  const { preview, html } = render("RollingText");
+  assert.match(preview, /data-openbitfun-component="rolling-text"/);
+  assert.match(preview, /data-openbitfun-component="tab-group"/);
+  assert.match(preview, /替换标题/);
+  assert.match(html, /labelTransitionKey/);
+});
+
 test("Icon details include real mixed-icon compositions at every button size", () => {
   const { preview } = render("Icon");
   assert.match(preview, /component-icon-composition/);

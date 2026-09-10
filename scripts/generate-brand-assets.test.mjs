@@ -93,6 +93,16 @@ test('brand exports provide decodable transparent PNGs at every advertised size'
   );
 });
 
+test('Web UI exposes the canonical mark as a reusable currentColor vector asset', () => {
+  const source = readFileSync('assets/brand/source/openbitfun-mark.svg', 'utf8');
+  const webAsset = readFileSync('src/web-ui/public/brand/openbitfun-mark.svg', 'utf8');
+
+  assert.equal(webAsset, source.replaceAll('stroke="black"', 'stroke="currentColor"'));
+  assert.equal(webAsset.match(/<path\b/g)?.length, 15);
+  assert.match(webAsset, /stroke="currentColor"/);
+  assert.doesNotMatch(webAsset, /#[0-9a-f]{3,8}\b/i);
+});
+
 test('Windows ICO frames contain the size-specific app PNGs', async () => {
   const ico = readFileSync('src/apps/desktop/icons/openbitfun-app-icon.ico');
   assert.equal(ico.readUInt16LE(0), 0);

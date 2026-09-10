@@ -7,6 +7,7 @@ import { createContext, useContext } from 'react';
 import type React from 'react';
 import type { Session, ToolRejectOptions } from '../../types/flow-chat';
 import { type LineRange } from '@/shared/editor/LineRange';
+import type { SearchMatch } from './useFlowChatSearch';
 
 /**
  * Stable part of the FlowChat context: callbacks with stable identities plus
@@ -87,8 +88,8 @@ export interface FlowChatVolatileContextValue {
 
   // Message search state
   searchQuery?: string;
-  searchMatchIndices?: ReadonlySet<number>;
-  searchCurrentMatchVirtualIndex?: number;
+  searchMatchesByVirtualIndex?: ReadonlyMap<number, readonly SearchMatch[]>;
+  searchCurrentMatch?: SearchMatch;
 }
 
 export const FlowChatContext = createContext<FlowChatContextValue>({});

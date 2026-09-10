@@ -1,4 +1,5 @@
-use serde::Serialize;
+use openbitfun_runtime_ports::ExecTerminalSize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -18,7 +19,7 @@ pub fn background_command_output_capture() -> Arc<BackgroundCommandOutputCapture
         .clone()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BackgroundCommandOutputStatus {
     Running,
@@ -35,7 +36,7 @@ struct BackgroundCommandSessionKey {
     exec_session_id: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundCommandOutputMetadata {
     pub agent_session_id: Option<String>,
@@ -44,6 +45,9 @@ pub struct BackgroundCommandOutputMetadata {
     pub workdir: Option<String>,
     pub remote: bool,
     pub tty: bool,
+    /// Explicit null means unknown geometry; absent on older hosts.
+    #[serde(default)]
+    pub terminal_size: Option<ExecTerminalSize>,
     pub status: BackgroundCommandOutputStatus,
     pub exit_code: Option<i32>,
     pub started_at: u64,
@@ -62,6 +66,7 @@ pub struct StartBackgroundCommandOutputCapture {
     pub workdir: Option<String>,
     pub remote: bool,
     pub tty: bool,
+    pub terminal_size: Option<ExecTerminalSize>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +109,7 @@ struct BackgroundCommandOutputRecord {
     workdir: Option<String>,
     remote: bool,
     tty: bool,
+    terminal_size: Option<ExecTerminalSize>,
     exec_session_id: Option<i32>,
     status: BackgroundCommandOutputStatus,
     exit_code: Option<i32>,
@@ -135,6 +141,7 @@ impl BackgroundCommandOutputCapture {
             workdir: request.workdir,
             remote: request.remote,
             tty: request.tty,
+            terminal_size: request.terminal_size.filter(|_| request.tty),
             exec_session_id: None,
             status: BackgroundCommandOutputStatus::Running,
             exit_code: None,
@@ -413,6 +420,7 @@ impl BackgroundCommandOutputRecord {
             workdir: self.workdir.clone(),
             remote: self.remote,
             tty: self.tty,
+            terminal_size: self.terminal_size,
             status: self.status,
             exit_code: self.exit_code,
             started_at: self.started_at,
@@ -466,6 +474,34 @@ mod tests {
         ReadBackgroundCommandOutputRequest, StartBackgroundCommandOutputCapture,
     };
 
+    #[test]
+    fn background_output_metadata_reads_legacy_payload_and_round_trips_geometry() {
+        let legacy = serde_json::json!({
+            "agentSessionId": null, "execSessionId": 42, "command": "test",
+            "workdir": null, "remote": true, "tty": true, "status": "running",
+            "exitCode": null, "startedAt": 0, "endedAt": null,
+            "retainedBytes": 0, "retainedLimitBytes": 1048576, "truncatedFromStart": false
+        });
+        let mut metadata: super::BackgroundCommandOutputMetadata =
+            serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(metadata.terminal_size, None);
+        let old_round_trip = serde_json::to_value(&metadata).unwrap();
+        for (key, value) in legacy.as_object().unwrap() {
+            assert_eq!(&old_round_trip[key], value);
+        }
+        // New hosts explicitly distinguish unknown geometry from old absent fields.
+        assert!(old_round_trip["terminalSize"].is_null());
+        metadata.terminal_size = Some(super::ExecTerminalSize { cols: 80, rows: 24 });
+        let encoded = serde_json::to_value(&metadata).unwrap();
+        assert_eq!(
+            encoded["terminalSize"],
+            serde_json::json!({"cols": 80, "rows": 24})
+        );
+        let restored: super::BackgroundCommandOutputMetadata =
+            serde_json::from_value(encoded).unwrap();
+        assert_eq!(restored.terminal_size, metadata.terminal_size);
+    }
+
     #[tokio::test]
     async fn background_command_output_reads_snapshot_then_incremental_chunks() {
         let capture_id = format!(
@@ -484,6 +520,7 @@ mod tests {
                 workdir: None,
                 remote: false,
                 tty: false,
+                terminal_size: None,
             })
             .await;
 

@@ -39,12 +39,19 @@ export function generateManualTerminalProfileId(): string {
   return `manual_profile_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function normalizeProfile(profile: Partial<ManualTerminalProfile>): ManualTerminalProfile | null {
-  if (!profile.id || !profile.sessionId || !profile.name?.trim()) {
+function normalizeProfile(raw: unknown): ManualTerminalProfile | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const profile = raw as Partial<ManualTerminalProfile>;
+  if (typeof profile.id !== 'string' || !profile.id
+    || typeof profile.sessionId !== 'string' || !profile.sessionId
+    || typeof profile.name !== 'string' || !profile.name.trim()
+    || [profile.workingDirectory, profile.startupCommand, profile.shellType]
+      .some(value => value != null && typeof value !== 'string')) {
     return null;
   }
 
   return {
+    ...profile,
     id: profile.id,
     sessionId: profile.sessionId,
     name: profile.name.trim(),
@@ -56,16 +63,20 @@ function normalizeProfile(profile: Partial<ManualTerminalProfile>): ManualTermin
 
 function normalizeState(raw: unknown): ManualTerminalProfilesState {
   if (!raw || typeof raw !== 'object') {
-    return EMPTY_STATE;
+    throw new Error('Invalid saved terminal configurations');
   }
-
-  const profiles = Array.isArray((raw as { profiles?: unknown[] }).profiles)
-    ? (raw as { profiles: unknown[] }).profiles
-        .map((item) => normalizeProfile(item as Partial<ManualTerminalProfile>))
-        .filter((item): item is ManualTerminalProfile => item !== null)
-    : [];
+  const state = raw as { version?: unknown; profiles?: unknown };
+  if ((state.version !== undefined && state.version !== 1) || !Array.isArray(state.profiles)) {
+    throw new Error('Unsupported saved terminal configuration format');
+  }
+  const profiles = state.profiles.map(item => {
+    const profile = normalizeProfile(item);
+    if (!profile) throw new Error('Invalid saved terminal configuration; existing data has been preserved');
+    return profile;
+  });
 
   return {
+    ...raw,
     version: 1,
     profiles,
   };
@@ -74,11 +85,12 @@ function normalizeState(raw: unknown): ManualTerminalProfilesState {
 export function loadManualTerminalProfiles(workspacePath: string): ManualTerminalProfilesState {
   try {
     const raw = localStorage.getItem(getStorageKey(workspacePath));
-    if (raw) {
+    if (raw !== null) {
       return normalizeState(JSON.parse(raw));
     }
   } catch (error) {
     logger.error('Failed to load manual terminal profiles', { workspacePath, error });
+    throw new Error('Saved terminal configurations could not be read; existing data has been preserved');
   }
 
   return EMPTY_STATE;
@@ -88,10 +100,13 @@ export function saveManualTerminalProfiles(
   workspacePath: string,
   state: ManualTerminalProfilesState,
 ): void {
+  // Do not replace an unreadable or newer-format record with a normalized subset.
+  loadManualTerminalProfiles(workspacePath);
   try {
     localStorage.setItem(getStorageKey(workspacePath), JSON.stringify(normalizeState(state)));
   } catch (error) {
     logger.error('Failed to save manual terminal profiles', { workspacePath, error });
+    throw error;
   }
 }
 
@@ -122,6 +137,7 @@ export function upsertManualTerminalProfile(
     (profile) => profile.id === input.id || profile.sessionId === input.sessionId,
   );
   const normalizedProfile = normalizeProfile({
+    ...existingProfile,
     id: existingProfile?.id ?? input.id ?? generateManualTerminalProfileId(),
     sessionId: input.sessionId,
     name: input.name,
@@ -144,7 +160,7 @@ export function upsertManualTerminalProfile(
   }
 
   saveManualTerminalProfiles(workspacePath, {
-    version: 1,
+    ...currentState,
     profiles: nextProfiles,
   });
 
@@ -154,7 +170,7 @@ export function upsertManualTerminalProfile(
 export function deleteManualTerminalProfile(workspacePath: string, profileId: string): void {
   const currentState = loadManualTerminalProfiles(workspacePath);
   saveManualTerminalProfiles(workspacePath, {
-    version: 1,
+    ...currentState,
     profiles: currentState.profiles.filter((profile) => profile.id !== profileId),
   });
 }

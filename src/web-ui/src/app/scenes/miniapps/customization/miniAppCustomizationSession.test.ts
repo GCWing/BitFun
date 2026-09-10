@@ -15,7 +15,7 @@ describe('buildMiniAppCustomizationSessionRequest', () => {
     })).toMatchObject({
       sessionId: 'miniapp-customize-builtin-gomoku-1',
       sessionName: 'Customize Gomoku',
-      agentType: 'agentic',
+      agentType: 'Standard',
       workspacePath: 'D:/workspace/OpenBitFun',
       sessionKind: 'subagent',
       config: {

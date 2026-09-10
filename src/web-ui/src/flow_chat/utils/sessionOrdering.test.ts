@@ -18,7 +18,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     status: 'idle',
     config: {
       modelName: 'gpt-test',
-      agentType: 'agentic',
+      agentType: 'Standard',
     },
     createdAt: 1000,
     lastActiveAt: undefined,
@@ -26,7 +26,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     error: null,
     todos: [],
     maxContextTokens: 128128,
-    mode: 'agentic',
+    mode: 'Standard',
     workspacePath: '/workspace',
     parentSessionId: undefined,
     sessionKind: 'normal',

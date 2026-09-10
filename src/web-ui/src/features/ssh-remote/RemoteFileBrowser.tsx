@@ -549,9 +549,11 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                     }}
                     className="remote-file-browser__row remote-file-browser__row--parent"
                   >
-                    <td colSpan={3}>
-                      <Icon name="folder" size="md" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
-                      <span>..</span>
+                    <td colSpan={3} className="remote-file-browser__td remote-file-browser__td--name">
+                      <div className="remote-file-browser__name-cell">
+                        <Icon name="folder" size="md" className="remote-file-browser__entry-icon remote-file-browser__entry-icon--parent" />
+                        <span className="remote-file-browser__name">..</span>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -660,11 +662,11 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 }}
               />
               <div className="remote-file-browser__dialog-actions">
-                <Button variant="outline" size="sm" onClick={() => setRenameEntry(null)}>
+                <Button variant="fill" size="sm" onClick={() => setRenameEntry(null)}>
                   {t('actions.cancel')}
                 </Button>
                 <Button
-                  variant="fill"
+                  variant="primary"
                   size="sm"
                   onClick={handleRename}
                   disabled={!renameValue.trim() || renameValue.trim() === renameEntry.name}
@@ -707,11 +709,11 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             )}
           </div>
           <div className="remote-file-browser__footer-actions">
-            <Button variant="outline" size="sm" onClick={onCancel}>
+            <Button variant="fill" size="sm" onClick={onCancel}>
               {t('actions.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={openSelectedWorkspace}
               disabled={false}

@@ -27,15 +27,33 @@
 
 .duration-text--warning {
   color: var(--openbitfun-color-status-warning-content);
+
+  > svg,
+  > [data-openbitfun-component='icon'] {
+    color: var(--openbitfun-color-status-warning-emphasis);
+    opacity: 1;
+  }
 }
 
 .duration-text--completed-success {
-  color: var(--openbitfun-color-status-success-content);
+  color: var(--openbitfun-color-code-change-added);
+
+  > svg,
+  > [data-openbitfun-component='icon'] {
+    color: var(--openbitfun-color-status-success-emphasis);
+    opacity: 1;
+  }
 }
 
 .duration-text--completed-error,
 .duration-text--completed-cancelled {
   color: var(--openbitfun-color-status-danger-content);
+
+  > svg,
+  > [data-openbitfun-component='icon'] {
+    color: var(--openbitfun-color-status-danger-emphasis);
+    opacity: 1;
+  }
 }
 
 .duration-separator {

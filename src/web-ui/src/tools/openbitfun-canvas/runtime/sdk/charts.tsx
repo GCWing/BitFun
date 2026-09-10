@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 import type { CanvasChartDatum, CanvasChartProps, CanvasChartSeries } from './types';
 
 interface NormalizedSeries {
@@ -130,7 +131,7 @@ function ChartShell({
     <div {...props} className={['openbitfun-chart', props.className].filter(Boolean).join(' ')} style={style}>
       {title || legend.length > 1 ? (
         <div className="openbitfun-chart__header">
-          {title ? <div className="openbitfun-chart__title">{title}</div> : <span />}
+          {title ? <div className="openbitfun-chart__title"><OverflowText>{title}</OverflowText></div> : <span />}
           {legend.length > 1 ? (
             <div className="openbitfun-chart__legend">
               {legend.map((item, index) => (
@@ -194,6 +195,7 @@ export function BarChart(props: CanvasChartProps = {}) {
         )}
         {labels.map((label, index) => (
           <text key={`label-${index}`} x={left + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle" fill="var(--openbitfun-color-content-muted)" fontSize="var(--openbitfun-type-micro-font-size)">
+            <title>{String(label)}</title>
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -232,6 +234,7 @@ export function LineChart(props: CanvasChartProps = {}) {
         )}
         {labels.map((label, index) => (
           <text key={`label-${index}`} x={xFor(index)} y={height - 10} textAnchor="middle" fill="var(--openbitfun-color-content-muted)" fontSize="var(--openbitfun-type-micro-font-size)">
+            <title>{String(label)}</title>
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -301,6 +304,7 @@ export function PieChart(props: CanvasChartProps = {}) {
         {paths}
         {slices.slice(0, 6).map((item, index) => (
           <g key={`label-${index}`} transform={`translate(225 ${52 + index * 23})`}>
+            <title>{String(item.label)}</title>
             <rect x={0} y={-8} width={9} height={9} rx={2} fill={item.color} />
             <text x={16} y={0} fill="var(--openbitfun-color-content-secondary)" fontSize="var(--openbitfun-type-meta-font-size)">
               {String(item.label).slice(0, 20)}

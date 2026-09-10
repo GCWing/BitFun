@@ -1,7 +1,9 @@
 import React from 'react';
 import { Tooltip } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
-import './WindowControls.scss';
+import { isWindowsDesktopRuntime } from '@/infrastructure/runtime';
+
+// Loaded from index.html so the pre-React splash and app chrome share one stylesheet instance.
 
 export interface WindowControlsProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -38,6 +40,12 @@ const CloseGlyph = () => (
   </svg>
 );
 
+const WindowsGlyph = ({ d }: { d: string }) => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d={d} stroke="currentColor" strokeWidth="1" />
+  </svg>
+);
+
 /** Desktop-shell window commands. This is product chrome, not a public UI primitive. */
 export const WindowControls: React.FC<WindowControlsProps> = ({
   onMinimize,
@@ -49,6 +57,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
   ...props
 }) => {
   const { t } = useTranslation('common');
+  const isWindows = isWindowsDesktopRuntime();
   const maximizeLabel = maximized ? t('window.restore') : t('window.maximize');
 
   const run = (event: React.MouseEvent<HTMLButtonElement>, command: () => void) => {
@@ -60,7 +69,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
   return (
     <div
       {...props}
-      className={['window-controls', className].filter(Boolean).join(' ')}
+      className={['window-controls', isWindows && 'window-controls--windows', className].filter(Boolean).join(' ')}
       data-openbitfun-component="window-controls"
       data-openbitfun-part="root"
       data-openbitfun-state={[disabled && 'disabled', maximized && 'maximized'].filter(Boolean).join(' ') || undefined}
@@ -73,7 +82,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
           disabled={disabled}
           aria-label={t('window.minimize')}
         >
-          <MinimizeGlyph />
+          {isWindows ? <WindowsGlyph d="M1 6.5h10" /> : <MinimizeGlyph />}
         </button>
       </Tooltip>
 
@@ -85,7 +94,11 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
           disabled={disabled}
           aria-label={maximizeLabel}
         >
-          {maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
+          {isWindows ? (
+            <WindowsGlyph d={maximized
+              ? 'M3.5 3.5v-2h7v7h-2 M1.5 3.5h7v7h-7z'
+              : 'M1.5 1.5h9v9h-9z'} />
+          ) : maximized ? <RestoreGlyph /> : <MaximizeGlyph />}
         </button>
       </Tooltip>
 
@@ -97,7 +110,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
           disabled={disabled}
           aria-label={t('window.close')}
         >
-          <CloseGlyph />
+          {isWindows ? <WindowsGlyph d="m1.5 1.5 9 9 m0-9-9 9" /> : <CloseGlyph />}
         </button>
       </Tooltip>
     </div>

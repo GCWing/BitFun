@@ -16,6 +16,7 @@ interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
   missionControlEnabled?: boolean;
   handleCloseWithDirtyCheck?: (tabId: string, groupId: EditorGroupId) => Promise<boolean>;
+  onReveal?: () => void;
 }
 
 export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) => {
@@ -23,6 +24,7 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     enabled = true,
     missionControlEnabled = true,
     handleCloseWithDirtyCheck,
+    onReveal,
   } = options;
 
   const {
@@ -33,6 +35,7 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     closeTab,
     switchToTab,
     reopenClosedTab,
+    closedTabs,
     setSplitMode,
     setAnchorPosition,
     toggleMaximize,
@@ -121,7 +124,11 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
   useShortcut(
     'tab.reopenClosed',
     { key: 'T', ctrl: true, shift: true, scope: 'canvas', allowInInput: true },
-    () => reopenClosedTab(),
+    () => {
+      if (closedTabs.length === 0) return;
+      reopenClosedTab();
+      onReveal?.();
+    },
     { enabled, priority: 10, description: 'keyboard.shortcuts.tab.reopenClosed' }
   );
 

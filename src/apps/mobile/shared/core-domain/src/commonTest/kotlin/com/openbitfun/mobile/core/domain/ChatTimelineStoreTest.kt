@@ -671,6 +671,7 @@ class ChatTimelineStoreTest {
         tools = null,
         items = null,
         images = null,
+        error = null,
     )
 
     private fun activeMessage(
@@ -691,5 +692,6 @@ class ChatTimelineStoreTest {
         tools = null,
         items = null,
         images = null,
+        error = null,
     )
 }

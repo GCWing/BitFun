@@ -12,7 +12,7 @@ struct OpenBitFunModalHeader: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(MobileLocalization.text(title))
-                    .font(MobileDesignTypography.headlineSmall.font)
+                    .font(MobileDesignTypography.conversationHeaderTitle.font)
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .lineLimit(1)
                 if let subtitle, !subtitle.isEmpty {
@@ -25,11 +25,12 @@ struct OpenBitFunModalHeader: View {
             Spacer(minLength: 8)
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(OpenBitFunTheme.ink)
-                    .frame(width: 40, height: 40)
-                    .background(OpenBitFunTheme.soft)
-                    .clipShape(Circle())
+                    .frame(
+                        width: MobileDesignGeometry.controlTouchSize,
+                        height: MobileDesignGeometry.controlTouchSize
+                    )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(MobileLocalization.text("关闭"))

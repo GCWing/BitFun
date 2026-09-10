@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
-import { Cloud, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
+import { MessageCircle, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -15,7 +15,6 @@ import {
   selectActivityFacts,
   selectAttachedGroups,
   type DeviceOverviewActivityFact,
-  type DeviceOverviewConnectionService,
   type DeviceOverviewDevice,
   type DeviceOverviewDeviceKind,
 } from '../deviceInterconnectionOverview';
@@ -56,17 +55,11 @@ function DeviceIcon({
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
       if (chatApp) return <ChatAppBrandIcon app={chatApp} size={size} />;
-      return <Icon name="side-chat" size="lg" style={iconStyle} />;
+      return <Icon glyph={MessageCircle} size="lg" style={iconStyle} />;
     }
     default:
       return <Icon glyph={Monitor} size="lg" style={iconStyle} />;
   }
-}
-
-function ConnectionServiceIcon({ service }: { service: DeviceOverviewConnectionService }) {
-  return service.kind === 'self-hosted' || service.kind === 'device-service'
-    ? <Icon glyph={Server} size="sm" />
-    : <Icon glyph={Cloud} size="sm" />;
 }
 
 const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
@@ -90,8 +83,7 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const {
     overview,
     refresh,
-    accountService,
-  } = useDeviceInterconnectionOverview(localDeviceLabel);
+  } = useDeviceInterconnectionOverview(localDeviceLabel, t('remoteConnect.mobileBrowserTitle'));
   const [returningLocal, setReturningLocal] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -188,29 +180,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     return device.name;
   }, [t]);
 
-  const serviceContent = useMemo(() => {
-    const service = overview.connectionService;
-    if (!service) return null;
-    switch (service.kind) {
-      case 'official':
-        return { label: t('deviceOverview.officialService'), detail: null };
-      case 'self-hosted':
-        return {
-          label: t('deviceOverview.selfHostedService'),
-          detail: service.host,
-        };
-      case 'local-network':
-        return { label: t('deviceOverview.sameNetwork'), detail: null };
-      case 'public-tunnel':
-        return { label: t('deviceOverview.publicConnection'), detail: null };
-      default:
-        return { label: t('deviceOverview.deviceService'), detail: service.host };
-    }
-  }, [overview.connectionService, t]);
-
   return (
     <>
-      <button
+      <button data-overflow-trigger
         ref={triggerRef}
         type="button"
         className={`openbitfun-nav-panel__footer-device-status${open ? ' is-open' : ''}`}
@@ -224,9 +196,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         data-openbitfun-state={overview.mode}
       >
         <DeviceIcon kind={overview.primaryDevice.kind} size={15} />
-        <span className="openbitfun-nav-panel__footer-device-status-label">
+        <OverflowText className="openbitfun-nav-panel__footer-device-status-label">
           {overview.currentWorkDeviceName}
-        </span>
+        </OverflowText>
         {attachedGroups.length > 0 && (
           <span
             className="openbitfun-nav-panel__footer-device-status-attached"
@@ -321,30 +293,13 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                               size={16}
                             />
                           </span>
-                          <strong>{deviceDisplayName(device)}</strong>
+                          <strong><OverflowText>{deviceDisplayName(device)}</OverflowText></strong>
                           <span>{deviceActivity(device)}</span>
                         </div>
                       ))}
                     </div>
                   </section>
                 </>
-              )}
-
-              {overview.mode === 'connected' && overview.connectionService && serviceContent && (
-                <div
-                  className="openbitfun-device-overview__service"
-                  data-testid="nav-device-connection-service"
-                  data-openbitfun-service-kind={overview.connectionService.kind}
-                >
-                  <ConnectionServiceIcon service={overview.connectionService} />
-                  <span>
-                    {t(overview.connectionService === accountService
-                      ? 'deviceOverview.accountService'
-                      : 'deviceOverview.connectionService')}
-                  </span>
-                  <strong>{serviceContent.label}</strong>
-                  {serviceContent.detail && <small>{serviceContent.detail}</small>}
-                </div>
               )}
 
               {overview.topologyUnavailable && (

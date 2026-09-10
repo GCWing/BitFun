@@ -13,7 +13,7 @@ export class AppShellState {
    * surfaces that live outside Navigation — the drawer above all — have no way
    * to follow the route without this traced copy.
    */
-  @Trace activeRoute: AppRoute = AppRoute.ChatHome;
+  @Trace activeRoute: AppRoute = AppRoute.RemoteHome;
   @Trace showSidebar: boolean = false;
   @Trace showSettings: boolean = false;
   @Trace settingsMode: string = 'general';

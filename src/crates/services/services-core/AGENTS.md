@@ -4,8 +4,8 @@ Scope: this guide applies to `src/crates/services/services-core`.
 
 `openbitfun-services-core` owns cross-platform service DTOs and helpers that compile
 without the full product runtime. This includes generic filesystem/search/JSON
-IO helpers, bounded local Instruction file reads, session metadata storage
-helpers, and local OS action primitives such as command lookup,
+IO helpers, bounded local Instruction file reads, Session metadata storage
+helpers, the durable Memory SQLite format, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
 providers, process-wide TLS provider selection, managed process-tree lifecycle,
 process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
@@ -30,7 +30,7 @@ crate.
   `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
   `workspace-text-runtime` extensions only for behavior they use. Products
   needing IANA time-zone ranges and dashboard aggregation additionally select
-  `token-usage-statistics`. In particular, session metadata consumers must
+  `token-usage-statistics` and `memory-store`. In particular, session metadata consumers must
   not compile libgit2 unless they use the memory-workspace baseline/diff API.
   Keep Tokio and platform API capabilities owner-scoped too: the empty profile
   carries no Tokio dependency, `workspace-runtime` explicitly composes
@@ -68,6 +68,11 @@ crate.
   resource-limit safety. Unix descendants that deliberately create a new
   session/process group are outside this boundary and must be treated as a
   disclosed residual risk until a platform supervisor is introduced.
+- Windows final cleanup closes only registered `process_tree` child Jobs and
+  rejects new managed spawns after shutdown begins. It must not initialize or
+  close the Job used by `contain_current_process_tree`: that explicit CLI/SDK
+  host-lifetime guard includes the host itself and stays alive until process
+  exit. Keep updater/restart handoff processes outside managed child trees.
 
 ## Verification
 
@@ -78,6 +83,7 @@ target. Representative stable entry points are:
 
 ```bash
 cargo check -p openbitfun-services-core --no-default-features
+cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib system::info::tests
 cargo test -p openbitfun-services-core --no-default-features --features credential-vault --lib credential_vault::tests::
 cargo check -p openbitfun-services-core --no-default-features --features filesystem
 cargo test -p openbitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::
@@ -86,11 +92,26 @@ cargo test -p openbitfun-services-core --no-default-features --features workspac
 cargo test -p openbitfun-services-core --no-default-features --features workspace-runtime --lib workspace::tests::
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
+cargo test -p openbitfun-services-core --no-default-features --features memory-store --lib memory_store::tests::
 cargo test -p openbitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::
 cargo test -p openbitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib process_tree::tests::
 cargo test --locked -p openbitfun-services-core --no-default-features --features tls-provider --lib tls_provider::tests
 pnpm run check:core-boundaries
 ```
 
 Other capability-specific target names remain in `Cargo.toml`; document a new
 command here only when it becomes a recurring owner workflow.
+
+## Offline-compatible storage formats
+
+workspace-persistence owns workspace records and registry validation;
+coordination-store owns the durable coordination SQLite schema;
+session-event-format owns the logged-event envelope and durable-prefix validator.
+StorageError carries only storage error categories; Core preserves its original
+error mappings. Workspace managers, watchers, identity loading and live scanning
+remain in Core through runtime extension traits on the shared records.
+
+```bash
+cargo test -p openbitfun-services-core --no-default-features --features workspace-persistence,coordination-store,session-event-format --lib
+```

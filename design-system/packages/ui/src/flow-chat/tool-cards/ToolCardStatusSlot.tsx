@@ -41,7 +41,7 @@ function StatusGlyph({
     case "waiting":
       return <Clock {...iconProps} className={styles.muted} />;
     default:
-      return <ToolProcessingDots size={size} />;
+      return <ToolProcessingDots className={styles.processing} size={size} />;
   }
 }
 

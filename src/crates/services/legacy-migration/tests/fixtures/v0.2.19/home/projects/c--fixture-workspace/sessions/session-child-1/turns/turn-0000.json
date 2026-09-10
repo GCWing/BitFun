@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "turnId": "turn-child-1",
+  "turnIndex": 0,
+  "sessionId": "session-child-1",
+  "timestamp": 1,
+  "agentType": "Explore",
+  "userMessage": {
+    "id": "message-child-1",
+    "content": "Synthetic delegated request",
+    "timestamp": 1
+  },
+  "modelRounds": [],
+  "startTime": 1,
+  "endTime": 2,
+  "durationMs": 1,
+  "hasFinalResponse": true,
+  "status": "completed"
+}

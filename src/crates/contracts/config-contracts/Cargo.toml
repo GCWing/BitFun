@@ -1,0 +1,23 @@
+[package]
+name = "openbitfun-config-contracts"
+version.workspace = true
+edition.workspace = true
+description = "Persisted OpenBitFun configuration contracts without product runtime"
+
+[dependencies]
+openbitfun-core-types = { path = "../core-types" }
+openbitfun-product-domains = { path = "../product-domains" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+log = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+default = []
+ts = ["dep:ts-rs", "openbitfun-core-types/ts", "openbitfun-product-domains/ts"]
+
+[lints]
+workspace = true

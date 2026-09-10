@@ -1,0 +1,14 @@
+[
+  {
+    "id": "ssh-fixture@example.invalid:22",
+    "name": "fixture@example.invalid",
+    "host": "example.invalid",
+    "port": 22,
+    "username": "fixture",
+    "authType": {
+      "type": "Password"
+    },
+    "defaultWorkspace": "/srv/fixture-workspace",
+    "lastConnected": 1
+  }
+]

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
 import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
-import { Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption, type IconSource } from '@openbitfun/ui';
+import { OverflowText, Button, Combobox, Icon, IconButton, ScrollArea, type ComboboxOption, type IconSource } from '@openbitfun/ui';
 import { Loader2, AlertTriangle, BarChart3, Calendar, Target, Zap, Trophy, AlertCircle, Lightbulb, Rocket, Database, ScanSearch, Layers3, FileCheck2, Gauge } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { insightsApi, type InsightsReport, type InsightsReportMeta, type InsightsStats } from '@/infrastructure/api/insightsApi';
@@ -123,7 +123,7 @@ const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress 
         <div className="insights-generation__status-copy">
           <div className="insights-generation__eyebrow">{t('insights.generating')}</div>
           <div className="insights-generation__title">{t(activeStep.titleKey)}</div>
-          <div className="insights-generation__detail">{detail}</div>
+          <div className="insights-generation__detail"><OverflowText>{detail}</OverflowText></div>
         </div>
         <div className="insights-generation__elapsed">
           <Icon name="clock" size="xs" />
@@ -144,7 +144,7 @@ const GenerationPanel: React.FC<{ progress: GenerationProgress }> = ({ progress 
               <span className="insights-generation__step-icon">
                 {state === 'complete' ? <Icon name="check-line" size="xs" /> : <Icon {...step.icon} size="xs" />}
               </span>
-              <span className="insights-generation__step-label">{t(step.titleKey)}</span>
+              <OverflowText className="insights-generation__step-label">{t(step.titleKey)}</OverflowText>
             </div>
           );
         })}
@@ -249,7 +249,7 @@ const InsightsScene: React.FC = () => {
           </div>
           {generating ? (
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               leadingIcon={<Icon name="xmark" size="lg" />}
               onClick={cancelGeneration}
@@ -258,7 +258,7 @@ const InsightsScene: React.FC = () => {
             </Button>
           ) : (
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               leadingIcon={<BarChart3 />}
               onClick={generateReport}
@@ -352,7 +352,7 @@ const ReportMetaCard: React.FC<{
     : t('insights.tokensUnavailable');
 
   return (
-    <button className="insights-meta-card" onClick={() => onSelect(meta)}>
+    <button data-overflow-trigger className="insights-meta-card" onClick={() => onSelect(meta)}>
       <div className="insights-meta-card__top">
         <div className="insights-meta-card__date">{dateStr} {timeStr}</div>
         <div className="insights-meta-card__range">{rangeStart} ~ {rangeEnd}</div>
@@ -364,24 +364,24 @@ const ReportMetaCard: React.FC<{
         >
           <Icon glyph={Gauge} size="sm" />
           <span>
-            <strong>
+            <strong><OverflowText>
               {hasSessionUsage
                 ? formatTokenCount(sessionUsage.total_tokens, formatNumber)
                 : '--'}
-            </strong>
+            </OverflowText></strong>
             {t('insights.sessionTokens')}
           </span>
         </span>
         <span className="insights-meta-card__metric">
           <Icon glyph={BarChart3} size="sm" />
           <span>
-            <strong>{formatNumber(meta.analyzed_sessions)} / {formatNumber(meta.total_sessions)}</strong>
+            <strong><OverflowText>{formatNumber(meta.analyzed_sessions)} / {formatNumber(meta.total_sessions)}</OverflowText></strong>
             {t('insights.analyzedSessions')}
           </span>
         </span>
         <span className="insights-meta-card__metric">
           <Icon name="side-chat" size="sm" />
-          <span><strong>{formatNumber(meta.total_messages)}</strong>{t('insights.messages')}</span>
+          <span><strong><OverflowText>{formatNumber(meta.total_messages)}</OverflowText></strong>{t('insights.messages')}</span>
         </span>
       </div>
       <div className="insights-meta-card__details">
@@ -406,7 +406,8 @@ const ReportMetaCard: React.FC<{
         <div className="insights-meta-card__generation-meta">
           {generationModels.length > 0 && (
             <span title={generationModels.join(', ')}>
-              <Icon name="thinking" size="lg" style={{ width: 10, height: 10 }} /> {generationModels.join(' + ')}
+              <Icon name="thinking" size="lg" style={{ width: 10, height: 10 }} />
+              <OverflowText title="">{generationModels.join(' + ')}</OverflowText>
             </span>
           )}
           {hasGenerationCalls && (
@@ -415,11 +416,13 @@ const ReportMetaCard: React.FC<{
               className={generationUsageComplete ? '' : 'insights-meta-card__generation-meta--partial'}
             >
               <Icon name="spark" size="2xs" />
+              <OverflowText title="">
               {t('insights.insightsGenerationTokens')}:
               {' '}{hasGenerationUsage
                 ? formatTokenCount(generationUsage.total_tokens, formatNumber)
                 : '--'} {t('insights.tokens')}
               {!generationUsageComplete && ` · ${t('insights.partialUsage')}`}
+              </OverflowText>
             </span>
           )}
         </div>
@@ -508,14 +511,14 @@ const ReportNav: React.FC<{ report: InsightsReport; scrollContainerRef: React.Re
       {visibleSections.map((section) => {
         const sectionIcon = SECTIONS.find(s => s.id === section.id)?.icon ?? { glyph: Target };
         return (
-          <button
+          <button data-overflow-trigger
             key={section.id}
             className={`insights-report-nav__item ${activeSection === section.id ? 'is-active' : ''}`}
             onClick={() => scrollToSection(section.id)}
             title={section.label}
           >
             <Icon {...sectionIcon} size="sm" />
-            <span className="insights-report-nav__label">{section.label}</span>
+            <OverflowText className="insights-report-nav__label">{section.label}</OverflowText>
           </button>
         );
       })}
@@ -1032,7 +1035,7 @@ const BarChart: React.FC<{ title: string; items: [string, number][]; max: number
         const displayLabel = label.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
         return (
           <div key={label} className="insights-bar-row">
-            <span className="insights-bar-row__label">{displayLabel}</span>
+            <OverflowText className="insights-bar-row__label">{displayLabel}</OverflowText>
             <div className="insights-bar-row__track">
               <div className="insights-bar-row__fill" style={{ width: `${pct}%`, background: barColor }} />
             </div>

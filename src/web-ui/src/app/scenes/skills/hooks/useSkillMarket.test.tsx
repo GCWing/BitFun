@@ -39,10 +39,10 @@ vi.mock('@/shared/notification-system', () => ({
 
 let currentMarket: ReturnType<typeof useSkillMarket> | null = null;
 
-function Harness({ enabled }: { enabled: boolean }) {
+function Harness({ enabled, installedMarketIds = new Set<string>() }: { enabled: boolean; installedMarketIds?: Set<string> }) {
   const market = useSkillMarket({
     searchQuery: '',
-    installedSkillNames: new Set(),
+    installedMarketIds,
     enabled,
     onInstalledChanged: installedChangedMock,
   });
@@ -71,6 +71,28 @@ describe('useSkillMarket', () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
+  });
+
+  it('prioritizes only the installed repository when market skills share a name', async () => {
+    const first = {
+      id: 'first/skills/eli5', name: 'eli5', source: 'first/skills',
+      installId: 'first/skills@eli5', installs: 1, description: '', url: '',
+    };
+    const second = {
+      ...first, id: 'second/skills/eli5', source: 'second/skills',
+      installId: 'second/skills@eli5', installs: 100,
+    };
+    listSkillMarketMock.mockResolvedValue([second, first]);
+    await act(async () => {
+      root.render(<Harness enabled installedMarketIds={new Set(['first/skills@eli5'])} />);
+    });
+    expect(currentMarket?.marketSkills.map(skill => skill.id)).toEqual([first.id, second.id]);
+
+    await act(async () => {
+      root.render(<Harness enabled installedMarketIds={new Set(['second/skills@eli5'])} />);
+    });
+    expect(currentMarket?.marketSkills.map(skill => skill.id)).toEqual([second.id, first.id]);
+    expect(listSkillMarketMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not query the skill market outside the desktop app', async () => {

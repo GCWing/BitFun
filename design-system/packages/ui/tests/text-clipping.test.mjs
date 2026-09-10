@@ -16,7 +16,7 @@ for (const [component, selector] of [
   ["Dialog", ".title"],
   ["Disclosure", ".summary"],
 ]) {
-  test(`${component} ${selector} retains ellipsis with font-safe line height`, async () => {
+  test(`${component} ${selector} uses shared overflow with font-safe line height`, async () => {
     const css = await readFile(new URL(
       `../src/components/${component}/${component}.module.css`, import.meta.url,
     ), "utf8");
@@ -31,11 +31,23 @@ for (const [component, selector] of [
     }
     assert.match(
       declarations["line-height"],
-      /^var\(--openbitfun-(?:line-height-base|type-body-sm-line-height|type-label-(?:xs|md)-line-height)\)$/,
+      component === "ActionItem"
+        ? /^var\(--openbitfun-type-action-row-line-height\)$/
+        : component === "ActionCard"
+          ? selector === ".title"
+            ? /^var\(--openbitfun-type-heading-section-line-height\)$/
+            : /^var\(--openbitfun-type-action-row-line-height\)$/
+        : component === "Dialog"
+          ? /^var\(--openbitfun-type-heading-dialog-line-height\)$/
+          : /^var\(--openbitfun-(?:line-height-base|type-body-sm-line-height|type-label-(?:xs|md)-line-height)\)$/,
     );
     assert.equal(declarations.overflow, "hidden");
-    assert.equal(declarations["text-overflow"], "ellipsis");
+    assert.equal(declarations["text-overflow"], undefined);
     assert.equal(declarations["block-size"], undefined);
     assert.equal(declarations.height, undefined);
+    const source = await readFile(new URL(
+      `../src/components/${component}/${component}.tsx`, import.meta.url,
+    ), "utf8");
+    assert.match(source, /<OverflowText\b/);
   });
 }

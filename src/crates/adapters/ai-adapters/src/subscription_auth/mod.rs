@@ -35,7 +35,7 @@ use tokio_util::sync::CancellationToken;
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// OpenCode release whose built-in subscription protocols these adapters mirror.
-pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.25";
+pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.29";
 
 /// One of the subscription providers OpenBitFun can sign in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -241,6 +241,12 @@ pub struct SubscriptionLogoutResult {
     pub warning: Option<String>,
 }
 
+/// Durable account epoch used to invalidate cached model clients after login,
+/// logout, refresh, or profile changes, including changes from another host process.
+pub async fn credential_revision(provider: SubscriptionProvider) -> Result<u64> {
+    store::credential_revision(provider.key()).await
+}
+
 /// Runtime-resolved credential that overrides fields in the AI client config.
 #[derive(Debug, Clone)]
 pub struct ResolvedCredential {
@@ -251,6 +257,52 @@ pub struct ResolvedCredential {
     pub extra_headers: HashMap<String, String>,
     /// Unix seconds when this credential expires; `None` means non-expiring.
     pub expires_at: Option<i64>,
+}
+
+impl ResolvedCredential {
+    /// Applies account-owned authentication to a transient client configuration.
+    /// Saved API-key headers and replace mode must not suppress OAuth auth, or
+    /// select a different account after login/refresh. HTTP names ignore case.
+    pub fn apply_to(self, config: &mut crate::types::AIConfig) -> Option<i64> {
+        config.api_key = self.api_key;
+        if let Some(base_url) = self.base_url {
+            config.base_url = base_url;
+        }
+        if let Some(request_url) = self.request_url {
+            config.request_url = request_url;
+        }
+        if let Some(format) = self.format {
+            config.format = format;
+        }
+        let mut headers = config.custom_headers.take().unwrap_or_default();
+        headers.retain(|name, _| {
+            ![
+                "authorization",
+                "x-api-key",
+                "x-goog-api-key",
+                "content-type",
+                "anthropic-version",
+                "chatgpt-account-id",
+                "x-openai-internal-codex-residency",
+                "x-org-id",
+                "session-id",
+                "session_id",
+                "x-client-request-id",
+                "x-opencode-session",
+                "x-grok-conv-id",
+            ]
+            .iter()
+            .any(|reserved| name.eq_ignore_ascii_case(reserved))
+                && !self
+                    .extra_headers
+                    .keys()
+                    .any(|required| name.eq_ignore_ascii_case(required))
+        });
+        headers.extend(self.extra_headers);
+        config.custom_headers = (!headers.is_empty()).then_some(headers);
+        config.custom_headers_mode = Some("merge".to_string());
+        self.expires_at
+    }
 }
 
 /// Returned by `start_login`; contains what the UI needs to guide the user.
@@ -944,6 +996,17 @@ pub async fn resolve_opencode_with_options(
     opencode::resolve_for(plan, format, options).await
 }
 
+/// Resolves the OpenCode wire format from the signed-in account's catalog.
+/// Legacy callers may omit the plan; known models still get their correct wire.
+pub async fn resolve_opencode_model_with_options(
+    plan: Option<OpenCodePlan>,
+    configured_format: &str,
+    model: &str,
+    options: &SubscriptionHttpOptions,
+) -> Result<ResolvedCredential> {
+    opencode::resolve_for_model(plan, configured_format, model, options).await
+}
+
 /// Resolves an xAI subscription credential for a concrete model. The adapter
 /// owns the trusted Responses endpoint so the OAuth token can never be sent to
 /// an arbitrary URL supplied by model configuration.
@@ -959,9 +1022,9 @@ pub async fn resolve_grok_with_options(
     grok::resolve_for(model, options).await
 }
 
-/// Resolves a Hermes subscription credential for a concrete model. Nous uses
-/// Anthropic Messages for `anthropic/*` model ids and OpenAI Chat Completions
-/// for the rest; the adapter pins both routes to the trusted inference host.
+/// Resolves a Hermes subscription credential for a concrete model. All catalog
+/// models use the current Hermes Chat Completions default, pinned to the trusted
+/// Nous inference host. Saved model IDs and credentials remain unchanged.
 pub async fn resolve_hermes(model: &str) -> Result<ResolvedCredential> {
     resolve_hermes_with_options(model, &SubscriptionHttpOptions::default()).await
 }
@@ -1054,6 +1117,12 @@ mod tests {
                 .unwrap();
             assert_eq!(resolved.expires_at, Some(actual_expiry));
             assert_eq!(resolved.api_key, token);
+            if provider == SubscriptionProvider::Codex {
+                assert_eq!(resolved.extra_headers["originator"], "openbitfun");
+                assert!(resolved.extra_headers["User-Agent"].starts_with("OpenBitFun/"));
+                assert_eq!(resolved.extra_headers["ChatGPT-Account-ID"], "test-account");
+                assert!(!resolved.extra_headers.contains_key("session-id"));
+            }
             // No rotation or mutation is needed for a still-usable legacy JWT.
             assert_eq!(
                 store::load_entry_with_revision(provider.key())
@@ -1063,6 +1132,113 @@ mod tests {
                 revision
             );
         }
+    }
+
+    #[test]
+    fn subscription_headers_survive_legacy_replace_mode_on_each_wire() {
+        use crate::{
+            client::AIClient,
+            providers::{anthropic, gemini, openai},
+            types::AIConfig,
+        };
+        // Deserialized legacy user settings, including differently cased stale
+        // auth headers. Assert the final request, not just the merged HashMap.
+        for (format, url, headers, auth_header) in [
+            ("responses", "https://chatgpt.com/backend-api/codex/responses", vec![("originator", "openbitfun"), ("User-Agent", "OpenBitFun/test"), ("ChatGPT-Account-ID", "current-account")], "authorization"),
+            ("responses", "https://api.x.ai/v1/responses", vec![("User-Agent", "opencode/test")], "authorization"),
+            ("openai", "https://opencode.ai/zen/go/v1/chat/completions", vec![("x-org-id", "current-org"), ("User-Agent", "OpenBitFun/test")], "authorization"),
+            ("anthropic", "https://opencode.ai/zen/v1/messages", vec![("x-org-id", "current-org"), ("User-Agent", "OpenBitFun/test")], "x-api-key"),
+            ("openai", "https://inference-api.nousresearch.com/v1/chat/completions", vec![], "authorization"),
+            ("anthropic", "https://inference-api.nousresearch.com/v1/messages", vec![], "authorization"),
+            ("gemini-code-assist", "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse", vec![("User-Agent", "antigravity/test"), ("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1"), ("Client-Metadata", "ANTIGRAVITY")], "authorization"),
+        ] {
+            let saved = serde_json::json!({
+                "name": "legacy", "model": "saved-model", "format": "anthropic",
+                "base_url": "https://old.invalid", "request_url": "https://old.invalid/messages",
+                "api_key": "old-api-key", "context_window": 128000, "inline_think_in_text": false, "skip_ssl_verify": false,
+                "custom_headers_mode": "replace", "custom_headers": {
+                    "AUTHORIZATION": "Bearer stale", "X-Api-Key": "stale-key",
+                    "x-goog-api-key": "stale-google-key", "Content-Type": "text/plain",
+                    "ANTHROPIC-VERSION": "invalid", "user-agent": "stale-client",
+                    "X-ORG-ID": "stale-org", "chatgpt-account-id": "stale-account",
+                    "x-openai-internal-codex-residency": "stale-residency", "session-id": "stale-session", "X-Trace-Test": "keep"
+                }
+            });
+            let mut config: AIConfig = serde_json::from_value(saved.clone()).unwrap();
+            let required: HashMap<String, String> = headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            let expires = ResolvedCredential {
+                api_key: "current-token".into(), base_url: Some(url.into()), request_url: Some(url.into()),
+                format: Some(format.into()), extra_headers: required.clone(), expires_at: Some(12345),
+            }.apply_to(&mut config);
+            assert_eq!(expires, Some(12345));
+            assert_eq!(config.model, "saved-model");
+            assert_eq!(config.custom_headers_mode.as_deref(), Some("merge"));
+            let client = AIClient::new(config);
+            for method in [reqwest::Method::GET, reqwest::Method::POST] {
+                let builder = client.client.request(method, url);
+                let request = match format {
+                    "anthropic" => anthropic::request::apply_headers(&client, builder, url),
+                    "gemini-code-assist" => gemini::code_assist::apply_headers(&client, builder),
+                    _ => openai::common::apply_headers(&client, builder),
+                }.build().unwrap();
+                let actual = request.headers();
+                assert_eq!(actual.get_all(auth_header).iter().count(), 1, "{url}");
+                assert_eq!(actual[auth_header], if auth_header == "authorization" { "Bearer current-token" } else { "current-token" });
+                assert!(!actual.contains_key(if auth_header == "authorization" { "x-api-key" } else { "authorization" }));
+                assert!(!actual.contains_key("x-goog-api-key"));
+                assert!(!actual.contains_key("session-id"));
+                assert!(!actual.contains_key("x-openai-internal-codex-residency"));
+                assert_eq!(actual.get_all("content-type").iter().count(), 1);
+                assert_eq!(actual["content-type"], "application/json");
+                assert_eq!(actual["x-trace-test"], "keep");
+                for (name, value) in &required {
+                    assert_eq!(actual.get_all(name).iter().count(), 1, "{url}: {name}");
+                    assert_eq!(actual[name], value);
+                }
+            }
+            // Runtime application does not rewrite the persisted legacy settings.
+            let restored: AIConfig = serde_json::from_value(saved).unwrap();
+            assert_eq!(restored.custom_headers_mode.as_deref(), Some("replace"));
+            assert_eq!(restored.api_key, "old-api-key");
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_hermes_anthropic_config_uses_current_chat_route_without_relogin() {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        let _guard = test_lock().lock().await;
+        store::set_store_path_for_test(temp_store_path());
+        let expires = chrono::Utc::now().timestamp() + 3600;
+        let body = URL_SAFE_NO_PAD.encode(
+            serde_json::to_vec(&serde_json::json!({
+                "exp": expires, "scope": "inference:invoke", "sub": "fixture-account"
+            }))
+            .unwrap(),
+        );
+        let token = format!("e30.{body}.fixture");
+        let legacy: StoredCredential = serde_json::from_value(serde_json::json!({
+            "type": "oauth", "access": token, "refresh": "unchanged-refresh", "expires": expires * 1000
+        })).unwrap();
+        store::upsert("hermes", legacy).await.unwrap();
+        let before = store::load_entry_with_revision("hermes")
+            .await
+            .unwrap()
+            .revision;
+        let resolved = resolve_hermes("anthropic/claude-sonnet-5").await.unwrap();
+        assert_eq!(resolved.format.as_deref(), Some("openai"));
+        assert_eq!(
+            resolved.request_url.as_deref(),
+            Some("https://inference-api.nousresearch.com/v1/chat/completions")
+        );
+        assert_eq!(resolved.api_key, token);
+        let after = store::load_entry_with_revision("hermes").await.unwrap();
+        assert_eq!(after.revision, before);
+        let roundtrip: StoredCredential =
+            serde_json::from_value(serde_json::to_value(after.credential.unwrap()).unwrap())
+                .unwrap();
+        assert!(
+            matches!(roundtrip, StoredCredential::Oauth { refresh, .. } if refresh == "unchanged-refresh")
+        );
     }
 
     #[test]

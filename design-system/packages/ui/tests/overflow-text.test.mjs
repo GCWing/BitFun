@@ -18,8 +18,21 @@ test("OverflowText preserves the complete accessible text while exposing overflo
   assert.match(markup, /class="[^" ]+ model-name"/);
   assert.match(markup, /aria-label="Complete model name"/);
   assert.match(markup, /data-overflow="false"/);
-  assert.match(markup, /data-overflow-behavior="fade"/);
-  assert.match(markup, />deepseek-v4-pro-with-a-long-suffix<\/span><\/span>/);
+  assert.match(markup, /data-overflow-behavior="marquee"/);
+  assert.match(markup, />deepseek-v4-pro-with-a-long-suffix<\/span>/);
+  assert.match(markup, /data-openbitfun-part="content"/);
+});
+
+test("OverflowText preserves rich composition and allows explicit static or highlighted text", () => {
+  const rich = createElement("span", null, "Highlighted name");
+  const composed = renderToStaticMarkup(createElement(OverflowText, null, rich));
+  assert.match(composed, /data-overflow-behavior="fade"/);
+  assert.doesNotMatch(composed, /data-overflow-content/);
+  const explicit = renderToStaticMarkup(createElement(OverflowText, { behavior: "marquee" }, rich));
+  assert.match(explicit, /data-overflow-behavior="marquee"/);
+  assert.match(explicit, /data-overflow-content/);
+  const staticText = renderToStaticMarkup(createElement(OverflowText, { behavior: "fade" }, "Static text"));
+  assert.match(staticText, /data-overflow-behavior="fade"/);
 });
 
 test("OverflowText exposes the reusable marquee behavior without changing its accessible text", () => {
@@ -27,12 +40,14 @@ test("OverflowText exposes the reusable marquee behavior without changing its ac
     OverflowText,
     {
       behavior: "marquee",
+      marqueeActive: true,
       "aria-label": "Complete workspace directory",
     },
     "a-very-long-remote-workspace-directory",
   ));
 
   assert.match(markup, /data-overflow-behavior="marquee"/);
+  assert.match(markup, /data-marquee-active="true"/);
   assert.match(markup, /--_overflow-text-marquee-distance:0px/);
   assert.match(markup, /aria-label="Complete workspace directory"/);
   assert.match(markup, />a-very-long-remote-workspace-directory<\/span><\/span>/);
@@ -45,10 +60,11 @@ test("OverflowText measures real clipping for fade and marquee treatments", asyn
   ]);
 
   assert.match(source, /content\.scrollWidth - element\.clientWidth/);
+  assert.match(source, /lines !== undefined\s*&& element\.clientHeight > 0\s*&& element\.scrollHeight > element\.clientHeight/s);
   assert.match(source, /measurementRef\.current/);
   assert.match(
     source,
-    /useIsomorphicLayoutEffect\(\(\) => \{\s*updateOverflow\(\);\s*\}, \[children, updateOverflow\]\);/s,
+    /useIsomorphicLayoutEffect\(\(\) => \{\s*updateOverflow\(\);\s*\}, \[behavior, children, lines, updateOverflow\]\);/s,
   );
   assert.match(source, /new ResizeObserver\(updateOverflow\)/);
   assert.match(source, /resizeObserver\?\.observe\(contentRef\.current\)/);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Icon, ScrollArea } from '@openbitfun/ui';
 import { FolderOpen } from 'lucide-react';
 import type { MiniAppBubbleCustomization } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
@@ -71,7 +71,7 @@ export const MiniAppBubbleWelcome: React.FC<MiniAppBubbleWelcomeProps> = ({
             data-workspace-path={workspacePath}
           >
             <FolderOpen size={13} aria-hidden="true" />
-            <span>{workspaceLabel}</span>
+            <OverflowText>{workspaceLabel}</OverflowText>
           </div>
         )}
 

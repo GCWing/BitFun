@@ -6,6 +6,11 @@ This directory contains the native mobile product surfaces for OpenBitFun:
 - `ios/`: iOS application code and resources.
 - `harmonyos/`: HarmonyOS application code and resources.
 
+The mobile apps are remote controllers: GitHub login and the account device
+directory select a desktop or CLI host that owns configuration and Agent Runtime
+execution. Phones submit tasks and display results; they do not synchronize model
+configuration or execute agents locally.
+
 Each platform directory owns its native UI, lifecycle, permissions, packaging,
 and platform adapters. Product logic and stable contracts should remain in the
 platform-agnostic Rust layers and be exposed to these apps through explicit

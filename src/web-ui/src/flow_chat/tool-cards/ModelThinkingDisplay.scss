@@ -108,7 +108,6 @@
 
   .thinking-label {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
@@ -329,24 +328,20 @@
     transform: scale(0.85);
     transform-origin: top right;
     transition:
-      transform 0.15s ease,
       opacity 0.2s ease;
   }
 
   .code-block-wrapper .copy-button:hover {
     background: transparent !important;
     color: var(--openbitfun-color-content-muted);
-    transform: scale(0.93);
   }
 
   .code-block-wrapper .copy-button:active {
     background: transparent !important;
-    transform: scale(0.88);
   }
 
   .code-block-wrapper .copy-button.copy-success:hover {
     color: var(--openbitfun-color-status-success-content);
-    transform: scale(0.93);
   }
 
   .table-wrapper {

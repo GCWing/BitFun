@@ -117,7 +117,9 @@ export interface AppLoggingConfig {
 }
 
 export interface AppFlowChatConfig {
+  default_mode_strategy?: 'follow_last' | 'fixed' | null;
   default_mode_id?: string | null;
+  last_mode_id?: string | null;
   show_permission_mode_control?: boolean;
 }
 
@@ -402,12 +404,16 @@ export interface SkillInfo {
   name: string;
   description: string;
   path: string;
+  /** Relative Markdown entry; legacy directory bundles use SKILL.md. */
+  entryFile?: string;
   level: SkillLevel;
   sourceSlot: string;
   /** Provider-neutral ecosystem identity shared by related discovery slots. */
   sourceId?: string;
   /** Stable product name supplied by the skill source definition. */
   sourceLabel?: string;
+  /** Repository recorded by the installer; absent for legacy or untracked skills. */
+  installationSource?: string | null;
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;
@@ -445,6 +451,19 @@ export interface ModeSkillInfo extends SkillInfo {
 
 export interface GlobalSkillSettings {
   globallyDisabledUserSkillKeys: string[];
+}
+
+export interface SkillScanDiagnostic {
+  path: string;
+  sourceId: string;
+  message: string;
+}
+
+export interface SkillScanReport<T = SkillInfo> {
+  skills: T[];
+  diagnostics: SkillScanDiagnostic[];
+  /** False when an older host returns the legacy array instead of diagnostics. */
+  diagnosticsAvailable: boolean;
 }
 
 export interface SkillMarketItem {
@@ -606,7 +625,9 @@ export type ConfigPath =
   | 'app.auto_update'
   | 'app.telemetry'
   | 'app.flow_chat'
+  | 'app.flow_chat.default_mode_strategy'
   | 'app.flow_chat.default_mode_id'
+  | 'app.flow_chat.last_mode_id'
   | 'app.flow_chat.show_permission_mode_control'
   | 'app.sidebar'
   | 'app.sidebar.width'

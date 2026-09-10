@@ -18,7 +18,7 @@ import { SceneChromeProvider, SceneTopBar } from '../components/SceneTopBar';
 import { SceneViewport } from '../scenes';
 import TerminalActionBridge from '../scenes/terminal/TerminalActionBridge';
 import { useApp } from '../hooks/useApp';
-import { useSceneStore } from '../stores/sceneStore';
+import { selectActiveSceneId, useSceneStore } from '../stores/sceneStore';
 import './WorkspaceBody.scss';
 
 const NAV_DEFAULT_WIDTH = 300;
@@ -49,7 +49,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
 }) => {
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   const { state, toggleLeftPanel } = useApp();
-  const activeSceneId = useSceneStore(sceneState => sceneState.activeTabId);
+  const activeSceneId = useSceneStore(selectActiveSceneId);
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
   const navAreaRef = useRef<HTMLDivElement>(null);

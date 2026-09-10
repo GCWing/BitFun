@@ -1,9 +1,20 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { Card, CardBody, CardHeader, Empty, Pill, Tabs } from './adapters';
+import { Button, Card, CardBody, CardHeader, Empty, Pill, Tabs } from './adapters';
 
 describe('OpenBitFun Canvas structural adapters', () => {
+  it('preserves primary action emphasis, disabled state, and existing secondary choices', () => {
+    const primary = renderToStaticMarkup(<Button variant="primary" size="small" disabled>Save</Button>);
+    expect(primary).toContain('data-openbitfun-variant="primary"');
+    expect(primary).toContain('data-size="sm"');
+    expect(primary).toContain('disabled=""');
+    for (const variant of ['secondary', 'ghost'] as const) {
+      expect(renderToStaticMarkup(<Button variant={variant}>More</Button>))
+        .toContain('data-openbitfun-variant="outline"');
+    }
+  });
+
   it('composes cards through the design-system anatomy', () => {
     const markup = renderToStaticMarkup(
       <Card variant="elevated" padding="medium">

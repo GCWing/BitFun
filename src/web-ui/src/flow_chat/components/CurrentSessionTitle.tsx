@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { flowChatStore } from '../store/FlowChatStore';
 import { FlowChatState, Session } from '../types/flow-chat';
-import { Tooltip, Icon } from '@openbitfun/ui';
+import { OverflowText, Tooltip, Icon } from '@openbitfun/ui';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 import './CurrentSessionTitle.scss';
@@ -53,7 +53,7 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
 
   return (
     <div data-openbitfun-component="current-session-title" data-openbitfun-part="root" className="openbitfun-current-session-title">
-      <span data-openbitfun-component="current-session-title" data-openbitfun-part="title" className="openbitfun-current-session-title__text">{title}</span>
+      <OverflowText data-openbitfun-component="current-session-title" data-openbitfun-part="title" className="openbitfun-current-session-title__text">{title}</OverflowText>
       <Tooltip content={newSessionLabel} placement="bottom">
         <button
           data-openbitfun-component="current-session-title"

@@ -26,7 +26,7 @@ describe('VoiceInputConfig status presentation', () => {
     expect(source).not.toContain('leadingIcon={<HardDrive');
     expect(source).not.toContain('handleDownload');
     expect(source).not.toContain('status.downloadAndEnable');
-    expect(source).toContain("variant={status === 'setup' ? 'fill' : 'outline'}");
+    expect(source).toContain("variant={status === 'setup' ? 'primary' : 'outline'}");
     expect(source).toMatch(/case 'setup':\s*return 'status\.downloadModel'/);
     expect(plainStateRule).toContain('grid-template-columns: minmax(0, 1fr) auto');
     expect(plainStateRule).toContain('padding: 0');

@@ -47,7 +47,7 @@ describe('SessionsSection layout styles', () => {
     expect(stylesheet).toContain('margin-top: 0;');
   });
 
-  it('keeps hidden session row actions from reserving title width', () => {
+  it('shares one trailing slot between status and menu without shifting the title', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const inlineItemBlock = extractBlock(stylesheet, '&__inline-item');
     const mainBlock = extractInlineItemBlock(stylesheet, 'main');
@@ -56,19 +56,27 @@ describe('SessionsSection layout styles', () => {
     expect(stylesheet).toContain('&__inline-item-main {\n    flex: 1 1 0;');
     expect(inlineItemBlock).toContain('position: relative;');
     expect(mainBlock).not.toContain('padding-right');
-    expect(stylesheet).toContain('&__inline-item:hover &__inline-item-main');
-    expect(stylesheet).toContain('&__inline-item:focus-within &__inline-item-main');
-    expect(stylesheet).toContain('padding-right: 24px;');
+    const trailingBlock = extractInlineItemBlock(stylesheet, 'trailing');
+    expect(trailingBlock).toContain('display: grid;');
+    expect(trailingBlock).toContain('flex: 0 0 var(--openbitfun-space-5);');
+    const statusBlock = extractInlineItemBlock(stylesheet, 'status');
+    expect(statusBlock).toContain('grid-area: 1 / 1;');
+    expect(statusBlock).not.toContain('margin-inline-end');
+    expect(statusBlock).toContain('.openbitfun-nav-panel__inline-item:hover &');
+    expect(statusBlock).toContain('.openbitfun-nav-panel__inline-item:focus-within &');
+    expect(statusBlock).toContain('.openbitfun-nav-panel__inline-item.is-menu-open &');
+    expect(statusBlock).toContain('visibility: hidden;');
+    expect(stylesheet).not.toContain('padding-right: 24px;');
     expect(actionsBlock).not.toContain('display: none;');
-    expect(actionsBlock).toContain('position: absolute;');
-    expect(actionsBlock).toContain('right: 4px;');
-    expect(actionsBlock).toContain('gap: 4px;');
-    expect(actionsBlock).toContain('visibility: hidden;');
+    expect(actionsBlock).not.toContain('position: absolute;');
+    expect(actionsBlock).toContain('grid-area: 1 / 1;');
+    expect(actionsBlock).not.toContain('visibility: hidden;');
     expect(actionsBlock).toContain('opacity: 0;');
     expect(actionsBlock).toContain('pointer-events: none;');
     expect(actionsBlock).toContain('.openbitfun-nav-panel__inline-item:hover &');
+    expect(actionsBlock).toContain('.openbitfun-nav-panel__inline-item:focus-within &');
     expect(actionsBlock).toContain('&.is-open');
-    expect(actionsBlock).toContain('visibility: visible;');
+    expect(actionsBlock).toContain('opacity: 1;');
   });
 
   it('keeps session menu buttons at the compact row size', () => {
@@ -147,7 +155,8 @@ describe('SessionsSection layout styles', () => {
     // trailing edge, and absorbs overflow so the chip is never ellipsized away.
     expect(labelBlock).toContain('flex: 1 1 auto;');
     expect(labelBlock).toContain('min-width: 0;');
-    expect(labelBlock).toContain('text-overflow: ellipsis;');
+    expect(labelBlock).not.toContain('text-overflow: ellipsis;');
+    expect(source).toMatch(/<OverflowText[^>]*className="openbitfun-nav-panel__inline-toggle-label"/);
     // The chip is decorative; the full sentence stays on the button's aria-label.
     expect(source).toContain('className="openbitfun-nav-panel__inline-toggle-count" aria-hidden');
     expect(source).toContain("aria-label={t('nav.sessions.showMore', {");
@@ -155,7 +164,7 @@ describe('SessionsSection layout styles', () => {
     expect(source).not.toContain('inline-toggle-dots');
   });
 
-  it('keeps child-session badges visible while long titles are ellipsized', () => {
+  it('keeps child-session badges visible outside the title marquee', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const labelBlock = extractInlineItemBlock(stylesheet, 'label');
     const btwBadgeBlock = extractInlineItemBlock(stylesheet, 'btw-badge');
@@ -164,7 +173,8 @@ describe('SessionsSection layout styles', () => {
 
     expect(labelBlock).toContain('flex: 1 1 0;');
     expect(labelBlock).toContain('overflow: hidden;');
-    expect(labelBlock).toContain('text-overflow: ellipsis;');
+    expect(labelBlock).not.toContain('text-overflow: ellipsis;');
+    expect(readSessionsSectionSource()).toMatch(/<OverflowText[^>]*behavior="marquee"[^>]*className="openbitfun-nav-panel__inline-item-label"/);
     expect(btwBadgeBlock).toContain('white-space: nowrap;');
     expect(btwBadgeBlock).toContain('overflow: visible;');
     expect(btwBadgeBlock).toContain('color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent) 62%, var(--openbitfun-color-content-primary));');

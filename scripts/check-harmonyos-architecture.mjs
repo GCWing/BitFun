@@ -144,13 +144,22 @@ const requiredPresentationFiles = [
 ];
 const missingPresentationFiles = requiredPresentationFiles
   .filter((file) => !fs.existsSync(path.join(pagesRoot, file)));
-const localConversationSectionHosts = [
-  path.join(pagesRoot, 'components/AppRootOverlaySurfaces.ets'),
-  path.join(pagesRoot, 'components/WideConversationHost.ets')
+// Phones are remote controllers: check the runtime and both responsive hosts.
+const localControllerOwners = [
+  'runtime/AppRootRuntimeComposition.ets',
+  'runtime/AppRootRuntime.ets',
+  'viewmodel/ConversationRuntime.ets',
+  'viewmodel/SettingsController.ets',
+  'viewmodel/VisibleConversationController.ets',
+  'components/AppRootOverlaySurfaces.ets',
+  'components/WideConversationHost.ets',
+  'components/SettingsSheet.ets',
+  'components/AppSidebar.ets'
 ];
-const hiddenLocalConversationSections = localConversationSectionHosts
-  .filter((file) => !fs.readFileSync(file, 'utf8').includes('showConversationSection: true'))
-  .map(relative);
+const localControllerRuntimeLeaks = localControllerOwners
+  .filter((file) => /GeneralChat(?:Controller|ConfigStore|BootstrapController|CommandController|DraftLifecycleController|ConversationViewModel)|showConversationSection|ModelServiceSettingsPanel|generalPageState\.recentSessions/.test(
+    fs.readFileSync(path.join(pagesRoot, file), 'utf8')))
+  .map((file) => relative(path.join(pagesRoot, file)));
 const chatTimelineSource = fs.readFileSync(path.join(pagesRoot, 'components/ChatTimeline.ets'), 'utf8');
 const chatMessageContentSource = fs.readFileSync(
   path.join(pagesRoot, 'components/ChatMessageContent.ets'),
@@ -405,7 +414,7 @@ const expected = {
   appRootRuntimeStateGetters: [],
   extractedOwnerForwards: [],
   missingPresentationFiles: [],
-  hiddenLocalConversationSections: [],
+  localControllerRuntimeLeaks: [],
   eagerChatTimeline: [],
   missingTimelineReuse: [],
   snapshottedTimelineRepeatItem: [],
@@ -444,7 +453,7 @@ const actual = {
   appRootRuntimeStateGetters,
   extractedOwnerForwards,
   missingPresentationFiles,
-  hiddenLocalConversationSections,
+  localControllerRuntimeLeaks,
   eagerChatTimeline,
   missingTimelineReuse,
   snapshottedTimelineRepeatItem,

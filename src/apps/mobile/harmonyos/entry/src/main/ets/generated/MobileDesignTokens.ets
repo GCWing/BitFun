@@ -99,13 +99,13 @@ export class MobileDesignGeometry {
   static readonly messageBubbleHorizontalPadding: number = 14;
   static readonly messageBubbleVerticalPadding: number = 11;
   static readonly messageBubbleRadius: number = 17;
-  static readonly composerActionSize: number = 44;
+  static readonly composerActionSize: number = 48;
   static readonly composerInputHeight: number = 44;
   static readonly composerExpandedInputHeight: number = 58;
   static readonly composerCollapsedHeight: number = 56;
   static readonly composerExpandedInputRowHeight: number = 60;
-  static readonly composerExpandedActionRowHeight: number = 40;
-  static readonly composerExpandedHeight: number = 108;
+  static readonly composerExpandedActionRowHeight: number = 48;
+  static readonly composerExpandedHeight: number = 120;
   static readonly composerCollapsedRadius: number = 28;
   static readonly composerExpandedRadius: number = 18;
   static readonly composerModelSelectorWidth: number = 330;
@@ -120,7 +120,7 @@ export class MobileDesignGeometry {
   static readonly sheetActionHeight: number = 48;
   static readonly selectionTopRadius: number = 20;
   static readonly selectionRowHeight: number = 64;
-  static readonly selectionCloseSize: number = 32;
+  static readonly selectionCloseSize: number = 48;
   static readonly popoverWidth: number = 292;
   static readonly popoverRadius: number = 16;
   static readonly popoverPadding: number = 12;

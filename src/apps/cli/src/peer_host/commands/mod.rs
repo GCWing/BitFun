@@ -86,6 +86,7 @@ pub(crate) async fn dispatch(
         // Sessions
         "list_persisted_sessions" => session::list_persisted_sessions(state, args).await,
         "list_persisted_sessions_page" => session::list_persisted_sessions_page(state, args).await,
+        "save_session_metadata" => session::save_session_metadata(state, args).await,
         "list_persisted_sessions_count" => {
             session::list_persisted_sessions_count(state, args).await
         }
@@ -228,6 +229,7 @@ pub(crate) const HANDLED_COMMANDS: &[&str] = &[
     "restore_session_with_turns",
     "reveal_external_source_location",
     "rollback_session_to_turn",
+    "save_session_metadata",
     "save_session_turn",
     "save_web_search_credential",
     "search_session_content",

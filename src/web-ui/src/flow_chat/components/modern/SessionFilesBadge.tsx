@@ -7,7 +7,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { FilePlus, SearchCheck, Zap, GitPullRequest } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, IconButton, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
 import { snapshotAPI } from '../../../infrastructure/api';
@@ -915,11 +915,11 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           }}
         >
           <div className="session-files-badge__popover-summary" data-openbitfun-component="session-files-badge" data-openbitfun-part="summary">
-            <span className="session-files-badge__popover-summary-count">
+            <OverflowText className="session-files-badge__popover-summary-count">
               {t('sessionFilesBadge.filesSummaryCount', {
                 count: fileStats.size,
               })}
-            </span>
+            </OverflowText>
             {(totalStats.totalAdditions > 0 || totalStats.totalDeletions > 0) && (
               <span className="session-files-badge__popover-summary-stats">
                 {totalStats.totalAdditions > 0 && (
@@ -937,7 +937,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           </div>
           <div className="session-files-badge__list" data-openbitfun-component="session-files-badge" data-openbitfun-part="list">
             {Array.from(fileStats.values()).map((stat) => (
-              <div
+              <div data-overflow-trigger
                 key={stat.filePath}
                 className={`session-files-badge__file-item session-files-badge__file-item--${stat.operationType} ${
                   stat.error ? 'session-files-badge__file-item--error' : ''
@@ -953,7 +953,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
                   {getOperationIcon(stat.operationType)}
                 </span>
 
-                <span className="session-files-badge__file-name">{stat.fileName}</span>
+                <OverflowText className="session-files-badge__file-name">{stat.fileName}</OverflowText>
 
                 {stat.error ? (
                   <span className="session-files-badge__file-error" data-openbitfun-component="session-files-badge" data-openbitfun-part="fileError">{stat.error}</span>

@@ -29,7 +29,7 @@ use crate::db::{
 };
 use crate::page_data::RelayPageHost;
 use crate::routes::api::AppState;
-use crate::routes::sync::{extract_bearer_token, validate_auth, validate_token, AuthUser};
+use crate::routes::auth::{extract_bearer_token, validate_auth, validate_token, AuthUser};
 use crate::WebAssetStore;
 
 pub const MAX_PAGES_PER_USER: i64 = 50;
@@ -512,11 +512,7 @@ fn upload_request_matches_session_intent(
 }
 
 fn require_db(state: &AppState) -> Result<&crate::db::DbPool, StatusCode> {
-    state
-        .db
-        .as_ref()
-        .map(|db| db.as_ref())
-        .ok_or(StatusCode::NOT_IMPLEMENTED)
+    Ok(state.db.as_ref())
 }
 
 pub fn pages_router() -> Router<AppState> {
@@ -781,8 +777,7 @@ async fn create_open_ticket(
 
 #[derive(Deserialize)]
 struct PageBrowserLoginRequest {
-    username: String,
-    password_hash: String,
+    access_token: String,
     #[serde(default)]
     return_to: Option<String>,
     #[serde(default)]
@@ -1003,6 +998,7 @@ async fn page_browser_login(
     State(state): State<AppState>,
     connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
+    verifier: Option<Extension<crate::identity::IdentityVerifier>>,
     Json(body): Json<PageBrowserLoginRequest>,
 ) -> Response {
     let db = match require_db(&state) {
@@ -1032,13 +1028,12 @@ async fn page_browser_login(
             })
             .into_response();
         }
-        let viewer = match crate::routes::auth::verify_password_hash_credentials(
+        let viewer = match crate::routes::auth::verify_identity_credentials(
             &state,
             connect_info.map(|Extension(ConnectInfo(addr))| addr),
             &headers,
-            &body.username,
-            &body.password_hash,
-            None,
+            &body.access_token,
+            verifier.as_ref().map(|v| &v.0),
         )
         .await
         {
@@ -1122,13 +1117,12 @@ async fn page_browser_login(
             .into_response();
     }
 
-    let viewer = match crate::routes::auth::verify_password_hash_credentials(
+    let viewer = match crate::routes::auth::verify_identity_credentials(
         &state,
         connect_info.map(|Extension(ConnectInfo(addr))| addr),
         &headers,
-        &body.username,
-        &body.password_hash,
-        None,
+        &body.access_token,
+        verifier.as_ref().map(|v| &v.0),
     )
     .await
     {
@@ -1326,25 +1320,14 @@ fn page_login_form_response(
     <div class="mark" aria-hidden="true">B</div>
     <p class="eyebrow">OPENBITFUN PAGE</p>
     <h1>登录后访问</h1>
-    <p>此页面受访问权限保护，请使用 OpenBitFun 账号登录。</p>
-    <p class="secondary">This Page is protected. Sign in with your OpenBitFun account.</p>
+    <p>此页面受访问权限保护，请使用 GitHub 账号登录。</p>
+    <p class="secondary">This Page is protected. Sign in with your GitHub account.</p>
     <p class="access">{access_description}</p>
     <form data-page-login-form{login_state_attribute}>
-      <label class="field">
-        <span>用户名 <small>Username</small></span>
-        <input data-page-login-username name="username" type="text" autocomplete="username" maxlength="128" required autofocus>
-      </label>
-      <label class="field">
-        <span>密码 <small>Password</small></span>
-        <span class="password">
-          <input data-page-login-password name="password" type="password" autocomplete="current-password" maxlength="1024" required>
-          <button data-page-login-toggle-password class="toggle" type="button" aria-pressed="false">显示</button>
-        </span>
-      </label>
       <p data-page-login-error class="error" role="alert" hidden></p>
-      <button data-page-login-submit class="submit" type="submit">登录并访问</button>
+      <button data-page-login-submit class="submit" type="submit">使用 GitHub 登录 · Sign in with GitHub</button>
     </form>
-    <p class="note">密码只在此浏览器中用于 Argon2id 派生，不会以明文发送给 Relay。</p>
+    <p class="note">使用 OpenBitFun 统一 GitHub 账号登录。</p>
     <noscript><p class="error">登录需要启用 JavaScript。 JavaScript is required to sign in.</p></noscript>
   </main>
   <script src="{client_script}" defer></script>
@@ -2553,7 +2536,7 @@ async fn serve_with_worker(
         .try_acquire(&page.user_id, &page.slug)
         .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     let page_data = state.page_data.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    let db = state.db.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.clone();
     let asset_store = Arc::clone(&state.asset_store);
     let asset_store_fallback = Arc::clone(&state.asset_store);
     let asset_key = asset_key.to_string();
@@ -2772,9 +2755,7 @@ async fn maybe_migrate_legacy_page_locked(
     slug: &str,
     expected_generation: &str,
 ) {
-    let Some(db) = state.db.as_ref() else {
-        return;
-    };
+    let db = state.db.as_ref();
     let Ok(Some(page)) = PageRow::get(db, user_id, slug).await else {
         return;
     };
@@ -3024,7 +3005,6 @@ fn mime_from_path(p: &str) -> &'static str {
 mod tests {
     use super::*;
     use crate::db::{connect, page_kv, AuthToken, DeviceRow, PageRow, UserRow};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::to_bytes;
     use axum::http::{Request, StatusCode};
@@ -3087,34 +3067,56 @@ mod tests {
     ) -> (axum::Router, String, String, Arc<crate::db::DbPool>) {
         let pool = connect(":memory:").await.unwrap();
         let pool = Arc::new(pool);
-        UserRow::create(&pool, "u1", "alice", "s", "ks", "{}", "hash", "wmk")
+        UserRow::create(&pool, "101", "alice").await.unwrap();
+        UserRow::create(&pool, "102", "bob").await.unwrap();
+        DeviceRow::upsert(&pool, "d1", "101", "Laptop", None, None)
             .await
             .unwrap();
-        UserRow::create(&pool, "u2", "bob", "s", "ks", "{}", "hash", "wmk")
+        DeviceRow::upsert(&pool, "d2", "102", "Phone", None, None)
             .await
             .unwrap();
-        DeviceRow::upsert(&pool, "d1", "u1", "Laptop", None, None)
-            .await
-            .unwrap();
-        DeviceRow::upsert(&pool, "d2", "u2", "Phone", None, None)
-            .await
-            .unwrap();
-        let tok_alice = AuthToken::create(&pool, "u1", "d1").await.unwrap();
-        let tok_bob = AuthToken::create(&pool, "u2", "d2").await.unwrap();
+        let tok_alice = AuthToken::create(&pool, "101", "d1").await.unwrap();
+        let tok_bob = AuthToken::create(&pool, "102", "d2").await.unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let page_data_dir = tmp.path().join("page-data");
         std::mem::forget(tmp);
 
         let app = crate::build_relay_router_with_page_data_origins_and_page_auth(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(Arc::clone(&pool)),
+            Arc::clone(&pool),
             "test",
             Some(page_data_dir),
             Vec::new(),
             page_browser_auth,
         );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let authority_url = format!("http://{}/me", listener.local_addr().unwrap());
+        let authority = axum::Router::new().route(
+            "/me",
+            axum::routing::get(|headers: HeaderMap| async move {
+                match headers.get("authorization").and_then(|h| h.to_str().ok()) {
+                    Some("Bearer alice") => (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"user":{"githubId":101,"login":"alice"}})),
+                    ),
+                    Some("Bearer bob") => (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"user":{"githubId":102,"login":"bob"}})),
+                    ),
+                    _ => (
+                        StatusCode::UNAUTHORIZED,
+                        Json(serde_json::json!({"error":"expired"})),
+                    ),
+                }
+            }),
+        );
+        tokio::spawn(async move {
+            axum::serve(listener, authority).await.unwrap();
+        });
+        let app = app.layer(Extension(
+            crate::identity::IdentityVerifier::with_url(&authority_url).unwrap(),
+        ));
         (app, tok_alice.token, tok_bob.token, pool)
     }
 
@@ -4014,11 +4016,11 @@ mod tests {
     #[tokio::test]
     async fn expired_session_pruning_waits_for_the_target_page_lock() {
         let manager = Arc::new(PageUploadManager::new());
-        let key = page_upload_session_key("u1", "locked");
+        let key = page_upload_session_key("101", "locked");
         manager.sessions.insert(
             key.clone(),
             PageUploadSession {
-                user_id: "u1".to_string(),
+                user_id: "101".to_string(),
                 upload_id: Some("a".repeat(32)),
                 draft_key: "pages/u1/locked/draft/id".to_string(),
                 manifest: HashMap::new(),
@@ -4452,7 +4454,7 @@ mod tests {
         });
         let mut observed_start = false;
         for _ in 0..200 {
-            if page_kv::get(&pool, "u1", "shared-read", "hold-started")
+            if page_kv::get(&pool, "101", "shared-read", "hold-started")
                 .await
                 .unwrap()
                 .as_deref()
@@ -4539,7 +4541,7 @@ mod tests {
         });
         let mut observed_start = false;
         for _ in 0..200 {
-            if page_kv::get(&pool, "u1", "delete-running", "started")
+            if page_kv::get(&pool, "101", "delete-running", "started")
                 .await
                 .unwrap()
                 .as_deref()
@@ -4578,11 +4580,11 @@ mod tests {
         );
         assert_eq!(worker_request.await.unwrap().status(), StatusCode::OK);
         assert_eq!(deletion.await.unwrap().status(), StatusCode::OK);
-        assert!(PageRow::get(&pool, "u1", "delete-running")
+        assert!(PageRow::get(&pool, "101", "delete-running")
             .await
             .unwrap()
             .is_none());
-        assert!(page_kv::get(&pool, "u1", "delete-running", "late")
+        assert!(page_kv::get(&pool, "101", "delete-running", "late")
             .await
             .unwrap()
             .is_none());
@@ -4620,8 +4622,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": username,
-                            "password_hash": "hash",
+                            "access_token": username,
                             "return_to": return_to,
                         })
                         .to_string(),
@@ -4678,7 +4679,7 @@ mod tests {
             .unwrap();
         let login_html = String::from_utf8_lossy(&body);
         assert!(login_html.contains("登录后访问"));
-        assert!(login_html.contains("data-page-login-username"));
+        assert!(login_html.contains("GitHub"));
         assert_eq!(
             get_page(&app, "/p/alice/priv", Some(&bob)).await,
             StatusCode::NOT_FOUND
@@ -4859,8 +4860,7 @@ mod tests {
         assert!(login_page.headers().get(header::SET_COOKIE).is_none());
         let body = to_bytes(login_page.into_body(), usize::MAX).await.unwrap();
         let html = String::from_utf8_lossy(&body);
-        assert!(html.contains("data-page-login-username"));
-        assert!(html.contains("data-page-login-password"));
+        assert!(html.contains("GitHub"));
         assert!(html.contains("/api/page-auth/client.js"));
 
         let script = app
@@ -4888,8 +4888,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "alice",
-                            "password_hash": "wrong",
+                            "access_token": "invalid",
                             "return_to": "/p/alice/private-open",
                         })
                         .to_string(),
@@ -4910,8 +4909,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "bob",
-                            "password_hash": "hash",
+                            "access_token": "bob",
                             "return_to": "/p/alice/private-open",
                         })
                         .to_string(),
@@ -4933,8 +4931,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "alice",
-                            "password_hash": "hash",
+                            "access_token": "alice",
                             "return_to": "/p/alice/private-open",
                             "path_prefix": "/relay",
                         })
@@ -5009,8 +5006,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "bob",
-                            "password_hash": "hash",
+                            "access_token": "bob",
                             "return_to": "/p/alice/relay-open",
                         })
                         .to_string(),
@@ -5051,8 +5047,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "alice",
-                            "password_hash": "hash",
+                            "access_token": "alice",
                             "return_to": "https://attacker.invalid/",
                         })
                         .to_string(),
@@ -5174,7 +5169,7 @@ mod tests {
         assert_eq!(sign_in.status(), StatusCode::OK);
         let body = to_bytes(sign_in.into_body(), usize::MAX).await.unwrap();
         let html = String::from_utf8_lossy(&body);
-        assert!(html.contains("data-page-login-username"));
+        assert!(html.contains("GitHub"));
         assert!(html.contains(&format!(r#"data-page-login-state="{state}""#)));
         assert!(html.contains(r#"src="./client.js""#));
 
@@ -5188,8 +5183,7 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(axum::body::Body::from(
                         serde_json::json!({
-                            "username": "alice",
-                            "password_hash": "hash",
+                            "access_token": "alice",
                             "state": state,
                         })
                         .to_string(),
@@ -5313,7 +5307,7 @@ mod tests {
         let manager = PageAccessManager::new();
         let grant = manager
             .issue_browser_grant(
-                "u1".into(),
+                "101".into(),
                 "viewer-1".into(),
                 "site".into(),
                 "generation-one".into(),
@@ -5325,14 +5319,14 @@ mod tests {
             header::COOKIE,
             HeaderValue::from_str(&format!("{PAGE_ACCESS_COOKIE}={grant}")).unwrap(),
         );
-        assert!(manager.authorizes_page(&headers, "u1", "site", "generation-one", None,));
-        assert!(!manager.authorizes_page(&headers, "u1", "site", "generation-two", None,));
+        assert!(manager.authorizes_page(&headers, "101", "site", "generation-one", None,));
+        assert!(!manager.authorizes_page(&headers, "101", "site", "generation-two", None,));
 
         let bounded = PageAccessManager::new();
         for index in 0..MAX_PAGE_BROWSER_GRANTS_PER_USER {
             bounded
                 .issue_browser_grant(
-                    "u1".into(),
+                    "101".into(),
                     "viewer-1".into(),
                     format!("site-{index}"),
                     "generation".into(),
@@ -5343,7 +5337,7 @@ mod tests {
         assert_eq!(
             bounded
                 .issue_browser_grant(
-                    "u1".into(),
+                    "101".into(),
                     "viewer-1".into(),
                     "overflow".into(),
                     "generation".into(),
@@ -5354,7 +5348,7 @@ mod tests {
         );
         assert!(bounded
             .issue_browser_grant(
-                "u1".into(),
+                "101".into(),
                 "viewer-2".into(),
                 "other".into(),
                 "generation".into(),

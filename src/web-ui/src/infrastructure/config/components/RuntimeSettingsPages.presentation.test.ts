@@ -10,6 +10,20 @@ function readSource(relativePath: string): string {
 }
 
 describe('Runtime settings information architecture', () => {
+  it('keeps concurrency input limits aligned with the host option schema', () => {
+    const source = readSource('./RuntimeSettingsPages.tsx');
+    const registry = readSource('../../../../../../src/crates/contracts/product-domains/src/product_control_owner_registry.rs');
+    for (const [option, constant] of [
+      ['subagent-max-concurrency', 'SUBAGENT_MAX_CONCURRENCY_LIMIT'],
+      ['swarm-max-concurrency', 'SWARM_MAX_CONCURRENCY_LIMIT'],
+    ]) {
+      const maximum = registry.match(new RegExp(`"${option}",\\s*integer_range\\(1\\.0, (\\d+)\\.0\\)`))?.[1];
+      expect(maximum).toBeDefined();
+      expect(source).toContain(`const ${constant} = ${maximum};`);
+      expect(source).toContain(`max={${constant}}`);
+    }
+  });
+
   it('keeps execution and permissions unified and stacks browser and desktop control in one owner', () => {
     const source = readSource('./RuntimeSettingsPages.tsx');
     const appearance = readSource('./RuntimeSettingsPages.appearance.ts');

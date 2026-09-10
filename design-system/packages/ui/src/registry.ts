@@ -27,6 +27,7 @@ import { numberInputMeta } from "./components/NumberInput/NumberInput.meta";
 import { numberBadgeMeta } from "./components/NumberBadge/NumberBadge.meta";
 import { pageHeaderMeta } from "./components/PageHeader/PageHeader.meta";
 import { radioMeta } from "./components/Radio/Radio.meta";
+import { rollingTextMeta } from "./components/RollingText/RollingText.meta";
 import { scrollAreaMeta } from "./components/ScrollArea/ScrollArea.meta";
 import { searchFieldMeta } from "./components/SearchField/SearchField.meta";
 import { segmentedControlMeta } from "./components/SegmentedControl/SegmentedControl.meta";
@@ -176,6 +177,7 @@ export const componentRegistry = [
   prominentToolCardMeta,
   readFileToolCardMeta,
   reviewSummaryToolCardMeta,
+  rollingTextMeta,
   runCodeToolCardMeta,
   scrollAreaMeta,
   searchFieldMeta,

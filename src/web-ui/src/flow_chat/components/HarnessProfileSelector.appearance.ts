@@ -18,7 +18,7 @@ export const harnessProfileSelectorAppearanceDescriptor: AppearanceSurfaceDescri
     {
       id: 'profile',
       attribute: 'data-openbitfun-profile',
-      values: ['minimal', 'balanced', 'ultimate', 'creative', 'other'],
+      values: ['Minimal', 'Standard', 'Ultimate', 'Creative', 'other'],
     },
   ],
   states: [

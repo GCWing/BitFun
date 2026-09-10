@@ -299,6 +299,8 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
       item.source.key.providerId === source.key.providerId
       && item.source.key.sourceId === source.key.sourceId
     ))) ?? [];
+  const discoveredSources = importSnapshot?.catalog.sources
+    .filter((source) => !IMPORTABLE_HOOK_ECOSYSTEMS.has(source.ecosystemId)) ?? [];
   const corruptDiagnostics = importSnapshot?.diagnostics.filter((diagnostic) => (
     diagnostic.code.startsWith('external_hook.import_store_corrupt.')
   )) ?? [];
@@ -367,6 +369,40 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             />
           </ConfigPageRow>
         </ConfigPageSection>
+
+        {importSnapshot && !remoteWorkspace ? (
+          <ConfigPageSection title={t('discovery.title')} description={t('discovery.description')}>
+            {discoveredSources.map((source) => {
+              const entries = importSnapshot.catalog.entries.filter((entry) => (
+                entry.source.providerId === source.key.providerId && entry.source.sourceId === source.key.sourceId
+              ));
+              const provider = importSnapshot.catalog.providers.find((item) => item.providerId === source.key.providerId);
+              return (
+                <ConfigPageRow
+                  key={`${source.key.providerId}:${source.key.sourceId}`}
+                  label={provider?.displayName ?? source.ecosystemId}
+                  description={[
+                    source.locationHint,
+                    ...entries.map((entry) => `${entry.nativeEvent} · ${entry.nativeActivation === 'disabled'
+                      ? t('discovery.disabled') : entry.nativeActivation === 'unsupported'
+                        ? t('discovery.unsupported') : entry.projectionStatus === 'opaque'
+                          ? t('discovery.opaque') : t('discovery.nativeOnly')}`),
+                    ...(source.diagnostics ?? []).map((diagnostic) => diagnostic.message),
+                  ].join('\n')}
+                  multiline
+                >
+                  <span>{t('discovery.readOnly')}</span>
+                </ConfigPageRow>
+              );
+            })}
+            {importSnapshot.catalog.diagnostics.map((diagnostic, index) => (
+              <ConfigPageRow key={`${diagnostic.code}:${index}`} label={diagnostic.message} multiline>{null}</ConfigPageRow>
+            ))}
+            {discoveredSources.length === 0 && importSnapshot.catalog.diagnostics.length === 0 ? (
+              <ConfigPageRow label={importSnapshot.catalog.discoveryPending ? t('discovery.loading') : t('discovery.empty')} multiline>{null}</ConfigPageRow>
+            ) : null}
+          </ConfigPageSection>
+        ) : null}
 
         <ConfigPageSection title={t('locations.title')} description={t('locations.description')}>
           <ConfigPageRow
@@ -578,7 +614,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               </p>
             ))}
             <Button
-              variant="outline"
+              variant="fill"
               disabled={busyKey === 'apply'}
               onClick={() => {
                 setReviewPlan(null);
@@ -587,7 +623,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             >
               {t('imports.cancel')}
             </Button>
-            <Button variant="fill"
+            <Button variant="primary"
               loading={busyKey === 'apply'}
               disabled={reviewPlan.handlers.length === 0}
               onClick={() => void applyReviewedPlan()}

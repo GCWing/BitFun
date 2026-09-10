@@ -117,7 +117,7 @@
     "account": {
       "menuLabel": "GitHub account @{{login}}",
       "githubAccount": "GitHub market account",
-      "dialogTitle": "Sign in to OpenBitFun Market",
+      "dialogTitle": "Sign in with GitHub",
       "dialogHeading": "Continue with GitHub",
       "dialogDescription": "MiniApp Market and Skin Market share this account. Authorization opens in your browser, while credentials stay in the desktop system vault.",
       "waiting": "Finish authorization in the browser. OpenBitFun will update automatically.",
@@ -163,7 +163,7 @@
       "developer": "Developer",
       "productivity": "Productivity",
       "data": "Data",
-      "creative": "Creative",
+      "creative": "$t(shared:agents.Creative)",
       "education": "Education",
       "utilities": "Utilities",
       "entertainment": "Entertainment",

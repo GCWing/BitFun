@@ -122,10 +122,6 @@
       color: var(--openbitfun-color-content-primary);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-
     &:disabled {
       opacity: 0.3;
       cursor: default;
@@ -239,7 +235,6 @@
     max-width: 300px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
     
   }
 
@@ -279,7 +274,6 @@
     flex: 1;
     font-size: var(--openbitfun-type-label-md-font-size);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 
@@ -300,7 +294,6 @@
   &__commit-author {
     max-width: 120px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

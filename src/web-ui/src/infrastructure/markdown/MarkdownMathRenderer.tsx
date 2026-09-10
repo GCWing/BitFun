@@ -2,6 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkAutolinkBoundaries } from './remarkAutolinkBoundaries';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -30,7 +31,7 @@ export const MarkdownMathRenderer: React.FC<MarkdownMathRendererProps> = ({
 }) => (
   <div data-openbitfun-component="markdown" data-openbitfun-part="math">
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkBoundaries, remarkAutolinkComputerFileLinks]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], [rehypeSourceRange, sourceRange], rehypeKatex]}
       urlTransform={urlTransform}
       components={components}

@@ -2,6 +2,8 @@
 
 import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
 
+const agentRuntimeDefinitionContractModules = new Set(['custom_agent', 'prompt', 'skills']);
+
 export const requiredContentRules = [
   {
     path: 'src/web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts',
@@ -973,29 +975,29 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/file_read_state.rs',
+    path: 'src/crates/execution/agent-runtime/src/review_read_receipt.rs',
     reason:
-      'agent-runtime must own provider-neutral file-read state facts and session-scoped in-memory store',
+      'agent-runtime must own provider-neutral code-review read receipts and their session-scoped in-memory store',
     patterns: [
       {
-        regex: /\bpub struct FileReadState\b/,
-        message: 'missing agent-runtime file-read state DTO',
+        regex: /\bpub struct FileRevision\b/,
+        message: 'missing agent-runtime file revision DTO',
       },
       {
-        regex: /\bpub fn is_full_file_read\b/,
-        message: 'missing agent-runtime file-read completeness policy',
+        regex: /\bpub struct ReviewReadCoverage\b/,
+        message: 'missing agent-runtime review read coverage DTO',
       },
       {
-        regex: /\bpub struct FileReadStateStore\b/,
-        message: 'missing agent-runtime file-read state store',
+        regex: /\bpub struct ReviewReadReceiptStore\b/,
+        message: 'missing agent-runtime review read receipt store',
       },
       {
-        regex: /\bfile_read_state_accepts_nonempty_whole_file\b/,
-        message: 'missing agent-runtime file-read completeness regression',
+        regex: /\breview_read_receipt_store_scopes_entries_by_session\b/,
+        message: 'missing review read receipt session scoping regression',
       },
       {
-        regex: /\bfile_read_state_store_scopes_entries_by_session\b/,
-        message: 'missing agent-runtime file-read state session scoping regression',
+        regex: /\breview_read_receipt_covers_only_previously_returned_lines\b/,
+        message: 'missing review read receipt coverage regression',
       },
     ],
   },
@@ -1504,12 +1506,12 @@ export const requiredContentRules = [
       'agent-runtime must own shared mode config profile facts that are runtime-visible and product-neutral',
     patterns: [
       {
-        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
-        message: 'missing shared coding-mode prompt template fact',
+        regex: /\bpub const STANDARD_HARNESS_PROMPT_TEMPLATE\b/,
+        message: 'missing Standard Harness prompt template fact',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
-        message: 'missing shared coding-mode config profile id',
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_ID\b/,
+        message: 'missing Standard Harness config profile id',
       },
       {
         regex: /\bpub fn resolve_mode_config_profile_id\b/,
@@ -1524,8 +1526,8 @@ export const requiredContentRules = [
         message: 'missing mode presentation rank',
       },
       {
-        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
-        message: 'missing shared coding-mode user-context policy',
+        regex: /\bpub fn standard_harness_user_context_policy\b/,
+        message: 'missing Standard Harness user-context policy',
       },
       {
         regex: /\bpub enum SubagentListScope\b/,
@@ -1591,7 +1593,7 @@ export const requiredContentRules = [
       },
       {
         regex: /\bshared_coding_modes_resolve_to_the_same_config_profile\b/,
-        message: 'missing shared coding-mode profile regression',
+        message: 'missing Standard Harness profile regression',
       },
       {
         regex:
@@ -2851,14 +2853,17 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/review_read_receipt.rs',
     reason:
-      'core file_read_state path must stay a compatibility facade over agent-runtime',
+      'core review_read_receipt path must stay a compatibility facade over agent-runtime',
     patterns: [
       {
-        regex:
-          /pub use openbitfun_agent_runtime::file_read_state::\{FileReadState, FileReadStateStore\};/,
-        message: 'missing agent-runtime file-read state compatibility re-export',
+        regex: /openbitfun_agent_runtime::review_read_receipt::\{/,
+        message: 'missing agent-runtime review read receipt compatibility re-export',
+      },
+      {
+        regex: /\bReviewReadReceiptStore\b/,
+        message: 'missing review read receipt store compatibility re-export',
       },
     ],
   },
@@ -3106,7 +3111,7 @@ export const requiredContentRules = [
       'core agent mode module must keep old import paths while agent-runtime owns shared mode profile facts',
     patterns: [
       {
-        regex: /pub use openbitfun_agent_runtime::agents::\{[\s\S]*mode_presentation_rank[\s\S]*resolve_mode_config_profile_id[\s\S]*shared_coding_mode_user_context_policy[\s\S]*SHARED_CODING_MODE_PROMPT_TEMPLATE[\s\S]*\};/,
+        regex: /pub use openbitfun_agent_runtime::agents::\{[\s\S]*mode_presentation_rank[\s\S]*resolve_mode_config_profile_id[\s\S]*standard_harness_user_context_policy[\s\S]*STANDARD_HARNESS_PROMPT_TEMPLATE[\s\S]*\};/,
         message: 'missing agent-runtime shared mode profile compatibility re-export',
       },
     ],
@@ -5156,8 +5161,14 @@ export const requiredContentRules = [
       ...agentRuntimeRootPublicModules
         .filter((moduleName) => moduleName !== 'native_hooks')
         .map((moduleName) => ({
-          regex: new RegExp(`#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`),
-          message: `${moduleName} must stay behind the full agent-runtime owner`,
+          regex: new RegExp(
+            agentRuntimeDefinitionContractModules.has(moduleName)
+              ? `#\\[cfg\\(any\\(feature = "agent-runtime", feature = "definition-contracts"\\)\\)\\]\\r?\\npub mod ${moduleName};`
+              : `#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`,
+          ),
+          message: agentRuntimeDefinitionContractModules.has(moduleName)
+            ? `${moduleName} must stay behind the full runtime or definition-contracts owner`
+            : `${moduleName} must stay behind the full agent-runtime owner`,
         })),
     ],
   },
@@ -5618,28 +5629,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn is_file_tool_guidance_message\b/,
         message: 'missing file tool guidance classifier',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/execution/tool-contracts/src/file_read_freshness.rs',
-    reason: 'agent-tools owns pure file-read freshness policy for Read/Edit/Write guardrails',
-    patterns: [
-      {
-        regex: /\bpub struct FileReadFreshnessFacts\b/,
-        message: 'missing file-read freshness facts contract',
-      },
-      {
-        regex: /\bpub fn normalize_tool_file_content\b/,
-        message: 'missing provider-neutral file content normalization helper',
-      },
-      {
-        regex: /\bpub fn file_read_facts_content_matches\b/,
-        message: 'missing file-read content equivalence helper',
-      },
-      {
-        regex: /\bpub fn file_read_facts_are_fresh\b/,
-        message: 'missing file-read freshness policy helper',
       },
     ],
   },
@@ -6265,8 +6254,8 @@ export const requiredContentRules = [
         message: 'missing remote-connect encryption compatibility export',
       },
       {
-        regex: /pub use pairing::\{[\s\S]*\bPairingChallenge\b[\s\S]*\bPairingProtocol\b[\s\S]*\bPairingResponse\b[\s\S]*\bPairingState\b[\s\S]*\bQrPayload\b[\s\S]*\}/,
-        message: 'missing remote-connect pairing compatibility export',
+        regex: /pub use pairing::PairingState/,
+        message: 'missing remote-connect bot pairing state export',
       },
       {
         regex: /\bpub use qr_generator::QrGenerator\b/,
@@ -6666,12 +6655,12 @@ export const requiredContentRules = [
     reason: 'remote-connect owner crate must keep focused behavior contracts',
     patterns: [
       {
-        regex: /\bremote_connect_pairing_primitives_live_in_services_owner\b/,
-        message: 'missing remote-connect pairing/encryption owner contract test',
+        regex: /\brelay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints\b/,
+        message: 'missing authenticated relay invitation owner contract test',
       },
       {
-        regex: /\bremote_connect_qr_and_relay_primitives_live_in_services_owner\b/,
-        message: 'missing remote-connect QR/relay owner contract test',
+        regex: /\bremote_connect_lan_url_builder_lives_in_services_owner\b/,
+        message: 'missing relay endpoint owner contract test',
       },
       {
         regex: /\bremote_connect_command_wire_shape_lives_in_owner_contract\b/,
@@ -6726,8 +6715,8 @@ export const requiredContentRules = [
         message: 'missing remote dialog outcome builder contract test',
       },
       {
-        regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
-        message: 'missing restore failure tolerance test',
+        regex: /\bremote_connect_dialog_runtime_stops_before_prewarm_when_restore_fails\b/,
+        message: 'missing restore failure propagation test',
       },
       {
         regex: /\bremote_chat_history_assembly_preserves_message_shape_and_item_order\b/,
@@ -10097,5 +10086,13 @@ export const requiredContentRules = [
         message: 'appearance market IdentityVerifier must initialize the ring provider first',
       },
     ],
+  },
+  {
+    path: 'src/crates/services/relay-service/src/identity.rs',
+    reason: 'standalone Relay must bind its reviewed ring configuration to the identity client',
+    patterns: [{
+      regex: /let tls = rustls::ClientConfig::builder_with_provider\(Arc::new\(\s*rustls::crypto::ring::default_provider\(\),?\s*\)\)[\s\S]*?\.tls_backend_preconfigured\(tls\)/,
+      message: 'Relay identity verification requires an explicit client-scoped ring config',
+    }],
   },
 ];

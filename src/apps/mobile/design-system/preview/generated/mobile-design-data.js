@@ -273,13 +273,13 @@ export const mobileTokens = {
     "message_bubble_horizontal_padding": 14,
     "message_bubble_vertical_padding": 11,
     "message_bubble_radius": 17,
-    "composer_action_size": 44,
+    "composer_action_size": 48,
     "composer_input_height": 44,
     "composer_expanded_input_height": 58,
     "composer_collapsed_height": 56,
     "composer_expanded_input_row_height": 60,
-    "composer_expanded_action_row_height": 40,
-    "composer_expanded_height": 108,
+    "composer_expanded_action_row_height": 48,
+    "composer_expanded_height": 120,
     "composer_collapsed_radius": 28,
     "composer_expanded_radius": 18,
     "composer_model_selector_width": 330,
@@ -294,7 +294,7 @@ export const mobileTokens = {
     "sheet_action_height": 48,
     "selection_top_radius": 20,
     "selection_row_height": 64,
-    "selection_close_size": 32,
+    "selection_close_size": 48,
     "popover_width": 292,
     "popover_radius": 16,
     "popover_padding": 12,
@@ -416,7 +416,7 @@ export const mobileComponents = {
         "assistant"
       ],
       "tokens": [
-        "body_medium",
+        "body_large",
         "message_bubble_max_width",
         "message_bubble_horizontal_padding",
         "message_bubble_vertical_padding",
@@ -915,6 +915,96 @@ export const mobilePreviewScenarios = {
         "draft": "",
         "placeholder": "等待重新连接",
         "phase": "reconnecting",
+        "streaming": false
+      }
+    },
+    {
+      "id": "narrow-multiline",
+      "title": "Narrow phone with a multiline draft",
+      "description": "Narrow phone with a multiline draft",
+      "appearance": "light",
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "header": {
+        "title": "检查移动端长标题、正文与控制目标的可读性",
+        "subtitle": "远程开发工作站 · OpenBitFun / feature/mobile-reading"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "text": "三端的组件和样式可以保持一致吗？"
+        },
+        {
+          "role": "assistant",
+          "text": "可以。共享视觉契约，三端继续使用原生渲染。"
+        }
+      ],
+      "composer": {
+        "draft": "请检查输入框是否能保留多行中文草稿。\n模型选择后内容应继续保留。\n附件与文本应各自成行。",
+        "placeholder": "向 OpenBitFun 提问",
+        "phase": "connected",
+        "streaming": false
+      }
+    },
+    {
+      "id": "fold-context",
+      "title": "Foldable with long remote context",
+      "description": "Foldable with long remote context",
+      "appearance": "light",
+      "viewport": {
+        "width": 700,
+        "height": 840
+      },
+      "header": {
+        "title": "检查移动端长标题、正文与控制目标的可读性",
+        "subtitle": "远程开发工作站 · OpenBitFun / feature/mobile-reading"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "text": "三端的组件和样式可以保持一致吗？"
+        },
+        {
+          "role": "assistant",
+          "text": "可以。共享视觉契约，三端继续使用原生渲染。"
+        }
+      ],
+      "composer": {
+        "draft": "请保留当前会话与控制目标。",
+        "placeholder": "向 OpenBitFun 提问",
+        "phase": "connected",
+        "streaming": false
+      }
+    },
+    {
+      "id": "long-reading",
+      "title": "Long reading content",
+      "description": "Long reading content",
+      "appearance": "light",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "header": {
+        "title": "检查移动端长标题、正文与控制目标的可读性",
+        "subtitle": "远程开发工作站 · OpenBitFun / feature/mobile-reading"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "text": "三端的组件和样式可以保持一致吗？"
+        },
+        {
+          "role": "assistant",
+          "text": "移动端的阅读层级需要清晰，正文应该舒适地换行，辅助说明保留足够对比度。\n\n当内容变长时，消息区滚动，输入框仍然可以操作。请在系统大字体设置下检查这一场景。"
+        }
+      ],
+      "composer": {
+        "draft": "",
+        "placeholder": "向 OpenBitFun 提问",
+        "phase": "connected",
         "streaming": false
       }
     }

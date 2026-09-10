@@ -12,7 +12,6 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-const MAX_PROJECT_SLUG_LEN: usize = 120;
 /// Storage level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StorageLevel {
@@ -488,30 +487,8 @@ impl PathManager {
             .insert(workspace_path.to_path_buf(), slug.to_string());
     }
 
-    fn build_project_runtime_slug(canonical: &str) -> String {
-        let slug: String = canonical
-            .chars()
-            .map(|ch| {
-                if ch.is_ascii_alphanumeric() {
-                    ch.to_ascii_lowercase()
-                } else {
-                    '-'
-                }
-            })
-            .collect();
-
-        let slug = slug.trim_matches('-');
-        let slug = if slug.is_empty() { "workspace" } else { slug };
-
-        if slug.len() <= MAX_PROJECT_SLUG_LEN {
-            return slug.to_string();
-        }
-
-        let hash = hex::encode(Sha256::digest(canonical.as_bytes()));
-        let suffix = &hash[..12];
-        let max_prefix_len = MAX_PROJECT_SLUG_LEN.saturating_sub(suffix.len() + 1);
-        let prefix = slug[..max_prefix_len].trim_end_matches('-');
-        format!("{}-{}", prefix, suffix)
+    pub(crate) fn build_project_runtime_slug(canonical: &str) -> String {
+        openbitfun_services_core::workspace_identity::build_project_runtime_slug(canonical)
     }
 
     #[cfg(unix)]

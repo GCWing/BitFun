@@ -1,19 +1,9 @@
 package com.openbitfun.mobile.core.feature.connection
 
-/**
- * Where the desktop currently being driven came from.
- *
- * Ports `controlTargetType` in `RemoteControlSettingsSheet.ets`, which is
- * `'none' | 'room' | 'account_device'`. A shell shows it as a badge under the
- * card, so the user can tell a one-off pairing from a device the account owns
- * without opening either screen.
- */
+/** The account directory owns remote device selection. */
 public enum class RemoteControlSource {
     /** Nothing is paired and no account device is selected. */
     NONE,
-
-    /** A room reached through a pairing link, which the desktop showed as a QR code. */
-    QR_PAIRING,
 
     /** A desktop registered to the signed-in account. */
     ACCOUNT_DEVICE,
@@ -48,46 +38,11 @@ public data class RemoteControlSummary public constructor(
 
 /** Ported from the `connectionTitle` / `connectionSource` / `ConnectionAction` trio. */
 public object RemoteControlPresenter {
-    /**
-     * Reduces the two ways this app can be driving a desktop into the one card
-     * that describes it.
-     *
-     * A paired room wins over an account device when both exist. They are
-     * separate stores here — unlike the source, which keeps a single control
-     * target — and a room is the more deliberate of the two: it was pasted or
-     * scanned for this session, while a selected device outlives every sign-in.
-     *
-     * @param pairedRoomLabel the already-truncated room label, or `""`. The full
-     * room id never crosses this seam.
-     * @param accountDeviceName may be blank for a device the relay only knows by
-     * id, in which case the id is what the card can name.
-     * @param accountPhase the selected device store's latest real command/poll
-     * phase; selection alone is not evidence that the device is reachable.
-     */
     public fun summarize(
-        pairingPhase: ConnectionPhase,
-        pairedRoomLabel: String,
         accountDeviceId: String,
         accountDeviceName: String,
         accountPhase: ConnectionPhase,
     ): RemoteControlSummary = when {
-        pairedRoomLabel.isNotBlank() -> RemoteControlSummary(
-            source = RemoteControlSource.QR_PAIRING,
-            desktopName = pairedRoomLabel,
-            phase = pairingPhase,
-            action = when (pairingPhase) {
-                ConnectionPhase.CONNECTED,
-                ConnectionPhase.CONNECTING,
-                ConnectionPhase.RECONNECTING,
-                -> RemoteControlAction.DISCONNECT
-
-                ConnectionPhase.FAILED,
-                ConnectionPhase.DISCONNECTED,
-                ConnectionPhase.IDLE,
-                -> RemoteControlAction.RECONNECT
-            },
-        )
-
         accountDeviceId.isNotBlank() -> RemoteControlSummary(
             source = RemoteControlSource.ACCOUNT_DEVICE,
             desktopName = accountDeviceName.ifBlank { accountDeviceId },

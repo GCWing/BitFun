@@ -40,16 +40,33 @@ describe('workspace session view model', () => {
     expect(normalizeWorkspaceSessionGrouping(undefined)).toBe('grouped');
   });
 
-  it('sorts by update time, status, creation time, and title', () => {
+  it('sorts by execution recency, status, creation time, and title', () => {
     const running = session({ sessionId: 'running', title: 'Zulu', createdAt: 10, updatedAt: 40 });
     const newer = session({ sessionId: 'newer', title: 'Alpha', createdAt: 20, updatedAt: 30 });
     const getTitle = (value: Session) => value.title || '';
     const isRunning = (value: Session) => value.sessionId === 'running';
+    const getActivityTimestamp = (value: Session) => value.sessionId === 'running' ? 40 : 30;
 
-    expect(compareWorkspaceNavSessions(running, newer, 'updated', getTitle, isRunning)).toBeLessThan(0);
+    expect(compareWorkspaceNavSessions(running, newer, 'updated', getTitle, isRunning, getActivityTimestamp)).toBeLessThan(0);
     expect(compareWorkspaceNavSessions(running, newer, 'status', getTitle, isRunning)).toBeLessThan(0);
     expect(compareWorkspaceNavSessions(running, newer, 'created', getTitle, isRunning)).toBeGreaterThan(0);
     expect(compareWorkspaceNavSessions(running, newer, 'name', getTitle, isRunning)).toBeGreaterThan(0);
+  });
+
+  it('does not use mutable timestamps as a fallback or break ties in explicit name and creation order', () => {
+    const left = session({ sessionId: 'a', createdAt: 10, lastActiveAt: 100, updatedAt: 100, lastFinishedAt: 100 });
+    const right = session({ sessionId: 'b', createdAt: 10 });
+    const getTitle = (value: Session) => value.title || '';
+    for (const ordering of ['updated', 'created', 'name'] as const) {
+      expect(compareWorkspaceNavSessions(left, right, ordering, getTitle)).toBeLessThan(0);
+      expect(compareWorkspaceNavSessions(right, left, ordering, getTitle)).toBeGreaterThan(0);
+    }
+    for (const ordering of ['created', 'name'] as const) {
+      expect(compareWorkspaceNavSessions(left, right, ordering, getTitle, () => false,
+        value => value.sessionId === 'b' ? 500 : 10)).toBeLessThan(0);
+    }
+    expect(compareWorkspaceNavSessions(left, session({ sessionId: 'newer', createdAt: 20 }),
+      'updated', getTitle)).toBeGreaterThan(0);
   });
 
   it('derives filter facets from canonical session data', () => {

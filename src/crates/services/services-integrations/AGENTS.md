@@ -24,10 +24,14 @@ slices that are outside pure product logic but still platform-neutral.
   presentation/validation behavior remain outside this crate unless a reviewed
   owner move proves behavior equivalence.
 - Remote-connect platform-neutral primitives belong here: device identity,
-  pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
-  orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
+  account device encryption, authenticated device invitation generation, relay client protocol, dialog/cancel
+  orchestration ports, LAN endpoint helpers, IM bot provider clients,
   provider-private cursor caches, mobile-web relay upload, image-context adapter
   contracts, remote workspace helpers, and command/response assembly.
+- The `remote-persistence` feature is the lightweight persisted-shape owner shared
+  by Remote Connect, remote SSH, and offline migration. Keep it free of network,
+  SSH transport, and runtime orchestration dependencies so owner readers and
+  writers can validate staged data without enabling those heavier families.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `openbitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -40,12 +44,12 @@ slices that are outside pure product logic but still platform-neutral.
   SSH features. Stable workspace path/session identity is owned by
   `services-core::workspace_identity`; `remote_ssh::paths` is only its legacy
   compatibility re-export and must not regain transport-independent logic.
-- One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
+- Retained developer Relay deployment tooling (`remote_ssh/relay_deploy.rs`) stages embedded
   scripts under `~/.openbitfun/relay-deploy/` and clones source to
   `~/.openbitfun/relay-src/` (never `$HOME/openbitfun`). Embeds
   `src/apps/relay-server/mirror.sh` and runs `openbitfun_mirror_init` before apt /
   Docker install / GitHub sync so mainland China hosts use configured mirrors.
-  Invariants: `src/web-ui/src/features/relay-deploy/README.md`. Desktop Tauri
+  Operator guide: `src/apps/relay-server/README.md`. The product wizard is retired. Desktop Tauri
   wrapper: `src/apps/desktop/src/api/relay_deploy_api.rs`.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
@@ -132,13 +136,17 @@ streamable HTTP stay independent. Representative stable entry points are:
 
 ```bash
 cargo check -p openbitfun-services-integrations --no-default-features
+cargo test -p openbitfun-services-integrations --no-default-features --features remote-persistence --lib remote_persistence::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features mcp --test mcp_contracts
+cargo test -p openbitfun-services-integrations --no-default-features --features mcp --test mcp_streamable_http_contracts
 cargo test -p openbitfun-services-integrations --no-default-features --features remote-ssh --test remote_ssh_contracts remote_ssh_disabled_contracts::
 cargo test -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::manager::tests::workspace_
 cargo test -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::wsl::tests::
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::relay_deploy::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib remote_connect::relay_client::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features review-platform --lib review_platform
 pnpm run check:core-boundaries
 ```
 
@@ -149,3 +157,19 @@ On Windows with an initialized WSL distribution, set `OPENBITFUN_TEST_WSL_DISTRO
 and run `cargo test -p openbitfun-services-integrations --no-default-features
 --features remote-ssh-concrete --lib wsl_windows_workspace_transport -- --ignored`
 for binary filesystem/stdio, exit status, cancellation, and saved reconnect.
+
+For SFTP handle ownership and cancellation regressions, run
+`cargo test --locked -p openbitfun-services-integrations --no-default-features
+--features remote-ssh-concrete --lib
+remote_ssh::manager::tests::workspace_sftp::`. These loopback SSH/SFTP tests
+advertise a small handle limit and are included in the existing CI
+`workspace_` filter. To exercise real OpenSSH file IO over loopback SSH, set
+`OPENBITFUN_TEST_SFTP_SERVER` to an installed `sftp-server` executable and run
+the same command with the filter ending in
+`workspace_sftp::openssh_real_files_over_loopback_ssh -- --ignored`.
+
+For the remote Flashgrep distribution gate and retained protocol helpers, use:
+
+```bash
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-ssh,workspace-search --lib remote_ssh::workspace_search::service::tests::
+```

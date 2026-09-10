@@ -8,7 +8,12 @@ use super::types::*;
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::util::errors::*;
 use log::{debug, info, warn};
-use openbitfun_core_types::product_identity;
+use openbitfun_core_types::{
+    installer_config_handoff::{
+        InstallerConfigHandoff, InstallerModelHandoff, INSTALLER_CONFIG_HANDOFF_FILE_NAME,
+    },
+    product_identity,
+};
 use openbitfun_services_core::json_store::JsonFileStore;
 
 use serde::{Deserialize, Serialize};
@@ -27,172 +32,42 @@ fn invalid_config_error(context: &str, result: &ConfigValidationResult) -> OpenB
     OpenBitFunError::validation(format!("{context}: {messages}"))
 }
 
-const MIN_OPENBITFUN_CONFIG_VERSION: (u64, u64, u64) = (1, 0, 0);
-
-fn parse_semver_floor(version: &str) -> Option<(u64, u64, u64)> {
-    let without_build = version.split_once('+').map_or(version, |(value, _)| value);
-    let core = without_build
-        .split_once('-')
-        .map_or(without_build, |(value, _)| value);
-    let mut parts = core.split('.');
-    let parsed = (
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-    );
-    if parts.next().is_some() {
-        return None;
-    }
-    Some(parsed)
-}
-
-pub(crate) fn validate_openbitfun_product_version(
-    persisted_product_id: &str,
-    version: &str,
+pub(crate) fn validate_openbitfun_product_identity(
+    value: &str,
     context: &str,
 ) -> OpenBitFunResult<()> {
-    let expected_product_id = product_identity::product_id();
-    if persisted_product_id != expected_product_id {
-        return Err(OpenBitFunError::validation(format!(
-            "{context} product_id must be '{expected_product_id}', found '{persisted_product_id}'"
-        )));
-    }
-
-    let Some(parsed) = parse_semver_floor(version) else {
-        return Err(OpenBitFunError::validation(format!(
-            "{context} version '{version}' is not a valid OpenBitFun version"
-        )));
-    };
-    // This floor separates product generations, not release-channel precedence.
-    // OpenBitFun 1.0 prereleases write the same product identity and schema.
-    if parsed < MIN_OPENBITFUN_CONFIG_VERSION {
-        return Err(OpenBitFunError::validation(format!(
-            "{context} version '{version}' predates OpenBitFun 1.0.0"
-        )));
-    }
-    Ok(())
+    openbitfun_config_contracts::validate_openbitfun_product_identity(value, context)
+        .map_err(OpenBitFunError::validation)
 }
 
 pub(crate) fn validate_current_config_value(value: &Value, context: &str) -> OpenBitFunResult<()> {
-    let root = value.as_object().ok_or_else(|| {
-        OpenBitFunError::validation(format!("{context} must be a JSON object"))
-    })?;
-    let product_id = root
-        .get("product_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            OpenBitFunError::validation(format!(
-                "{context} is missing required string field 'product_id'"
-            ))
-        })?;
-    let schema_version = root
-        .get("schema_version")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| {
-            OpenBitFunError::validation(format!(
-                "{context} is missing required integer field 'schema_version'"
-            ))
-        })?;
-    if schema_version != u64::from(CURRENT_CONFIG_SCHEMA_VERSION) {
-        return Err(OpenBitFunError::validation(format!(
-            "{context} schema_version must be {CURRENT_CONFIG_SCHEMA_VERSION}, found {schema_version}"
-        )));
-    }
-    let version = root
-        .get("version")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            OpenBitFunError::validation(format!(
-                "{context} is missing required string field 'version'"
-            ))
-        })?;
-    if !root.contains_key("last_modified") {
-        return Err(OpenBitFunError::validation(format!(
-            "{context} is missing required field 'last_modified'"
-        )));
-    }
-    validate_openbitfun_product_version(product_id, version, context)?;
-    reject_retired_config_fields(root, context)
+    openbitfun_config_contracts::validate_current_config_value(value, context)
+        .map_err(OpenBitFunError::validation)
 }
 
-fn retired_config_field(context: &str, path: &str) -> OpenBitFunError {
-    OpenBitFunError::validation(format!(
-        "{context} contains retired pre-OpenBitFun field '{path}'; use the explicit data migration tool instead"
-    ))
-}
+const INSTALLER_MODEL_ID: &str = "installer:default";
+const INSTALLER_MODEL_CONTEXT_WINDOW: u32 = 200_000;
 
-fn reject_retired_config_fields(
-    root: &serde_json::Map<String, Value>,
-    context: &str,
-) -> OpenBitFunResult<()> {
-    if let Some(app) = root.get("app").and_then(Value::as_object) {
-        for field in ["session", "session_config"] {
-            if app.contains_key(field) {
-                return Err(retired_config_field(context, &format!("app.{field}")));
-            }
-        }
-        if app
-            .get("ai_experience")
-            .and_then(Value::as_object)
-            .is_some_and(|ai_experience| {
-                ai_experience.contains_key("agent_companion_display_mode")
-            })
-        {
-            return Err(retired_config_field(
-                context,
-                "app.ai_experience.agent_companion_display_mode",
-            ));
-        }
+fn model_from_installer_handoff(model: InstallerModelHandoff) -> AIModelConfig {
+    AIModelConfig {
+        id: INSTALLER_MODEL_ID.to_string(),
+        name: model.name,
+        provider: model.provider,
+        model_name: model.model_name,
+        base_url: model.base_url,
+        request_url: Some(model.request_url),
+        api_key: model.api_key,
+        context_window: Some(INSTALLER_MODEL_CONTEXT_WINDOW),
+        enabled: true,
+        category: ModelCategory::GeneralChat,
+        capabilities: vec![ModelCapability::TextChat, ModelCapability::FunctionCalling],
+        inline_think_in_text: false,
+        custom_headers: model.custom_headers,
+        custom_headers_mode: model.custom_headers_mode,
+        skip_ssl_verify: model.skip_ssl_verify,
+        custom_request_body: model.custom_request_body,
+        ..AIModelConfig::default()
     }
-    if root
-        .get("font")
-        .and_then(Value::as_object)
-        .is_some_and(|font| font.contains_key("flowChat"))
-    {
-        return Err(retired_config_field(context, "font.flowChat"));
-    }
-
-    let Some(ai) = root.get("ai").and_then(Value::as_object) else {
-        return Ok(());
-    };
-    for field in ["agent_models", "skip_tool_confirmation"] {
-        if ai.contains_key(field) {
-            return Err(retired_config_field(context, &format!("ai.{field}")));
-        }
-    }
-    if ai
-        .get("review_teams")
-        .and_then(Value::as_object)
-        .is_some_and(|review_teams| review_teams.contains_key("rate_limit_status"))
-    {
-        return Err(retired_config_field(
-            context,
-            "ai.review_teams.rate_limit_status",
-        ));
-    }
-
-    if let Some(models) = ai.get("models").and_then(Value::as_array) {
-        for (index, model) in models.iter().enumerate() {
-            let Some(model) = model.as_object() else {
-                continue;
-            };
-            for field in [
-                "enable_thinking_process",
-                "reasoning_mode",
-                "reasoning_effort",
-                "thinking_budget_tokens",
-            ] {
-                if model.contains_key(field) {
-                    return Err(retired_config_field(
-                        context,
-                        &format!("ai.models[{index}].{field}"),
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
 
 fn reject_protected_metadata_path(path: &str) -> OpenBitFunResult<()> {
@@ -411,6 +286,10 @@ impl ConfigManager {
             self.create_default_config().await?;
         }
 
+        if let Err(error) = self.consume_installer_config_handoff().await {
+            warn!("Could not apply installer configuration handoff: {error}");
+        }
+
         Ok(())
     }
 
@@ -425,7 +304,80 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Loads an existing OpenBitFun config without rewriting or repairing it.
+    async fn consume_installer_config_handoff(&mut self) -> OpenBitFunResult<()> {
+        let handoff_file = self.config_dir.join(INSTALLER_CONFIG_HANDOFF_FILE_NAME);
+        if !handoff_file.exists() {
+            return Ok(());
+        }
+
+        let store = JsonFileStore;
+        let _cross_process_lock = store
+            .acquire_cross_process_lock(&handoff_file)
+            .await
+            .map_err(|error| OpenBitFunError::config(error.to_string()))?;
+        let Some(handoff) = store
+            .read_optional::<InstallerConfigHandoff>(&handoff_file)
+            .await
+            .map_err(|error| OpenBitFunError::config(error.to_string()))?
+        else {
+            return Ok(());
+        };
+
+        let mut config = self.config.clone();
+        if let Some(language) = handoff.language {
+            config.app.language = language;
+        }
+        if let Some(selection) = handoff.appearance_selection {
+            config.appearance.selection = selection;
+        }
+        if let Some(model) = handoff.model {
+            let model = model_from_installer_handoff(model);
+            if let Some(existing) = config
+                .ai
+                .models
+                .iter_mut()
+                .find(|existing| existing.id == INSTALLER_MODEL_ID)
+            {
+                *existing = model;
+            } else {
+                config.ai.models.push(model);
+            }
+            config.ai.default_models.primary = Some(INSTALLER_MODEL_ID.to_string());
+            config.ai.default_models.fast = Some(INSTALLER_MODEL_ID.to_string());
+        }
+
+        let mut diagnostics = normalize_typed_config(&mut config);
+        diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
+        let validation_result = self.providers.validate_config(&config).await?;
+        if !validation_result.valid {
+            return Err(invalid_config_error(
+                "Invalid installer configuration handoff",
+                &validation_result,
+            ));
+        }
+
+        config.product_id = product_identity::product_id().to_string();
+        config.schema_version = CURRENT_CONFIG_SCHEMA_VERSION;
+        config.version = env!("CARGO_PKG_VERSION").to_string();
+        config.last_modified = chrono::Utc::now();
+        self.persist_config(&config).await?;
+        self.config = config;
+        self.load_diagnostics.extend(diagnostics);
+
+        match fs::remove_file(&handoff_file).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => warn!(
+                "Applied installer configuration but could not remove handoff file: path={}, error={}",
+                handoff_file.display(),
+                error
+            ),
+        }
+        Ok(())
+    }
+
+    /// Loads an existing OpenBitFun config, with a narrow repair for the sparse
+    /// document written by released standalone installers.
     async fn load_existing_config(&mut self) -> OpenBitFunResult<()> {
         let content = fs::read_to_string(&self.config_file)
             .await
@@ -434,7 +386,18 @@ impl ConfigManager {
         let config_value: Value = serde_json::from_str(&content).map_err(|error| {
             OpenBitFunError::config(format!("Failed to parse config file as JSON: {error}"))
         })?;
-        validate_current_config_value(&config_value, "Configuration file")?;
+        if let Err(contract_error) =
+            validate_current_config_value(&config_value, "Configuration file")
+        {
+            if let Some(config) = self
+                .try_repair_sparse_installer_config(&content, &config_value)
+                .await?
+            {
+                self.config = config;
+                return Ok(());
+            }
+            return Err(contract_error);
+        }
 
         let config: GlobalConfig = serde_json::from_value(config_value).map_err(|error| {
             OpenBitFunError::config(format!("Failed to deserialize config file: {error}"))
@@ -451,6 +414,62 @@ impl ConfigManager {
         self.load_diagnostics.clear();
         debug!("Loaded OpenBitFun config from file without rewriting it");
         Ok(())
+    }
+
+    async fn try_repair_sparse_installer_config(
+        &mut self,
+        content: &str,
+        config_value: &Value,
+    ) -> OpenBitFunResult<Option<GlobalConfig>> {
+        let Some(root) = config_value.as_object() else {
+            return Ok(None);
+        };
+        if !root
+            .keys()
+            .all(|key| matches!(key.as_str(), "app" | "ai" | "themes"))
+        {
+            return Ok(None);
+        }
+        let Some(app) = root.get("app").and_then(Value::as_object) else {
+            return Ok(None);
+        };
+        let Some(language) = app.get("language").and_then(Value::as_str) else {
+            return Ok(None);
+        };
+
+        let mut config = GlobalConfig::default();
+        config.app.language = language.to_string();
+        if let Some(themes) = root.get("themes") {
+            let Some(selection) = themes.get("current").and_then(Value::as_str) else {
+                return Ok(None);
+            };
+            config.appearance.selection = selection.to_string();
+        }
+        if let Some(ai) = root.get("ai") {
+            let Ok(ai) = serde_json::from_value(ai.clone()) else {
+                return Ok(None);
+            };
+            config.ai = ai;
+        }
+
+        let mut diagnostics = normalize_typed_config(&mut config);
+        diagnostics.extend(reconcile_model_references(&mut config).diagnostics);
+        let validation_result = self.providers.validate_config(&config).await?;
+        if !validation_result.valid {
+            return Ok(None);
+        }
+
+        let backup = self
+            .backup_raw_config(content, "installer-config-repair")
+            .await?;
+        self.persist_config(&config).await?;
+        self.load_diagnostics = diagnostics;
+        info!(
+            "Repaired sparse installer configuration: config={}, backup={}",
+            self.config_file.display(),
+            backup.display()
+        );
+        Ok(Some(config))
     }
 
     /// Saves the configuration file.
@@ -903,8 +922,44 @@ pub struct ConfigStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::{config_value_for_persistence, validate_current_config_value};
+    use super::{
+        config_value_for_persistence, validate_current_config_value, ConfigManager,
+        ConfigManagerSettings, INSTALLER_MODEL_ID,
+    };
+    use crate::infrastructure::PathManager;
     use crate::service::config::types::GlobalConfig;
+    use openbitfun_core_types::installer_config_handoff::{
+        InstallerConfigHandoff, InstallerModelHandoff, INSTALLER_CONFIG_HANDOFF_FILE_NAME,
+    };
+    use std::sync::Arc;
+
+    fn manager_settings(path_manager: Arc<PathManager>) -> ConfigManagerSettings {
+        ConfigManagerSettings {
+            path_manager: Some(path_manager),
+            auto_save: true,
+            backup_count: 5,
+        }
+    }
+
+    fn complete_installer_handoff() -> InstallerConfigHandoff {
+        InstallerConfigHandoff {
+            language: Some("en-US".to_string()),
+            appearance_selection: Some("openbitfun-light".to_string()),
+            model: Some(InstallerModelHandoff {
+                name: "Installer model".to_string(),
+                provider: "openai".to_string(),
+                model_name: "fixture-model".to_string(),
+                base_url: "https://example.com/v1".to_string(),
+                request_url: "https://example.com/v1/chat/completions".to_string(),
+                api_key: "fixture-secret".to_string(),
+                custom_headers: None,
+                custom_headers_mode: None,
+                skip_ssl_verify: false,
+                custom_request_body: None,
+            }),
+            ..InstallerConfigHandoff::default()
+        }
+    }
 
     #[test]
     fn current_config_contract_requires_openbitfun_identity_and_format() {
@@ -912,9 +967,12 @@ mod tests {
         validate_current_config_value(&current, "test config").unwrap();
 
         for (field, value, expected) in [
-            ("product_id", serde_json::json!("other-product"), "product_id"),
+            (
+                "product_id",
+                serde_json::json!("other-product"),
+                "product_id",
+            ),
             ("schema_version", serde_json::json!(0), "schema_version"),
-            ("version", serde_json::json!("0.9.9"), "predates OpenBitFun 1.0.0"),
         ] {
             let mut invalid = current.clone();
             invalid[field] = value;
@@ -935,27 +993,77 @@ mod tests {
     }
 
     #[test]
-    fn current_config_contract_accepts_openbitfun_prerelease_versions() {
-        for version in [
-            "1.0.0-beta.1",
-            "1.0.0-beta.2+build.7",
-            "1.0.0-nightly.20260906",
-            "1.0.0-rc.1",
-            "1.0.0",
-            "1.0.1-beta.1",
-        ] {
-            let mut current = serde_json::to_value(GlobalConfig::default()).unwrap();
-            current["version"] = serde_json::json!(version);
-            validate_current_config_value(&current, "test config")
-                .unwrap_or_else(|error| panic!("{version}: {error}"));
-        }
+    fn application_version_is_informational_metadata() {
+        let mut current = serde_json::to_value(GlobalConfig::default()).unwrap();
+        current["version"] = serde_json::json!("1.0.0-beta.1");
+        validate_current_config_value(&current, "test config").unwrap();
+    }
 
-        for version in ["0.2.19", "0.9.9-beta.1", "0.9.9+build.7"] {
-            let mut legacy = serde_json::to_value(GlobalConfig::default()).unwrap();
-            legacy["version"] = serde_json::json!(version);
-            let error = validate_current_config_value(&legacy, "test config").unwrap_err();
-            assert!(error.to_string().contains("predates OpenBitFun 1.0.0"));
+    #[tokio::test]
+    async fn installer_handoff_is_applied_idempotently() {
+        let temp = tempfile::tempdir().unwrap();
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            temp.path().join("handoff"),
+        ));
+        path_manager.initialize_user_directories().await.unwrap();
+        let handoff_path = path_manager
+            .user_config_dir()
+            .join(INSTALLER_CONFIG_HANDOFF_FILE_NAME);
+        let handoff = complete_installer_handoff();
+
+        for _ in 0..2 {
+            tokio::fs::write(&handoff_path, serde_json::to_vec(&handoff).unwrap())
+                .await
+                .unwrap();
+            let manager = ConfigManager::new(manager_settings(path_manager.clone()))
+                .await
+                .unwrap();
+            assert_eq!(manager.config.app.language, "en-US");
+            assert_eq!(manager.config.appearance.selection, "openbitfun-light");
+            assert_eq!(
+                manager
+                    .config
+                    .ai
+                    .models
+                    .iter()
+                    .filter(|model| model.id == INSTALLER_MODEL_ID)
+                    .count(),
+                1
+            );
+            assert!(!handoff_path.exists());
         }
+    }
+
+    #[tokio::test]
+    async fn sparse_installer_config_is_backed_up_and_repaired() {
+        let temp = tempfile::tempdir().unwrap();
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            temp.path().join("repair"),
+        ));
+        path_manager.initialize_user_directories().await.unwrap();
+        let original = r#"{
+  "app": { "language": "en-US" },
+  "themes": { "current": "openbitfun-midnight" }
+}"#;
+        tokio::fs::write(path_manager.app_config_file(), original)
+            .await
+            .unwrap();
+
+        let manager = ConfigManager::new(manager_settings(path_manager.clone()))
+            .await
+            .unwrap();
+        assert_eq!(manager.config.app.language, "en-US");
+        assert_eq!(manager.config.appearance.selection, "openbitfun-midnight");
+        assert_eq!(
+            manager.config.schema_version,
+            super::CURRENT_CONFIG_SCHEMA_VERSION
+        );
+
+        let mut backups = tokio::fs::read_dir(path_manager.user_config_dir().join("backups"))
+            .await
+            .unwrap();
+        let backup = backups.next_entry().await.unwrap().unwrap().path();
+        assert_eq!(tokio::fs::read_to_string(backup).await.unwrap(), original);
     }
 
     #[test]

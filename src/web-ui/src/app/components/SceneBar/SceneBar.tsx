@@ -2,7 +2,7 @@
  * SceneBar — horizontally scrollable scene-level tab bar.
  *
  * Delegates state to useSceneManager.
- * The Session tab uses the current session title as its single visible label.
+ * Session tabs show only the referenced session title.
  */
 
 import React, { useCallback } from 'react';
@@ -10,7 +10,7 @@ import React, { useCallback } from 'react';
 import { Icon, TabGroup, type TabGroupItem } from '@openbitfun/ui';
 import { useSceneTabNavigation } from './useSceneTabNavigation';
 import { useSceneManager } from '../../hooks/useSceneManager';
-import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
+import { useSessionTabLabels } from '../../hooks/useSessionTabLabels';
 import { isSceneTabClosable } from '../../scenes/registry';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from './types';
@@ -33,12 +33,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const {
     openTabs,
     activeTabId,
+    pendingTabId,
     navigationMotion,
     tabDefs,
     activateScene,
     closeScene,
   } = useSceneManager();
-  const sessionTitle = useCurrentSessionTitle();
+  const sessionLabels = useSessionTabLabels(openTabs);
+  const selectedTabId = pendingTabId ?? activeTabId;
   const { t } = useI18n('common');
   const sceneBarClassName = `openbitfun-scene-bar ${className}`.trim();
   const {
@@ -49,7 +51,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
     handleWheel: handleTabsWheel,
     scrollByPage: scrollTabsByPage,
   } = useSceneTabNavigation({
-    activeTabId,
+    activeTabId: selectedTabId,
     navigationMotion,
     openTabIds: openTabs.map(tab => tab.id),
   });
@@ -90,15 +92,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
     if (!def) return items;
 
     const translatedLabel = def.labelKey ? t(def.labelKey) : def.label;
-    const displayLabel = tab.id === 'session' && sessionTitle
-      ? sessionTitle
-      : translatedLabel;
+    const displayLabel = sessionLabels[tab.id] || translatedLabel;
     const closeLabel = t('sceneBar.closeTab', { label: displayLabel });
     const closable = isSceneTabClosable(def);
 
     items.push({
       value: tab.id,
-      label: <span className="openbitfun-scene-bar__tab-title">{displayLabel}</span>,
+      label: displayLabel,
+      labelTransitionKey: tab.session?.sessionId,
       // Keep the close hit target stationary between pointer down and up;
       // shrinking it can retarget the click at the button edge (issue #2210).
       endAction: closable ? (
@@ -154,7 +155,8 @@ const SceneBar: React.FC<SceneBarProps> = ({
           aria-label={t('sceneBar.tabsLabel')}
           items={tabItems}
           size="sm"
-          value={activeTabId ?? undefined}
+          value={selectedTabId ?? undefined}
+          aria-busy={Boolean(pendingTabId)}
           onValueChange={handleTabValueChange}
           onScroll={handleTabsScroll}
           onWheel={handleTabsWheel}

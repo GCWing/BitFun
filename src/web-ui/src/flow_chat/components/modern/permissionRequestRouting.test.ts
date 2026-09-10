@@ -27,7 +27,7 @@ function request(
     sessionId,
     toolCallId,
     projectId: 'project-1',
-    agentId: parentSessionId ? 'Explore' : 'agentic',
+    agentId: parentSessionId ? 'Explore' : 'Standard',
     action: 'edit',
     resources: ['src/main.rs'],
     source: { kind: 'tool_call', identity: 'Write' },

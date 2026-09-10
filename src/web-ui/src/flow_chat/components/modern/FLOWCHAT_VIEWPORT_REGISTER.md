@@ -88,6 +88,17 @@ ownership to the reader, and their resting position is preserved.
 One-shot Turn, search and history navigation lives in `VirtualMessageList`, and
 holds `one-shot-navigation` for as long as it is still arriving.
 
+**A readable search hit needs no placement.** Resolve a mounted text range before
+asking the virtualizer to move. Advancing between occurrences on the same line
+only changes passive highlighting; the readable area excludes the top fade,
+bottom fade, and floating input. An offscreen text line is placed once through
+`scrollToOffset`, replacing any item aim. Only an unmounted row needs coarse
+item alignment to materialize it, and that aim ends as soon as the concrete hit
+is reached. Previously every occurrence first centered its row and then its
+text on another frame, while the row aim could still reassert itself later.
+Gestures, a superseding search request, and session teardown abandon pending
+search resolution. Search styling owns no viewport writes.
+
 **The current Turn is not always the first visible Turn.** The top alignment
 gap can leave a sliver of the preceding Turn on screen; the content-end clamp
 can leave several earlier Turns visible. `VirtualMessageList` remembers the

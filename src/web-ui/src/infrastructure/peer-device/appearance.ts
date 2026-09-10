@@ -15,6 +15,8 @@ export const peerDeviceAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'pathDisplay' },
     { id: 'body' },
     { id: 'status' },
+    { id: 'connectionStatus' },
+    { id: 'connectionStatusContent' },
     { id: 'list' },
     { id: 'item' },
     { id: 'footer' },

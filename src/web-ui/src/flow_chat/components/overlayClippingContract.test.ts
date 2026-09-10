@@ -9,7 +9,7 @@ function readSource(relativePath: string): string {
 
 const ANCHORED_OVERLAYS = [
   { name: 'chat input pickers', path: './ChatInput.tsx' },
-  { name: 'file mention picker', path: './FileMentionPicker.tsx' },
+  { name: 'chat context picker', path: './ChatContextPicker.tsx' },
   { name: 'permission menu', path: './ChatInputWorkspaceStrip.tsx' },
   { name: 'welcome workspace menu', path: './WelcomePanel.tsx' },
   { name: 'session menu', path: './session-menu/SessionMenu.tsx' },

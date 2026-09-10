@@ -230,7 +230,6 @@
   color: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 50%, transparent);
   font-family: var(--openbitfun-type-code-md-font-family);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

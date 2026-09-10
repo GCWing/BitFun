@@ -84,6 +84,8 @@ export interface ScrollbarColors {
  * palette. Builtins that omit this slice keep today's single-surface behavior.
  */
 export interface ChromeColors {
+  /** A mixed appearance can use dark chrome around a light scene. */
+  type?: AppearancePaletteMode;
   background: BackgroundColors;
   text: TextColors;
   accent: AccentColors;

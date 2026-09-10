@@ -24,6 +24,7 @@ const panelMocks = vi.hoisted(() => ({
   respondPermission: vi.fn(() => Promise.resolve()),
   respondPermissionBatch: vi.fn(() => Promise.resolve()),
   virtualItems: [] as unknown[],
+  flowChatSubscriber: null as ((state: FlowChatState) => void) | null,
 }));
 
 let flowChatState: FlowChatState;
@@ -184,7 +185,15 @@ vi.mock('../../store/FlowChatStore', () => ({
   },
   flowChatStore: {
     getState: () => flowChatState,
-    subscribe: () => () => {},
+    subscribeSelector: () => () => {},
+    subscribe: (listener: (state: FlowChatState) => void) => {
+      panelMocks.flowChatSubscriber = listener;
+      return () => {
+        if (panelMocks.flowChatSubscriber === listener) {
+          panelMocks.flowChatSubscriber = null;
+        }
+      };
+    },
   },
 }));
 
@@ -534,6 +543,7 @@ describe('BtwSessionPanel review action bar integration', () => {
     panelMocks.respondPermissionBatch.mockReset();
     panelMocks.respondPermissionBatch.mockResolvedValue(undefined);
     panelMocks.virtualItems = [];
+    panelMocks.flowChatSubscriber = null;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -653,7 +663,7 @@ describe('BtwSessionPanel review action bar integration', () => {
       sessionId: 'deep-review-child',
       toolCallId: 'direct-child-tool',
       projectId: 'project-1',
-      agentId: 'agentic',
+      agentId: 'Standard',
       action: 'edit',
       resources: ['src/main.rs'],
       source: { kind: 'tool_call', identity: 'Write' },
@@ -1604,6 +1614,68 @@ describe('BtwSessionPanel review action bar integration', () => {
       minimized: true,
       customInstructions: 'Keep the fix focused.',
     });
+  });
+
+  it('does not reapply stale persisted minimize state after a local restore during streaming', async () => {
+    vi.mocked(loadPersistedReviewState).mockClear();
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'review_running',
+      completedRemediationIds: [],
+      minimized: true,
+      customInstructions: '',
+      persistedAt: 2,
+    });
+    const runningSession = createRunningDeepReviewSession();
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', runningSession],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const restoreButton = container.querySelector<HTMLButtonElement>(
+      '.btw-session-panel__minimized-button',
+    );
+    expect(restoreButton).toBeTruthy();
+    await act(async () => {
+      restoreButton?.click();
+    });
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')?.minimized)
+      .toBe(false);
+
+    const streamedSession = {
+      ...runningSession,
+      lastActiveAt: runningSession.lastActiveAt + 1,
+    };
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', streamedSession],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      panelMocks.flowChatSubscriber?.(flowChatState);
+      await Promise.resolve();
+    });
+
+    expect(loadPersistedReviewState).toHaveBeenCalledTimes(1);
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')?.minimized)
+      .toBe(false);
   });
 
   it('restores persisted follow-up and review scope only when the child still exists', async () => {

@@ -271,6 +271,16 @@ async function ensureProjection(
         cached.dialogTurns as DialogTurn[],
       );
     if (hydrated && cached) {
+      const current = dispatchJobStore.getState().jobs[job.jobId];
+      if (
+        !current?.titleSource
+        && typeof cached.title === 'string'
+        && cached.title.trim()
+        && (cached.titleSource === 'generated' || cached.titleSource === 'manual')
+      ) {
+        dispatchJobStore.getState().updateTitle(job.jobId, cached.title, cached.titleSource);
+        void context.flowChatStore.updateSessionTitle(job.sessionId, cached.title, 'generated');
+      }
       bindTarget(cached.cursor, true);
       // The cache, not the persisted renderer state, decides where to resume.
       // The two are written separately, so the renderer's own cursor can be
@@ -313,6 +323,9 @@ async function ensureProjection(
     // The observer can start before FlowChat knows its workspace, so a legacy
     // outbound record may only gain its source path on a later poll.
     bindTarget(job.cursor);
+    if (job.titleSource && existing.title !== job.title) {
+      void context.flowChatStore.updateSessionTitle(job.sessionId, job.title, 'generated');
+    }
     // Startup metadata can win the race and create this session before the
     // observer. Such a session has no turns, so merely binding the dispatch
     // target would leave the navigation row permanently empty and allow the
@@ -606,6 +619,21 @@ function applyEvent(
   const projected = projectDispatchAgentEvent(event);
   if (!projected) {
     log.debug('Ignoring unprojectable target agent event', { event });
+    return true;
+  }
+  if (
+    projected.eventName === 'session_title_generated'
+    && projected.payload.sessionId === job.sessionId
+    && typeof projected.payload.title === 'string'
+    && projected.payload.title.trim()
+  ) {
+    // A title is projection metadata too: keep it with the persisted observer
+    // before advancing its cursor. Manual names win over replayed target events.
+    dispatchJobStore.getState().updateTitle(job.jobId, projected.payload.title, 'generated');
+    const title = dispatchJobStore.getState().jobs[job.jobId]?.title;
+    if (title) {
+      void context.flowChatStore.updateSessionTitle(job.sessionId, title, 'generated');
+    }
     return true;
   }
   const applied = agenticEventListener.dispatchExternal(

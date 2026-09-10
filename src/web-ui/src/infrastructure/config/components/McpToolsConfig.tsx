@@ -461,7 +461,7 @@ const McpToolsConfig: React.FC = () => {
     const hasPendingAutoStart = servers.some((server) => {
       if (!server.enabled || !server.autoStart) return false;
       const status = server.status.trim().toLowerCase();
-      return ['uninitialized', 'starting', 'reconnecting', 'stopping'].includes(status);
+      return ['uninitialized', 'starting', 'reconnecting', 'failed', 'stopping'].includes(status);
     });
     if (!hasPendingAutoStart) return;
 
@@ -553,12 +553,23 @@ const McpToolsConfig: React.FC = () => {
       if (!jsonConfigFingerprint) {
         throw new Error('MCP configuration snapshot is unavailable; reload before saving');
       }
-      await MCPAPI.saveMCPJsonConfig(jsonConfig, jsonConfigFingerprint);
+      const result = await MCPAPI.saveMCPJsonConfig(jsonConfig, jsonConfigFingerprint);
       if (!capabilityIsCurrent(capabilityEpoch)) return false;
-      notification.success(tMcp('messages.saveSuccess'), {
-        title: tMcp('notifications.saveSuccess'),
-        duration: 3000,
-      });
+      // Persistence succeeded even if applying the runtime failed. Clear the
+      // draft now, and invalidate the old fingerprint until read-back completes.
+      setJsonSavedConfig(jsonConfig);
+      setJsonConfigFingerprint('');
+      if (result.runtimeApplied) {
+        notification.success(tMcp('messages.saveSuccess'), {
+          title: tMcp('notifications.saveSuccess'),
+          duration: 3000,
+        });
+      } else {
+        notification.warning(tMcp('messages.partialStartFailed'), {
+          title: tMcp('messages.saveSuccess'),
+          duration: 10000,
+        });
+      }
       setShowJsonEditor(false);
       await loadServers();
       if (capabilityIsCurrent(capabilityEpoch)) {
@@ -1219,6 +1230,7 @@ const McpToolsConfig: React.FC = () => {
         </>
       ) : null}
       <Button
+        data-testid="mcp-json-toggle"
         variant="outline"
         size="sm"
         leadingIcon={showJsonEditor ? <Icon name="arrow-left" size="sm" /> : <FileJson size={15} />}
@@ -1477,6 +1489,7 @@ const McpToolsConfig: React.FC = () => {
                 <p className="openbitfun-mcp-tools__json-hint" role="note" data-openbitfun-component="mcp-tools-config" data-openbitfun-part="jsonHint">{tMcp('jsonEditor.secretWarning')}</p>
               </div>
               <Textarea
+                data-testid="mcp-json-input"
                 ref={jsonEditorRef}
                 value={jsonConfig}
                 onChange={(e) => setJsonConfig(e.target.value)}
@@ -1507,11 +1520,12 @@ const McpToolsConfig: React.FC = () => {
                 }
               />
               <div className="openbitfun-mcp-tools__json-actions" data-openbitfun-component="mcp-tools-config" data-openbitfun-part="jsonActions">
-                <Button variant="outline" onClick={requestCloseJsonEditor} disabled={mcpSaving}>
+                <Button variant="fill" onClick={requestCloseJsonEditor} disabled={mcpSaving}>
                   {tMcp('actions.cancel')}
                 </Button>
                 <Button
-                  variant="fill"
+                  data-testid="mcp-json-save"
+                  variant="primary"
                   onClick={handleSaveJsonConfig}
                   loading={mcpSaving}
                   disabled={mcpSaving || !jsonDirty || !jsonSyntaxValid || Boolean(jsonLintError)}
@@ -1615,7 +1629,7 @@ const McpToolsConfig: React.FC = () => {
                 )}
                 <div className="openbitfun-mcp-tools__json-actions" data-openbitfun-component="mcp-tools-config" data-openbitfun-part="jsonActions">
                   <Button
-                    variant="fill"
+                    variant="primary"
                     onClick={handleStartRemoteOAuth}
                     loading={oauthStarting}
                     disabled={authSubmitting || oauthCancelling}
@@ -1650,7 +1664,7 @@ const McpToolsConfig: React.FC = () => {
             />
             <div className="openbitfun-mcp-tools__json-actions" data-openbitfun-component="mcp-tools-config" data-openbitfun-part="jsonActions">
               <Button
-                variant="outline"
+                variant="fill"
                 onClick={handleCloseAuthDialog}
                 disabled={authSubmitting || oauthStarting || oauthCancelling}
               >
@@ -1659,7 +1673,7 @@ const McpToolsConfig: React.FC = () => {
                   : tMcp('actions.cancel')}
               </Button>
               <Button
-                variant="fill"
+                variant="primary"
                 onClick={handleSaveRemoteAuth}
                 loading={authSubmitting}
                 disabled={oauthStarting || oauthCancelling}

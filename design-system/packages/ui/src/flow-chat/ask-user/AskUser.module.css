@@ -117,7 +117,6 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -272,7 +271,6 @@
     font-weight: var(--openbitfun-type-body-md-font-weight);
     line-height: var(--openbitfun-type-body-sm-line-height);
     text-align: end;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

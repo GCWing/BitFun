@@ -1,36 +1,32 @@
 import { create } from 'zustand';
 
-export type InstalledFilter = 'all' | 'builtin' | 'user' | 'project' | 'suite';
-export type SuiteModeId = 'agentic' | 'Cowork' | 'Claw';
+export type InstalledFilter = 'all' | 'builtin' | 'user' | 'project' | `source:${string}`;
+export type SkillsView = InstalledFilter | 'groups';
 
 interface SkillsSceneState {
   searchDraft: string;
   marketQuery: string;
-  installedFilter: InstalledFilter;
+  installedView: SkillsView;
   hideDuplicates: boolean;
   isAddFormOpen: boolean;
-  suiteModeId: SuiteModeId;
   setSearchDraft: (value: string) => void;
   submitMarketQuery: () => void;
-  setInstalledFilter: (filter: InstalledFilter) => void;
+  setInstalledView: (view: SkillsView) => void;
   setHideDuplicates: (hide: boolean) => void;
   setAddFormOpen: (open: boolean) => void;
   toggleAddForm: () => void;
-  setSuiteModeId: (modeId: SuiteModeId) => void;
 }
 
 export const useSkillsSceneStore = create<SkillsSceneState>((set) => ({
   searchDraft: '',
   marketQuery: '',
-  installedFilter: 'all',
+  installedView: 'all',
   hideDuplicates: false,
   isAddFormOpen: false,
-  suiteModeId: 'agentic',
   setSearchDraft: (value) => set({ searchDraft: value }),
   submitMarketQuery: () => set((state) => ({ marketQuery: state.searchDraft.trim() })),
-  setInstalledFilter: (filter) => set({ installedFilter: filter }),
+  setInstalledView: (view) => set({ installedView: view }),
   setHideDuplicates: (hide) => set({ hideDuplicates: hide }),
   setAddFormOpen: (open) => set({ isAddFormOpen: open }),
   toggleAddForm: () => set((state) => ({ isAddFormOpen: !state.isAddFormOpen })),
-  setSuiteModeId: (modeId) => set({ suiteModeId: modeId }),
 }));

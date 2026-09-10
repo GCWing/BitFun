@@ -529,7 +529,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
             <div data-openbitfun-component="global-permission-rules-dialog" data-openbitfun-part="footer" className="global-permission-rules-dialog__footer">
               <Button
                 type="button"
-                variant="outline"
+                variant="fill"
                 onClick={handleDiscard}
                 disabled={isSaving}
               >
@@ -537,7 +537,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
               </Button>
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 loading={isSaving}
                 disabled={!rulesValid || isSaving}
                 onClick={() => void handleSave()}

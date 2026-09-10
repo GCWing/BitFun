@@ -13,11 +13,8 @@
     "empty": "No compatible products match this search."
   },
   "host": {
-    "label": "Execution host",
     "local": "This computer",
-    "remote": "Remote · {{name}}",
-    "switchLabel": "Switch execution host",
-    "switchAction": "Execution host switching"
+    "remote": "Remote · {{name}}"
   },
   "groups": {
     "connected": "Connected or discovered",

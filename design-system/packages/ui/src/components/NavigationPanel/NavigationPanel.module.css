@@ -85,14 +85,12 @@
     overflow: hidden;
     flex: 1 1 auto;
     min-inline-size: 0;
-    /* Keep group captions at 40% semantic ink without borrowing disabled-state color. */
-    color: color-mix(in srgb, var(--openbitfun-color-content-primary) 40%, transparent);
+    color: var(--openbitfun-color-content-caption);
     font-family: var(--openbitfun-type-label-xs-font-family);
     font-size: var(--openbitfun-type-label-xs-font-size);
     font-weight: var(--openbitfun-type-label-xs-font-weight);
     line-height: var(--openbitfun-type-label-xs-line-height);
     letter-spacing: var(--openbitfun-type-label-xs-letter-spacing);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

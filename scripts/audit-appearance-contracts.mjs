@@ -436,6 +436,7 @@ for (const [file, source] of productionCodeSources) {
       file,
       exportName: match[1],
       id,
+      hostSelectorId: body.match(/\bhostSelectorId:\s*['"]([^'"]+)['"]/)?.[1],
       parts,
       states,
       facets,
@@ -453,6 +454,25 @@ descriptors
   .forEach(item => failures.push(`${relative(item.file)}: transitional Appearance surface id ${item.id} is forbidden`));
 
 const descriptorsById = new Map(descriptors.map(descriptor => [descriptor.id, descriptor]));
+for (const descriptor of descriptors) {
+  if (!descriptor.hostSelectorId) continue;
+  const hostDescriptor = descriptorsById.get(descriptor.hostSelectorId);
+  if (!hostDescriptor) {
+    failures.push(`${relative(descriptor.file)}: Appearance host selector ${descriptor.hostSelectorId} is not registered`);
+    continue;
+  }
+  if (hostDescriptor.hostSelectorId) {
+    failures.push(`${relative(descriptor.file)}: Appearance host selector ${descriptor.hostSelectorId} must target a current DOM descriptor`);
+  }
+  if (hostDescriptor.kind !== descriptor.kind || hostDescriptor.componentAttribute !== descriptor.componentAttribute) {
+    failures.push(`${relative(descriptor.file)}: Appearance host selector ${descriptor.hostSelectorId} must use the same surface kind and attribute`);
+  }
+  for (const part of descriptor.parts) {
+    if (!hostDescriptor.parts.includes(part)) {
+      failures.push(`${relative(descriptor.file)}: legacy Appearance part ${descriptor.id}.${part} is missing from host ${descriptor.hostSelectorId}`);
+    }
+  }
+}
 const domSurfaceParts = new Map(descriptors.map(descriptor => [descriptor.id, new Set()]));
 const domSurfaceStates = new Map(descriptors.map(descriptor => [descriptor.id, new Set()]));
 const domSurfaceDynamicStates = new Set();
@@ -609,8 +629,9 @@ for (const [file, source, strictContractOwnership] of domContractSources) {
 
 for (const descriptor of descriptors) {
   const kind = descriptor.kind === 'scene' ? 'Scene' : 'Component';
+  const domSurfaceId = descriptor.hostSelectorId ?? descriptor.id;
   for (const part of descriptor.parts) {
-    if (!domSurfaceParts.get(descriptor.id)?.has(part)) {
+    if (!domSurfaceParts.get(domSurfaceId)?.has(part)) {
       failures.push(`${relative(descriptor.file)}: registered part ${descriptor.id}.${part} has no exact DOM contract`);
     }
   }
@@ -620,13 +641,13 @@ for (const descriptor of descriptors) {
       failures.push(`${relative(descriptor.file)}: state ${descriptor.id}.${state.id} references unknown ancestor part ${state.part}`);
     }
     if (stateToken
-      && !domSurfaceStates.get(descriptor.id)?.has(stateToken)
-      && !domSurfaceDynamicStates.has(descriptor.id)) {
+      && !domSurfaceStates.get(domSurfaceId)?.has(stateToken)
+      && !domSurfaceDynamicStates.has(domSurfaceId)) {
       failures.push(`${relative(descriptor.file)}: registered state ${descriptor.id}.${state.id} has no DOM state source (${stateToken})`);
     }
   }
   for (const facet of descriptor.facets) {
-    if (!domSurfaceFacets.get(descriptor.id)?.has(facet.attribute)) {
+    if (!domSurfaceFacets.get(domSurfaceId)?.has(facet.attribute)) {
       failures.push(`${relative(descriptor.file)}: registered facet ${descriptor.id}.${facet.id} has no DOM attribute source (${facet.attribute})`);
     }
   }

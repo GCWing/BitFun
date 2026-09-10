@@ -2,6 +2,7 @@ import {
   Button,
   Icon,
   IconButton,
+  OverflowText,
   Tooltip,
 } from '@openbitfun/ui';
 import { ChatComposerActionButton } from '@openbitfun/ui/flow-chat';
@@ -121,7 +122,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             data-openbitfun-component="composer-voice-input"
             data-openbitfun-part="setupMessage"
           >
-            {controller.setupMessage}
+            <OverflowText>{controller.setupMessage}</OverflowText>
             {downloading ? (
               <span className="openbitfun-chat-input__voice-setup-progress" aria-hidden="true">
                 <span style={{ width: `${progress}%` }} />
@@ -132,7 +133,7 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             <span data-openbitfun-component="composer-voice-input" data-openbitfun-part="action" data-openbitfun-action="install">
               <Button
                 className="openbitfun-chat-input__voice-setup-action"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 onClick={(event) => {
                   event.stopPropagation();

@@ -70,6 +70,7 @@ pub async fn weixin_qr_poll(
 }
 
 impl WeixinBot {
+    #[cfg(test)]
     pub fn new(config: WeixinConfig) -> Self {
         Self::new_fenced(config, BotRuntimeFence::standalone())
     }
@@ -321,6 +322,7 @@ impl WeixinBot {
         let config = self.api.config().clone();
         let snapshot = self.runtime_fence.persistence_snapshot(state);
         let connection = SavedBotConnection {
+            account_user_id: self.runtime_fence.account_user_id(),
             bot_type: "weixin".to_string(),
             chat_id: peer_id.to_string(),
             config: BotConfig::Weixin {

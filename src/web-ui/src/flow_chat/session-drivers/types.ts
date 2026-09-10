@@ -19,6 +19,7 @@ import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
 import type { SurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+import type { LineRange } from '@/shared/editor/LineRange';
 
 export type { SessionDriverId } from './resolve';
 
@@ -144,6 +145,23 @@ export type PermissionRequestSource =
       getSnapshot: () => readonly PermissionRequestLike[];
     };
 
+/** Transport health exposed without leaking a driver-specific store or type. */
+export type SessionDriverReachability = 'unknown' | 'reachable' | 'unreachable';
+
+export interface SessionDriverNavigationStatus {
+  reachability?: SessionDriverReachability;
+}
+
+/**
+ * External navigation facts owned by a driver. The source is stable for the
+ * driver's lifetime so shared navigation can subscribe without knowing which
+ * feature store backs it.
+ */
+export interface SessionDriverNavigationStatusSource {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: (sessionId: string) => SessionDriverNavigationStatus;
+}
+
 /**
  * Structural stand-in for AgentAPI's PermissionRequest wire shape. `object`
  * so both the typed interface and raw store records assign without casts.
@@ -178,6 +196,14 @@ export interface SessionCascadeRemoval {
 
 export interface SessionDriver {
   readonly id: SessionDriverId;
+
+  /** When provided, all session file previews belong to this transport. */
+  readonly fileAccess?: {
+    open(sessionId: string, filePath: string, fileName: string, lineRange?: LineRange): Promise<void>;
+  };
+
+  /** Optional driver-owned facts used by the shared session navigation UI. */
+  readonly navigationStatusSource?: SessionDriverNavigationStatusSource;
 
   /** Create the flavor's session and return its id. */
   createSession(context: FlowChatContext, seed: SessionCreationSeed): Promise<string>;

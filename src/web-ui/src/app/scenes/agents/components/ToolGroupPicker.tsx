@@ -1,10 +1,17 @@
 import {
+  OverflowText,
+  Checkbox,
+  DialogFooter,
+  Field,
+  FieldGroup,
+  FieldRow,
+  FormSection,
+  StatusPill,
+  Toolbar,
   Button,
   Icon,
   IconButton,
   Input,
-  ScrollArea,
-  Switch,
   Tooltip,
   Dialog,
   DialogBody,
@@ -14,9 +21,8 @@ import {
   DialogTitle,
 } from '@openbitfun/ui';
 import React, { useMemo, useState } from 'react';
-import type { TFunction } from 'i18next';
 
-import { useTranslation } from 'react-i18next';
+import { useI18n, type UseI18nReturn } from '@/infrastructure/i18n/hooks/useI18n';
 
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import type { UserToolGroup } from '@/infrastructure/config/types';
@@ -79,7 +85,7 @@ function selectedGroupToolCount(group: ResolvedToolGroup, selectedToolNames: rea
   return group.tools.filter((tool) => selected.has(tool.name)).length;
 }
 
-function groupSectionLabel(group: ResolvedToolGroup, t: TFunction<'scenes/agents'>): string {
+function groupSectionLabel(group: ResolvedToolGroup, t: UseI18nReturn['t']): string {
   switch (group.kind) {
     case 'user':
       return t('agentsOverview.toolGroups.myGroups');
@@ -94,7 +100,7 @@ function groupSectionLabel(group: ResolvedToolGroup, t: TFunction<'scenes/agents
 
 function toolTooltipFields(
   tool: GroupableTool,
-  t: TFunction<'scenes/agents'>,
+  t: UseI18nReturn['t'],
 ): AgentCapabilityTooltipField[] {
   const mcpServerName = tool.dynamic_info?.mcp?.serverName?.trim();
   const providerId = tool.dynamic_info?.providerId?.trim();
@@ -136,7 +142,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
   groups,
   onSaveGroups,
 }) => {
-  const { t } = useTranslation('scenes/agents');
+  const { t } = useI18n('scenes/agents');
   const notification = useNotification();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -279,147 +285,150 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
         <DialogClose />
       </DialogHeader>
       <DialogBody>
-      <div className="tool-group-manager" data-openbitfun-component="tool-group-picker" data-openbitfun-part="manager">
-        {isEditing ? (
-          <div className="tool-group-manager__editor" data-openbitfun-component="tool-group-picker" data-openbitfun-part="managerEditor">
-            <div className="tool-group-manager__field">
-              <label htmlFor="tool-group-name">{t('agentsOverview.toolGroups.groupName')}</label>
-              <Input
-                id="tool-group-name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (nameError) {
-                    setNameError(false);
-                  }
-                }}
-                placeholder={t('agentsOverview.toolGroups.groupNamePlaceholder')}
-                invalid={nameError}
-                disabled={saving}
-                size="sm"
-              />
-            </div>
-            <div className="tool-group-manager__field">
-              <span>{t('agentsOverview.toolGroups.groupTools')}</span>
-              <ScrollArea className="tool-group-manager__token-grid" data-openbitfun-component="tool-group-picker" data-openbitfun-part="tokenGrid">
-                {selectableTools.map((tool) => {
-                  const selected = toolNames.has(tool.name);
-                  const tooltipFields = toolTooltipFields(tool, t);
-                  return (
-                    <AgentCapabilityTooltip
-                      key={tool.name}
-                      title={tool.name}
-                      description={tool.description}
-                      fields={tooltipFields}
-                      titleMonospace
-                      placement="top"
-                    >
-                      <button
-                        type="button"
-                        className={`tool-group-manager__token${selected ? ' is-on' : ''}`}
-                        data-openbitfun-component="tool-group-picker"
-                        data-openbitfun-part="token"
-                        data-openbitfun-state={selected ? 'selected' : undefined}
-                        onClick={() => toggleTool(tool.name)}
-                        disabled={saving}
-                        aria-label={capabilityTooltipAriaLabel(tool.name, tool.description, tooltipFields)}
-                        aria-pressed={selected}
+        <div className="tool-group-manager" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="manager">
+          {isEditing ? (
+            <div className="tool-group-manager__editor" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="managerEditor">
+              <Field
+                label={t('agentsOverview.toolGroups.groupName')}
+                error={nameError ? t('agentsOverview.toolGroups.validation.nameRequired') : undefined}
+              >
+                <Input
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    if (nameError) setNameError(false);
+                  }}
+                  placeholder={t('agentsOverview.toolGroups.groupNamePlaceholder')}
+                  invalid={nameError}
+                  disabled={saving}
+                  size="sm"
+                />
+              </Field>
+              <FormSection headingAs="h4" title={t('agentsOverview.toolGroups.groupTools')}>
+                <div className="tool-group-manager__token-grid" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="tokenGrid">
+                  {selectableTools.map((tool) => {
+                    const selected = toolNames.has(tool.name);
+                    const tooltipFields = toolTooltipFields(tool, t);
+                    return (
+                      <AgentCapabilityTooltip
+                        key={tool.name}
+                        title={tool.name}
+                        description={tool.description}
+                        fields={tooltipFields}
+                        titleMonospace
+                        placement="top"
                       >
-                        {tool.name}
-                      </button>
-                    </AgentCapabilityTooltip>
-                  );
-                })}
-              </ScrollArea>
+                        <Button
+                          className="tool-group-manager__token"
+                          data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="token"
+                          data-openbitfun-state={selected ? 'selected' : undefined}
+                          variant={selected ? 'secondary' : 'outline'}
+                          size="sm"
+                          onClick={() => toggleTool(tool.name)}
+                          disabled={saving}
+                          aria-label={capabilityTooltipAriaLabel(tool.name, tool.description, tooltipFields)}
+                          aria-pressed={selected}
+                        >
+                          {tool.name}
+                        </Button>
+                      </AgentCapabilityTooltip>
+                    );
+                  })}
+                </div>
+              </FormSection>
             </div>
-            <div className="tool-group-manager__footer">
-              <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
-                {t('agentsOverview.cancel')}
-              </Button>
-              <Button variant="fill" size="sm" onClick={() => void saveEditor()} loading={saving}>
-                {isEditing && editingGroup
-                  ? t('agentsOverview.toolGroups.saveGroup')
-                  : t('agentsOverview.toolGroups.createGroup')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="tool-group-manager__head">
-              <span>{t('agentsOverview.toolGroups.manageSubtitle')}</span>
-              <Button variant="outline" size="sm" onClick={startCreate} disabled={saving} leadingIcon={<Icon name="plus" size="sm" />}>
-
-                {t('agentsOverview.toolGroups.createGroup')}
-              </Button>
-            </div>
-            {groups.length === 0 ? (
-              <p className="tool-group-manager__empty">{t('agentsOverview.toolGroups.noUserGroups')}</p>
-            ) : (
-              <ScrollArea className="tool-group-manager__list" data-openbitfun-component="tool-group-picker" data-openbitfun-part="managerList">
-                {groups.map((group, index) => {
-                  const unavailable = unavailableUserToolNames(group, tools);
-                  return (
-                    <div data-openbitfun-component="tool-group-picker" data-openbitfun-part="managerGroup" key={group.id} className="tool-group-manager__group-row">
-                      <div className="tool-group-manager__group-copy">
-                        <span className="tool-group-manager__group-name">{group.name}</span>
-                        <span className="tool-group-manager__group-meta">
-                          {t('agentsOverview.toolGroups.groupCount', { count: group.toolNames.length })}
-                          {unavailable.length > 0
-                            ? ` · ${t('agentsOverview.toolGroups.unavailableCount', { count: unavailable.length })}`
-                            : ''}
-                        </span>
-                      </div>
-                      <div className="tool-group-manager__group-actions" data-openbitfun-component="tool-group-picker" data-openbitfun-part="groupActions">
-                        <Tooltip content={t('agentsOverview.toolGroups.moveUp')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.toolGroups.moveUp')}
-                            onClick={() => void moveGroup(index, -1)}
-                            disabled={saving || index === 0}
-                            icon={<Icon name="arrow-up" size="xs" />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.toolGroups.moveDown')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.toolGroups.moveDown')}
-                            onClick={() => void moveGroup(index, 1)}
-                            disabled={saving || index === groups.length - 1}
-                            icon={<Icon name="arrow-down" size="lg" style={{ width: 13, height: 13 }} />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.toolGroups.editGroup')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.toolGroups.editGroup')}
-                            onClick={() => startEdit(group)}
-                            disabled={saving}
-                            icon={<Icon name="edit" size="xs" />}
-                          />
-                        </Tooltip>
-                        <Tooltip content={t('agentsOverview.toolGroups.deleteGroup')}>
-                          <IconButton
-                            type="button"
-                            size="sm"
-                            aria-label={t('agentsOverview.toolGroups.deleteGroup')}
-                            onClick={() => void deleteGroup(group)}
-                            disabled={saving}
-                            icon={<Icon name="delete" size="lg" style={{ width: 13, height: 13 }} />}
-                          />
-                        </Tooltip>
-                      </div>
-                    </div>
-                  );
-                })}
-              </ScrollArea>
-            )}
-          </>
-        )}
-      </div>
-          </DialogBody>
+          ) : (
+            <FormSection
+              description={t('agentsOverview.toolGroups.manageSubtitle')}
+              actions={(
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startCreate}
+                  disabled={saving}
+                  leadingIcon={<Icon name="plus" />}
+                >
+                  {t('agentsOverview.toolGroups.createGroup')}
+                </Button>
+              )}
+            >
+              {groups.length === 0 ? (
+                <p className="tool-group-manager__empty">{t('agentsOverview.toolGroups.noUserGroups')}</p>
+              ) : (
+                <FieldGroup className="tool-group-manager__list" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="managerList">
+                  {groups.map((group, index) => {
+                    const unavailable = unavailableUserToolNames(group, tools);
+                    return (
+                      <FieldRow key={group.id} data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="managerGroup">
+                        <div className="tool-group-manager__group-row">
+                          <div className="tool-group-manager__group-copy">
+                            <OverflowText className="tool-group-manager__group-name">{group.name}</OverflowText>
+                            <span className="tool-group-manager__group-meta">
+                              {t('agentsOverview.toolGroups.groupCount', { count: group.toolNames.length })}
+                              {unavailable.length > 0
+                                ? ` · ${t('agentsOverview.toolGroups.unavailableCount', { count: unavailable.length })}`
+                                : ''}
+                            </span>
+                          </div>
+                          <div className="tool-group-manager__group-actions" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="groupActions">
+                            <Tooltip content={t('agentsOverview.toolGroups.moveUp')}>
+                              <IconButton
+                                size="sm"
+                                aria-label={t('agentsOverview.toolGroups.moveUp')}
+                                onClick={() => void moveGroup(index, -1)}
+                                disabled={saving || index === 0}
+                                icon={<Icon name="arrow-up" />}
+                              />
+                            </Tooltip>
+                            <Tooltip content={t('agentsOverview.toolGroups.moveDown')}>
+                              <IconButton
+                                size="sm"
+                                aria-label={t('agentsOverview.toolGroups.moveDown')}
+                                onClick={() => void moveGroup(index, 1)}
+                                disabled={saving || index === groups.length - 1}
+                                icon={<Icon name="arrow-down" />}
+                              />
+                            </Tooltip>
+                            <Tooltip content={t('agentsOverview.toolGroups.editGroup')}>
+                              <IconButton
+                                size="sm"
+                                aria-label={t('agentsOverview.toolGroups.editGroup')}
+                                onClick={() => startEdit(group)}
+                                disabled={saving}
+                                icon={<Icon name="edit" />}
+                              />
+                            </Tooltip>
+                            <Tooltip content={t('agentsOverview.toolGroups.deleteGroup')}>
+                              <IconButton
+                                size="sm"
+                                tone="danger"
+                                aria-label={t('agentsOverview.toolGroups.deleteGroup')}
+                                onClick={() => void deleteGroup(group)}
+                                disabled={saving}
+                                icon={<Icon name="delete" />}
+                              />
+                            </Tooltip>
+                          </div>
+                        </div>
+                      </FieldRow>
+                    );
+                  })}
+                </FieldGroup>
+              )}
+            </FormSection>
+          )}
+        </div>
+      </DialogBody>
+      {isEditing ? (
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={closeEditor} disabled={saving}>
+            {t('agentsOverview.cancel')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => void saveEditor()} loading={saving}>
+            {editingGroup ? t('agentsOverview.toolGroups.saveGroup') : t('agentsOverview.toolGroups.createGroup')}
+          </Button>
+        </DialogFooter>
+      ) : null}
     </Dialog>
   );
 };
@@ -434,7 +443,7 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
   disabled = false,
   testId,
 }) => {
-  const { t } = useTranslation('scenes/agents');
+  const { t, formatNumber } = useI18n('scenes/agents');
   const [isManagerOpen, setIsManagerOpen] = useState(false);
   const groups = useMemo(() => resolveToolGroups(tools, userGroups, t), [t, tools, userGroups]);
   const selectedCount = new Set(selectedToolNames).size;
@@ -450,102 +459,112 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
   }, [groups, t]);
 
   return (
-    <div data-openbitfun-component="tool-group-picker" data-openbitfun-part="root" className="tool-group-picker" data-testid={testId}>
-      <div className="tool-group-picker__head" data-openbitfun-component="tool-group-picker" data-openbitfun-part="head">
-        <span className="tool-group-picker__selected-count">
-          {t('agentsOverview.toolGroups.selectedCount', { count: selectedCount })}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsManagerOpen(true)}
-          disabled={disabled}
-          leadingIcon={<Icon name="settings" size="sm" />}
-        >
-
-          {t('agentsOverview.toolGroups.manageGroups')}
-        </Button>
-      </div>
-      <div className="tool-group-picker__sections" data-openbitfun-component="tool-group-picker" data-openbitfun-part="sections">
+    <div data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="root" className="tool-group-picker" data-testid={testId}>
+      <Toolbar
+        data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="head"
+        bordered={false}
+        leading={(
+          <span className="tool-group-picker__selected-count">
+            {t('agentsOverview.toolGroups.selectedCount', { count: selectedCount })}
+          </span>
+        )}
+        trailing={(
+          <Button
+            variant="text"
+            size="sm"
+            onClick={() => setIsManagerOpen(true)}
+            disabled={disabled}
+            leadingIcon={<Icon name="settings" />}
+          >
+            {t('agentsOverview.toolGroups.manageGroups')}
+          </Button>
+        )}
+      />
+      <div className="tool-group-picker__sections" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="sections">
         {sections.map(([sectionLabel, sectionGroups]) => (
-          <section key={sectionLabel} className="tool-group-picker__section" data-openbitfun-component="tool-group-picker" data-openbitfun-part="section">
-            <span className="tool-group-picker__section-label">{sectionLabel}</span>
+          <FormSection
+            key={sectionLabel}
+            headingAs="h4"
+            title={sectionLabel}
+            data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="section"
+          >
             {sectionGroups.map((group) => {
               const selectedInGroup = selectedGroupToolCount(group, selectedToolNames);
               const allSelected = isGroupEnabled(group, selectedToolNames);
               return (
-                <div data-openbitfun-component="tool-group-picker" data-openbitfun-part="group" key={group.id} className="tool-group-picker__group">
-                  <div className="tool-group-picker__group-head" data-openbitfun-component="tool-group-picker" data-openbitfun-part="groupHeader">
-                    <div className="tool-group-picker__group-title-wrap">
-                      <span className="tool-group-picker__group-name">{group.label}</span>
-                      <span className="tool-group-picker__group-count">
-                        {selectedInGroup}/{group.tools.length}
-                      </span>
-                    </div>
-                    <div className="tool-group-picker__group-actions" data-openbitfun-component="tool-group-picker" data-openbitfun-part="groupActions">
-                      {selectedInGroup > 0 && !allSelected ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onSelectionChange(
-                            setToolGroupSelection(selectedToolNames, groupToolNames(group), false),
-                          )}
-                          disabled={disabled}
-                        >
-                          {t('agentsOverview.clearGroup')}
-                        </Button>
-                      ) : null}
-                      <Switch
-                        checked={allSelected}
-                        onChange={(event) => onSelectionChange(
-                          setToolGroupSelection(
-                            selectedToolNames,
-                            groupToolNames(group),
-                            event.target.checked,
-                          ),
-                        )}
-                        disabled={disabled}
-                        aria-label={allSelected
-                          ? t('agentsOverview.toolGroups.clearGroupTools', { name: group.label })
-                          : t('agentsOverview.toolGroups.enableGroupTools', { name: group.label })}
-                      />
-                    </div>
-                  </div>
-                  <div className="tool-group-picker__token-grid" data-openbitfun-component="tool-group-picker" data-openbitfun-part="tokenGrid">
-                    {group.tools.map((tool) => {
-                      const selected = selectedToolNames.includes(tool.name);
-                      const tooltipFields = toolTooltipFields(tool, t);
-                      return (
-                        <AgentCapabilityTooltip
-                          key={tool.name}
-                          title={tool.name}
-                          description={tool.description}
-                          fields={tooltipFields}
-                          titleMonospace
-                          placement="top"
-                        >
-                          <button
-                            type="button"
-                            className={`tool-group-picker__token${selected ? ' is-on' : ''}`}
-                            data-openbitfun-component="tool-group-picker"
-                            data-openbitfun-part="token"
-                            data-openbitfun-state={selected ? 'selected' : undefined}
+                <FieldGroup key={group.id} data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="group">
+                  <FieldRow data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="groupHeader">
+                    <div className="tool-group-picker__group-head">
+                      <div className="tool-group-picker__group-title-wrap">
+                        <OverflowText className="tool-group-picker__group-name">{group.label}</OverflowText>
+                        <span className="tool-group-picker__group-count">
+                          {formatNumber(selectedInGroup)}/{formatNumber(group.tools.length)}
+                        </span>
+                      </div>
+                      <div className="tool-group-picker__group-actions" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="groupActions">
+                        {selectedInGroup > 0 && !allSelected ? (
+                          <Button
+                            variant="text"
+                            size="xs"
                             onClick={() => onSelectionChange(
-                              toggleToolSelection(selectedToolNames, tool.name),
+                              setToolGroupSelection(selectedToolNames, groupToolNames(group), false),
                             )}
                             disabled={disabled}
-                            aria-label={capabilityTooltipAriaLabel(tool.name, tool.description, tooltipFields)}
                           >
-                            {tool.name}
-                          </button>
-                        </AgentCapabilityTooltip>
-                      );
-                    })}
-                  </div>
-                </div>
+                            {t('agentsOverview.clearGroup')}
+                          </Button>
+                        ) : null}
+                        <Checkbox
+                          size="sm"
+                          checked={allSelected}
+                          indeterminate={selectedInGroup > 0 && !allSelected}
+                          onCheckedChange={(checked) => onSelectionChange(
+                            setToolGroupSelection(selectedToolNames, groupToolNames(group), checked),
+                          )}
+                          disabled={disabled || group.tools.length === 0}
+                          aria-label={allSelected
+                            ? t('agentsOverview.toolGroups.clearGroupTools', { name: group.label })
+                            : t('agentsOverview.toolGroups.enableGroupTools', { name: group.label })}
+                        />
+                      </div>
+                    </div>
+                  </FieldRow>
+                  <FieldRow align="start">
+                    <div className="tool-group-picker__token-grid" data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="tokenGrid">
+                      {group.tools.map((tool) => {
+                        const selected = selectedToolNames.includes(tool.name);
+                        const tooltipFields = toolTooltipFields(tool, t);
+                        return (
+                          <AgentCapabilityTooltip
+                            key={tool.name}
+                            title={tool.name}
+                            description={tool.description}
+                            fields={tooltipFields}
+                            titleMonospace
+                            placement="top"
+                          >
+                            <Button
+                              className="tool-group-picker__token"
+                              data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="token"
+                              data-openbitfun-state={selected ? 'selected' : undefined}
+                              variant={selected ? 'secondary' : 'outline'}
+                              size="sm"
+                              onClick={() => onSelectionChange(toggleToolSelection(selectedToolNames, tool.name))}
+                              disabled={disabled}
+                              aria-label={capabilityTooltipAriaLabel(tool.name, tool.description, tooltipFields)}
+                              aria-pressed={selected}
+                            >
+                              {tool.name}
+                            </Button>
+                          </AgentCapabilityTooltip>
+                        );
+                      })}
+                    </div>
+                  </FieldRow>
+                </FieldGroup>
               );
             })}
-          </section>
+          </FormSection>
         ))}
       </div>
       <GroupManagerModal
@@ -564,21 +583,20 @@ export const ToolGroupSummary: React.FC<ToolGroupSummaryProps> = ({
   selectedToolNames,
   userGroups,
 }) => {
-  const { t } = useTranslation('scenes/agents');
+  const { t } = useI18n('scenes/agents');
   const groups = useMemo(
     () => resolveToolGroupSummary(tools, userGroups, selectedToolNames, t),
     [selectedToolNames, t, tools, userGroups],
   );
 
   if (groups.length === 0) {
-    return <span data-openbitfun-component="tool-group-picker" data-openbitfun-part="empty" className="agent-card__empty-inline">{t('agentsOverview.toolGroups.noEnabledTools')}</span>;
+    return <span data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="empty" className="tool-group-summary__empty">{t('agentsOverview.toolGroups.noEnabledTools')}</span>;
   }
 
   return (
-    <div data-openbitfun-component="tool-group-picker" data-openbitfun-part="summary" className="tool-group-summary">
+    <div data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="summary" className="tool-group-summary">
       {groups.map((group) => (
-        <div key={group.id} className="tool-group-summary__group" data-openbitfun-component="tool-group-picker" data-openbitfun-part="summaryGroup">
-          <span className="tool-group-summary__label">{group.label}</span>
+        <FormSection key={group.id} headingAs="h4" title={group.label} data-openbitfun-product-component="tool-group-picker" data-openbitfun-product-part="summaryGroup">
           <div className="tool-group-summary__tools">
             {group.tools.map((tool) => {
               const tooltipFields = toolTooltipFields(tool, t);
@@ -590,14 +608,14 @@ export const ToolGroupSummary: React.FC<ToolGroupSummaryProps> = ({
                   fields={tooltipFields}
                   titleMonospace
                 >
-                  <span className="agent-card__chip">
+                  <StatusPill tone="neutral" className="tool-group-summary__item">
                     {tool.name.replace(/_/g, ' ')}
-                  </span>
+                  </StatusPill>
                 </AgentCapabilityTooltip>
               );
             })}
           </div>
-        </div>
+        </FormSection>
       ))}
     </div>
   );

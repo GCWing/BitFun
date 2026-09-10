@@ -9,6 +9,7 @@ export interface ScrollAreaProps extends HTMLAttributes<HTMLDivElement> {
   "data-openbitfun-component"?: string;
   "data-openbitfun-part"?: string;
   orientation?: ScrollAreaOrientation;
+  /** Auto reveals on viewport hover or keyboard focus; touch remains visible. */
   scrollbarVisibility?: ScrollbarVisibility;
 }
 

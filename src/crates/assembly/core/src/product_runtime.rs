@@ -1214,6 +1214,155 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
+    /// A bounded navigation read over metadata + current runtime owners. Initial
+    /// pages stay index-only; targeted reads can repair missing legacy outcomes
+    /// without restoring a Session or changing execution state.
+    pub async fn list_persisted_sessions_page_with_activity(
+        &self,
+        runtime: &AgentRuntime,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+        session_ids: Option<&[String]>,
+    ) -> OpenBitFunResult<SessionMetadataPage> {
+        use futures::StreamExt;
+        use openbitfun_agent_runtime::session_state::SessionState;
+        use openbitfun_services_core::session::page::{
+            empty_session_metadata_page, SessionActivitySummary,
+        };
+
+        if let Some(ids) = session_ids {
+            if ids.len() > 128 {
+                return Err(OpenBitFunError::Validation(
+                    "A session activity batch may contain at most 128 session ids".to_string(),
+                ));
+            }
+            for id in ids {
+                validate_persisted_session_id(id)?;
+            }
+        }
+        let mut page = if session_ids.is_some() {
+            empty_session_metadata_page()
+        } else {
+            self.list_persisted_sessions_page(workspace_path, cursor, limit)
+                .await?
+        };
+        let selected = match session_ids {
+            Some(ids) => {
+                self.persistence
+                    .session_metadata_by_ids(workspace_path, ids)
+                    .await?
+            }
+            None => page.sessions.clone(),
+        };
+        // Capture the mailbox once for the batch, including delegated owners.
+        let mut approvals = std::collections::HashMap::<String, usize>::new();
+        for request in runtime.pending_permission_requests().map_err(|error| {
+            OpenBitFunError::Service(format!(
+                "Session activity permission snapshot unavailable: {error}"
+            ))
+        })? {
+            *approvals.entry(request.session_id.clone()).or_default() += 1;
+            if let Some(parent) = request.delegation {
+                if parent.parent_session_id != request.session_id {
+                    *approvals.entry(parent.parent_session_id).or_default() += 1;
+                }
+            }
+        }
+        let manager = self.coordinator.get_session_manager();
+        let questions = openbitfun_agent_runtime::user_questions::get_user_input_manager()
+            .pending_question_counts();
+        let selected = futures::stream::iter(selected)
+            .map(|metadata| {
+                let manager = &manager;
+                let approvals = &approvals;
+                let questions = &questions;
+                async move {
+                    let native = metadata.custom_metadata.as_ref()
+                        .and_then(|custom| custom.get(SESSION_PROVIDER_METADATA_KEY))
+                        .and_then(serde_json::Value::as_str) != Some(SESSION_PROVIDER_ACP);
+                    let live = matches!(manager.get_session_state(&metadata.session_id),
+                        Some(SessionState::Processing { .. } | SessionState::Error { .. }))
+                        || self.scheduler.is_session_busy_or_queued(&metadata.session_id)
+                        || approvals.contains_key(&metadata.session_id)
+                        || questions.contains_key(&metadata.session_id);
+                    if native && !live && metadata.needs_last_turn_backfill() {
+                        // Publish metadata immediately. The application-level
+                        // sidebar synchronizer coalesces missing activities into
+                        // a targeted batch instead of blocking the first page.
+                        session_ids?;
+                        let session_id = metadata.session_id.clone();
+                        match self.persistence.backfill_session_last_turn(workspace_path, metadata).await {
+                            Ok(metadata) => Some(metadata),
+                            Err(error) => {
+                                // Omit only this unavailable activity. Existing
+                                // client backoff handles missing entries; the
+                                // Session and its history remain untouched.
+                                log::warn!("Failed to repair legacy session activity: session_id={}, error={}",
+                                    session_id, error);
+                                None
+                            }
+                        }
+                    } else {
+                        Some(metadata)
+                    }
+                }
+            })
+            .buffered(2)
+            .filter_map(|metadata| async { metadata })
+            .collect::<Vec<_>>()
+            .await;
+        page.activities = Some(
+            selected
+                .into_iter()
+                .map(|metadata| {
+                    let state = manager.get_session_state(&metadata.session_id);
+                    let (execution, active_turn_id) = match state {
+                        Some(SessionState::Processing {
+                            current_turn_id, ..
+                        }) => ("running", Some(current_turn_id)),
+                        _ if self.scheduler.queue_depth(&metadata.session_id) > 0 => {
+                            ("queued", None)
+                        }
+                        _ if self
+                            .scheduler
+                            .is_session_busy_or_queued(&metadata.session_id) =>
+                        {
+                            ("running", None)
+                        }
+                        Some(SessionState::Error { .. }) => ("error", None),
+                        _ if metadata
+                            .custom_metadata
+                            .as_ref()
+                            .and_then(|custom| custom.get(SESSION_PROVIDER_METADATA_KEY))
+                            .and_then(serde_json::Value::as_str)
+                            == Some(SESSION_PROVIDER_ACP) =>
+                        {
+                            ("external", None)
+                        }
+                        _ => ("idle", None),
+                    };
+                    SessionActivitySummary {
+                        pending_approvals: approvals
+                            .get(&metadata.session_id)
+                            .copied()
+                            .unwrap_or_default(),
+                        pending_questions: questions
+                            .get(&metadata.session_id)
+                            .copied()
+                            .unwrap_or_default(),
+                        session_id: metadata.session_id,
+                        execution: execution.to_string(),
+                        active_turn_id,
+                        last_turn: metadata.last_turn,
+                        unread_completion: metadata.unread_completion,
+                    }
+                })
+                .collect(),
+        );
+        Ok(page)
+    }
+
     /// Search presentation-safe persisted Session content at an already-resolved
     /// sessions root. The SQLite sidecar is reconciled against authoritative
     /// metadata before every query and stale transcript rows are never served.
@@ -2931,7 +3080,7 @@ mod tests {
         let root = SessionMetadata::new(
             "root".to_string(),
             "Root".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         let mut child = SessionMetadata::new(
@@ -3108,7 +3257,7 @@ mod tests {
         let root = SessionMetadata::new(
             "root".to_string(),
             "Root".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         let mut child = SessionMetadata::new(
@@ -3285,7 +3434,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Reload test".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -3557,7 +3706,7 @@ mod tests {
             let source = crate::agentic::core::Session::new_with_id(
                 source_session_id.clone(),
                 format!("Remote fork {host}"),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(remote_path.clone()),
                     remote_connection_id: Some(connection_id.to_string()),
@@ -3848,7 +3997,7 @@ mod tests {
         let source = crate::agentic::core::Session::new_with_id(
             "remote-source".into(),
             "Remote source".into(),
-            "agentic".into(),
+            "Standard".into(),
             crate::agentic::core::SessionConfig {
                 workspace_path: Some("/workspace/repo".into()),
                 remote_connection_id: Some("ssh-source".into()),
@@ -3971,7 +4120,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
             "Latest fork".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model-a".to_string(),
         );
         metadata.workspace_path = Some(workspace_root.to_string_lossy().into_owned());
@@ -4059,7 +4208,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 Some("session-transient-settlement".to_string()),
                 "Transient settlement".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(workspace_root.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -4072,7 +4221,7 @@ mod tests {
         let transient_turn_id = session_manager
             .start_dialog_turn(
                 &transient.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish transiently".to_string(),
                 Some("turn-transient-settlement".to_string()),
                 None,
@@ -4106,7 +4255,7 @@ mod tests {
         );
 
         assert_ne!(result.session_id, session_id);
-        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(result.agent_type, "Standard");
         assert_eq!(
             persistence
                 .load_session_turns(&storage_path, &result.session_id)
@@ -4334,7 +4483,7 @@ mod tests {
                 &SessionMetadata::new(
                     session_id.to_string(),
                     "Usage session".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )
@@ -4510,7 +4659,7 @@ mod tests {
                 &SessionMetadata::new(
                     runtime_session_id.to_string(),
                     "Runtime owned".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )

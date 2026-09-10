@@ -45,18 +45,18 @@
     },
     {
       "id": "openbitfun-midnight",
-      "bgPrimary": "#2b2d30",
-      "bgSecondary": "#1c1c1f",
+      "bgPrimary": "#1c1c1f",
+      "bgSecondary": "#313335",
       "bgScene": "#2b2d30",
       "isLight": false,
       "textPrimary": "#c8c8c8",
-      "textMuted": "#6f737a",
+      "textMuted": "#a1a1aa",
       "accentColor": "#60a5fa"
     },
     {
       "id": "openbitfun-china-style",
-      "bgPrimary": "#faf8f0",
-      "bgSecondary": "#f5f3e8",
+      "bgPrimary": "#f0ede0",
+      "bgSecondary": "#faf8f0",
       "bgScene": "#faf8f0",
       "isLight": true,
       "textPrimary": "#1c1c1f",
@@ -66,11 +66,11 @@
     {
       "id": "openbitfun-china-night",
       "bgPrimary": "#1c1c1f",
-      "bgSecondary": "#212019",
-      "bgScene": "#1c1c1f",
+      "bgSecondary": "#313335",
+      "bgScene": "#262626",
       "isLight": false,
       "textPrimary": "#e8e8e8",
-      "textMuted": "#928f89",
+      "textMuted": "#a1a1aa",
       "accentColor": "#73a5cc"
     },
     {
@@ -86,11 +86,11 @@
     {
       "id": "openbitfun-tokyo-night",
       "bgPrimary": "#1a1b26",
-      "bgSecondary": "#1e202e",
-      "bgScene": "#1a1b26",
+      "bgSecondary": "#2f334d",
+      "bgScene": "#24283b",
       "isLight": false,
       "textPrimary": "#c0caf5",
-      "textMuted": "#787c99",
+      "textMuted": "#9aa5ce",
       "accentColor": "#7aa2f7"
     }
   ]

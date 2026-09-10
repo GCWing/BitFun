@@ -248,7 +248,7 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
   assert.match(styles, /--openbitfun-control-chat-composer-action-icon-size/);
   assert.match(styles, /--openbitfun-control-chat-composer-control-height/);
   assert.match(styles, /--openbitfun-space-8/);
-  assert.match(styles, /--openbitfun-radius-2xl/);
+  assert.match(styles, /--openbitfun-control-composer-surface-radius/);
   assert.match(styles, /--openbitfun-color-surface-panel/);
   assert.match(styles, /--openbitfun-color-surface-subtle/);
   assert.match(styles, /--openbitfun-color-surface-raised/);
@@ -256,16 +256,12 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
     /\.\w+\[data-has-context=(?:"true"|true)\][^{]*\{[^}]*\}/,
   );
   assert.ok(contextBackgroundRule);
-  assert.match(
-    contextBackgroundRule[0],
-    /background:\s*color-mix\(in srgb,\s*var\(--openbitfun-color-surface-panel\)\s*94%,\s*var\(--openbitfun-color-content-primary\)\s*6%\)/,
-  );
-  assert.doesNotMatch(contextBackgroundRule[0], /\btransparent\b/);
-  assert.match(styles, /--openbitfun-color-action-neutral-border/);
-  assert.match(styles, /--openbitfun-shadow-base/);
+  assert.match(contextBackgroundRule[0], /background:\s*var\(--openbitfun-color-composer-context-background\)/);
+  assert.match(styles, /--openbitfun-color-composer-border/);
+  assert.match(styles, /--openbitfun-shadow-composer/);
   assert.match(
     styles,
-    /border:\s*var\(--openbitfun-border-width-default\)\s+solid\s+var\(--openbitfun-color-action-neutral-border\)/,
+    /border:\s*var\(--openbitfun-border-width-default\)\s+solid\s+var\(--openbitfun-color-composer-border\)/,
   );
   assert.match(styles, /min-block-size:\s*var\(--openbitfun-control-height-md\)/);
   assert.match(styles, /grid-template-areas:\s*"start content end"/);
@@ -276,7 +272,7 @@ test("ChatComposer geometry is driven by public system and semantic tokens", asy
   assert.match(styles, /"content content"\s*"start end"/);
   assert.match(
     styles,
-    /\[data-openbitfun-layout=(?:"compact"|compact)\][^{]*\{[^}]*block-size:\s*var\(--openbitfun-control-chat-composer-compact-height\)[^}]*border-radius:\s*var\(--openbitfun-radius-pill\)/,
+    /\[data-openbitfun-layout=(?:"compact"|compact)\][^{]*\{[^}]*block-size:\s*var\(--openbitfun-control-chat-composer-compact-height\)[^}]*border-radius:\s*var\(--openbitfun-control-composer-surface-radius\)/,
   );
   assert.match(
     styles,

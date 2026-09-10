@@ -24,14 +24,24 @@ use super::GitError;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// Ownership rejection wordings emitted by the Git CLI and by libgit2.
-const OWNERSHIP_REJECTION_MARKERS: [&str; 5] = [
-    "dubious ownership",
-    "is owned by someone else",
-    "is not owned by current user",
-    "not owned by current user",
-    "owned by a different user",
-];
+pub const REPOSITORY_UNTRUSTED_ERROR_PREFIX: &str =
+    crate::repository_trust::REPOSITORY_UNTRUSTED_ERROR_PREFIX;
+
+pub fn is_untrusted_repository_message(message: &str) -> bool {
+    crate::repository_trust::is_untrusted_repository_message(message)
+}
+
+pub fn normalize_trust_path(raw: &str) -> Option<String> {
+    crate::repository_trust::normalize_trust_path(raw)
+}
+
+pub fn untrusted_repository_path_from_message(message: &str) -> Option<String> {
+    crate::repository_trust::untrusted_repository_path_from_message(message)
+}
+
+pub fn untrusted_repository_error_message(repository_path: &str) -> String {
+    crate::repository_trust::untrusted_repository_error_message(repository_path)
+}
 
 // Repository-level phrasings only. A bare "does not exist" also matches Git
 // talking about an object, a ref or a pathspec inside a repository that is
@@ -89,11 +99,6 @@ fn contains_any(message: &str, markers: &[&str]) -> bool {
     markers.iter().any(|marker| lowered.contains(marker))
 }
 
-/// Whether a Git/libgit2 diagnostic is an ownership rejection.
-pub fn is_untrusted_repository_message(message: &str) -> bool {
-    contains_any(message, &OWNERSHIP_REJECTION_MARKERS)
-}
-
 /// Whether a Git/libgit2 diagnostic says no repository is there.
 ///
 /// What is neither this nor [`is_untrusted_repository_message`] is a probe that
@@ -103,110 +108,6 @@ pub fn is_untrusted_repository_message(message: &str) -> bool {
 /// repository" for a problem initializing cannot fix.
 pub fn is_missing_repository_message(message: &str) -> bool {
     contains_any(message, &MISSING_REPOSITORY_MARKERS)
-}
-
-/// True when the value carries a shape only Windows produces: a `\\server\share`
-/// or `\\?\...` prefix, or a `C:\` / `C:/` drive root.
-///
-/// This is a shape test on purpose, not `cfg!(windows)`: a Windows desktop
-/// driving a remote Linux workspace normalizes that host's paths, and a POSIX
-/// host can be handed a Windows path by a peer.
-fn looks_like_windows_path(value: &str) -> bool {
-    if value.starts_with('\\') {
-        return true;
-    }
-    let mut chars = value.chars();
-    matches!(
-        (chars.next(), chars.next(), chars.next()),
-        (Some(drive), Some(':'), Some('\\' | '/')) if drive.is_ascii_alphabetic()
-    )
-}
-
-/// Normalizes a repository path into the shape Git compares `safe.directory`
-/// entries against: forward slashes, no extended-length prefix, no trailing
-/// separator.
-pub fn normalize_trust_path(raw: &str) -> Option<String> {
-    let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    // Only a Windows-shaped path may have its backslashes rewritten. Backslash
-    // is an ordinary filename character on POSIX, and rewriting it would turn
-    // `/srv/we\ird/repo` into a `safe.directory` entry that can never match and
-    // a manual command naming a directory that does not exist.
-    let mut value = if looks_like_windows_path(trimmed) {
-        trimmed.replace('\\', "/")
-    } else {
-        trimmed.to_string()
-    };
-    // `\\?\UNC\server\share` is the extended-length spelling of the UNC path
-    // `\\server\share`. Dropping the whole prefix would leave
-    // `UNC/server/share`, which Git never matches — and the manual command we
-    // hand the user would name a path that does not exist.
-    let unc_prefix = value
-        .get(..8)
-        .filter(|prefix| prefix.eq_ignore_ascii_case("//?/UNC/"));
-    if unc_prefix.is_some() {
-        value = format!("//{}", &value[8..]);
-    } else if let Some(stripped) = value.strip_prefix("//?/") {
-        value = stripped.to_string();
-    }
-    while value.len() > 1 && value.ends_with('/') && !value.ends_with(":/") {
-        value.pop();
-    }
-
-    (!value.is_empty()).then_some(value)
-}
-
-/// Extracts the repository path Git named in an ownership rejection.
-///
-/// Both wordings quote the path first, before any remediation hint:
-/// `detected dubious ownership in repository at '<path>'` (CLI) and
-/// `repository path '<path>' is not owned by current user` (libgit2).
-///
-/// Only the line carrying the rejection itself is read. The CLI's advice block
-/// repeats the path on later lines, and reading those would make the result
-/// depend on how far the prose was truncated.
-pub fn untrusted_repository_path_from_message(message: &str) -> Option<String> {
-    if !is_untrusted_repository_message(message) {
-        return None;
-    }
-
-    message
-        .lines()
-        .filter(|line| contains_any(line, &OWNERSHIP_REJECTION_MARKERS))
-        .find_map(quoted_path_on_line)
-        // A wording we have not seen may put the path on its own line. Falling
-        // back to any quoted span still beats losing the path entirely.
-        .or_else(|| message.lines().find_map(quoted_path_on_line))
-}
-
-/// Takes the widest quoted span on a line: first quote to last quote of the same
-/// kind.
-///
-/// Git does not escape quotes inside the path it prints, so stopping at the
-/// first closing quote truncates `/srv/a'b/repo` to `/srv/a` — and that
-/// truncated path outranks the caller's in `classify_command_failure`, so it is
-/// what would be written into the user's global `safe.directory`, never
-/// reclaimed, and still not resolve the rejection.
-fn quoted_path_on_line(line: &str) -> Option<String> {
-    for quote in ['\'', '"'] {
-        let Some(open) = line.find(quote) else {
-            continue;
-        };
-        let start = open + quote.len_utf8();
-        let Some(end) = line.rfind(quote) else {
-            continue;
-        };
-        if end < start {
-            continue;
-        }
-        if let Some(path) = normalize_trust_path(&line[start..end]) {
-            return Some(path);
-        }
-    }
-    None
 }
 
 /// The command a user can run themselves when the product cannot apply the
@@ -278,18 +179,6 @@ fn shell_quote_pretty(value: &str) -> String {
 
 fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
-}
-
-/// Stable prefix every interface uses to carry an ownership rejection across a
-/// command boundary that only transports strings (Tauri `Result<T, String>`,
-/// JSON-RPC error `data`). Frontends branch on this instead of on prose, which
-/// is localized by Git itself and differs between the CLI and libgit2.
-pub const REPOSITORY_UNTRUSTED_ERROR_PREFIX: &str = "git_repository_untrusted:";
-
-/// Boundary error string for an ownership rejection. One producer so the
-/// desktop and app-server surfaces cannot drift apart on the wire.
-pub fn untrusted_repository_error_message(repository_path: &str) -> String {
-    format!("{REPOSITORY_UNTRUSTED_ERROR_PREFIX} {repository_path}")
 }
 
 fn untrusted_error(repository_path: Option<String>, detail: impl Into<String>) -> GitError {

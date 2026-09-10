@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bookmark } from 'lucide-react';
-import { Icon as CatalogIcon, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon as CatalogIcon, Tooltip } from '@openbitfun/ui';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import type { ShellEntry } from '../hooks/shellEntryTypes';
 
@@ -48,7 +48,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
   const displayCwd = getDisplayCwd(entry);
 
   return (
-    <div
+    <div data-overflow-trigger
       role="button"
       tabIndex={0}
       className={[
@@ -83,7 +83,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
               <CatalogIcon name="terminal" size="sm" className="openbitfun-shell-nav__terminal-icon" />
             )}
 
-            <span className="openbitfun-shell-nav__terminal-label" data-testid="shell-command-text">{entry.name}</span>
+            <OverflowText className="openbitfun-shell-nav__terminal-label" data-testid="shell-command-text">{entry.name}</OverflowText>
 
             {showSavedBadge ? (
               <span className="openbitfun-shell-nav__saved-indicator">{savedBadgeLabel}</span>
@@ -116,9 +116,9 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
       </div>
 
       {displayCwd ? (
-        <span className="openbitfun-shell-nav__terminal-cwd" title={displayCwd}>
+        <span className="openbitfun-shell-nav__terminal-cwd" title={displayCwd}><OverflowText>
           {displayCwd}
-        </span>
+        </OverflowText></span>
       ) : null}
     </div>
   );

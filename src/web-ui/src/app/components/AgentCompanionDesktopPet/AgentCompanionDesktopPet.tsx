@@ -1,4 +1,4 @@
-import { Menu, MenuItem, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Menu, MenuItem, ScrollArea } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { emit, listen } from '@tauri-apps/api/event';
@@ -924,12 +924,12 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                 const bubbleClassName = `openbitfun-agent-companion-window__bubble openbitfun-agent-companion-window__bubble--${task.state}${isSingleTask ? ' openbitfun-agent-companion-window__bubble--single' : ''}${isComposingTask ? ' openbitfun-agent-companion-window__bubble--composing' : ''}`;
                 const bubbleBody = (
                   <>
-                    <span className="openbitfun-agent-companion-window__bubble-title" data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="bubbleTitle">
+                    <OverflowText className="openbitfun-agent-companion-window__bubble-title" data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="bubbleTitle">
                       {task.title}
-                    </span>
-                    <span className="openbitfun-agent-companion-window__bubble-status" data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="bubbleStatus">
+                    </OverflowText>
+                    <OverflowText className="openbitfun-agent-companion-window__bubble-status" data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="bubbleStatus">
                       {t(task.labelKey, { defaultValue: task.defaultLabel })}
-                    </span>
+                    </OverflowText>
                     {isSingleTask && task.latestOutput && (() => {
                       const typedOutput = typedOutputBySessionId[task.sessionId];
                       const visibleOutput = typedOutput?.visible ?? seedTypewriterOutput(task.latestOutput);

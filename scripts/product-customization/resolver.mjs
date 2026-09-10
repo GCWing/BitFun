@@ -17,7 +17,7 @@ const ROOT_FIELDS = new Set([
 ]);
 const MEMBERS_FIELDS = new Set(['desktop', 'cli']);
 const COMMON_MEMBER_FIELDS = new Set(['displayNameKey', 'binaryName']);
-const DESKTOP_MEMBER_FIELDS = new Set([...COMMON_MEMBER_FIELDS, 'bundleId']);
+const BUNDLED_MEMBER_FIELDS = new Set([...COMMON_MEMBER_FIELDS, 'bundleId']);
 
 export class ProductDefinitionError extends Error {
   constructor(code, message, action) {
@@ -192,12 +192,13 @@ function ownedLocaleFile(localeRoot, locale) {
 function validateMember(raw, member) {
   const owner = `members.${member}`;
   const value = requireObject(raw, owner);
-  rejectUnknownFields(value, member === 'desktop' ? DESKTOP_MEMBER_FIELDS : COMMON_MEMBER_FIELDS, owner);
+  const bundled = member === 'desktop';
+  rejectUnknownFields(value, bundled ? BUNDLED_MEMBER_FIELDS : COMMON_MEMBER_FIELDS, owner);
   const result = {
     displayNameKey: requiredString(value.displayNameKey, `${owner}.displayNameKey`),
     binaryName: binaryName(value.binaryName, `${owner}.binaryName`),
   };
-  if (member === 'desktop') result.bundleId = bundleId(value.bundleId, `${owner}.bundleId`);
+  if (bundled) result.bundleId = bundleId(value.bundleId, `${owner}.bundleId`);
   return result;
 }
 
@@ -234,7 +235,9 @@ function loadProductNames(rootDir, localeRoot, displayNameKeys) {
 }
 
 export function resolveProductDefinition({ rootDir, productConfig, member }) {
-  if (!['desktop', 'cli'].includes(member)) fail('invalid_member', `Unsupported product member: ${member}`, 'Use desktop or cli.');
+  if (!['desktop', 'cli'].includes(member)) {
+    fail('invalid_member', `Unsupported product member: ${member}`, 'Use desktop or cli.');
+  }
   const canonicalRoot = realpathSync.native(resolve(rootDir));
   const defaultPath = realpathSync.native(join(canonicalRoot, 'products', 'openbitfun', 'product.jsonc'));
   const selectedPath = resolve(productConfig || defaultPath);
@@ -264,7 +267,10 @@ export function resolveProductDefinition({ rootDir, productConfig, member }) {
   const locales = loadProductNames(
     canonicalRoot,
     localeRoot,
-    [normalizedMembers.desktop.displayNameKey, normalizedMembers.cli.displayNameKey],
+    [
+      normalizedMembers.desktop.displayNameKey,
+      normalizedMembers.cli.displayNameKey,
+    ],
   );
   const selected = normalizedMembers[member];
   const assemblyContent = {

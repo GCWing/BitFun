@@ -61,22 +61,6 @@ const resolveBtwSessionTitle = (childSessionId: string): string => {
   return i18nService.t('flow-chat:btw.threadLabel');
 };
 
-const scheduleFrame = (callback: FrameRequestCallback): void => {
-  if (typeof globalThis.requestAnimationFrame === 'function') {
-    globalThis.requestAnimationFrame(callback);
-    return;
-  }
-  setTimeout(() => callback(Date.now()), 0);
-};
-
-const clearSessionUnreadCompletionAfterRender = (sessionId: string): void => {
-  scheduleFrame(() => {
-    scheduleFrame(() => {
-      flowChatStore.clearSessionUnreadCompletion(sessionId);
-    });
-  });
-};
-
 export const isBtwSessionPanelContent = (content: PanelContent | null | undefined): boolean =>
   content?.type === BTW_SESSION_PANEL_TYPE;
 
@@ -205,7 +189,7 @@ function ensureBtwSessionAvailableInternal(
     flowChatStore.addExternalSession(
       params.childSessionId,
       params.sessionTitle || resolveBtwSessionTitle(params.childSessionId),
-      params.agentType || parentSession?.mode || 'agentic',
+      params.agentType || parentSession?.mode || 'Standard',
       resolvedWorkspacePath,
       {
         parentSessionId: params.parentSessionId,
@@ -320,7 +304,6 @@ export function openBtwSessionInAuxPane(params: {
       }
       canvasStore.updateTabContent(existing.tab.id, existing.groupId, content);
       canvasStore.switchToTab(existing.tab.id, existing.groupId);
-      clearSessionUnreadCompletionAfterRender(params.childSessionId);
       return;
     }
   }
@@ -339,7 +322,6 @@ export function openBtwSessionInAuxPane(params: {
     replaceExisting: false,
     mode: 'agent',
   });
-  clearSessionUnreadCompletionAfterRender(params.childSessionId);
 }
 
 export function closeBtwSessionInAuxPane(childSessionId: string): boolean {

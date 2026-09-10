@@ -243,6 +243,13 @@ watcher；用户通过统一的 `/reload instructions`（或默认 `/reload`）�
 
 ### 5.2 Agents、Modes 与 Skills
 
+标准 Skill 根使用有界递归发现（包括 Codex 的 `.system` 等容器目录），遇到 `SKILL.md` 后将该目录视为包边界，不继续收集其示例中的 Skill。
+本地扫描跟随目录链接并按规范路径防环；远程扫描通过 workspace filesystem 跟随链接，以深度和目录预算终止循环。远程项目根与本地项目根采用相同的项目优先、用户次之顺序。
+直接子目录保留原有 `scope::source-slot::directory` key；嵌套目录以根内 POSIX 相对路径作为末段，避免不同容器内同名目录冲突。
+按名称的默认选择维持现有覆盖规则；Web UI 的 `@`、`/`、`$` 和输入框加号菜单中的技能列表只显示当前模式按覆盖规则选出的名称赢家；选择后插入 `[$技能名]`，仍受全局、模式和作者的用户调用可见性约束。已有的完整 key 引用继续兼容解析与调用。
+扫描诊断与可用清单分别返回。Desktop 现有列表命令通过可选 `includeDiagnostics` 返回报告；参数缺省仍返回数组，新客户端接受旧主机的数组并标明诊断不可用。单个目录或文件失败不清空已发现技能。
+
+
 兼容定义进入现有 Agent 归属模块，而不是新建 OpenCode Agent Runtime。当前已实现范围按是否能保持行为等价划分：
 
 - 可等价映射并激活：名称、description、生产 V1 `prompt/disable` 与 Core V2 `system/disabled` 安全子集、`primary|subagent|all`、隐藏状态、

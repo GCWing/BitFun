@@ -22,8 +22,8 @@ test("ActivityItem keeps identity, content, metadata, and actions independent", 
   assert.match(markup, /data-openbitfun-component="activity-item"/);
   assert.match(markup, /data-appearance="surface"/);
   assert.match(markup, /data-openbitfun-part="leading"/);
-  assert.match(markup, /data-openbitfun-part="label">Run command<\/span>/);
-  assert.match(markup, /data-openbitfun-part="description">pnpm run check<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>Run command<\/span><\/span>/);
+  assert.match(markup, /data-openbitfun-part="description"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>pnpm run check<\/span><\/span>/);
   assert.match(markup, /data-openbitfun-part="metadata"/);
   assert.match(markup, /data-openbitfun-part="divider"/);
   assert.match(markup, /data-openbitfun-part="actions"/);

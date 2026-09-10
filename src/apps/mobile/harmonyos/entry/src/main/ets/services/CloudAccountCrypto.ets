@@ -1,60 +1,27 @@
+import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { Encoding } from './Encoding';
-import openbitfunCrypto from 'libopenbitfun_crypto.so';
+import { X25519 } from './X25519';
 
-export interface CloudAccountKdfParams {
-  m: number;
-  t: number;
-  p: number;
-}
-
-/**
- * Desktop-compatible Argon2id derivation. Keep this adapter isolated so the
- * relay protocol and the UI never depend on a particular crypto provider.
- */
+/** Per-device ECDH and the Relay v1.0.0 domain-separated HKDF contract. */
 export class CloudAccountCrypto {
-  private static readonly KDF_TIMEOUT_MS: number = 30000;
-
-  static async derivePasswordHash(password: string, salt: Uint8Array, params: CloudAccountKdfParams): Promise<Uint8Array> {
-    CloudAccountCrypto.validateParams(params, salt);
-    return CloudAccountCrypto.withTimeout(
-      openbitfunCrypto.argon2idRaw(Encoding.utf8ToBytes(password), salt, params.m, params.t, params.p),
-      CloudAccountCrypto.KDF_TIMEOUT_MS
-    );
-  }
-
-  private static withTimeout(operation: Promise<Uint8Array>, timeoutMs: number): Promise<Uint8Array> {
-    return new Promise<Uint8Array>((resolve, reject) => {
-      let settled = false;
-      const timeoutId = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        reject(new Error('Argon2id operation timed out.'));
-      }, timeoutMs);
-      operation.then((value: Uint8Array) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timeoutId);
-        resolve(value);
-      }).catch((err: Object) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timeoutId);
-        reject(err);
-      });
-    });
-  }
-
-  private static validateParams(params: CloudAccountKdfParams, salt: Uint8Array): void {
-    if (salt.length < 8 || salt.length > 64 ||
-      params.m < 8 * 1024 || params.m > 256 * 1024 ||
-      params.t < 1 || params.t > 10 || params.p < 1 || params.p > 16) {
-      throw new Error('Invalid Argon2id parameters.');
+  static async deriveDeviceKey(secret: Uint8Array, peerPublicKey: Uint8Array): Promise<Uint8Array> {
+    const shared = X25519.scalarMult(secret, peerPublicKey);
+    if (shared.every((value: number): boolean => value === 0)) {
+      throw new Error('Invalid peer public key.');
     }
+    const own = X25519.scalarMultBase(secret);
+    let ownFirst = true;
+    for (let i = 0; i < 32; i++) {
+      if (own[i] !== peerPublicKey[i]) { ownFirst = own[i] < peerPublicKey[i]; break; }
+    }
+    const params: cryptoFramework.HKDFSpec = {
+      algName: 'HKDF', key: shared,
+      salt: Encoding.utf8ToBytes('OpenBitFun Relay v1.0.0 device key'),
+      info: ownFirst ? Encoding.concat(own, peerPublicKey) : Encoding.concat(peerPublicKey, own),
+      keySize: 32
+    };
+    try {
+      return (await cryptoFramework.createKdf('HKDF|SHA256|EXTRACT_AND_EXPAND').generateSecret(params)).data;
+    } finally { shared.fill(0); }
   }
 }

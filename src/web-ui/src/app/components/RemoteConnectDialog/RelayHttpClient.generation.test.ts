@@ -1,413 +1,74 @@
-import { describe, expect, it, vi } from 'vitest';
-import {
-  DelegatedAccountChangedError,
-  RelayHttpClient,
-} from '../../../../../mobile-web/src/services/RelayHttpClient';
-import { encrypt, fromB64 } from '../../../../../mobile-web/src/services/E2EEncryption';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { AccountIdentityChangedError, RelayHttpClient } from '../../../../../mobile-web/src/services/RelayHttpClient';
+import { deriveDeviceMessageKey, encrypt, toB64, generateKeyPair } from '../../../../../mobile-web/src/services/E2EEncryption';
 
-const masterKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
-const replacementMasterKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(8)));
+const identity = (userId = 'user-a') => ({ token: `token-${userId}`, userId, deviceId: 'browser', masterKey: new Uint8Array(32).fill(userId === 'user-a' ? 7 : 8) });
+const peerPublicKey = (await generateKeyPair()).publicKey;
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
+beforeEach(() => { vi.stubGlobal('window', globalThis); });
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
+describe.each(['https://remote.openbitfun.com/v/1.0.0', 'http://192.168.1.9:9700'])('account device routing on %s', (relayUrl) => {
+  it('rejects an unauthenticated constructor and sends nothing after logout', async () => {
+    expect(() => new RelayHttpClient(relayUrl, { ...identity(), token: '' })).toThrow();
+    const client = new RelayHttpClient(relayUrl, identity());
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    client.resetConnectionIdentity();
+    await expect(client.listDevices()).rejects.toThrow('Sign in');
+    expect(fetch).not.toHaveBeenCalled();
   });
-  return { promise, resolve, reject };
-}
-
-describe('RelayHttpClient delegated identity generations', () => {
-  it.each(['Unauthorized tool provider', 'Upstream returned HTTP 401'])(
-    'does not replay a mutation after an authenticated remote error: %s',
-    async (message) => {
-      const client = new RelayHttpClient('https://relay.example.com', 'room');
-      const delegate = vi.spyOn(client, 'sendCommand').mockResolvedValue({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      });
-      await client.requestDelegatedIdentity();
-      const encrypted = await encrypt(fromB64(masterKey), JSON.stringify({ resp: 'error', message }));
-      const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
-        encrypted_data: encrypted.data, nonce: encrypted.nonce,
-      }), { status: 200 }));
-      (client as any).fetchWithTimeout = fetchMock;
-
-      await expect(client.sendDeviceRpc('peer-a', { cmd: 'cancel_task', session_id: 'session-a' }))
-        .rejects.toThrow(message);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(delegate).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it('advances the target epoch for an initial delegated account owner', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const changes: number[] = [];
-    client.onControlTargetChange((snapshot) => changes.push(snapshot.epoch));
-    vi.spyOn(client, 'sendCommand').mockResolvedValueOnce({
-      resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-      user_id: 'user-a', device_id: 'home-a',
-    });
+  it('invalidates target state and notifies observers on account replacement', () => {
+    const client = new RelayHttpClient(relayUrl, identity());
+    client.setTargetDeviceId('desktop');
     const epoch = client.controlTargetEpoch;
-
-    await expect(client.requestDelegatedIdentity()).resolves.toBe(true);
-
+    const listener = vi.fn(); client.onAccountOwnerChange(listener, { emitCurrent: true });
+    client.setAccountIdentity(identity('user-b'));
+    expect(client.targetDeviceId).toBeNull();
     expect(client.controlTargetEpoch).toBeGreaterThan(epoch);
-    expect(client.getControlTargetSnapshot()).toMatchObject({
-      deviceId: 'home-a',
-      homeDeviceId: 'home-a',
-      epoch: client.controlTargetEpoch,
-    });
-    expect(changes).toEqual([client.controlTargetEpoch]);
+    expect(listener.mock.calls.map(([event]) => event.userId)).toEqual(['user-a', 'user-b']);
+    client.resetConnectionIdentity();
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'unavailable', userId: null }));
   });
-
-  it('forces a target epoch advance when the account is replaced on the same home', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'shared-home',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-b', master_key: replacementMasterKey,
-        user_id: 'user-b', device_id: 'shared-home',
-      });
-    await client.requestDelegatedIdentity();
-    const firstOwnerEpoch = client.controlTargetEpoch;
-
-    await client.requestDelegatedIdentity({ force: true });
-
-    expect(client.pairedDeviceId).toBe('shared-home');
-    expect(client.controlTargetEpoch).toBeGreaterThan(firstOwnerEpoch);
+  it.each([200, 401])('discards the old directory response (%s) without clearing a replacement account', async (status) => {
+    const pending = deferred<Response>(); vi.stubGlobal('fetch', vi.fn(() => pending.promise));
+    const client = new RelayHttpClient(relayUrl, identity());
+    const result = client.listDevices();
+    client.setAccountIdentity(identity('user-b'));
+    pending.resolve(Response.json([], { status }));
+    await expect(result).rejects.toBeInstanceOf(AccountIdentityChangedError);
+    expect(client.accountUserId).toBe('user-b');
   });
-
-  it('does not manufacture a target change for an initial unavailable identity', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const changes: number[] = [];
-    client.onControlTargetChange((snapshot) => changes.push(snapshot.epoch));
-    vi.spyOn(client, 'sendCommand').mockResolvedValueOnce({
-      resp: 'error', message: 'Not logged in',
-    });
-    const epoch = client.controlTargetEpoch;
-
-    await expect(client.requestDelegatedIdentity()).resolves.toBe(false);
-
-    expect(client.controlTargetEpoch).toBe(epoch);
-    expect(client.pairedDeviceId).toBeNull();
-    expect(client.homeDeviceId).toBeNull();
-    expect(changes).toEqual([]);
+  it.each(['Unauthorized tool provider', 'Upstream returned HTTP 401'])('never replays an authenticated mutation error: %s', async (message) => {
+    const client = new RelayHttpClient(relayUrl, identity());
+    const key = deriveDeviceMessageKey(identity().masterKey, peerPublicKey);
+    const encrypted = await encrypt(key, JSON.stringify({ resp: 'error', message }));
+    const fetch = vi.fn(async (url: string) => url.endsWith('/key')
+      ? Response.json({ device_id: 'desktop', public_key: toB64(peerPublicKey) })
+      : Response.json({ encrypted_data: encrypted.data, nonce: encrypted.nonce }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(client.sendDeviceRpc('desktop', { cmd: 'cancel_task' })).rejects.toThrow(message);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe(`${relayUrl}/api/devices/desktop/key`);
   });
-
-  it('commits only the latest concurrent delegation response', async () => {
-    const client = new RelayHttpClient('https://relay.example.com///', 'room');
-    const first = deferred<any>();
-    const second = deferred<any>();
-    vi.spyOn(client, 'sendCommand')
-      .mockImplementationOnce(() => first.promise)
-      .mockImplementationOnce(() => second.promise);
-
-    const firstRequest = client.requestDelegatedIdentity({ force: true });
-    const secondRequest = client.requestDelegatedIdentity({ force: true });
-    second.resolve({
-      resp: 'delegate_identity', token: 'token-b', master_key: masterKey,
-      user_id: 'user-b', device_id: 'home-b',
-    });
-    await expect(secondRequest).resolves.toBe(true);
-    first.resolve({
-      resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-      user_id: 'user-a', device_id: 'home-a',
-    });
-    await expect(firstRequest).resolves.toBe(false);
-
-    expect(client.homeDeviceId).toBe('home-b');
-    expect(client.pairedDeviceId).toBe('home-b');
+  it('does not post a command after the target changes during key lookup', async () => {
+    const pending = deferred<Response>(); const fetch = vi.fn(() => pending.promise); vi.stubGlobal('fetch', fetch);
+    const client = new RelayHttpClient(relayUrl, identity()); client.setTargetDeviceId('desktop');
+    const result = client.sendDeviceRpc('desktop', { cmd: 'cancel_task' });
+    client.setTargetDeviceId('another');
+    pending.resolve(Response.json({ device_id: 'desktop', public_key: toB64(peerPublicKey) }));
+    await expect(result).rejects.toBeInstanceOf(AccountIdentityChangedError);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
-
-  it('keeps the last committed identity available while a forced refresh is pending', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const refresh = deferred<any>();
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      })
-      .mockImplementationOnce(() => refresh.promise);
-    await client.requestDelegatedIdentity({ force: true });
-
-    const pendingRefresh = client.requestDelegatedIdentity({ force: true });
-    expect(client.hasDelegatedIdentity).toBe(true);
-    expect(client.delegatedUserId).toBe('user-a');
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(
-      JSON.stringify([{ device_id: 'old-a', device_name: 'Old A', online: true }]),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ));
-    (client as any).fetchWithTimeout = fetchMock;
-    await expect(client.listDevices()).rejects.toThrow('Delegated identity changed');
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    refresh.resolve({
-      resp: 'delegate_identity', token: 'token-a2', master_key: masterKey,
-      user_id: 'user-a', device_id: 'home-a',
-    });
-    await expect(pendingRefresh).resolves.toBe(true);
-  });
-
-  it('restores the last confirmed identity after a forced refresh transport failure', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      })
-      .mockRejectedValueOnce(new Error('Desktop temporarily unavailable'));
-    await client.requestDelegatedIdentity({ force: true });
-
-    await expect(client.requestDelegatedIdentity({ force: true }))
-      .rejects.toThrow('Desktop temporarily unavailable');
-    (client as any).fetchWithTimeout = vi.fn().mockResolvedValueOnce(new Response(
-      JSON.stringify([{ device_id: 'home-a', device_name: 'Home A', online: true }]),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ));
-
-    await expect(client.listDevices()).resolves.toHaveLength(1);
-  });
-
-  it('does not let an old 401 clear a newly delegated account', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand').mockResolvedValueOnce({
-      resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-      user_id: 'user-a', device_id: 'home-a',
-    });
-    await client.requestDelegatedIdentity({ force: true });
-    const oldAccountEpoch = client.delegatedAccountEpoch;
-
-    const oldList = deferred<Response>();
-    (client as any).fetchWithTimeout = vi.fn(() => oldList.promise);
-    const staleRequest = client.listDevices();
-
-    vi.spyOn(client, 'sendCommand').mockResolvedValueOnce({
-      resp: 'delegate_identity', token: 'token-b', master_key: masterKey,
-      user_id: 'user-b', device_id: 'home-b',
-    });
-    await client.requestDelegatedIdentity({ force: true });
-
-    const unauthorized = new Error('List devices failed: HTTP 401') as Error & { status: number };
-    unauthorized.status = 401;
-    oldList.reject(unauthorized);
-    await expect(staleRequest).rejects.toBeInstanceOf(DelegatedAccountChangedError);
-    expect(client.hasDelegatedIdentity).toBe(true);
-    expect(client.homeDeviceId).toBe('home-b');
-    expect(client.pairedDeviceId).toBe('home-b');
-    expect(client.delegatedAccountEpoch).toBeGreaterThan(oldAccountEpoch);
-    expect(client.delegatedUserId).toBe('user-b');
-  });
-
-  it('returns a successful device list after refreshing an unauthorized identity', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'expired-token', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'fresh-token', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      });
-    await client.requestDelegatedIdentity({ force: true });
-    const expiredGeneration = client.delegatedIdentityGeneration;
-
-    (client as any).fetchWithTimeout = vi.fn()
-      .mockResolvedValueOnce(new Response(null, { status: 401 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([
-        { device_id: 'peer-a', device_name: 'Peer A', online: true },
-      ]), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }));
-
-    await expect(client.listDevices()).resolves.toEqual([
-      { device_id: 'peer-a', device_name: 'Peer A', online: true },
-    ]);
-    expect(client.delegatedIdentityGeneration).toBeGreaterThan(expiredGeneration);
-  });
-
-  it('accepts a 401 retry while advancing the account epoch for a replacement account', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'expired-token', master_key: masterKey,
-        user_id: 'user-a', device_id: 'shared-home',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'replacement-token', master_key: replacementMasterKey,
-        user_id: 'user-b', device_id: 'shared-home',
-      });
-    await client.requestDelegatedIdentity({ force: true });
-    const accountEpoch = client.delegatedAccountEpoch;
-    client.setPairedDeviceId('peer-from-user-a');
-
-    (client as any).fetchWithTimeout = vi.fn()
-      .mockResolvedValueOnce(new Response(null, { status: 401 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([
-        { device_id: 'peer-b', device_name: 'Peer B', online: true },
-      ]), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }));
-
-    await expect(client.listDevices()).resolves.toEqual([
-      { device_id: 'peer-b', device_name: 'Peer B', online: true },
-    ]);
-    expect(client.delegatedAccountEpoch).toBeGreaterThan(accountEpoch);
-    expect(client.pairedDeviceId).toBe('shared-home');
-    expect(client.delegatedUserId).toBe('user-b');
-  });
-
-  it('advances the account epoch when the user changes on the same home device', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'shared-home',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-b', master_key: masterKey,
-        user_id: 'user-b', device_id: 'shared-home',
-      });
-
-    await client.requestDelegatedIdentity({ force: true });
-    const accountEpoch = client.delegatedAccountEpoch;
-    client.setPairedDeviceId('peer-from-user-a');
-    await client.requestDelegatedIdentity({ force: true });
-
-    expect(client.delegatedAccountEpoch).toBeGreaterThan(accountEpoch);
-    expect(client.pairedDeviceId).toBe('shared-home');
-    expect(client.delegatedUserId).toBe('user-b');
-  });
-
-  it('keeps the account epoch stable across token refresh for the same account', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a2', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      });
-
-    await client.requestDelegatedIdentity({ force: true });
-    const accountEpoch = client.delegatedAccountEpoch;
-    const targetEpoch = client.controlTargetEpoch;
-    await client.requestDelegatedIdentity({ force: true });
-
-    expect(client.delegatedAccountEpoch).toBe(accountEpoch);
-    expect(client.controlTargetEpoch).toBe(targetEpoch);
-  });
-
-  it('does not replay an A-owned device RPC after a 401 delegates account B', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'expired-token', master_key: masterKey,
-        user_id: 'user-a', device_id: 'shared-home',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'replacement-token', master_key: replacementMasterKey,
-        user_id: 'user-b', device_id: 'shared-home',
-      });
-    await client.requestDelegatedIdentity({ force: true });
-    client.setPairedDeviceId('peer-owned-by-a');
-    const changes: string[] = [];
-    client.onDelegatedAccountOwnerChange((change) => changes.push(change.kind));
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 }));
-    (client as any).fetchWithTimeout = fetchMock;
-
-    await expect(client.sendDeviceRpc('peer-owned-by-a', { cmd: 'get_sessions' }))
-      .rejects.toBeInstanceOf(DelegatedAccountChangedError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(changes).toEqual(['replacement']);
-    expect(client.delegatedUserId).toBe('user-b');
-    expect(client.pairedDeviceId).toBe('shared-home');
-  });
-
-  it('notifies a listener when a soft-timed-out initial delegation commits later', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const delegation = deferred<any>();
-    vi.spyOn(client, 'sendCommand').mockImplementationOnce(() => delegation.promise);
-    const pending = client.requestDelegatedIdentity();
-    const changes: Array<{ kind: string; userId: string | null }> = [];
-    client.onDelegatedAccountOwnerChange((change) => changes.push({
-      kind: change.kind,
-      userId: change.userId,
-    }));
-
-    delegation.resolve({
-      resp: 'delegate_identity', token: 'late-token', master_key: masterKey,
-      user_id: 'late-user', device_id: 'late-home',
-    });
-
-    await expect(pending).resolves.toBe(true);
-    expect(changes).toEqual([{ kind: 'initial', userId: 'late-user' }]);
-  });
-
-  it('can replay an identity committed before the app owner listener attaches', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand').mockResolvedValueOnce({
-      resp: 'delegate_identity', token: 'token-b', master_key: replacementMasterKey,
-      user_id: 'user-b', device_id: 'home-b',
-    });
-    await client.requestDelegatedIdentity();
-
-    const changes: Array<{ kind: string; userId: string | null }> = [];
-    client.onDelegatedAccountOwnerChange((change) => changes.push({
-      kind: change.kind,
-      userId: change.userId,
-    }), { emitCurrent: true });
-
-    expect(changes).toEqual([{ kind: 'initial', userId: 'user-b' }]);
-  });
-
-  it('publishes unavailable only after a confirmed no-identity response', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        user_id: 'user-a', device_id: 'home-a',
-      })
-      .mockResolvedValueOnce({ resp: 'error', message: 'Not logged in' });
-    await client.requestDelegatedIdentity({ force: true });
-    const changes: string[] = [];
-    client.onDelegatedAccountOwnerChange((change) => changes.push(change.kind));
-
-    await expect(client.requestDelegatedIdentity({ force: true })).resolves.toBe(false);
-    expect(changes).toEqual(['unavailable']);
-    expect(client.hasDelegatedIdentity).toBe(false);
-    expect(client.homeDeviceId).toBeNull();
-    expect(client.pairedDeviceId).toBeNull();
-  });
-
-  it('uses the master key when legacy delegated responses omit user_id', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-a', master_key: masterKey,
-        device_id: 'shared-home',
-      })
-      .mockResolvedValueOnce({
-        resp: 'delegate_identity', token: 'token-b', master_key: replacementMasterKey,
-        device_id: 'shared-home',
-      });
-
-    await client.requestDelegatedIdentity({ force: true });
-    const accountEpoch = client.delegatedAccountEpoch;
-    client.setPairedDeviceId('legacy-peer-a');
-    await client.requestDelegatedIdentity({ force: true });
-
-    expect(client.delegatedAccountEpoch).toBeGreaterThan(accountEpoch);
-    expect(client.pairedDeviceId).toBe('shared-home');
-    expect(client.delegatedUserId).toBeNull();
+  it('stops transient directory retries when the account changes during backoff', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(async () => Response.json({}, { status: 503 })); vi.stubGlobal('fetch', fetch);
+    const client = new RelayHttpClient(relayUrl, identity());
+    const result = client.listDevices();
+    const checked = expect(result).rejects.toBeInstanceOf(AccountIdentityChangedError);
+    await vi.advanceTimersByTimeAsync(1);
+    client.setAccountIdentity(identity('user-b'));
+    await vi.advanceTimersByTimeAsync(300);
+    await checked;
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

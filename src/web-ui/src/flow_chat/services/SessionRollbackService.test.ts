@@ -28,6 +28,13 @@ import {
 import { pendingQueueManager } from './flow-chat-manager/PendingQueueModule';
 
 describe('SessionRollbackService', () => {
+  it('rejects detached history mutation before any local backend call', async () => {
+    sessions.set('dispatch-session', { config: { dispatchJobId: 'job-remote' } });
+    await expect(rollbackSessionToTurn({ sessionId: 'dispatch-session', targetTurnId: 'turn-1', kind: 'rollback' }))
+      .rejects.toThrow('detached remote session');
+    expect(agentApiMock.rollbackSessionToTurn).not.toHaveBeenCalled();
+    expect(useSessionMutationStore.getState().mutations.size).toBe(0);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     loadSessionHistory.mockResolvedValue(undefined);

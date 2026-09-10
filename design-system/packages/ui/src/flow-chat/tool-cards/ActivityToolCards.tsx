@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type { HTMLAttributes, ReactNode } from "react";
 import { Hourglass, Info, Terminal, Zap } from "lucide-react";
 import {
@@ -40,14 +41,14 @@ function ActivityToolCardBase({
         <AmbientToolCardHeader
           action={action}
           content={summary !== undefined && summary !== null ? (
-            <span
+            <OverflowText
               className={styles.summary}
               data-openbitfun-part="summary"
               data-tone={status === "error" ? "danger" : "neutral"}
               title={summaryTitle}
             >
               {summary}
-            </span>
+            </OverflowText>
           ) : undefined}
           icon={(
             <ToolCardStatusSlot

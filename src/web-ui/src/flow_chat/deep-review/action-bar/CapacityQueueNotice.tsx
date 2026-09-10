@@ -224,7 +224,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
               </Button>
             )}
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={() => void onCancelQueuedReviewers()}
             >

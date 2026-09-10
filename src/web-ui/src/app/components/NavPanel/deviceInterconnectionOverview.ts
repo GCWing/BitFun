@@ -1,4 +1,5 @@
 import type { RemoteConnectStatus } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { selectRemoteNetworkConnection } from '@/infrastructure/remote-connect/remoteConnectionState';
 
 export type DeviceOverviewMode = 'local' | 'connected';
 export type DeviceOverviewDeviceKind =
@@ -144,6 +145,7 @@ export interface DeviceOverviewDispatchJob {
 
 export interface DeviceInterconnectionOverviewInput {
   localDeviceName: string;
+  fallbackMobileDeviceName?: string;
   peer: { deviceId: string; deviceName: string } | null;
   remoteStatus: RemoteConnectStatus | null;
   remoteStatusState: 'loading' | 'ready' | 'unavailable';
@@ -203,25 +205,6 @@ export function classifyAccountRelayUrl(
   const service = connectionServiceFromRelayUrl(relayUrl);
   if (!service) return 'unknown';
   return service.kind === 'official' ? 'official-relay' : 'self-hosted-relay';
-}
-
-function connectionServiceFromActiveMethod(
-  activeMethod: string | null,
-): DeviceOverviewConnectionService {
-  const method = activeMethod?.trim().toLowerCase() ?? '';
-  if (method.startsWith('lan')) {
-    return { kind: 'local-network', url: null, host: null };
-  }
-  if (method.startsWith('ngrok')) {
-    return { kind: 'public-tunnel', url: null, host: null };
-  }
-  if (method.startsWith('openbitfunserver')) {
-    return { kind: 'official', url: null, host: OFFICIAL_RELAY_HOST };
-  }
-  if (method.startsWith('customserver')) {
-    return { kind: 'self-hosted', url: null, host: null };
-  }
-  return { kind: 'device-service', url: null, host: null };
 }
 
 function messageApplicationName(botConnected: string): string | undefined {
@@ -287,16 +270,16 @@ export function projectDeviceInterconnectionOverview(
 
   let connectionService = input.peer ? input.accountService : null;
 
-  if (input.remoteStatus?.is_connected) {
-    addOrMergeDevice(devices, {
-      id: `mobile:${input.remoteStatus.peer_user_id ?? input.remoteStatus.peer_device_name ?? 'connected'}`,
-      name: formatDeviceDisplayName(input.remoteStatus.peer_device_name) || 'Mobile device',
-      kind: 'mobile',
-      local: false,
-      activities: ['controlling'],
-      backgroundTaskCount: 0,
-    });
-    connectionService ??= connectionServiceFromActiveMethod(input.remoteStatus.active_method);
+  const network = selectRemoteNetworkConnection(input.remoteStatus);
+  if (network.connected && input.remoteStatus) {
+    for (const client of input.remoteStatus.clients) {
+      addOrMergeDevice(devices, {
+        id: `mobile:${client.id}`,
+        name: formatDeviceDisplayName(client.name) || input.fallbackMobileDeviceName || 'Mobile device',
+        kind: 'mobile', local: false, activities: ['controlling'], backgroundTaskCount: 0,
+      });
+    }
+    connectionService ??= connectionServiceFromRelayUrl(network.relayUrl);
   }
 
   // A paired bot contributes a controller and nothing else. It does not claim
@@ -354,6 +337,6 @@ export function projectDeviceInterconnectionOverview(
     controllerCount,
     backgroundTaskCount,
     peerActive: input.peer !== null,
-    topologyUnavailable: mode === 'connected' && input.remoteStatusState === 'unavailable',
+    topologyUnavailable: input.remoteStatusState === 'unavailable',
   };
 }

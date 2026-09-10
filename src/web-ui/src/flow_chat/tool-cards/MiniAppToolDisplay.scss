@@ -55,7 +55,6 @@
       color: var(--openbitfun-color-content-primary);
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
       min-width: 0;
     }
   }
@@ -65,7 +64,6 @@
     color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     max-width: 200px;
   }
 
@@ -116,7 +114,6 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     line-height: var(--openbitfun-type-flow-meta-line-height);
   }

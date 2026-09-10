@@ -68,7 +68,7 @@
       &:not(:disabled):hover,
       &.session-tree-popover__trigger--active {
         color: var(--openbitfun-color-status-success-content);
-        background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+        background: var(--openbitfun-color-status-success-surface);
       }
     }
   }
@@ -87,7 +87,7 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 92%, var(--openbitfun-color-content-on-dark) 8%);
+    background: var(--openbitfun-color-status-success-emphasis);
     box-shadow: 0 0 0 1px var(--openbitfun-color-surface-raised);
   }
 
@@ -264,7 +264,6 @@
   &__node-title,
   &__node-meta {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -287,20 +286,20 @@
 
     &--running,
     &--finishing {
-      background: var(--openbitfun-color-status-success-content);
+      background: var(--openbitfun-color-status-success-emphasis);
     }
 
     &--waiting {
-      background: var(--openbitfun-color-status-warning-content);
+      background: var(--openbitfun-color-status-warning-emphasis);
     }
 
     &--error,
     &--cancelled {
-      background: var(--openbitfun-color-status-danger-content);
+      background: var(--openbitfun-color-status-danger-emphasis);
     }
 
     &--completed {
-      background: var(--openbitfun-color-status-info-content);
+      background: var(--openbitfun-color-status-info-emphasis);
     }
   }
 

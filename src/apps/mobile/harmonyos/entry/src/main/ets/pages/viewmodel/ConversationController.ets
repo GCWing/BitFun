@@ -51,14 +51,12 @@ export class ConversationController {
     });
     this.createFlow = new RemoteCreateFlowController(remote, remoteRuntime);
     this.visible = new VisibleConversationController(
-      general,
       remote,
       remoteRuntime,
       this.transcript,
       this.createFlow,
       (route: AppRoute, value: string) => this.setChatInput(route, value),
       (statusText: string) => this.setVisibleStatusText(statusText),
-      (route: AppRoute) => this.isGeneralComposerRoute(route),
       (message: string) => this.showHomeToast(message)
     );
   }
@@ -192,14 +190,6 @@ export class ConversationController {
     this.visible.openHomeSession(session, inPlace);
   }
   async deleteHomeSession(session: RemoteSession): Promise<void> { await this.visible.deleteHomeSession(session); }
-  activeGeneralChatAsRemoteSession(): RemoteSession { return this.visible.activeGeneralChatAsRemoteSession(); }
-  activeGeneralUploadedFileCount(): number { return this.visible.activeGeneralUploadedFileCount(); }
-  async archiveHomeSession(session: RemoteSession, archived: boolean): Promise<void> {
-    await this.visible.archiveHomeSession(session, archived);
-  }
-  async exportHomeSession(session: RemoteSession): Promise<void> { await this.visible.exportHomeSession(session); }
-  async openGeneralSession(item: RemoteSession): Promise<void> { await this.visible.openGeneralSession(item); }
-  async startGeneralChat(text: string): Promise<void> { await this.visible.startGeneralChat(text); }
   async sendVisibleMessage(): Promise<void> { await this.visible.sendVisibleMessage(); }
   async stopVisibleTask(): Promise<void> { await this.visible.stopVisibleTask(); }
   closeActiveChat(): void { this.visible.closeActiveChat(); }
@@ -207,18 +197,9 @@ export class ConversationController {
   async retryVisibleMessage(text: string): Promise<void> { await this.visible.retryVisibleMessage(text); }
   downloadVisibleFile(path: string): void { this.visible.downloadVisibleFile(path); }
   async selectVisibleModel(modelId: string): Promise<void> { await this.visible.selectVisibleModel(modelId); }
-  startVisibleGeneralChat(): void { this.visible.startVisibleGeneralChat(); }
-  generalChatHomeStatusText(): string { return this.visible.generalChatHomeStatusText(); }
-  prepareNewGeneralChat(): void { this.visible.prepareNewGeneralChat(); }
   onVisibleChatInputChange(route: AppRoute, value: string): void {
     this.visible.onVisibleChatInputChange(route, value);
   }
-  visibleGeneralChatDraftId(): string { return this.visible.visibleGeneralChatDraftId(); }
-  async restoreGeneralChatDraft(draftId: string): Promise<void> {
-    await this.visible.restoreGeneralChatDraft(draftId);
-  }
   latestUserMessageText(): string { return this.visible.latestUserMessageText(); }
-  resetGeneralTimeline(sessionId: string): void { this.visible.resetGeneralTimeline(sessionId); }
-  syncGeneralTimeline(): void { this.visible.syncGeneralTimeline(); }
   showHomeToast(message: string): void { this.visible.showHomeToast(message); }
 }

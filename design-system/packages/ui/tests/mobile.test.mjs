@@ -143,6 +143,17 @@ test("mobile sheet keeps its closed server-rendering contract", () => {
   assert.equal(sheet, "");
 });
 
+test("mobile confirmation sheets present custom icons without a decorative tile", async () => {
+  const styles = await readFile(
+    new URL("../src/mobile/MobileConfirmSheet/MobileConfirmSheet.module.css", import.meta.url),
+    "utf8",
+  );
+  const iconRule = styles.match(/\.icon\s*\{[^}]+\}/)?.[0];
+
+  assert.ok(iconRule, "missing MobileConfirmSheet icon rule");
+  assert.doesNotMatch(iconRule, /(?:background|border-radius)\s*:/);
+});
+
 test("mobile stylesheet is isolated and uses semantic tokens", async () => {
   const styles = await readFile(new URL("../dist/mobile.css", import.meta.url), "utf8");
 

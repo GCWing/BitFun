@@ -222,5 +222,6 @@ class ChatSessionControllerTest {
         tools = null,
         items = null,
         images = null,
+        error = null,
     )
 }

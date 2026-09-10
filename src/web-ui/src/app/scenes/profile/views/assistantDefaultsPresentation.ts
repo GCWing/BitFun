@@ -15,12 +15,6 @@ export interface AssistantDefaultsFilterableItem {
   available: boolean;
 }
 
-export interface AssistantDefaultsSummary {
-  enabled: number;
-  changed: number;
-  unavailable: number;
-}
-
 export interface McpAvailabilityInput {
   enabled?: boolean;
   status?: string;
@@ -68,15 +62,4 @@ export function matchesAssistantDefaultsFilter(
     case 'all':
       return true;
   }
-}
-
-export function summarizeAssistantDefaults(
-  items: AssistantDefaultsFilterableItem[],
-): AssistantDefaultsSummary {
-  return items.reduce<AssistantDefaultsSummary>((summary, item) => {
-    if (item.enabled) summary.enabled += 1;
-    if (differsFromProductDefault(item)) summary.changed += 1;
-    if (!item.available) summary.unavailable += 1;
-    return summary;
-  }, { enabled: 0, changed: 0, unavailable: 0 });
 }

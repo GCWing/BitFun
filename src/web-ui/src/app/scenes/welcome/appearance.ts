@@ -4,6 +4,7 @@ export const welcomeAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'root', propertyProfile: 'layout', visualRole: 'workspace' },
     { id: 'content', visualRole: 'card' },
     { id: 'greeting', visualRole: 'content' },
+    { id: 'logo', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'title', propertyProfile: 'paint', visualRole: 'content' },
     { id: 'subtitle', propertyProfile: 'paint', visualRole: 'content' },
   ],

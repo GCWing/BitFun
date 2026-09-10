@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Disclosure,
   Field,
@@ -14,8 +14,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { AlertTriangle, Camera, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
-import { MarketAccountControls } from '@/features/market-account';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   miniAppMarketAPI,
@@ -69,7 +69,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
   const { openScene, activateScene, openTabs } = useSceneManager();
-  const { me, resolved: authResolved } = useMarketAccount();
+  const { me, resolved: authResolved } = useAccountIdentity();
   const [apps, setApps] = useState<MiniAppMeta[]>([]);
   const [submissions, setSubmissions] = useState<MarketSubmission[]>([]);
   const [selectedAppId, setSelectedAppId] = useState('');
@@ -266,7 +266,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
         <GalleryEmpty
           icon={{ glyph: Github }}
           message={t('market.submissions.signInRequired')}
-          action={<MarketAccountControls />}
+          action={<AccountIdentityControls />}
         />
       </GalleryLayout>
     );
@@ -283,7 +283,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
               {t('market.submissions.refresh')}
             </Button>
-            <MarketAccountControls />
+            <AccountIdentityControls />
           </div>
         )}
       />
@@ -383,7 +383,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
               {screenshotPaths.map((path) => (
                 <div key={path}>
                   <Icon name="image" size="sm" />
-                  <span title={path}>{fileName(path)}</span>
+                  <OverflowText title={path}>{fileName(path)}</OverflowText>
                   <IconButton
                     size="xs"
                     aria-label={t('market.submissions.removeScreenshot')}
@@ -549,7 +549,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
           <Button
             type="submit"
-            variant="fill"
+            variant="primary"
             disabled={busy || localActionsDisabled || apps.length === 0}
           >
             {busy ? <Loader2 size={15} className="gallery-spinning" /> : <Send size={15} />}
@@ -582,8 +582,8 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
                       {renderMiniAppIcon(submission.icon || 'box', 16)}
                     </span>
                     <div>
-                      <strong>{submission.name}</strong>
-                      <small>{submission.slug} · v{submission.releaseNumber}</small>
+                      <strong><OverflowText>{submission.name}</OverflowText></strong>
+                      <small><OverflowText>{submission.slug} · v{submission.releaseNumber}</OverflowText></small>
                     </div>
                   </div>
                   <div className="miniapp-submissions__status">

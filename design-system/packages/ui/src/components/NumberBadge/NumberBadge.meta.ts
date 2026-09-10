@@ -2,7 +2,7 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const numberBadgeMeta = {
   category: "primitive",
-  description: "A compact numeric marker with a 24px slot, 20px surface and caller-owned value. Long values grow without clipping.",
+  description: "A compact numeric marker with a 24px filled surface and caller-owned value. Long values grow without clipping.",
   maturity: "stable",
   name: "NumberBadge",
   props: [
@@ -11,7 +11,7 @@ export const numberBadgeMeta = {
   ],
   states: ["default"],
   tokens: [
-    "space.1", "space.5", "space.6", "type.meta.fontSize", "radius.pill",
-    "color.action.neutral.content", "color.action.neutral.surface",
+    "space.1", "space.6", "type.meta.fontSize", "radius.pill",
+    "color.action.neutral.content", "color.numberBadge.background",
   ],
 } as const satisfies ComponentMeta;

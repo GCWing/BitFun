@@ -144,3 +144,121 @@ describe('ModelThinkingDisplay reasoning summary', () => {
       ?.getAttribute('data-expanded')).toBe('true');
   });
 });
+
+describe('ModelThinkingDisplay scroll ownership', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let frames: Map<number, FrameRequestCallback>;
+  let frameId: number;
+  let height: number;
+  let viewport: number;
+  let clockMs: number;
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+      .IS_REACT_ACT_ENVIRONMENT = true;
+    frames = new Map();
+    frameId = 0;
+    height = 1000;
+    viewport = 300;
+    clockMs = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clockMs);
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.set(++frameId, callback);
+      return frameId;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function render(content = 'Thinking') {
+    act(() => root.render(<ModelThinkingDisplay thinkingItem={{
+      ...summaryItem(content), reasoningKind: 'reasoning',
+    }} />));
+  }
+
+  function nextFrame() {
+    const pending = [...frames.values()];
+    frames.clear();
+    act(() => pending.forEach((callback) => callback(clockMs)));
+  }
+
+  function startFollow(initialTop = 640) {
+    render();
+    const el = container.querySelector('[data-testid="chat-thinking-content"]') as HTMLDivElement;
+    Object.defineProperties(el, {
+      scrollHeight: { get: () => height },
+      clientHeight: { get: () => viewport },
+    });
+    el.scrollTop = initialTop;
+    nextFrame();
+    expect(el.scrollTop).toBeGreaterThan(initialTop);
+    expect(frames.size).toBe(1);
+    return el;
+  }
+
+  it.each([true, false])('pauses a scrollbar drag with scroll event delivered: %s', (deliverScroll) => {
+    const el = startFollow();
+    el.scrollTop = 400;
+    if (deliverScroll) act(() => el.dispatchEvent(new Event('scroll')));
+    nextFrame();
+    expect(el.scrollTop).toBe(400);
+    expect(frames.size).toBe(0);
+    clockMs += 1000;
+    height += 20;
+    render('More thinking');
+    nextFrame();
+    expect(el.scrollTop).toBe(400);
+  });
+
+  it('continues following after its own scroll events', () => {
+    const el = startFollow();
+    const before = el.scrollTop;
+    act(() => el.dispatchEvent(new Event('scroll')));
+    nextFrame();
+    expect(el.scrollTop).toBeGreaterThan(before);
+  });
+
+  it.each(['shrink', 'resize', 'rounding'])('does not pause for %s', (change) => {
+    const el = startFollow();
+    if (change === 'shrink') height -= 20;
+    if (change === 'resize') viewport += 20;
+    el.scrollTop -= change === 'rounding' ? 0.5 : 20;
+    const before = el.scrollTop;
+    act(() => el.dispatchEvent(new Event('scroll')));
+    nextFrame();
+    expect(el.scrollTop).toBeGreaterThan(before);
+  });
+
+  it.each([19, 20, 75])('only resumes within 20 px after the 700 ms pause (gap: %s)', (gap) => {
+    const el = startFollow(690);
+    const pausedTop = 700 - gap;
+    el.scrollTop = pausedTop;
+    act(() => el.dispatchEvent(new Event('scroll')));
+    clockMs += 600;
+    render('Still paused');
+    nextFrame();
+    expect(el.scrollTop).toBe(pausedTop);
+    clockMs += 101;
+    render('Resume near bottom');
+    nextFrame();
+    if (gap < 20) {
+      expect(el.scrollTop).toBeGreaterThan(pausedTop);
+    } else {
+      expect(el.scrollTop).toBe(pausedTop);
+    }
+  });
+});

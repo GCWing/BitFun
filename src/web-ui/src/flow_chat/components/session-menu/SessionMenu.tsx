@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Menu, MenuItem, MenuSeparator } from '@openbitfun/ui';
+import { OverflowText, Menu, MenuItem, MenuSeparator } from '@openbitfun/ui';
 import { Tooltip, Icon } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -131,7 +131,7 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="openbitfun-session-menu__actions" data-openbitfun-component="session-menu" data-openbitfun-part="actions">
-            <MenuItem
+            <MenuItem data-overflow-trigger
               type="button"
               className="openbitfun-session-menu__item-row openbitfun-session-menu__item-row--new openbitfun-session-menu__item--new"
               data-openbitfun-component="session-menu"
@@ -149,9 +149,9 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                 </span>
               )}
             >
-              <span className="openbitfun-session-menu__item-label" data-openbitfun-component="session-menu" data-openbitfun-part="itemLabel">
+              <OverflowText className="openbitfun-session-menu__item-label" data-openbitfun-component="session-menu" data-openbitfun-part="itemLabel">
                 {t('toolCards.toolbar.newSessionItem')}
-              </span>
+              </OverflowText>
             </MenuItem>
             <MenuSeparator className="openbitfun-session-menu__divider" data-openbitfun-component="session-menu" data-openbitfun-part="divider" />
           </div>

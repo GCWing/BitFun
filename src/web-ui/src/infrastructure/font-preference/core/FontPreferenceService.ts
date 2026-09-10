@@ -19,23 +19,36 @@ const CONFIG_KEY = 'font';
 export class FontPreferenceService {
   private preference: FontPreference = { ...DEFAULT_FONT_PREFERENCE };
   private listeners: Map<FontPreferenceEventType, Set<FontPreferenceEventListener>> = new Map();
+  private changeVersion = 0;
 
   // ---- Lifecycle ----
 
   async initialize(): Promise<void> {
     try {
-      const saved = await configAPI.getConfig(CONFIG_KEY, { skipRetryOnNotFound: true }) as FontPreference | undefined;
-      if (saved) {
-        this.preference = this.mergeWithDefaults(saved);
-      }
-    } catch {
-      // Config not found — use defaults
+      await this.reloadFromConfig();
+    } catch (error) {
+      log.warn('Failed to load font preference', error);
     }
     this.applyPreference(this.preference);
 
     log.info('Font preference initialized', {
       level: this.preference.uiSize.level,
     });
+  }
+
+  /** Apply externally persisted preferences without writing them back to the host. */
+  async reloadFromConfig(): Promise<void> {
+    const version = ++this.changeVersion;
+    const saved = await configAPI.getConfig(CONFIG_KEY, { skipRetryOnNotFound: true }) as FontPreference | undefined;
+    if (version !== this.changeVersion) return;
+    const previous = this.preference;
+    const preference = this.mergeWithDefaults(saved ?? DEFAULT_FONT_PREFERENCE);
+    this.preference = preference;
+    this.applyPreference(preference);
+    if (previous.uiSize.level !== preference.uiSize.level
+      || previous.uiSize.customPx !== preference.uiSize.customPx) {
+      this.emit({ type: 'font:after-change', preference, previousPreference: previous, timestamp: Date.now() });
+    }
   }
 
   // ---- Read ----
@@ -51,6 +64,7 @@ export class FontPreferenceService {
   // ---- Write ----
 
   async setPreference(partial: Partial<FontPreference>): Promise<void> {
+    this.changeVersion += 1;
     const previous = { ...this.preference };
     const merged = this.mergeWithDefaults({ ...this.preference, ...partial });
 
@@ -77,6 +91,14 @@ export class FontPreferenceService {
 
   async reset(): Promise<void> {
     await this.setPreference(DEFAULT_FONT_PREFERENCE);
+  }
+
+  async adjustUiSize(delta: -1 | 1): Promise<void> {
+    const currentPx = parseFloat(resolveFontSizeTokens(this.preference.uiSize).base);
+    const nextPx = Math.max(12, Math.min(20, currentPx + delta));
+    if (nextPx !== currentPx) {
+      await this.setUiSize('custom', nextPx);
+    }
   }
 
   // ---- CSS Application ----

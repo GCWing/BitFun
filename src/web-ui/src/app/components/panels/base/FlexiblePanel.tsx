@@ -1,5 +1,5 @@
 import React, { useCallback, memo } from 'react';
-import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { AlertCircle } from 'lucide-react';
 
 import { MarkdownRenderer } from '@/infrastructure/markdown';
@@ -526,6 +526,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             workspacePath={editorWorkspacePath}
             fileName={fileName}
             language={editorLanguage}
+            initialContent={typeof editorData.initialContent === 'string' ? editorData.initialContent : undefined}
             readOnly={editorData.readOnly || false}
             autoSave={editorData.autoSave === true}
             autoSaveDelayMs={typeof editorData.autoSaveDelayMs === 'number' ? editorData.autoSaveDelayMs : undefined}
@@ -1018,12 +1019,12 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               {getContentIcon(content.type)}
             </div>
             <div className="openbitfun-flexible-panel__content-info">
-              <span className="openbitfun-flexible-panel__content-title">
+              <OverflowText className="openbitfun-flexible-panel__content-title">
                 {content.title || getContentTypeName(content.type)}
-              </span>
-              <span className="openbitfun-flexible-panel__content-type">
+              </OverflowText>
+              <OverflowText className="openbitfun-flexible-panel__content-type">
                 {getContentTypeName(content.type)}
-              </span>
+              </OverflowText>
             </div>
           </div>
 

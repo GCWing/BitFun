@@ -1,10 +1,10 @@
 use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, CreativeMode,
+    Agent, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, CreativeHarness,
     DeepResearchMode, DeepReviewAgent, ExploreAgent, GeneralPurposeAgent, GenerateDocAgent,
-    MinimalMode, ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent,
-    SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, UltraMode,
+    MinimalHarness, ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent,
+    StandardHarness, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent, UltimateHarness,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use openbitfun_agent_runtime::agents as runtime_agents;
@@ -44,13 +44,13 @@ pub(crate) fn builtin_agent_specs_for_ids<'a>(
 
 fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
     match id {
-        "minimal" => || Arc::new(MinimalMode::new()),
-        "agentic" => || Arc::new(AgenticMode::new()),
+        "Minimal" => || Arc::new(MinimalHarness::new()),
+        "Standard" => || Arc::new(StandardHarness::new()),
         "Cowork" => || Arc::new(CoworkMode::new()),
-        "Creative" => || Arc::new(CreativeMode::new()),
+        "Creative" => || Arc::new(CreativeHarness::new()),
         "Claw" => || Arc::new(ClawMode::new()),
         "DeepResearch" => || Arc::new(DeepResearchMode::new()),
-        "Ultra" => || Arc::new(UltraMode::new()),
+        "Ultimate" => || Arc::new(UltimateHarness::new()),
         "SwarmPlanner" => || Arc::new(SwarmPlannerAgent::new()),
         "SwarmWorker" => || Arc::new(SwarmWorkerAgent::new()),
         "SwarmReviewer" => || Arc::new(SwarmReviewerAgent::new()),

@@ -16,16 +16,14 @@ import {
 } from './paletteHelpers';
 
 const MIDNIGHT_BACKGROUND = '#2b2d30';
-const MIDNIGHT_BACKGROUND_SECONDARY = '#1c1c1f';
+const MIDNIGHT_CHROME = '#1c1c1f';
+const MIDNIGHT_BACKGROUND_SECONDARY = '#313335';
 const MIDNIGHT_TEXT_PRIMARY = '#c8c8c8';
 const MIDNIGHT_BUTTON_TEXT = '#b0b0b0';
 const MIDNIGHT_ACCENT = '#60a5fa';
 const MIDNIGHT_ACCENT_HOVER = '#3b82f6';
 const MIDNIGHT_PURPLE = '#9c78ff';
 const MIDNIGHT_PURPLE_HOVER = '#8b5cf6';
-const MIDNIGHT_SUCCESS = '#6aab73';
-const MIDNIGHT_WARNING = '#e0a055';
-const MIDNIGHT_ERROR = '#cc7f7a';
 
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
 const midnightAccent = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT, alpha);
@@ -37,23 +35,25 @@ export const openBitFunMidnightPalette: AppearancePalette = {
   type: 'dark',
   description: 'Midnight gray dark appearance - Professional and elegant, inspired by JetBrains IDE',
   author: 'OpenBitFun Team',
-  version: '1.0.0',
+  version: '1.1.0',
 
 
   colors: {
     background: {
+      // Recess navigation and keep content, fields, and overlays progressively lighter.
       primary: MIDNIGHT_BACKGROUND,
       secondary: MIDNIGHT_BACKGROUND_SECONDARY,
-      tertiary: '#313335',
-      elevated: MIDNIGHT_BACKGROUND,
-      workbench: MIDNIGHT_BACKGROUND_SECONDARY,
+      tertiary: MIDNIGHT_CHROME,
+      elevated: MIDNIGHT_BACKGROUND_SECONDARY,
+      workbench: MIDNIGHT_CHROME,
       scene: MIDNIGHT_BACKGROUND,
+      chrome: MIDNIGHT_CHROME,
     },
 
     text: {
       primary: MIDNIGHT_TEXT_PRIMARY,
-      secondary: '#a1a1aa',
-      muted: '#6f737a',
+      secondary: MIDNIGHT_BUTTON_TEXT,
+      muted: '#a1a1aa',
       disabled: '#555555',
     },
 
@@ -61,19 +61,14 @@ export const openBitFunMidnightPalette: AppearancePalette = {
 
     purple: createSecondaryAccentScale({ base: MIDNIGHT_PURPLE, hover: MIDNIGHT_PURPLE_HOVER }),
 
-    semantic: createSemanticColors({
-      success: MIDNIGHT_SUCCESS,
-      warning: MIDNIGHT_WARNING,
-      error: MIDNIGHT_ERROR,
-      info: MIDNIGHT_ACCENT,
-    }),
+    semantic: createSemanticColors('dark'),
 
     border: {
-      subtle: overlayWhite(0.08),
-      base: overlayWhite(0.14),
-      medium: overlayWhite(0.2),
-      strong: overlayWhite(0.26),
-      prominent: overlayWhite(0.35),
+      subtle: overlayWhite(0.12),
+      base: overlayWhite(0.18),
+      medium: overlayWhite(0.24),
+      strong: overlayWhite(0.3),
+      prominent: overlayWhite(0.4),
     },
 
     element: {
@@ -84,12 +79,9 @@ export const openBitFunMidnightPalette: AppearancePalette = {
       strong: overlayWhite(0.15),
     },
 
-    git: createGitColors({
+    git: createGitColors('dark', {
       branch: rgbFromHex(MIDNIGHT_ACCENT),
       branchBg: midnightAccent(0.1),
-      changes: rgbFromHex(MIDNIGHT_WARNING),
-      added: rgbFromHex(MIDNIGHT_SUCCESS),
-      deleted: rgbFromHex(MIDNIGHT_ERROR),
     }),
   },
 

@@ -135,6 +135,38 @@
   }
 }
 
+// Windows caption buttons keep their full hit area even in a narrow window.
+.window-controls--windows {
+  align-items: stretch;
+  gap: 0;
+  height: 100%;
+
+  .window-controls__btn {
+    flex: 0 0 46px;
+    width: 46px;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    color: var(--openbitfun-color-content-primary);
+    cursor: default;
+
+    svg {
+      width: 12px;
+      height: 12px;
+      transition: none;
+    }
+
+    &:focus-visible {
+      outline-offset: -2px;
+    }
+
+    &--close:hover:not(:disabled) {
+      background: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-content-on-dark);
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .window-controls__btn {
     transition: none;

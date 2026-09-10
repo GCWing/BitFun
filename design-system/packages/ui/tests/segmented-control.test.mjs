@@ -28,7 +28,7 @@ test("SegmentedControl exposes radiogroup semantics with a roving selected segme
   assert.match(markup, /aria-checked="true"[^>]*tabindex="0"/);
   assert.match(markup, /aria-checked="false"[^>]*tabindex="-1"/);
   assert.match(markup, /data-openbitfun-part="icon"/);
-  assert.match(markup, /data-openbitfun-part="label">Chat<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>Chat<\/span><\/span>/);
 });
 
 test("SegmentedControl falls back to the first enabled option when the candidate is disabled", () => {

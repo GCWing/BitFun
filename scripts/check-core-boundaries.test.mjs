@@ -194,10 +194,12 @@ test('Agent Runtime leaf capabilities have one managed feature and source contra
   assert.deepEqual(Object.keys(rule.featureProfiles).sort(), [
     'agent-runtime',
     'default',
+    'definition-contracts',
     'native-hook-runtime',
     'native-hook-settings',
   ]);
-  assert.equal(rule.consumers.size, 10);
+  assert.equal(rule.consumers.size, 11);
+  assert.ok(rule.consumers.has('openbitfun-legacy-migration-adapters'));
   assert.ok(
     guardedEmptyInternalDefaultManifestPaths.includes(
       'src/crates/execution/agent-runtime/Cargo.toml',
@@ -301,6 +303,16 @@ test('TLS source boundaries reject bypasses of the centralized provider owner', 
     'unrelated_component.install_default();',
     providerRule.patterns[0].regex,
   );
+});
+
+test('standalone Relay TLS exception cannot install a process provider', () => {
+  const providerRule = forbiddenContentUnderRules.find(rule => rule.reason.includes('only owner allowed to install'));
+  const relayPath = 'src/crates/services/relay-service/src/identity.rs';
+  assert.ok(providerRule.patterns[0].allowPaths.includes(relayPath));
+  const scopedRule = forbiddenContentUnderRules.find(rule => rule.path === relayPath && rule.reason.includes('client-scoped'));
+  assert.ok(scopedRule);
+  assert.ok(scopedRule.patterns.some(pattern => pattern.regex.test('provider.install_default()')));
+  assert.ok(scopedRule.patterns.every(pattern => !pattern.regex.test('ClientConfig::builder_with_provider(provider)')));
 });
 
 test('Core and ACP defaults preserve their explicit assembly contracts', async () => {
@@ -850,6 +862,7 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       name: 'core_type_contracts',
       path: 'tests/core_type_contracts.rs',
       leaves: [
+        'tests/core_type_contracts/agent_identity.rs',
         'tests/core_type_contracts/session_contracts.rs',
         'tests/core_type_contracts/session_usage_contracts.rs',
         'tests/core_type_contracts/surface_contracts.rs',
@@ -924,6 +937,11 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       name: 'loopx_contracts',
       path: 'tests/loopx_contracts.rs',
       requiredFeatures: ['miniapp'],
+    },
+    {
+      name: 'legacy_migration_contracts',
+      path: 'tests/legacy_migration_contracts.rs',
+      requiredFeatures: ['legacy-migration'],
     },
     {
       name: 'plugin_source_contracts',
@@ -3024,6 +3042,22 @@ test('third-party capability profiles reject ambient feature unions and unreview
   assert.match(messages, /future-image-owner Image dependency is missing a reviewed owner profile/);
 });
 
+test('relay WebSocket lifecycle client stays test-only without TLS or defaults', () => {
+  const pkg = packageAt('openbitfun-relay-service', 'src/crates/services/relay-service/Cargo.toml', [{
+    name: 'tokio-tungstenite', kind: 'dev', optional: false, uses_default_features: false,
+    features: ['connect', 'handshake'],
+  }]);
+  assert.deepEqual(findThirdPartyCapabilityFeatureViolations([pkg]), []);
+  for (const change of [
+    { kind: null }, { uses_default_features: true },
+    { features: ['connect', 'handshake', 'rustls-tls-native-roots'] },
+  ]) {
+    const mutated = structuredClone(pkg);
+    Object.assign(mutated.dependencies[0], change);
+    assert.ok(findThirdPartyCapabilityFeatureViolations([mutated]).length > 0);
+  }
+});
+
 test('services integrations image codecs stay attached to exact product owners', () => {
   const pkg = {
     ...packageAt('openbitfun-services-integrations', 'src/crates/services/services-integrations/Cargo.toml', [{
@@ -3883,6 +3917,7 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'tokio/time',
     'windows/Win32_Foundation',
     'windows/Win32_System_Diagnostics_ToolHelp',
+    'windows/Win32_System_JobObjects',
     'windows/Win32_System_Threading',
   ]);
   assert.deepEqual(profiles.get('workspace-instructions'), [
@@ -4138,6 +4173,7 @@ test('Core Tokio capabilities cannot hide behind an unreviewed owner feature', (
     ],
     features: {
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
+      'legacy-migration': [],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
       sneaky: ['agent-runtime', 'browser-control'],
@@ -4159,6 +4195,7 @@ test('reviewed Tokio aggregates cannot declare runtime capabilities directly', (
     dependencies: [{ name: 'tokio', kind: null, optional: false, features: ['fs', 'sync'] }],
     features: {
       'agent-runtime': ['tokio/io-util', 'tokio/macros', 'tokio/rt', 'tokio/time'],
+      'legacy-migration': [],
       'mcp-runtime': ['agent-runtime', 'tokio/rt-multi-thread'],
       'browser-control': ['tokio/net', 'tokio/rt', 'tokio/time'],
       'product-full': ['agent-runtime', 'tokio/net'],

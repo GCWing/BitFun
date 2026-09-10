@@ -12,12 +12,7 @@ use anyhow::{anyhow, Context, Result};
 use sha2::{Digest, Sha256};
 
 /// Represents a device's identity used for pairing and account routing.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DeviceIdentity {
-    pub device_id: String,
-    pub device_name: String,
-    pub mac_address: String,
-}
+pub use crate::remote_persistence::DeviceIdentityRecord as DeviceIdentity;
 
 static CACHED_IDENTITY: Mutex<Option<DeviceIdentity>> = Mutex::new(None);
 
@@ -122,29 +117,15 @@ fn identity_file_path() -> Result<PathBuf> {
 
 fn load_persisted() -> Result<Option<DeviceIdentity>> {
     let path = identity_file_path()?;
-    let json = match std::fs::read_to_string(&path) {
-        Ok(data) => data,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => {
-            return Err(anyhow!("read device identity: {e}").context(path.display().to_string()))
-        }
-    };
-    let identity: DeviceIdentity =
-        serde_json::from_str(&json).context("parse device identity file")?;
-    if !is_valid_device_id(&identity.device_id) {
-        return Err(anyhow!("persisted device_id is invalid"));
-    }
-    Ok(Some(identity))
+    crate::remote_persistence::read_device_identity(&path)
+        .context("read device identity")
+        .map_err(|error| error.context(path.display().to_string()))
 }
 
 fn save_persisted(identity: &DeviceIdentity) -> Result<()> {
     let path = identity_file_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).context("create device identity dir")?;
-    }
-    let json = serde_json::to_string_pretty(identity).context("serialize device identity")?;
-    std::fs::write(&path, json).context("write device identity file")?;
-    Ok(())
+    crate::remote_persistence::write_device_identity(&path, identity)
+        .context("write device identity file")
 }
 
 fn cache_identity(identity: DeviceIdentity) {

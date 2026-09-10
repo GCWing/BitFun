@@ -41,6 +41,7 @@
     "emptyError": "此字段不能为空"
   },
   "markdown": {
+    "remoteImageUnavailable": "派发任务暂不支持图片预览",
     "copySuccess": "复制成功",
     "copyCode": "复制代码",
     "openInExplorer": "在资源管理器中打开",

@@ -8,7 +8,6 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--openbitfun-color-content-secondary);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -21,14 +20,16 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--openbitfun-color-content-muted);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .statusDetail {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
+    display: inline-block;
+    /* Shrinks with the extra slot and truncates so the trailing status icon
+       stays inside the card on narrow surfaces. */
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
     padding-block: var(--openbitfun-space-1);
     padding-inline: var(--openbitfun-space-2);
     border-radius: var(--openbitfun-radius-sm);
@@ -80,6 +81,8 @@
   }
 
   .errorMessage {
+    max-block-size: 20rem;
+    overflow-y: auto;
     color: var(--openbitfun-color-content-muted);
     white-space: pre-wrap;
     overflow-wrap: anywhere;

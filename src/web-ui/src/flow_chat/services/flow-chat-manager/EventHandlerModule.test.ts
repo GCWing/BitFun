@@ -21,6 +21,8 @@ import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Sessio
 import type { FlowChatContext } from './types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { interruptedTurnRecoveryGate } from '../interruptedTurnRecoveryGate';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { localSessionDriver } from '../../session-drivers/local/LocalSessionDriver';
 
 const {
   buildBuiltInBrowserTabOptions,
@@ -39,6 +41,42 @@ vi.mock('../../../shared/notification-system/services/NotificationService', () =
 describe('isAppWindowFocused', () => {
   it('returns true when no document is available', () => {
     expect(isAppWindowFocused()).toBe(true);
+  });
+});
+
+describe('Claw bootstrap cancellation', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('stops a backend-started bootstrap using its actual session and turn identities', async () => {
+    const interrupt = vi.spyOn(agentAPI, 'interruptDialogTurn').mockResolvedValue(undefined);
+    const store = FlowChatStore.getInstance();
+    store.setState(() => ({
+      sessions: new Map([['claw-1', {
+        sessionId: 'claw-1', title: 'Claw', mode: 'Claw', sessionKind: 'normal',
+        workspacePath: '/assistants/default', config: { agentType: 'Claw' },
+        dialogTurns: [], status: 'idle', createdAt: 1, lastActiveAt: 1, error: null,
+      } as Session]]),
+      activeSessionId: 'claw-1',
+    }));
+    const context = createFlowChatContext();
+    __test_only__.handleDialogTurnStarted(context, {
+      sessionId: 'claw-1', turnId: 'assistant-bootstrap-1', turnIndex: 0,
+      userInput: 'Please start bootstrap',
+      userMessageMetadata: { assistant_bootstrap: { system_generated: true } },
+    });
+
+    expect(await localSessionDriver.cancel(context, 'claw-1')).toBe(true);
+    expect(interrupt).toHaveBeenCalledExactlyOnceWith('claw-1', 'assistant-bootstrap-1');
+    expect(context.userCancelledSessionIds.has('claw-1')).toBe(true);
+    expect(stateMachineManager.getCurrentState('claw-1')).toBe(SessionExecutionState.FINISHING);
   });
 });
 
@@ -91,7 +129,7 @@ describe('interrupted turn lifecycle', () => {
     const turn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'continue this work', timestamp: 1 },
       modelRounds: [{
         id: 'round-0',
@@ -110,7 +148,7 @@ describe('interrupted turn lifecycle', () => {
         sessionId: 'session-1',
         dialogTurns: [turn],
         status: 'active',
-        config: { agentType: 'agentic' },
+        config: { agentType: 'Standard' },
         createdAt: 1,
         lastActiveAt: 1,
         error: null,
@@ -187,7 +225,7 @@ describe('interrupted turn lifecycle', () => {
     const oldTurn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'old work', timestamp: 1 },
       modelRounds: [],
       status: 'processing',
@@ -213,7 +251,7 @@ describe('interrupted turn lifecycle', () => {
     const newTurn: DialogTurn = {
       id: 'turn-2',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-2', content: 'new work', timestamp: 2 },
       modelRounds: [],
       status: 'processing',
@@ -257,7 +295,7 @@ describe('interrupted turn lifecycle', () => {
     const turn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'resume safely', timestamp: 1 },
       modelRounds: [],
       status: 'cancelled',
@@ -303,7 +341,7 @@ describe('interrupted turn lifecycle', () => {
     const turn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'keep retryable', timestamp: 1 },
       modelRounds: [],
       status: 'cancelled',
@@ -336,7 +374,7 @@ describe('interrupted turn lifecycle', () => {
     const oldTurn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'old', timestamp: 1 },
       modelRounds: [],
       status: 'processing',
@@ -345,7 +383,7 @@ describe('interrupted turn lifecycle', () => {
     const newTurn: DialogTurn = {
       id: 'turn-2',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-2', content: 'new', timestamp: 2 },
       modelRounds: [],
       status: 'processing',
@@ -380,7 +418,7 @@ describe('interrupted turn lifecycle', () => {
     const turn: DialogTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'stop', timestamp: 1 },
       modelRounds: [],
       status: 'processing',
@@ -450,7 +488,7 @@ describe('dispatch optimistic turn reconciliation', () => {
           dialogTurns: [{
             id: 'dispatch_pending_job-1',
             sessionId: 'dispatch-session',
-            agentType: 'agentic',
+            agentType: 'Standard',
             userMessage: {
               id: 'user-dispatch-1',
               content: 'Original visible prompt',
@@ -527,7 +565,7 @@ describe('dispatch optimistic turn reconciliation', () => {
           dialogTurns: [{
             id: 'dispatch_pending_job-1',
             sessionId: 'dispatch-session',
-            agentType: 'agentic',
+            agentType: 'Standard',
             userMessage: {
               id: 'user-dispatch-1',
               content: '',
@@ -700,7 +738,7 @@ describe('subagent parent helpers', () => {
             startTime: 900,
           }],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 800,
           lastActiveAt: 1000,
           error: null,
@@ -780,7 +818,7 @@ describe('subagent parent helpers', () => {
             startTime: 900,
           }],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 800,
           lastActiveAt: 1000,
           error: null,
@@ -909,7 +947,7 @@ describe('shouldProcessEvent', () => {
             startTime: 1000,
           }],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 1000,
           lastActiveAt: 1000,
           error: null,
@@ -947,7 +985,7 @@ describe('shouldProcessEvent', () => {
             startTime: 1000,
           }],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 1000,
           lastActiveAt: 1000,
           error: null,
@@ -1000,7 +1038,7 @@ describe('shouldProcessEvent', () => {
             },
           ],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 1000,
           lastActiveAt: 2000,
           error: null,
@@ -1037,7 +1075,7 @@ describe('shouldProcessEvent', () => {
             startTime: 1000,
           }],
           status: 'idle',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 1000,
           lastActiveAt: 1000,
           error: null,
@@ -1318,7 +1356,7 @@ function createFinishingSession(): Session {
     title: 'Session 1',
     dialogTurns: [createFinishingTurn()],
     status: 'idle',
-    config: { agentType: 'agentic' },
+    config: { agentType: 'Standard' },
     createdAt: 800,
     lastActiveAt: 1000,
     error: null,
@@ -1533,7 +1571,7 @@ describe('handleSessionHistoryChanged', () => {
     createSessionWithTurn({
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'request', timestamp: 1 },
       modelRounds: [],
       status: 'completed',
@@ -1559,7 +1597,7 @@ describe('handleSessionHistoryChanged', () => {
     createSessionWithTurn({
       id: 'turn-1',
       sessionId: 'session-1',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: { id: 'user-1', content: 'request', timestamp: 1 },
       modelRounds: [],
       status: 'finishing',

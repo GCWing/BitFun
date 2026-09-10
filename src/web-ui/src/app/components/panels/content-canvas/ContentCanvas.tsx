@@ -1,6 +1,6 @@
 /**
  * ContentCanvas main container component.
- * Core component for the right panel, aggregating submodules.
+ * Shared content surface. The containing scene or panel owns its layout.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -9,9 +9,9 @@ import { AnchorZone } from './anchor-zone';
 import { MissionControl } from './mission-control';
 import { EmptyState } from './empty-state';
 import { useCanvasStore } from './stores';
-import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
+import { useTabLifecycle, useKeyboardShortcuts } from './hooks';
 import type { AnchorPosition } from './types';
-import { TAB_EVENTS } from './types';
+import type { CanvasStoreMode } from './stores/canvasStore';
 import { selectActiveBtwSessionTab } from '@/flow_chat/services/btwSessionPane';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { isSamePath } from '@/shared/utils/pathUtils';
@@ -20,7 +20,7 @@ export interface ContentCanvasProps {
   /** Workspace path */
   workspacePath?: string;
   /** App mode */
-  mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
+  mode?: CanvasStoreMode;
   /** Whether the containing scene is currently visible */
   isSceneActive?: boolean;
   /** Interaction callback */
@@ -31,13 +31,9 @@ export interface ContentCanvasProps {
   disablePopOut?: boolean;
   /** Override the event this canvas listens to for creating tabs. */
   createTabEventName?: string;
-  /** Override the expansion event this canvas dispatches/listens for. */
-  expandPanelEventName?: string;
-  /** Custom collapsed state for canvases hosted outside the right panel. */
-  isPanelCollapsed?: boolean;
-  /** Custom expand behavior for canvases hosted outside the right panel. */
-  onExpandPanel?: () => void;
-  /** Custom collapse behavior for canvases hosted outside the right panel. */
+  /** Reveal this host after an explicit content-open request. */
+  onReveal?: () => void;
+  /** Close the containing panel, when this host is collapsible. */
   onCollapsePanel?: () => void;
   /** Suspend terminal fit/PTY resize while the hosting panel is animating. */
   terminalResizeSuspended?: boolean;
@@ -54,9 +50,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   onInteraction,
   disablePopOut = false,
   createTabEventName,
-  expandPanelEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
-  isPanelCollapsed,
-  onExpandPanel,
+  onReveal,
   onCollapsePanel,
   terminalResizeSuspended = false,
   missionControlEnabled = true,
@@ -82,21 +76,13 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const { handleCloseWithDirtyCheck, handleCloseAllWithDirtyCheck } = useTabLifecycle({
     mode,
     createTabEventName,
-    expandPanelEventName,
+    onReveal,
   });
   useKeyboardShortcuts({
     enabled: true,
     missionControlEnabled,
     handleCloseWithDirtyCheck,
-  });
-  // Panel/tab state coordinator (auto manage expand/collapse)
-  const { collapsePanel } = usePanelTabCoordinator({
-    autoCollapseOnEmpty: true,
-    autoExpandOnTabOpen: true,
-    isCollapsed: isPanelCollapsed,
-    onExpand: onExpandPanel,
-    onCollapse: onCollapsePanel,
-    expandEventName: expandPanelEventName,
+    onReveal,
   });
 
   useEffect(() => {
@@ -160,7 +146,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     // Show empty state when there are no visible tabs and no terminal keep-alive tabs.
     if (!hasRenderableTabs) {
       return (
-        <EmptyState onClose={disablePopOut ? undefined : collapsePanel}>
+        <EmptyState onClose={disablePopOut ? undefined : onCollapsePanel}>
           {emptyState}
         </EmptyState>
       );

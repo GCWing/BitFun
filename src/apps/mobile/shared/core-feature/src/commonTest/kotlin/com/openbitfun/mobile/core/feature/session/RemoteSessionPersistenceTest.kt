@@ -137,7 +137,7 @@ class RemoteSessionPersistenceTest {
     fun activeTurnIsPersistedOnEndAndRestoredOnReopen() = runTest {
         val stores = MemoryPersistence()
         val transport = PersistenceTransport()
-        transport.messagesJson = """[{"id":"m-1","role":"assistant","content":"All done"}]"""
+        transport.messagesJson = """[{"id":"m-1","role":"assistant","content":"All done","status":"failed","error":"Desktop failed"}]"""
         transport.polls = listOf(
             """{"resp":"ok","version":1,"changed":true,"session_state":"running","active_turn":{"turn_id":"t-1","status":"active","text":"All "}}""",
             """{"resp":"ok","version":2,"changed":true,"session_state":"idle","active_turn":{"turn_id":"t-1","status":"completed","text":"All done"}}""",
@@ -154,7 +154,11 @@ class RemoteSessionPersistenceTest {
         transport2.messagesJson = transport.messagesJson
         val store2 = RemoteSessionStore.create(this, transport2, "device-a", stores.stores)
         store2.dispatch(RemoteSessionIntent.Open("server"))
-        assertEquals("m-1", assertIs<RemoteSessionUiState.Ready>(store2.state.value).timeline?.persistedMessages?.single()?.id)
+        val restored = assertIs<RemoteSessionUiState.Ready>(store2.state.value)
+            .timeline?.persistedMessages?.single()
+        assertEquals("m-1", restored?.id)
+        assertEquals("failed", restored?.status)
+        assertEquals("Desktop failed", restored?.error)
         runCurrent(); store2.dispatch(RemoteSessionIntent.Stop)
     }
 

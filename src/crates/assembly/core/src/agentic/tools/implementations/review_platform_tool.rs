@@ -8,8 +8,8 @@ use crate::agentic::tools::framework::{
 };
 use crate::service::review_platform::{
     ReviewPlatformApprovalRequest, ReviewPlatformCreatePullRequestRequest,
-    ReviewPlatformDetailSection, ReviewPlatformError, ReviewPlatformKind, ReviewPlatformRemote,
-    ReviewPlatformReplyToThreadRequest, ReviewPlatformRequestChangesRequest,
+    ReviewPlatformDetailSection, ReviewPlatformError, ReviewPlatformKind, ReviewPlatformListState,
+    ReviewPlatformRemote, ReviewPlatformReplyToThreadRequest, ReviewPlatformRequestChangesRequest,
     ReviewPlatformResolveThreadRequest, ReviewPlatformService, ReviewPlatformSubmitReviewRequest,
     ReviewSubmitEvent,
 };
@@ -130,11 +130,21 @@ impl ReviewPlatformTool {
             "github" => Ok(ReviewPlatformKind::Github),
             "gitlab" => Ok(ReviewPlatformKind::Gitlab),
             "gitcode" => Ok(ReviewPlatformKind::Gitcode),
+            "gitee" => Ok(ReviewPlatformKind::Gitee),
             "unknown" => Ok(ReviewPlatformKind::Unknown),
             other => Err(OpenBitFunError::tool(format!(
                 "Unsupported review platform kind: {}",
                 other
             ))),
+        }
+    }
+
+    fn list_state(input: &Value) -> OpenBitFunResult<ReviewPlatformListState> {
+        match input.get("state") {
+            None | Some(Value::Null) => Ok(ReviewPlatformListState::All),
+            Some(state) => serde_json::from_value(state.clone()).map_err(|error| {
+                OpenBitFunError::tool(format!("Invalid pull request state filter: {error}"))
+            }),
         }
     }
 
@@ -242,7 +252,7 @@ impl Tool for ReviewPlatformTool {
 
 Use this for remote review-platform operations such as discovering remotes, loading the workspace PR snapshot, counting pull requests, listing pull requests, opening full or paginated pull request detail, loading CI logs, creating a pull request, replying to review threads, submitting a comment review, approving, revoking approval, requesting changes, or resolving a review thread. Use ExecCommand for local repository state and branch/commit/push operations.
 
-GitHub authentication is owned by the local `gh` CLI and must never use token actions. Authentication-token actions are only for GitLab and GitCode when the user explicitly provides a token or asks to clear a stored token. Never guess or expose token values.
+GitHub authentication is owned by the local `gh` CLI and must never use token actions. Authentication-token actions are only for GitLab, GitCode, and Gitee when the user explicitly provides a token or asks to clear a stored token. Never guess or expose token values.
 
 When returning pull request results to the user, include the provider web URL so the chat UI can open the pull request detail panel naturally."#.to_string())
     }
@@ -301,6 +311,11 @@ When returning pull request results to the user, include the provider web URL so
                     "type": "integer",
                     "description": "Page size for list_pull_requests, get_workspace_snapshot, or get_pull_request_detail_page."
                 },
+                "state": {
+                    "type": "string",
+                    "enum": ["all", "open", "draft", "merged", "closed"],
+                    "description": "Repository-wide PR state filter for list_pull_requests, count_pull_requests, or get_workspace_snapshot; defaults to all. Only use filters advertised in capabilities.supportedPullRequestStates."
+                },
                 "section": {
                     "type": "string",
                     "enum": ["overview", "ci", "files", "commits", "reviews"],
@@ -316,8 +331,8 @@ When returning pull request results to the user, include the provider web URL so
                 },
                 "platform": {
                     "type": "string",
-                    "enum": ["github", "gitlab", "gitcode", "unknown"],
-                    "description": "GitLab or GitCode platform kind for update_auth_token or clear_auth_token. GitHub uses local gh authentication."
+                    "enum": ["github", "gitlab", "gitcode", "gitee", "unknown"],
+                    "description": "GitLab, GitCode, or Gitee platform kind for update_auth_token or clear_auth_token. GitHub uses local gh authentication."
                 },
                 "host": {
                     "type": "string",
@@ -325,7 +340,7 @@ When returning pull request results to the user, include the provider web URL so
                 },
                 "token": {
                     "type": "string",
-                    "description": "GitLab or GitCode personal access token for update_auth_token. Only provide this when the user explicitly asks to store that token. Never provide a GitHub token."
+                    "description": "GitLab, GitCode, or Gitee personal access token for update_auth_token. Only provide this when the user explicitly asks to store that token. Never provide a GitHub token."
                 },
                 "title": {
                     "type": "string",
@@ -782,11 +797,12 @@ When returning pull request results to the user, include the provider web URL so
                     .and_then(Value::as_u64)
                     .map(|value| value as u32);
                 let remote_id = Self::optional_string_field(input, "remote_id");
-                let snapshot = ReviewPlatformService::workspace_snapshot(
+                let snapshot = ReviewPlatformService::workspace_snapshot_with_state(
                     &repository_path,
                     remote_id.as_deref(),
                     page,
                     per_page,
+                    Self::list_state(input)?,
                 )
                 .await
                 .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
@@ -820,11 +836,12 @@ When returning pull request results to the user, include the provider web URL so
                 let remote_id = resolved_remote_id
                     .clone()
                     .expect("remote-bound action should resolve a remote");
-                let snapshot = ReviewPlatformService::workspace_snapshot(
+                let snapshot = ReviewPlatformService::workspace_snapshot_with_state(
                     &repository_path,
                     Some(remote_id.as_str()),
                     Some(1),
                     Some(1),
+                    Self::list_state(input)?,
                 )
                 .await
                 .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
@@ -864,11 +881,12 @@ When returning pull request results to the user, include the provider web URL so
                 let remote_id = resolved_remote_id
                     .clone()
                     .expect("remote-bound action should resolve a remote");
-                let snapshot = ReviewPlatformService::workspace_snapshot(
+                let snapshot = ReviewPlatformService::workspace_snapshot_with_state(
                     &repository_path,
                     Some(remote_id.as_str()),
                     page,
                     per_page,
+                    Self::list_state(input)?,
                 )
                 .await
                 .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
@@ -1221,7 +1239,8 @@ fn canonical_supported_remotes(remotes: &[ReviewPlatformRemote]) -> Vec<&ReviewP
             ReviewPlatformKind::Github => 0,
             ReviewPlatformKind::Gitlab => 1,
             ReviewPlatformKind::Gitcode => 2,
-            ReviewPlatformKind::Unknown => 3,
+            ReviewPlatformKind::Gitee => 3,
+            ReviewPlatformKind::Unknown => 4,
         };
         let normalized_host = remote.host.trim().to_ascii_lowercase();
         let normalized_project = remote.project_path.trim_matches('/').to_ascii_lowercase();
@@ -1270,6 +1289,26 @@ fn remote_selection_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gitee_uses_the_existing_write_permission_and_concurrency_boundary() {
+        let tool = ReviewPlatformTool::new();
+        assert_eq!(
+            ReviewPlatformTool::platform_kind(&json!({"platform":"gitee"})).unwrap(),
+            ReviewPlatformKind::Gitee
+        );
+        assert!(!tool.is_readonly());
+        for action in [
+            ACTION_CREATE,
+            ACTION_SUBMIT_REVIEW,
+            ACTION_APPROVE,
+            ACTION_REVOKE_APPROVAL,
+            ACTION_UPDATE_AUTH_TOKEN,
+        ] {
+            assert!(!tool.is_concurrency_safe(Some(&json!({"action":action,"platform":"gitee"}))));
+        }
+        assert!(tool.is_concurrency_safe(Some(&json!({"action":ACTION_LIST,"platform":"gitee"}))));
+    }
 
     fn github_remote(id: &str, name: &str, project_path: &str) -> ReviewPlatformRemote {
         serde_json::from_value(json!({

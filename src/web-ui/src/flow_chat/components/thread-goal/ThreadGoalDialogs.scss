@@ -35,8 +35,12 @@
   &--paused,
   &--blocked {
     color: var(--openbitfun-color-status-warning-content);
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 32%, transparent);
+    background: var(--openbitfun-color-status-warning-surface);
+    border-color: var(--openbitfun-color-status-warning-border);
+
+    > svg {
+      color: var(--openbitfun-color-status-warning-emphasis);
+    }
   }
 
   &--usageLimited,
@@ -48,8 +52,12 @@
 
   &--complete {
     color: var(--openbitfun-color-status-success-content);
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 32%, transparent);
+    background: var(--openbitfun-color-status-success-surface);
+    border-color: var(--openbitfun-color-status-success-border);
+
+    > svg {
+      color: var(--openbitfun-color-status-success-emphasis);
+    }
   }
 }
 
@@ -120,8 +128,8 @@
   box-sizing: border-box;
 
   &--done {
-    background: var(--openbitfun-color-status-success-content);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-status-success-content) 20%, transparent);
+    background: var(--openbitfun-color-status-success-emphasis);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 20%, transparent);
   }
 
   &--current {

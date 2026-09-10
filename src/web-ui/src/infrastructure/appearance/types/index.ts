@@ -590,6 +590,8 @@ export interface AppearanceStateDescriptor {
 
 export interface AppearanceSurfaceDescriptor {
   id: string;
+  /** Current DOM surface id used when this descriptor reads a legacy persisted id. */
+  hostSelectorId?: string;
   componentAttribute?: 'data-openbitfun-component' | 'data-openbitfun-product-component';
   parts: readonly AppearancePartDescriptor[];
   facets?: readonly AppearanceFacetDescriptor[];

@@ -10,6 +10,9 @@ const SOURCE_LABEL_BY_ID: Record<string, string> = {
   opencode: 'OpenCode',
   'agent-skills': 'Agent Skills',
   agents: 'Agent Skills',
+  'deepseek-harness': 'DeepSeek Harness',
+  dsh: 'DeepSeek Harness',
+  pi: 'PI',
 };
 
 function knownSourceLabel(value: string | undefined): string | undefined {
@@ -44,6 +47,19 @@ export function getSkillSourceLabel(
     skill.sourceSlot,
     fallbackLabel,
   );
+}
+
+/** Stable ecosystem identity shared by user and project discovery slots. */
+export function getSkillSourceId(skill: SkillInfo): string {
+  const identity = (skill.sourceId?.trim() || skill.sourceSlot?.trim() || 'openbitfun')
+    .toLowerCase()
+    .replace(/^(home|config)\./, '');
+  if (identity === 'claude') return 'claude-code';
+  if (identity === 'dsh') return 'deepseek-harness';
+  if (identity === 'agents') return 'agent-skills';
+  if (identity === 'openbitfun-system' || identity === 'openbitfun-user') return 'openbitfun';
+  if (identity.startsWith('opencode.')) return 'opencode';
+  return identity;
 }
 
 export function canDeleteSkill(skill: SkillInfo): boolean {

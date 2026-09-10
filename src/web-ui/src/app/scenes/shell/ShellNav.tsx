@@ -362,7 +362,7 @@ const ShellNav: React.FC = () => {
             </p>
             <Button
               type="button"
-              variant="outline"
+              variant="primary"
               size="sm"
               onClick={() => { void handleCreateManualTerminal(); }}
               leadingIcon={<Icon name="plus" size="sm" aria-hidden />}

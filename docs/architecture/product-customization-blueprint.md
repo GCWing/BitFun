@@ -8,7 +8,7 @@
 本文同时记录长期目标边界与最小架构切片。设计只保留已有或近期有明确消费方的概念，不建立通用
 白标平台、构建脚本运行时或跨 GUI/TUI 的组件协议；未在“当前实现”中列出的对象只是后续边界，不应被视为已支持能力。
 
-## 0. 当前实现（C0a）
+## 0. 当前实现（C0b）
 
 C0a 实现一个构建期 JSONC 产品定义、严格解析器和确定性解析摘要，入口位于 `products/` 与
 `scripts/product-customization/`。默认命令不需要参数；只有多产品仓库、CI 矩阵或外部定义文件需要显式传入
@@ -23,7 +23,7 @@ C0a 实现一个构建期 JSONC 产品定义、严格解析器和确定性解析
   ownership、Remote Connect 与 Detached Dispatch 复用；
 
 `product:check` / `product:explain` 只是构建作者的校验与解释工具，不计作产品字段的生产消费者。C0a 不生成无人读取的
-通用产品 manifest 或 locale projection；Desktop 与 CLI build adapter 直接消费同一次内存解析结果，Rust consumer
+通用产品 manifest 或 locale projection；两个 build adapter 直接消费同一次内存解析结果，Rust consumer
 只读取随对应产品 artifact 编译进去的不可变事实，不在运行时重新选产品。
 
 产品定义 v1 仅包含已被这些消费者读取的字段，未知字段一律拒绝。localized 名称独立于技术 ID，并按共享 locale contract
@@ -58,7 +58,8 @@ GUI/TUI 布局、插件/内置扩展选择、Installer/Store target、更新与�
 ```
 
 解析器先校验完整 family、双方 locale key、owned path 与技术 ID，再选择命令对应成员；digest-bearing `assembly`
-只携带 schema/source digest、成员、display-name key、binary/bundle identity、locale contract facts 与 assembly digest。
+只携带 schema/source digest、成员、display-name key、binary/bundle identity、
+locale contract facts 与 assembly digest。
 构建 adapter 所需的源路径、localized 名称、输出目录和 default-product 标记保留在外围 build context，不扩展成通用
 manifest。相同输入必须产生相同摘要；非默认产品使用 digest-scoped Cargo target 目录，避免复用其他产品的编译期身份。
 
@@ -73,6 +74,10 @@ i18n locale 集合和 key parity。
   `pnpm run product:check -- --product-config <path>`，确保校验实际改动的产品；
 - 修改 schema、resolver 或 Desktop/CLI build adapter 行为时，再运行 `pnpm run product:test`；
 - 打包和平台矩阵只在变更触及对应交付路径时运行，不作为产品定义的默认本地预检。
+
+Data Migrator 已从产品 family 与 sibling binary 投影中移除，使用自己的版本、Tauri 身份、构建与发布工作流。
+它固定面向 OpenBitFun 数据格式；工具身份与目标数据身份分开。旧定制产品定义应移除 `members.dataMigrator`。
+详见 [迁移器 README](../../src/apps/data-migrator/README.zh-CN.md)。
 
 ## 1. 设计结论
 

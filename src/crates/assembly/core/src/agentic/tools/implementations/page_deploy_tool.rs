@@ -31,7 +31,7 @@ impl Tool for PageDeployTool {
         Ok(
             r#"Switch the production pointer of an existing OpenBitFun Page to a previously saved version_id (rollback or promote a prior version).
 
-Requires a logged-in OpenBitFun account. This tool is only available after account login. To create or update page content and publish, use PagePublish instead. Existing versions can also be reviewed from the Pages scene.
+Requires a logged-in GitHub account. This tool is only available after account login. To create or update page content and publish, use PagePublish instead. Existing versions can also be reviewed from the Pages scene.
 
 Input: slug (page path id), version_id (immutable saved version from a prior PagePublish). Returns absolute `url` plus url_path / deployed_version_id. Public links can be shared directly. Private and relay links must be opened or copied through the Pages scene/tool card so the browser receives a scoped one-time access handoff.
 
@@ -120,7 +120,7 @@ Preview a version at /p/{username}/{slug}/@v/{version_id}."#
     ) -> OpenBitFunResult<Vec<ToolResult>> {
         if !account_login_available() {
             return Err(OpenBitFunError::tool(
-                "PageDeploy requires a logged-in OpenBitFun account".to_string(),
+                "PageDeploy requires a logged-in GitHub account".to_string(),
             ));
         }
 

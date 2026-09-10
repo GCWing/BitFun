@@ -1,6 +1,8 @@
 import {
+  Children,
   forwardRef,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -10,6 +12,8 @@ import {
   type HTMLAttributes,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { TooltipTriggerContext } from "../../internal/tooltipTriggerContext";
+import { Tooltip } from "../../components/Tooltip";
 import styles from "./OverflowText.module.css";
 
 const useIsomorphicLayoutEffect = typeof window === "undefined"
@@ -23,13 +27,18 @@ function assignRef<T>(ref: ForwardedRef<T>, value: T | null) {
 
 const MARQUEE_MIN_DURATION_MS = 2400;
 const MARQUEE_PIXELS_PER_SECOND = 36;
-const MARQUEE_EDGE_HOLD_MS = 1200;
 
 export type OverflowTextBehavior = "fade" | "marquee";
 
-export interface OverflowTextProps extends HTMLAttributes<HTMLSpanElement> {
-  /** Visual treatment used only after the rendered content is actually clipped. */
+export interface OverflowTextProps extends HTMLAttributes<HTMLElement> {
+  /** Preserve paragraph/div semantics when adopting the shared text behavior. */
+  as?: "span" | "p" | "div";
+  /** Clamp a multiline preview; its full text uses the same hover/focus tooltip. */
+  lines?: number;
+  /** Plain text defaults to marquee; rich composition defaults to a static fade. */
   behavior?: OverflowTextBehavior;
+  /** Runs an overflowing marquee while its owning control is virtually active. */
+  marqueeActive?: boolean;
 }
 
 interface OverflowMeasurement {
@@ -37,45 +46,90 @@ interface OverflowMeasurement {
   isOverflowing: boolean;
 }
 
-export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
+export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
   function OverflowText({
-    behavior = "fade",
+    as: Tag = "span",
+    behavior: requestedBehavior,
     children,
     className,
+    lines,
+    marqueeActive = false,
     style,
+    title,
     ...props
   }, forwardedRef) {
-    const elementRef = useRef<HTMLSpanElement | null>(null);
+    // Preserve existing rich slot layouts unless their owner explicitly opts in.
+    const textOnly = Children.toArray(children).every(
+      child => typeof child === "string" || typeof child === "number",
+    );
+    const behavior = lines ? "fade" : requestedBehavior ?? (textOnly ? "marquee" : "fade");
+    const elementRef = useRef<HTMLElement | null>(null);
     const contentRef = useRef<HTMLSpanElement | null>(null);
+    const triggerRef = useRef<HTMLElement | null>(null);
+    const hasExplicitTooltip = useContext(TooltipTriggerContext);
+    const [tooltipText, setTooltipText] = useState("");
     const measurementRef = useRef<OverflowMeasurement>({
       distance: 0,
       isOverflowing: false,
     });
     const [measurement, setMeasurement] = useState<OverflowMeasurement>(measurementRef.current);
 
-    const setElementRef = useCallback((element: HTMLSpanElement | null) => {
+    const setElementRef = useCallback((element: HTMLElement | null) => {
       elementRef.current = element;
+      triggerRef.current = element?.closest<HTMLElement>("[data-overflow-trigger]") ?? element;
       assignRef(forwardedRef, element);
     }, [forwardedRef]);
 
     const updateOverflow = useCallback(() => {
       const element = elementRef.current;
-      const content = contentRef.current;
+      const content = contentRef.current ?? element;
       if (!element || !content) return;
 
       const distance = Math.max(0, content.scrollWidth - element.clientWidth);
-      const isOverflowing = distance > 0;
+      // A compact single-line label can have glyph ink extend slightly beyond
+      // its line box without any text being clipped. Only multiline clamps use
+      // vertical overflow as a truncation signal; single-line slots are clipped
+      // exclusively on the inline axis.
+      const hasVerticalClampOverflow = lines !== undefined
+        && element.clientHeight > 0
+        && element.scrollHeight > element.clientHeight;
+      const isOverflowing = element.clientWidth > 0
+        && (distance > 0 || hasVerticalClampOverflow);
       const current = measurementRef.current;
       if (current.distance === distance && current.isOverflowing === isOverflowing) return;
 
       const next = { distance, isOverflowing };
       measurementRef.current = next;
       setMeasurement(next);
+    }, [lines]);
+
+    const prepareTooltip = useCallback(() => {
+      const element = elementRef.current;
+      const trigger = triggerRef.current;
+      if (!element || !trigger) return false;
+
+      // One tooltip per control, even when its label and metadata both overflow.
+      // Nested text slots contribute only their innermost full-text content.
+      const slots = trigger === element
+        ? [element]
+        : Array.from(trigger.querySelectorAll<HTMLElement>('[data-overflow-tooltip="true"]'))
+          .filter(slot => slot.closest("[data-overflow-trigger]") === trigger
+            && !slot.querySelector('[data-overflow-tooltip="true"]'));
+      if (slots[0] !== element) return false;
+      const text = slots.map(slot => slot.getAttribute("data-overflow-text") ?? slot.textContent ?? "")
+        .filter(Boolean).join("\n");
+      if (!text) return false;
+      setTooltipText(text);
+      return true;
     }, []);
 
     useIsomorphicLayoutEffect(() => {
       updateOverflow();
-    }, [children, updateOverflow]);
+    }, [behavior, children, lines, updateOverflow]);
+
+    useEffect(() => {
+      if (measurementRef.current.isOverflowing) prepareTooltip();
+    }, [children, title, prepareTooltip]);
 
     useEffect(() => {
       const element = elementRef.current;
@@ -89,6 +143,11 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
 
       const fontSet = element.ownerDocument.fonts;
       fontSet?.addEventListener("loadingdone", updateOverflow);
+      // Rich labels may update their own descendants without changing this slot's props.
+      const mutationObserver = textOnly || typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => { updateOverflow(); prepareTooltip(); });
+      mutationObserver?.observe(element, { childList: true, characterData: true, subtree: true });
 
       if (!resizeObserver) {
         element.ownerDocument.defaultView?.addEventListener("resize", updateOverflow);
@@ -96,41 +155,61 @@ export const OverflowText = forwardRef<HTMLSpanElement, OverflowTextProps>(
 
       return () => {
         resizeObserver?.disconnect();
+        mutationObserver?.disconnect();
         fontSet?.removeEventListener("loadingdone", updateOverflow);
         if (!resizeObserver) {
           element.ownerDocument.defaultView?.removeEventListener("resize", updateOverflow);
         }
       };
-    }, [updateOverflow]);
+    }, [behavior, prepareTooltip, textOnly, updateOverflow]);
 
     const marqueeDuration = Math.max(
       MARQUEE_MIN_DURATION_MS,
-      Math.round(
-        (measurement.distance / MARQUEE_PIXELS_PER_SECOND) * 1000
-        + MARQUEE_EDGE_HOLD_MS,
-      ),
+      Math.round((measurement.distance / MARQUEE_PIXELS_PER_SECOND) * 1000),
     );
-    const resolvedStyle = behavior === "marquee"
-      ? ({
-          ...style,
+    const resolvedStyle = {
+      ...style,
+      ...(lines ? { "--_overflow-text-lines": lines } : {}),
+      ...(behavior === "marquee" ? {
           "--_overflow-text-marquee-distance": `${measurement.distance}px`,
           "--_overflow-text-marquee-duration": `${marqueeDuration}ms`,
-        } as CSSProperties)
-      : style;
+      } : {}),
+    } as CSSProperties;
+
+    const hasOverflowTooltip = measurement.isOverflowing && !hasExplicitTooltip && title !== "";
 
     return (
-      <span
+      <>
+      <Tag
         {...props}
         className={classNames(styles.root, className)}
+        data-marquee-active={marqueeActive ? "true" : undefined}
         data-overflow={measurement.isOverflowing ? "true" : "false"}
         data-overflow-behavior={behavior}
+        data-overflow-lines={lines}
+        data-overflow-tooltip={hasOverflowTooltip ? "true" : undefined}
+        data-overflow-text={title}
         ref={setElementRef}
         style={resolvedStyle}
+        title={hasOverflowTooltip ? undefined : title}
       >
-        <span className={styles.content} data-openbitfun-part="content" ref={contentRef}>
-          {children}
-        </span>
-      </span>
+        {behavior === "marquee" ? (
+          <span className={styles.content} data-openbitfun-part="content" data-overflow-content="" ref={contentRef}>
+            {children}
+          </span>
+        ) : children}
+      </Tag>
+      {hasOverflowTooltip && (
+        <Tooltip
+          active={marqueeActive}
+          content={tooltipText}
+          interactive
+          onBeforeShow={prepareTooltip}
+          trigger="hover-focus"
+          triggerRef={triggerRef}
+        />
+      )}
+      </>
     );
   },
 );

@@ -440,7 +440,7 @@ export struct ConnectView {
       onSubmit: () => {
         this.ensureUserId();
         this.showManualPairing = false;
-        this.onConnect(this.accountPassword);
+        this.onConnect();
       }
     })
   }
@@ -492,17 +492,8 @@ export struct ConnectView {
       return;
     }
     if (this.remoteUrl.trim().length > 0) {
-      if (this.requiresAccountAuth && this.accountPassword.length === 0) {
-        if (this.isAccountAuthenticated()) {
-          this.pairingStep = ConnectSheetStep.Account;
-          return;
-        }
-        this.showManualPairing = true;
-        this.onRemoteUrlInputVisibleChange(true);
-        return;
-      }
       this.ensureUserId();
-      this.onConnect(this.accountPassword);
+      this.onConnect();
       return;
     }
     this.onRemoteUrlInputVisibleChange(true);
@@ -511,13 +502,7 @@ export struct ConnectView {
   }
 
   private canConnect(): boolean {
-    if (this.remoteUrl.trim().length === 0 || this.isBusy) {
-      return false;
-    }
-    if (!this.requiresAccountAuth) {
-      return true;
-    }
-    return this.displayUserIdInput().trim().length > 0 && this.accountPassword.length > 0;
+    return this.remoteUrl.trim().length > 0 && !this.isBusy;
   }
 
   private closeManualPairing(): void {
@@ -563,20 +548,9 @@ export struct ConnectView {
 
   private handleScannedRemoteUrl(text: string): void {
     const action = this.onRemoteUrlDetected(text);
-    if (action === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD) {
-      this.showManualPairing = true;
-      this.onRemoteUrlInputVisibleChange(true);
-      this.pairingStep = ConnectSheetStep.Scan;
-      return;
-    }
     if (action === DetectedUrlAction.SHOW_CLOUD_DEVICES ||
       action === DetectedUrlAction.USE_CLOUD_DEVICE) {
       this.pairingStep = ConnectSheetStep.Account;
-      return;
-    }
-    if (action === DetectedUrlAction.PAIR_NOW) {
-      this.ensureUserId();
-      this.onConnect();
       return;
     }
     this.inlineScanError = this.statusText || RemoteI18n.t('connect.hintInvalidLink');

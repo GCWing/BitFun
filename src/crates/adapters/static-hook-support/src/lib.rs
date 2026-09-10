@@ -1,5 +1,8 @@
 //! Shared, runtime-free bounded file and parser support for ecosystem source adapters.
 
+mod catalog;
+pub use catalog::StaticHookCatalog;
+
 use openbitfun_product_domains::external_hook_catalog::{
     ExternalHookHandlerKind, ExternalHookMatcherSummary,
 };

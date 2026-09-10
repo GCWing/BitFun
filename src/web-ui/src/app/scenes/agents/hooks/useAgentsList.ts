@@ -1,3 +1,5 @@
+import { primaryAgentKind, agentName } from '@/shared/agents/identity';
+import { isPrimaryAgent, isOrdinaryAgent } from '../agentVisibility';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
@@ -17,7 +19,7 @@ import { useNotification } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { enrichCapabilities } from '../utils';
-import { HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
+import { HIDDEN_AGENT_IDS } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -29,7 +31,7 @@ import { createLogger } from '@/shared/utils/logger';
 const toolLog = createLogger('useAgentsList');
 
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
-export type FilterType = 'all' | 'mode' | 'subagent';
+export type FilterType = 'all' | 'agent' | 'subagent';
 
 /**
  * State of the tool catalog load, so the UI can distinguish "host doesn't expose
@@ -249,7 +251,7 @@ export function useAgentsList({
 
     try {
       const [modes, subagents, toolCatalog, configs, reviewTeamDefinition, modelConfigs] = await Promise.all([
-        agentAPI.getAvailableModes().catch(() => []),
+        agentAPI.getAvailableModes({ workspacePath: workspacePath || undefined }).catch(() => []),
         SubagentAPI.listSubagents({ workspacePath: workspacePath || undefined }).catch(() => []),
         fetchTools(),
         configAPI.getAgentProfileConfigs().catch(() => ({})),
@@ -312,24 +314,22 @@ export function useAgentsList({
         enrichCapabilities({
           key: `mode::${mode.id}`,
           id: mode.id,
-          name: mode.name,
+          name: agentName(mode, t),
           description: mode.description,
           isReadonly: mode.isReadonly,
-          isReview: false,
           toolCount: mode.toolCount,
           defaultTools: mode.defaultTools ?? [],
-          defaultEnabled: true,
-          effectiveEnabled: true,
           source: mode.source,
           path: mode.path,
           model: mode.model,
+          promptCacheScopeKey: mode.promptCacheScopeKey,
           configProfileId: mode.configProfileId,
           configProfileLabel: mode.configProfileLabel,
           configProfileMemberModeIds: mode.configProfileMemberModeIds,
           visibleSubagentCount: manageableSubagentsByProfile[mode.configProfileId]
             ?.filter((subagent) => subagent.effectiveEnabled).length ?? 0,
           capabilities: [],
-          agentKind: 'mode',
+          agentKind: primaryAgentKind(mode),
         }),
       );
 
@@ -338,6 +338,7 @@ export function useAgentsList({
 
         return enrichCapabilities({
           ...subagent,
+          name: agentName(subagent, t),
           capabilities: [],
           agentKind: 'subagent',
           subagentModelOverride: modelOverride,
@@ -362,7 +363,7 @@ export function useAgentsList({
         setLoading(false);
       }
     }
-  }, [canQueryToolCatalog, workspacePath, renderedPeerDeviceId]);
+  }, [canQueryToolCatalog, workspacePath, renderedPeerDeviceId, t]);
 
   useEffect(() => {
     void loadAgents();
@@ -380,7 +381,7 @@ export function useAgentsList({
   }, [loadAgents]);
 
   const getModeProfile = useCallback((agentId: string): ModeProfileEntry | null => {
-    const agent = allAgents.find((item) => item.id === agentId && item.agentKind === 'mode');
+    const agent = allAgents.find((item) => item.id === agentId && isPrimaryAgent(item));
     if (!agent) {
       return null;
     }
@@ -395,7 +396,7 @@ export function useAgentsList({
   }, [allAgents, modeProfiles]);
 
   const getModeConfig = useCallback((agentId: string): AgentProfileConfigItem | null => {
-    const agent = allAgents.find((item) => item.id === agentId && item.agentKind === 'mode');
+    const agent = allAgents.find((item) => item.id === agentId && isPrimaryAgent(item));
     if (!agent) return null;
 
     const profileId = agent.configProfileId ?? agentId;
@@ -504,8 +505,10 @@ export function useAgentsList({
       } catch {
         // ignore
       }
+      return true;
     } catch {
       notification.error(t('agentsOverview.skillToggleFailed'));
+      return false;
     }
   }, [getModeProfile, notification, t, workspacePath]);
 
@@ -532,8 +535,10 @@ export function useAgentsList({
       } catch {
         // ignore
       }
+      return true;
     } catch {
       notification.error(t('agentsOverview.skillToggleFailed'));
+      return false;
     }
   }, [getModeProfile, notification, t, workspacePath]);
 
@@ -563,7 +568,7 @@ export function useAgentsList({
         [profile.profileId]: updatedSubagents,
       }));
       setAllAgents((prev) => prev.map((agent) => (
-        agent.agentKind === 'mode' && (agent.configProfileId ?? agent.id) === profile.profileId
+        isPrimaryAgent(agent) && (agent.configProfileId ?? agent.id) === profile.profileId
           ? {
               ...agent,
               visibleSubagentCount: updatedSubagents.filter((subagent) => subagent.effectiveEnabled).length,
@@ -610,7 +615,7 @@ export function useAgentsList({
     }
 
     if (filterType !== 'all') {
-      if (filterType === 'mode' && agent.agentKind !== 'mode') return false;
+      if (filterType === 'agent' && !isOrdinaryAgent(agent)) return false;
       if (filterType === 'subagent' && agent.agentKind !== 'subagent') return false;
     }
 
@@ -623,7 +628,7 @@ export function useAgentsList({
   }), [allAgents, filterLevel, filterType, searchQuery]);
 
   const overviewAgents = useMemo(
-    () => allAgents.filter((agent) => isAgentInOverviewZone(agent, hiddenAgentIds)),
+    () => allAgents.filter((agent) => !hiddenAgentIds.has(agent.id) && agent.agentKind !== 'harness'),
     [allAgents, hiddenAgentIds],
   );
 
@@ -633,7 +638,7 @@ export function useAgentsList({
     user: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'user').length,
     project: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'project').length,
     external: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'external').length,
-    mode: overviewAgents.filter((agent) => agent.agentKind === 'mode').length,
+    agent: overviewAgents.filter(isOrdinaryAgent).length,
     subagent: overviewAgents.filter((agent) => agent.agentKind === 'subagent').length,
   }), [overviewAgents]);
 

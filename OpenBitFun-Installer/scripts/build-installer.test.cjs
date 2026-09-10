@@ -103,6 +103,13 @@ test("all Installer validators share the required runtime file contract", () => 
     path.join(installerRoot, "src-tauri", "src", "installer", "commands.rs"),
     "utf8"
   );
+  for (const source of [buildRs, commandsRs]) {
+    const declaration = source.match(/const REQUIRED_PAYLOAD_FILES: \[&str; (\d+)\] = \[([\s\S]*?)\];/);
+    assert.equal(Number(declaration[1]), REQUIRED_PAYLOAD_FILES.length);
+    const files = [...declaration[2].matchAll(/"([^"]+)"|MAIN_APP_EXE/g)]
+      .map((match) => match[1] || "openbitfun-desktop.exe");
+    assert.deepEqual(files, REQUIRED_PAYLOAD_FILES);
+  }
   for (const relativePath of REQUIRED_PAYLOAD_FILES) {
     assert.match(buildRs, new RegExp(escapeRegExp(relativePath)));
     if (relativePath === "openbitfun-desktop.exe") {
@@ -111,6 +118,15 @@ test("all Installer validators share the required runtime file contract", () => 
       assert.match(commandsRs, new RegExp(escapeRegExp(relativePath)));
     }
   }
+});
+
+test("standalone Data Migrator is not required by the installer", () => {
+  assert.ok(!REQUIRED_PAYLOAD_FILES.includes("openbitfun-data-migrator.exe"));
+  const commandsRs = fs.readFileSync(path.join(installerRoot, "src-tauri/src/installer/commands.rs"), "utf8");
+  assert.doesNotMatch(commandsRs, /DATA_MIGRATOR_EXE|HandoffStore|launch_trusted_executable/);
+  assert.match(commandsRs, /Data Migrator is distributed separately/);
+  const themeSetup = fs.readFileSync(path.join(installerRoot, "src/pages/ThemeSetup.tsx"), "utf8");
+  assert.doesNotMatch(themeSetup, /migrateLegacyData|onLaunchMigration/);
 });
 
 function minorLine(version) {

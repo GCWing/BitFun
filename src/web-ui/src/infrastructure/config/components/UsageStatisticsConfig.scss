@@ -70,7 +70,6 @@
     font-size: var(--openbitfun-type-label-sm-font-size);
     line-height: var(--openbitfun-type-body-sm-line-height);
     color: var(--openbitfun-color-content-secondary);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -81,7 +80,6 @@
     line-height: var(--openbitfun-type-label-md-line-height);
     color: var(--openbitfun-color-content-primary);
     font-variant-numeric: tabular-nums;
-    text-overflow: ellipsis;
 
     &--highlight {
       color: var(--openbitfun-color-accent-secondary);
@@ -293,7 +291,6 @@
     min-width: 0;
     overflow: hidden;
     line-height: var(--openbitfun-type-label-md-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

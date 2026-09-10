@@ -22,6 +22,7 @@ export interface FileSystemNode {
 export interface FileExplorerProps {
   fileTree: FileSystemNode[];
   selectedFile?: string;
+  revealTarget?: FileTreeRevealTarget;
   onFileSelect?: (filePath: string, fileName: string) => void;
   className?: string;
   enablePathCompression?: boolean;
@@ -193,9 +194,15 @@ export interface FlatFileNode {
 }
 
 
+export interface FileTreeRevealTarget {
+  path: string;
+  requestId: number;
+}
+
 export interface VirtualFileTreeProps {
   flatNodes: FlatFileNode[];
   selectedFile?: string;
+  revealTarget?: FileTreeRevealTarget;
   expandedFolders: Set<string>;
   onNodeSelect?: (node: FlatFileNode) => void;
   onToggleExpand?: (path: string) => void;

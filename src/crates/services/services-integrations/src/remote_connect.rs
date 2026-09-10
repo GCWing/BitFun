@@ -11,17 +11,15 @@ pub mod account;
 pub mod bot;
 mod chat_projection;
 pub mod device;
+pub mod device_crypto;
 pub mod encryption;
 mod lan;
-mod mobile_web_upload;
-mod ngrok;
 mod page_upload;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
 mod relay_http;
 pub mod session_store;
-pub mod sync_state;
 
 pub use chat_projection::{
     agent_input_attachment_from_remote_image_context, project_remote_chat_user,
@@ -34,10 +32,6 @@ pub use lan::{
     LocalNetworkInterface,
 };
 use log::info;
-pub use mobile_web_upload::upload_mobile_web_to_relay;
-pub use ngrok::{
-    cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
-};
 use openbitfun_core_types::{
     ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection,
 };
@@ -53,7 +47,7 @@ pub use openbitfun_runtime_ports::{
     RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
-use openbitfun_services_core::product_identity::{hidden_data_directory, product_id};
+use openbitfun_services_core::product_identity::hidden_data_directory;
 pub use page_upload::{
     create_page_open_link_on_relay, delete_page_from_relay, delete_page_version_on_relay,
     deploy_page_version_on_relay, join_relay_url, list_page_versions_from_relay,
@@ -62,7 +56,7 @@ pub use page_upload::{
     update_page_on_relay, PageContentPublishResult, PageInfo, PageOpenLink, PagePublishResult,
     PageSaveVersionResult, PageVersionInfo,
 };
-pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
+pub use pairing::PairingState;
 pub use qr_generator::QrGenerator;
 pub use relay_client::{
     ensure_rustls_crypto_provider, ConnectionState, RelayClient, RelayEvent, RelayMessage,
@@ -522,7 +516,7 @@ where
     if let Some(workspace) =
         remote_session_restore_target(session_exists, binding_workspace.as_ref())
     {
-        let _ = host.restore_remote_session(&session_id, workspace).await;
+        host.restore_remote_session(&session_id, workspace).await?;
     }
 
     host.prewarm_remote_terminal(RemoteTerminalPrewarmRequest {
@@ -1866,22 +1860,27 @@ pub struct RemoteModelCatalogPollDelta {
 }
 
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
+    if let Some(harness) =
+        mobile_type.and_then(openbitfun_core_types::agent_identity::HarnessId::from_legacy_id)
+    {
+        return harness.as_str();
+    }
     match mobile_type {
-        Some(value) if value.eq_ignore_ascii_case("minimal") => "minimal",
+        Some(value) if value.eq_ignore_ascii_case("minimal") => "Minimal",
         Some(value)
             if value.eq_ignore_ascii_case("ultra") || value.eq_ignore_ascii_case("ultimate") =>
         {
-            "Ultra"
+            "Ultimate"
         }
         Some(value)
             if value.eq_ignore_ascii_case("balanced") || value.eq_ignore_ascii_case("standard") =>
         {
-            "agentic"
+            "Standard"
         }
-        Some("code") | Some("agentic") | Some("Agentic") => "agentic",
+        Some("code") => "Standard",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("claw") | Some("Claw") | Some("assistant") | Some("chat") => "Claw",
-        _ => "agentic",
+        _ => "Standard",
     }
 }
 
@@ -1896,6 +1895,10 @@ pub struct ImageAttachment {
 pub struct SessionInfo {
     pub session_id: String,
     pub name: String,
+    #[serde(
+        serialize_with = "openbitfun_core_types::agent_identity_wire::serialize_legacy_agent_id",
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id"
+    )]
     pub agent_type: String,
     pub created_at: String,
     pub updated_at: String,
@@ -2268,6 +2271,13 @@ pub enum RemotePermissionMode {
     FullAccess,
 }
 
+/// Display-only identity for a live browser connection, never an authorization identity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteControlClient {
+    pub id: String,
+    pub name: String,
+}
+
 /// Commands that remote clients can send to the desktop runtime.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
@@ -2402,33 +2412,18 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
-    /// Ask the paired desktop to delegate its logged-in account identity
-    /// (token + master_key) to this room-channel client so it can call the
-    /// relay device APIs directly. Answered by the host runtime; other hosts
-    /// return an error response.
-    GetDelegatedIdentity,
-    /// Ask the paired desktop to mint a *full* account device credential for a
-    /// separate device that cannot type a password (a watch). The desktop calls
-    /// the relay's `/api/auth/provision-device` with its own device token, then
-    /// returns the minted credential together with the account master key over
-    /// this already-encrypted room channel. The relay never sees the master key.
-    ///
-    /// Unlike `GetDelegatedIdentity` this yields a 30-day full credential rather
-    /// than a 24-hour delegated one, because the provisioned device is a primary
-    /// surface and cannot re-authenticate on its own when the token lapses.
-    ///
-    /// `request_id` is minted by the device being provisioned, not by the
-    /// desktop, so that a retry anywhere along the watch → phone → desktop chain
-    /// replays one idempotent relay request instead of registering a second
-    /// device. Answered by the host runtime; other hosts return an error
-    /// response.
+    /// Provision a separate device through this authenticated controller.
+    /// The target host owns token issuance and idempotent request handling.
     ProvisionPeerDevice {
         /// 32 lowercase hex characters; the relay rejects any other shape.
         device_id: String,
         device_name: String,
         request_id: String,
     },
-    Ping,
+    Ping {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client: Option<RemoteControlClient>,
+    },
 
     // ── Device-to-device distributed control ──────────────────────────────
     //
@@ -2655,18 +2650,8 @@ pub enum RemoteResponse {
     },
     /// Event already delivered out-of-band; ack only.
     DeviceEventAccepted,
-    /// Delegated account identity for a paired room-channel client.
-    /// `master_key` is base64-encoded; `device_id` is the delegating host.
-    DelegateIdentity {
-        token: String,
-        user_id: String,
-        master_key: String,
-        device_id: String,
-    },
-    /// A full account device credential minted for a paired client's peer
-    /// device. `master_key` is base64-encoded; `device_id` echoes the *newly
-    /// provisioned* device, not the delegating host — the opposite of
-    /// `DelegateIdentity`, whose `device_id` names the desktop.
+    /// A device credential and its independent private key, delivered only
+    /// over the authenticated encrypted device channel.
     PeerDeviceProvisioned {
         token: String,
         user_id: String,
@@ -2728,7 +2713,7 @@ where
     H: RemoteCommandRuntimeHost + ?Sized,
 {
     match command {
-        RemoteCommand::Ping => RemoteResponse::Pong,
+        RemoteCommand::Ping { .. } => RemoteResponse::Pong,
 
         RemoteCommand::GetWorkspaceInfo
         | RemoteCommand::ListRecentWorkspaces
@@ -2775,7 +2760,7 @@ where
             );
             info!(
                 "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
-                agent_type.as_deref().unwrap_or("agentic"),
+                agent_type.as_deref().unwrap_or("Standard"),
                 resolved_contexts.len()
             );
             remote_dialog_submit_response(
@@ -2870,15 +2855,7 @@ where
             .await,
         ),
 
-        // Answered by the host runtime (which owns the delegated identity
-        // provider) before dispatch reaches this router; this is the fallback
-        // for hosts that cannot delegate an account identity.
-        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
-            message: "Delegated identity is not available on this host".to_string(),
-        },
-
-        // Same contract as GetDelegatedIdentity above: the host runtime owns the
-        // account credentials and answers before dispatch reaches this router.
+        // The authenticated host owns credential provisioning.
         RemoteCommand::ProvisionPeerDevice { .. } => RemoteResponse::Error {
             message: "Device provisioning is not available on this host".to_string(),
         },
@@ -4138,7 +4115,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-a".to_string(),
                     name: "keep me".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 3,
@@ -4146,7 +4123,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-b".to_string(),
                     name: "other".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 1,

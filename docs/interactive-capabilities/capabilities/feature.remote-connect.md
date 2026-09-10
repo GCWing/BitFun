@@ -17,24 +17,18 @@ Connect to this host from mobile, a bot, or another OpenBitFun device to inspect
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器
-  - Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择局域网或官方 Relay
+  - Choose LAN or the official Relay
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动、停止 Remote Connect 并查看实时连接状态和设备信息
   - Start or stop Remote Connect and inspect live status and device information
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看局域网 IP、网络信息与可分享的连接配置
   - Inspect LAN IP, network details, and shareable connection configuration
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 配置飞书、Telegram、微信等 Bot 并单独停止 Bot
   - Configure Feishu, Telegram, WeChat, and other bots, and stop a bot independently
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 通过向导预检、安装 Docker、部署、注册并验证自建 Relay
-  - Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 登录、退出并查看账户状态和凭据提示
-  - Sign in, sign out, and inspect account status and credential hints
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 使用 GitHub 登录、退出并查看身份状态
+  - Sign in with GitHub, sign out, and inspect identity status
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 列出、连接、查看在线状态和删除同账户设备
   - List, connect, inspect online status, and remove same-account devices
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 同步、导出、导入、删除或发送会话到另一台设备
-  - Sync, export, import, delete, or send sessions to another device
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 在设备间自动或手动同步 OpenBitFun 设置
-  - Synchronize OpenBitFun settings across devices automatically or on demand
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面
   - Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane
 

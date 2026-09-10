@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip, Icon } from '@openbitfun/ui';
+import { IconButton, Tooltip, Icon, OverflowText } from '@openbitfun/ui';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './CopyableTextPreview.scss';
 
@@ -9,6 +9,8 @@ interface CopyableTextPreviewProps extends React.HTMLAttributes<HTMLElement> {
   text?: string | null;
   emptyText: React.ReactNode;
   as?: 'span' | 'code';
+  /** Preserve full resource details instead of using single-line overflow. */
+  multiline?: boolean;
   className?: string;
   tooltipContent?: React.ReactNode;
   tooltipPlacement?: 'top' | 'bottom' | 'left' | 'right';
@@ -18,6 +20,7 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   text,
   emptyText,
   as = 'span',
+  multiline = false,
   className,
   tooltipContent,
   tooltipPlacement = 'bottom',
@@ -27,7 +30,10 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   const content = text?.trim()
     ? text
     : <span className="copyable-text-preview__empty" data-openbitfun-component="copyable-text-preview" data-openbitfun-part="empty">{emptyText}</span>;
-  const resolvedClassName = `copyable-text-preview${className ? ` ${className}` : ''}`;
+  const resolvedClassName = `copyable-text-preview${multiline ? ' copyable-text-preview--multiline' : ''}${className ? ` ${className}` : ''}`;
+  const preview = multiline ? content : (
+    <OverflowText title={tooltipContent ? '' : undefined}>{content}</OverflowText>
+  );
   const copyText = typeof tooltipContent === 'string' && tooltipContent.trim()
     ? tooltipContent
     : undefined;
@@ -40,11 +46,11 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   const copyTooltip = copied ? t('toolCards.common.copied') : t('toolCards.common.copy');
   const node = as === 'code' ? (
     <code ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
-      {content}
+      {preview}
     </code>
   ) : (
     <span ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
-      {content}
+      {preview}
     </span>
   );
 

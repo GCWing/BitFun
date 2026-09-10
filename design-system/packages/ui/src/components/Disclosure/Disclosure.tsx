@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { Icon } from "../Icon";
 import styles from "./Disclosure.module.css";
 
@@ -62,7 +63,7 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
         ref={ref}
       >
         <div className={styles.header} data-openbitfun-part="header">
-          <button
+          <button data-overflow-trigger
             aria-controls={contentId}
             aria-expanded={resolvedOpen}
             className={styles.trigger}
@@ -80,7 +81,7 @@ export const Disclosure = forwardRef<HTMLElement, DisclosureProps>(
               </span>
             )}
             <span className={styles.heading} data-openbitfun-part="heading">
-              <span className={styles.summary} data-openbitfun-part="summary">{summary}</span>
+              <OverflowText className={styles.summary} data-openbitfun-part="summary">{summary}</OverflowText>
               {description !== undefined && description !== null && (
                 <span className={styles.description} data-openbitfun-part="description">
                   {description}

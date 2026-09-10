@@ -98,10 +98,10 @@ test("Field styles consume shared content and typography tokens", async () => {
   const styles = await readFile(new URL("../src/components/Field/Field.module.css", import.meta.url), "utf8");
 
   assert.match(styles, /--openbitfun-color-content-primary/);
-  assert.match(styles, /--openbitfun-color-content-muted/);
+  assert.match(styles, /--openbitfun-color-content-secondary/);
   assert.match(styles, /--openbitfun-color-content-required-indicator/);
   assert.doesNotMatch(styles, /--openbitfun-color-status-danger-content[^\n]*required/);
-  assert.match(styles, /--openbitfun-type-label-md-font-size/);
+  assert.match(styles, /--openbitfun-type-label-selected-font-size/);
   assert.match(styles, /--openbitfun-type-support-font-size/);
   assert.match(styles, /--openbitfun-layout-field-root-gap/);
   assert.match(styles, /--openbitfun-layout-field-label-action-gap/);

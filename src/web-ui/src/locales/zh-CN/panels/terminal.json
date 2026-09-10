@@ -1,6 +1,7 @@
 {
   "title": "终端",
   "emptyState": "当前没有打开的终端",
+  "actions": { "closeView": "关闭终端视图", "stopTerminal": "停止终端" },
   "dialog": {
     "editTerminal": {
       "title": "编辑终端",

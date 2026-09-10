@@ -88,7 +88,6 @@ $_indent-width: 8px;
 .openbitfun-file-explorer__breadcrumb-item {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100px;
   padding: 2px 2px 3px;
   border-radius: 3px;
@@ -324,7 +323,6 @@ $_indent-width: 8px;
   font-size: var(--openbitfun-type-label-md-font-size);
   font-weight: var(--openbitfun-type-body-sm-font-weight);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   position: relative;
   z-index: 2;

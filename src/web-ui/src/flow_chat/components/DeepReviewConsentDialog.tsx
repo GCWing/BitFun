@@ -232,14 +232,14 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         <div data-openbitfun-component="deep-review-consent-dialog" data-openbitfun-part="footer" className="deep-review-consent__footer">
           <div data-openbitfun-component="deep-review-consent-dialog" data-openbitfun-part="actions" className="deep-review-consent__actions">
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={() => void settleConsent(false)}
             >
               {t('deepReviewConsent.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={() => void settleConsent(true)}
             >

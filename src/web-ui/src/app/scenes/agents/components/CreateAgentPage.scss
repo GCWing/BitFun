@@ -424,10 +424,9 @@
     color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
     box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-  span {
+  span:not([data-overflow-content]) {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

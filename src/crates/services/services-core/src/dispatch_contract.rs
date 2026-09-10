@@ -73,6 +73,10 @@ pub const DISPATCH_MODEL_SYNC_SETUP_AUDIT_ACTION: &str = "model-sync";
 /// of failing an otherwise valid submission.
 pub const DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY: &str = "setup_audit_model_sync";
 
+/// Optional read-only access to files in the target-owned job workspace.
+/// Older targets can still execute, resume, and sync jobs without this query.
+pub const DISPATCH_READ_FILE_CAPABILITY: &str = "query_file_content";
+
 /// Whether a target advertising `capabilities` accepts this audit action.
 pub fn dispatch_target_accepts_setup_audit_action(action: &str, capabilities: &[&str]) -> bool {
     DISPATCH_BASE_SETUP_AUDIT_ACTIONS.contains(&action)
@@ -193,6 +197,7 @@ mod tests {
         }
         assert!(!required.contains(&DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY));
         assert!(!required.contains(&DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY));
+        assert!(!required.contains(&DISPATCH_READ_FILE_CAPABILITY));
     }
 
     #[test]

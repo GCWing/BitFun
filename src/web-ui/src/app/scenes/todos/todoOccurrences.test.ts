@@ -35,7 +35,7 @@ function makeJob(overrides: Partial<CronJob> & { schedule: CronSchedule }): Cron
     target: {
       kind: 'workspace',
       workspace: { workspacePath: '/tmp/workspace' },
-      launch: { agentType: 'agentic' },
+      launch: { agentType: 'Standard' },
     },
     createdAtMs: 0,
     configUpdatedAtMs: 0,

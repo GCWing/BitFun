@@ -62,7 +62,7 @@
   }
 
   &--running {
-    color: var(--openbitfun-color-status-warning-content);
+    color: var(--openbitfun-color-status-info-content);
   }
 }
 
@@ -83,7 +83,7 @@
 }
 
 .chat-tool-card--running {
-  border-color: var(--openbitfun-color-status-warning-border);
+  border-color: var(--openbitfun-color-status-info-border);
 }
 
 .chat-tool-card--done {
@@ -120,26 +120,26 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid var(--openbitfun-color-status-warning-border);
-  border-top-color: var(--openbitfun-color-status-warning-content);
+  border: 2px solid var(--openbitfun-color-status-info-border);
+  border-top-color: var(--openbitfun-color-status-info-emphasis);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 
 .chat-tool-card__check {
-  color: var(--openbitfun-color-status-success-content);
+  color: var(--openbitfun-color-status-success-emphasis);
   display: flex;
   align-items: center;
 }
 
 .chat-tool-card__error-icon {
-  color: var(--openbitfun-color-status-danger-content);
+  color: var(--openbitfun-color-status-danger-emphasis);
   display: flex;
   align-items: center;
 }
 
 .chat-tool-card__pending-icon {
-  color: var(--openbitfun-color-status-warning-content);
+  color: var(--openbitfun-color-status-warning-emphasis);
   display: flex;
   align-items: center;
 }
@@ -323,7 +323,7 @@
 
 .chat-task-card__stat--running {
   font-size: var(--openbitfun-type-support-font-size);
-  color: var(--openbitfun-color-status-warning-content);
+  color: var(--openbitfun-color-status-info-content);
   font-variant-numeric: tabular-nums;
 }
 
@@ -359,8 +359,8 @@
   display: inline-block;
   width: 10px;
   height: 10px;
-  border: 1.5px solid var(--openbitfun-color-status-warning-border);
-  border-top-color: var(--openbitfun-color-status-warning-content);
+  border: 1.5px solid var(--openbitfun-color-status-info-border);
+  border-top-color: var(--openbitfun-color-status-info-emphasis);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -459,7 +459,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-emphasis);
     animation: pulse-dot 1.4s ease-in-out infinite;
   }
 }
@@ -664,11 +664,11 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &--completed {
-    background: var(--openbitfun-color-status-success-content);
+    background: var(--openbitfun-color-status-success-emphasis);
   }
 
   &--in_progress {
-    background: var(--openbitfun-color-accent-default);
+    background: var(--openbitfun-color-status-info-emphasis);
     animation: todoPulse 1.4s ease-in-out infinite;
   }
 
@@ -678,7 +678,7 @@
   }
 
   &--cancelled {
-    background: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-emphasis);
     opacity: 0.5;
   }
 }

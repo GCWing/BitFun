@@ -148,7 +148,7 @@ impl RuntimeIpcRequestHandler for CreateRaceHandler {
                 self.create_started.notify_one();
                 self.allow_create.notified().await;
                 let mut session =
-                    AgentSessionCreateResult::new("session-a", "Created session", "agentic");
+                    AgentSessionCreateResult::new("session-a", "Created session", "Standard");
                 session.workspace_path = request.workspace_path;
                 session.workspace_id = Some("workspace-fixture".to_string());
                 Ok(RuntimeIpcOperationResult::SessionCreated { session })
@@ -610,7 +610,7 @@ fn summary(session_id: &str) -> AgentSessionSummary {
     AgentSessionSummary {
         session_id: session_id.to_string(),
         session_name: "Shared session".to_string(),
-        agent_type: "agentic".to_string(),
+        agent_type: "Standard".to_string(),
         model_id: None,
         reasoning_preset: None,
         last_user_dialog_agent_type: None,
@@ -669,7 +669,7 @@ fn create_operation(workspace: &Path, name: &str) -> RuntimeIpcOperation {
     RuntimeIpcOperation::CreateSession {
         request: AgentSessionCreateRequest {
             session_name: name.to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             agent_route_key: None,
             workspace_path: Some(workspace.to_string_lossy().to_string()),
             project_workspace_path: None,
@@ -692,7 +692,7 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
             original_message: None,
             turn_id: Some(turn_id.to_string()),
             execution: Default::default(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some(workspace.to_string_lossy().to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -1274,7 +1274,7 @@ async fn mode_update_requires_the_controlled_idle_session() {
     expect_error(
         &mut client,
         7,
-        update_mode_operation("session-a", "agentic"),
+        update_mode_operation("session-a", "Standard"),
         RuntimeIpcErrorCode::SessionInUse,
     )
     .await;

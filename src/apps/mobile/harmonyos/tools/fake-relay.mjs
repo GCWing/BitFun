@@ -165,10 +165,12 @@ let cancelled = false;
 let sentMessage = '';
 let sentImageCount = 0;
 let toolApproved = false;
+let previewDecisionAttempts = 0;
 let toolRejected = false;
 let toolCancelled = false;
 let questionAnswered = false;
 let selectedModelId = 'model-primary-preview';
+let selectedReasoningPreset = null;
 const deletedSessions = new Set();
 
 const assistants = [
@@ -209,7 +211,7 @@ const previewFiles = new Map([
 ]);
 
 function isScenario(name) {
-  return SCENARIO === name;
+  return SCENARIO === name || (SCENARIO === 'mobile-ui-review' && ['model-selection', 'tool-pending-confirmation'].includes(name));
 }
 
 function assistantResponseContent() {
@@ -334,6 +336,13 @@ function currentModelCatalog() {
         context_window: 128000,
         enabled: true,
         capabilities: ['text_chat', 'code_specialized', 'function_calling'],
+        ...(isScenario('model-selection') ? { reasoning: {
+          status: 'known',
+          presets: [
+            { id: 'low', label: 'Low', order: 0 },
+            { id: 'high', label: 'High', order: 1 },
+          ],
+        } } : {}),
       },
       {
         id: 'model-fast-preview',
@@ -355,6 +364,15 @@ function currentModelCatalog() {
         enabled: true,
         capabilities: ['text_chat', 'image_understanding'],
       },
+      ...(SCENARIO === 'mobile-ui-review' ? Array.from({ length: 9 }, (_, index) => ({
+        id: `review-model-${index}`,
+        name: 'Preview provider with a long configuration label',
+        provider: index % 2 ? 'review-cloud' : 'review-local',
+        model_name: `Review model ${index + 1} with extended context and reasoning support`,
+        enabled: true,
+        capabilities: ['text_chat'],
+        context_window: 128000,
+      })) : []),
     ],
     default_models: {
       primary: 'model-primary-preview',
@@ -362,6 +380,10 @@ function currentModelCatalog() {
       image_understanding: 'model-vision-preview',
     },
     session_model_id: selectedModelId,
+    ...(isScenario('model-selection') ? {
+      reasoning_preset_selection_supported: true,
+      session_reasoning_preset: selectedReasoningPreset,
+    } : {}),
   };
 }
 
@@ -708,10 +730,12 @@ function responseFor(command) {
       };
     case 'set_session_model':
       selectedModelId = command.model_id || selectedModelId;
+      if (isScenario('model-selection')) selectedReasoningPreset = command.reasoning_preset ?? null;
       return {
         resp: 'ok',
         session_id: command.session_id,
         model_id: selectedModelId,
+        ...(isScenario('model-selection') ? { reasoning_preset: selectedReasoningPreset } : {}),
       };
     case 'get_session_messages':
       if (command.before_message_id) {
@@ -844,6 +868,9 @@ function responseFor(command) {
         return response;
       }
     case 'confirm_tool':
+      if (SCENARIO === 'mobile-ui-review' && previewDecisionAttempts++ === 0) {
+        return { resp: 'error', message: 'Preview: decision submission failed; retry is available.' };
+      }
       toolApproved = true;
       activeTurn = false;
       return { resp: 'ok' };
@@ -991,6 +1018,9 @@ const server = http.createServer(async (req, res) => {
               has_more_sessions: currentSessionItems().length > 8,
             }
         : responseFor(command);
+      if (SCENARIO === 'mobile-ui-review' && ['confirm_tool', 'reject_tool'].includes(command.cmd)) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
       const payload = encryptJson(sharedKey, response);
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(payload));

@@ -135,7 +135,6 @@
   color: var(--openbitfun-color-content-secondary);
   font-size: var(--openbitfun-type-flow-support-font-size);
   line-height: var(--openbitfun-type-body-sm-line-height);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -267,10 +266,6 @@
   ):not(:disabled):hover {
     color: var(--openbitfun-color-content-primary);
   }
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
 }
 
 @keyframes openbitfun-voice-input-spin { to { transform: rotate(360deg); } }
@@ -350,7 +345,7 @@
     padding-top: 1px;
   }
 
-  // In capsule: vertically centre inside the 25px line height
+  // In capsule: vertically centre inside the 24px line height
   &--capsule &__placeholder {
     top: 50%;
     transform: translateY(-50%);
@@ -496,7 +491,7 @@
   }
 
   // Product controls fill the stable public ChatComposer slots. The package
-  // owns the 45px compact / 120px expanded surface geometry; Web UI owns concrete menus and
+  // owns the 42px compact / 120px expanded surface geometry; Web UI owns concrete menus and
   // lifecycle states.
   &__composer-surface {
     .openbitfun-chat-input__actions-left,
@@ -692,10 +687,6 @@
       color: var(--openbitfun-color-content-primary);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:hover:not(#{&}--active) {
       color: var(--openbitfun-color-content-secondary);
       background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
@@ -711,7 +702,6 @@
   &__target-tab-name {
     max-width: 110px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-flow-support-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
@@ -840,10 +830,6 @@
       opacity: 1;
     }
 
-    &:active {
-      transform: scale(0.97);
-    }
-
     &:focus-visible {
       opacity: 1;
       outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
@@ -963,23 +949,6 @@
     max-height: min(240px, calc(100vh - 56px));
     overflow-y: auto;
     padding: 4px 0;
-
-    &::-webkit-scrollbar {
-      width: 3px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 15%, transparent);
-      border-radius: 2px;
-
-      &:hover {
-        background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 25%, transparent);
-      }
-    }
   }
 
   &__slash-command-section {
@@ -1022,10 +991,6 @@
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
-    &:active {
-      transform: scale(0.99);
-    }
-
     &--active {
       .openbitfun-chat-input__slash-command-name {
         color: color-mix(in srgb, var(--openbitfun-color-accent-default) 95%, var(--openbitfun-color-content-primary));
@@ -1041,7 +1006,6 @@
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1135,14 +1099,6 @@
 
     &__mode-submenu-trigger:hover {
       background: var(--openbitfun-color-action-quiet-hover);
-    }
-
-    &__slash-command-list::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--openbitfun-color-content-muted) 8%, transparent);
-
-      &:hover {
-        background: color-mix(in srgb, var(--openbitfun-color-content-muted) 12%, transparent);
-      }
     }
   }
 

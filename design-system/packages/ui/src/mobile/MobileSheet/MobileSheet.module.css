@@ -71,8 +71,8 @@
     font-size: var(--openbitfun-type-body-lg-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
     line-height: var(--openbitfun-type-body-lg-line-height);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .description {

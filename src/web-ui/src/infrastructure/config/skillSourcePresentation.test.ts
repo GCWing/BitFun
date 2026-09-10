@@ -7,6 +7,7 @@ import {
   formatSkillOrigin,
   getModeSkillRuntimeStatus,
   getSkillSourceLabel,
+  getSkillSourceId,
   getSkillSourceLabelFromIdentity,
 } from './skillSourcePresentation';
 
@@ -39,9 +40,23 @@ function modeSkill(overrides: Partial<ModeSkillInfo> = {}): ModeSkillInfo {
 }
 
 describe('skill source presentation', () => {
+  it('normalizes legacy discovery slots without using paths or display labels as group identity', () => {
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'home.codex' }))).toBe('codex');
+    expect(getSkillSourceId(skill({ sourceId: 'claude' }))).toBe('claude-code');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'home.dsh' }))).toBe('deepseek-harness');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'home.pi' }))).toBe('pi');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'home.agents' }))).toBe('agent-skills');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'config.opencode.custom-root' }))).toBe('opencode');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: 'openbitfun-system' }))).toBe('openbitfun');
+    expect(getSkillSourceId(skill({ sourceId: '', sourceSlot: '' }))).toBe('openbitfun');
+    expect(getSkillSourceId(skill({ sourceId: 'future-agent', sourceLabel: 'Codex' }))).toBe('future-agent');
+  });
+
   it('uses the stable source label and falls back to source identity facts', () => {
     expect(getSkillSourceLabel(skill())).toBe('OpenBitFun');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: 'codex' }))).toBe('Codex');
+    expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: 'deepseek-harness' }))).toBe('DeepSeek Harness');
+    expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'home.pi' }))).toBe('PI');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'home.codex' }))).toBe('Codex');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'openbitfun-system' }))).toBe('OpenBitFun');
     expect(getSkillSourceLabel(skill({ sourceLabel: '', sourceId: '', sourceSlot: 'future' }), '其他来源')).toBe('其他来源');

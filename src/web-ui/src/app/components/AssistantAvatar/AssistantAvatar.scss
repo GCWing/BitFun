@@ -82,11 +82,11 @@
   }
 
   &.is-attention &__status-dot {
-    background: var(--openbitfun-color-status-warning-content);
+    background: var(--openbitfun-color-status-warning-emphasis);
   }
 
   &.is-error &__status-dot {
-    background: var(--openbitfun-color-status-danger-content);
+    background: var(--openbitfun-color-status-danger-emphasis);
   }
 }
 

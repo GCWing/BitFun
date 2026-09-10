@@ -27,12 +27,6 @@ const LIGHT_TEXT_DISABLED = getDesignSystemThemeString('light', 'color.content.d
 const LIGHT_NAVY_HOVER = getDesignSystemThemeString('light', 'color.action.primary.hover');
 const LIGHT_PURPLE = '#7c6b99';
 const LIGHT_PURPLE_HOVER = '#655680';
-const LIGHT_SUCCESS = getDesignSystemThemeString('light', 'color.status.success.content');
-const LIGHT_SUCCESS_BG = getDesignSystemThemeString('light', 'color.status.success.surface');
-const LIGHT_INFO = getDesignSystemThemeString('light', 'color.status.info.content');
-const LIGHT_WARNING = getDesignSystemThemeString('light', 'color.status.warning.content');
-const LIGHT_ERROR = getDesignSystemThemeString('light', 'color.status.danger.content');
-const LIGHT_ERROR_BG = getDesignSystemThemeString('light', 'color.status.danger.surface');
 const LIGHT_BACKGROUND_PRIMARY = getDesignSystemThemeString('light', 'color.surface.canvas');
 const LIGHT_SURFACE_CHROME = getDesignSystemThemeString('light', 'color.surface.chrome');
 const LIGHT_SURFACE_SUBTLE = getDesignSystemThemeString('light', 'color.surface.subtle');
@@ -100,24 +94,7 @@ export const openBitFunLightPalette: AppearancePalette = {
     }),
 
 
-    semantic: createSemanticColors({
-      success: LIGHT_SUCCESS,
-      warning: LIGHT_WARNING,
-      error: LIGHT_ERROR,
-      info: LIGHT_INFO,
-      bgAlpha: 0.08,
-      borderAlpha: 0.25,
-      overrides: {
-        successBg: LIGHT_SUCCESS_BG,
-        successBorder: getDesignSystemThemeString('light', 'color.status.success.border'),
-        warningBg: getDesignSystemThemeString('light', 'color.status.warning.surface'),
-        warningBorder: getDesignSystemThemeString('light', 'color.status.warning.border'),
-        errorBg: LIGHT_ERROR_BG,
-        errorBorder: getDesignSystemThemeString('light', 'color.status.danger.border'),
-        infoBg: getDesignSystemThemeString('light', 'color.status.info.surface'),
-        infoBorder: getDesignSystemThemeString('light', 'color.status.info.border'),
-      },
-    }),
+    semantic: createSemanticColors('light'),
 
 
     border: {
@@ -138,12 +115,9 @@ export const openBitFunLightPalette: AppearancePalette = {
     },
 
 
-    git: createGitColors({
+    git: createGitColors('light', {
       branch: rgbFromHex(LIGHT_NAVY_HOVER),
       branchBg: lightNavyHover(0.1),
-      changes: rgbFromHex(LIGHT_WARNING),
-      added: rgbFromHex(LIGHT_SUCCESS),
-      deleted: rgbFromHex(LIGHT_ERROR),
     }),
   },
 

@@ -4,7 +4,8 @@
   .actions { justify-content: flex-end; }
   .copy { min-inline-size: 0; }
   .root[data-centered="true"] .copy { text-align: center; }
-  .title { overflow: hidden; margin: 0; font-family: var(--openbitfun-type-heading-page-font-family); font-size: var(--openbitfun-type-heading-section-font-size); font-weight: var(--openbitfun-type-heading-page-font-weight); line-height: var(--openbitfun-type-heading-page-line-height); text-overflow: ellipsis; white-space: nowrap; }
-  .subtitle { overflow: hidden; margin-block-start: var(--openbitfun-space-1); color: var(--openbitfun-color-content-muted); font-size: var(--openbitfun-type-body-xs-font-size); text-overflow: ellipsis; white-space: nowrap; }
+  .title { margin: 0; font-family: var(--openbitfun-type-heading-page-font-family); font-size: var(--openbitfun-type-heading-section-font-size); font-weight: var(--openbitfun-type-heading-page-font-weight); line-height: var(--openbitfun-type-heading-page-line-height); }
+  .subtitle { margin-block-start: var(--openbitfun-space-1); color: var(--openbitfun-color-content-muted); font-size: var(--openbitfun-type-body-xs-font-size); }
+  .title, .subtitle { white-space: normal; overflow-wrap: anywhere; }
   @media (max-width: 479px) { .root { padding-inline: var(--openbitfun-space-3); } }
 }

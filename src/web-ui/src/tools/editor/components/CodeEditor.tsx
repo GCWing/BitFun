@@ -1401,6 +1401,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [filePath, isMemoryContent]);
 
   const handleEncodingConfirm = useCallback(async (newEncoding: string) => {
+    if (isMemoryContent) return;
     setEncoding(newEncoding);
     if (!filePath) return;
     try {
@@ -1441,7 +1442,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       log.warn('Failed to reload file with new encoding', err);
     }
-  }, [applyExternalContentToModel, fetchFileMetadata, filePath, reportFileMissingFromDisk, updateLargeFileMode]);
+  }, [applyExternalContentToModel, fetchFileMetadata, filePath, isMemoryContent, reportFileMissingFromDisk, updateLargeFileMode]);
 
   const handleLanguageConfirm = useCallback((languageId: string) => {
     userLanguageOverrideRef.current = true;
@@ -2040,6 +2041,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     unsubscribers.push(unsubDocHighlight);
 
     const unsubFileChanged = globalEventBus.on('editor:file-changed', async (data: { filePath: string }) => {
+      if (isMemoryContent) return;
       if (!isSamePath(data.filePath || '', filePath || '')) {
         return;
       }
@@ -2151,7 +2153,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, t, workspacePath]);
+  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, isMemoryContent, t, workspacePath]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;
@@ -2243,7 +2245,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         isReadOnly={readOnly}
         onPositionClick={(e) => openStatusBarPopover('position', e)}
         onIndentClick={(e) => openStatusBarPopover('indent', e)}
-        onEncodingClick={(e) => openStatusBarPopover('encoding', e)}
+        onEncodingClick={isMemoryContent ? undefined : (e) => openStatusBarPopover('encoding', e)}
         onLanguageClick={(e) => openStatusBarPopover('language', e)}
       />
 

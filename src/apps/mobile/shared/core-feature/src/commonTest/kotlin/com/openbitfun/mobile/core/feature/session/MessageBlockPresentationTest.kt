@@ -197,6 +197,7 @@ private fun message(
     tools = tools,
     items = items,
     images = null,
+    error = null,
 )
 
 private fun item(

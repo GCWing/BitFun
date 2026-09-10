@@ -207,11 +207,11 @@ impl ContextProfilePolicy {
 fn is_long_task_agent(agent_type: &str) -> bool {
     matches!(
         agent_type,
-        "agentic"
+        "Standard"
             | "DeepReview"
             | "DeepResearch"
             | "ComputerUse"
-            | "Ultra"
+            | "Ultimate"
             | "SwarmPlanner"
             | "SwarmWorker"
             | "SwarmReviewer"

@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useTranslation } from 'react-i18next';
-import { Menu, MenuItem } from '@openbitfun/ui';
+import { OverflowText, Menu, MenuItem } from '@openbitfun/ui';
 import { Tooltip, Icon } from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -134,7 +134,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
       data-openbitfun-state={open ? 'open' : undefined}
     >
       <Tooltip content={triggerTooltip} disabled={open}>
-        <button
+        <button data-overflow-trigger
           ref={triggerRef}
           type="button"
           className={`openbitfun-acp-mode-selector__trigger${open ? ' openbitfun-acp-mode-selector__trigger--open' : ''}`}
@@ -166,13 +166,13 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
             }
           }}
         >
-          <span
+          <OverflowText
             className="openbitfun-acp-mode-selector__label"
             data-openbitfun-component="acp-mode-selector"
             data-openbitfun-part="label"
           >
             {currentLabel}
-          </span>
+          </OverflowText>
           <Icon name="chevron-down" size="lg" style={{ width: 10, height: 10 }} aria-hidden="true" />
         </button>
       </Tooltip>
@@ -203,7 +203,7 @@ export const AcpModeSelector: React.FC<AcpModeSelectorProps> = ({
             >
               <span>{t('modelSelector.acpMode')}</span>
               {clientId && (
-                <span className="openbitfun-acp-mode-selector__header-hint">{clientId}</span>
+                <OverflowText className="openbitfun-acp-mode-selector__header-hint">{clientId}</OverflowText>
               )}
             </div>
             {candidates.map((candidate) => {

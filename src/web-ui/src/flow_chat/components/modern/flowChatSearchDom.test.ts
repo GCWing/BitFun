@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createFlowChatSearchHighlightOwner,
   findElementWithDataValue,
   findFlowChatSearchTextRange,
   findFlowChatSearchTextRanges,
@@ -68,5 +69,42 @@ describe('FlowChat search DOM navigation', () => {
     const range = findFlowChatSearchTextRange(root, 'needle');
 
     expect(range?.startContainer.parentElement?.textContent).toBe('visible needle');
+  });
+});
+
+describe('FlowChat search highlight ownership', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps other mounted rows and chat panes highlighted when one owner unmounts', () => {
+    // This registry checks range ownership only; jsdom provides no visual proof.
+    class TestHighlight extends Set<Range> {
+      constructor(...ranges: Range[]) { super(ranges); }
+    }
+    const registry = new Map<string, TestHighlight>();
+    vi.stubGlobal('CSS', { highlights: registry });
+    vi.stubGlobal('Highlight', TestHighlight);
+    const source = document.createElement('p');
+    source.textContent = 'needle one, needle two';
+    document.body.append(source);
+    const [first, second] = findFlowChatSearchTextRanges(source, 'needle');
+    const firstOwner = createFlowChatSearchHighlightOwner(document);
+    const secondOwner = createFlowChatSearchHighlightOwner(document);
+
+    firstOwner.update(first, []);
+    secondOwner.update(null, [second]);
+    expect([...registry.get('openbitfun-flowchat-search-current')!]).toEqual([first]);
+    expect([...registry.get('openbitfun-flowchat-search-match')!]).toEqual([second]);
+
+    firstOwner.dispose();
+    expect(registry.has('openbitfun-flowchat-search-current')).toBe(false);
+    expect([...registry.get('openbitfun-flowchat-search-match')!]).toEqual([second]);
+
+    firstOwner.update(first, []);
+    expect(registry.has('openbitfun-flowchat-search-current')).toBe(false);
+    secondOwner.dispose();
+    expect(registry.size).toBe(0);
   });
 });

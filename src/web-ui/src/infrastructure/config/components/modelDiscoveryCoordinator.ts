@@ -34,13 +34,23 @@ export class ModelDiscoveryCoordinator {
   }
 }
 
-/** A plan-wide /models response mixes incompatible wire formats. */
+/** The picker exposes models; the account catalog supplies each model's wire. */
 export function openCodeOfferingModels(
   offerings: SubscriptionApiOffering[],
   plan: OpenCodePlan | undefined,
-  format: string,
 ) {
-  // Legacy model configs without a plan still execute as Zen Chat Completions.
-  const selectedFormat = plan ? (format === 'response' ? 'responses' : format) : 'openai';
-  return offerings.find(item => item.plan === (plan ?? 'zen') && item.format === selectedFormat)?.models ?? [];
+  const models = offerings.filter(item => item.plan === (plan ?? 'zen')).flatMap(item => item.models);
+  return models.filter((model, index) => models.findIndex(item => item.id === model.id) === index);
+}
+
+export function openCodeModelOffering(
+  offerings: SubscriptionApiOffering[],
+  plan: OpenCodePlan | undefined,
+  model: string,
+  configuredFormat = 'openai',
+) {
+  const matches = offerings.filter(item => item.plan === (plan ?? 'zen')
+    && item.models.some(entry => entry.id === model.trim()));
+  const format = plan ? (configuredFormat === 'response' ? 'responses' : configuredFormat) : 'openai';
+  return matches.find(item => item.format === format) ?? matches[0];
 }

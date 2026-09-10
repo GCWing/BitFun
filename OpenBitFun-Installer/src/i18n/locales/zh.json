@@ -225,7 +225,9 @@
     }
   },
   "complete": {
-    "finish": "完成"
+    "finish": "完成",
+    "migrateLegacyData": "安装完成后迁移旧版 数据",
+    "migrateLegacyDataDescription": "启动已安装的 Data Migrator。它会保持旧数据不变，请你确认迁移范围，并在迁移结束后重新打开 OpenBitFun。"
   },
   "uninstall": {
     "title": "卸载 OpenBitFun",

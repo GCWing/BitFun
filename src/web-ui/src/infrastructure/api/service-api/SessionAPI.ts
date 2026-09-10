@@ -4,6 +4,7 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   DialogTurnData,
   SessionMetadata,
+  SessionActivitySummary,
 } from '@/shared/types/session-history';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 
@@ -27,6 +28,8 @@ export interface SessionMetadataPageRequest {
   workspacePath: string;
   limit: number;
   cursor?: string;
+  /** Read only these summaries (max 128), without returning metadata rows. */
+  sessionIds?: string[];
   remoteConnectionId?: string;
   remoteSshHost?: string;
 }
@@ -37,6 +40,8 @@ export interface SessionMetadataPage {
   loadedTopLevelCount: number;
   nextCursor?: string;
   hasMore: boolean;
+  /** Absent on older hosts; never interpret absence as an empty snapshot. */
+  activities?: SessionActivitySummary[];
 }
 
 export interface SessionLineageRequest {
@@ -382,6 +387,7 @@ export class SessionAPI {
           workspace_path: request.workspacePath,
           limit: request.limit,
           ...(request.cursor ? { cursor: request.cursor } : {}),
+          ...(request.sessionIds ? { session_ids: request.sessionIds } : {}),
           ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
         }
       });

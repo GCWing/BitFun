@@ -12,6 +12,15 @@
   background: var(--openbitfun-color-surface-scene);
   box-shadow: none;
 
+  // The ecosystem catalog owns its own content padding and starts at the scene edge.
+  .openbitfun-workspace-body__scene-surface > &:has(
+    > .openbitfun-scene-viewport__clip
+    > .openbitfun-scene-viewport__scene--visible[data-scene-id='ecosystem-compatibility']
+  ) {
+    inline-size: calc(100% + var(--openbitfun-space-4));
+    margin-inline-start: calc(0px - var(--openbitfun-space-4));
+  }
+
   &__clip {
     position: absolute;
     inset: 0;
@@ -83,10 +92,17 @@
       z-index: 2;
       pointer-events: none;
     }
+
+    &:not(.openbitfun-scene-viewport__scene--visible) {
+      // Descendants can override inherited visibility. Hide the entire subtree
+      // immediately while keeping its mounted state and layout measurements.
+      opacity: 0;
+      transition: none;
+    }
   }
 
   &__clip[data-scene-motion-phase='preparing'] {
-    .openbitfun-scene-viewport__scene--incoming {
+    .openbitfun-scene-viewport__scene--incoming.openbitfun-scene-viewport__scene--visible {
       opacity: 0.5;
       transition: none;
     }
@@ -99,7 +115,7 @@
   }
 
   .openbitfun-scene-viewport__clip[data-scene-motion-phase='preparing'] {
-    .openbitfun-scene-viewport__scene--incoming {
+    .openbitfun-scene-viewport__scene--incoming.openbitfun-scene-viewport__scene--visible {
       opacity: 1;
     }
   }

@@ -1,4 +1,4 @@
-import { Icon, IconButton } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton } from '@openbitfun/ui';
 import React from 'react';
 import { Play, Square } from 'lucide-react';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -70,7 +70,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
   };
 
   return (
-    <div data-openbitfun-component="mini-app-card" data-openbitfun-part="root" data-miniapp-id={app.id}
+    <div data-overflow-trigger data-openbitfun-component="mini-app-card" data-openbitfun-part="root" data-miniapp-id={app.id}
       className={[
         'miniapp-card',
         isRunning && 'miniapp-card--running',
@@ -115,13 +115,13 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
 
         <div className="miniapp-card__content">
           <div className="miniapp-card__title-group" data-openbitfun-component="mini-app-card" data-openbitfun-part="title">
-            <span className="miniapp-card__name" data-openbitfun-component="mini-app-card" data-openbitfun-part="name">{localizedName}</span>
+            <OverflowText className="miniapp-card__name" data-openbitfun-component="mini-app-card" data-openbitfun-part="name">{localizedName}</OverflowText>
           </div>
 
           <div className="miniapp-card__body" data-openbitfun-component="mini-app-card" data-openbitfun-part="body">
             {localizedDescription ? (
               <div className="miniapp-card__desc" data-openbitfun-component="mini-app-card" data-openbitfun-part="description">
-                <span className="miniapp-card__desc-inner">{localizedDescription}</span>
+                <OverflowText lines={3} className="miniapp-card__desc-inner">{localizedDescription}</OverflowText>
               </div>
             ) : null}
           </div>
@@ -129,20 +129,20 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
 
         <div className="miniapp-card__footer" data-openbitfun-component="mini-app-card" data-openbitfun-part="footer">
           <div className="miniapp-card__tags" data-openbitfun-component="mini-app-card" data-openbitfun-part="tags">
-            <span className="miniapp-card__tag" data-openbitfun-component="mini-app-card" data-openbitfun-part="version">
+            <span className="miniapp-card__tag" data-openbitfun-component="mini-app-card" data-openbitfun-part="version"><OverflowText>
               V{marketReleaseNumber ?? app.version}
-            </span>
+            </OverflowText></span>
             {displayedTags.map((tag) => (
-              <span key={tag} className="miniapp-card__tag" title={tag}>{tag}</span>
+              <span key={tag} className="miniapp-card__tag" title={tag}><OverflowText>{tag}</OverflowText></span>
             ))}
             {overflowTags.length > 0 ? (
               <span
                 className="miniapp-card__tag miniapp-card__tag-overflow"
                 title={overflowTags.join(', ')}
                 aria-label={overflowTags.join(', ')}
-              >
+              ><OverflowText>
                 +{overflowTags.length}
-              </span>
+              </OverflowText></span>
             ) : null}
           </div>
           <div className="miniapp-card__actions" data-openbitfun-component="mini-app-card" data-openbitfun-part="actions" onClick={(event) => event.stopPropagation()}>

@@ -5,7 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConnectionHealth } from '../../../../../mobile-web/src/hooks/useConnectionHealth';
-import { DelegatedIdentityChangedError } from '../../../../../mobile-web/src/services/RelayHttpClient';
+import { AccountIdentityChangedError } from '../../../../../mobile-web/src/services/RelayHttpClient';
 import {
   RemoteControlTargetChangedError,
   type RemoteSessionManager,
@@ -77,10 +77,10 @@ describe('mobile connection health target generations', () => {
     expect(useMobileStore.getState().connectionHealth).toBe('connected');
   });
 
-  it('retries a delegated-identity transition without publishing unreachable', async () => {
+  it('retries a account identity transition without publishing unreachable', async () => {
     vi.useFakeTimers();
     const ping = vi.fn()
-      .mockRejectedValueOnce(new DelegatedIdentityChangedError())
+      .mockRejectedValueOnce(new AccountIdentityChangedError())
       .mockResolvedValueOnce(undefined);
     const manager = {
       ping,

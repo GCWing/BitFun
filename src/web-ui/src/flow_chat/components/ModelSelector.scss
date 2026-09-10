@@ -50,10 +50,6 @@
       opacity: 1;
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:focus-visible {
       border-color: color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent);
@@ -86,12 +82,11 @@
     font-size: var(--openbitfun-type-flow-control-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
     line-height: var(--openbitfun-type-modifier-leading-none-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__fast-icon {
-    color: var(--openbitfun-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-emphasis);
     flex-shrink: 0;
   }
 
@@ -259,7 +254,6 @@
     display: block;
     max-width: 112px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -280,7 +274,6 @@
     color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__option-desc {
@@ -288,7 +281,6 @@
     color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
 
     &--selected-model {
       display: flex;
@@ -300,7 +292,6 @@
   &__option-desc-label {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__option-selected-check {
@@ -324,7 +315,6 @@
     color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
 }

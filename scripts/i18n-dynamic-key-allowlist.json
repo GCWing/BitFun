@@ -165,21 +165,17 @@
       ]
     },
     {
-      "id": "web-skills-filter-and-suite-metadata",
+      "id": "web-skills-filter-metadata",
       "surface": "web-ui",
       "namespace": "scenes/skills",
       "owner": "src/web-ui/src/app/scenes/skills",
-      "description": "Skills filters and suite modes store labelKey and descKey metadata resolved with the scenes/skills namespace.",
+      "description": "Skill library filters and group navigation resolve their labels from the owning scene.",
       "sourceReferences": [
-        "labelKey: 'filters.all'",
-        "labelKey: 'suite.modes.agentic'",
-        "descKey: 'suite.modeDescriptions.agentic'"
+        "labelKey: 'filters.all'"
       ],
       "keyPrefixes": [
         "filters.",
-        "categories.",
-        "suite.modes.",
-        "suite.modeDescriptions."
+        "categories."
       ]
     }
   ]

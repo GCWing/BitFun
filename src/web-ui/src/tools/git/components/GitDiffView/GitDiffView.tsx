@@ -1,6 +1,6 @@
 /** Git diff view. */
 
-import { Button, Icon, IconButton, SegmentedControl } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SegmentedControl } from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, Minus, EyeOff, AlertCircle } from 'lucide-react';
@@ -249,7 +249,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           <FileText size={48} />
           <h3>{t('diffView.loadFailedTitle')}</h3>
           <p>{error}</p>
-          <Button onClick={loadDiff} variant="fill" size="sm">
+          <Button onClick={loadDiff} variant="primary" size="sm">
             {t('common.retry')}
           </Button>
         </div>
@@ -314,7 +314,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
             </div>
             <h3>{t('diffView.loadFailedTitle')}</h3>
             <p>{error}</p>
-            <Button onClick={loadDiff} variant="fill" size="sm" leadingIcon={<Icon name="refresh" size="md" />}>
+            <Button onClick={loadDiff} variant="primary" size="sm" leadingIcon={<Icon name="refresh" size="md" />}>
 
               {t('common.retry')}
             </Button>
@@ -328,7 +328,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
           <div data-openbitfun-component="git-diff-view" data-openbitfun-part="fileList" className="openbitfun-git-diff-view__file-list">
             {diffFiles.map((file, index) => (
               <div data-openbitfun-component="git-diff-view" data-openbitfun-part="file" data-openbitfun-state={file.expanded ? 'expanded' : undefined} key={file.path} className="openbitfun-git-diff-view__file-item">
-                <div 
+                <div data-overflow-trigger
                   data-openbitfun-component="git-diff-view"
                   data-openbitfun-part="fileHeader"
                   className="openbitfun-git-diff-view__file-header"
@@ -343,7 +343,7 @@ const GitDiffView: React.FC<GitDiffViewProps> = ({
                       {getFileStatusIcon(file.status)}
                     </span>
                     
-                    <span className="openbitfun-git-diff-view__file-path">{file.path}</span>
+                    <OverflowText className="openbitfun-git-diff-view__file-path">{file.path}</OverflowText>
                     
                     {file.oldPath && file.oldPath !== file.path && (
                       <span className={`openbitfun-git-diff-view__file-status openbitfun-git-diff-view__file-status--${file.status}`}>

@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { FileIcon } from 'lucide-react';
 import type { FileContext, ValidationResult, RenderOptions } from '../../../types/context';
@@ -109,19 +109,19 @@ export class FileCardRenderer implements ContextCardRenderer<'file'> {
         </div>
         
         <div className="openbitfun-context-card__content">
-          <div className="openbitfun-context-card__title">
+          <div className="openbitfun-context-card__title"><OverflowText>
             {context.fileName}
-          </div>
+          </OverflowText></div>
           
           {!compact && (
-            <div className="openbitfun-context-card__subtitle">
+            <div className="openbitfun-context-card__subtitle"><OverflowText behavior="marquee">
               {context.relativePath || context.filePath}
               {context.fileSize && (
                 <span className="openbitfun-context-card__meta">
                   {' • '}{this.formatFileSize(context.fileSize)}
                 </span>
               )}
-            </div>
+            </OverflowText></div>
           )}
         </div>
         

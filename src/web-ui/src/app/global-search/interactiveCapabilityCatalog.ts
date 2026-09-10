@@ -141,10 +141,13 @@ export interface InteractiveCapabilityCatalog {
   definitions: InteractiveCapabilityControlDefinition[];
 }
 
-// Keep the shared host contract intact while hiding suspended frontend controls.
+// Keep the host contract intact while filtering controls unavailable for the workspace.
 const catalog = generatedCatalog as InteractiveCapabilityCatalog;
 const suspendedSearchItems = new Set(['accelerated-search', 'search-index']);
-export const INTERACTIVE_CAPABILITY_CATALOG: InteractiveCapabilityCatalog = WORKSPACE_SEARCH_AVAILABLE
+export function getInteractiveCapabilityCatalog(
+  workspaceSearchAvailable = WORKSPACE_SEARCH_AVAILABLE,
+): InteractiveCapabilityCatalog {
+  return workspaceSearchAvailable
   ? catalog
   : {
     ...catalog,
@@ -177,6 +180,10 @@ export const INTERACTIVE_CAPABILITY_CATALOG: InteractiveCapabilityCatalog = WORK
       return itemIds.length ? [{ ...definition, itemIds }] : [];
     }),
   };
+
+}
+
+export const INTERACTIVE_CAPABILITY_CATALOG = getInteractiveCapabilityCatalog();
 
 const capabilityById = new Map(
   INTERACTIVE_CAPABILITY_CATALOG.capabilities.map((capability) => [capability.id, capability]),

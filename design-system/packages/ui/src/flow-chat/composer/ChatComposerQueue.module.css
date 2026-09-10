@@ -41,7 +41,6 @@
 
   .titleLabel {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -71,17 +70,7 @@
     overflow-y: auto;
     overscroll-behavior-y: contain;
     padding: 0;
-    scrollbar-width: thin;
     list-style: none;
-  }
-
-  .list::-webkit-scrollbar {
-    inline-size: var(--openbitfun-space-1);
-  }
-
-  .list::-webkit-scrollbar-thumb {
-    border-radius: var(--openbitfun-radius-pill);
-    background: var(--openbitfun-color-action-neutral-border);
   }
 
   .item {

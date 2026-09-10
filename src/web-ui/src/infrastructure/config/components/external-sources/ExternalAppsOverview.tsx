@@ -1,4 +1,4 @@
-import { Switch, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Switch, Tooltip } from '@openbitfun/ui';
 import React from 'react';
 import { CircleAlert } from 'lucide-react';
 import type { TFunction } from 'i18next';
@@ -45,9 +45,9 @@ export const ExternalAppsOverview: React.FC<ExternalAppsOverviewProps> = ({
           data-openbitfun-part="application"
           data-openbitfun-ecosystem={application.ecosystemId}
         >
-          <span className="openbitfun-external-sources-config__app-name">
+          <OverflowText className="openbitfun-external-sources-config__app-name">
             {application.displayName}
-          </span>
+          </OverflowText>
           {application.attentionCount > 0 ? (
             <Tooltip content={t('applications.attentionRequired')} placement="top">
               <button

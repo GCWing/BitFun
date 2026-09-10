@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -14,7 +15,11 @@ import {
   verifyHarmonyFontSources,
 } from "../../scripts/web-font-profile.mjs";
 
+import { resolveDevServerPorts } from '../../scripts/dev-server-ports.mjs';
+
 const host = process.env.TAURI_DEV_HOST;
+const requireFromWebUi = createRequire(path.join(__dirname, 'package.json'));
+const { port: devPort, hmrPort } = resolveDevServerPorts();
 const designSystemUiSourceDirectory = path.resolve(
   __dirname,
   '../../design-system/packages/ui/src',
@@ -165,6 +170,12 @@ export default defineConfig(({ mode, command }) => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: [
+        // @xterm/headless 6.1.0-beta.141 advertises a missing lib/xterm.mjs.
+        // Resolve its published ESM entry for both dev optimization and builds.
+        {
+          find: /^@xterm\/headless$/,
+          replacement: requireFromWebUi.resolve('@xterm/headless/lib-headless/xterm-headless.mjs'),
+        },
         ...createDesignSystemSourceAliases(command),
         { find: "@/shared", replacement: path.resolve(__dirname, "./src/shared") },
         { find: "@/core", replacement: path.resolve(__dirname, "./src/core") },
@@ -192,8 +203,8 @@ export default defineConfig(({ mode, command }) => {
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1422,
-    // Tauri devUrl is fixed to http://localhost:1422.
+    port: devPort,
+    // The desktop launcher uses the same configured development port.
     // If Vite silently falls back to another port, the desktop webview stays blank.
     strictPort: true,
     host: host || "localhost",
@@ -201,7 +212,7 @@ export default defineConfig(({ mode, command }) => {
     hmr: {
       protocol: "ws",
       host: host || "localhost",
-      port: 1421,
+      port: hmrPort,
     },
     // Allow access to workspace root for dependencies like monaco-editor
     fs: {

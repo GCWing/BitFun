@@ -12,6 +12,12 @@ import {
   DEFAULT_LIGHT_APPEARANCE_ID,
   getBuiltinAppearance,
 } from './catalog';
+import { withLegacyButtonTokens } from './buttonThemeCompatibility';
+import { withLegacyFieldTokens } from './fieldThemeCompatibility';
+import { withLegacyCaptionToken } from './captionThemeCompatibility';
+import { withLegacyActionCardToken } from './actionCardThemeCompatibility';
+import { withLegacyIndicatorTokens } from './indicatorThemeCompatibility';
+import { withLegacyComposerTokens } from './composerThemeCompatibility';
 
 const COMPOSITION_LAYERS = Symbol('openbitfun.appearance.composition-layers');
 
@@ -120,12 +126,12 @@ function mergeRenderers(
         ...override['theme-tokens'].settings,
         tokens: {
           ...(base?.['theme-tokens']?.settings.tokens ?? {}),
-          ...override['theme-tokens'].settings.tokens,
+          ...withLegacyComposerTokens(withLegacyIndicatorTokens(withLegacyActionCardToken(withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.tokens)))))),
         },
         scopes: {
           chrome: {
             ...(base?.['theme-tokens']?.settings.scopes?.chrome ?? {}),
-            ...(override['theme-tokens'].settings.scopes?.chrome ?? {}),
+            ...withLegacyComposerTokens(withLegacyIndicatorTokens(withLegacyActionCardToken(withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.scopes?.chrome)))))),
           },
         },
       },

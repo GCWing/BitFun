@@ -6,12 +6,14 @@ interface RemotePairingCardProps {
   qrUrl?: string | null;
   pairingCode?: string | null;
   owner: 'bot' | 'network';
+  connected?: boolean;
+  statusState?: 'loading' | 'ready' | 'unavailable';
   copied: boolean;
   onCopyUrl: () => void | Promise<void>;
 }
 
 /** One shared pending state for chat-app codes, network QR links, and restored connections. */
-export function RemotePairingCard({ qrUrl, pairingCode, owner, copied, onCopyUrl }: RemotePairingCardProps) {
+export function RemotePairingCard({ qrUrl, pairingCode, owner, connected = false, statusState = 'ready', copied, onCopyUrl }: RemotePairingCardProps) {
   const { t } = useI18n('common');
   const hasCopiedUrl = Boolean(qrUrl && copied);
 
@@ -43,12 +45,18 @@ export function RemotePairingCard({ qrUrl, pairingCode, owner, copied, onCopyUrl
       )}
       <div className="openbitfun-remote-connect__pairing-details">
         <div className="openbitfun-remote-connect__pairing-status" role="status">
-          <StatusPill tone={hasCopiedUrl ? 'success' : 'warning'}>
-            {hasCopiedUrl
-              ? t('remoteConnect.urlCopied')
-              : owner === 'bot'
-                ? t('remoteConnect.stateWaitingBot')
-                : t('remoteConnect.stateWaiting')}
+          <StatusPill tone={statusState !== 'ready' ? 'neutral' : hasCopiedUrl || connected ? 'success' : 'warning'}>
+            {statusState === 'unavailable'
+              ? t('remoteConnect.statusUnavailable')
+              : statusState === 'loading'
+                ? t('remoteConnect.statusChecking')
+                : hasCopiedUrl
+                  ? t('remoteConnect.urlCopied')
+                  : connected
+                    ? t('remoteConnect.stateConnected')
+                    : owner === 'bot'
+                      ? t('remoteConnect.stateWaitingBot')
+                      : t('remoteConnect.stateWaiting')}
           </StatusPill>
         </div>
         {qrUrl ? (
@@ -57,7 +65,7 @@ export function RemotePairingCard({ qrUrl, pairingCode, owner, copied, onCopyUrl
               {t('remoteConnect.workspaceAddress')}
             </span>
             <div className="openbitfun-remote-connect__pairing-url-row">
-              <span title={qrUrl}>{qrUrl}</span>
+              <span className="openbitfun-remote-connect__pairing-url">{qrUrl}</span>
               <IconButton
                 aria-label={t('remoteConnect.copyUrl')}
                 title={t('remoteConnect.copyUrl')}
@@ -67,14 +75,7 @@ export function RemotePairingCard({ qrUrl, pairingCode, owner, copied, onCopyUrl
                 variant="quiet"
               />
             </div>
-            <div className="openbitfun-remote-connect__pairing-instruction">
-              <Icon name="browser" size="lg" aria-hidden="true" />
-              <p>{t('remoteConnect.scanHint')}</p>
-            </div>
-            <div className="openbitfun-remote-connect__pairing-instruction">
-              <Icon name="link" size="lg" aria-hidden="true" />
-              <p>{t('remoteConnect.mobileBrowserDescription')}</p>
-            </div>
+            <p className="openbitfun-remote-connect__pairing-instruction">{t('remoteConnect.scanHint')}</p>
           </>
         ) : owner === 'bot' && pairingCode ? (
           <p className="openbitfun-remote-connect__hint">{t('remoteConnect.botHint')}</p>

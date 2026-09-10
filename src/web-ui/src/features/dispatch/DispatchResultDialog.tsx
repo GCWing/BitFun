@@ -1,4 +1,7 @@
-import { Alert, Button, ScrollArea, Dialog, DialogBody, DialogClose, DialogHeader, Icon } from '@openbitfun/ui';
+import {
+  Alert, Button, ScrollArea, Dialog, DialogBody, DialogClose, DialogDescription,
+  DialogFooter, DialogHeader, DialogHeading, DialogTitle, Disclosure, Icon,
+} from '@openbitfun/ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
@@ -77,31 +80,27 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
       aria-labelledby={DIALOG_TITLE_ID}
       data-testid="dispatch-sync-dialog"
     >
-      <DialogHeader>
-        <DialogClose />
-      </DialogHeader>
-      <DialogBody inset="none">
       <div
         className="dispatch-result-dialog"
         data-openbitfun-component="dispatch-result-dialog"
         data-openbitfun-part="root"
       >
-        <div
-          className="dispatch-result-dialog__header"
+        <DialogHeader
           data-openbitfun-component="dispatch-result-dialog"
           data-openbitfun-part="header"
         >
-          <h2 id={DIALOG_TITLE_ID} className="dispatch-result-dialog__title">
-            {t('dispatch.syncTitle')}
-          </h2>
-          <span className="dispatch-result-dialog__subtitle">
-            {targetLabel
-              ? t('dispatch.syncSubtitleWithTarget', { target: targetLabel })
-              : t('dispatch.syncSubtitle')}
-          </span>
-        </div>
+          <DialogHeading>
+            <DialogTitle id={DIALOG_TITLE_ID}>{t('dispatch.syncTitle')}</DialogTitle>
+            <DialogDescription>
+              {targetLabel
+                ? t('dispatch.syncSubtitleWithTarget', { target: targetLabel })
+                : t('dispatch.syncSubtitle')}
+            </DialogDescription>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
 
-        <ScrollArea
+        <DialogBody
           className="dispatch-result-dialog__body"
           data-openbitfun-component="dispatch-result-dialog"
           data-openbitfun-part="body"
@@ -114,39 +113,41 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
           ) : null}
 
           {resolvedBranch || resolvedBaselinePath || resolvedHeadCommit ? (
-            <details className="dispatch-result-dialog__details">
-              <summary>{t('dispatch.syncDetails')}</summary>
-              <div className="dispatch-result-dialog__details-body">
+            <Disclosure
+              className="dispatch-result-dialog__details"
+              summary={t('dispatch.syncDetails')}
+            >
+              <dl className="dispatch-result-dialog__details-body">
                 {resolvedBranch ? (
                   <div className="dispatch-result-dialog__field">
-                    <span className="dispatch-result-dialog__field-label">
+                    <dt className="dispatch-result-dialog__field-label">
                       {t('dispatch.syncBranch')}
-                    </span>
-                    <code>{resolvedBranch}</code>
+                    </dt>
+                    <dd>{resolvedBranch}</dd>
                   </div>
                 ) : null}
                 {resolvedBaselinePath ? (
                   <div className="dispatch-result-dialog__field">
-                    <span className="dispatch-result-dialog__field-label">
+                    <dt className="dispatch-result-dialog__field-label">
                       {t('dispatch.syncBaselineWorktree')}
-                    </span>
-                    <code>{resolvedBaselinePath}</code>
+                    </dt>
+                    <dd>{resolvedBaselinePath}</dd>
                   </div>
                 ) : null}
                 {resolvedHeadCommit ? (
                   <div className="dispatch-result-dialog__field">
-                    <span className="dispatch-result-dialog__field-label">
+                    <dt className="dispatch-result-dialog__field-label">
                       {t('dispatch.syncHeadCommit')}
-                    </span>
-                    <code>{resolvedHeadCommit}</code>
+                    </dt>
+                    <dd>{resolvedHeadCommit}</dd>
                   </div>
                 ) : null}
-              </div>
-            </details>
+              </dl>
+            </Disclosure>
           ) : null}
 
           {syncing ? (
-            <div className="dispatch-result-dialog__pending">
+            <div className="dispatch-result-dialog__pending" role="status">
               <Loader2 size={14} className="dispatch-result-dialog__spin" />
               {t('dispatch.syncingResult')}
             </div>
@@ -190,18 +191,19 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
               <Alert tone="info" message={t('dispatch.syncNoChanges')} />
             )
           ) : null}
-        </ScrollArea>
+        </DialogBody>
 
         <div
           className="dispatch-result-dialog__actions"
           data-openbitfun-component="dispatch-result-dialog"
           data-openbitfun-part="actions"
         >
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <DialogFooter>
+          <Button variant="fill" size="sm" onClick={onClose}>
             {t('dispatch.syncClose')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             disabled={syncing || baselineMissing || !jobId}
             onClick={() => void sync()}
@@ -209,9 +211,9 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
             {syncing ? <Loader2 size={14} className="dispatch-result-dialog__spin" /> : null}
             {t('dispatch.syncAction')}
           </Button>
+          </DialogFooter>
         </div>
       </div>
-          </DialogBody>
     </Dialog>
   );
 };

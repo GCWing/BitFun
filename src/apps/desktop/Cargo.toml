@@ -33,7 +33,7 @@ openbitfun-webdriver = { path = "../../crates/adapters/webdriver" }
 openbitfun-acp = { path = "../../crates/interfaces/acp", default-features = false, features = ["client"] }
 
 # Tauri
-tauri = { workspace = true }
+tauri = { workspace = true, features = ["unstable", "macos-private-api", "tray-icon"] }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }

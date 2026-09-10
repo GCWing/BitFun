@@ -14,6 +14,7 @@ export const iconMeta = {
   ],
   states: ["default"],
   tokens: [
+    "opacity.iconArtwork",
     "color.content.primary",
     "color.content.secondary",
     "color.content.muted",

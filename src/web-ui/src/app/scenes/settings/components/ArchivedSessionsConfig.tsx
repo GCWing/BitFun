@@ -7,7 +7,7 @@
  * directly with explicit success or failure feedback.
  */
 
-import { Button, Icon } from '@openbitfun/ui';
+import { OverflowText, Button, Icon } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Inbox } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -126,7 +126,7 @@ const ArchivedRow: React.FC<ArchivedRowProps> = ({
   return (
     <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="row" className="archived-sessions-config__row">
       <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="rowInfo" className="archived-sessions-config__row-info">
-        <span className="archived-sessions-config__row-name">{displayName}</span>
+        <OverflowText className="archived-sessions-config__row-name">{displayName}</OverflowText>
         {dateStr && (
           <span className="archived-sessions-config__row-date">{dateStr}</span>
         )}
@@ -568,7 +568,7 @@ const ArchivedSessionsConfig: React.FC = () => {
               const isCollapsed = collapsedWorkspaces.has(workspaceKey);
               return (
               <div data-openbitfun-component="archived-sessions-config" data-openbitfun-part="group" data-openbitfun-state={isCollapsed ? 'collapsed' : undefined} key={workspaceKey} className="archived-sessions-config__group">
-                <button
+                <button data-overflow-trigger
                   type="button"
                   data-openbitfun-component="archived-sessions-config"
                   data-openbitfun-part="groupHeader"
@@ -581,7 +581,7 @@ const ArchivedSessionsConfig: React.FC = () => {
                   ) : (
                     <Icon name="chevron-down" size="sm" className="archived-sessions-config__group-chevron" />
                   )}
-                  <span className="archived-sessions-config__group-name">{group.label}</span>
+                  <OverflowText className="archived-sessions-config__group-name">{group.label}</OverflowText>
                   <span className="archived-sessions-config__group-count">
                     {group.entries.length}
                   </span>

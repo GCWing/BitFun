@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { CanvasTab, EditorGroupId } from '../types';
 import { isFileViewerType } from '../types';
 import './ThumbnailCard.scss';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Tooltip } from '@openbitfun/ui';
 
 export interface ThumbnailCardProps {
   /** Tab data */
@@ -140,7 +140,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
   const stateClass = tab.state === 'pinned' ? 'is-pinned' : tab.state === 'preview' ? 'is-preview' : '';
 
   return (
-    <div data-openbitfun-component="canvas-thumbnail" data-openbitfun-part="root" data-openbitfun-group={groupId}
+    <div data-overflow-trigger data-openbitfun-component="canvas-thumbnail" data-openbitfun-part="root" data-openbitfun-group={groupId}
       data-openbitfun-state={[
         isActive && 'active',
         tab.isDirty && 'dirty',
@@ -162,10 +162,10 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
         </div>
         <div data-openbitfun-component="canvas-thumbnail" data-openbitfun-part="title" className="canvas-thumbnail-card__title">
           {tab.state === 'pinned' && <Icon name="pin" size="2xs" className="canvas-thumbnail-card__pin-icon" />}
-          <span className={tab.state === 'preview' ? 'is-preview' : ''}>
+          <OverflowText className={tab.state === 'preview' ? 'is-preview' : ''}>
             {titleWithDeleted}
-          </span>
-          {tab.isDirty && <span className="canvas-thumbnail-card__dirty">●</span>}
+          </OverflowText>
+          {tab.isDirty && <OverflowText className="canvas-thumbnail-card__dirty">●</OverflowText>}
         </div>
         <div data-openbitfun-component="canvas-thumbnail" data-openbitfun-part="actions" className="canvas-thumbnail-card__actions">
           <Tooltip content={tab.state === 'pinned' ? t('tabs.unpin') : t('tabs.pin')}>
@@ -196,7 +196,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
         {isFileType ? (
           <pre data-openbitfun-component="canvas-thumbnail" data-openbitfun-part="code" className="canvas-thumbnail-card__code">
             {previewLines.map((line, index) => (
-              <div key={index} className="canvas-thumbnail-card__code-line">
+              <div key={index} className="canvas-thumbnail-card__code-line" title={line}>
                 {line || ' '}
               </div>
             ))}

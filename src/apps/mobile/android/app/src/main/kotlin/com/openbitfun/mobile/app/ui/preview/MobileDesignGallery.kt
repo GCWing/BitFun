@@ -105,6 +105,9 @@ internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean)
 
 internal fun mobileDesignScenario(id: String?): MobilePreviewScenario = when (id) {
     MobilePreviewScenarios.StreamingDark.id -> MobilePreviewScenarios.StreamingDark
+    MobilePreviewScenarios.NarrowMultiline.id -> MobilePreviewScenarios.NarrowMultiline
+    MobilePreviewScenarios.FoldContext.id -> MobilePreviewScenarios.FoldContext
+    MobilePreviewScenarios.LongReading.id -> MobilePreviewScenarios.LongReading
     MobilePreviewScenarios.ReconnectingWide.id -> MobilePreviewScenarios.ReconnectingWide
     else -> MobilePreviewScenarios.ConnectedConversation
 }
@@ -145,7 +148,7 @@ private fun PreviewMessageBubble(message: MobilePreviewMessage) {
         if (message.role == "user") Spacer(Modifier.weight(1f))
         Text(
             text = message.text,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .widthIn(max = MobileDesignGeometry.MessageBubbleMaxWidth)

@@ -525,16 +525,16 @@ const ExternalMcpOverview: React.FC = () => {
               </ul>
               </ScrollArea>
               <div className="openbitfun-mcp-tools__import-actions" data-openbitfun-component="external-mcp-overview" data-openbitfun-part="importActions">
-                <Button variant="fill" size="sm" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
+                <Button variant="primary" size="sm" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
                   {t('external.import.apply')}
                 </Button>
-                <Button variant="outline" size="sm" disabled={importBusy} onClick={cancelImport}>
+                <Button variant="fill" size="sm" disabled={importBusy} onClick={cancelImport}>
                   {t('external.import.cancel')}
                 </Button>
               </div>
             </div>
           ) : (
-            <Button variant="fill" size="sm" disabled={importBusy} onClick={() => void previewImport()}>
+            <Button variant="primary" size="sm" disabled={importBusy} onClick={() => void previewImport()}>
               {t('external.import.preview')}
             </Button>
           )}

@@ -52,10 +52,16 @@ test("ScrollArea styling uses public scrollbar tokens and preserves native scrol
   assert.match(styles, /overflow-y: auto/);
   assert.match(styles, /overflow-x: auto/);
   assert.match(styles, /overflow: scroll/);
-  assert.match(styles, /--openbitfun-scrollbar-width/);
-  assert.match(styles, /--openbitfun-scrollbar-radius/);
-  assert.match(styles, /--openbitfun-color-scrollbar-thumb/);
-  assert.match(styles, /--openbitfun-color-scrollbar-thumb-hover/);
-  assert.match(styles, /scrollbar-width: none/);
+  assert.doesNotMatch(styles, /scrollbar-color:|::-webkit-scrollbar/);
+
+  // The published stylesheet must carry the shared policy for both ordinary
+  // native scroll containers and ScrollArea, including standalone consumers.
+  const publishedStyles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
+  assert.match(publishedStyles, /--openbitfun-scrollbar-width/);
+  assert.match(publishedStyles, /--openbitfun-scrollbar-radius/);
+  assert.match(publishedStyles, /--openbitfun-color-scrollbar-thumb/);
+  assert.match(publishedStyles, /--openbitfun-color-scrollbar-thumb-hover/);
+  assert.match(publishedStyles, /\[data-openbitfun-scrollbar-visibility\]/);
+  assert.match(publishedStyles, /scrollbar-width:\s*none/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });

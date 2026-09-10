@@ -164,6 +164,7 @@ impl ProductCapabilityPack {
 pub enum DeliveryProfile {
     ProductFull,
     Desktop,
+    DataMigrator,
     Cli,
     Server,
     Remote,
@@ -178,6 +179,7 @@ impl DeliveryProfile {
         match self {
             Self::ProductFull => "product-full",
             Self::Desktop => "desktop",
+            Self::DataMigrator => "data-migrator",
             Self::Cli => "cli",
             Self::Server => "server",
             Self::Remote => "remote",
@@ -192,6 +194,7 @@ impl DeliveryProfile {
         &[
             Self::ProductFull,
             Self::Desktop,
+            Self::DataMigrator,
             Self::Cli,
             Self::Server,
             Self::Remote,
@@ -251,6 +254,10 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Desktop,
         ProductCoreDependencyMode::ProductFullCompatibility,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::DataMigrator,
+        ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Cli,
@@ -943,6 +950,7 @@ pub fn product_extension_capabilities_for_profile(
         DeliveryProfile::Server
         | DeliveryProfile::Remote
         | DeliveryProfile::Acp
+        | DeliveryProfile::DataMigrator
         | DeliveryProfile::Web
         | DeliveryProfile::MobileWeb
         | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::UnsupportedProfile,
@@ -1015,11 +1023,11 @@ const CREATION_TOOL_GROUPS: &[&str] = &["core.creation", "core.miniapp"];
 const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
 const CODE_AGENT_IDS: &[&str] = &[
-    "minimal",
-    "agentic",
+    "Minimal",
+    "Standard",
     "Cowork",
     "Claw",
-    "Ultra",
+    "Ultimate",
     "SwarmPlanner",
     "SwarmWorker",
     "SwarmReviewer",
@@ -1129,6 +1137,7 @@ fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductC
         }
         DeliveryProfile::Server
         | DeliveryProfile::Remote
+        | DeliveryProfile::DataMigrator
         | DeliveryProfile::Web
         | DeliveryProfile::MobileWeb => {
             ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS)

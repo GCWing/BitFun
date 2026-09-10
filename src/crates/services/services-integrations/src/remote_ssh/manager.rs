@@ -2,6 +2,7 @@
 //!
 //! This module manages SSH connections using the pure-Russ SSH implementation
 
+use super::sftp_file::ManagedSftpSession;
 use crate::remote_ssh::password_vault::SSHPasswordVault;
 use crate::remote_ssh::types::{
     ConnectionTestReport, ConnectionTestStage, ContainerAccess, ContainerWorkspaceConfig,
@@ -16,7 +17,6 @@ use russh::Sig;
 use russh_keys::key::{KeyPair, PublicKey};
 use russh_keys::PublicKeyBase64;
 use russh_sftp::client::error::Error as SftpError;
-use russh_sftp::client::fs::ReadDir;
 use russh_sftp::client::{RawSftpSession, SftpSession};
 use russh_sftp::protocol::{File as SftpFile, StatusCode as SftpStatusCode};
 #[cfg(feature = "ssh_config")]
@@ -566,7 +566,7 @@ struct ActiveConnection {
 }
 
 struct SftpCache {
-    session: tokio::sync::RwLock<Option<Arc<SftpSession>>>,
+    session: tokio::sync::RwLock<Option<Arc<ManagedSftpSession>>>,
     init_lock: tokio::sync::Mutex<()>,
 }
 
@@ -579,13 +579,8 @@ impl SftpCache {
     }
 }
 
-#[derive(Clone)]
-struct SftpSessionLease {
-    session: Arc<SftpSession>,
-    cache: Arc<SftpCache>,
-}
-
 struct BoundedSftpChannel {
+    retired: AtomicBool,
     session: Arc<RawSftpSession>,
     read_lock: tokio::sync::Mutex<()>,
 }
@@ -611,14 +606,14 @@ struct BoundedSftpSession {
 }
 
 struct BoundedSftpReadGuard {
-    session: Arc<RawSftpSession>,
+    channel: Arc<BoundedSftpChannel>,
     armed: bool,
 }
 
 impl BoundedSftpReadGuard {
-    fn new(session: Arc<RawSftpSession>) -> Self {
+    fn new(channel: Arc<BoundedSftpChannel>) -> Self {
         Self {
-            session,
+            channel,
             armed: true,
         }
     }
@@ -631,7 +626,8 @@ impl BoundedSftpReadGuard {
 impl Drop for BoundedSftpReadGuard {
     fn drop(&mut self) {
         if self.armed {
-            let _ = self.session.close_session();
+            self.channel.retired.store(true, Ordering::Release);
+            let _ = self.channel.session.close_session();
         }
     }
 }
@@ -5677,11 +5673,7 @@ impl SSHConnectionManager {
     /// so a transient SSH disconnect (e.g. NAT timeout while the user is idly
     /// browsing the remote folder picker) is recovered transparently instead
     /// of cascading into a stale cached SFTP handle that fails forever.
-    pub async fn get_sftp(&self, connection_id: &str) -> anyhow::Result<Arc<SftpSession>> {
-        Ok(self.get_sftp_lease(connection_id).await?.session)
-    }
-
-    async fn get_sftp_lease(&self, connection_id: &str) -> anyhow::Result<SftpSessionLease> {
+    async fn get_sftp(&self, connection_id: &str) -> anyhow::Result<Arc<ManagedSftpSession>> {
         self.ensure_alive_or_reconnect(connection_id).await?;
 
         // Capture the transport and cache from the same connection generation.
@@ -5705,21 +5697,29 @@ impl SSHConnectionManager {
             (handle, connection.sftp_session.clone())
         };
 
-        if let Some(session) = cache.session.read().await.as_ref().cloned() {
-            return Ok(SftpSessionLease {
-                session,
-                cache: cache.clone(),
-            });
+        if let Some(session) = cache
+            .session
+            .read()
+            .await
+            .as_ref()
+            .filter(|session| !session.is_retired())
+            .cloned()
+        {
+            return Ok(session);
         }
 
         // Serialize initialization within one generation so concurrent callers
         // cannot exhaust the server's channel/session limit.
         let _init_guard = cache.init_lock.lock().await;
-        if let Some(session) = cache.session.read().await.as_ref().cloned() {
-            return Ok(SftpSessionLease {
-                session,
-                cache: cache.clone(),
-            });
+        if let Some(session) = cache
+            .session
+            .read()
+            .await
+            .as_ref()
+            .filter(|session| !session.is_retired())
+            .cloned()
+        {
+            return Ok(session);
         }
 
         // Open a channel and request SFTP subsystem
@@ -5736,20 +5736,15 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to create SFTP session: {}", e))?;
 
-        let sftp = Arc::new(sftp);
+        let sftp = Arc::new(ManagedSftpSession::new(sftp));
         *cache.session.write().await = Some(sftp.clone());
 
-        Ok(SftpSessionLease {
-            session: sftp,
-            cache: cache.clone(),
-        })
+        Ok(sftp)
     }
 
-    /// Get or create the raw SFTP session used by bounded directory reads.
-    ///
-    /// The high-level russh-sftp `read_dir` API buffers until EOF. Keeping a
-    /// separate raw session lets callers stop issuing `readdir` requests as
-    /// soon as their entry budget is satisfied.
+    /// Reuse a dedicated SFTP channel for serialized directory enumeration.
+    /// The high-level API leaks directory handles on errors/cancellation. The
+    /// raw path closes on all exits and can also stop at an entry budget.
     async fn get_bounded_sftp(&self, connection_id: &str) -> anyhow::Result<BoundedSftpSession> {
         self.ensure_alive_or_reconnect(connection_id).await?;
 
@@ -5770,7 +5765,13 @@ impl SSHConnectionManager {
             (handle, connection.bounded_sftp_session.clone())
         };
 
-        let cached_channel = cache.channel.read().await.as_ref().cloned();
+        let cached_channel = cache
+            .channel
+            .read()
+            .await
+            .as_ref()
+            .filter(|channel| !channel.retired.load(Ordering::Acquire))
+            .cloned();
         if let Some(channel) = cached_channel {
             return Ok(BoundedSftpSession {
                 channel,
@@ -5779,7 +5780,13 @@ impl SSHConnectionManager {
         }
 
         let _init_guard = cache.init_lock.lock().await;
-        let cached_channel = cache.channel.read().await.as_ref().cloned();
+        let cached_channel = cache
+            .channel
+            .read()
+            .await
+            .as_ref()
+            .filter(|channel| !channel.retired.load(Ordering::Acquire))
+            .cloned();
         if let Some(channel) = cached_channel {
             return Ok(BoundedSftpSession {
                 channel,
@@ -5801,6 +5808,7 @@ impl SSHConnectionManager {
             .await
             .map_err(|error| anyhow!("Failed to create bounded SFTP session: {}", error))?;
         let channel = Arc::new(BoundedSftpChannel {
+            retired: AtomicBool::new(false),
             session: Arc::new(session),
             read_lock: tokio::sync::Mutex::new(()),
         });
@@ -5829,6 +5837,9 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to read remote file '{}': {}", path, e))?;
 
+        file.close()
+            .await
+            .context("Failed to close remote file after reading")?;
         Ok(buffer)
     }
 
@@ -5883,6 +5894,9 @@ impl SSHConnectionManager {
         // Ensure final 100% progress is reported even if metadata returned 0.
         on_progress(bytes_read, total);
 
+        file.close()
+            .await
+            .context("Failed to close remote file after reading")?;
         Ok(buffer)
     }
 
@@ -5909,6 +5923,9 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to flush remote file '{}': {}", path, e))?;
 
+        file.close()
+            .await
+            .context("Failed to close remote file after writing")?;
         Ok(())
     }
 
@@ -5986,6 +6003,10 @@ impl SSHConnectionManager {
             .flush()
             .await
             .map_err(|error| anyhow!("Failed to flush remote file '{}': {}", path, error))?;
+        remote
+            .close()
+            .await
+            .context("Failed to close remote upload file")?;
         Ok(written)
     }
 
@@ -6027,49 +6048,20 @@ impl SSHConnectionManager {
             .await
             .map_err(|e| anyhow!("Failed to flush remote file '{}': {}", path, e))?;
 
+        file.close()
+            .await
+            .context("Failed to close remote file after writing")?;
         Ok(())
     }
 
-    /// Read directory via SFTP.
-    ///
-    /// Retries once after dropping the cached SFTP session and forcing a
-    /// reconnect attempt, so a stale SFTP channel left over from a prior
-    /// network blip does not permanently break the remote folder picker.
-    pub async fn sftp_read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<ReadDir> {
-        let resolved = self.resolve_sftp_path(connection_id, path).await?;
-        let lease = self.get_sftp_lease(connection_id).await?;
-        match lease.session.read_dir(&resolved).await {
-            Ok(entries) => Ok(entries),
-            Err(first_err) => {
-                let generation_is_current =
-                    self.sftp_generation_is_current(connection_id, &lease).await;
-                if generation_is_current && !sftp_error_may_be_stale_transport(&first_err) {
-                    return Err(anyhow!(
-                        "Failed to read directory '{}': {}",
-                        resolved,
-                        first_err
-                    ));
-                }
-                if generation_is_current {
-                    log::warn!(
-                        "SFTP read_dir '{}' failed (will retry once after refreshing session): {}",
-                        resolved,
-                        first_err
-                    );
-                    self.invalidate_sftp_generation(connection_id, &lease).await;
-                    // Force the alive flag to false so ensure_alive_or_reconnect rebuilds
-                    // the underlying SSH transport too — the previous failure may indicate
-                    // the channel was torn down even though the keepalive callback has not
-                    // fired yet.
-                }
-                let lease = self.get_sftp_lease(connection_id).await?;
-                lease
-                    .session
-                    .read_dir(&resolved)
-                    .await
-                    .map_err(|e| anyhow!("Failed to read directory '{}': {}", resolved, e))
-            }
-        }
+    /// Read a directory with the same handle cleanup as bounded enumeration.
+    pub async fn sftp_read_dir(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Vec<SftpFile>> {
+        self.sftp_read_dir_bounded(connection_id, path, usize::MAX)
+            .await
     }
 
     /// Read at most `max_entries` directory entries without asking the SFTP
@@ -6098,7 +6090,10 @@ impl SSHConnectionManager {
                         first_error
                     ));
                 }
-                if generation_is_current {
+                // A cancelled enumeration may have retired this channel while
+                // another caller waited on its read lock. Replace that SFTP
+                // subsystem without marking the shared SSH transport dead.
+                if generation_is_current && !session.channel.retired.load(Ordering::Acquire) {
                     log::warn!(
                         "Bounded SFTP read_dir '{}' failed (will retry once after refreshing session): {}",
                         resolved,
@@ -6121,12 +6116,17 @@ impl SSHConnectionManager {
         max_entries: usize,
     ) -> Result<Vec<SftpFile>, SftpError> {
         let _read_lock = bounded.channel.read_lock.lock().await;
+        if bounded.channel.retired.load(Ordering::Acquire) {
+            return Err(SftpError::IO("SFTP directory channel was retired".into()));
+        }
         let session = bounded.channel.session.as_ref();
-        let mut read_guard = BoundedSftpReadGuard::new(bounded.channel.session.clone());
+        let mut read_guard = BoundedSftpReadGuard::new(bounded.channel.clone());
         let handle = match session.opendir(path.to_string()).await {
             Ok(handle) => handle.handle,
             Err(error) => {
-                read_guard.disarm();
+                if !sftp_error_may_be_stale_transport(&error) {
+                    read_guard.disarm();
+                }
                 return Err(error);
             }
         };
@@ -6201,38 +6201,6 @@ impl SSHConnectionManager {
         if !cached
             .as_ref()
             .is_some_and(|channel| Arc::ptr_eq(channel, &failed.channel))
-        {
-            return;
-        }
-        *cached = None;
-        connection.alive.store(false, Ordering::SeqCst);
-    }
-
-    async fn sftp_generation_is_current(
-        &self,
-        connection_id: &str,
-        lease: &SftpSessionLease,
-    ) -> bool {
-        self.connections
-            .read()
-            .await
-            .get(connection_id)
-            .is_some_and(|connection| Arc::ptr_eq(&connection.sftp_session, &lease.cache))
-    }
-
-    async fn invalidate_sftp_generation(&self, connection_id: &str, failed: &SftpSessionLease) {
-        let guard = self.connections.read().await;
-        let Some(connection) = guard.get(connection_id) else {
-            return;
-        };
-        if !Arc::ptr_eq(&connection.sftp_session, &failed.cache) {
-            return;
-        }
-
-        let mut cached = failed.cache.session.write().await;
-        if !cached
-            .as_ref()
-            .is_some_and(|session| Arc::ptr_eq(session, &failed.session))
         {
             return;
         }
@@ -6566,6 +6534,8 @@ fn sftp_mkdir_all_prefixes(path: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod workspace_sftp;
 
     struct UnpublishedSessionTestServer {
         opens: usize,

@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type {
   HTMLAttributes,
   MouseEvent as ReactMouseEvent,
@@ -182,7 +183,7 @@ export function CommandToolCard({
               {item.label !== undefined && item.label !== null && (
                 <span className={styles.footerLabel}>{item.label}</span>
               )}
-              <span className={styles.footerValue}>{item.value}</span>
+              <OverflowText className={styles.footerValue}>{item.value}</OverflowText>
             </span>
           ))}
         </div>
@@ -217,10 +218,9 @@ export function CommandToolCard({
                 data-openbitfun-part="command"
                 data-empty={resolvedCommand ? "false" : "true"}
                 data-testid={commandTestId}
-                title={resolvedCommand ?? undefined}
-              >
+              ><OverflowText>
                 {resolvedCommand ?? emptyCommand}
-              </code>
+              </OverflowText></code>
             )}
             extra={(statusSummary || statusLabel) ? (
               <span className={styles.statusSummary} data-openbitfun-part="statusSummary">

@@ -5,16 +5,24 @@
 //! rendering. Product hosts still own filesystem/config IO and registry
 //! scanning.
 
+#[cfg(feature = "agent-runtime")]
 mod catalog;
+#[cfg(feature = "agent-runtime")]
 mod keys;
+#[cfg(feature = "agent-runtime")]
 mod policy;
+#[cfg(feature = "agent-runtime")]
 mod resolver;
 mod roots;
+#[cfg(feature = "agent-runtime")]
 mod selection;
 mod types;
 
+#[cfg(feature = "agent-runtime")]
 pub use catalog::builtin_skill_group_key;
+#[cfg(feature = "agent-runtime")]
 pub use policy::resolve_builtin_default_enabled;
+#[cfg(feature = "agent-runtime")]
 pub use resolver::{
     normalize_user_mode_skill_overrides, resolve_skill_default_enabled_for_mode,
     resolve_skill_state_for_mode, ModeSkillState, UserModeSkillOverrides,
@@ -26,6 +34,7 @@ pub use roots::{
     OPENBITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS,
     USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
+#[cfg(feature = "agent-runtime")]
 pub use selection::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
     filter_implicitly_invocable_skills, filter_user_invocable_skills, is_skill_globally_enabled,
@@ -35,5 +44,5 @@ pub use selection::{
 };
 pub use types::{
     render_loaded_skill_for_assistant, ModeSkillInfo, ModeSkillStateReason, SkillData, SkillInfo,
-    SkillLocation, SkillParseError,
+    SkillLocation, SkillParseError, SkillScanDiagnostic, SkillScanReport,
 };

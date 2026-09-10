@@ -516,6 +516,7 @@ describe('ConfigManager', () => {
     });
     await configManager.getConfig('editor');
     await configManager.getConfig('app.window.mode');
+    await configManager.getConfig('app.keybindings');
 
     const changes: Array<{ path: string; oldValue: unknown; newValue: unknown }> = [];
     const unsubscribe = configManager.onConfigChange((path, oldValue, newValue) => {
@@ -571,5 +572,20 @@ describe('ConfigManager', () => {
     expect(configApiMocks.getConfig).toHaveBeenCalledWith('editor');
 
     unsubscribe();
+  });
+
+  it('notifies an uncached keybinding watcher when cloud sync removes bootstrap overrides', async () => {
+    const stored = {
+      version: 1, overrides: { 'session.new': { key: 'n', alt: true } },
+    };
+    globalThis.__OPENBITFUN_BOOTSTRAP_KEYBINDINGS__ = stored;
+    await expect(configManager.getOptionalConfig('app.keybindings')).resolves.toEqual(stored);
+    const watcher = vi.fn();
+    const unwatch = configManager.watch('app.keybindings', watcher);
+    configApiMocks.getConfigs.mockResolvedValueOnce({ 'app.keybindings': undefined });
+    await configManager.applyExternalReload();
+    expect(watcher).toHaveBeenCalledTimes(1);
+    await expect(configManager.getOptionalConfig('app.keybindings')).resolves.toBeUndefined();
+    unwatch();
   });
 });

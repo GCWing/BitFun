@@ -109,18 +109,22 @@ export const APPEARANCE_DOMAIN_TOKEN_NAMES = Object.freeze([
 ]);
 
 export const APPEARANCE_COMPONENT_TOKEN_NAMES = Object.freeze(
-  prefix(componentTokenSuffixes, '--openbitfun-component-'),
+  [
+    // Public component colors are theme-owned; product-only component tokens stay above.
+    ...Object.values(themeCssVariables).filter(name => name.startsWith('--openbitfun-component-')),
+    ...prefix(componentTokenSuffixes, '--openbitfun-component-'),
+  ],
 );
 
 export const APPEARANCE_ROOT_THEME_TOKEN_NAMES = Object.freeze(
   Object.values(themeCssVariables) as AppearanceThemeTokenName[],
 );
 
-export const APPEARANCE_ROOT_TOKEN_NAMES = Object.freeze([
+export const APPEARANCE_ROOT_TOKEN_NAMES = Object.freeze([...new Set([
   ...APPEARANCE_ROOT_THEME_TOKEN_NAMES,
   ...APPEARANCE_DOMAIN_TOKEN_NAMES,
   ...APPEARANCE_COMPONENT_TOKEN_NAMES,
-]);
+])]);
 
 export const APPEARANCE_SCOPED_TOKEN_NAMES = APPEARANCE_ROOT_THEME_TOKEN_NAMES;
 

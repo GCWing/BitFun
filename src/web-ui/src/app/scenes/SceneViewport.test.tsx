@@ -129,6 +129,21 @@ describe('SceneViewport transitions', () => {
     expect(container.querySelector('[role="tab"]')).toBeNull();
   });
 
+  it('shares one mounted Session host across workspace tab identities', () => {
+    sceneHarness.state.openTabs = [
+      { id: 'session:workspace-a', lastUsed: 1 },
+      { id: 'session:workspace-b', lastUsed: 2 },
+    ];
+    sceneHarness.state.activeTabId = 'session:workspace-a';
+    act(() => root.render(<SceneViewport />));
+    const host = container.querySelector('[data-testid="session-scene-content"]');
+    expect(container.querySelectorAll('[data-testid="session-scene-content"]')).toHaveLength(1);
+    sceneHarness.state.activeTabId = 'session:workspace-b';
+    sceneHarness.state.navigationSequence++;
+    act(() => root.render(<SceneViewport />));
+    expect(container.querySelector('[data-testid="session-scene-content"]')).toBe(host);
+  });
+
   it('keeps one scene visible while a lazy pointer target becomes ready', async () => {
     act(() => root.render(<SceneViewport />));
     expect(visibleScenes().map(scene => scene.getAttribute('data-scene-id'))).toEqual(['session']);

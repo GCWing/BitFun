@@ -4,6 +4,7 @@ const SLASH_ADDRESSABLE_SKILL_NAME_PATTERN = /^[A-Za-z][\w:-]*$/;
 
 export interface SkillPromptReferenceTokenPayload {
   skillName: string;
+  skillKey?: string;
 }
 
 export function createSkillPromptReferenceToken(skillName: string): string {
@@ -18,7 +19,10 @@ export function parseSkillPromptReferenceToken(
   if (!skillName) {
     return null;
   }
-  return { skillName };
+  const key = skillName.match(/^(user|project)::([^:]+)::(.+)$/);
+  return key
+    ? { skillName: key[3].split('/').pop() || key[3], skillKey: skillName }
+    : { skillName };
 }
 
 export function getSkillPromptReferenceMatches(text: string): Array<{
@@ -70,7 +74,7 @@ export function replaceLeadingSlashCommandWithSkillToken(
     return appendSkillPromptReferenceToken(text, skillName);
   }
 
-  return text.replace(LEADING_SLASH_COMMAND_PATTERN, `${'$1'}${token}`);
+  return text.replace(LEADING_SLASH_COMMAND_PATTERN, (_match, whitespace: string) => `${whitespace}${token}`);
 }
 
 export function isSlashAddressableSkillName(skillName: string): boolean {
@@ -79,7 +83,11 @@ export function isSlashAddressableSkillName(skillName: string): boolean {
 
 export function isSkillAvailableForUserInvocation(skill: {
   selectedForRuntime: boolean;
+  effectiveEnabled?: boolean;
+  globallyEnabled?: boolean;
   allowUserInvocation?: boolean;
 }): boolean {
-  return skill.selectedForRuntime && skill.allowUserInvocation !== false;
+  return (skill.effectiveEnabled ?? skill.selectedForRuntime)
+    && skill.globallyEnabled !== false
+    && skill.allowUserInvocation !== false;
 }

@@ -18,9 +18,9 @@ use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
     prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
     CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
-    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
-    FileRevision, PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
-    PromptCacheRestoreDecision, PromptCacheScope, ReviewReadCoverage, SessionContextStore,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileRevision, PromptCacheLookup,
+    PromptCachePersistenceWriteAction, PromptCachePolicy, PromptCacheRestoreDecision,
+    PromptCacheScope, ReviewReadCoverage, ReviewReadReceiptStore, SessionContextStore,
     SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
     TokenAnchor, TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore,
     UserContextCacheIdentity,
@@ -391,7 +391,7 @@ pub struct SessionManager {
     /// restore and fork paths preserve both constraints and extraction evidence.
     edit_constraints_store:
         Arc<DashMap<String, crate::agentic::execution::edit_constraint_guard::EditConstraintState>>,
-    file_read_state_store: Arc<FileReadStateStore>,
+    review_read_receipt_store: Arc<ReviewReadReceiptStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     evidence_ledger_operation_locks: Arc<KeyedAsyncLock>,
     persistence_manager: Arc<PersistenceManager>,
@@ -414,7 +414,7 @@ fn clear_session_runtime_stores(
     token_anchor_store: &TokenAnchorStore,
     turn_skill_agent_snapshot_store: &TurnSkillAgentSnapshotStore,
     skill_agent_baseline_override_snapshot_store: &DashMap<String, TurnSkillAgentSnapshot>,
-    file_read_state_store: &FileReadStateStore,
+    review_read_receipt_store: &ReviewReadReceiptStore,
     evidence_ledger: &SessionEvidenceLedger,
 ) {
     context_store.delete_session(session_id);
@@ -422,7 +422,7 @@ fn clear_session_runtime_stores(
     token_anchor_store.delete_session(session_id);
     turn_skill_agent_snapshot_store.delete_session(session_id);
     skill_agent_baseline_override_snapshot_store.remove(session_id);
-    file_read_state_store.delete_session(session_id);
+    review_read_receipt_store.delete_session(session_id);
     evidence_ledger.delete_session(session_id);
 }
 
@@ -2064,7 +2064,7 @@ impl SessionManager {
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
             edit_constraints_store: Arc::new(DashMap::new()),
-            file_read_state_store: Arc::new(FileReadStateStore::new()),
+            review_read_receipt_store: Arc::new(ReviewReadReceiptStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             evidence_ledger_operation_locks: Arc::new(KeyedAsyncLock::default()),
             persistence_manager,
@@ -2567,7 +2567,7 @@ impl SessionManager {
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
         let edit_constraints_store = self.edit_constraints_store.clone();
-        let file_read_state_store = self.file_read_state_store.clone();
+        let review_read_receipt_store = self.review_read_receipt_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let evidence_ledger_operation_locks = self.evidence_ledger_operation_locks.clone();
         let persistence_manager = self.persistence_manager.clone();
@@ -2603,7 +2603,7 @@ impl SessionManager {
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
                 edit_constraints_store,
-                file_read_state_store,
+                review_read_receipt_store,
                 evidence_ledger,
                 evidence_ledger_operation_locks,
                 persistence_manager,
@@ -2894,7 +2894,7 @@ impl SessionManager {
         self.token_anchor_store.create_session(&session_id);
         self.turn_skill_agent_snapshot_store
             .create_session(&session_id);
-        self.file_read_state_store.create_session(&session_id);
+        self.review_read_receipt_store.create_session(&session_id);
         self.commit_session_storage_path_claim(&session_id, &session_storage_path, storage_claim);
         self.commit_active_session_reservation(&session_id, active_session_permit);
         if let Some(write_lock) = session_write_lock {
@@ -2909,6 +2909,13 @@ impl SessionManager {
     /// Get session
     pub fn get_session(&self, session_id: &str) -> Option<Session> {
         self.sessions.get(session_id).map(|s| s.clone())
+    }
+
+    /// Read only the execution fact; navigation must not clone Session content.
+    pub fn get_session_state(&self, session_id: &str) -> Option<SessionState> {
+        self.sessions
+            .get(session_id)
+            .map(|session| session.state.clone())
     }
 
     pub async fn cached_system_prompt(
@@ -5032,7 +5039,7 @@ impl SessionManager {
             self.token_anchor_store.as_ref(),
             self.turn_skill_agent_snapshot_store.as_ref(),
             self.skill_agent_baseline_override_snapshot_store.as_ref(),
-            self.file_read_state_store.as_ref(),
+            self.review_read_receipt_store.as_ref(),
             self.evidence_ledger.as_ref(),
         );
         self.release_session_write_lock(session_id);
@@ -5075,7 +5082,7 @@ impl SessionManager {
             self.token_anchor_store.as_ref(),
             self.turn_skill_agent_snapshot_store.as_ref(),
             self.skill_agent_baseline_override_snapshot_store.as_ref(),
-            self.file_read_state_store.as_ref(),
+            self.review_read_receipt_store.as_ref(),
             self.evidence_ledger.as_ref(),
         );
 
@@ -5973,7 +5980,7 @@ impl SessionManager {
             } else {
                 let fallback_mode = available_modes
                     .iter()
-                    .find(|mode| mode.id == "agentic")
+                    .find(|mode| mode.id == "Standard")
                     .or_else(|| available_modes.first())
                     .map(|mode| mode.id.clone())
                     .ok_or_else(|| {
@@ -6271,7 +6278,7 @@ impl SessionManager {
                 self.token_anchor_store.as_ref(),
                 self.turn_skill_agent_snapshot_store.as_ref(),
                 self.skill_agent_baseline_override_snapshot_store.as_ref(),
-                self.file_read_state_store.as_ref(),
+                self.review_read_receipt_store.as_ref(),
                 self.evidence_ledger.as_ref(),
             );
         }
@@ -6403,7 +6410,7 @@ impl SessionManager {
         };
 
         self.context_store.replace_context(session_id, messages);
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         let fallback_agent_type = self
             .sessions
             .get(session_id)
@@ -6565,7 +6572,7 @@ impl SessionManager {
         // 2) Restore the in-memory context cache.
         self.context_store
             .replace_context(session_id, messages.clone());
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
 
@@ -9246,24 +9253,11 @@ impl SessionManager {
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
         self.context_store
             .replace_context(session_id, messages.clone());
-        self.file_read_state_store.clear_session(session_id);
+        self.review_read_receipt_store.clear_session(session_id);
         self.prune_token_anchors_to_messages(session_id, &messages)
             .await;
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
-    }
-
-    pub fn set_file_read_state(&self, session_id: &str, logical_path: &str, state: FileReadState) {
-        self.file_read_state_store
-            .set(session_id, logical_path, state);
-    }
-
-    pub fn get_file_read_state(
-        &self,
-        session_id: &str,
-        logical_path: &str,
-    ) -> Option<FileReadState> {
-        self.file_read_state_store.get(session_id, logical_path)
     }
 
     pub fn record_review_read(
@@ -9275,7 +9269,7 @@ impl SessionManager {
         end_line: usize,
         total_lines: usize,
     ) {
-        self.file_read_state_store.record_review_read(
+        self.review_read_receipt_store.record_review_read(
             session_id,
             logical_path,
             revision,
@@ -9293,7 +9287,7 @@ impl SessionManager {
         start_line: usize,
         limit: usize,
     ) -> Option<ReviewReadCoverage> {
-        self.file_read_state_store.review_read_coverage(
+        self.review_read_receipt_store.review_read_coverage(
             session_id,
             logical_path,
             revision,
@@ -9624,7 +9618,7 @@ impl SessionManager {
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
         let edit_constraints_store = self.edit_constraints_store.clone();
-        let file_read_state_store = self.file_read_state_store.clone();
+        let review_read_receipt_store = self.review_read_receipt_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
 
         tokio::spawn(async move {
@@ -9721,7 +9715,7 @@ impl SessionManager {
                             token_anchor_store.as_ref(),
                             turn_skill_agent_snapshot_store.as_ref(),
                             skill_agent_baseline_override_snapshot_store.as_ref(),
-                            file_read_state_store.as_ref(),
+                            review_read_receipt_store.as_ref(),
                             evidence_ledger.as_ref(),
                         );
                         edit_constraints_store.remove(&candidate.session_id);
@@ -9877,19 +9871,19 @@ mod tests {
         let expired_at = now - Duration::from_secs(120);
         let mut durable = Session::new(
             "Durable".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         durable.last_activity_at = expired_at;
         let mut transient = Session::new(
             "Connection scoped".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         transient.last_activity_at = expired_at;
         let mut processing = Session::new(
             "Processing".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         processing.last_activity_at = expired_at;
@@ -9939,7 +9933,7 @@ mod tests {
         let expired_at = now - Duration::from_secs(120);
         let mut session = Session::new(
             "Becomes active".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         session.last_activity_at = expired_at;
@@ -10135,7 +10129,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Completion merge".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -10146,7 +10140,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish the response".to_string(),
                 Some("turn-completion-prefix".to_string()),
                 None,
@@ -10316,7 +10310,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Usage persistence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -10362,7 +10356,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -10373,7 +10367,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish the task".to_string(),
                 Some("turn-1".to_string()),
                 None,
@@ -10475,7 +10469,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery permission".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     permission_mode: Some(PermissionMode::FullAccess),
@@ -10487,7 +10481,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish with the original permission".to_string(),
                 Some("turn-permission".to_string()),
                 None,
@@ -10535,7 +10529,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery reasoning preset".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     reasoning_preset: Some("high".to_string()),
@@ -10547,7 +10541,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "continue with one reasoning contract".to_string(),
                 Some("turn-reasoning".to_string()),
                 None,
@@ -10598,7 +10592,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery auto reasoning".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("model-original".to_string()),
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
@@ -10610,7 +10604,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "continue with the original auto reasoning default".to_string(),
                 Some("turn-auto-reasoning".to_string()),
                 None,
@@ -10664,7 +10658,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery model binding".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("model-original".to_string()),
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
@@ -10676,7 +10670,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "continue with the original model binding".to_string(),
                 Some("turn-model-binding".to_string()),
                 None,
@@ -10730,7 +10724,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Turn admission CAS".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     model_id: Some("model-original".to_string()),
@@ -10751,7 +10745,7 @@ mod tests {
         let error = manager
             .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "must retry admission".to_string(),
                 Some("turn-admission-race".to_string()),
                 None,
@@ -10776,7 +10770,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Turn admission context window CAS".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     model_id: Some("model-original".to_string()),
@@ -10801,7 +10795,7 @@ mod tests {
         let error = manager
             .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "must reject stale context window".to_string(),
                 Some("turn-admission-context-window-race".to_string()),
                 None,
@@ -10826,7 +10820,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Turn admission route CAS".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -10838,7 +10832,7 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "agentic",
+                "Standard",
                 SessionAgentRouteOwner::External,
                 None,
             )
@@ -10848,7 +10842,7 @@ mod tests {
         let error = manager
             .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "must reject stale route owner".to_string(),
                 Some("turn-admission-route-race".to_string()),
                 None,
@@ -10873,7 +10867,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Turn admission route key CAS".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     agent_route_key: Some("local:agentic:v1".to_string()),
@@ -10886,7 +10880,7 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "agentic",
+                "Standard",
                 SessionAgentRouteOwner::Local,
                 Some("local:agentic:v2".to_string()),
             )
@@ -10896,7 +10890,7 @@ mod tests {
         let error = manager
             .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "must reject stale route key".to_string(),
                 Some("turn-admission-route-key-race".to_string()),
                 None,
@@ -10922,7 +10916,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Turn admission workspace CAS".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(original_workspace.clone()),
                     project_workspace_path: Some(original_workspace.clone()),
@@ -10955,7 +10949,7 @@ mod tests {
         let error = manager
             .start_dialog_turn_with_prepended_messages_if_session_matches(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "must reject stale workspace binding".to_string(),
                 Some("turn-admission-workspace-race".to_string()),
                 None,
@@ -10980,7 +10974,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery rollback".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -10991,7 +10985,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish the task".to_string(),
                 Some("turn-rollback".to_string()),
                 None,
@@ -11113,7 +11107,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery append".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -11124,7 +11118,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish the task".to_string(),
                 Some("turn-append".to_string()),
                 None,
@@ -11232,7 +11226,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Repeated recovery".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -11243,7 +11237,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "continue through two interruptions".to_string(),
                 Some("turn-repeat-interruption".to_string()),
                 None,
@@ -11354,7 +11348,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Interrupted merge".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -11365,7 +11359,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "merge frontend and runtime rounds".to_string(),
                 Some("turn-prefix-merge".to_string()),
                 None,
@@ -11438,7 +11432,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Recovery restart".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
@@ -11450,7 +11444,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish after restart".to_string(),
                 Some("turn-restart".to_string()),
                 None,
@@ -11574,7 +11568,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Delayed usage".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -11640,7 +11634,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Binding race".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..SessionConfig::default()
@@ -11687,7 +11681,7 @@ mod tests {
         let session = manager
             .create_session(
                 "View-only binding".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     project_workspace_path: Some(workspace.path().to_string_lossy().to_string()),
@@ -11740,7 +11734,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Boundary zero binding".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     project_workspace_path: Some(workspace.path().to_string_lossy().to_string()),
@@ -11851,7 +11845,7 @@ mod tests {
         let first = manager
             .create_session(
                 "First loaded session".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
             )
             .await
@@ -11874,7 +11868,7 @@ mod tests {
         let second = manager
             .create_session(
                 "Second loaded session".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config,
             )
             .await
@@ -11895,7 +11889,7 @@ mod tests {
         let session = first
             .create_session(
                 "Single writer".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -11908,7 +11902,7 @@ mod tests {
             .create_session_with_id(
                 Some(session.session_id.clone()),
                 "Duplicate".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -11962,13 +11956,13 @@ mod tests {
         let first_session = Session::new_with_id(
             "first-workspace-session".to_string(),
             "First".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config.clone(),
         );
         let second_session = Session::new_with_id(
             "second-workspace-session".to_string(),
             "Second".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config,
         );
         persistence
@@ -12009,7 +12003,7 @@ mod tests {
         let session = first
             .create_session(
                 "Aliased workspace".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12046,7 +12040,7 @@ mod tests {
         let fixture = Session::new_with_id(
             session_id.to_string(),
             "Recovered fixture".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -12080,7 +12074,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Failed fixture".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12096,7 +12090,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Recovered fixture".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12120,7 +12114,7 @@ mod tests {
         let session = first
             .create_session(
                 "Unload failure".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12157,7 +12151,7 @@ mod tests {
         let session = first
             .create_session(
                 "Processing".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12200,7 +12194,7 @@ mod tests {
             .create_session_with_id_and_details(
                 None,
                 "First".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
                 None,
                 SessionKind::Standard,
@@ -12211,7 +12205,7 @@ mod tests {
             .create_session_with_id_and_details(
                 None,
                 "Second".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config,
                 None,
                 SessionKind::Standard,
@@ -12263,7 +12257,7 @@ mod tests {
         let mut session = Session::new_with_id(
             session_id.clone(),
             "Active permission session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         session.state = SessionState::Processing {
@@ -12329,7 +12323,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 None,
                 "Connection Session".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12357,7 +12351,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 None,
                 "Prepared Subagent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12389,12 +12383,12 @@ mod tests {
         };
         let first = Session::new(
             "First persisted".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config.clone(),
         );
         let second = Session::new(
             "Second persisted".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config,
         );
         persistence_manager
@@ -12461,7 +12455,7 @@ mod tests {
                     .create_session_with_id(
                         Some("capacity-first".to_string()),
                         "First".to_string(),
-                        "agentic".to_string(),
+                        "Standard".to_string(),
                         config,
                     )
                     .await
@@ -12474,7 +12468,7 @@ mod tests {
                     .create_session_with_id(
                         Some("capacity-second".to_string()),
                         "Second".to_string(),
-                        "agentic".to_string(),
+                        "Standard".to_string(),
                         config,
                     )
                     .await
@@ -12582,7 +12576,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Persisted model update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     model_id: Some("primary".to_string()),
@@ -12615,7 +12609,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Legacy model selector".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                 model_id: Some("auto".to_string()),
@@ -12664,7 +12658,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Failed model update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     model_id: Some("primary".to_string()),
@@ -12762,7 +12756,7 @@ mod tests {
             .create_session_with_id_and_details(
                 Some(session_id.to_string()),
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
                 None,
                 SessionKind::EphemeralChild,
@@ -12773,7 +12767,7 @@ mod tests {
             .create_session_with_id_and_details(
                 Some(session_id.to_string()),
                 "Duplicate".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
                 None,
                 SessionKind::EphemeralChild,
@@ -12787,7 +12781,7 @@ mod tests {
             .create_session_with_id_and_details(
                 Some(session_id.to_string()),
                 "Recreated".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config,
                 None,
                 SessionKind::EphemeralChild,
@@ -12816,7 +12810,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
             )
             .await
@@ -12831,7 +12825,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Replacement".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config,
             )
             .await
@@ -12855,7 +12849,7 @@ mod tests {
             .create_session_with_id(
                 Some(invalid_id.to_string()),
                 "Invalid".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12887,7 +12881,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Must not become visible".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
             )
             .await
@@ -12908,7 +12902,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Retry succeeds".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config,
             )
             .await
@@ -12928,7 +12922,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -12981,7 +12975,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13018,7 +13012,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -13051,7 +13045,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -13096,7 +13090,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Original".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -13133,7 +13127,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Active".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13176,7 +13170,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Active".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13219,7 +13213,7 @@ mod tests {
                 .create_session_with_id(
                     Some(session_id.to_string()),
                     "Serialized".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path),
                         ..Default::default()
@@ -13247,7 +13241,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Persisted".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13286,7 +13280,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Serialized mode update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13323,7 +13317,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Serialized compression update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13366,7 +13360,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Serialized turn start".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13382,7 +13376,7 @@ mod tests {
             manager_for_turn
                 .start_dialog_turn(
                     &session_id,
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "hello".to_string(),
                     Some("serialized-turn".to_string()),
                     None,
@@ -13410,7 +13404,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Idempotent mode update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13427,7 +13421,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         manager
-            .update_session_agent_type(&session.session_id, "agentic")
+            .update_session_agent_type(&session.session_id, "Standard")
             .await
             .expect("same mode should succeed");
 
@@ -13448,7 +13442,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Durable mode update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13486,7 +13480,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Durable external route".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13498,7 +13492,7 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "agentic",
+                "Standard",
                 SessionAgentRouteOwner::External,
                 Some("test:external:agentic".to_string()),
             )
@@ -13515,7 +13509,7 @@ mod tests {
         manager
             .update_session_agent_binding(
                 &session.session_id,
-                "agentic",
+                "Standard",
                 SessionAgentRouteOwner::Local,
                 Some("local:agentic".to_string()),
             )
@@ -13573,7 +13567,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Metadata-only mode update".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -13677,7 +13671,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "reasoning-selection".to_string(),
             "Reasoning selection".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 model_id: Some("model-a".to_string()),
                 reasoning_preset: Some("high".to_string()),
@@ -13707,7 +13701,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Stale reasoning preset".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     model_id: Some("model-b".to_string()),
@@ -13774,7 +13768,7 @@ mod tests {
                 manager
                     .create_session(
                         "Remote session".to_string(),
-                        "agentic".to_string(),
+                        "Standard".to_string(),
                         SessionConfig {
                             workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                             model_id: Some("deepseek-v4-flash".to_string()),
@@ -13805,7 +13799,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "session-804".to_string(),
             "DeepSeek session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 model_id: Some("deepseek-v4-pro".to_string()),
                 max_context_tokens: 256_000,
@@ -13835,7 +13829,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "session-default".to_string(),
             "Default session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 model_id: None,
                 max_context_tokens: 256_000,
@@ -14210,7 +14204,7 @@ mod tests {
             .create_session_with_id_and_details(
                 Some(Uuid::new_v4().to_string()),
                 "Side thread".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -14247,7 +14241,7 @@ mod tests {
             .create_session_with_id_and_details(
                 Some(Uuid::new_v4().to_string()),
                 "Main thread".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -14603,7 +14597,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Resolved sessions restore".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -14635,7 +14629,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Resolved sessions restore".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -14669,7 +14663,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Remote identity restore".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some("/home/wsp/project".to_string()),
                 remote_connection_id: Some("ssh-1".to_string()),
@@ -14769,7 +14763,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Fork child".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -14789,7 +14783,7 @@ mod tests {
         let turn_id = manager
             .start_dialog_turn_with_existing_context(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "delegate task".to_string(),
                 Some("subagent-turn-0".to_string()),
                 None,
@@ -14847,7 +14841,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Atomic admission".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -14858,7 +14852,7 @@ mod tests {
 
         let dialog = manager.start_dialog_turn(
             &session.session_id,
-            "agentic".to_string(),
+            "Standard".to_string(),
             "new user input".to_string(),
             Some("dialog-turn".to_string()),
             None,
@@ -14903,7 +14897,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Retry admission".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -14938,7 +14932,7 @@ mod tests {
         let retry_turn = manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "retry after failure".to_string(),
                 Some("retry-turn".to_string()),
                 None,
@@ -14958,7 +14952,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Failed maintenance".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -15252,7 +15246,7 @@ mod tests {
                 },
             );
             turn.agent_type = Some(if index == 0 {
-                "agentic".to_string()
+                "Standard".to_string()
             } else {
                 "Cowork".to_string()
             });
@@ -15321,7 +15315,7 @@ mod tests {
             .expect("turns should load");
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].user_message.content, "prompt 0");
-        assert_eq!(turns[0].agent_type.as_deref(), Some("agentic"));
+        assert_eq!(turns[0].agent_type.as_deref(), Some("Standard"));
         assert!(persistence_manager
             .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
             .await
@@ -15347,7 +15341,7 @@ mod tests {
         assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
         assert_eq!(
             restored.last_user_dialog_agent_type.as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
         assert_eq!(
             manager
@@ -15386,7 +15380,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Staged revert".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -15740,7 +15734,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Listing baseline rebuild".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -15854,7 +15848,7 @@ mod tests {
         let mut session = Session::new_with_id(
             session_id.clone(),
             "Restore sanitize".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -15957,7 +15951,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Rollback sanitize".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -16486,7 +16480,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Durable evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -16590,7 +16584,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Staged evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -16670,7 +16664,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Staged revert evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17115,7 +17109,7 @@ mod tests {
         let session = writer
             .create_session(
                 "Staged revert explicit history evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17254,7 +17248,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Rollback evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17391,7 +17385,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Evidence write failure".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17431,7 +17425,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Concurrent evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17512,7 +17506,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Corrupt evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17556,7 +17550,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Corrupt retention evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17595,7 +17589,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Remote evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some("/home/wsp/project".to_string()),
                     remote_connection_id: Some("ssh-1".to_string()),
@@ -17650,7 +17644,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Converge evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17770,7 +17764,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Fork evidence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17888,7 +17882,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Prompt cache".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path),
                     ..Default::default()
@@ -17946,7 +17940,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Listing baseline".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -18104,7 +18098,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Edit constraint persistence".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -18229,7 +18223,7 @@ mod tests {
         let parent = manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -18240,7 +18234,7 @@ mod tests {
         let child = manager
             .create_session(
                 "Child".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -18330,7 +18324,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Prompt cache".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path),
                     ..Default::default()
@@ -18399,7 +18393,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Prompt cache".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -18482,7 +18476,7 @@ mod tests {
         let source_session = manager
             .create_session(
                 "Prompt cache source".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path.clone()),
                     ..Default::default()
@@ -18493,7 +18487,7 @@ mod tests {
         let target_session = manager
             .create_session(
                 "Prompt cache target".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path),
                     ..Default::default()
@@ -18574,7 +18568,7 @@ mod tests {
         let session = manager
             .create_session(
                 "Prompt cache".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path),
                     ..Default::default()

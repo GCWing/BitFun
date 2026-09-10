@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, MenuItem, Icon } from '@openbitfun/ui';
-import { AlertCircle, Timer, Infinity as InfinityIcon } from 'lucide-react';
+import { Menu, MenuItem } from '@openbitfun/ui';
+import { Timer, Infinity as InfinityIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -43,16 +43,7 @@ export interface ToolTimeoutIndicatorProps {
   completedTooltip?: string;
   completedFailureReason?: string;
   defaultTimeoutDisabled?: boolean;
-}
-
-function renderCompletedDurationIcon(status: ToolTimeoutIndicatorProps['completedStatus']) {
-  if (status === 'success') {
-    return <Icon name="check-circle" size="lg" style={{ width: 13, height: 13 }} />;
-  }
-  if (status === 'error' || status === 'cancelled') {
-    return <AlertCircle size={13} strokeWidth={2.2} />;
-  }
-  return <Timer size={13} strokeWidth={2} />;
+  showCompletedDuration?: boolean;
 }
 
 export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
@@ -66,6 +57,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   completedTooltip,
   completedFailureReason,
   defaultTimeoutDisabled = false,
+  showCompletedDuration = true,
 }) => {
   const { t } = useTranslation('flow-chat');
   const remainingMsRef = useRef<number | null>(null);
@@ -133,8 +125,8 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
     return () => document.removeEventListener('keydown', handleKey);
   }, [isPopoverOpen, closePopover]);
 
-  // Completed state: show precise duration only.
-  if (!isRunning && completedDurationMs != null) {
+  // Completed state: show precise duration when the card is expanded.
+  if (!isRunning && completedDurationMs != null && showCompletedDuration) {
     const durationLabel = formatDurationPrecise(completedDurationMs);
     const completionLabel = completedTooltip || (
       completedStatus === 'success'
@@ -165,7 +157,6 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
         title={completionLabel}
         aria-label={completionLabel}
       >
-        {renderCompletedDurationIcon(completedStatus)}
         <span data-openbitfun-component="tool-timeout-indicator" data-openbitfun-part="duration">{durationLabel}</span>
       </span>
     );

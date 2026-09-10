@@ -15,6 +15,7 @@ import {
   type SelectHTMLAttributes,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { useFieldSurface } from "../../internal/fieldSurface";
 import { useAnchoredLayer, type LayerPlacement } from "../../internal/useAnchoredLayer";
 import { Portal } from "../../overlay/Portal";
@@ -346,12 +347,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           {leading}
         </span>
       )}
-      <span
+      <OverflowText
         className={selectedOption ? styles.value : styles.placeholder}
         data-openbitfun-part="value"
       >
         {selectedOption?.label ?? placeholder}
-      </span>
+      </OverflowText>
       <span aria-hidden="true" className={styles.indicator} data-openbitfun-part="indicator">
         <Icon name="chevron-down" size="sm" />
       </span>
@@ -370,6 +371,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       style={layout?.style ?? { position: "fixed", visibility: "hidden" }}
     >
       <button
+        data-overflow-trigger
         aria-controls={listboxId}
         aria-describedby={ariaDescribedBy}
         aria-expanded="true"
@@ -457,7 +459,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           <optgroup key={label} label={label}>{groupedOptions.map(renderNativeOption)}</optgroup>
         ))}
       </select>
-      <button
+      <button data-overflow-trigger
         aria-controls={resolvedOpen ? undefined : listboxId}
         aria-describedby={ariaDescribedBy}
         aria-expanded={resolvedOpen ? undefined : false}

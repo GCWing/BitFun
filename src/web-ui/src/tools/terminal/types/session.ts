@@ -34,6 +34,8 @@ export interface SessionResponse {
   name: string;
   shellType: string;
   cwd: string;
+  /** Immutable creation directory; omitted by older hosts. */
+  initialCwd?: string;
   pid?: number;
   status: SessionStatus | string;
   cols: number;

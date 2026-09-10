@@ -84,7 +84,7 @@ class MobileScreenTest {
         // the scanner, so both entry modes stay visible behind the closing drawer.
         waitForText("Choose how to connect")
         composeRule.onNodeWithText("Scan to connect").assertIsDisplayed()
-        composeRule.onNodeWithText("Sign in to OpenBitFun account").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign in with GitHub").assertIsDisplayed()
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -106,11 +106,11 @@ class MobileScreenTest {
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsDisplayed()
 
-        val signedOut = composeRule.onAllNodesWithText("Sign in to OpenBitFun account")
+        val signedOut = composeRule.onAllNodesWithText("Sign in with GitHub")
             .fetchSemanticsNodes()
             .isNotEmpty()
         if (signedOut) {
-            composeRule.onNodeWithText("Sign in to OpenBitFun account").performClick()
+            composeRule.onNodeWithText("Sign in with GitHub").performClick()
         } else {
             // The signed-in exchange: settings first, and the profile row there
             // is what leads on to the account. The drawer is over the general
@@ -120,7 +120,7 @@ class MobileScreenTest {
             composeRule.onNodeWithTag(GENERAL_SETTINGS_PROFILE_TEST_TAG).performClick()
         }
 
-        waitForText(if (signedOut) "Sign in to OpenBitFun" else "Account")
+        waitForText(if (signedOut) "Sign in with GitHub" else "Account")
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 

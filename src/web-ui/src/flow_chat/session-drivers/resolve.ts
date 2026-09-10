@@ -109,6 +109,26 @@ export function resolveSessionDriverId(
   return resolveSessionDriverIdWith(sessionId, session, dispatchJobStoreObservesSession);
 }
 
+/** Resolve a child projection to the durable job that owns its files. */
+export function resolveDispatchJobId(
+  sessionId: string,
+  session: DriverResolvableSession | undefined,
+  lookupSession: SessionLookup | null = parentSessionLookup,
+): string | undefined {
+  let currentId: string | undefined = sessionId;
+  let current = session;
+  for (let depth = 0; currentId && depth <= MAX_PARENT_CHAIN_DEPTH; depth += 1) {
+    const configured = current?.config?.dispatchJobId?.trim();
+    if (configured) return configured;
+    const observed = Object.values(dispatchJobStore.getState().jobs ?? {})
+      .find(job => job.sessionId === currentId);
+    if (observed) return observed.jobId;
+    currentId = current?.parentSessionId?.trim();
+    current = currentId ? lookupSession?.(currentId) : undefined;
+  }
+  return undefined;
+}
+
 /** Creation has no session yet; the requested target decides the driver. */
 export function resolveSessionDriverIdForCreation(config: {
   dispatchTargetRequest?: DispatchTargetRequest;

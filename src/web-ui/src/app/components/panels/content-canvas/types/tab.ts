@@ -109,7 +109,10 @@ export const createTab = (
   const now = Date.now();
   return {
     id: generateTabId(),
-    title: content.title,
+    // Older terminal tab payloads shortened title but retained the full session name.
+    title: content.type === 'terminal' && typeof content.data?.sessionName === 'string'
+      ? content.data.sessionName
+      : content.title,
     content,
     state,
     isDirty: false,

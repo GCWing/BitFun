@@ -114,7 +114,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
       action={(
         <Button
           type="button"
-          variant="fill"
+          variant="primary"
           size="sm"
           onClick={async () => {
             if (!childSessionId || !parentSessionId) return;

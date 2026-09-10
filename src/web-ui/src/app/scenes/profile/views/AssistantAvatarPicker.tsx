@@ -208,7 +208,7 @@ const AssistantAvatarPicker: React.FC<AssistantAvatarPickerProps> = ({
             />
             <Button
               type="submit"
-              variant="outline"
+              variant="primary"
               size="sm"
               disabled={!normalizedCustomValue || normalizedCustomValue === displayedValue}
             >

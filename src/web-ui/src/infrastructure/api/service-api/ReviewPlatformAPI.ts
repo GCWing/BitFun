@@ -4,11 +4,12 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ReviewPlatformAPI');
 
-export type ReviewPlatformKind = 'github' | 'gitlab' | 'gitcode' | 'unknown';
+export type ReviewPlatformKind = 'github' | 'gitlab' | 'gitcode' | 'gitee' | 'unknown';
 export type ReviewAuthState = 'not_connected' | 'not_required' | 'connected' | 'expired' | 'error' | 'unsupported';
 export type ReviewAuthSource = 'gh_cli' | 'env' | 'stored' | 'none' | 'unsupported';
 export type ReviewAuthChallengeState = 'missing' | 'invalid' | 'insufficient_scope';
 export type ReviewItemState = 'open' | 'merged' | 'closed' | 'draft';
+export type ReviewPlatformListState = 'all' | ReviewItemState;
 export type ReviewDecision = 'approved' | 'changes_requested' | 'commented' | 'pending';
 export type ReviewFileStatus = 'added' | 'modified' | 'deleted' | 'renamed';
 export type ReviewPlatformDetailSection = 'overview' | 'ci' | 'files' | 'commits' | 'reviews';
@@ -100,6 +101,7 @@ export interface ReviewPlatformPullRequest {
   webUrl: string;
   additions: number;
   deletions: number;
+  lineStatsKnown?: boolean;
   changedFiles: number;
   /** Missing on older backends; only an explicit false means the count is unknown. */
   changedFileCountKnown?: boolean;
@@ -186,6 +188,7 @@ export interface ReviewPlatformThread {
 }
 
 export interface ReviewPlatformPullRequestDetail extends ReviewPlatformPullRequest {
+  limitations?: string[];
   body: string;
   ci: ReviewPlatformCiItem[];
   files: ReviewPlatformFile[];
@@ -215,6 +218,7 @@ export interface ReviewPlatformCapabilities {
   canRequestChanges: boolean;
   canMerge: boolean;
   supportsDraftReview: boolean;
+  supportedPullRequestStates?: ReviewPlatformListState[];
 }
 
 export interface ReviewPlatformPagination {
@@ -241,6 +245,7 @@ export interface ReviewPlatformWorkspaceSnapshotRequest {
   remoteId?: string | null;
   page?: number;
   perPage?: number;
+  state?: ReviewPlatformListState;
 }
 
 export interface ReviewPlatformWorkspaceContextRequest {
@@ -300,11 +305,18 @@ export class ReviewPlatformAPI {
     remoteId?: string | null,
     page?: number,
     perPage?: number,
+    state?: ReviewPlatformListState,
   ): Promise<ReviewPlatformWorkspaceSnapshot> {
     try {
-      return await api.invoke('review_platform_get_workspace_snapshot', {
-        request: { repositoryPath, remoteId, page, perPage },
+      const snapshot = await api.invoke<ReviewPlatformWorkspaceSnapshot>('review_platform_get_workspace_snapshot', {
+        request: { repositoryPath, remoteId, page, perPage, ...(state && state !== 'all' ? { state } : {}) },
       });
+      // Older hosts may ignore a new optional request field. Require their
+      // advertised capability before accepting the returned page as filtered.
+      if (state && state !== 'all' && !snapshot.capabilities.supportedPullRequestStates?.includes(state)) {
+        throw new Error('review_platform_state_filter_unsupported');
+      }
+      return snapshot;
     } catch (error) {
       log.error('Failed to load review platform snapshot', { repositoryPath, remoteId, page, perPage, error });
       throw createTauriCommandError('review_platform_get_workspace_snapshot', error, {

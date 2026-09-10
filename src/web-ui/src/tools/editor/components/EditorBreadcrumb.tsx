@@ -10,7 +10,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 
 import './EditorBreadcrumb.scss';
-import { Icon, Menu, MenuItem, MenuSection, Tooltip, type IconSize } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, MenuSection, Tooltip, type IconSize } from '@openbitfun/ui';
 
 const log = createLogger('EditorBreadcrumb');
 
@@ -430,7 +430,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
               </span>
             ) : (
               <Tooltip content={pathSegment.fullPath} placement="bottom">
-                <span
+                <span data-overflow-trigger
                   data-openbitfun-product-component="editor-breadcrumb"
                   data-openbitfun-product-part="item"
                   data-openbitfun-state={isDropdownOpen ? 'active' : undefined}
@@ -449,9 +449,9 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
                       <Icon name="folder" size="xs" />
                     )}
                   </span>
-                  <span data-openbitfun-product-component="editor-breadcrumb" data-openbitfun-product-part="itemText" className="editor-breadcrumb__item-text">
+                  <OverflowText data-openbitfun-product-component="editor-breadcrumb" data-openbitfun-product-part="itemText" className="editor-breadcrumb__item-text">
                     {pathSegment.name}
-                  </span>
+                  </OverflowText>
                 </span>
               </Tooltip>
             )}

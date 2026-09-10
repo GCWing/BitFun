@@ -113,6 +113,7 @@ export function getApplicationPath(): string {
 }
 
 async function waitForDevServerIfNeeded(appPath: string): Promise<void> {
+  if (process.env.OPENBITFUN_E2E_PACKAGED_FRONTEND === '1') return;
   if (!appPath.includes(`${path.sep}debug${path.sep}`)) {
     return;
   }
@@ -432,6 +433,7 @@ async function startOpenBitFunApp(): Promise<void> {
 
   openbitfunApp = spawn(appPath, [], {
     cwd: projectRoot(),
+    windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,

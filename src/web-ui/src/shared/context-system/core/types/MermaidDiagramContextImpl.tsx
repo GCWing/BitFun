@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { Network } from 'lucide-react';
 import type { MermaidDiagramContext, ValidationResult, RenderOptions } from '../../../types/context';
 import type { 
@@ -109,17 +109,17 @@ export class MermaidDiagramCardRenderer implements ContextCardRenderer<'mermaid-
         </div>
         
         <div className="openbitfun-context-card__content">
-          <div className="openbitfun-context-card__title">
+          <div className="openbitfun-context-card__title"><OverflowText>
             {context.diagramTitle || i18nService.t('components:contextSystem.diagram.defaultTitle')}
-          </div>
+          </OverflowText></div>
           
           {!compact && (
-            <div className="openbitfun-context-card__subtitle">
+            <div className="openbitfun-context-card__subtitle"><OverflowText behavior="marquee">
               {this.getDiagramTypeLabel(context.diagramType)}
               <span className="openbitfun-context-card__meta">
                 {' • '}{this.formatCodeSize(context.diagramCode.length)}
               </span>
-            </div>
+            </OverflowText></div>
           )}
         </div>
         

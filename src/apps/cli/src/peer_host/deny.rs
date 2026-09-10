@@ -143,12 +143,17 @@ mod tests {
         assert!(!is_local_only_command("git_get_repository_trust"));
     }
 
-    /// Previously the CLI list lacked this entry while the desktop and the
-    /// frontend refused it, and a CI exception hid the drift. One registry row
-    /// now answers for all three surfaces.
+    /// GitHub identity belongs to the controller across all three surfaces.
     #[test]
-    fn cancelling_a_pending_login_stays_on_the_controller_device() {
-        assert!(is_local_only_command("account_cancel_pending_login"));
+    fn github_identity_stays_on_the_controller_device() {
+        for command in [
+            "account_github_start",
+            "account_github_poll",
+            "account_github_info",
+            "account_logout",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
     }
 
     /// Browser and OS automation are controller-local in the frontend adapter

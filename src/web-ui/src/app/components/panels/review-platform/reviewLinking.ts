@@ -1,5 +1,6 @@
 import type { Session } from '@/flow_chat/types/flow-chat';
 import type {
+  ReviewPlatformDetailSection,
   ReviewPlatformPullRequest,
   ReviewPlatformPullRequestDetail,
 } from '@/infrastructure/api';
@@ -19,6 +20,7 @@ type PullRequestChangedFileCount = Pick<
   ReviewPlatformPullRequest,
   'changedFiles' | 'changedFileCountKnown'
 >;
+type PullRequestLineStats = Pick<ReviewPlatformPullRequest, 'additions' | 'deletions' | 'lineStatsKnown'>;
 
 function normalizeProviderHost(value: string): string {
   return value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -124,22 +126,36 @@ export function mergeRevalidatedPullRequestOverview(
   if (!current || !samePullRequestRevisions(current, overview)) {
     return overview;
   }
-  const preserveKnownLineStats = overview.changedFileCountKnown === false
-    && current.changedFileCountKnown !== false
-    ? {
-        additions: current.additions,
-        deletions: current.deletions,
-      }
-    : {};
   return {
     ...overview,
-    ...preserveKnownLineStats,
+    limitations: mergePullRequestDetailLimitations(current.limitations, overview.limitations, 'overview'),
+    ...mergeOverviewLineStats(current, overview),
     ...mergeChangedFileCount(current, overview),
     ci: current.ci,
     files: current.files,
     commits: current.commits,
     threads: current.threads,
   };
+}
+
+export function mergePullRequestDetailLimitations(
+  current: string[] | undefined,
+  incoming: string[] | undefined,
+  section: ReviewPlatformDetailSection,
+): string[] {
+  // A page refresh replaces only the coverage facts owned by that section.
+  // Preserve warnings for other loaded sections until they are refreshed too.
+  const refreshed = (limitation: string): boolean => {
+    switch (limitation) {
+      case 'gitee_file_list_limit': return section === 'files' || section === 'overview';
+      case 'gitee_commit_list_limit': return section === 'commits';
+      case 'provider_comment_list_incomplete': return section === 'reviews';
+      case 'provider_ci_list_incomplete':
+      case 'provider_ci_head_unavailable': return section === 'ci' || section === 'overview';
+      default: return false;
+    }
+  };
+  return [...new Set([...(current ?? []).filter(limitation => !refreshed(limitation)), ...(incoming ?? [])])];
 }
 
 export function mergeChangedFileCount(
@@ -176,6 +192,46 @@ export function resolvedChangedFileCount(
     return fallback.changedFiles;
   }
   return null;
+}
+
+export function mergeLineStats(
+  current: PullRequestLineStats,
+  incoming: PullRequestLineStats,
+): PullRequestLineStats {
+  if (incoming.lineStatsKnown !== undefined) {
+    const source = incoming.lineStatsKnown || current.lineStatsKnown === false ? incoming : current;
+    return { additions: source.additions, deletions: source.deletions, lineStatsKnown: source.lineStatsKnown };
+  }
+  // Older providers use zero as the missing-section placeholder.
+  return {
+    additions: incoming.additions || current.additions,
+    deletions: incoming.deletions || current.deletions,
+    lineStatsKnown: current.lineStatsKnown,
+  };
+}
+
+export function resolvedLineStats(value?: PullRequestLineStats | null): PullRequestLineStats | null {
+  return value && value.lineStatsKnown !== false ? value : null;
+}
+
+function mergeOverviewLineStats(
+  current: PullRequestChangedFileCount & PullRequestLineStats,
+  overview: PullRequestChangedFileCount & PullRequestLineStats,
+): PullRequestLineStats {
+  if (overview.lineStatsKnown !== undefined) return mergeLineStats(current, overview);
+  // Legacy overviews replace totals, including zero. Only section payloads use
+  // zero as a placeholder; keep that fallback inside mergeLineStats.
+  const source = overview.changedFileCountKnown === false && current.changedFileCountKnown !== false
+    ? current : overview;
+  return { additions: source.additions, deletions: source.deletions, lineStatsKnown: source.lineStatsKnown };
+}
+
+export function resolvedPullRequestStatistics(
+  pullRequest: ReviewPlatformPullRequest,
+  detail?: ReviewPlatformPullRequestDetail | null,
+): PullRequestChangedFileCount & PullRequestLineStats {
+  if (!detail || detail.id !== pullRequest.id || !samePullRequestRevisions(pullRequest, detail)) return pullRequest;
+  return { ...mergeChangedFileCount(pullRequest, detail), ...mergeOverviewLineStats(pullRequest, detail) };
 }
 
 export function samePullRequestRevisions(

@@ -62,7 +62,7 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   queue decisions, registry source/profile facts, prompt-loop user-context
   policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
   prompt runtime/workspace/user-context rendering, turn skill/agent snapshot
-  state, file-read session state, session evidence ledger projection,
+  state, code-review read receipts, session evidence ledger projection,
   finish-reason labels, session-state event labels, and turn-outcome event
   facts.
 - Keep concrete prompt fact collection, workspace context IO, prompt-cache

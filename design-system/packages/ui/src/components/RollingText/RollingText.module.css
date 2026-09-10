@@ -1,0 +1,30 @@
+@layer openbitfun.components {
+  .root {
+    --_rolling-text-duration: var(--openbitfun-motion-duration-content-swap);
+    --_rolling-text-easing: var(--openbitfun-motion-easing-smooth);
+
+    position: relative;
+    display: block;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .current {
+    display: block;
+  }
+
+  .outgoing {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .outgoing {
+      display: none;
+    }
+  }
+}

@@ -1,0 +1,211 @@
+/**
+ * Chat context picker styles
+ */
+
+@use '@/shared/styles/surface-recipes' as surfaces;
+
+.chat-context-picker {
+  @include surfaces.floating;
+
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 320px;
+  overflow: hidden;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+
+  &--overlay {
+    position: fixed;
+    // The non-portalled picker is positioned with `bottom`; clear that
+    // constraint when the overlay is placed by the viewport anchor hook.
+    bottom: auto;
+    left: auto;
+    z-index: var(--openbitfun-layer-popover);
+    width: min(300px, calc(100vw - 16px));
+    min-width: min(220px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    color: var(--openbitfun-color-content-primary);
+    font-family:var(--openbitfun-type-body-sm-font-family);
+  }
+  
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: var(--openbitfun-control-flow-chat-inline-gap) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    border-bottom: 1px solid var(--openbitfun-color-border-subtle);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    font-weight: var(--openbitfun-type-label-sm-font-weight);
+    letter-spacing: var(--openbitfun-type-modifier-tracking-wide-letter-spacing);
+    
+    svg,
+    [data-openbitfun-component='icon'] {
+      opacity: 0.6;
+    }
+  }
+  
+  &__directory-label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__directory-path {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--openbitfun-color-content-secondary);
+  }
+
+  &__directory-path--file {
+    display: flex;
+  }
+
+  &__directory-prefix {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  &__directory-tail {
+    // Keep the current directory visible while the parent path absorbs clipping.
+    flex: 0 0 auto;
+    max-inline-size: 100%;
+    overflow: hidden;
+  }
+  
+  &__content {
+    flex: 1;
+    overflow: hidden;
+    min-height: 60px;
+    max-height: 240px;
+  }
+  
+  &__loading,
+  &__empty {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-support-font-size);
+    
+    span {
+      opacity: 0.7;
+    }
+  }
+  
+  &__spinner {
+    animation: chat-context-picker-spin 1s linear infinite;
+    color: var(--openbitfun-color-accent-default);
+    
+    @keyframes chat-context-picker-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  }
+  
+  &__list {
+    block-size: 100%;
+    padding: var(--openbitfun-overlay-menu-surface-padding);
+  }
+
+  &--skills {
+    width: max-content;
+    min-width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+  }
+
+  &__skill-option > [data-openbitfun-part='content'] {
+    flex: 0 0 auto;
+  }
+
+  &__skill-name {
+    display: block;
+    white-space: nowrap;
+  }
+
+  &__skill-option > [data-openbitfun-part='metadata'] {
+    flex: 1 1 auto;
+    inline-size: 8rem;
+    min-inline-size: 0;
+    max-inline-size: 60%;
+  }
+
+  &__skill-description {
+    inline-size: 100%;
+    // This picker uses a visible ellipsis instead of the shared resting fade.
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  &__skill-option:not(:hover):not(:focus-visible) &__skill-description > [data-overflow-content] {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    // Virtual selection alone must not start the marquee on initial opening.
+    animation: none;
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__skill-description > [data-overflow-content] {
+      display: block;
+      min-inline-size: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--openbitfun-control-flow-chat-control-gap);
+    padding: var(--openbitfun-control-flow-chat-inline-gap) var(--openbitfun-control-flow-chat-card-expanded-padding-inline);
+    border-top: 1px solid var(--openbitfun-color-border-subtle);
+    font-size: var(--openbitfun-type-flow-micro-font-size);
+    color: var(--openbitfun-color-content-muted);
+    
+    > span {
+      display: flex;
+      align-items: center;
+      gap: 0.18rem;
+    }
+  }
+
+  :root[data-openbitfun-appearance-mode="light"] &,
+  .light & {
+    // Keep the lighter edge treatment without overriding the shared frosted
+    // floating-surface background and filter.
+    border-color: var(--openbitfun-color-border-subtle);
+    box-shadow:
+      0 4px 18px color-mix(in srgb, var(--openbitfun-color-content-muted) 4%, transparent),
+      0 1px 3px color-mix(in srgb, var(--openbitfun-color-content-muted) 4%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 95%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-context-picker__spinner {
+    animation: none;
+  }
+}
+
+.chat-context-picker__diagnostics {
+  padding: 8px 12px;
+  max-height: 160px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--openbitfun-type-flow-support-font-size);
+
+  summary { cursor: pointer; }
+}

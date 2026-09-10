@@ -4,6 +4,7 @@ import {
   type ReactNode,
 } from "react";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./Button.module.css";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -30,7 +31,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ...props
 }, ref) {
   return (
-    <button
+    <button data-overflow-trigger
       {...props}
       aria-busy={loading || undefined}
       className={classNames(styles.button, className)}
@@ -51,7 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
             {leadingIcon}
           </span>
         )}
-        <span className={styles.label}>{children}</span>
+        <OverflowText className={styles.label}>{children}</OverflowText>
         {trailingIcon && (
           <span aria-hidden="true" className={classNames(styles.icon, styles.trailingIcon)}>
             {trailingIcon}

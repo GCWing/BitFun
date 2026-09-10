@@ -562,8 +562,28 @@ impl RemoteMCPTransport {
             fut,
             "MCP ping timeout".to_string(),
         )
-        .await?
-        .map_err(|e| MCPRuntimeError::mcp(format!("MCP ping failed: {}", e)))?;
+        .await?;
+
+        let result = match result {
+            // Some reachable HTTP servers (including Huawei Developer Knowledge)
+            // omit ping. Verify a supported read-only operation instead of
+            // putting an otherwise usable connection into a reconnect loop.
+            Err(rmcp::service::ServiceError::McpError(error))
+                if error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND
+                    && service
+                        .peer()
+                        .peer_info()
+                        .is_some_and(|info| info.capabilities.tools.is_some()) =>
+            {
+                debug!("MCP server does not implement ping; checking tools/list");
+                self.list_tools(None).await.map_err(|error| {
+                    MCPRuntimeError::mcp(format!("MCP health check tools/list failed: {}", error))
+                })?;
+                return Ok(());
+            }
+            other => other
+                .map_err(|error| MCPRuntimeError::mcp(format!("MCP ping failed: {}", error)))?,
+        };
 
         match result {
             rmcp::model::ServerResult::EmptyResult(_) => Ok(()),

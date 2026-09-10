@@ -632,7 +632,7 @@ mod search_projection_tests {
             session_id: "session_1".to_string(),
             timestamp: 1,
             kind: DialogTurnKind::UserDialog,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             user_message: UserMessageData {
                 id: "user_1".to_string(),
                 content: "question".to_string(),

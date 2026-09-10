@@ -1,0 +1,18 @@
+{
+  "id": "custom-notes",
+  "name": "Custom Notes",
+  "description": "Synthetic user MiniApp",
+  "icon": "FileText",
+  "category": "productivity",
+  "tags": ["fixture"],
+  "version": 1,
+  "created_at": 1,
+  "updated_at": 2,
+  "permissions": {
+    "fs": { "read": ["{appdata}"], "write": ["{appdata}"] },
+    "shell": { "allow": [] },
+    "net": { "allow": [] },
+    "node": { "enabled": false, "max_memory_mb": 128, "timeout_ms": 5000 }
+  },
+  "ai_context": null
+}

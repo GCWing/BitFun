@@ -1,8 +1,9 @@
 /**
  * SceneViewport — renders the active scene component.
  *
- * All open scenes stay mounted, but only the active tab is visible, preserving
- * state across tab switches until the user explicitly closes a scene.
+ * Open scene hosts stay mounted, but only the active host is visible. Workspace
+ * session tabs share one Session host backed by the authoritative selection;
+ * their resource identity is independent of the host's mounting lifetime.
  *
  * When no tabs are open, the viewport renders WelcomeScene as a shell-owned
  * landing surface rather than manufacturing a tab for it.
@@ -18,6 +19,7 @@ import React, {
   useState,
 } from 'react';
 import type { SceneTabId } from '../components/SceneBar/types';
+import { getSceneViewId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useDialogCompletionNotify } from '../hooks/useDialogCompletionNotify';
@@ -94,7 +96,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
     navigationSequence,
   } = useSceneManager();
   const { t } = useI18n('common');
-  const activeRenderedSceneId: RenderedSceneId = activeTabId ?? EMPTY_SCENE_ID;
+  const activeRenderedSceneId: RenderedSceneId = activeTabId ? getSceneViewId(activeTabId) : EMPTY_SCENE_ID;
   const [transition, setTransition] = useState<SceneTransition | null>(null);
   const [readyVersion, setReadyVersion] = useState(0);
   const readySceneIdsRef = useRef<Set<RenderedSceneId>>(new Set([EMPTY_SCENE_ID]));
@@ -122,9 +124,10 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
       ? null
       : transition;
   const outgoingTabId = pendingTransition?.outgoingTabId ?? null;
-  const renderedTabIds: RenderedSceneId[] = openTabs.length === 0
-    ? [EMPTY_SCENE_ID]
-    : openTabs.map(tab => tab.id);
+  // Session tabs are resource bookmarks into a shared projection. Mounting one
+  // SessionScene per tab would duplicate global composers, listeners and panes.
+  const renderedTabIds: RenderedSceneId[] = [...new Set(openTabs.map(tab => getSceneViewId(tab.id)))];
+  if (activeTabId === null) renderedTabIds.push(EMPTY_SCENE_ID);
   if (outgoingTabId && !renderedTabIds.includes(outgoingTabId)) {
     renderedTabIds.push(outgoingTabId);
   }

@@ -57,13 +57,7 @@ pub enum MarketSort {
     Rating,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketUserSummary {
-    pub github_id: i64,
-    pub login: String,
-    pub avatar_url: String,
-}
+pub use crate::account::GitHubUser as MarketUserSummary;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

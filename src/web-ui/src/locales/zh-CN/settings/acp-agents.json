@@ -112,7 +112,8 @@
   "permissionMode": {
     "ask": "询问",
     "allowOnce": "自动通过",
-    "rejectOnce": "自动拒绝"
+    "legacyRejectWarning": "部分 Agent 的已保存设置仍为“自动拒绝”，编辑器已将其替换为“询问”。请保存并应用当前选择；保存前，这些 Agent 仍会自动拒绝请求。",
+    "saveAndApply": "保存并应用"
   },
   "requirements": {
     "tool": "CLI",

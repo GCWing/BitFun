@@ -263,7 +263,7 @@ export function VoiceInputDiagnostics({
           ) : null}
           <Button
             className="voice-input-config__diagnostic-button"
-            variant={phase === 'recording' ? 'outline' : 'fill'}
+            variant={phase === 'recording' ? 'fill' : 'primary'}
             size="sm"
             loading={phase === 'preparing' || phase === 'transcribing'}
             disabled={phase === 'preparing' || phase === 'transcribing'}

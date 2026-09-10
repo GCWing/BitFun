@@ -197,7 +197,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
 
         <div className="openbitfun-create-branch-dialog__actions">
           <Button 
-            variant="outline"
+            variant="fill"
             size="sm"
             onClick={handleCancel}
             disabled={isCreating}
@@ -205,7 +205,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
             {t('dialog.createNewBranch.cancel')}
           </Button>
           <Button 
-            variant="fill"
+            variant="primary"
             size="sm"
             onClick={handleConfirm}
             disabled={!canSubmit}

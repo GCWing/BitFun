@@ -1,4 +1,13 @@
 {
+  "reviewPlatform": {
+    "stateFilterUnsupported": "This host does not support repository-wide Gitee state filters. Update the connected host to use these tabs.",
+    "fileLimit": "Gitee may have truncated the file list. File and change counts may be incomplete.",
+    "commitLimit": "Gitee returns at most 250 commits. The commit history may be incomplete.",
+    "commentsLimited": "Only part of the comments could be loaded.",
+    "checksLimited": "Only part of the CI checks could be loaded.",
+    "ciHeadUnavailable": "CI checks are unavailable because the pull request has no exact head revision.",
+    "limited": "Some provider data is incomplete."
+  },
   "title": "Git",
   "init": {
     "title": "Initialize Git",

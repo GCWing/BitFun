@@ -117,7 +117,7 @@
     "account": {
       "menuLabel": "GitHub 帳號 @{{login}}",
       "githubAccount": "GitHub 市場帳號",
-      "dialogTitle": "登入 OpenBitFun 市場",
+      "dialogTitle": "使用 GitHub 登入",
       "dialogHeading": "使用 GitHub 繼續",
       "dialogDescription": "MiniApp 市場與 Skin 市場共用此帳號。授權會在瀏覽器中完成，憑證只儲存在桌面系統憑證庫中。",
       "waiting": "請在瀏覽器中完成授權，OpenBitFun 會自動更新登入狀態。",

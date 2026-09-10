@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const stylesheets = [
   './BrowserPanel.scss',
   './BrowserScene.scss',
-].map(path => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8'));
+].map(path => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8').replaceAll('\r\n', '\n'));
 
 function addressWrapperRule(stylesheet: string): string {
   const match = stylesheet.match(/&__address\s*\{([\s\S]*?)\n\s*}\n\n\s*&__address-field/);

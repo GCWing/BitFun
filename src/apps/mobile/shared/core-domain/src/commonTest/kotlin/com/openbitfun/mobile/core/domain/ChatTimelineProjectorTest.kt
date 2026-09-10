@@ -314,6 +314,7 @@ class ChatTimelineProjectorTest {
         tools = null,
         items = null,
         images = images,
+        error = null,
     )
 
     private fun activeMessage(

@@ -1,5 +1,30 @@
 {
-  "repo": "wgqqqqq/flashgrep",
+  "repo": "wgqqqqq/flashgrep-binaries",
   "tag": "v0.2.16",
-  "published_at": "2026-09-01T09:14:49Z"
+  "assets": {
+    "flashgrep-aarch64-apple-darwin": {
+      "sha256": "f35051821426b51409afdf13f927ce3e3270ef9eb938c5f60d6bbafa09cbc783",
+      "size": 8835776
+    },
+    "flashgrep-aarch64-pc-windows-msvc.exe": {
+      "sha256": "a6dc3912f7fd65428a68a5a061179c7dd951531aa6db176dadfb651519e36cc6",
+      "size": 7029760
+    },
+    "flashgrep-aarch64-unknown-linux-musl": {
+      "sha256": "2702a4f3e34c45e9e322c6ac5b0a842a789a617d41b15241117f5097889f907c",
+      "size": 9953280
+    },
+    "flashgrep-x86_64-apple-darwin": {
+      "sha256": "f81bf953eb8680ce896b66b997cff8ade25681b0f9b6c290b8130c57f035a14f",
+      "size": 9423968
+    },
+    "flashgrep-x86_64-pc-windows-msvc.exe": {
+      "sha256": "96684c3a946d90a42d3cfca3a7c511a41422eb7e0cb702801179ba363d9d6ed0",
+      "size": 8240128
+    },
+    "flashgrep-x86_64-unknown-linux-musl": {
+      "sha256": "e09eb8c187512c3a29eea89126ba814e411d53417af5c0cfd68a28f253a2bcc4",
+      "size": 10638320
+    }
+  }
 }

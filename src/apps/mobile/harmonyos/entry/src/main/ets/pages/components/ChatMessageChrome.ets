@@ -84,7 +84,7 @@ export struct ChatUserMessageBubble {
               MessageImageGallery({ images: this.item.images, userStyle: true })
             }
             if (this.visibleText().length > 0) {
-              Text(this.visibleText()).fontSize(MobileDesignTypography.bodyMedium.size).lineHeight(MobileDesignTypography.bodyMedium.lineHeight).fontColor(INK)
+              Text(this.visibleText()).fontSize(MobileDesignTypography.bodyLarge.size).lineHeight(MobileDesignTypography.bodyLarge.lineHeight).fontColor(INK)
             }
           }
           .padding({

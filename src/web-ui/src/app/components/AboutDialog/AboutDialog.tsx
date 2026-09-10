@@ -430,7 +430,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                             <Icon name="check-circle" size="sm" className="openbitfun-about-dialog__update-status-icon" aria-hidden="true" />
                             <span>{t('update.readyVersion', { version: updateVersion ?? '' })}</span>
                           </div>
-                          <Button variant="fill" size="sm" disabled={updateStatus === 'installing'} onClick={onRestart}>
+                          <Button variant="primary" size="sm" disabled={updateStatus === 'installing'} onClick={onRestart}>
                             {t(updateStatus === 'installing' ? 'update.installing' : 'update.installAndRestart')}
                           </Button>
                         </div>

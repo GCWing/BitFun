@@ -115,6 +115,19 @@
       }
     },
     {
+      "id": "data-migrator",
+      "label": "Offline Data Migrator",
+      "kind": "canonical-web",
+      "owner": "@openbitfun/design-tokens and @openbitfun/theme-openbitfun public CSS exports",
+      "root": "src/apps/data-migrator/ui",
+      "audit": {
+        "engine": "theme",
+        "policy": "canonical-ui-zero",
+        "packageContracts": ["@openbitfun/design-tokens", "@openbitfun/theme-openbitfun"],
+        "excludePaths": ["generated"]
+      }
+    },
+    {
       "id": "desktop-bootstrap",
       "label": "Desktop pre-JavaScript bootstrap pages",
       "kind": "canonical-web",
@@ -363,6 +376,11 @@
   ],
   "generatedChecks": [
     {
+      "id": "data-migrator-design-system",
+      "surfaceIds": ["data-migrator"],
+      "command": ["node", "scripts/generate-data-migrator-theme.mjs", "--check"]
+    },
+    {
       "id": "desktop-appearance-projection",
       "surfaceIds": ["web-ui", "desktop-bootstrap"],
       "command": ["node", "scripts/generate-startup-appearance-bootstrap.mjs", "--check"]
@@ -462,6 +480,13 @@
       "kind": "generated-output",
       "owner": "scripts/mobile-ui-design-system.mjs",
       "reason": "Preview data is generated from the native mobile token contract and checked for drift."
+    },
+    {
+      "id": "data-migrator-generated",
+      "path": "src/apps/data-migrator/ui/generated",
+      "kind": "generated-output",
+      "owner": "scripts/generate-data-migrator-theme.mjs",
+      "reason": "Offline CSS is bundled from public design-system exports and checked for drift."
     },
     {
       "id": "desktop-bootstrap-generated",

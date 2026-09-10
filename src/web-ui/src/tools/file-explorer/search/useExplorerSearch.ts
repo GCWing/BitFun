@@ -34,6 +34,8 @@ export interface ExplorerSearchPhase {
 
 export interface UseExplorerSearchOptions {
   workspacePath?: string;
+  /** Optional host/workspace-scoped presentation key. Results are always fetched fresh. */
+  stateKey?: string;
   initialMode?: ExplorerSearchMode;
   filenameSearchDebounce?: number;
   contentSearchDebounce?: number;
@@ -159,11 +161,14 @@ function combineSearchGroups(
   return mergeSearchGroups(filenameGroups, contentGroups);
 }
 
+const searchPreferences = new Map<string, { query: string; mode: ExplorerSearchMode; options: ExplorerSearchOptions }>();
+
 export function useExplorerSearch(
   options: UseExplorerSearchOptions = {}
 ): UseExplorerSearchResult {
   const {
     workspacePath,
+    stateKey,
     initialMode = 'filenames',
     filenameSearchDebounce = 300,
     contentSearchDebounce = 300,
@@ -173,8 +178,9 @@ export function useExplorerSearch(
     contentMaxResults = 1000,
   } = options;
 
-  const [query, setQueryState] = useState('');
-  const [searchMode, setSearchMode] = useState<ExplorerSearchMode>(initialMode);
+  const saved = stateKey ? searchPreferences.get(stateKey) : undefined;
+  const [query, setQueryState] = useState(saved?.query ?? '');
+  const [searchMode, setSearchMode] = useState<ExplorerSearchMode>(saved?.mode ?? initialMode);
   const [filenameGroups, setFilenameGroups] = useState<FileSearchResultGroup[]>([]);
   const [contentGroups, setContentGroups] = useState<FileSearchResultGroup[]>([]);
   const [contentSearchMetadata, setContentSearchMetadata] = useState<SearchMetadata | null>(null);
@@ -184,11 +190,14 @@ export function useExplorerSearch(
   const [filenameTruncated, setFilenameTruncated] = useState(false);
   const [contentTruncated, setContentTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchOptions, setSearchOptions] = useState<ExplorerSearchOptions>({
+  const [searchOptions, setSearchOptions] = useState<ExplorerSearchOptions>(saved?.options ?? {
     caseSensitive: false,
     useRegex: false,
     wholeWord: false,
   });
+  useEffect(() => {
+    if (stateKey) searchPreferences.set(stateKey, { query, mode: searchMode, options: searchOptions });
+  }, [stateKey, query, searchMode, searchOptions]);
 
   const filenameAbortController = useRef<AbortController | null>(null);
   const contentAbortController = useRef<AbortController | null>(null);

@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "migrator",
+  "description": "Minimal local capability set for OpenBitFun Data Migrator",
+  "windows": ["migrator"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close"
+  ]
+}

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, Database, FileText, GitCompare, ShieldCheck, Wrench, type LucideProps } from 'lucide-react';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
-import { Tooltip } from '@openbitfun/ui';
+import { OverflowText, Tooltip } from '@openbitfun/ui';
 import { snapshotAPI } from '@/infrastructure/api';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -339,7 +339,7 @@ function UsageMetaRow({
   return (
     <div data-openbitfun-component="session-usage-panel" data-openbitfun-part="metaRow" className="session-usage-panel__meta-row">
       <span className="session-usage-panel__meta-label">{label}</span>
-      <span className="session-usage-panel__meta-value" title={value}>{value}</span>
+      <OverflowText className="session-usage-panel__meta-value" title={value}>{value}</OverflowText>
       {onCopy && copyLabel && (
         <Tooltip content={copyLabel}>
           <IconButton
@@ -440,7 +440,7 @@ function UsageRowAnchorLink({
 
   const jumpHelp = t('usage.actions.jumpToTurn');
   const node = (
-    <button
+    <button data-overflow-trigger
       type="button"
       className="session-usage-panel__row-anchor-link"
       onClick={() => {
@@ -460,9 +460,9 @@ function UsageRowAnchorLink({
         globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
       }}
       aria-label={`${jumpHelp}: ${label}`}
-    >
+    ><OverflowText>
       {label}
-    </button>
+    </OverflowText></button>
   );
 
   return (
@@ -474,9 +474,9 @@ function UsageRowAnchorLink({
 
 function UsageFilePathValue({ pathLabel }: { pathLabel: string }) {
   const node = (
-    <span className="session-usage-panel__file-path-display">
+    <OverflowText className="session-usage-panel__file-path-display">
       {getCompactFilePathLabel(pathLabel)}
-    </span>
+    </OverflowText>
   );
 
   return <Tooltip content={pathLabel}>{node}</Tooltip>;
@@ -648,11 +648,11 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
       <dl className="session-usage-panel__definition-list">
         <div>
           <dt>{t('usage.panel.accounting')}</dt>
-          <dd>{getAccountingLabel(report.time.accounting, t)}</dd>
+          <dd><OverflowText>{getAccountingLabel(report.time.accounting, t)}</OverflowText></dd>
         </div>
         <div>
           <dt>{t('usage.panel.turnScope')}</dt>
-          <dd>{t('usage.card.turns', { count: report.scope.turnCount })}</dd>
+          <dd><OverflowText>{t('usage.card.turns', { count: report.scope.turnCount })}</OverflowText></dd>
         </div>
         <div>
           <dt>{t('usage.panel.cacheCoverage')}</dt>
@@ -665,7 +665,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
         </div>
         <div>
           <dt>{t('usage.panel.compressions')}</dt>
-          <dd>{formatUsageNumber(report.compression.compactionCount, t)}</dd>
+          <dd><OverflowText>{formatUsageNumber(report.compression.compactionCount, t)}</OverflowText></dd>
         </div>
       </dl>
 
@@ -1140,14 +1140,14 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
               node: (
                 <div className="session-usage-panel__slow-span">
                   <Tooltip content={spanHelp ? `${spanHelp} ${jumpHelp}` : jumpHelp}>
-                    <button
+                    <button data-overflow-trigger
                       type="button"
                       className="session-usage-panel__turn-link"
                       onClick={() => handleJumpToSpan(span)}
                       aria-label={`${jumpHelp}: ${spanLabel}`}
-                    >
+                    ><OverflowText>
                       {spanLabel}
-                    </button>
+                    </OverflowText></button>
                   </Tooltip>
                   {detailRows.length > 0 && (
                     <dl className="session-usage-panel__slow-span-details">
@@ -1293,7 +1293,7 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
                     className={typeof cell === 'string' ? undefined : cell.className}
                   >
                     {typeof cell === 'string'
-                      ? <span>{cell}</span>
+                      ? <OverflowText>{cell}</OverflowText>
                       : 'node' in cell
                         ? cell.node
                         : <UsageValue value={cell.value} help={cell.help} />}

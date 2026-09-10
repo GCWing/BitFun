@@ -95,6 +95,9 @@ export class AppearanceRegistry {
     if (!SURFACE_ID_PATTERN.test(descriptor.id)) {
       throw new Error(`Invalid appearance surface id: ${descriptor.id}`);
     }
+    if (descriptor.hostSelectorId && !SURFACE_ID_PATTERN.test(descriptor.hostSelectorId)) {
+      throw new Error(`Invalid Appearance host selector id: ${descriptor.hostSelectorId}`);
+    }
     if (descriptor.parts.length === 0) {
       throw new Error(`Appearance surface ${descriptor.id} must declare at least one part`);
     }

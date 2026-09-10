@@ -50,6 +50,13 @@ pnpm --dir OpenBitFun-Installer run type-check                            # fron
 cargo check --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml      # Tauri/Rust changes
 ```
 
+For installer payload validation and the independent Data Migrator boundary, run:
+
+```bash
+node --test OpenBitFun-Installer/scripts/build-installer.test.cjs scripts/data-migrator-tauri-build.test.mjs
+cargo test --manifest-path OpenBitFun-Installer/src-tauri/Cargo.toml --lib installer::commands::tests
+```
+
 Run the full installer build only for packaging, payload, native bundling,
 install/uninstall flow, registry, shortcut, or extraction changes:
 

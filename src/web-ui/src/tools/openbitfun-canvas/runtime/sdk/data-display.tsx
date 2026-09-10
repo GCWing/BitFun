@@ -1,5 +1,5 @@
 import { categoryColor, usageColorSequence, toneColor } from './style';
-import { Alert as DesignAlert, Disclosure as DesignDisclosure } from '@openbitfun/ui';
+import { Alert as DesignAlert, Disclosure as DesignDisclosure, OverflowText } from '@openbitfun/ui';
 import { useCanvasState } from './hooks';
 import { normalizeDiffLines } from './diffLines';
 import type {
@@ -477,19 +477,18 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
         <span style={{ flex: '0 0 auto', width: 14, color: isFolder ? 'var(--openbitfun-color-accent-default)' : 'var(--openbitfun-color-content-muted)' }}>
           {isFolder ? '▸' : '•'}
         </span>
-        <span
+        <OverflowText
           style={{
             minWidth: 0,
             color: toneColor(item.tone),
             fontFamily: 'var(--openbitfun-type-code-sm-font-family)',
             fontSize: 'var(--openbitfun-type-code-sm-font-size)',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
         >
           {item.name ?? item.path}
-        </span>
+        </OverflowText>
         {item.meta ? (
           <span style={{ flex: '0 0 auto', marginLeft: 'auto', color: 'var(--openbitfun-color-content-muted)', fontSize: 'var(--openbitfun-type-meta-font-size)' }}>
             {item.meta}
@@ -504,7 +503,7 @@ function renderFileTreeItems(items: CanvasFileTreeItem[], depth: number, default
 
     return (
       <details key={fileTreeKey(item, index, depth)} open={defaultExpanded}>
-        <summary style={{ display: 'block', cursor: 'default', listStyle: 'none' }}>{row}</summary>
+        <summary data-overflow-trigger style={{ display: 'block', cursor: 'default', listStyle: 'none' }}>{row}</summary>
         {children.length ? renderFileTreeItems(children, depth + 1, defaultExpanded) : null}
       </details>
     );

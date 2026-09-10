@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Field,
   StatusPill,
@@ -59,7 +59,6 @@ import {
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import type {
   SubscriptionAccount,
-  SubscriptionApiOffering,
   SubscriptionLoginMethod,
 } from '@/infrastructure/api/service-api/AIApi';
 import type { ProviderRegion } from '@/shared/types';
@@ -101,7 +100,7 @@ import {
   SubscriptionLoginCoordinator,
   type SubscriptionLoginOperation,
 } from './subscriptionLoginCoordinator';
-import { ModelDiscoveryCoordinator, openCodeOfferingModels } from './modelDiscoveryCoordinator';
+import { ModelDiscoveryCoordinator, openCodeOfferingModels, openCodeModelOffering } from './modelDiscoveryCoordinator';
 import './ModelSettingsPage.scss';
 
 const log = createLogger('ModelSettings');
@@ -762,12 +761,6 @@ const ModelSettingsPage: React.FC = () => {
       : t('subscriptionAuth.openCodePlans.zen.description')
   ), [t]);
 
-  const getOpenCodeFormatLabel = useCallback((format: SubscriptionApiOffering['format']): string => {
-    if (format === 'responses') return t('subscriptionAuth.openCodeFormats.responses');
-    if (format === 'anthropic') return t('subscriptionAuth.openCodeFormats.messages');
-    return t('subscriptionAuth.openCodeFormats.chatCompletions');
-  }, [t]);
-
   const syncSelectedModelDrafts = (
     modelNames: string[],
     baseConfig?: Partial<AIModelConfigType>,
@@ -1013,7 +1006,7 @@ const ModelSettingsPage: React.FC = () => {
         if (!scope.isCurrent() || !coordinator.isCurrent(operation)) return;
         setSubscriptionAccounts(current => current.map(item => item.provider === 'opencode' ? account : item));
         remoteModels = openCodeOfferingModels(
-          account.api_offerings ?? [], discoveryConfig.auth.plan, discoveryConfig.provider,
+          account.api_offerings ?? [], discoveryConfig.auth.plan,
         ).map(model => ({ id: model.id, display_name: model.display_name || undefined }));
       } else {
         remoteModels = await aiApi.listModelsByConfig(discoveryConfig);
@@ -1084,9 +1077,9 @@ const ModelSettingsPage: React.FC = () => {
 
   const handleImportFromSubscription = useCallback((
     account: SubscriptionAccount,
-    offering?: SubscriptionApiOffering,
+    plan?: OpenCodePlan,
   ) => {
-    const targetKey = `new-provider:subscription:${account.provider}:${offering?.plan || 'default'}:${offering?.format || 'default'}`;
+    const targetKey = `new-provider:subscription:${account.provider}:${plan || 'default'}`;
     requestEditorOpen(targetKey, () => {
       resetRemoteModelDiscovery();
       setManualModelInput('');
@@ -1094,11 +1087,9 @@ const ModelSettingsPage: React.FC = () => {
       setSelectedProviderId(null);
       setEditingTargetKey(targetKey);
       setEditingConfig({
-        name: offering
-          ? getOpenCodePlanLabel(offering.plan)
-          : account.display_label,
-        provider: offering?.format || account.suggested_format,
-        base_url: offering?.base_url || account.suggested_base_url,
+        name: plan ? getOpenCodePlanLabel(plan) : account.display_label,
+        provider: account.suggested_format,
+        base_url: plan === 'go' ? 'https://opencode.ai/zen/go/v1' : account.suggested_base_url,
         // Leave request_url + model_name empty so the user must pick a model
         // from the live list. We never inject a hard-coded default slug.
         request_url: '',
@@ -1114,7 +1105,7 @@ const ModelSettingsPage: React.FC = () => {
         auth: {
           type: 'subscription',
           provider: account.provider,
-          ...(offering ? { plan: offering.plan } : {}),
+          ...(plan ? { plan } : {}),
         },
       });
       setSelectedModelDrafts([]);
@@ -1707,31 +1698,40 @@ const ModelSettingsPage: React.FC = () => {
           || allocateModelConfigId(draft.modelName, allocatedConfigIds);
         allocatedConfigIds.add(id);
 
+        const auth = editingConfig.auth;
+        const offering = auth?.type === 'subscription' && auth.provider === 'opencode'
+          ? openCodeModelOffering(
+              subscriptionAccounts.find(account => account.provider === 'opencode')?.api_offerings ?? [],
+              auth.plan, draft.modelName, editingConfig.provider,
+            )
+          : undefined;
+        const format = offering?.format || editingConfig.provider || 'openai';
+        const modelBaseUrl = offering?.base_url || baseUrl;
         return {
           id,
           name: providerName,
-          base_url: baseUrl,
+          base_url: modelBaseUrl,
           request_url: resolveRequestUrl(
-            baseUrl,
-            editingConfig.provider || 'openai',
+            modelBaseUrl,
+            format,
             draft.modelName
           ),
           api_key: editingConfig.api_key || '',
           model_name: draft.modelName,
-          provider: editingConfig.provider || 'openai',
+          provider: format,
           enabled: editingConfig.enabled ?? true,
           context_window: draft.contextWindow,
           max_tokens: draft.maxTokens,
           category: resolveModelCategory(
             draft.modelName,
             draft.category,
-            editingConfig.provider || 'openai'
+            format
           ),
           capabilities: getCapabilitiesByCategory(
             resolveModelCategory(
               draft.modelName,
               draft.category,
-              editingConfig.provider || 'openai'
+              format
             )
           ),
           recommended_for: editingConfig.recommended_for || [],
@@ -1746,7 +1746,9 @@ const ModelSettingsPage: React.FC = () => {
           skip_ssl_verify: editingConfig.skip_ssl_verify ?? false,
           custom_request_body: editingConfig.custom_request_body,
           custom_request_body_mode: editingConfig.custom_request_body_mode,
-          auth: editingConfig.auth || { type: 'api_key' },
+          auth: offering && auth?.type === 'subscription'
+            ? { ...auth, plan: offering.plan }
+            : editingConfig.auth || { type: 'api_key' },
         };
       });
       let previousModelsBeforeSave: AIModelConfigType[] = [];
@@ -2310,7 +2312,7 @@ const ModelSettingsPage: React.FC = () => {
 
 
             <div className="openbitfun-model-settings__selection-actions" data-openbitfun-component="model-settings" data-openbitfun-part="selectionActions">
-              <Button variant="outline" size="sm" onClick={() => setCreationMode(null)}>
+              <Button variant="fill" size="sm" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}
               </Button>
             </div>
@@ -2684,11 +2686,16 @@ const ModelSettingsPage: React.FC = () => {
               const plan = provider === 'opencode'
                 ? (planValue || 'zen') as OpenCodePlan
                 : undefined;
+              resetRemoteModelDiscovery();
+              const account = subscriptionAccounts.find(item => item.provider === provider);
               setEditingConfig((prev) => {
                 if (!prev) return prev;
                 if (provider !== 'opencode') {
                   return {
                     ...prev,
+                    provider: account?.suggested_format || prev.provider,
+                    base_url: account?.suggested_base_url || prev.base_url,
+                    request_url: '',
                     auth: { type: 'subscription', provider },
                   };
                 }
@@ -2750,7 +2757,7 @@ const ModelSettingsPage: React.FC = () => {
     return (
       <>
         <div className="openbitfun-model-settings__form openbitfun-model-settings__form--modal" data-openbitfun-component="model-settings" data-openbitfun-part="form">
-          <ScrollArea className="openbitfun-model-settings__form-scrollable" data-openbitfun-component="model-settings" data-openbitfun-part="formBody">
+          <div className="openbitfun-model-settings__form-content" data-openbitfun-component="model-settings" data-openbitfun-part="formBody">
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="openbitfun-model-settings__edit-section"
@@ -2770,69 +2777,73 @@ const ModelSettingsPage: React.FC = () => {
                 </ConfigPageRow>
                 {renderAuthRow()}
                 {!authIsSubscription && renderApiKeyRow(t('form.apiKey'))}
-                <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
-                  <div className="openbitfun-model-settings__control-stack">
-                    {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
-                      <Combobox
-                        value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
+                {!authIsSubscription && (
+                  <>
+                    <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
+                      <div className="openbitfun-model-settings__control-stack">
+                        {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
+                          <Combobox
+                            value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
+                            onValueChange={(value) => {
+                              const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
+                              const newProvider = selectedOption?.format || editingConfig.provider || 'openai';
+                              resetRemoteModelDiscovery();
+                              setEditingConfig(prev => ({
+                                ...prev,
+                                base_url: value as string,
+                                request_url: resolveRequestUrl(value as string, newProvider, editingConfig.model_name || ''),
+                                provider: newProvider
+                              }));
+                            }}
+                            placeholder={t('form.baseUrl')}
+                            options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.note || opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.url}` }))}
+                            size="sm"
+                          />
+                        )}
+                        <Input
+                          data-testid="settings-model-base-url-input"
+                          type="url"
+                          value={editingConfig.base_url || ''}
+                          onChange={(e) => {
+                            resetRemoteModelDiscovery();
+                            setEditingConfig(prev => ({
+                              ...prev,
+                              base_url: e.target.value,
+                              request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
+                            }));
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          placeholder={currentTemplate?.baseUrl}
+                          size="sm"
+                        />
+                        {editingConfig.base_url && (
+                          <div className="openbitfun-model-settings__resolved-url">
+                            <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
+                              <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </ConfigPageRow>
+                    <ConfigPageRow label={t('form.provider')} align="center" wide>
+                      <Select
+                        data-testid="settings-model-request-format-select"
+                        value={editingConfig.provider || 'openai'}
                         onValueChange={(value) => {
-                          const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
-                          const newProvider = selectedOption?.format || editingConfig.provider || 'openai';
+                          const provider = value as string;
                           resetRemoteModelDiscovery();
                           setEditingConfig(prev => ({
                             ...prev,
-                            base_url: value as string,
-                            request_url: resolveRequestUrl(value as string, newProvider, editingConfig.model_name || ''),
-                            provider: newProvider
+                            provider,
+                            request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || '')
                           }));
                         }}
-                        placeholder={t('form.baseUrl')}
-                        options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.note || opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.url}` }))}
+                        placeholder={t('form.providerPlaceholder')}
+                        options={requestFormatOptions}
                         size="sm"
                       />
-                    )}
-                    <Input
-                      data-testid="settings-model-base-url-input"
-                      type="url"
-                      value={editingConfig.base_url || ''}
-                      onChange={(e) => {
-                        resetRemoteModelDiscovery();
-                        setEditingConfig(prev => ({
-                          ...prev,
-                          base_url: e.target.value,
-                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
-                        }));
-                      }}
-                      onFocus={(e) => e.target.select()}
-                      placeholder={currentTemplate?.baseUrl}
-                      size="sm"
-                    />
-                    {editingConfig.base_url && (
-                      <div className="openbitfun-model-settings__resolved-url">
-                        <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
-                          <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
-                      </div>
-                    )}
-                  </div>
-                </ConfigPageRow>
-                <ConfigPageRow label={t('form.provider')} align="center" wide>
-                  <Select
-                    data-testid="settings-model-request-format-select"
-                    value={editingConfig.provider || 'openai'}
-                    onValueChange={(value) => {
-                      const provider = value as string;
-                      resetRemoteModelDiscovery();
-                      setEditingConfig(prev => ({
-                        ...prev,
-                        provider,
-                        request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || '')
-                      }));
-                    }}
-                    placeholder={t('form.providerPlaceholder')}
-                    options={requestFormatOptions}
-                    size="sm"
-                  />
-                </ConfigPageRow>
+                    </ConfigPageRow>
+                  </>
+                )}
                 <ConfigPageRow label={t('form.modelSelection')} required multiline className="openbitfun-model-settings__model-selection-row">
                   <div className="openbitfun-model-settings__control-stack">
                     <div className="openbitfun-model-settings__model-picker-row">
@@ -2904,44 +2915,48 @@ const ModelSettingsPage: React.FC = () => {
                     </ConfigPageRow>
                     {renderAuthRow()}
                     {!authIsSubscription && renderApiKeyRow(t('form.apiKey'))}
-                    <ConfigPageRow label={t('form.baseUrl')} required align="center" wide>
-                      <div className="openbitfun-model-settings__control-stack">
-                        <Input
-                          data-testid="settings-model-base-url-input"
-                          required
-                          type="url"
-                          value={editingConfig.base_url || ''}
-                          onChange={(e) => {
+                    {!authIsSubscription && (
+                      <>
+                        <ConfigPageRow label={t('form.baseUrl')} required align="center" wide>
+                          <div className="openbitfun-model-settings__control-stack">
+                            <Input
+                              data-testid="settings-model-base-url-input"
+                              required
+                              type="url"
+                              value={editingConfig.base_url || ''}
+                              onChange={(e) => {
+                                resetRemoteModelDiscovery();
+                                setEditingConfig(prev => ({
+                                  ...prev,
+                                  base_url: e.target.value,
+                                  request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
+                                }));
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
+                              size="sm"
+                            />
+                            {editingConfig.base_url && (
+                              <div className="openbitfun-model-settings__resolved-url">
+                                <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
+                              <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
+                              </div>
+                            )}
+                          </div>
+                        </ConfigPageRow>
+                        <ConfigPageRow label={t('form.provider')} align="center" wide>
+                          <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onValueChange={(value) => {
+                            const provider = value as string;
                             resetRemoteModelDiscovery();
                             setEditingConfig(prev => ({
                               ...prev,
-                              base_url: e.target.value,
-                              request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
+                              provider,
+                              request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
                             }));
-                          }}
-                          onFocus={(e) => e.target.select()}
-                          placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
-                          size="sm"
-                        />
-                        {editingConfig.base_url && (
-                          <div className="openbitfun-model-settings__resolved-url">
-                            <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
-                          <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
-                          </div>
-                        )}
-                      </div>
-                    </ConfigPageRow>
-                    <ConfigPageRow label={t('form.provider')} align="center" wide>
-                      <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onValueChange={(value) => {
-                        const provider = value as string;
-                        resetRemoteModelDiscovery();
-                        setEditingConfig(prev => ({
-                          ...prev,
-                          provider,
-                          request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
-                        }));
-                      }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="sm" />
-                    </ConfigPageRow>
+                          }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="sm" />
+                        </ConfigPageRow>
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -3023,200 +3038,202 @@ const ModelSettingsPage: React.FC = () => {
             )}
           </ConfigPageSection>
 
-          <ConfigPageSection
-            title={t('advancedSettings.title')}
-            className="openbitfun-model-settings__edit-section"
-            fieldSurface="default"
-          >
-            <ConfigPageRow className="openbitfun-model-settings__toggle-row" label={t('advancedSettings.title')} align="center">
-              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
-            </ConfigPageRow>
+          {!authIsSubscription && (
+            <ConfigPageSection
+              title={t('advancedSettings.title')}
+              className="openbitfun-model-settings__edit-section"
+              fieldSurface="default"
+            >
+              <ConfigPageRow className="openbitfun-model-settings__toggle-row" label={t('advancedSettings.title')} align="center">
+                <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
+              </ConfigPageRow>
 
-            {showAdvancedSettings && (
-              <>
-                {(editingConfig.provider === 'openai' || editingConfig.provider === 'anthropic') && (
+              {showAdvancedSettings && (
+                <>
+                  {(editingConfig.provider === 'openai' || editingConfig.provider === 'anthropic') && (
+                    <ConfigPageRow
+                      label={t('advancedSettings.inlineThinkInText.label')}
+                      description={t('advancedSettings.inlineThinkInText.hint')}
+                      align="center"
+                      className="openbitfun-model-settings__toggle-row"
+                    >
+                      <Switch
+                        checked={editingConfig.inline_think_in_text ?? true}
+                        onChange={(e) => setEditingConfig(prev => ({ ...prev, inline_think_in_text: e.target.checked }))}
+                      />
+                    </ConfigPageRow>
+                  )}
                   <ConfigPageRow
-                    label={t('advancedSettings.inlineThinkInText.label')}
-                    description={t('advancedSettings.inlineThinkInText.hint')}
+                    label={t('advancedSettings.skipSslVerify.label')}
+                    description={editingConfig.skip_ssl_verify ? (
+                      <span className="openbitfun-model-settings__warning-inline">
+                        <AlertTriangle size={14} />
+                        <span>{t('advancedSettings.skipSslVerify.warning')}</span>
+                      </span>
+                    ) : undefined}
                     align="center"
                     className="openbitfun-model-settings__toggle-row"
                   >
                     <Switch
-                      checked={editingConfig.inline_think_in_text ?? true}
-                      onChange={(e) => setEditingConfig(prev => ({ ...prev, inline_think_in_text: e.target.checked }))}
+                      checked={editingConfig.skip_ssl_verify || false}
+                      onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))}
                     />
                   </ConfigPageRow>
-                )}
-                <ConfigPageRow
-                  label={t('advancedSettings.skipSslVerify.label')}
-                  description={editingConfig.skip_ssl_verify ? (
-                    <span className="openbitfun-model-settings__warning-inline">
-                      <AlertTriangle size={14} />
-                      <span>{t('advancedSettings.skipSslVerify.warning')}</span>
-                    </span>
-                  ) : undefined}
-                  align="center"
-                  className="openbitfun-model-settings__toggle-row"
-                >
-                  <Switch
-                    checked={editingConfig.skip_ssl_verify || false}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))}
-                  />
-                </ConfigPageRow>
-                <ConfigPageRow
-                  label={(
-                    <span className="openbitfun-model-settings__inline-header">
-                      <span className="openbitfun-model-settings__inline-header-main">
-                        <span>{t('advancedSettings.customHeaders.label')}</span>
-                        <Tooltip
-                          content={(
-                            <span className="openbitfun-model-settings__header-tooltip">
-                              <span>{t('advancedSettings.customHeaders.hint')}</span>
-                              <span>
-                                {(editingConfig.custom_headers_mode || 'merge') === 'replace'
-                                  ? t('advancedSettings.customHeaders.modeReplaceHint')
-                                  : t('advancedSettings.customHeaders.modeMergeHint')}
+                  <ConfigPageRow
+                    label={(
+                      <span className="openbitfun-model-settings__inline-header">
+                        <span className="openbitfun-model-settings__inline-header-main">
+                          <span>{t('advancedSettings.customHeaders.label')}</span>
+                          <Tooltip
+                            content={(
+                              <span className="openbitfun-model-settings__header-tooltip">
+                                <span>{t('advancedSettings.customHeaders.hint')}</span>
+                                <span>
+                                  {(editingConfig.custom_headers_mode || 'merge') === 'replace'
+                                    ? t('advancedSettings.customHeaders.modeReplaceHint')
+                                    : t('advancedSettings.customHeaders.modeMergeHint')}
+                                </span>
                               </span>
+                            )}
+                            placement="top"
+                          >
+                            <span
+                              className="openbitfun-model-settings__inline-header-info"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={t('advancedSettings.customHeaders.hint')}
+                            >
+                              <Icon name="info" size="sm" />
                             </span>
-                          )}
-                          placement="top"
-                        >
-                          <span
-                            className="openbitfun-model-settings__inline-header-info"
-                            role="button"
-                            tabIndex={0}
-                            aria-label={t('advancedSettings.customHeaders.hint')}
-                          >
-                            <Icon name="info" size="sm" />
-                          </span>
-                        </Tooltip>
-                      </span>
-                      <span className="openbitfun-model-settings__inline-header-actions">
-                        <Tooltip content={t('advancedSettings.customHeaders.modeMergeHint')} placement="top">
-                          <Button
-                            type="button"
-                            variant={(editingConfig.custom_headers_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
-                            size="sm"
-                            className="openbitfun-model-settings__mode-button"
-                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))}
-                          >
-                            {t('advancedSettings.customHeaders.modeMerge')}
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content={t('advancedSettings.customHeaders.modeReplaceHint')} placement="top">
-                          <Button
-                            type="button"
-                            variant={editingConfig.custom_headers_mode === 'replace' ? 'fill' : 'outline'}
-                            size="sm"
-                            className="openbitfun-model-settings__mode-button"
-                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))}
-                          >
-                            {t('advancedSettings.customHeaders.modeReplace')}
-                          </Button>
-                        </Tooltip>
-                      </span>
-                    </span>
-                  )}
-                  multiline
-                  className="openbitfun-model-settings__custom-headers-row"
-                >
-                  <div className="openbitfun-model-settings__row-control--stack">
-                    <div className="openbitfun-model-settings__custom-headers">
-                      {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
-                        <div key={index} className="openbitfun-model-settings__header-row">
-                          <Input
-                            value={key}
-                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
-                            placeholder={t('advancedSettings.customHeaders.keyPlaceholder')}
-                            className="openbitfun-model-settings__header-key"
-                            size="sm"
-                          />
-                          <Input
-                            value={value}
-                            onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
-                            placeholder={t('advancedSettings.customHeaders.valuePlaceholder')}
-                            className="openbitfun-model-settings__header-value"
-                            size="sm"
-                          />
-                          <Tooltip content={t('actions.delete')}>
-                            <IconButton
-                              aria-label={t('actions.delete')}
-                              size="sm"
-                              onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }}
-                              icon={<Icon name="xmark" size="sm" />}
-                            />
                           </Tooltip>
-                        </div>
-                      ))}
-                      <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="openbitfun-model-settings__add-header-btn" leadingIcon={<Icon name="plus" size="sm" />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
+                        </span>
+                        <span className="openbitfun-model-settings__inline-header-actions">
+                          <Tooltip content={t('advancedSettings.customHeaders.modeMergeHint')} placement="top">
+                            <Button
+                              type="button"
+                              variant={(editingConfig.custom_headers_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
+                              size="sm"
+                              className="openbitfun-model-settings__mode-button"
+                              onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))}
+                            >
+                              {t('advancedSettings.customHeaders.modeMerge')}
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content={t('advancedSettings.customHeaders.modeReplaceHint')} placement="top">
+                            <Button
+                              type="button"
+                              variant={editingConfig.custom_headers_mode === 'replace' ? 'fill' : 'outline'}
+                              size="sm"
+                              className="openbitfun-model-settings__mode-button"
+                              onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))}
+                            >
+                              {t('advancedSettings.customHeaders.modeReplace')}
+                            </Button>
+                          </Tooltip>
+                        </span>
+                      </span>
+                    )}
+                    multiline
+                    className="openbitfun-model-settings__custom-headers-row"
+                  >
+                    <div className="openbitfun-model-settings__row-control--stack">
+                      <div className="openbitfun-model-settings__custom-headers">
+                        {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
+                          <div key={index} className="openbitfun-model-settings__header-row">
+                            <Input
+                              value={key}
+                              onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                              placeholder={t('advancedSettings.customHeaders.keyPlaceholder')}
+                              className="openbitfun-model-settings__header-key"
+                              size="sm"
+                            />
+                            <Input
+                              value={value}
+                              onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }}
+                              placeholder={t('advancedSettings.customHeaders.valuePlaceholder')}
+                              className="openbitfun-model-settings__header-value"
+                              size="sm"
+                            />
+                            <Tooltip content={t('actions.delete')}>
+                              <IconButton
+                                aria-label={t('actions.delete')}
+                                size="sm"
+                                onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }}
+                                icon={<Icon name="xmark" size="sm" />}
+                              />
+                            </Tooltip>
+                          </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="openbitfun-model-settings__add-header-btn" leadingIcon={<Icon name="plus" size="sm" />}>{t('advancedSettings.customHeaders.addHeader')}</Button>
+                      </div>
                     </div>
-                  </div>
-                </ConfigPageRow>
-                <ConfigPageRow
-                  label={(
-                    <span className="openbitfun-model-settings__inline-header">
-                      <span className="openbitfun-model-settings__inline-header-main">
-                        <span>{t('advancedSettings.customRequestBody.label')}</span>
-                        <Tooltip
-                          content={(
-                            <span className="openbitfun-model-settings__header-tooltip">
-                              <span>{t('advancedSettings.customRequestBody.hint')}</span>
-                              <span>{getCustomRequestBodyModeHint(editingConfig.provider, editingConfig.custom_request_body_mode)}</span>
+                  </ConfigPageRow>
+                  <ConfigPageRow
+                    label={(
+                      <span className="openbitfun-model-settings__inline-header">
+                        <span className="openbitfun-model-settings__inline-header-main">
+                          <span>{t('advancedSettings.customRequestBody.label')}</span>
+                          <Tooltip
+                            content={(
+                              <span className="openbitfun-model-settings__header-tooltip">
+                                <span>{t('advancedSettings.customRequestBody.hint')}</span>
+                                <span>{getCustomRequestBodyModeHint(editingConfig.provider, editingConfig.custom_request_body_mode)}</span>
+                              </span>
+                            )}
+                            placement="top"
+                          >
+                            <span
+                              className="openbitfun-model-settings__inline-header-info"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={t('advancedSettings.customRequestBody.hint')}
+                            >
+                              <Icon name="info" size="sm" />
                             </span>
-                          )}
-                          placement="top"
-                        >
-                          <span
-                            className="openbitfun-model-settings__inline-header-info"
-                            role="button"
-                            tabIndex={0}
-                            aria-label={t('advancedSettings.customRequestBody.hint')}
-                          >
-                            <Icon name="info" size="sm" />
-                          </span>
-                        </Tooltip>
+                          </Tooltip>
+                        </span>
+                        <span className="openbitfun-model-settings__inline-header-actions">
+                          <Tooltip content={t('advancedSettings.customRequestBody.modeMergeHint')} placement="top">
+                            <Button
+                              type="button"
+                              variant={(editingConfig.custom_request_body_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
+                              size="sm"
+                              className="openbitfun-model-settings__mode-button"
+                              onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'merge' }))}
+                            >
+                              {t('advancedSettings.customRequestBody.modeMerge')}
+                            </Button>
+                          </Tooltip>
+                          <Tooltip content={getCustomRequestBodyTrimHint(editingConfig.provider)} placement="top">
+                            <Button
+                              type="button"
+                              variant={editingConfig.custom_request_body_mode === 'trim' ? 'fill' : 'outline'}
+                              size="sm"
+                              className="openbitfun-model-settings__mode-button"
+                              onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'trim' }))}
+                            >
+                              {t('advancedSettings.customRequestBody.modeTrim')}
+                            </Button>
+                          </Tooltip>
+                        </span>
                       </span>
-                      <span className="openbitfun-model-settings__inline-header-actions">
-                        <Tooltip content={t('advancedSettings.customRequestBody.modeMergeHint')} placement="top">
-                          <Button
-                            type="button"
-                            variant={(editingConfig.custom_request_body_mode || 'merge') === 'merge' ? 'fill' : 'outline'}
-                            size="sm"
-                            className="openbitfun-model-settings__mode-button"
-                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'merge' }))}
-                          >
-                            {t('advancedSettings.customRequestBody.modeMerge')}
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content={getCustomRequestBodyTrimHint(editingConfig.provider)} placement="top">
-                          <Button
-                            type="button"
-                            variant={editingConfig.custom_request_body_mode === 'trim' ? 'fill' : 'outline'}
-                            size="sm"
-                            className="openbitfun-model-settings__mode-button"
-                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'trim' }))}
-                          >
-                            {t('advancedSettings.customRequestBody.modeTrim')}
-                          </Button>
-                        </Tooltip>
-                      </span>
-                    </span>
-                  )}
-                  multiline
-                  className="openbitfun-model-settings__custom-request-body-row"
-                >
-                  <div className="openbitfun-model-settings__row-control--stack">
-                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--openbitfun-type-code-md-font-family)', fontSize: 'var(--openbitfun-type-code-md-font-size)' }} />
-                    {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
-                      try { JSON.parse(editingConfig.custom_request_body); return <small className="openbitfun-model-settings__json-status openbitfun-model-settings__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
-                      catch { return <small className="openbitfun-model-settings__json-status openbitfun-model-settings__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }
-                    })()}
-                  </div>
-                </ConfigPageRow>
-              </>
-            )}
-          </ConfigPageSection>
-          </ScrollArea>
+                    )}
+                    multiline
+                    className="openbitfun-model-settings__custom-request-body-row"
+                  >
+                    <div className="openbitfun-model-settings__row-control--stack">
+                      <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--openbitfun-type-code-md-font-family)', fontSize: 'var(--openbitfun-type-code-md-font-size)' }} />
+                      {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
+                        try { JSON.parse(editingConfig.custom_request_body); return <small className="openbitfun-model-settings__json-status openbitfun-model-settings__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
+                        catch { return <small className="openbitfun-model-settings__json-status openbitfun-model-settings__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }
+                      })()}
+                    </div>
+                  </ConfigPageRow>
+                </>
+              )}
+            </ConfigPageSection>
+          )}
+          </div>
 
         </div>
       </>
@@ -3230,6 +3247,9 @@ const ModelSettingsPage: React.FC = () => {
     const providerDisplayName = getProviderDisplayName(config);
     const modelDisplayName = getModelDisplayName(config);
     const modelLabel = config.model_name || modelDisplayName;
+    const testStatusLabel = isTesting
+      ? t('messages.testing')
+      : testResult?.message.split('\n', 1)[0];
 
     const badge = (
       <>
@@ -3240,15 +3260,18 @@ const ModelSettingsPage: React.FC = () => {
         >
           {t(`category.${config.category}`)}
         </span>
-        {testResult && (
+        {(isTesting || testResult) && (
           <span
             data-testid="settings-model-test-status"
             data-config-id={config.id || ''}
             data-model-id={config.model_name}
             data-model-name={config.model_name}
-            data-status={testResult.success ? 'success' : 'error'}
-            className={`openbitfun-model-settings__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
-            title={testResult.message}
+            data-status={isTesting ? 'testing' : testResult?.success ? 'success' : 'error'}
+            className={`openbitfun-model-settings__status-dot ${isTesting ? 'is-testing' : testResult?.success ? 'is-success' : 'is-error'}`}
+            role="status"
+            aria-live="polite"
+            aria-label={testStatusLabel}
+            title={isTesting ? testStatusLabel : testResult?.message}
           />
         )}
       </>
@@ -3524,20 +3547,7 @@ const ModelSettingsPage: React.FC = () => {
                 ? Math.max(0, Math.ceil((loginPanel.deadlineMs - subscriptionLoginClock) / 1000))
                 : 0;
               const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
-              const openCodePlanRows = account.provider === 'opencode'
-                ? (['zen', 'go'] as const).map((plan) => {
-                    const planOfferings = (account.api_offerings || [])
-                      .filter((offering) => offering.plan === plan);
-                    const populatedOfferings = planOfferings
-                      .filter((offering) => offering.models.length > 0);
-                    return {
-                      plan,
-                      offerings: populatedOfferings.length > 0
-                        ? populatedOfferings
-                        : planOfferings,
-                    };
-                  }).filter((row) => row.offerings.length > 0)
-                : [];
+              const openCodePlanRows = account.provider === 'opencode' ? ['zen', 'go'] as const : [];
               const hasOpenCodeOfferings = openCodePlanRows.length > 0;
               return (
                 <React.Fragment key={account.provider}>
@@ -3576,7 +3586,7 @@ const ModelSettingsPage: React.FC = () => {
                           {(account.provider !== 'opencode' || !hasOpenCodeOfferings) && (
                             <Button
                               size="sm"
-                              variant="fill"
+                              variant="primary"
                               disabled={anyLoginInProgress}
                               onClick={() => handleImportFromSubscription(account)}
                             >
@@ -3596,7 +3606,7 @@ const ModelSettingsPage: React.FC = () => {
                       ) : (
                         <Button
                           size="sm"
-                          variant="fill"
+                          variant="primary"
                           loading={isLoggingIn}
                           disabled={anyLoginInProgress}
                           onClick={() => void handleSubscriptionLogin(account.provider)}
@@ -3609,7 +3619,7 @@ const ModelSettingsPage: React.FC = () => {
                       {isLoggingIn && (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="fill"
                           disabled={loginPanel?.status === 'cancelling'}
                           onClick={() => void handleCancelSubscriptionLogin(account.provider)}
                         >
@@ -3619,7 +3629,7 @@ const ModelSettingsPage: React.FC = () => {
                     </div>
                   </ConfigPageRow>
 
-                  {account.connected && openCodePlanRows.map(({ plan, offerings }) => (
+                  {account.connected && openCodePlanRows.map((plan) => (
                     <ConfigPageRow
                       key={`${account.provider}:${plan}`}
                       label={getOpenCodePlanLabel(plan)}
@@ -3628,26 +3638,14 @@ const ModelSettingsPage: React.FC = () => {
                       align="center"
                     >
                       <div className="openbitfun-model-settings__cli-actions openbitfun-model-settings__opencode-plan-actions">
-                        {offerings.map((offering) => {
-                          const formatLabel = getOpenCodeFormatLabel(offering.format);
-                          const label = offering.models.length > 0
-                            ? t('subscriptionAuth.useFormatWithCount', {
-                                format: formatLabel,
-                                modelCount: i18nService.formatNumber(offering.models.length),
-                              })
-                            : t('subscriptionAuth.useFormat', { format: formatLabel });
-                          return (
-                            <Button
-                              key={`${offering.plan}:${offering.format}`}
-                              size="sm"
-                              variant="outline"
-                              disabled={anyLoginInProgress}
-                              onClick={() => handleImportFromSubscription(account, offering)}
-                            >
-                              {label}
-                            </Button>
-                          );
-                        })}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={anyLoginInProgress}
+                          onClick={() => handleImportFromSubscription(account, plan)}
+                        >
+                          {t('subscriptionAuth.import')}
+                        </Button>
                       </div>
                     </ConfigPageRow>
                   ))}
@@ -3754,7 +3752,7 @@ const ModelSettingsPage: React.FC = () => {
               icon={<Wifi size={36} aria-hidden="true" />}
               description={t('empty.noModels')}
               actions={(
-                <Button data-testid="settings-model-create-first-config-btn" variant="fill" size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
+                <Button data-testid="settings-model-create-first-config-btn" variant="primary" size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
                   {t('actions.createFirst')}
                 </Button>
               )}
@@ -3996,7 +3994,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="openbitfun-model-settings__catalog-path">
-              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
+              <code title={modelsDevStatus?.cache_path}><OverflowText>{modelsDevStatus?.cache_path || '—'}</OverflowText></code>
               <Tooltip content={t('modelsDevCatalog.reveal')}>
                 <IconButton
                   aria-label={t('modelsDevCatalog.reveal')}
@@ -4097,7 +4095,7 @@ const ModelSettingsPage: React.FC = () => {
             </Button>
             <Button
               size="sm"
-              variant="fill"
+              variant="primary"
               tone="danger"
               onClick={() => void confirmSubscriptionLogout()}
             >
@@ -4162,13 +4160,13 @@ const ModelSettingsPage: React.FC = () => {
         ) : renderEditingForm()}
               </DialogBody>
         {!reasoningPanelDraft && (
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
+          <DialogFooter appearance="floating">
+            <Button variant="fill" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
               {t('actions.cancel')}
             </Button>
             <Button
               data-testid="settings-model-save-btn"
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={() => void handleSave()}
               loading={isEditorSaving}

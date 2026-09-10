@@ -392,14 +392,16 @@ describe('SSHRemoteProvider startup restore', () => {
   });
 });
 
-describe('SSHRemoteProvider peer device mode', () => {
+describe('SSHRemoteProvider workspace connection state', () => {
   let container: HTMLDivElement;
   let root: Root;
   let latestStatuses: Record<string, ConnectionStatus>;
+  let statusHistory: Array<Record<string, ConnectionStatus>>;
 
   function StatusProbe() {
     const ctx = React.useContext(SSHContext);
     latestStatuses = ctx?.workspaceStatuses ?? {};
+    statusHistory.push(latestStatuses);
     return null;
   }
 
@@ -424,6 +426,7 @@ describe('SSHRemoteProvider peer device mode', () => {
     vi.clearAllMocks();
     peerModeFlagMock.active = false;
     latestStatuses = {};
+    statusHistory = [];
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -476,6 +479,59 @@ describe('SSHRemoteProvider peer device mode', () => {
       }
     });
   }
+
+  it.each([true, false])('keeps an established connection green during a session-switch probe (saved profile: %s)', async (hasSavedProfile) => {
+    const workspace = createRemoteWorkspace();
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false, openedWorkspaces: new Map([[workspace.id, workspace]]), activeWorkspaceId: workspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue(hasSavedProfile ? [{
+      id: 'conn-1', name: 'dev-box', host: 'example.com', port: 22, username: 'dev',
+      authType: { type: 'PrivateKey', keyPath: '/tmp/key' },
+    }] : []);
+    sshApiMock.isConnected.mockResolvedValue(true);
+    await renderProvider();
+    expect(latestStatuses['conn-1']).toBe('connected');
+    statusHistory = [];
+
+    let finishProbe!: (connected: boolean) => void;
+    sshApiMock.isConnected.mockImplementationOnce(() => new Promise(resolve => { finishProbe = resolve; }));
+    emitWorkspaceManagerEvent({ type: 'workspace:switched', workspace });
+    await act(async () => { await Promise.resolve(); });
+    expect(finishProbe).toBeTypeOf('function');
+    expect(latestStatuses['conn-1']).toBe('connected');
+    await act(async () => { finishProbe(true); });
+
+    expect(statusHistory.every(statuses => statuses['conn-1'] === 'connected')).toBe(true);
+    expect(sshApiMock.connect).not.toHaveBeenCalled();
+  });
+
+  it('shows connecting after a probe confirms a real disconnect and clears it when reconnection finishes', async () => {
+    const workspace = createRemoteWorkspace();
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false, openedWorkspaces: new Map([[workspace.id, workspace]]), activeWorkspaceId: workspace.id,
+    });
+    sshApiMock.listSavedConnections.mockResolvedValue([{
+      id: 'conn-1', name: 'dev-box', host: 'example.com', port: 22, username: 'dev',
+      authType: { type: 'PrivateKey', keyPath: '/tmp/key' },
+    }]);
+    sshApiMock.isConnected.mockResolvedValue(true);
+    await renderProvider();
+    expect(latestStatuses['conn-1']).toBe('connected');
+
+    let finishProbe!: (connected: boolean) => void;
+    let finishReconnect!: (result: { success: boolean; connectionId: string }) => void;
+    sshApiMock.isConnected.mockImplementationOnce(() => new Promise(resolve => { finishProbe = resolve; }));
+    sshApiMock.connect.mockImplementationOnce(() => new Promise(resolve => { finishReconnect = resolve; }));
+    emitWorkspaceManagerEvent({ type: 'workspace:switched', workspace });
+    await act(async () => { await Promise.resolve(); });
+    expect(latestStatuses['conn-1']).toBe('connected');
+    await act(async () => { finishProbe(false); });
+    expect(sshApiMock.connect).toHaveBeenCalledTimes(1);
+    expect(latestStatuses['conn-1']).toBe('connecting');
+    await act(async () => { finishReconnect({ success: true, connectionId: 'conn-1' }); });
+    expect(latestStatuses['conn-1']).toBe('connected');
+  });
 
   it('mirrors peer-owned remote workspaces as connected without starting the reconnect timeout', async () => {
     vi.useFakeTimers();

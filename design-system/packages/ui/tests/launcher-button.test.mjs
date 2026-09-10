@@ -22,7 +22,7 @@ test("LauncherButton exposes native button semantics and stable icon/label parts
   assert.match(markup, /data-openbitfun-component="launcher-button"/);
   assert.match(markup, /data-openbitfun-part="icon"/);
   assert.match(markup, /data-openbitfun-name="mic"/);
-  assert.match(markup, /data-openbitfun-part="label">Hello<\/span>/);
+  assert.match(markup, /data-openbitfun-part="label"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>Hello<\/span><\/span>/);
 });
 
 test("LauncherButton forwards native disabled state", () => {

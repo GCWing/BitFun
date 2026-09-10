@@ -1,13 +1,14 @@
 @layer openbitfun.components {
   .button {
     --_icon-button-background: transparent;
-    --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface);
-    --_icon-button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
-    --_icon-button-content: var(--openbitfun-color-action-neutral-content);
+    --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
+    --_icon-button-background-active: var(--openbitfun-color-action-neutral-surface-hover);
+    --_icon-button-content: var(--openbitfun-color-content-primary);
     --_icon-button-icon-size: 14px;
     --_icon-button-size: var(--openbitfun-control-height-sm);
 
     position: relative;
+    box-sizing: border-box;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -63,6 +64,15 @@
   .button[data-openbitfun-variant="fill"] {
     --_icon-button-background: var(--openbitfun-color-action-neutral-surface);
     --_icon-button-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
+    --_icon-button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
+  }
+
+  .button[data-openbitfun-variant="outline"] {
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-surface-hover);
+  }
+
+  .button[data-openbitfun-variant="outline"]:is(:hover, :active, [data-openbitfun-preview-state="hover"], [data-openbitfun-preview-state="active"]):not(:disabled) {
+    border-color: transparent;
   }
 
   .button[data-openbitfun-variant="primary"] {
@@ -80,7 +90,7 @@
   .button[data-openbitfun-tone="danger"] {
     --_icon-button-background-hover: var(--openbitfun-color-status-danger-surface);
     --_icon-button-background-active: var(--openbitfun-color-status-danger-surface);
-    --_icon-button-content: var(--openbitfun-color-status-danger-content);
+    --_icon-button-content: var(--openbitfun-color-status-danger-emphasis);
   }
 
   .button[data-openbitfun-tone="danger"][data-openbitfun-variant="fill"] {
@@ -103,6 +113,15 @@
     --_icon-button-size: var(--openbitfun-control-icon-button-xs-size);
   }
 
+  .button[data-size="xs"][data-openbitfun-shape="square"] {
+    border-radius: var(--openbitfun-radius-xs);
+  }
+
+  .button[data-size="standard"] {
+    --_icon-button-icon-size: var(--openbitfun-control-icon-button-standard-icon-size);
+    --_icon-button-size: var(--openbitfun-control-icon-button-standard-size);
+  }
+
   .button[data-size="md"] {
     --_icon-button-icon-size: 16px;
     --_icon-button-size: var(--openbitfun-control-height-md);
@@ -115,6 +134,7 @@
 
   .icon,
   .progress {
+    --openbitfun-opacity-icon-artwork: 1;
     position: absolute;
     display: inline-flex;
     align-items: center;

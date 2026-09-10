@@ -678,7 +678,7 @@ async fn dispatch(
         BotCommand::SetVerbose(on) => set_verbose(state, on, s).await,
         BotCommand::SwitchContext => start_switch(state, s).await,
         BotCommand::NewSession => new_session_for_mode(state, s).await,
-        BotCommand::NewCodeSession => guarded_new(state, "agentic", s).await,
+        BotCommand::NewCodeSession => guarded_new(state, "Standard", s).await,
         BotCommand::NewCoworkSession => guarded_new(state, "Cowork", s).await,
         BotCommand::NewClawSession => guarded_new(state, "Claw", s).await,
         BotCommand::ResumeSession => start_resume(state, 0, s).await,
@@ -724,11 +724,11 @@ fn delegated_session(
     }
     let mut master_key = [0u8; 32];
     master_key.copy_from_slice(&key_vec);
-    Some(crate::service::remote_connect::AccountSession {
+    Some(crate::service::remote_connect::AccountSession::new(
         token,
-        user_id: String::new(),
+        String::new(),
         master_key,
-    })
+    ))
 }
 
 async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
@@ -1855,7 +1855,7 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 
 async fn new_session_for_mode(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
     let agent_type = if state.display_mode == BotDisplayMode::Pro {
-        "agentic"
+        "Standard"
     } else {
         "Claw"
     };
@@ -1867,12 +1867,12 @@ async fn guarded_new(
     agent_type: &str,
     s: &'static BotStrings,
 ) -> HandleResult {
-    let needs_pro = matches!(agent_type, "agentic" | "Cowork");
+    let needs_pro = matches!(agent_type, "Standard" | "Cowork");
     let needs_assistant = matches!(agent_type, "Claw");
 
     if needs_pro && state.display_mode != BotDisplayMode::Pro {
         let target_cmd = match agent_type {
-            "agentic" => "/new_code_session",
+            "Standard" => "/new_code_session",
             "Cowork" => "/new_cowork_session",
             _ => "/new_code_session",
         };
@@ -2644,10 +2644,10 @@ async fn submit_question_answers(
 // ── Free-form chat handling ───────────────────────────────────────
 
 /// Look up the agent type a session was created with (e.g. "Claw", "Cowork",
-/// "agentic").  Returns `None` if the coordinator is unavailable or the
+/// "Standard").  Returns `None` if the coordinator is unavailable or the
 /// session is not currently hot in memory; in that case `send_message` will
 /// lazily restore the session from disk and `resolve_agent_type` falls back
-/// to the safe default ("agentic"), so chat keeps working.
+/// to the safe default ("Standard"), so chat keeps working.
 async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
     use crate::agentic::coordination::get_global_coordinator;
     use crate::service_agent_runtime::CoreServiceAgentRuntime;
@@ -2728,18 +2728,18 @@ async fn handle_chat(
         let turn_id = format!("turn_{}", uuid::Uuid::new_v4());
 
         // Pick the agent type from the actual session — NOT a hardcoded
-        // "agentic" — otherwise every chat message goes through the Code
+        // "Standard" — otherwise every chat message goes through the Code
         // (`agentic`) agent regardless of what kind of session was created.
         // Concretely: the IM pairing bootstrap creates a `Claw` session for
         // assistant mode, but the old hardcoded value caused all subsequent
         // messages to be re-routed to the Code agent and the assistant flow
         // was effectively bypassed.  We mirror the agent type the session was
-        // actually created with, falling back to "agentic" only if the session
+        // actually created with, falling back to "Standard" only if the session
         // is missing in memory (e.g. needs lazy restore — `send_message` will
         // also normalize via `resolve_agent_type`).
         let agent_type = resolve_session_agent_type(&session_id)
             .await
-            .unwrap_or_else(|| "agentic".to_string());
+            .unwrap_or_else(|| "Standard".to_string());
 
         // Intentionally do NOT send a "Processing..." / "Queued" interstitial
         // message with a Cancel-task menu. The session manager queues new user

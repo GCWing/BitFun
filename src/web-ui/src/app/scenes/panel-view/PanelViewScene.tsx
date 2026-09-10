@@ -24,7 +24,7 @@ const PanelViewScene: React.FC<PanelViewSceneProps> = ({ workspacePath }) => {
       <div className="openbitfun-panel-view-scene" data-openbitfun-scene="panel-view" data-openbitfun-part="root">
         <ContentCanvas
           workspacePath={workspacePath}
-          mode="agent"
+          mode="panel-view"
           onInteraction={handleInteraction}
           disablePopOut={true}
         />

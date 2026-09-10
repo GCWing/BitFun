@@ -29,7 +29,7 @@ test("Select exposes a select-only combobox and preserves native form semantics"
   assert.match(markup, /<optgroup label="Advanced">/);
   assert.match(markup, /value="3">Agent<\/option>/);
   assert.match(markup, /<button[^>]*aria-expanded="false"[^>]*role="combobox"/);
-  assert.match(markup, /data-openbitfun-part="value">Ask<\/span>/);
+  assert.match(markup, /data-openbitfun-part="value"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>Ask<\/span><\/span>/);
 });
 
 test("Select exposes size, invalid, disabled, and leading regions independently", () => {

@@ -44,6 +44,10 @@ test("preview matrices define horizontal columns for every registered state coun
   );
   assert.match(
     source,
+    /\.component-preview-matrix\[data-state-count="2"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(2, minmax\(280px, max-content\)\)/s,
+  );
+  assert.match(
+    source,
     /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(280px, max-content\)\)/s,
   );
   assert.match(
@@ -276,11 +280,13 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.ok(declaration);
   assert.deepEqual(
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["quiet", "fill", "primary"],
+    ["quiet", "outline", "fill", "primary"],
   );
   assert.match(source, /data-component="icon-button"/);
   assert.match(source, /aria-label=\{t\("components\.preview\.listView"\)\}/);
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
+  assert.match(source, /size=\{iconButtonSize\}/);
+  assert.match(source, /shape=\{iconButtonShape\}/);
 });
 
 test("Icon preview exposes the complete named catalog and semantic controls", async () => {
@@ -413,14 +419,24 @@ test("ConfirmDialog preview exposes semantic, destructive, preview, and pending 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "filled", "hover", "focus-visible", "read-only", "invalid", "disabled"\] as const/);
   assert.match(source, /case "Select":\s*return \["default", "hover", "focus-visible", "open", "invalid", "disabled"\] as const/);
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);
-  assert.match(source, /trailing=\{<Icon name="eye" size="lg" aria-hidden="true" \/>\}/);
-  assert.match(source, /leadingIcon=\{<Icon name="search" size="lg" aria-hidden="true" \/>\}/);
-  assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" size="lg" aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
+  assert.match(source, /trailing=\{<Icon name="eye" \/>\}/);
+  assert.match(source, /leadingIcon=\{<Icon name="search" \/>\}/);
+  assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" \/>\}>K<\/KeyHint>\}/);
+  assert.match(source, /onClear=\{\(\) => setValue\(""\)\}/);
+  assert.match(source, /readOnly=\{state === "read-only"\}/);
+
+  const styles = await readFile(stylesSource, "utf8");
+  const fieldFocus = styles.match(/\[data-openbitfun-component="input"\]\.lab-force-focus,[^{]+\{([^}]+)\}/)?.[1];
+  assert.ok(fieldFocus, "Input and SearchField must share their preview focus treatment");
+  assert.match(fieldFocus, /border-color: var\(--openbitfun-color-field-border-active\)/);
+  assert.match(fieldFocus, /box-shadow: none/);
+  assert.doesNotMatch(fieldFocus, /border-width:|outline:|--openbitfun-focus-width/);
+  assert.doesNotMatch(styles, /input\.lab-force-focus\s*\{/);
 });
 
 test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {

@@ -1123,7 +1123,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             "btw-session".to_string(),
             "Side thread".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         metadata.session_kind = SessionKind::Standard;

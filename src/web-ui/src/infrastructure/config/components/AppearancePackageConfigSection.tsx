@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Icon, IconButton, Select, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Select, Tooltip } from '@openbitfun/ui';
 
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import {
@@ -212,7 +212,7 @@ function AppearancePackagePreview({
                 ? <img src={previewUrl} alt="" />
                 : <Icon name="image" size="lg" aria-hidden="true" />}
             </div>
-            <span>{appearanceName}</span>
+            <OverflowText>{appearanceName}</OverflowText>
           </div>
         )}
       >
@@ -515,7 +515,7 @@ export function AppearancePackageConfigSection() {
         >
           <AlertTriangle size={16} aria-hidden="true" />
           <span>{t('package.missingSelection', { id: unavailableSelectionId })}</span>
-          <Button variant="fill" size="md" onClick={() => setMarketOpen(true)}>
+          <Button variant="primary" size="md" onClick={() => setMarketOpen(true)}>
             {t('package.market.open')}
           </Button>
         </div>

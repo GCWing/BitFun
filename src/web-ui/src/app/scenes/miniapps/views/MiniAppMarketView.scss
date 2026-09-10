@@ -16,7 +16,6 @@
   &__categories {
     max-width: 100%;
     overflow-x: auto;
-    scrollbar-width: thin;
 
     > [data-openbitfun-part='segment'] {
       flex: 0 0 auto;
@@ -111,7 +110,6 @@
       font-weight: var(--openbitfun-type-heading-card-font-weight);
       line-height: var(--openbitfun-type-heading-card-line-height);
       letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 

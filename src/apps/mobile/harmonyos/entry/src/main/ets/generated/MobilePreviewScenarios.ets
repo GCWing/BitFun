@@ -104,4 +104,52 @@ export class MobilePreviewScenarios {
     "reconnecting",
     false
   );
+
+  static readonly narrowMultiline: MobilePreviewScenario = new MobilePreviewScenario(
+    "narrow-multiline",
+    "Narrow phone with a multiline draft",
+    "Narrow phone with a multiline draft",
+    "light",
+    360,
+    800,
+    "检查移动端长标题、正文与控制目标的可读性",
+    "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+    [new MobilePreviewMessage("user", "三端的组件和样式可以保持一致吗？"), new MobilePreviewMessage("assistant", "可以。共享视觉契约，三端继续使用原生渲染。")],
+    "请检查输入框是否能保留多行中文草稿。\n模型选择后内容应继续保留。\n附件与文本应各自成行。",
+    "向 OpenBitFun 提问",
+    "connected",
+    false
+  );
+
+  static readonly foldContext: MobilePreviewScenario = new MobilePreviewScenario(
+    "fold-context",
+    "Foldable with long remote context",
+    "Foldable with long remote context",
+    "light",
+    700,
+    840,
+    "检查移动端长标题、正文与控制目标的可读性",
+    "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+    [new MobilePreviewMessage("user", "三端的组件和样式可以保持一致吗？"), new MobilePreviewMessage("assistant", "可以。共享视觉契约，三端继续使用原生渲染。")],
+    "请保留当前会话与控制目标。",
+    "向 OpenBitFun 提问",
+    "connected",
+    false
+  );
+
+  static readonly longReading: MobilePreviewScenario = new MobilePreviewScenario(
+    "long-reading",
+    "Long reading content",
+    "Long reading content",
+    "light",
+    430,
+    932,
+    "检查移动端长标题、正文与控制目标的可读性",
+    "远程开发工作站 · OpenBitFun / feature/mobile-reading",
+    [new MobilePreviewMessage("user", "三端的组件和样式可以保持一致吗？"), new MobilePreviewMessage("assistant", "移动端的阅读层级需要清晰，正文应该舒适地换行，辅助说明保留足够对比度。\n\n当内容变长时，消息区滚动，输入框仍然可以操作。请在系统大字体设置下检查这一场景。")],
+    "",
+    "向 OpenBitFun 提问",
+    "connected",
+    false
+  );
 }

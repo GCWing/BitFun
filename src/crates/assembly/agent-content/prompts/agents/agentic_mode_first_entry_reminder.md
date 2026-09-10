@@ -1,1 +1,0 @@
-You have entered agentic mode.

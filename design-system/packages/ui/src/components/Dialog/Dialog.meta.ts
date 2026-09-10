@@ -2,17 +2,19 @@ import type { ComponentMeta } from "../../registry.types";
 
 export const dialogMeta = {
   category: "feedback",
-  description: "A compound dialog with attached or opaque floating footer anatomy on the shared overlay kernel.",
+  description: "A compound dialog with attached or frosted floating footer anatomy on the shared overlay kernel.",
   maturity: "stable",
   name: "Dialog",
   props: [
     { name: "open", type: "boolean" },
     { name: "onOpenChange", type: "(open: false, reason: DialogCloseReason) => void" },
     { defaultValue: "md", name: "size", type: "sm | md | lg | xl | 2xl" },
+    { defaultValue: "false", name: "DialogHeader.separator", type: "boolean" },
+    { defaultValue: "false", name: "DialogFooter.separator", type: "boolean" },
     { defaultValue: "true", name: "closeOnEscape", type: "boolean" },
     { defaultValue: "true", name: "closeOnPointerOutside", type: "boolean" },
   ],
-  states: ["default", "open", "alert", "scrolling", "opaque-floating-footer"],
+  states: ["default", "open", "alert", "scrolling", "floating-footer"],
   tokens: [
     "color.overlay.scrim",
     "color.surface.raised",
@@ -27,12 +29,18 @@ export const dialogMeta = {
     "overlay.dialog.footerPaddingBlockStart",
     "overlay.dialog.footerPaddingBlockEnd",
     "overlay.dialog.footerActionMinWidth",
+    "overlay.dialog.footerHeight",
+    "overlay.dialog.footerFadeExtent",
+    "overlay.dialog.footerContentInset",
+    "overlay.dialog.footerBlur",
     "shadow.overlay",
     "motion.distance.sm",
     "type.support",
     "type.heading.dialog.fontFamily",
     "type.heading.dialog.fontSize",
     "type.heading.dialog.fontWeight",
+    "type.heading.dialog.lineHeight",
+    "type.heading.dialog.letterSpacing",
   ],
 } as const satisfies ComponentMeta;
 

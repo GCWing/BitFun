@@ -18,25 +18,25 @@
   &--success {
     
     .notification-item__icon {
-      color: var(--openbitfun-color-status-success-content);
+      color: var(--openbitfun-color-status-success-emphasis);
     }
   }
 
   &--error {
     .notification-item__icon {
-      color: var(--openbitfun-color-status-danger-content);
+      color: var(--openbitfun-color-status-danger-emphasis);
     }
   }
 
   &--warning {
     .notification-item__icon {
-      color: var(--openbitfun-color-status-warning-content);
+      color: var(--openbitfun-color-status-warning-emphasis);
     }
   }
 
   &--info {
     .notification-item__icon {
-      color: var(--openbitfun-color-status-info-content);
+      color: var(--openbitfun-color-status-info-emphasis);
     }
   }
 

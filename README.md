@@ -103,6 +103,12 @@ OpenBitFun is still evolving. Here are three directions we want to explore:
 
 Getting there means making long-running tasks more reliable, the runtime more efficient, and the desktop experience smoother.
 
+## Optional legacy data migration
+
+Data migration is optional and uses a **separately downloaded OpenBitFun Data
+Migrator**. It runs independently and is not bundled with or launched by the main
+application. See the [download, compatibility and recovery guide](src/apps/data-migrator/README.md).
+
 ## Build with it. Help shape it.
 
 **Star OpenBitFun to follow along. Share what you build, offer feedback, or contribute code to help shape what comes next.**

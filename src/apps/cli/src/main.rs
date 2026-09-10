@@ -168,10 +168,16 @@ struct Cli {
     #[arg(long)]
     agent: Option<String>,
 
-    /// Select the Harness Profile for this session (minimal or balanced).
-    /// `minimal` is kept as a compatibility alias for agent type `minimal`.
-    #[arg(long, value_parser = ["minimal", "balanced"])]
+    /// Select the Agent Harness for this session.
+    #[arg(long, value_parser = harness_profile_parser())]
     harness_profile: Option<String>,
+}
+
+fn harness_profile_parser() -> clap::builder::PossibleValuesParser {
+    use openbitfun_core_types::agent_identity::HarnessId;
+    clap::builder::PossibleValuesParser::new(HarnessId::ALL.map(|id| {
+        clap::builder::PossibleValue::new(id.as_str()).aliases(id.legacy_ids().iter().copied())
+    }))
 }
 
 fn shared_tui_requested(shared: bool, command: &Option<Commands>) -> Result<bool> {
@@ -196,7 +202,7 @@ fn validate_global_harness_profile_scope(
         return Ok(());
     }
     Err(anyhow!(
-        "--harness-profile is supported only by interactive chat and headless exec; this command cannot silently fall back to Balanced"
+        "--harness-profile is supported only by interactive chat and headless exec; this command cannot silently fall back to Standard"
     ))
 }
 
@@ -208,10 +214,11 @@ fn resolved_command_harness_profile(
 }
 
 fn agent_type_with_harness_profile(agent_type: String, harness_profile: Option<&str>) -> String {
+    use openbitfun_core_types::agent_identity::canonical_agent_id;
     match harness_profile {
-        Some("minimal") => "minimal".to_string(),
-        Some("balanced") | None => agent_type,
-        Some(other) => other.to_string(),
+        // The retired CLI profile was an overlay: balanced preserved --agent.
+        Some("balanced") | None => canonical_agent_id(&agent_type).to_string(),
+        Some(profile) => canonical_agent_id(profile).to_string(),
     }
 }
 
@@ -220,15 +227,15 @@ enum Commands {
     /// Start interactive chat (TUI)
     Chat {
         /// Agent type
-        #[arg(short, long, default_value = "agentic")]
+        #[arg(short, long, default_value = "Standard")]
         agent: String,
 
         /// Use the opt-in Shared Runtime for this interactive TUI
         #[arg(long)]
         shared: bool,
 
-        /// Harness Profile for this session (minimal or balanced).
-        #[arg(long, value_parser = ["minimal", "balanced"])]
+        /// Agent Harness for this session.
+        #[arg(long, value_parser = harness_profile_parser())]
         harness_profile: Option<String>,
     },
 
@@ -246,11 +253,11 @@ enum Commands {
         message: Option<String>,
 
         /// Agent type
-        #[arg(short, long, default_value = "agentic")]
+        #[arg(short, long, default_value = "Standard")]
         agent: String,
 
-        /// Harness Profile for this session (minimal or balanced).
-        #[arg(long, value_parser = ["minimal", "balanced"])]
+        /// Agent Harness for this session.
+        #[arg(long, value_parser = harness_profile_parser())]
         harness_profile: Option<String>,
 
         /// Continue the most recent session in the current workspace
@@ -1088,16 +1095,6 @@ async fn run_interactive(
                 }
             }
         }
-    }
-
-    // 3.6 Continuous account settings sync (30s pull + debounced push).
-    // Safe to start before login: cycles skip while logged out.
-    if !shared {
-        runtime
-            .as_ref()
-            .expect("Embedded settings sync requires the CLI Runtime")
-            .account_runtime()
-            .start_settings_sync_loop();
     }
 
     // Resolve the agent override against the execution owner's mode catalog.
@@ -2243,13 +2240,28 @@ mod dispatch_command_tests {
 #[cfg(test)]
 mod harness_profile_compatibility_tests {
     use super::{agent_type_with_harness_profile, resolved_command_harness_profile, Cli, Commands};
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn canonical_cli_choices_are_the_only_displayed_identifiers() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("Minimal, Standard, Ultimate, Creative"));
+        assert!(!help.contains("balanced"));
+        for id in openbitfun_core_types::agent_identity::HarnessId::ALL {
+            let cli =
+                Cli::try_parse_from(["openbitfun", "--harness-profile", id.as_str()]).unwrap();
+            assert_eq!(
+                agent_type_with_harness_profile("Cowork".into(), cli.harness_profile.as_deref()),
+                id.as_str()
+            );
+        }
+    }
 
     #[test]
     fn minimal_profile_is_an_agent_type_compatibility_alias() {
         assert_eq!(
-            agent_type_with_harness_profile("agentic".to_string(), Some("minimal")),
-            "minimal"
+            agent_type_with_harness_profile("Standard".to_string(), Some("minimal")),
+            "Minimal"
         );
         assert_eq!(
             agent_type_with_harness_profile("Cowork".to_string(), Some("balanced")),

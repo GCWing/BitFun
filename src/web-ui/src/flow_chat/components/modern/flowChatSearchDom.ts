@@ -8,6 +8,13 @@ type HighlightRegistryLike = {
 
 type HighlightConstructorLike = new (...ranges: Range[]) => unknown;
 
+interface SearchHighlightRanges {
+  current: Range | null;
+  matches: readonly Range[];
+}
+
+const documentHighlights = new WeakMap<Document, Map<object, SearchHighlightRanges>>();
+
 interface FoldedTextOffset {
   start: number;
   end: number;
@@ -23,7 +30,7 @@ function isSearchableTextNode(node: Node): node is Text {
     return false;
   }
 
-  return !parent.closest('script, style, [aria-hidden="true"]');
+  return !parent.closest('script, style, button, input, textarea, [contenteditable="true"], [hidden], [aria-hidden="true"]');
 }
 
 function foldTextWithOriginalOffsets(text: string): {
@@ -127,20 +134,14 @@ export function findFlowChatSearchTextRange(root: HTMLElement, query: string): R
   return findFlowChatSearchTextRanges(root, query)[0] ?? null;
 }
 
-/**
- * Highlights the current occurrence and, more faintly, every other occurrence
- * in the same text root. Passing `null` clears both highlight registries.
- */
-export function setFlowChatSearchHighlight(
-  currentRange: Range | null,
-  otherRanges: readonly Range[] = [],
-): void {
-  const cssWithHighlights = globalThis.CSS as (typeof CSS & {
+function publishSearchHighlights(ownerDocument: Document): void {
+  const view = ownerDocument.defaultView;
+  const cssWithHighlights = view?.CSS as (typeof CSS & {
     highlights?: HighlightRegistryLike;
   }) | undefined;
-  const HighlightConstructor = (globalThis as typeof globalThis & {
+  const HighlightConstructor = (view as (Window & {
     Highlight?: HighlightConstructorLike;
-  }).Highlight;
+  }) | null)?.Highlight;
 
   if (!cssWithHighlights?.highlights) {
     return;
@@ -151,18 +152,46 @@ export function setFlowChatSearchHighlight(
   if (!HighlightConstructor) {
     return;
   }
-  if (currentRange) {
-    cssWithHighlights.highlights.set(
-      SEARCH_HIGHLIGHT_CURRENT_NAME,
-      new HighlightConstructor(currentRange),
-    );
+  const owners = documentHighlights.get(ownerDocument)?.values() ?? [];
+  const current: Range[] = [];
+  const matches: Range[] = [];
+  for (const ranges of owners) {
+    if (ranges.current?.startContainer.isConnected) current.push(ranges.current);
+    matches.push(...ranges.matches.filter(range => range.startContainer.isConnected));
   }
-  if (otherRanges.length > 0) {
+  if (matches.length > 0) {
     cssWithHighlights.highlights.set(
       SEARCH_HIGHLIGHT_MATCH_NAME,
-      new HighlightConstructor(...otherRanges),
+      new HighlightConstructor(...matches),
     );
   }
+  // Register current last so it wins if two presentations share a text range.
+  if (current.length > 0) {
+    cssWithHighlights.highlights.set(SEARCH_HIGHLIGHT_CURRENT_NAME, new HighlightConstructor(...current));
+  }
+}
+
+/** Each mounted row releases only its own ranges, including across chat panes. */
+export function createFlowChatSearchHighlightOwner(ownerDocument: Document) {
+  const owner = {};
+  let disposed = false;
+  return {
+    update(current: Range | null, matches: readonly Range[]) {
+      if (disposed) return;
+      let owners = documentHighlights.get(ownerDocument);
+      if (!owners) {
+        owners = new Map();
+        documentHighlights.set(ownerDocument, owners);
+      }
+      owners.set(owner, { current, matches });
+      publishSearchHighlights(ownerDocument);
+    },
+    dispose() {
+      disposed = true;
+      documentHighlights.get(ownerDocument)?.delete(owner);
+      publishSearchHighlights(ownerDocument);
+    },
+  };
 }
 
 export function findElementWithDataValue(
@@ -177,7 +206,7 @@ export function findElementWithDataValue(
 export function getFlowChatSearchTextRoot(
   wrapper: HTMLElement,
   flowItemId?: string,
-): HTMLElement {
+): HTMLElement | null {
   if (flowItemId) {
     const flowItem = findElementWithDataValue(wrapper, 'data-flow-item-id', flowItemId);
     if (flowItem) {
@@ -189,6 +218,9 @@ export function getFlowChatSearchTextRoot(
     if (thinkingText) {
       return thinkingText;
     }
+
+    // A collapsed or unmounted source must not highlight unrelated card labels.
+    return null;
   }
 
   return wrapper.querySelector<HTMLElement>('.user-message-item__content') ?? wrapper;

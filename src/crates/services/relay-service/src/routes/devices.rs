@@ -48,14 +48,20 @@ fn is_valid_device_id(value: &str) -> bool {
 fn is_valid_encrypted_payload(encrypted_data: &str, nonce: &str) -> bool {
     !encrypted_data.is_empty()
         && encrypted_data.len() <= MAX_ENCRYPTED_PAYLOAD_BYTES
+        && encrypted_data.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=' | b'-' | b'_')
+        })
         && !nonce.is_empty()
         && nonce.len() <= MAX_NONCE_BYTES
         && !nonce.chars().any(char::is_control)
 }
 
 /// Validate bearer token and return its account principal and capability kind.
-async fn validate_user(state: &AppState, headers: &HeaderMap) -> Result<AuthToken, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+pub(crate) async fn validate_user(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<AuthToken, StatusCode> {
+    let db = state.db.as_ref();
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -76,11 +82,51 @@ async fn validate_user(state: &AppState, headers: &HeaderMap) -> Result<AuthToke
 pub fn device_router() -> Router<AppState> {
     Router::new()
         .route("/api/devices", get(list_devices))
+        .route("/api/devices/{target_device_id}/key", get(device_key))
         .route(
             "/api/devices/{target_device_id}/rpc",
             post(device_rpc).layer(DefaultBodyLimit::max(RPC_BODY_LIMIT_BYTES)),
         )
+        .route(
+            "/api/devices/{target_device_id}/messages",
+            post(device_message).layer(DefaultBodyLimit::max(RPC_BODY_LIMIT_BYTES)),
+        )
         .route("/api/devices/{target_device_id}", delete(delete_device))
+}
+
+#[derive(Serialize)]
+pub struct DeviceKeyResponse {
+    pub device_id: String,
+    pub public_key: String,
+}
+
+/// Resolve even hidden controller keys, scoped to the authenticated account.
+pub async fn device_key(
+    State(state): State<AppState>,
+    Path(target_device_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<DeviceKeyResponse>, StatusCode> {
+    let auth = validate_user(&state, &headers).await?;
+    if !is_valid_device_id(&target_device_id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let db = state.db.as_ref();
+    let public_key = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT public_key FROM devices WHERE user_id = ?1 AND device_id = ?2
+         UNION ALL SELECT k.public_key FROM delegated_device_keys k JOIN auth_tokens t ON t.token = k.token
+         WHERE t.user_id = ?1 AND k.controller_id = ?2 AND t.expires_at > unixepoch() LIMIT 1",
+    )
+    .bind(&auth.user_id)
+    .bind(&target_device_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .flatten()
+    .ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(DeviceKeyResponse {
+        device_id: target_device_id,
+        public_key,
+    }))
 }
 
 // ── List devices ────────────────────────────────────────────────────────
@@ -113,7 +159,8 @@ async fn list_devices(
     // Get all registered devices from the DB (online + offline)
     let mut devices = Vec::new();
     let mut hidden_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if let Some(db) = &state.db {
+    {
+        let db = &state.db;
         if let Ok(db_devices) = crate::db::DeviceRow::list_by_user(db, &user_id).await {
             for row in db_devices {
                 if !crate::db::device_kind_is_desktop(row.device_kind.as_deref()) {
@@ -157,7 +204,7 @@ async fn list_devices(
 
 #[derive(Deserialize)]
 pub struct DeviceRpcRequest {
-    /// Opaque ciphertext encrypted client-side with the account master_key.
+    /// Opaque ciphertext encrypted client-side with the device-pair key.
     /// The relay never decrypts this — it only routes.
     pub encrypted_data: String,
     pub nonce: String,
@@ -167,6 +214,60 @@ pub struct DeviceRpcRequest {
 pub struct DeviceRpcResponse {
     pub encrypted_data: String,
     pub nonce: String,
+}
+
+#[derive(Deserialize)]
+struct DeviceMessageRequest {
+    correlation_id: String,
+    encrypted_data: String,
+    nonce: String,
+}
+
+/// Device responses use the same authenticated, memory-admitted HTTP ingress
+/// as requests. WebSocket ingress is reserved for small control messages.
+async fn device_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(target_device_id): Path<String>,
+    Json(body): Json<DeviceMessageRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let auth = validate_user(&state, &headers).await?;
+    if !auth.is_device_token() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if !is_valid_device_id(&target_device_id)
+        || !is_valid_device_id(&body.correlation_id)
+        || !is_valid_encrypted_payload(&body.encrypted_data, &body.nonce)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let response = crate::relay::device_manager::RpcResponse::try_new(
+        body.encrypted_data.clone(),
+        body.nonce.clone(),
+    )
+    .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    if state.device_manager.resolve_rpc(
+        &body.correlation_id,
+        &auth.user_id,
+        &auth.device_id,
+        response,
+    ) {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+    let message = OutboundProtocol::IncomingDeviceMessage {
+        source_device_id: auth.device_id,
+        correlation_id: body.correlation_id,
+        encrypted_data: body.encrypted_data,
+        nonce: body.nonce,
+    };
+    let json = serde_json::to_string(&message).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !state
+        .device_manager
+        .route_message(&auth.user_id, &target_device_id, &json)
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/devices/:target_device_id/rpc`
@@ -179,8 +280,13 @@ async fn device_rpc(
     headers: HeaderMap,
     Path(target_device_id): Path<String>,
     Json(body): Json<DeviceRpcRequest>,
-) -> Result<Json<DeviceRpcResponse>, StatusCode> {
+) -> Result<axum::response::Response, StatusCode> {
     let auth = validate_user(&state, &headers).await?;
+    let db = state.db.as_ref();
+    let source_device_id = auth
+        .routing_device_id(db)
+        .await
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     let user_id = auth.user_id;
 
     if !is_valid_device_id(&target_device_id)
@@ -206,10 +312,10 @@ async fn device_rpc(
         .ok_or(StatusCode::TOO_MANY_REQUESTS)?;
 
     // Build the WS message to send to the target device.
-    // The relay acts as a "virtual" source — the target device sees this
-    // as an IncomingDeviceMessage from a special "rpc" source.
+    // Retain the authenticated controller identity so the receiver can resolve
+    // its same-account public key. Correlation still resolves the HTTP response.
     let out_msg = OutboundProtocol::IncomingDeviceMessage {
-        source_device_id: "rpc".to_string(), // indicates HTTP RPC origin
+        source_device_id,
         correlation_id: correlation_id.clone(),
         encrypted_data: body.encrypted_data,
         nonce: body.nonce,
@@ -227,10 +333,7 @@ async fn device_rpc(
     // Wait for the response (the target device sends back a DeviceMessage
     // via WS, which the WS handler resolves via resolve_rpc)
     match tokio::time::timeout(RPC_TIMEOUT, rx).await {
-        Ok(Ok(resp)) => Ok(Json(DeviceRpcResponse {
-            encrypted_data: resp.encrypted_data,
-            nonce: resp.nonce,
-        })),
+        Ok(Ok(resp)) => resp.into_http_response(),
         _ => {
             state.device_manager.cancel_rpc(&correlation_id);
             Err(StatusCode::GATEWAY_TIMEOUT)
@@ -259,7 +362,7 @@ async fn delete_device(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
     let current_auth = crate::db::AuthToken::find(db, &auth.token)
         .await
@@ -319,7 +422,6 @@ async fn delete_device(
 mod tests {
     use super::*;
     use crate::db::{connect, AuthToken, DbPool, DeviceRow, UserRow};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::Body;
     use axum::http::Request;
@@ -335,14 +437,136 @@ mod tests {
         other_token: String,
     }
 
+    #[tokio::test]
+    async fn delegated_device_keys_are_scoped_and_follow_parent_revocation() {
+        let ctx = setup_app().await;
+        let controller = AuthToken::create_keyed_delegated(
+            &ctx.db,
+            "owner",
+            "owner-device",
+            "controller-public-key",
+        )
+        .await
+        .unwrap();
+        let id = controller.routing_device_id(&ctx.db).await.unwrap();
+        assert_ne!(id, "owner-device");
+        let second =
+            AuthToken::create_keyed_delegated(&ctx.db, "owner", "owner-device", "other-public-key")
+                .await
+                .unwrap();
+        assert_ne!(id, second.routing_device_id(&ctx.db).await.unwrap());
+        for (token, expected) in [
+            (&ctx.owner_token, StatusCode::OK),
+            (&ctx.other_token, StatusCode::NOT_FOUND),
+        ] {
+            let response = ctx
+                .app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/api/devices/{id}/key"))
+                        .header(axum::http::header::AUTHORIZATION, format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected);
+        }
+        AuthToken::revoke_by_device(&ctx.db, "owner", "owner-device")
+            .await
+            .unwrap();
+        assert!(controller.routing_device_id(&ctx.db).await.is_err());
+        assert!(second.routing_device_id(&ctx.db).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn http_device_response_requires_expected_principal_and_accepts_large_payload() {
+        let ctx = setup_app().await;
+        let state = AppState {
+            start_time: std::time::Instant::now(),
+            asset_store: Arc::new(MemoryAssetStore::new()),
+            db: ctx.db.clone(),
+            page_data: None,
+            page_access_manager: Arc::new(crate::routes::pages::PageAccessManager::new()),
+            page_upload_manager: Arc::new(crate::routes::pages::PageUploadManager::new()),
+            page_execution_guard: Arc::new(crate::page_execution::PageExecutionGuard::new()),
+            login_rate_limiter: Arc::new(crate::routes::auth::LoginRateLimiter::new()),
+            device_manager: crate::relay::DeviceManager::new(),
+            cors_allow_origins: Arc::new(Vec::new()),
+            page_browser_auth: None,
+        };
+        let app = device_router()
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::admission::admit,
+            ))
+            .with_state(state.clone());
+        let mut pending = state
+            .device_manager
+            .register_rpc("correlation", "owner", "target-device")
+            .unwrap();
+        let ciphertext = "a".repeat(256 * 1024);
+        let body = serde_json::json!({
+            "correlation_id": "correlation", "encrypted_data": ciphertext, "nonce": "nonce"
+        })
+        .to_string();
+        for (token, expected) in [
+            (&ctx.owner_token, StatusCode::NOT_FOUND),
+            (&ctx.other_token, StatusCode::NOT_FOUND),
+            (&ctx.delegated_token, StatusCode::FORBIDDEN),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/devices/owner-device/messages")
+                        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(body.clone()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected);
+            assert!(pending.try_recv().is_err());
+        }
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/devices/owner-device/messages")
+                    .header(
+                        header::AUTHORIZATION,
+                        format!("Bearer {}", ctx.target_token),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let response = pending.await.unwrap().into_http_response().unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(value["encrypted_data"], ciphertext);
+        assert_eq!(value["nonce"], "nonce");
+    }
+
+    #[test]
+    fn encrypted_payload_cannot_expand_json_with_escape_characters() {
+        assert!(!is_valid_encrypted_payload("\"\\", "nonce"));
+        assert!(is_valid_encrypted_payload("ab+/=_-09", "nonce"));
+    }
+
     async fn setup_app() -> TestContext {
         let db = Arc::new(connect(":memory:").await.unwrap());
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
-        UserRow::create(&db, "other", "bob", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
+        UserRow::create(&db, "other", "bob").await.unwrap();
         DeviceRow::upsert(&db, "owner-device", "owner", "Owner", None, None)
             .await
             .unwrap();
@@ -370,10 +594,9 @@ mod tests {
             .unwrap()
             .token;
         let app = crate::build_relay_router(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(db.clone()),
+            db.clone(),
             "test",
         );
 

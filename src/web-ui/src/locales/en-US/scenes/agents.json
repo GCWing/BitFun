@@ -1,15 +1,15 @@
 {
   "title": "Agents",
-  "desc": "Sub-agents collaborating on specialized tasks — {{total}} total, {{enabled}} enabled",
+  "desc": "SubAgents collaborating on specialized tasks — {{total}} total, {{enabled}} enabled",
   "manage": "Manage",
   "builtin": "Built-in",
   "custom": "Custom",
-  "empty": "No sub-agents available",
+  "empty": "No SubAgents available",
   "goManage": "Go to Manage",
   "loading": "Loading…",
   "page": {
     "title": "Agents",
-    "subtitle": "Manage Agents and their execution framework so each task gets the right capability mix.",
+    "subtitle": "Configure four Agent Harnesses, task-focused Agents, and delegated SubAgents",
     "searchPlaceholder": "Search agents by name or description…",
     "newAgent": "New Agent"
   },
@@ -20,25 +20,25 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "Defines how an Agent organizes tasks, calls tools, coordinates Agents, and brings results together.",
+    "subtitle": "Choose how a session executes work; each Harness owns its tool and collaboration policy",
     "flowCaption": "One task · Four strategies · One result",
     "task": "Task",
     "result": "Result",
     "profiles": {
-      "minimal": {
-        "name": "Minimal",
+      "Minimal": {
+        "name": "$t(shared:agents.Minimal)",
         "purpose": "Lean flow, fast progress"
       },
-      "balanced": {
-        "name": "Standard",
+      "Standard": {
+        "name": "$t(shared:agents.Standard)",
         "purpose": "Balance speed and quality"
       },
-      "ultimate": {
-        "name": "Ultimate",
+      "Ultimate": {
+        "name": "$t(shared:agents.Ultimate)",
         "purpose": "Deep planning and collaboration"
       },
-      "creative": {
-        "name": "Creative",
+      "Creative": {
+        "name": "$t(shared:agents.Creative)",
         "purpose": "Customize and build on OpenBitFun"
       }
     }
@@ -52,26 +52,15 @@
     "user": "User",
     "project": "Project",
     "external": "External",
-    "mode": "Direct Agent",
-    "subagent": "Collaborating Agent"
+    "subagent": "SubAgent",
+    "agent": "Agent"
   },
   "coreAgentsZone": {
-    "title": "Connected Agents",
-    "subtitle": "Existing runtime Agents that can already be configured. Legacy mode wiring remains visible during migration.",
-    "empty": "No core agents detected",
+    "title": "Agent",
+    "subtitle": "Agents that directly handle a task, such as Assistant, Cowork, and Deep Research",
+    "empty": "No Agents available",
     "roleLabel": "Primary Use · ",
-    "computerUseDisabledBadge": "Disabled in Settings",
-    "modes": {
-      "agentic": {
-        "role": "Coding agent"
-      },
-      "cowork": {
-        "role": "Office & collaboration agent"
-      },
-      "computerUse": {
-        "role": "Desktop automation agent"
-      }
-    }
+    "computerUseDisabledBadge": "Disabled in Settings"
   },
   "agentsZone": {
     "title": "Agents",
@@ -96,10 +85,10 @@
       "agent": "Agent",
       "userMode": "User Agent",
       "projectMode": "Project Agent",
-      "subagent": "Sub-Agent",
-      "userSubagent": "User Sub-Agent",
-      "projectSubagent": "Project Sub-Agent",
-      "externalSubagent": "External Sub-Agent",
+      "subagent": "SubAgent",
+      "userSubagent": "User SubAgent",
+      "projectSubagent": "Project SubAgent",
+      "externalSubagent": "External SubAgent",
       "disabled": "Disabled"
     },
     "actions": {
@@ -108,17 +97,17 @@
     "meta": {
       "tools": "{{count}} tools",
       "skills": "{{count}} skills",
-      "subagents": "{{count}} sub-agents",
+      "subagents": "{{count}} SubAgents",
       "externalProvider": "External · {{provider}}",
       "singleRun": "One run only · No follow-up"
     },
     "modelSelector": {
       "label": "Model",
-      "default": "Use default Sub-Agent model",
+      "default": "Use default SubAgent model",
       "inherit": "Inherit parent session",
       "fast": "Fast model",
       "primary": "Primary model",
-      "updateFailed": "Failed to update the Sub-Agent model"
+      "updateFailed": "Failed to update the SubAgent model"
     }
   },
   "capabilityCategories": {
@@ -126,7 +115,7 @@
     "docs": "Docs",
     "analysis": "Analysis",
     "testing": "Testing",
-    "creative": "Creative",
+    "creative": "$t(shared:agents.Creative)",
     "ops": "Ops"
   },
   "agentsOverview": {
@@ -159,13 +148,13 @@
     "toolsUnsupported": "The connected peer host does not expose a tool catalog.",
     "toolsFailed": "Could not load the tool catalog. Try reopening the agent.",
     "skills": "Skills",
-    "subagents": "Sub-Agents",
+    "subagents": "SubAgents",
     "skillsCancel": "Cancel editing",
     "skillsSave": "Save",
     "skillsEdit": "Manage skills",
-    "subagentsEdit": "Manage sub-agents",
+    "subagentsEdit": "Manage SubAgents",
     "subagentsDone": "Done",
-    "noSubagents": "No manageable sub-agents available",
+    "noSubagents": "No manageable SubAgents available",
     "enableGroup": "Enable group",
     "disableGroup": "Disable group",
     "clearGroup": "Clear",
@@ -173,7 +162,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "skillToggleFailed": "Failed to toggle skill",
-    "subagentToggleFailed": "Failed to toggle sub-agent",
+    "subagentToggleFailed": "Failed to toggle SubAgent",
     "sharedProfileLabel": "Shared profile",
     "sharedProfileDefaultLabel": "Shared coding profile",
     "sharedProfileDescription": "Changes here apply to: {{modes}}.",
@@ -189,7 +178,7 @@
     "noSkills": "No skills enabled",
     "capabilityTooltip": {
       "executionPermission": "Execution permission",
-      "standardPermission": "Standard",
+      "standardPermission": "$t(shared:agents.Standard)",
       "provider": "Provider",
       "mcpServer": "MCP server",
       "skillKey": "Key",
@@ -201,7 +190,7 @@
       "externalManaged": "Managed by the external provider"
     },
     "skillGroups": {
-      "computerUse": "Computer Use",
+      "computerUse": "$t(shared:agents.ComputerUse)",
       "office": "Office",
       "meta": "Meta",
       "miniapp": "MiniApp",
@@ -217,32 +206,11 @@
       "myGroups": "My groups",
       "otherSkills": "Other skills",
       "selectedCount": "{{count}} skills selected",
-      "manageGroups": "Manage groups",
-      "manageTitle": "Manage my Skill groups",
-      "manageSubtitle": "Organize reusable personal Skill selections.",
-      "createGroup": "New group",
-      "saveGroup": "Save group",
-      "editGroup": "Edit group",
-      "deleteGroup": "Delete group",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
-      "groupName": "Group name",
-      "groupNamePlaceholder": "For example, Daily development",
-      "groupSkills": "Skills",
-      "groupCount": "{{count}} skills",
       "unavailableCount": "{{count}} unavailable",
-      "noUserGroups": "No personal Skill groups yet.",
-      "enableGroupSkills": "Enable all Skills in {{name}}",
-      "clearGroupSkills": "Clear Skills in {{name}}",
-      "deleteTitle": "Delete Skill group",
-      "deleteMessage": "Delete \"{{name}}\"? This does not change any Agent Skill selection.",
-      "deleteConfirm": "Delete",
-      "saveFailed": "Failed to save Skill groups",
-      "validation": {
-        "nameRequired": "Enter a group name",
-        "nameDuplicate": "A group with this name already exists",
-        "skillsRequired": "Select at least one Skill"
-      }
+      "enableGroupSkills": "Select all skills in {{name}}",
+      "clearGroupSkills": "Deselect skills in {{name}}",
+      "loadFailed": "Could not load custom groups. You can still select individual skills.",
+      "retry": "Retry"
     },
     "toolGroups": {
       "builtin": "Built-in groups",
@@ -300,10 +268,10 @@
     "deleteFailed": "Delete failed: ",
     "form": {
       "title": "Create Custom Agent",
-      "subtitle": "Create a custom mode or sub-agent with its own prompt, tools, and runtime context policy.",
+      "subtitle": "Create an Agent or SubAgent with its own prompt, tools, and runtime context policy.",
       "titleEdit": "Edit Custom Agent",
       "subtitleEdit": "Change display name, description, system prompt, tools, and runtime context policy.",
-      "subtitleEditMode": "Change display name, description, system prompt, tools, and runtime context policy. Choose this agent's model from ChatInput.",
+      "subtitleEditMode": "Change display name, description, system prompt, tools, and runtime context policy. Choose the model in the conversation input.",
       "subtitleEditSubagent": "Change display name, description, system prompt, tools, model, and runtime context policy.",
       "loadingDetail": "Loading…",
       "save": "Save",
@@ -311,8 +279,8 @@
       "updateFailed": "Save failed: ",
       "basicInformation": "Basic information",
       "kind": "Kind",
-      "kindAgentTooltip": "After creating it, you can select it directly as a standalone mode from the conversation input's mode picker.",
-      "kindSubagentTooltip": "After creating it, a primary agent can delegate subtasks to it. It is not available as a directly selectable mode.",
+      "kindAgentTooltip": "Select this Agent in the conversation input to assign tasks directly.",
+      "kindSubagentTooltip": "Receives delegated tasks from a primary Agent and returns the results.",
       "id": "Agent ID",
       "idPlaceholder": "Used by the model, config, and routing; cannot be changed after creation",
       "idRequired": "ID is required",
@@ -320,7 +288,7 @@
       "name": "Name (optional)",
       "namePlaceholder": "Used for display only; defaults to the Agent ID",
       "level": "Level",
-      "modeUserOnly": "Custom modes are always user-level in the current release.",
+      "modeUserOnly": "Custom Agents that accept tasks directly are user-level in the current release.",
       "description": "Description",
       "descPlaceholder": "Briefly describe what this agent does",
       "descRequired": "Description is required",
@@ -387,17 +355,19 @@
     }
   },
   "agentDescriptions": {
-    "Agentic": "Autonomous execution mode: automatically analyze requirements, plan tasks, and execute code changes",
-    "Cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
-    "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
+    "Cowork": "Office collaboration Agent: help with office and research tasks, confirming key steps with you.",
+    "ComputerUse": "Computer use SubAgent: perform delegated work in browsers, desktop apps, and file systems.",
     "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",
-    "Explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
-    "CodeReview": "Code review agent: perform quality checks and provide improvement suggestions",
-    "DeepReview": "Strict Review compatibility agent: runs the highest-strength Review path when historical sessions or commands need it",
-    "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
+    "Explore": "Explore SubAgent: quickly browse the codebase to understand project structure and key files",
+    "CodeReview": "Code review SubAgent: perform quality checks and provide improvement suggestions",
+    "DeepReview": "Strict Review compatibility SubAgent: supports review workflows in historical sessions and commands.",
+    "GenerateDoc": "Documentation SubAgent: automatically generate code documentation and explanations",
     "Init": "Init agent: help set up project structure and initial configuration",
-    "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
-    "Claw": "Claw mode: extract and integrate information from external sources",
-    "Ultra": "Swarm planning mode: decompose complex work into bounded agent tasks, coordinate execution, and synthesize reviewed results"
+    "ReviewFixer": "Review fixer SubAgent: automatically fix code issues based on review results",
+    "Claw": "Personal assistant: help with daily tasks using your preferences and context.",
+    "Standard": "General task execution with planning, tools, and delegated work.",
+    "Ultimate": "Decompose complex tasks, coordinate parallel SubAgents, and review their results.",
+    "Minimal": "A compact execution loop with a fixed, small tool set.",
+    "Creative": "Create and customize OpenBitFun experiences and capabilities."
   }
 }

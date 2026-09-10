@@ -1,6 +1,14 @@
 use crate::agentic::core::message::MemoryCitation;
 use crate::infrastructure::PathManager;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_services_core::memory_store::{
+    decode_memory_job, decode_memory_record, initialize_memory_schema, upsert_memory_record,
+};
+pub use openbitfun_services_core::memory_store::{
+    MemoryJobRecord as MemoryJobRow, MemoryRecord as MemoryRow,
+};
+#[cfg(test)]
+use openbitfun_services_core::memory_store::{EXPECTED_JOBS_COLUMNS, EXPECTED_STAGE1_COLUMNS};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -17,22 +25,6 @@ const JOB_STATUS_RUNNING: &str = "running";
 const JOB_STATUS_DONE: &str = "done";
 const JOB_STATUS_ERROR: &str = "error";
 const DEFAULT_RETRY_REMAINING: i64 = 3;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MemoryRow {
-    pub session_id: String,
-    pub workspace_path: String,
-    pub rollout_path: String,
-    pub source_updated_at_unix_secs: i64,
-    pub raw_memory: String,
-    pub rollout_summary: String,
-    pub rollout_slug: Option<String>,
-    pub generated_at_unix_secs: i64,
-    pub usage_count: i64,
-    pub last_usage_unix_secs: Option<i64>,
-    pub selected_for_phase2: i64,
-    pub selected_for_phase2_source_updated_at: Option<i64>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemoryPhase2CandidateRow {
@@ -54,39 +46,6 @@ pub struct MemoryPhase2CandidateRow {
 pub struct MemoryPhase2SelectionRow {
     pub job_key: String,
     pub input_watermark: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MemoryJobRow {
-    pub kind: String,
-    pub job_key: String,
-    pub status: String,
-    pub worker_id: Option<String>,
-    pub ownership_token: Option<String>,
-    pub started_at_unix_secs: Option<i64>,
-    pub finished_at_unix_secs: Option<i64>,
-    pub lease_until_unix_secs: Option<i64>,
-    pub retry_at_unix_secs: Option<i64>,
-    pub retry_remaining: i64,
-    pub last_error: Option<String>,
-    pub input_watermark: Option<i64>,
-    pub last_success_watermark: Option<i64>,
-}
-
-impl MemoryJobRow {
-    pub fn success_cooldown_until_unix_secs(&self, cooldown_seconds: i64) -> Option<i64> {
-        if self.kind != JOB_KIND_MEMORY_CONSOLIDATE_GLOBAL
-            || self.status != JOB_STATUS_DONE
-            || self.last_error.is_some()
-            || self.input_watermark.is_none()
-            || self.last_success_watermark != self.input_watermark
-        {
-            return None;
-        }
-
-        self.finished_at_unix_secs
-            .map(|finished_at| finished_at.saturating_add(cooldown_seconds.max(0)))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1219,108 +1178,12 @@ fn open_connection(path: &Path) -> OpenBitFunResult<Connection> {
 }
 
 fn initialize_schema(conn: &Connection) -> OpenBitFunResult<()> {
-    recreate_table_if_shape_differs(conn, "stage1_outputs", EXPECTED_STAGE1_COLUMNS)?;
-    recreate_table_if_shape_differs(conn, "jobs", EXPECTED_JOBS_COLUMNS)?;
-    conn.execute_batch(
-        r#"
-        CREATE TABLE IF NOT EXISTS stage1_outputs (
-            thread_id TEXT PRIMARY KEY NOT NULL,
-            workspace_path TEXT NOT NULL,
-            rollout_path TEXT NOT NULL,
-            source_updated_at INTEGER NOT NULL,
-            raw_memory TEXT NOT NULL,
-            rollout_summary TEXT NOT NULL,
-            rollout_slug TEXT,
-            generated_at INTEGER NOT NULL,
-            usage_count INTEGER,
-            last_usage INTEGER,
-            selected_for_phase2 INTEGER NOT NULL DEFAULT 0,
-            selected_for_phase2_source_updated_at INTEGER
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_stage1_outputs_source_updated_at
-            ON stage1_outputs(source_updated_at DESC, thread_id DESC);
-
-        CREATE TABLE IF NOT EXISTS jobs (
-            kind TEXT NOT NULL,
-            job_key TEXT NOT NULL,
-            status TEXT NOT NULL,
-            worker_id TEXT,
-            ownership_token TEXT,
-            started_at INTEGER,
-            finished_at INTEGER,
-            lease_until INTEGER,
-            retry_at INTEGER,
-            retry_remaining INTEGER NOT NULL,
-            last_error TEXT,
-            input_watermark INTEGER,
-            last_success_watermark INTEGER,
-            PRIMARY KEY (kind, job_key)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_jobs_kind_status_retry_lease
-            ON jobs(kind, status, retry_at, lease_until);
-        "#,
-    )
-    .map_err(|error| {
-        OpenBitFunError::io(format!("Failed to initialize memories schema: {}", error))
-    })?;
-    Ok(())
+    initialize_memory_schema(conn).map_err(|error| {
+        OpenBitFunError::io(format!("Failed to initialize memories schema: {error}"))
+    })
 }
 
-const EXPECTED_STAGE1_COLUMNS: &[&str] = &[
-    "thread_id",
-    "workspace_path",
-    "rollout_path",
-    "source_updated_at",
-    "raw_memory",
-    "rollout_summary",
-    "rollout_slug",
-    "generated_at",
-    "usage_count",
-    "last_usage",
-    "selected_for_phase2",
-    "selected_for_phase2_source_updated_at",
-];
-
-const EXPECTED_JOBS_COLUMNS: &[&str] = &[
-    "kind",
-    "job_key",
-    "status",
-    "worker_id",
-    "ownership_token",
-    "started_at",
-    "finished_at",
-    "lease_until",
-    "retry_at",
-    "retry_remaining",
-    "last_error",
-    "input_watermark",
-    "last_success_watermark",
-];
-
-fn recreate_table_if_shape_differs(
-    conn: &Connection,
-    table_name: &str,
-    expected_columns: &[&str],
-) -> OpenBitFunResult<()> {
-    let columns = table_columns(conn, table_name)?;
-    let expected_columns = expected_columns
-        .iter()
-        .map(|column| column.to_string())
-        .collect::<Vec<_>>();
-    if !columns.is_empty() && columns != expected_columns {
-        conn.execute(&format!("DROP TABLE IF EXISTS {table_name}"), [])
-            .map_err(|error| {
-                OpenBitFunError::io(format!(
-                    "Failed to drop incompatible memories table {}: {}",
-                    table_name, error
-                ))
-            })?;
-    }
-    Ok(())
-}
-
+#[cfg(test)]
 fn table_columns(conn: &Connection, table_name: &str) -> OpenBitFunResult<Vec<String>> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table_name})"))
@@ -1362,71 +1225,14 @@ fn clear_memory_state_in_conn(conn: &Connection) -> OpenBitFunResult<()> {
     Ok(())
 }
 
-const UPSERT_STAGE1_OUTPUT_SQL: &str = r#"
-            INSERT INTO stage1_outputs (
-                thread_id, workspace_path, rollout_path, source_updated_at, raw_memory,
-                rollout_summary, rollout_slug, generated_at, usage_count,
-                last_usage, selected_for_phase2, selected_for_phase2_source_updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(thread_id) DO UPDATE SET
-                workspace_path = excluded.workspace_path,
-                rollout_path = excluded.rollout_path,
-                source_updated_at = excluded.source_updated_at,
-                raw_memory = excluded.raw_memory,
-                rollout_summary = excluded.rollout_summary,
-                rollout_slug = excluded.rollout_slug,
-                generated_at = excluded.generated_at,
-                usage_count = CASE
-                    WHEN ? != 0 THEN excluded.usage_count
-                    ELSE stage1_outputs.usage_count
-                END,
-                last_usage = CASE
-                    WHEN ? != 0 THEN excluded.last_usage
-                    ELSE stage1_outputs.last_usage
-                END,
-                selected_for_phase2 = CASE
-                    WHEN ? != 0 THEN excluded.selected_for_phase2
-                    ELSE stage1_outputs.selected_for_phase2
-                END,
-                selected_for_phase2_source_updated_at = CASE
-                    WHEN ? != 0 THEN excluded.selected_for_phase2_source_updated_at
-                    ELSE stage1_outputs.selected_for_phase2_source_updated_at
-                END
-            WHERE excluded.source_updated_at >= stage1_outputs.source_updated_at
-            "#;
-
 fn upsert_stage1_output_conn(
     conn: &Connection,
     row: &MemoryRow,
     overwrite_usage_and_selection: bool,
 ) -> OpenBitFunResult<()> {
-    let overwrite = if overwrite_usage_and_selection { 1 } else { 0 };
-    conn.execute(
-        UPSERT_STAGE1_OUTPUT_SQL,
-        params![
-            &row.session_id,
-            &row.workspace_path,
-            &row.rollout_path,
-            row.source_updated_at_unix_secs,
-            &row.raw_memory,
-            &row.rollout_summary,
-            &row.rollout_slug,
-            row.generated_at_unix_secs,
-            row.usage_count,
-            row.last_usage_unix_secs,
-            row.selected_for_phase2,
-            row.selected_for_phase2_source_updated_at,
-            overwrite,
-            overwrite,
-            overwrite,
-            overwrite,
-        ],
-    )
-    .map_err(|error| {
-        OpenBitFunError::io(format!("Failed to upsert memory stage1 output: {}", error))
-    })?;
-    Ok(())
+    upsert_memory_record(conn, row, overwrite_usage_and_selection).map_err(|error| {
+        OpenBitFunError::io(format!("Failed to upsert memory stage1 output: {error}"))
+    })
 }
 
 fn upsert_stage1_output_tx(
@@ -1434,32 +1240,9 @@ fn upsert_stage1_output_tx(
     row: &MemoryRow,
     overwrite_usage_and_selection: bool,
 ) -> OpenBitFunResult<()> {
-    let overwrite = if overwrite_usage_and_selection { 1 } else { 0 };
-    tx.execute(
-        UPSERT_STAGE1_OUTPUT_SQL,
-        params![
-            &row.session_id,
-            &row.workspace_path,
-            &row.rollout_path,
-            row.source_updated_at_unix_secs,
-            &row.raw_memory,
-            &row.rollout_summary,
-            &row.rollout_slug,
-            row.generated_at_unix_secs,
-            row.usage_count,
-            row.last_usage_unix_secs,
-            row.selected_for_phase2,
-            row.selected_for_phase2_source_updated_at,
-            overwrite,
-            overwrite,
-            overwrite,
-            overwrite,
-        ],
-    )
-    .map_err(|error| {
-        OpenBitFunError::io(format!("Failed to upsert memory stage1 output: {}", error))
-    })?;
-    Ok(())
+    upsert_memory_record(tx, row, overwrite_usage_and_selection).map_err(|error| {
+        OpenBitFunError::io(format!("Failed to upsert memory stage1 output: {error}"))
+    })
 }
 
 fn phase1_source_needs_update_in_conn(
@@ -1723,38 +1506,11 @@ fn get_job_in_tx(
 }
 
 fn row_to_job(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryJobRow> {
-    Ok(MemoryJobRow {
-        kind: row.get(0)?,
-        job_key: row.get(1)?,
-        status: row.get(2)?,
-        worker_id: row.get(3)?,
-        ownership_token: row.get(4)?,
-        started_at_unix_secs: row.get(5)?,
-        finished_at_unix_secs: row.get(6)?,
-        lease_until_unix_secs: row.get(7)?,
-        retry_at_unix_secs: row.get(8)?,
-        retry_remaining: row.get(9)?,
-        last_error: row.get(10)?,
-        input_watermark: row.get(11)?,
-        last_success_watermark: row.get(12)?,
-    })
+    decode_memory_job(row)
 }
 
 fn row_to_memory(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRow> {
-    Ok(MemoryRow {
-        session_id: row.get(0)?,
-        workspace_path: row.get(1)?,
-        rollout_path: row.get(2)?,
-        source_updated_at_unix_secs: row.get(3)?,
-        raw_memory: row.get(4)?,
-        rollout_summary: row.get(5)?,
-        rollout_slug: row.get(6)?,
-        generated_at_unix_secs: row.get(7)?,
-        usage_count: row.get(8)?,
-        last_usage_unix_secs: row.get(9)?,
-        selected_for_phase2: row.get(10)?,
-        selected_for_phase2_source_updated_at: row.get(11)?,
-    })
+    decode_memory_record(row)
 }
 
 fn row_to_phase2_candidate(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryPhase2CandidateRow> {

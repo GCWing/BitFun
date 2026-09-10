@@ -26,7 +26,7 @@
       "purpose": "Presents one user or assistant message in the conversation timeline.",
       "anatomy": ["message_text", "role_surface", "hairline_border"],
       "states": ["user", "assistant"],
-      "tokens": ["body_medium", "message_bubble_max_width", "message_bubble_horizontal_padding", "message_bubble_vertical_padding", "message_bubble_radius", "message_spacing", "timeline_top_padding"],
+      "tokens": ["body_large", "message_bubble_max_width", "message_bubble_horizontal_padding", "message_bubble_vertical_padding", "message_bubble_radius", "message_spacing", "timeline_top_padding"],
       "platformNotes": "The maximum width is the 276-unit compact HarmonyOS baseline; wide layouts may use a separate responsive policy."
     },
     "composer_bar": {

@@ -4,9 +4,11 @@
     "subagentOwner": "{{subagent}} 子 Agent",
     "responseFailed": "权限回复未能送达，请重试。",
     "allowOnce": "允许一次",
-    "allowAlways": "始终允许",
-    "allowAlwaysTooltip": "始终允许会为 {{projectPath}} 保存匹配的访问权限。",
-    "allowAlwaysTooltipCurrentProject": "始终允许会为当前项目保存匹配的访问权限。",
+    "allowAlways": "始终允许此范围",
+    "allowAlwaysCommand": "始终允许此命令",
+    "allowAlwaysCommandDescription": "仅对当前项目中完全相同的命令（含参数）生效，不会放行其他命令。",
+    "allowAlwaysTooltip": "在 {{projectPath}} 中记住当前操作的授权，仅对以下范围生效：\n{{resources}}",
+    "allowAlwaysTooltipCurrentProject": "在当前项目中记住当前操作的授权，仅对以下范围生效：\n{{resources}}",
     "allowAlwaysTooltipNoGrant": "此请求没有可保存的访问范围；始终允许仅应用于本次请求。",
     "risks": {
       "pageSave": "以{{visibility}}可见性保存“{{slug}}”的新不可变版本，不改变当前生产版本。",
@@ -177,7 +179,7 @@
     },
     "loading": {
       "title": "正在生成用量报告",
-      "description": "正在读取本地会话记录，并整理隐私安全的统计摘要。",
+      "description": "正在读取会话记录，并整理隐私安全的统计摘要。",
       "steps": {
         "collecting": "读取会话记录",
         "tokens": "汇总 Token 和工具活动",
@@ -487,6 +489,7 @@
     "cannotRollback": "无法回滚",
     "rollbackDisabledBusy": "请等待会话空闲后再回滚。",
     "rollbackDisabledRemote": "远程工作区未记录文件快照，暂不支持文件与消息一致回滚；不会更改任何文件或消息。",
+    "rollbackDisabledDispatch": "远程任务暂不支持从当前设备回滚历史。",
     "rollbackTo": "回滚到第 {{index}} 轮之前（删除该轮及之后）",
     "rollbackDialogTitle": "确定回滚到第 {{index}} 轮之前？",
     "rollbackDialogIntro": "将执行：",
@@ -501,6 +504,7 @@
     "editDisabledBusy": "请等待会话空闲后再编辑并重跑。",
     "editDisabledImages": "暂不支持编辑图片消息",
     "editDisabledRemote": "编辑并重跑需要完整回滚；远程工作区未记录文件快照，因此暂不支持。",
+    "editDisabledDispatch": "编辑并重跑需要先回滚历史，远程任务暂不支持此操作。",
     "editDisabledLocalCommand": "无法编辑本地命令消息",
     "editDisabledHistoryNotReady": "会话历史尚未就绪",
     "editDialogTitle": "从第 {{index}} 轮编辑并重跑？",
@@ -620,12 +624,13 @@
     "codeBlock": "代码块",
     "image": "图片",
     "url": "URL",
+    "dropToAdd": "松开即可添加",
     "dragHint": "拖放文件到此处添加上下文"
   },
   "agent": {
     "title": "智能体",
     "select": "选择智能体",
-    "default": "默认助手",
+    "default": "$t(shared:agents.default)",
     "coding": "编程助手",
     "review": "审核",
     "architect": "架构师",
@@ -721,7 +726,6 @@
     "harness": {
       "selectorTooltip": "当前执行：{{name}}",
       "fixedTooltip": "本会话使用 {{name}}，开始后已固定。",
-      "activateBalanced": "切换到标准 Harness",
       "compatibilityShort": "兼容模式",
       "comingSoon": "开发中",
       "comingSoonNotice": "「{{name}}」Harness 执行框架正在开发中。",
@@ -738,17 +742,29 @@
       "profileChangeOutcomeUnknown": "暂时无法确认 Harness 是否已切换，请刷新会话后再重试。",
       "profileUnavailable": "当前 OpenBitFun Host 不支持该 Harness。",
       "profileChangeFailed": "切换 Harness 失败，请重试。",
+      "rememberFailed": "Harness 已切换，但未能记住本次选择。之后的新会话可能继续使用原默认设置。",
       "otherAgentsTitle": "智能体",
       "otherAgentsEmpty": "当前没有可用的主智能体",
       "unavailable": "不可用",
       "agentUnavailable": "当前 Host 或设置不支持 {{name}}。",
       "profiles": {
-        "minimal": { "name": "极简" },
-        "balanced": { "name": "标准" },
-        "ultimate": { "name": "极致" },
-        "creative": { "name": "创造" },
-        "other": { "name": "智能体" }
-      }
+        "other": {
+          "name": "智能体"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "切换到标准 Harness"
     },
     "agents": {
       "available": "可用",
@@ -756,9 +772,15 @@
       "comingSoon": "开发中",
       "comingSoonNotice": "直接调用「{{name}}」Agent 的能力正在开发中。",
       "reviewUnavailable": "Review Agent 需要一个包含可审查变更的活动会话。",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "Cowork"
+      },
+      "computerUse": {
+        "name": "Computer Use"
+      }
     },
     "addBoostTooltip": "指令、上下文、图片或 Skill",
     "modeChangeFailed": "切换智能体模式失败，请重试。",
@@ -833,7 +855,6 @@
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "移除当前 Agent",
     "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",
     "defaultModeUnsetTooltip": "默认模式覆盖已启用，点击清除",
     "defaultModeSet": "已将 {{mode}} 设为新聊天默认模式。",
@@ -915,20 +936,22 @@
     "sendingToMain": "主会话：{{title}}",
     "sendingToBtw": "侧问会话：{{title}}",
     "modeDescriptions": {
-      "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
       "Claw": "个人助理模式：面向个人工作区和日常事务，使用独立的助理上下文",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
       "ComputerUse": "独立电脑操作智能体：感知本机环境，操作应用、浏览器与系统界面",
       "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
-      "Ultra": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
+      "Standard": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
+      "Ultimate": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
@@ -963,15 +986,18 @@
     "percentComplete": "{{percent}}% 完成",
     "currentStatus": "当前状态: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "skillsIncomplete": "部分技能扫描失败，已成功读取的技能仍可使用。",
+    "skillsDiagnosticsUnavailable": "当前主机不提供技能扫描诊断。",
+    "menuTitle": "选择上下文",
     "searchResults": "搜索结果",
     "loading": "加载中...",
     "browseUnavailable": "无法加载工作区文件，请检查连接后重试。",
     "searchUnavailable": "无法搜索工作区，请检查连接后重试。",
-    "noMatchingFiles": "没有找到匹配的文件",
+    "noMatchingResults": "没有找到匹配的上下文",
     "emptyDirectory": "空目录",
     "rootDirectory": "根目录",
-    "goBack": "返回上级目录",
+    "goBack": "返回上一级",
     "navHint": "导航",
     "enterHint": "进入",
     "backHint": "返回",
@@ -1093,6 +1119,8 @@
     "fixRunning": "正在修复...",
     "fixCompleted": "修复完成",
     "fixFailed": "修复失败",
+    "actionStartFailed": "无法开始此次操作。",
+    "actionStartFailedWithReason": "无法开始此次操作：{{reason}}",
     "fixTimeout": "修复超时",
     "fixInterrupted": "修复已中断，最多有 {{count}} 个已选项目可能仍需处理。",
     "reviewWaitingCapacity": "审核正在等待容量",
@@ -1264,6 +1292,7 @@
       "unresolvedGitRange": "无法解析请求的 Git 范围，请检查引用或范围后重试",
       "emptyWorkspace": "当前工作区没有可审核的变更",
       "emptyExplicitScope": "请求的文件或目录没有工作区变更",
+      "missingExplicitScope": "请求的文件或目录在当前工作区中不存在",
       "unresolvedTarget": "无法将审核目标准备为有界证据，请打开对应工作区或缩小目标后重试",
       "repositoryUntrusted": "该目录属于其他用户，Git 拒绝读取此仓库。请在提示中信任该目录后重新启动审核",
       "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
@@ -1335,7 +1364,7 @@
     "btwBackTooltipWithoutTurn": "返回到来源会话：{{title}}",
     "btwCreateTooltip": "快速发起一个侧问",
     "searchPlaceholder": "搜索对话消息",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} 个结果",
     "searchNoResults": "没有匹配结果",
     "searchPrevious": "上一个匹配结果",
     "searchNext": "下一个匹配结果",
@@ -1409,9 +1438,10 @@
     "sendInput": "发送输入",
     "sendInputUnavailable": "只能向正在运行的交互式命令发送输入。",
     "copy": "复制输出",
+    "copyRaw": "复制原始输出",
+    "replayIncomplete": "较早的输出已丢弃，无法完整恢复终端状态；保留内容可能显示不完整。",
+    "unknownGeometry": "无法确定源终端尺寸，不能准确重放输出。你仍可复制原始输出。",
     "copyCommand": "复制命令",
-    "simplifiedView": "简化显示",
-    "simplifiedViewTooltip": "隐藏终端控制符，让输出更易读。",
     "loading": "正在加载输出...",
     "empty": "暂未捕获到输出。",
     "remote": "远程",
@@ -1486,6 +1516,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "简洁长图",
+    "expandedThinking": "含思考长图",
     "subtitle": "AI 编程助手 · 对话记录",
     "poweredBy": "Powered by",
     "aiAssistant": "AI 编程助手",
@@ -1628,8 +1660,6 @@
       "delete": "删除文件",
       "deletedLabel": "删除",
       "failed": "失败",
-      "guidanceHint": " · 需要处理",
-      "guidanceTitle": "重试前需要处理",
       "parsingPath": "解析文件路径中...",
       "receivingContent": "接收文件内容中...",
       "unknownFile": "未知文件",
@@ -1963,7 +1993,7 @@
       "executing": "执行中...",
       "subAgentFailed": "子代理任务执行失败",
       "subAgentTaskFailed": "子代理任务失败",
-      "failed": "失败",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "确认委派",
       "cancel": "取消",
       "task": "任务",
@@ -1997,7 +2027,7 @@
       "status": {
         "pending": "等待中",
         "running": "执行中",
-        "completed": "已完成",
+        "completed": "$t(shared:statuses.done)",
         "failed": "执行失败"
       },
       "loadingMore": "正在加载更多输出...",
@@ -2187,9 +2217,9 @@
       "paramsReceiving": "接收参数中",
       "preparing": "准备中",
       "running": "执行中",
-      "completed": "已完成",
-      "error": "失败",
-      "cancelled": "已取消"
+      "completed": "$t(shared:statuses.done)",
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "执行中...",

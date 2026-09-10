@@ -87,7 +87,6 @@
   &__workspace-name {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--openbitfun-type-label-sm-font-size);
   }
@@ -119,7 +118,6 @@
   &__workspace-menu-text {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -325,7 +323,6 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -354,7 +351,6 @@
     line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
     color: var(--openbitfun-color-content-muted);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

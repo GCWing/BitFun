@@ -84,7 +84,7 @@ test("NavigationPanel separates group captions, destinations, and the selected d
   );
   const heading = styles.match(/\.headingLabel\s*\{([^}]+)\}/)?.[1];
   assert.ok(heading);
-  assert.match(heading, /color: color-mix\(in srgb, var\(--openbitfun-color-content-primary\) 40%, transparent\)/);
+  assert.match(heading, /color: var\(--openbitfun-color-content-caption\)/);
   assert.match(heading, /font-family: var\(--openbitfun-type-label-xs-font-family\)/);
   assert.match(heading, /font-size: var\(--openbitfun-type-label-xs-font-size\)/);
   assert.match(heading, /font-weight: var\(--openbitfun-type-label-xs-font-weight\)/);

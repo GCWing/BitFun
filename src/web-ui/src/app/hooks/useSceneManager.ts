@@ -5,7 +5,7 @@
  * write to the same Zustand store, so state is always in sync.
  */
 
-import { SCENE_TAB_REGISTRY, getMiniAppSceneDef } from '../scenes/registry';
+import { SCENE_TAB_REGISTRY, getMiniAppSceneDef, getSceneDef } from '../scenes/registry';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
 import { useSceneStore } from '../stores/sceneStore';
 import { useMiniAppStore } from '../scenes/miniapps/miniAppStore';
@@ -15,6 +15,7 @@ import { useI18n } from '@/infrastructure/i18n';
 export interface UseSceneManagerReturn {
   openTabs: ReturnType<typeof useSceneStore.getState>['openTabs'];
   activeTabId: ReturnType<typeof useSceneStore.getState>['activeTabId'];
+  pendingTabId: ReturnType<typeof useSceneStore.getState>['pendingTabId'];
   navigationMotion: ReturnType<typeof useSceneStore.getState>['navigationMotion'];
   navigationSequence: ReturnType<typeof useSceneStore.getState>['navigationSequence'];
   tabDefs: SceneTabDef[];
@@ -27,6 +28,7 @@ export function useSceneManager(): UseSceneManagerReturn {
   const {
     openTabs,
     activeTabId,
+    pendingTabId,
     navigationMotion,
     navigationSequence,
     activateScene,
@@ -45,12 +47,17 @@ export function useSceneManager(): UseSceneManagerReturn {
       return getMiniAppSceneDef(appId, localizedName ?? app?.name);
     });
 
+  const sessionDefs: SceneTabDef[] = openTabs
+    .filter(tab => tab.session)
+    .map(tab => ({ ...getSceneDef('session')!, id: tab.id }));
+
   return {
     openTabs,
     activeTabId,
+    pendingTabId,
     navigationMotion,
     navigationSequence,
-    tabDefs: [...SCENE_TAB_REGISTRY, ...miniAppDefs],
+    tabDefs: [...SCENE_TAB_REGISTRY, ...sessionDefs, ...miniAppDefs],
     activateScene,
     openScene,
     closeScene,

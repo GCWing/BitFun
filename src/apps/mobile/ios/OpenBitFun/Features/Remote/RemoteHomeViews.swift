@@ -5,8 +5,7 @@ struct RemoteHomeView: View {
     @ObservedObject var model: MobileAppModel
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 12) {
+        VStack(spacing: 12) {
             Spacer()
             ZStack {
                 Image(systemName: "desktopcomputer")
@@ -33,28 +32,11 @@ struct RemoteHomeView: View {
                 .background(OpenBitFunTheme.accent)
                 .clipShape(Capsule())
             Spacer()
-            }
-            remoteSettingsButton
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
         .padding(.bottom, 48)
         .background(OpenBitFunTheme.page)
-    }
-
-    private var remoteSettingsButton: some View {
-        Button { model.remoteControlSettingsOpen = true } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(OpenBitFunTheme.ink)
-                .frame(width: 44, height: 44)
-                .background(OpenBitFunTheme.card)
-                .overlay(Circle().stroke(OpenBitFunTheme.line, lineWidth: 1))
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(model.localized("远程控制设置"))
-        .padding(.top, 16).padding(.trailing, 16)
     }
 }
 
@@ -62,38 +44,42 @@ struct RemoteConnectedHomeView: View {
     @ObservedObject var model: MobileAppModel
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 14) {
+        VStack(spacing: 10) {
             Spacer()
-            Image(systemName: "desktopcomputer.and.macbook")
-                .font(.system(size: 34, weight: .medium)).foregroundStyle(OpenBitFunTheme.muted)
-            Text(model.localized("桌面端已连接"))
-                .font(MobileDesignTypography.titleMedium.font).foregroundStyle(OpenBitFunTheme.ink)
-            Text(model.localized("选择已有会话，或在当前工作区创建一个新会话。"))
-                .font(MobileDesignTypography.bodySmall.font).foregroundStyle(OpenBitFunTheme.muted)
+            Text(model.localized(model.remoteSessions.isEmpty ? "还没有远程对话" : "选择一个会话"))
+                .font(MobileDesignTypography.headlineMedium.font)
+                .foregroundStyle(OpenBitFunTheme.ink)
+            Text(model.localized(
+                model.remoteSessions.isEmpty
+                    ? "新建聊天后，可以从手机继续处理桌面端任务。"
+                    : "从侧边栏打开会话，或新建一个。"
+            ))
+                .font(MobileDesignTypography.bodyMedium.font)
+                .foregroundStyle(OpenBitFunTheme.muted)
                 .multilineTextAlignment(.center)
-            Button { model.remoteCreateOpen = true } label: {
-                Label(model.localized("新建远程会话"), systemImage: "plus")
-                    .font(MobileDesignTypography.labelMedium.font).foregroundStyle(OpenBitFunTheme.contentOnAction)
-                    .frame(minWidth: 176, minHeight: 44).background(OpenBitFunTheme.accent).clipShape(Capsule())
+                .lineLimit(2)
+                .frame(maxWidth: 280)
+            Button(action: model.createRemoteSessionFromHome) {
+                HStack(spacing: 8) {
+                    if model.remoteCreateSubmitting {
+                        ProgressView().controlSize(.small).tint(OpenBitFunTheme.contentOnAction)
+                    }
+                    Text(model.localized(model.remoteCreateSubmitting ? "正在加载" : "新建会话"))
+                }
+                .font(MobileDesignTypography.titleSmall.font)
+                .foregroundStyle(OpenBitFunTheme.contentOnAction)
+                .frame(width: 148, height: 46)
+                .background(OpenBitFunTheme.accent)
+                .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(model.remoteCreateSubmitting || !model.remoteCreateInteraction.canSubmit)
+            .padding(.top, 12)
             Spacer()
-            }
-            Button { model.remoteControlSettingsOpen = true } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(OpenBitFunTheme.ink)
-                    .frame(width: 44, height: 44)
-                    .background(OpenBitFunTheme.card)
-                    .overlay(Circle().stroke(OpenBitFunTheme.line, lineWidth: 1))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.localized("远程控制设置"))
-            .padding(.top, 16).padding(.trailing, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 56)
         .background(OpenBitFunTheme.page)
     }
 }

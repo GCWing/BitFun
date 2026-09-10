@@ -39,7 +39,7 @@ How to use skills:
   - `command: "user::openbitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
-- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key or the user's message contains an exact `[$skill-name]` invocation
+- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()
@@ -232,7 +232,8 @@ impl Tool for SkillTool {
 
         // Find and load skill through registry
         let registry = get_skill_registry();
-        let use_stable_key = skill_name.split("::").count() == 3;
+        let use_stable_key =
+            skill_name.starts_with("user::") || skill_name.starts_with("project::");
         let mut skill_data = if context.is_remote() {
             if let Some(ws_fs) = context.ws_fs() {
                 let root = context
@@ -318,6 +319,7 @@ impl Tool for SkillTool {
                 "description": skill_data.description,
                 "location": location_str,
                 "content": skill_data.content,
+                "compatibility_warnings": skill_data.compatibility_warnings,
                 "success": true
             }),
             result_for_assistant: Some(result_for_assistant),
@@ -442,7 +444,7 @@ Use the remote project skill.
         async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
             if path == "/remote/project/.claude/skills/remote-review/SKILL.md" {
                 return Ok(
-                    "---\ndescription: Review a remote target.\narguments: target focus\n---\n\nReview $target for $focus.\n"
+                    "---\ndescription: Review a remote target.\narguments: target focus\nmodel: opus\n---\n\nReview $target for $focus.\nContext: !`git diff`\n"
                         .to_string(),
                 );
             }
@@ -504,6 +506,64 @@ Use the remote project skill.
 
         assert_eq!(schema["properties"]["arguments"]["type"], "string");
         assert_eq!(schema["required"], json!(["command"]));
+    }
+
+    #[tokio::test]
+    async fn stable_key_loads_a_shadowed_nested_skill_without_changing_name_resolution() {
+        let temp = tempfile::tempdir().unwrap();
+        for (directory, body) in [
+            (".openbitfun/skills/same", "default body"),
+            (".codex/skills/nested/same", "chosen body"),
+        ] {
+            let path = temp.path().join(directory);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(
+                path.join("SKILL.md"),
+                format!(
+                    "---\nname: source-collision-regression\ndescription: fixture\n---\n{body}\n"
+                ),
+            )
+            .unwrap();
+        }
+        let context = local_context(temp.path().to_path_buf());
+        for (command, expected) in [
+            ("source-collision-regression", "default body"),
+            ("project::codex::nested/same", "chosen body"),
+        ] {
+            let results = SkillTool::new()
+                .call_impl(&json!({ "command": command }), &context)
+                .await
+                .unwrap();
+            let ToolResult::Result { data, .. } = &results[0] else {
+                panic!("expected skill result")
+            };
+            assert_eq!(data["content"].as_str().unwrap().trim(), expected);
+        }
+        use crate::agentic::tools::implementations::skills::mode_overrides::{
+            load_project_mode_skills_document_local, save_project_mode_skills_document_local,
+            set_mode_skill_disabled_in_document,
+        };
+        let mut document = load_project_mode_skills_document_local(temp.path())
+            .await
+            .unwrap();
+        set_mode_skill_disabled_in_document(
+            &mut document,
+            "agent",
+            "project::codex::nested/same",
+            true,
+        )
+        .unwrap();
+        save_project_mode_skills_document_local(temp.path(), &document)
+            .await
+            .unwrap();
+        assert!(SkillRegistry::global()
+            .find_and_load_skill_by_key_for_workspace(
+                "project::codex::nested/same",
+                Some(temp.path()),
+                Some("agent")
+            )
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -652,6 +712,23 @@ Use the remote project skill.
     #[tokio::test]
     async fn remote_claude_skill_uses_the_same_dialect_for_discovery_and_load() {
         let registry = SkillRegistry::global();
+        let report = registry
+            .get_skill_scan_report_for_remote_workspace(&ClaudeRemoteFs, "/remote/project")
+            .await;
+        assert!(report
+            .skills
+            .iter()
+            .any(|skill| skill.name == "remote-review"));
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .filter(
+                    |notice| notice.path == "/remote/project/.claude/skills/remote-review/SKILL.md"
+                )
+                .count(),
+            2
+        );
         let visible = registry
             .get_resolved_skills_for_remote_workspace(&ClaudeRemoteFs, "/remote/project", None)
             .await;
@@ -672,6 +749,8 @@ Use the remote project skill.
         assert_eq!(loaded.source_id, "claude-code");
         assert_eq!(loaded.source_label, "Claude Code");
         assert_eq!(loaded.argument_names, ["target", "focus"]);
+        assert_eq!(loaded.compatibility_warnings.len(), 2);
+        assert!(loaded.content.contains("!`git diff`"));
 
         let loaded_by_key = registry
             .find_and_load_skill_by_key_for_remote_workspace(
@@ -684,6 +763,61 @@ Use the remote project skill.
             .expect("remote skill should retain source metadata when loaded by key");
         assert_eq!(loaded_by_key.source_id, loaded.source_id);
         assert_eq!(loaded_by_key.source_label, loaded.source_label);
+        assert_eq!(
+            loaded_by_key.compatibility_warnings,
+            loaded.compatibility_warnings
+        );
+    }
+
+    #[tokio::test]
+    async fn local_claude_fallback_survives_discovery_and_explicit_tool_loading() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".claude/skills/compatibility-review");
+        fs::create_dir_all(&skill_dir).unwrap();
+        let body = "Excel `!` and `#REF!`. Review $target. Context: !`git diff`";
+        fs::write(skill_dir.join("SKILL.md"), format!(
+            "---\ndescription: Compatibility review.\nmodel: opus\neffort: high\narguments: target\n---\n{body}"
+        )).unwrap();
+        let registry = SkillRegistry::global();
+        let report = registry
+            .get_skill_scan_report_for_workspace(Some(temp.path()))
+            .await;
+        let skill = report
+            .skills
+            .iter()
+            .find(|skill| skill.name == "compatibility-review")
+            .unwrap();
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .filter(|notice| PathBuf::from(&notice.path) == skill_dir.join("SKILL.md"))
+                .count(),
+            3
+        );
+        let context = local_context(temp.path().to_path_buf());
+        for command in [skill.name.as_str(), skill.key.as_str()] {
+            let results = SkillTool::new()
+                .call_impl(
+                    &json!({"command": command, "arguments": "workbook.xlsx"}),
+                    &context,
+                )
+                .await
+                .unwrap();
+            let ToolResult::Result {
+                data,
+                result_for_assistant,
+                ..
+            } = &results[0]
+            else {
+                panic!("expected skill result");
+            };
+            assert_eq!(data["content"], body.replace("$target", "workbook.xlsx"));
+            assert_eq!(data["compatibility_warnings"].as_array().unwrap().len(), 3);
+            let rendered = result_for_assistant.as_deref().unwrap();
+            assert!(rendered.contains("have not been executed"));
+            assert!(rendered.contains("current session configuration"));
+        }
     }
 
     #[tokio::test]
@@ -742,7 +876,7 @@ Use the remote project skill.
         );
         let context = crate::agentic::tools::framework::ToolUseContext {
             tool_call_id: None,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(workspace),

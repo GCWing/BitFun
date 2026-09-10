@@ -232,7 +232,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
             <div data-openbitfun-component="thread-goal-dialogs" data-openbitfun-part="actions" className="openbitfun-thread-goal-menu__actions">
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 disabled={disabled}
                 onClick={() => controller.openEdit('create')}
@@ -274,12 +274,12 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
             placeholder={t('threadGoal.editPlaceholder')}
           />
           <div data-openbitfun-component="thread-goal-dialogs" data-openbitfun-part="actions" className="openbitfun-thread-goal-edit__actions">
-            <Button type="button" variant="outline" size="sm" onClick={controller.closeEdit}>
+            <Button type="button" variant="fill" size="sm" onClick={controller.closeEdit}>
               {t('threadGoal.editCancel')}
             </Button>
             <Button
               type="button"
-              variant="fill"
+              variant="primary"
               size="sm"
               disabled={disabled || !draft.trim()}
               onClick={() => void controller.saveEdit(draft)}
@@ -315,7 +315,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
           <div data-openbitfun-component="thread-goal-dialogs" data-openbitfun-part="actions" className="openbitfun-thread-goal-resume__actions">
             <Button
               type="button"
-              variant="outline"
+              variant="fill"
               size="sm"
               disabled={disabled}
               onClick={controller.dismissResume}
@@ -324,7 +324,7 @@ export const ThreadGoalDialogs: React.FC<ThreadGoalDialogsProps> = ({
             </Button>
             <Button
               type="button"
-              variant="fill"
+              variant="primary"
               size="sm"
               disabled={disabled}
               onClick={() => void controller.confirmResume()}

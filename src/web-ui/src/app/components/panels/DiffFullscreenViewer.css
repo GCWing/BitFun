@@ -104,7 +104,6 @@
   font-family: var(--openbitfun-type-code-md-font-family);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Header actions */

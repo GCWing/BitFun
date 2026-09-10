@@ -261,7 +261,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-123456789".to_string(),
             "A session\nwith title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.messages = vec![
@@ -300,7 +300,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "CLI Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.messages = vec![

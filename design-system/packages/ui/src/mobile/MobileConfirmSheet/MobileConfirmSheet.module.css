@@ -10,12 +10,8 @@
 
   .icon {
     display: grid;
-    inline-size: 52px;
-    block-size: 52px;
     place-items: center;
-    border-radius: var(--openbitfun-radius-pill);
     color: var(--openbitfun-color-content-secondary);
-    background: var(--openbitfun-color-surface-tertiary);
   }
 
   .actions {

@@ -1,4 +1,13 @@
 {
+  "reviewPlatform": {
+    "stateFilterUnsupported": "目前主機不支援 Gitee 全儲存庫狀態篩選。請更新所連線的主機後使用這些頁籤。",
+    "fileLimit": "Gitee 回傳的檔案清單可能已被截斷，檔案數與變更統計可能不完整。",
+    "commitLimit": "Gitee 最多回傳 250 條提交紀錄，提交歷史可能不完整。",
+    "commentsLimited": "僅載入了部分評論。",
+    "checksLimited": "僅載入了部分 CI 檢查項目。",
+    "ciHeadUnavailable": "此 PR 未提供準確的來源提交版本，無法載入 CI 檢查項目。",
+    "limited": "部分平台資料不完整。"
+  },
   "title": "Git",
   "init": {
     "title": "初始化 Git",

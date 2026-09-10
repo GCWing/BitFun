@@ -1,7 +1,6 @@
 import { createContext, useContext } from 'react';
 import type {
   PeerConnectionHealth,
-  PeerConnectionLostReason,
   PeerHostCapabilities,
 } from './PeerConnectionManager';
 
@@ -20,7 +19,6 @@ export interface PeerAttachmentState {
   deviceId: string;
   deviceName: string;
   health: PeerConnectionHealth;
-  lostReason: PeerConnectionLostReason | null;
   /**
    * Host capabilities probed via `peer_mode_ping`. Null when the host has not
    * answered yet; consumers must fall back to a safe default (unsupported).

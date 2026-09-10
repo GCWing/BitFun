@@ -87,15 +87,17 @@ struct RemoteFilePreviewSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: preview.imageData == nil ? "doc.text" : "photo")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(MobileDesignColors.fileLink)
-                    .frame(width: 34, height: 34)
-                    .background(MobileDesignColors.fileLink.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                Button(action: closePreview) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(model.localized("返回")))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(preview.name)
-                        .font(MobileDesignTypography.titleSmall.font)
+                        .font(MobileDesignTypography.bodyLarge.font.weight(.medium))
                         .foregroundStyle(OpenBitFunTheme.ink)
                         .lineLimit(1)
                     if !preview.mimeType.isEmpty || preview.sizeBytes > 0 {
@@ -107,36 +109,35 @@ struct RemoteFilePreviewSheet: View {
                 }
                 Spacer()
                 Button {
+                    model.openRemoteFile(reference: preview.id, label: preview.name)
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.filePreviewLoading || model.connectionPhase == .disconnected)
+                .opacity(model.filePreviewLoading || model.connectionPhase == .disconnected ? 0.45 : 1)
+                .accessibilityLabel(Text(model.localized("刷新")))
+                Button {
                     model.downloadRemoteFile(
                         reference: "computer://\(preview.id)",
                         label: preview.name
                     )
                 } label: {
-                    Image(systemName: "arrow.down.circle")
+                    Image(systemName: "arrow.down.to.line")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .disabled([.preparing, .downloading, .saving].contains(model.downloadPhase))
                 .opacity([.preparing, .downloading, .saving].contains(model.downloadPhase) ? 0.45 : 1)
                 .accessibilityLabel(Text(model.localizedFormat("下载 %@", preview.name)))
-                Button {
-                    model.dismissFilePreview()
-                    if !embedded { dismiss() }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(OpenBitFunTheme.ink)
-                        .frame(width: 36, height: 36)
-                        .background(OpenBitFunTheme.soft)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(model.localized("关闭文件预览")))
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .frame(height: 68)
+            .padding(.horizontal, 8)
 
             Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
 
@@ -299,5 +300,10 @@ struct RemoteFilePreviewSheet: View {
         .background(OpenBitFunTheme.page)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func closePreview() {
+        model.dismissFilePreview()
+        if !embedded { dismiss() }
     }
 }

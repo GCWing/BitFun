@@ -502,7 +502,7 @@ mod tests {
         SessionMetadata::new(
             session_id.to_string(),
             format!("Session {session_id}"),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         )
     }
@@ -878,7 +878,7 @@ mod tests {
             source_metadata: &source,
             target_session_id: "target".to_string(),
             target_session_name: "Target".to_string(),
-            target_agent_type: "agentic".to_string(),
+            target_agent_type: "Standard".to_string(),
             source_session_id: "source",
             source_turn_id: "turn-2",
             source_turn_index: 1,

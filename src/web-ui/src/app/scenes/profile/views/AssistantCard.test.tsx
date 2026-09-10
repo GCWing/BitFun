@@ -86,12 +86,13 @@ describe('AssistantCard actions', () => {
     const card = container.querySelector('[role="listitem"]');
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
     const newSession = container.querySelector(
-      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
+      '.assistant-card__session-actions > button[data-openbitfun-component="button"]',
     ) as HTMLButtonElement;
     const remove = container.querySelector('[data-openbitfun-part="delete"]') as HTMLButtonElement;
     const setPrimary = container.querySelector('[data-openbitfun-part="setPrimary"]') as HTMLButtonElement;
 
     expect(card?.tagName).toBe('ARTICLE');
+    expect(newSession.getAttribute('data-openbitfun-variant')).toBe('primary');
     expect(configure.getAttribute('aria-label')).toContain('Mira');
 
     act(() => configure.click());
@@ -129,7 +130,7 @@ describe('AssistantCard actions', () => {
 
     const configure = container.querySelector('.assistant-card__main') as HTMLButtonElement;
     const newSession = container.querySelector(
-      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
+      '.assistant-card__session-actions > button[data-openbitfun-component="button"]',
     ) as HTMLButtonElement;
     const setPrimary = container.querySelector('[data-openbitfun-part="setPrimary"]') as HTMLButtonElement;
     const remove = container.querySelector('[data-openbitfun-part="delete"]') as HTMLButtonElement;
@@ -155,7 +156,7 @@ describe('AssistantCard actions', () => {
     });
 
     const newSession = container.querySelector(
-      'button[data-openbitfun-component="button"][data-openbitfun-variant="fill"]',
+      '.assistant-card__session-actions > button[data-openbitfun-component="button"]',
     ) as HTMLButtonElement;
     expect(newSession.disabled).toBe(true);
     expect(newSession.getAttribute('aria-busy')).toBe('true');

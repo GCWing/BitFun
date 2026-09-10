@@ -1,6 +1,16 @@
  
 
 import { api } from './ApiClient';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
+
+function canonicalConfig(json: string): string {
+  return JSON.stringify(JSON.parse(json), (_key, value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]));
+    }
+    return value;
+  });
+}
 
 /** MCP Apps protocol version (aligned with VSCode modelContextProtocolApps.ts). */
 export const MCP_APPS_PROTOCOL_VERSION = '2026-01-26';
@@ -335,8 +345,36 @@ export class MCPAPI {
   }
 
    
-  static async saveMCPJsonConfig(jsonConfig: string, expectedFingerprint: string): Promise<void> {
-    return api.invoke('save_mcp_json_config', { jsonConfig, expectedFingerprint });
+  static async saveMCPJsonConfig(
+    jsonConfig: string,
+    expectedFingerprint: string,
+  ): Promise<{ runtimeApplied: boolean }> {
+    const scope = getActiveSurfaceScope();
+    try {
+      await api.invoke('save_mcp_json_config', { jsonConfig, expectedFingerprint });
+      scope.assertCurrent('save MCP configuration');
+      return { runtimeApplied: true };
+    } catch (error) {
+      scope.assertCurrent('confirm saved MCP configuration');
+      // Existing hosts return this explicit post-persistence error over the wire.
+      // Other errors do not prove persistence. A timeout needs a matching
+      // read-back before the UI may discard the draft.
+      const message = error instanceof Error ? error.message : error;
+      if (typeof message === 'string'
+        && message.startsWith('MCP config was saved, but runtime reconciliation failed:')) {
+        return { runtimeApplied: false };
+      }
+      if (error instanceof Error && (error as Error & { code?: string }).code === 'REQUEST_TIMEOUT') {
+        // Connection setup can outlive the invoke deadline after the write
+        // committed. Read back on the same surface; never replay the mutation.
+        const snapshot = await this.loadMCPJsonConfig().catch(() => null);
+        scope.assertCurrent('read back saved MCP configuration');
+        if (snapshot && canonicalConfig(snapshot.jsonConfig) === canonicalConfig(jsonConfig)) {
+          return { runtimeApplied: false };
+        }
+      }
+      throw error;
+    }
   }
 
   /**

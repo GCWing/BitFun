@@ -10,7 +10,7 @@ import React, { useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { NavItem as NavItemConfig } from '../types';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, Tooltip } from '@openbitfun/ui';
 
 interface NavItemProps {
   item: NavItemConfig;
@@ -63,7 +63,7 @@ const NavItem: React.FC<NavItemProps> = ({
   };
 
   return (
-    <button
+    <button data-overflow-trigger
       type="button"
       className={[
         'openbitfun-nav-panel__item',
@@ -77,17 +77,17 @@ const NavItem: React.FC<NavItemProps> = ({
       <span className="openbitfun-nav-panel__item-icon" aria-hidden="true">
         <Icon glyph={ItemGlyph} size="sm" />
       </span>
-      <span className="openbitfun-nav-panel__item-label">{displayLabel}</span>
+      <OverflowText className="openbitfun-nav-panel__item-label">{displayLabel}</OverflowText>
 
       {badge && (
-        <span
+        <OverflowText data-overflow-trigger
           ref={badgeRef}
           className={`openbitfun-nav-panel__item-badge ${onBadgeClick ? 'openbitfun-nav-panel__item-badge--clickable' : ''}`}
           onClick={handleBadgeClick}
           title={badge}
         >
           {badge}
-        </span>
+        </OverflowText>
       )}
 
       {renderActions ? (

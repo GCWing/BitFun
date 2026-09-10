@@ -174,6 +174,60 @@ describe('useFlowChatSearch navigation', () => {
     expect(controller?.currentMatchIndex).toBe(4);
   }
 
+  it('marks only matching blocks, leaving other blocks in the same turn undecorated', () => {
+    render([
+      {
+        type: 'user-message',
+        turnId: 'turn-1',
+        data: { id: 'user-1', content: 'unrelated prompt' },
+      },
+      {
+        type: 'model-round',
+        turnId: 'turn-1',
+        data: {
+          id: 'round-1',
+          items: [{ id: 'text-1', type: 'text', content: 'needle and another needle' }],
+        },
+      },
+      {
+        type: 'explore-group',
+        turnId: 'turn-1',
+        data: {
+          groupId: 'group-1',
+          allItems: [{ id: 'thinking-1', type: 'thinking', content: 'unrelated reasoning' }],
+        },
+      },
+      {
+        type: 'user-message',
+        turnId: 'turn-2',
+        data: { id: 'user-2', content: 'needle in a different turn' },
+      },
+    ] as VirtualItem[]);
+
+    act(() => controller?.onSearchChange('needle'));
+    expect(controller?.matches).toHaveLength(3);
+    expect(controller?.matchIndices).toEqual(new Set([1, 3]));
+    expect(controller?.matchesByVirtualIndex.get(1)).toEqual([
+      expect.objectContaining({ flowItemId: 'text-1', occurrenceIndex: 0 }),
+      expect.objectContaining({ flowItemId: 'text-1', occurrenceIndex: 1 }),
+    ]);
+    expect(controller?.matchesByVirtualIndex.has(0)).toBe(false);
+    expect(controller?.matchesByVirtualIndex.has(2)).toBe(false);
+    expect(controller?.currentMatchVirtualIndex).toBe(1);
+
+    act(() => controller?.onSearchChange('missing'));
+    expect(controller?.matchIndices.size).toBe(0);
+    expect(controller?.currentMatchVirtualIndex).toBe(-1);
+
+    act(() => controller?.onSearchChange('reasoning'));
+    expect(controller?.matchIndices).toEqual(new Set([2]));
+    expect(controller?.currentMatchVirtualIndex).toBe(2);
+
+    act(() => controller?.clearSearch());
+    expect(controller?.matchIndices.size).toBe(0);
+    expect(controller?.currentMatchVirtualIndex).toBe(-1);
+  });
+
   it('moves next from the resolved index after matches shrink', () => {
     selectLastOfFive();
     render(searchableItems(3));

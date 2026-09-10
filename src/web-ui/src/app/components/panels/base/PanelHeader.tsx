@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 /**
  * Generic panel header with centered title and optional action buttons.
  */
@@ -18,7 +19,7 @@ export const PanelHeader: React.FC<PanelHeaderProps> = ({
 }) => {
   return (
     <div data-openbitfun-component="panel-header" data-openbitfun-part="root" className={`openbitfun-panel-header ${className}`}>
-      <h3 className="openbitfun-panel-header__title" data-openbitfun-component="panel-header" data-openbitfun-part="title">{title}</h3>
+      <h3 className="openbitfun-panel-header__title" data-openbitfun-component="panel-header" data-openbitfun-part="title"><OverflowText>{title}</OverflowText></h3>
       {actions && (
         <div className="openbitfun-panel-header__actions" data-openbitfun-component="panel-header" data-openbitfun-part="actions">
           {actions}

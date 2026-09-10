@@ -14,6 +14,7 @@ import {
 } from "react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { Portal, resolvePortalTarget } from "../../overlay/Portal";
 import { useDesignSystem } from "../../overlay/useDesignSystem";
 import { useDismissibleLayer } from "../../overlay/useDismissibleLayer";
@@ -208,9 +209,13 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet({
   );
 });
 
-export const DialogHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  function DialogHeader({ className, ...props }, ref) {
-    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" ref={ref} />;
+export interface DialogHeaderProps extends HTMLAttributes<HTMLDivElement> {
+  separator?: boolean;
+}
+
+export const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
+  function DialogHeader({ className, separator = false, ...props }, ref) {
+    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" data-separator={separator} ref={ref} />;
   },
 );
 
@@ -221,9 +226,13 @@ export const DialogHeading = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEl
 );
 
 export const DialogTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
-  function DialogTitle({ className, id, ...props }, ref) {
+  function DialogTitle({ children, className, id, ...props }, ref) {
     const context = useDialogContext("DialogTitle");
-    return <h2 {...props} className={classNames(styles.title, className)} data-openbitfun-part="title" id={id ?? context.titleId} ref={ref} />;
+    return (
+      <h2 {...props} className={classNames(styles.title, className)} data-openbitfun-part="title" id={id ?? context.titleId} ref={ref}>
+        <OverflowText>{children}</OverflowText>
+      </h2>
+    );
   },
 );
 
@@ -286,15 +295,17 @@ export const DialogBody = forwardRef<HTMLDivElement, DialogBodyProps>(
 
 export interface DialogFooterProps extends HTMLAttributes<HTMLElement> {
   appearance?: DialogFooterAppearance;
+  separator?: boolean;
 }
 
 export const DialogFooter = forwardRef<HTMLElement, DialogFooterProps>(
-  function DialogFooter({ appearance = "attached", className, ...props }, ref) {
+  function DialogFooter({ appearance = "attached", className, separator = false, ...props }, ref) {
     return (
       <footer
         {...props}
         className={classNames(styles.footer, className)}
         data-appearance={appearance}
+        data-separator={separator}
         data-openbitfun-part="footer"
         ref={ref}
       />

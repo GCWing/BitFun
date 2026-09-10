@@ -135,7 +135,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
 
     await localSessionDriver.startTurn(
       context,
-      { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'agentic' },
+      { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'Standard' },
       { createdLocalTurnId: null, hostAcceptedTurn: false },
     );
 

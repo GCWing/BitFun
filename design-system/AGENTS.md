@@ -10,6 +10,7 @@ This file applies to `design-system/**`. Repository-wide rules in the root `AGEN
 - `@openbitfun/ui` owns React anatomy, behavior, accessibility, and stable variants. It must remain independent from product routes, stores, locale catalogs, Tauri APIs, and concrete themes.
 - `@openbitfun/design-tokens` owns theme-independent names and system scales. `@openbitfun/theme-openbitfun` supplies replaceable reference and semantic values.
 - Components consume semantic or system CSS variables. Raw colors are forbidden in public component CSS. Component-private variables use the `--_` prefix.
+- Single-line text slots use `OverflowText`: plain text defaults to fade-out truncation plus an interaction marquee; rich composition keeps its layout unless explicitly opted in. Keep icons/actions outside the text slot, mark the owning control with `data-overflow-trigger`, and preserve wrapping or native editing where appropriate. See the UI package README for the shared interaction contract.
 - Files under `dist/` are generated and must not be edited or committed.
 - Design Lab may alias `@openbitfun/ui` to source only during Vite development for HMR. Its production build must consume package exports.
 - `@openbitfun/ui/registry` is the source of truth for published components. Design Lab derives navigation, counts, token scopes, and detail routes from that registry; Lab-only previews or copy must never add, retain, or remove a package component.

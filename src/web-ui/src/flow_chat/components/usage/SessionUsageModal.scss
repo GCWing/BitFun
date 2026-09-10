@@ -1,61 +1,11 @@
 .session-usage-dialog {
-  inline-size: min(720px, 100%);
-  block-size: min(520px, calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
-  max-block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
-}
-
-.session-usage-dialog__header {
-  padding: 22px 24px 8px;
-  border-block-end: 0;
-}
-
-.session-usage-dialog__heading {
-  min-inline-size: 0;
-}
-
-.session-usage-dialog__title {
-  color: var(--openbitfun-color-content-primary);
-  font-size: var(--openbitfun-type-heading-dialog-font-size);
-  font-weight: var(--openbitfun-type-heading-page-font-weight);
-  letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
-  line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
-}
-
-.session-usage-dialog__body {
-  min-block-size: 0;
-  padding: 0 24px 16px;
-  overflow: hidden;
-  background: var(--openbitfun-color-surface-panel);
+  block-size: min(600px, calc(100dvh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter)));
+  max-block-size: calc(100dvh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
 }
 
 .session-usage-dialog__content {
   display: flex;
-  min-block-size: 0;
-  flex: 1 1 auto;
-}
-
-@media (max-width: 640px) {
-  .session-usage-dialog {
-    block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
-  }
-
-  .session-usage-dialog__header {
-    padding: 18px 18px 9px;
-  }
-
-  .session-usage-dialog__body {
-    padding: 0 18px 14px;
-    overflow-y: auto;
-  }
-}
-
-@media (max-width: 420px) {
-  .session-usage-dialog__header,
-  .session-usage-dialog__body {
-    padding-inline: 14px;
-  }
-
-  .session-usage-dialog__title {
-    font-size: var(--openbitfun-type-flow-section-title-font-size);
-  }
+  flex: 1 0 auto;
+  min-inline-size: 0;
+  container: session-usage / inline-size;
 }

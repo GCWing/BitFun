@@ -28,8 +28,35 @@ Public beta assets are stored on the immutable version tag. After every asset
 and signature is verified, the workflow updates only the `latest.json` asset on
 the `channel-beta` pre-release. Beta Desktop builds read that pointer and fall
 back to `https://openbitfun.com/release/beta/latest.json`.
-The beta release contains Desktop and Installer assets only. CLI and Relay
-floating releases remain stable-only.
+Beta releases include Desktop and Installer assets, Linux CLI and Relay Server
+archives for x86_64 and aarch64, and a multi-platform Relay image for linux/amd64
+and linux/arm64. Release publication requires every producer to succeed. Archives
+include checksums and signatures; `linux-binaries.json` and the signed
+`relay-image.json` descriptor live on the immutable version release.
+
+Relay images use `ghcr.io/<repository-owner>/openbitfun-relay-server` with the
+version tags `v1.0.0-beta.N` and `1.0.0-beta.N`. Beta never updates the `latest`
+image tag. Fork builds publish to the fork owner's image namespace and their
+own GitHub Release URLs. GHCR credentials must permit package publication, and
+the package must be publicly readable for the anonymous-pull verification to
+pass.
+
+With `upload_to_release` disabled, the workflow keeps CLI/Relay archives in
+Actions artifacts and validates the runtime image build without pushing it.
+The explicit `relay_image_only` backfill mode remains a publishing operation.
+It resolves the same immutable tag as the existing archives, rather than the
+current workflow commit. Releases predating the current OpenBitFun artifact
+layout are not image-rebuild inputs.
+
+Install Beta CLI archives manually and deploy the Relay with an explicit Beta
+image tag or its signed descriptor's digest. The default CLI install/update and
+Relay one-click deployment paths stay on stable; Beta CLI builds do not run
+stable-feed automatic update checks. This does not add a runtime channel switch
+or a Beta option to one-click deployment. The stable CLI/Relay mirror manifests
+and the Desktop-only `channel-beta/latest.json` pointer remain unchanged.
+When no usable current stable Relay image exists, one-click deployment builds
+current source on the target host automatically. It does not deploy a differently
+named product image or silently promote a Beta image to stable.
 
 The selected ref must resolve to a commit in the protected `main` history. The
 workflow pins that SHA before dispatching platform jobs and rejects an existing
@@ -61,3 +88,15 @@ stable-only CLI and Relay floating manifests.
 Production cron must run this in-repo script from the OpenBitFun checkout. Do not
 create a detached copy. Host paths, Nginx, and the rest of the origin restore
 steps live in [`deploy/openbitfun-host/README.md`](../../deploy/openbitfun-host/README.md).
+The sync resolves the exact release directory from the updater manifest once;
+Relay and Linux metadata use that same directory to avoid mixed-version reads
+when GitHub's latest-release pointer changes. Publication also compares the
+downloaded Relay descriptor and signature to the image job's signed bytes.
+
+## Focused packaging checks
+
+For release workflow and channel-isolation changes, run
+`pnpm run check:github-config` and
+`node --test scripts/relay/package-contract.test.mjs scripts/tauri-release-manifest.test.mjs`.
+These checks exercise release conditions, image tag selection, Beta manifest
+generation, and asset collection with fixtures; they do not build or publish packages.

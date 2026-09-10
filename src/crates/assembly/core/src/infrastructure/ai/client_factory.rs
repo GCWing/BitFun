@@ -41,6 +41,8 @@ struct CachedAIClient {
     /// Unix seconds when the resolved subscription credential expires.
     #[cfg(feature = "subscription-auth")]
     credential_expires_at: Option<i64>,
+    #[cfg(feature = "subscription-auth")]
+    credential_revision: Option<u64>,
 }
 
 /// Once a cached subscription credential is within this window of expiry, the
@@ -283,6 +285,14 @@ impl AIClientFactory {
         let default_reasoning_preset =
             resolve_default_reasoning_preset(&reasoning_projection).cloned();
 
+        #[cfg(feature = "subscription-auth")]
+        let credential_revision = match &model_config.auth {
+            AuthConfig::Subscription { provider, .. } => {
+                Some(subscription_auth::credential_revision(to_adapter_provider(*provider)).await?)
+            }
+            AuthConfig::ApiKey => None,
+        };
+
         {
             let cache = match self.client_cache.read() {
                 Ok(cache) => cache,
@@ -294,7 +304,12 @@ impl AIClientFactory {
                 }
             };
             if let Some(cached) = cache.get(&normalized_model_id) {
-                if cached.configuration_fingerprint == configuration_fingerprint
+                #[cfg(feature = "subscription-auth")]
+                let account_unchanged = cached.credential_revision == credential_revision;
+                #[cfg(not(feature = "subscription-auth"))]
+                let account_unchanged = true;
+                if account_unchanged
+                    && cached.configuration_fingerprint == configuration_fingerprint
                     && cached.default_reasoning_preset == default_reasoning_preset
                     && !subscription_credential_stale(&model_config.auth, cached)
                 {
@@ -323,7 +338,10 @@ impl AIClientFactory {
 
         let stream_options = build_stream_options_for_model(&global_config.ai, Some(&model_config));
         let client = apply_default_reasoning_preset(
-            AIClient::new_with_runtime_options(ai_config, proxy_config, stream_options),
+            apply_subscription_request_profile(
+                &model_config.auth,
+                AIClient::new_with_runtime_options(ai_config, proxy_config, stream_options),
+            ),
             &reasoning_projection,
         );
         let client = Arc::new(client);
@@ -346,6 +364,11 @@ impl AIClientFactory {
                     client: client.clone(),
                     #[cfg(feature = "subscription-auth")]
                     credential_expires_at,
+                    // Capture before resolution: a concurrent mutation or token
+                    // rotation conservatively causes another rebuild, never a
+                    // stale client stamped with a newer account's epoch.
+                    #[cfg(feature = "subscription-auth")]
+                    credential_revision,
                 },
             );
         }
@@ -449,6 +472,17 @@ fn to_adapter_opencode_plan(plan: OpenCodePlan) -> AdapterOpenCodePlan {
     }
 }
 
+/// Attach request policy from explicit auth identity after credential resolution.
+pub fn apply_subscription_request_profile(auth: &AuthConfig, client: AIClient) -> AIClient {
+    #[cfg(feature = "subscription-auth")]
+    if let AuthConfig::Subscription { provider, .. } = auth {
+        return client.with_subscription_provider(to_adapter_provider(*provider));
+    }
+    #[cfg(not(feature = "subscription-auth"))]
+    let _ = auth;
+    client
+}
+
 /// Resolve a subscription `AuthConfig` and overlay it onto the runtime
 /// `AIConfig`. No-op when `auth == AuthConfig::ApiKey`. Returns the resolved
 /// credential's expiry (Unix seconds) so callers can invalidate cached
@@ -515,10 +549,11 @@ pub async fn apply_subscription_auth_with_options(
                 ai_config.model = model.to_string();
             }
             let resolved = match (*provider, *plan) {
-                (SubscriptionProvider::Opencode, Some(plan)) => {
-                    subscription_auth::resolve_opencode_with_options(
-                        to_adapter_opencode_plan(plan),
+                (SubscriptionProvider::Opencode, plan) => {
+                    subscription_auth::resolve_opencode_model_with_options(
+                        plan.map(to_adapter_opencode_plan),
                         &ai_config.format,
+                        &ai_config.model,
                         options,
                     )
                     .await
@@ -546,34 +581,7 @@ pub async fn apply_subscription_auth_with_options(
         }
     };
 
-    ai_config.api_key = resolved.api_key;
-    if let Some(base) = resolved.base_url {
-        ai_config.base_url = base;
-    }
-    if let Some(req) = resolved.request_url {
-        ai_config.request_url = req;
-    }
-    if let Some(format) = resolved.format {
-        ai_config.format = format;
-    }
-    if !resolved.extra_headers.is_empty() {
-        let merged = match ai_config.custom_headers.take() {
-            Some(mut existing) => {
-                for (k, v) in resolved.extra_headers {
-                    existing.insert(k, v);
-                }
-                existing
-            }
-            None => resolved.extra_headers,
-        };
-        ai_config.custom_headers = Some(merged);
-        // Default to merge so adapter-specific headers (Authorization etc.) are
-        // still applied alongside the injected ones.
-        if ai_config.custom_headers_mode.is_none() {
-            ai_config.custom_headers_mode = Some("merge".to_string());
-        }
-    }
-    Ok(resolved.expires_at)
+    Ok(resolved.apply_to(ai_config))
 }
 
 /// List subscription accounts (Codex / Antigravity / OpenCode / xAI / Hermes).
@@ -659,6 +667,78 @@ mod tests {
 
     #[cfg(feature = "subscription-auth")]
     #[tokio::test]
+    async fn subscription_cache_rebuilds_after_account_changes_and_rejects_logout() {
+        use crate::infrastructure::subscription_auth::{self, store, StoredCredential};
+        let dir = tempfile::tempdir().unwrap();
+        subscription_auth::set_store_path_for_test(dir.path().join("subscription.json"));
+        let config = Arc::new(
+            ConfigService::with_settings(ConfigManagerSettings {
+                path_manager: Some(Arc::new(PathManager::with_user_root_for_tests(
+                    dir.path().join("config"),
+                ))),
+                auto_save: true,
+                backup_count: 0,
+            })
+            .await
+            .unwrap(),
+        );
+        let mut model = build_model("subscription:fixture", "OpenCode", "fixture-model");
+        model.provider = "openai".into();
+        model.base_url = "https://opencode.ai/zen/v1".into();
+        model.auth = AuthConfig::Subscription {
+            provider: super::SubscriptionProvider::Opencode,
+            plan: None,
+        };
+        config.install_runtime_ai_model(model).await.unwrap();
+        let factory = AIClientFactory::new(config);
+        store::upsert(
+            "opencode",
+            StoredCredential::Api {
+                key: "first-synthetic-key".into(),
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+        let first = factory
+            .get_client_by_id("subscription:fixture")
+            .await
+            .unwrap();
+        assert_eq!(first.subscription_provider_key(), Some("opencode"));
+        assert!(Arc::ptr_eq(
+            &first,
+            &factory
+                .get_client_by_id("subscription:fixture")
+                .await
+                .unwrap()
+        ));
+        // A different process would advance the same on-disk provider epoch.
+        store::upsert(
+            "opencode",
+            StoredCredential::Api {
+                key: "replacement-synthetic-key".into(),
+                metadata: None,
+            },
+        )
+        .await
+        .unwrap();
+        let replacement = factory
+            .get_client_by_id("subscription:fixture")
+            .await
+            .unwrap();
+        assert!(!Arc::ptr_eq(&first, &replacement));
+        assert_eq!(replacement.config.api_key, "replacement-synthetic-key");
+        subscription_auth::logout(subscription_auth::SubscriptionProvider::Opencode)
+            .await
+            .unwrap();
+        assert!(factory
+            .get_client_by_id("subscription:fixture")
+            .await
+            .is_err());
+    }
+
+    #[cfg(feature = "subscription-auth")]
+    #[tokio::test]
     async fn api_key_auth_remains_a_noop_when_subscription_support_is_compiled() {
         let mut config = test_runtime_ai_config();
 
@@ -669,6 +749,11 @@ mod tests {
         assert_eq!(expires_at, None);
         assert_eq!(config.api_key, "unchanged");
         assert_eq!(config.base_url, "https://example.test");
+        let client = super::apply_subscription_request_profile(
+            &AuthConfig::ApiKey,
+            super::AIClient::new(config),
+        );
+        assert_eq!(client.subscription_provider_key(), None);
     }
 
     #[cfg(not(feature = "subscription-auth"))]

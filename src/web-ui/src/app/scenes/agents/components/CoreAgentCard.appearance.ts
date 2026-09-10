@@ -2,6 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const coreAgentCardAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'core-agent-card',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' },
     { id: 'header' },

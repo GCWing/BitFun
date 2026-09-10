@@ -51,12 +51,13 @@ struct ReferenceGlyph: View {
     let assetName: String
     let width: CGFloat
     let height: CGFloat
+    var color: Color = OpenBitFunTheme.ink
 
     var body: some View {
         Image(assetName)
             .resizable()
             .renderingMode(.template)
-            .foregroundStyle(OpenBitFunTheme.ink)
+            .foregroundStyle(color)
             .aspectRatio(contentMode: .fit)
             .frame(width: width, height: height)
     }

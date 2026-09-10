@@ -90,7 +90,7 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
         <h2>{tErrors('core.initializationFailed')}</h2>
         <p>{error}</p>
         <Button
-          variant="fill"
+          variant="primary"
           size="sm"
           onClick={() => window.location.reload()}
         >

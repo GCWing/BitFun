@@ -9,6 +9,19 @@ use openbitfun_core_types::errors::{
 use serde::Serialize;
 use thiserror::Error;
 
+impl From<openbitfun_services_core::storage_error::StorageError> for OpenBitFunError {
+    fn from(error: openbitfun_services_core::storage_error::StorageError) -> Self {
+        use openbitfun_services_core::storage_error::StorageError;
+        match error {
+            StorageError::Config(message) => Self::config(message),
+            StorageError::Validation(message) => Self::validation(message),
+            StorageError::Io(message) => Self::io(message),
+            StorageError::Service(message) => Self::service(message),
+            StorageError::Tool(message) => Self::tool(message),
+        }
+    }
+}
+
 /// Unified error type for the OpenBitFun application
 #[derive(Debug, Error, Serialize)]
 pub enum OpenBitFunError {

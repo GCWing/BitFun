@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
-import type { SkillInfo, SkillLevel, SkillValidationResult } from '@/infrastructure/config/types';
-import { canDeleteSkill } from '@/infrastructure/config/skillSourcePresentation';
+import { getActiveSurfaceScope, onSurfaceActivated } from '@/infrastructure/peer-device/deviceSurface';
+import type { SkillInfo, SkillLevel, SkillValidationResult, SkillScanDiagnostic } from '@/infrastructure/config/types';
+import { canDeleteSkill, getSkillSourceId, getSkillSourceLabel } from '@/infrastructure/config/skillSourcePresentation';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import type { InstalledFilter } from '../skillsSceneStore';
 
 const log = createLogger('SkillsScene:useInstalledSkills');
+
+function installedSkillGroup(skill: SkillInfo): InstalledFilter {
+  if (skill.isBuiltin) return 'builtin';
+  const sourceId = getSkillSourceId(skill);
+  return sourceId === 'openbitfun' ? skill.level : `source:${sourceId}`;
+}
 
 interface UseInstalledSkillsOptions {
   searchQuery: string;
@@ -24,9 +31,14 @@ export function useInstalledSkills({
 }: UseInstalledSkillsOptions) {
   const { t } = useTranslation('scenes/skills');
   const notification = useNotification();
-  const { workspacePath, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
+  const { warning: notifyScanWarning, info: notifyScanInfo } = notification;
+  const { workspace, workspacePath, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
 
+  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
+  const [loadedContextKey, setLoadedContextKey] = useState<string | null>(null);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [diagnostics, setDiagnostics] = useState<SkillScanDiagnostic[]>([]);
+  const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(true);
   const [globallyDisabledSkillKeys, setGloballyDisabledSkillKeys] = useState<Set<string>>(new Set());
   const [savingGlobalSkillKey, setSavingGlobalSkillKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,8 +50,9 @@ export function useInstalledSkills({
   const [isValidating, setIsValidating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const loadRequestIdRef = useRef(0);
+  const lastScanFeedbackKeyRef = useRef<string | null>(null);
   const validationRequestIdRef = useRef(0);
-  const capabilityKey = `${enabled}\u0000${workspacePath ?? ''}\u0000${isRemoteWorkspace}`;
+  const capabilityKey = scope.key(scope.epoch, String(enabled), workspace?.id, workspacePath, workspace?.connectionId, String(isRemoteWorkspace));
   const capabilityRef = useRef({ key: capabilityKey, epoch: 0, enabled });
   useLayoutEffect(() => {
     if (capabilityRef.current.key !== capabilityKey) {
@@ -71,7 +84,7 @@ export function useInstalledSkills({
       setLoading(true);
       setError(null);
       const [list, globalSettings] = await Promise.all([
-        configAPI.getSkillConfigs({
+        configAPI.getSkillScanReport({
           forceRefresh,
           workspacePath: workspacePath || undefined,
         }),
@@ -80,8 +93,35 @@ export function useInstalledSkills({
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
       }
-      setSkills(list);
+      setLoadedContextKey(capabilityRef.current.key);
+      setSkills(list.skills);
+      setDiagnostics(list.diagnostics);
+      setDiagnosticsAvailable(list.diagnosticsAvailable);
       setGloballyDisabledSkillKeys(new Set(globalSettings.globallyDisabledUserSkillKeys));
+
+      const diagnosticKeys = list.diagnostics
+        .map(({ sourceId, path, message }) => JSON.stringify([sourceId, path, message]))
+        .sort();
+      const feedbackKey = JSON.stringify([
+        capabilityRef.current.key, list.diagnosticsAvailable, diagnosticKeys,
+      ]);
+      // Gallery focus and tab re-entry refresh the scan; only changed results notify.
+      if (lastScanFeedbackKeyRef.current !== feedbackKey) {
+        lastScanFeedbackKeyRef.current = feedbackKey;
+        if (list.diagnostics.length > 0) {
+          const message = list.skills.length > 0 ? t('list.scanIncomplete') : t('list.loadFailed');
+          notifyScanWarning(message, {
+            title: t('nav.title'),
+            metadata: {
+              diagnostics: list.diagnostics
+                .map(({ path, message }) => `${path}: ${message}`)
+                .join('\n'),
+            },
+          });
+        } else if (!list.diagnosticsAvailable) {
+          notifyScanInfo(t('list.diagnosticsUnavailable'), { title: t('nav.title') });
+        }
+      }
     } catch (err) {
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
@@ -93,7 +133,7 @@ export function useInstalledSkills({
         setLoading(false);
       }
     }
-  }, [capabilityIsCurrent, currentCapabilityEpoch, workspacePath]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, notifyScanInfo, notifyScanWarning, t, workspacePath]);
 
   useEffect(() => {
     loadRequestIdRef.current += 1;
@@ -103,6 +143,8 @@ export function useInstalledSkills({
     setIsAdding(false);
     if (!enabled) {
       setSkills([]);
+      setDiagnostics([]);
+      setDiagnosticsAvailable(true);
       setGloballyDisabledSkillKeys(new Set());
       setSavingGlobalSkillKey(null);
       setError(null);
@@ -314,14 +356,8 @@ export function useInstalledSkills({
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
       let matchesFilter = true;
-      if (activeFilter === 'user') {
-        matchesFilter = skill.level === 'user' && !skill.isBuiltin;
-      } else if (activeFilter === 'project') {
-        matchesFilter = skill.level === 'project' && !skill.isBuiltin;
-      } else if (activeFilter === 'builtin') {
-        matchesFilter = skill.isBuiltin;
-      } else if (activeFilter === 'suite') {
-        matchesFilter = skill.isBuiltin;
+      if (activeFilter !== 'all') {
+        matchesFilter = installedSkillGroup(skill) === activeFilter;
       }
 
       const matchesQuery = !normalizedQuery || [
@@ -333,20 +369,36 @@ export function useInstalledSkills({
     });
   }, [activeFilter, normalizedQuery, skills]);
 
-  const counts = useMemo(() => ({
-    all: skills.length,
-    builtin: skills.filter((skill) => skill.isBuiltin).length,
-    user: skills.filter((skill) => skill.level === 'user' && !skill.isBuiltin).length,
-    project: skills.filter((skill) => skill.level === 'project' && !skill.isBuiltin).length,
-    suite: skills.filter((skill) => skill.isBuiltin).length,
-  }), [skills]);
+  const { counts, sourceGroups } = useMemo(() => {
+    const counts: Record<InstalledFilter, number> = {
+      all: skills.length, builtin: 0, user: 0, project: 0,
+    };
+    const sources = new Map<`source:${string}`, string>();
+    for (const skill of skills) {
+      const group = installedSkillGroup(skill);
+      counts[group] = (counts[group] ?? 0) + 1;
+      if (group.startsWith('source:')) {
+        sources.set(group as `source:${string}`, getSkillSourceLabel(skill, t('list.item.unknownSource')));
+      }
+    }
+    return {
+      counts,
+      sourceGroups: [...sources].sort(([left], [right]) => left.localeCompare(right))
+        .map(([id, label]) => ({ id, label })),
+    };
+  }, [skills, t]);
 
   return {
+    catalogContextKey: capabilityKey,
+    catalogReady: enabled && loadedContextKey === capabilityKey && !loading && !error,
     skills,
+    diagnostics,
+    diagnosticsAvailable,
     globallyDisabledSkillKeys,
     savingGlobalSkillKey,
     filteredSkills,
     counts,
+    sourceGroups,
     loading,
     error,
     loadSkills,

@@ -7,7 +7,7 @@ function source(relativePath: string): string {
 }
 
 describe('unified project session creation', () => {
-  it('keeps New Session beside search and makes Hello open shared chat before voice', () => {
+  it('moves New Session from search to each workspace action strip and keeps Hello opening shared chat before voice', () => {
     const mainNav = source('./MainNav.tsx');
     const workspaceBody = source('../../layout/WorkspaceBody.tsx');
     const appLayout = source('../../layout/AppLayout.tsx');
@@ -23,15 +23,31 @@ describe('unified project session creation', () => {
     const voicePanel = source('../../../flow_chat/components/voice/RealtimeVoiceCallPanel.tsx');
     const workspaceItem = source('./sections/workspaces/WorkspaceItem.tsx');
     const utilityRowIndex = mainNav.indexOf('data-openbitfun-part="utilityRow"');
-    const newSessionIndex = mainNav.indexOf('data-testid="nav-new-session-btn"');
     const sectionsIndex = mainNav.indexOf('data-testid="nav-sections"');
     const sessionsSectionIndex = mainNav.indexOf('data-openbitfun-section="sessions"');
+    const assistantActionsStart = workspaceItem.indexOf('className="openbitfun-nav-panel__assistant-item-menu"');
+    const assistantActionsEnd = workspaceItem.indexOf('{menuOpen && createPortal(', assistantActionsStart);
+    const projectActionsStart = workspaceItem.indexOf('className="openbitfun-nav-panel__workspace-item-actions"');
+    const projectActionsEnd = workspaceItem.indexOf('{menuOpen && createPortal(', projectActionsStart);
+    const actionStrips = [
+      workspaceItem.slice(assistantActionsStart, assistantActionsEnd),
+      workspaceItem.slice(projectActionsStart, projectActionsEnd),
+    ];
 
-    expect(newSessionIndex).toBeGreaterThan(utilityRowIndex);
-    expect(sectionsIndex).toBeGreaterThan(newSessionIndex);
-    expect(sessionsSectionIndex).toBeGreaterThan(newSessionIndex);
-    expect(mainNav).toContain('<Icon name="plus" size="lg" style={{ width: 15, height: 15 }} aria-hidden="true" />');
-    expect(mainNav).toContain("activateProductAction('session.new')");
+    expect(utilityRowIndex).toBeGreaterThan(-1);
+    expect(sectionsIndex).toBeGreaterThan(utilityRowIndex);
+    expect(sessionsSectionIndex).toBeGreaterThan(utilityRowIndex);
+    expect(mainNav).not.toContain('data-testid="nav-new-session-btn"');
+    expect(mainNav).not.toContain("activateProductAction('session.new')");
+    expect(workspaceItem.match(/data-testid="nav-workspace-new-session-btn"/g)).toHaveLength(2);
+    for (const actionStrip of actionStrips) {
+      const newSessionIndex = actionStrip.indexOf('data-testid="nav-workspace-new-session-btn"');
+      const resourcesIndex = actionStrip.indexOf('data-testid="nav-workspace-files-btn"');
+      const moreIndex = actionStrip.indexOf('data-testid="nav-workspace-menu-btn"');
+      expect(newSessionIndex).toBeGreaterThan(-1);
+      expect(resourcesIndex).toBeGreaterThan(newSessionIndex);
+      expect(moreIndex).toBeGreaterThan(resourcesIndex);
+    }
     expect(mainNav).not.toContain('<RealtimeVoiceCallButton />');
     expect(workspaceBody).not.toContain('<RealtimeVoiceCallButton />');
     expect(appLayout).toContain('<FloatingMiniChat />');

@@ -47,7 +47,7 @@ test("AskUser renders the answered disclosure and native selection semantics", (
   assert.match(markup, /data-openbitfun-expanded="true"/);
   assert.match(markup, /<button[^>]+aria-expanded="true"/);
   assert.match(markup, /data-openbitfun-part="summary-label">1 question answered/);
-  assert.match(markup, /data-openbitfun-part="summary-detail">Choose version:/);
+  assert.match(markup, /data-openbitfun-part="summary-detail"[^>]*><span[^>]*>Choose version:/);
   assert.match(markup, /<fieldset[^>]+disabled=""/);
   assert.match(markup, /type="radio"[^>]+checked=""/);
   assert.match(markup, /lucide-disc2/);
@@ -70,6 +70,7 @@ test("AskUser renders a controlled custom answer with an accessible text field",
   assert.match(markup, /aria-label="Custom version"/);
   assert.match(markup, /value="v0.2.17"/);
   assert.match(markup, /data-openbitfun-part="submit"/);
+  assert.match(markup, /data-openbitfun-component="button"[^>]+data-openbitfun-variant="primary"/);
 });
 
 test("AskUser styles use public semantic and component geometry tokens", async () => {

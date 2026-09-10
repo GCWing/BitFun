@@ -201,10 +201,10 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
         </form>
       </DialogBody>
       <DialogFooter data-openbitfun-component="new-project-dialog" data-openbitfun-part="footer">
-        <Button type="button" variant="outline" size="sm" onClick={handleCancel} disabled={isCreating}>
+        <Button type="button" variant="fill" size="sm" onClick={handleCancel} disabled={isCreating}>
           {t('newProject.cancel')}
         </Button>
-        <Button type="submit" form={formId} variant="fill" size="sm" disabled={isCreating} loading={isCreating}>
+        <Button type="submit" form={formId} variant="primary" size="sm" disabled={isCreating} loading={isCreating}>
           {isCreating ? t('newProject.creating') : t('newProject.create')}
         </Button>
       </DialogFooter>

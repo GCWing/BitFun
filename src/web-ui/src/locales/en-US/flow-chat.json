@@ -4,9 +4,11 @@
     "subagentOwner": "{{subagent}} subagent",
     "responseFailed": "The permission response could not be delivered. Try again.",
     "allowOnce": "Allow once",
-    "allowAlways": "Always allow",
-    "allowAlwaysTooltip": "Always allow saves matching access for {{projectPath}}.",
-    "allowAlwaysTooltipCurrentProject": "Always allow saves matching access for the current project.",
+    "allowAlways": "Always allow this scope",
+    "allowAlwaysCommand": "Always allow this command",
+    "allowAlwaysCommandDescription": "Applies only to this exact command, including its arguments, in the current project. Other commands are not authorized.",
+    "allowAlwaysTooltip": "Remember approval for this action in {{projectPath}}, limited to the following scope:\n{{resources}}",
+    "allowAlwaysTooltipCurrentProject": "Remember approval for this action in the current project, limited to the following scope:\n{{resources}}",
     "allowAlwaysTooltipNoGrant": "This request has no savable access scope; always allow applies only to this request.",
     "risks": {
       "pageSave": "Save a new immutable version of “{{slug}}” with {{visibility}} visibility without changing production.",
@@ -177,7 +179,7 @@
     },
     "loading": {
       "title": "Generating usage report",
-      "description": "Reading local session records and preparing a privacy-safe summary.",
+      "description": "Reading session records and preparing a privacy-safe summary.",
       "steps": {
         "collecting": "Reading session records",
         "tokens": "Summarizing token and tool activity",
@@ -469,7 +471,7 @@
   },
   "message": {
     "user": "User",
-    "assistant": "Assistant",
+    "assistant": "$t(shared:agents.Claw)",
     "system": "System",
     "thinking": "Thinking...",
     "generating": "Generating...",
@@ -487,6 +489,7 @@
     "cannotRollback": "Cannot rollback",
     "rollbackDisabledBusy": "Wait until the session is idle before rolling back.",
     "rollbackDisabledRemote": "Remote workspaces do not support complete rollback because remote file snapshots are not recorded. No files or messages will be changed.",
+    "rollbackDisabledDispatch": "Remote tasks do not yet support history rollback from this device.",
     "rollbackTo": "Rollback to before turn {{index}} (delete this and following turns)",
     "rollbackDialogTitle": "Rollback to before turn {{index}}?",
     "rollbackDialogIntro": "This will:",
@@ -501,6 +504,7 @@
     "editDisabledBusy": "Wait until the session is idle before editing and rerunning.",
     "editDisabledImages": "Image messages cannot be edited yet",
     "editDisabledRemote": "Editing and rerunning requires complete rollback, which is unavailable because remote file snapshots are not recorded.",
+    "editDisabledDispatch": "Editing and rerunning requires history rollback, which is not yet available for remote tasks.",
     "editDisabledLocalCommand": "Local command messages cannot be edited",
     "editDisabledHistoryNotReady": "Session history is not ready yet",
     "editDialogTitle": "Edit and rerun from turn {{index}}?",
@@ -620,12 +624,13 @@
     "codeBlock": "Code Block",
     "image": "Image",
     "url": "URL",
+    "dropToAdd": "Drop to add to message",
     "dragHint": "Drop files here to add context"
   },
   "agent": {
     "title": "Agent",
     "select": "Select Agent",
-    "default": "Default Assistant",
+    "default": "$t(shared:agents.default)",
     "coding": "Coding Assistant",
     "review": "Review",
     "architect": "Architect",
@@ -721,7 +726,6 @@
     "harness": {
       "selectorTooltip": "Current execution: {{name}}",
       "fixedTooltip": "This session uses {{name}} and is now fixed.",
-      "activateBalanced": "Switch to Standard Harness",
       "compatibilityShort": "Legacy",
       "comingSoon": "In development",
       "comingSoonNotice": "The {{name}} Harness execution framework is in development.",
@@ -738,17 +742,29 @@
       "profileChangeOutcomeUnknown": "OpenBitFun cannot confirm whether the Harness changed. Refresh the session before trying again.",
       "profileUnavailable": "This Harness is not supported by the current OpenBitFun Host.",
       "profileChangeFailed": "Failed to change Harness. Try again.",
+      "rememberFailed": "The Harness changed, but this selection could not be remembered. New sessions may continue using the previous default.",
       "otherAgentsTitle": "Agents",
       "otherAgentsEmpty": "No main Agents are available",
       "unavailable": "Unavailable",
       "agentUnavailable": "{{name}} is not available with the current Host or settings.",
       "profiles": {
-        "minimal": { "name": "Minimal" },
-        "balanced": { "name": "Standard" },
-        "ultimate": { "name": "Ultimate" },
-        "creative": { "name": "Creative" },
-        "other": { "name": "Agents" }
-      }
+        "other": {
+          "name": "Agents"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "Switch to Standard Harness"
     },
     "agents": {
       "available": "Available",
@@ -756,9 +772,15 @@
       "comingSoon": "In development",
       "comingSoonNotice": "Direct {{name}} Agent invocation is in development.",
       "reviewUnavailable": "Review Agent needs an active session with reviewable changes.",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "$t(shared:agents.Cowork)"
+      },
+      "computerUse": {
+        "name": "$t(shared:agents.ComputerUse)"
+      }
     },
     "addBoostTooltip": "Directives, context, images, or skills",
     "modeChangeFailed": "Failed to change the agent mode. Try again.",
@@ -833,7 +855,6 @@
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "Remove selected Agent",
     "defaultModeSetTooltip": "Use {{mode}} as the default mode for new chats",
     "defaultModeUnsetTooltip": "Default mode override is active. Click to clear it.",
     "defaultModeSet": "{{mode}} is now the default mode for new chats.",
@@ -921,20 +942,22 @@
     "sendingToMain": "Main session: {{title}}",
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
-      "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
       "ComputerUse": "Dedicated desktop automation agent for perceiving and operating apps, browsers, and OS UI",
       "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports",
-      "Ultra": "Swarm planning mode for complex work; it can issue many concurrent model requests, increasing API cost and provider rate-limit pressure"
+      "Standard": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
+      "Ultimate": "Swarm planning mode for complex work; it can issue many concurrent model requests, increasing API cost and provider rate-limit pressure"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
@@ -963,12 +986,15 @@
     "percentComplete": "{{percent}}% Complete",
     "currentStatus": "Current status: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "skillsIncomplete": "Some skills could not be scanned. Available skills are still listed.",
+    "skillsDiagnosticsUnavailable": "This host does not report skill scan diagnostics.",
+    "menuTitle": "Choose context",
     "searchResults": "Search Results",
     "loading": "Loading...",
     "browseUnavailable": "Workspace files are unavailable. Check the connection and try again.",
     "searchUnavailable": "Workspace search is unavailable. Check the connection and try again.",
-    "noMatchingFiles": "No matching files found",
+    "noMatchingResults": "No matching context found",
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",
     "goBack": "Go back",
@@ -1093,6 +1119,8 @@
     "fixRunning": "Fixing in progress...",
     "fixCompleted": "Fix completed",
     "fixFailed": "Fix failed",
+    "actionStartFailed": "Unable to start this action.",
+    "actionStartFailedWithReason": "Unable to start this action: {{reason}}",
     "fixTimeout": "Fix timed out",
     "fixInterrupted": "Fix was interrupted. Up to {{count}} selected items may still need attention.",
     "reviewWaitingCapacity": "Review waiting for capacity",
@@ -1264,6 +1292,7 @@
       "unresolvedGitRange": "The requested Git range could not be resolved. Check the ref or range and try again.",
       "emptyWorkspace": "There are no workspace changes to review.",
       "emptyExplicitScope": "The requested files or directories contain no workspace changes.",
+      "missingExplicitScope": "The requested file or directory does not exist in the current workspace.",
       "unresolvedTarget": "The Review target could not be prepared as bounded evidence. Open its workspace or narrow the target and try again.",
       "repositoryUntrusted": "Git will not read this repository because the folder is owned by another user. Trust the folder when prompted, then start Review again.",
       "uncertain": "The Review request may already be running. Its session was preserved so you can inspect or retry it safely.",
@@ -1335,7 +1364,7 @@
     "btwBackTooltipWithoutTurn": "Go back to the source session: {{title}}",
     "btwCreateTooltip": "Start a quick side question",
     "searchPlaceholder": "Search messages",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} results",
     "searchNoResults": "No results",
     "searchPrevious": "Previous match",
     "searchNext": "Next match",
@@ -1409,9 +1438,10 @@
     "sendInput": "Send input",
     "sendInputUnavailable": "Input can only be sent to a running interactive command.",
     "copy": "Copy output",
+    "copyRaw": "Copy raw output",
+    "replayIncomplete": "Earlier output was discarded. Terminal state cannot be fully restored; the retained output may be incomplete.",
+    "unknownGeometry": "The source terminal size is unknown, so output cannot be accurately replayed. You can still copy the raw output.",
     "copyCommand": "Copy command",
-    "simplifiedView": "Simplified view",
-    "simplifiedViewTooltip": "Hide terminal control characters to make the output easier to read.",
     "loading": "Loading output...",
     "empty": "No output captured yet.",
     "remote": "Remote",
@@ -1486,6 +1516,8 @@
     }
   },
   "exportImage": {
+    "collapsedThinking": "Compact image",
+    "expandedThinking": "Image with thinking",
     "subtitle": "AI Programming Assistant · Chat Record",
     "poweredBy": "Powered by",
     "aiAssistant": "AI Programming Assistant",
@@ -1628,8 +1660,6 @@
       "delete": "Delete File",
       "deletedLabel": "Deleted",
       "failed": "Failed",
-      "guidanceHint": " · Needs attention",
-      "guidanceTitle": "Action required before retrying",
       "parsingPath": "Parsing file path...",
       "receivingContent": "Receiving file content...",
       "unknownFile": "Unknown file",
@@ -1963,7 +1993,7 @@
       "executing": "Executing...",
       "subAgentFailed": "Sub-agent task execution failed",
       "subAgentTaskFailed": "Sub-agent task failed",
-      "failed": "Failed",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "Confirm Delegate",
       "cancel": "Cancel",
       "task": "Task",
@@ -1996,9 +2026,9 @@
       "waitingForModelResponse": "Waiting for model response...",
       "status": {
         "pending": "Pending",
-        "running": "Running",
+        "running": "$t(shared:statuses.running)",
         "completed": "Completed",
-        "failed": "Failed"
+        "failed": "$t(shared:statuses.failed)"
       },
       "loadingMore": "Loading more output...",
       "loading": "Loading task details...",
@@ -2186,10 +2216,10 @@
       "pending": "Pending",
       "paramsReceiving": "Receiving params",
       "preparing": "Preparing",
-      "running": "Running",
+      "running": "$t(shared:statuses.running)",
       "completed": "Completed",
-      "error": "Failed",
-      "cancelled": "Cancelled"
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "Executing...",
@@ -2388,7 +2418,7 @@
         "editorTitle": "Review Report"
       },
       "reviewModes": {
-        "standard": "Standard",
+        "standard": "$t(shared:agents.Standard)",
         "deep": "Strict"
       },
       "remediationActions": {

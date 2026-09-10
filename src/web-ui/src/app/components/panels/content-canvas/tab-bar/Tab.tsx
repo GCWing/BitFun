@@ -18,7 +18,7 @@ import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import type { CanvasTab, EditorGroupId, TabState } from '../types';
 import './Tab.scss';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { Icon, OverflowText, Tooltip } from '@openbitfun/ui';
 export interface TabProps {
   /** Tab data */
   tab: CanvasTab;
@@ -322,6 +322,7 @@ export const Tab: React.FC<TabProps> = ({
   return (
     <Tooltip content={tooltipText} placement="bottom">
       <div data-openbitfun-component="canvas-tab" data-openbitfun-part="root" data-openbitfun-group={groupId}
+        data-overflow-trigger
         data-openbitfun-state={[
           isActive && 'active',
           isDragging && 'dragging',
@@ -353,9 +354,9 @@ export const Tab: React.FC<TabProps> = ({
         )}
 
         {/* Title */}
-        <span data-openbitfun-component="canvas-tab" data-openbitfun-part="title" className="canvas-tab__title">
+        <OverflowText behavior="marquee" title="" data-openbitfun-component="canvas-tab" data-openbitfun-part="title" className="canvas-tab__title">
           {titleDisplay}
-        </span>
+        </OverflowText>
 
         {/* Dirty state indicator */}
         {tab.isDirty && (

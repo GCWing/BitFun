@@ -17,7 +17,6 @@ import androidx.compose.runtime.setValue
  * displace the conversation the user was reading.
  */
 internal enum class MobileSurface {
-    GENERAL_CHAT,
     REMOTE,
 }
 
@@ -194,7 +193,7 @@ internal class AppShellState(
             },
             restore = {
                 AppShellState(
-                    surface = MobileSurface.valueOf(it[0] as String),
+                    surface = MobileSurface.REMOTE,
                     showSettings = it[1] as Boolean,
                     settingsMode = SettingsMode.valueOf(it[2] as String),
                     showAccount = it[3] as Boolean,
@@ -213,7 +212,7 @@ internal class AppShellState(
 @Composable
 internal fun rememberAppShellState(): AppShellState = rememberSaveable(saver = AppShellState.Saver) {
     AppShellState(
-        surface = MobileSurface.GENERAL_CHAT,
+        surface = MobileSurface.REMOTE,
         showSettings = false,
         settingsMode = SettingsMode.GENERAL,
         showAccount = false,

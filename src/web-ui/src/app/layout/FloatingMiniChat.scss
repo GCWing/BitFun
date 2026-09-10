@@ -14,8 +14,9 @@ $fmc-close-duration: 0.16s;
 $miniapp-button-size: 42px;
 $miniapp-button-offset: 20px;
 // Sized for the full session composer (workspace strip, model/permission
-// controls, action row) rather than the single-line input it replaced.
-$panel-width: 440px;
+// controls, action row) rather than the single-line input it replaced. The
+// portrait surface keeps a near-square-root-of-two long-side ratio (680:480).
+$panel-width: 480px;
 $panel-height: 680px;
 
 // ─── Root container ────────────────────────────────────────
@@ -103,10 +104,6 @@ $panel-height: 680px;
     place-items: center;
   }
 
-  &:active {
-    transform: scale(0.97);
-  }
-
   &:focus-visible {
     inline-size: var(--openbitfun-control-launcher-button-min-inline-size);
     transition-duration: 0s;
@@ -179,18 +176,12 @@ $panel-height: 680px;
   transition:
     color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
     background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-    transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+    border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
   &:hover {
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-action-neutral-surface-hover);
     border-color: var(--openbitfun-color-border-strong);
-    transform: scale(1.06);
-  }
-
-  &:active {
-    transform: scale(0.96);
   }
 }
 
@@ -372,7 +363,7 @@ $panel-height: 680px;
   }
   50% {
     box-shadow: 0 4px 12px color-mix(in srgb, var(--openbitfun-color-content-on-light) 30%, transparent),
-      0 0 0 2px var(--openbitfun-color-status-warning-content);
+      0 0 0 2px var(--openbitfun-color-status-warning-emphasis);
   }
 }
 
@@ -438,7 +429,6 @@ $panel-height: 680px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
 }
@@ -573,10 +563,9 @@ $panel-height: 680px;
   color: var(--openbitfun-color-content-muted);
   font-size: var(--openbitfun-type-flow-support-font-size);
 
-  span {
+  span:not([data-overflow-content]) {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
@@ -637,7 +626,6 @@ $panel-height: 680px;
   }
 
   &:active {
-    transform: scale(0.985);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 

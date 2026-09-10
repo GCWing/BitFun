@@ -643,7 +643,7 @@ fn parse_pull_request_identity(
         ));
     }
     let platform = required_string(value, &["platform"], "reviewTarget.pullRequest.platform")?;
-    if !matches!(platform.as_str(), "github" | "gitlab" | "gitcode") {
+    if !matches!(platform.as_str(), "github" | "gitlab" | "gitcode" | "gitee") {
         return Err(ReviewTargetEvidenceValidationError::invalid(
             "reviewTarget.pullRequest.platform",
             "unknown provider",
@@ -1044,6 +1044,32 @@ mod tests {
         assert_eq!(identity.project_path(), "example/repo");
         assert!(!evidence.allows_live_repository_context());
         assert_eq!(evidence.diff_revisions_for_path("src/lib.rs"), None);
+    }
+
+    #[test]
+    fn gitee_targets_keep_provider_identity_and_disallow_live_repository_fallback() {
+        let mut value = manifest();
+        let target = &mut value["evidencePack"]["reviewTarget"];
+        target["source"] = json!("pull_request");
+        target["workspaceBinding"] = json!("unavailable");
+        target["pullRequest"] = json!({
+            "remoteId": "origin:gitee:example__repo", "platform": "gitee", "host": "gitee.com",
+            "projectPath": "example/repo", "pullRequestId": "69", "number": 69,
+            "webUrl": "https://gitee.com/example/repo/pulls/69"
+        });
+        let evidence = ReviewTargetEvidence::from_manifest(&value)
+            .unwrap()
+            .unwrap();
+        assert_eq!(evidence.pull_request().unwrap().platform(), "gitee");
+        assert_eq!(evidence.pull_request().unwrap().pull_request_id(), "69");
+        assert!(!evidence.allows_live_repository_context());
+        assert_eq!(evidence.diff_revisions_for_path("src/lib.rs"), None);
+        value["evidencePack"]["reviewTarget"]["pullRequest"]["platform"] = json!("future-provider");
+        assert!(ReviewTargetEvidence::from_manifest(&value).is_err());
+        assert_eq!(
+            value["evidencePack"]["reviewTarget"]["pullRequest"]["platform"],
+            "future-provider"
+        );
     }
 
     #[test]

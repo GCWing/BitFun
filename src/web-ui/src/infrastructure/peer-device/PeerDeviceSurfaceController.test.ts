@@ -77,7 +77,7 @@ class FakeConnectionManager {
     const online = new Set(onlineDeviceIds);
     for (const state of this.states.values()) {
       if (!online.has(state.deviceId)) {
-        this.lose(state.deviceId, 'presence');
+        this.setHealth(state.deviceId, 'degraded');
       }
     }
   }
@@ -97,15 +97,14 @@ class FakeConnectionManager {
     pending.resolve(this.ensure(deviceId, deviceName));
   }
 
-  lose(deviceId: string, reason: 'presence' | 'keepalive'): void {
+  setHealth(deviceId: string, health: 'degraded' | 'ready'): void {
     const previous = this.states.get(deviceId);
     if (!previous) {
       return;
     }
     this.states.set(deviceId, {
       ...previous,
-      health: 'lost',
-      lostReason: reason,
+      health,
     });
     this.publish();
   }
@@ -135,10 +134,10 @@ class FakeConnectionManager {
         miniAppAgentContextFilesV1: true,
         cancelTool: true,
         toolCatalog: true,
+        userQuestionResponse: true,
         hostKind: 'desktop',
       },
       consecutiveFailures: 0,
-      lostReason: null,
     });
     this.publish();
     return connection;
@@ -159,10 +158,10 @@ function createHarness(options: {
   const commits: string[] = [];
   const invalidations: string[] = [];
   const discarded: string[] = [];
-  const autoExits: Array<{ deviceId: string; reason: string }> = [];
   const peerModeEvents: Array<{ active: boolean; deviceId?: string }> = [];
   const controllerFlags: boolean[] = [];
   let latestSnapshot: PeerDeviceSurfaceSnapshot | null = null;
+  let loginListener: ((loggedIn: boolean) => void) | undefined;
 
   const controller = new PeerDeviceSurfaceController({
     connectionManager: manager,
@@ -186,9 +185,11 @@ function createHarness(options: {
     markSurfaceSwitched: vi.fn(),
     discardSurfaceState: surfaceId => discarded.push(surfaceId),
     clearDeviceActivity: vi.fn(),
-    emitAutoExit: detail => autoExits.push(detail),
     listenPresence: () => () => undefined,
-    listenLoginState: () => () => undefined,
+    listenLoginState: listener => {
+      loginListener = listener;
+      return () => { loginListener = undefined; };
+    },
   });
   controller.subscribe(snapshot => {
     latestSnapshot = snapshot;
@@ -200,10 +201,10 @@ function createHarness(options: {
     commits,
     invalidations,
     discarded,
-    autoExits,
     peerModeEvents,
     controllerFlags,
     snapshot: () => latestSnapshot!,
+    reportLogin: (loggedIn: boolean) => loginListener?.(loggedIn),
   };
 }
 
@@ -339,24 +340,58 @@ describe('PeerDeviceSurfaceController connection loss', () => {
     resetDeviceSurfaceForTest();
   });
 
-  it('returns to local, disposes a lost peer, and emits one auto-exit', async () => {
+  it('preserves the rendered surface and epoch throughout disconnection and recovery', async () => {
     const harness = createHarness();
     harness.controller.start();
     await harness.controller.switchToDevice('peer-a', 'A');
+    const originalScope = getActiveSurfaceScope();
+    const originalConnection = harness.manager.get('peer-a');
 
-    harness.manager.lose('peer-a', 'presence');
+    harness.manager.reportPresence([]);
+    await harness.controller.waitForIdle();
 
-    await vi.waitFor(() => {
-      expect(harness.snapshot().peerMode).toEqual({ active: false });
-      expect(harness.manager.dispose).toHaveBeenCalledWith('peer-a', { notifyPeer: false });
-    });
+    expect(harness.snapshot().peerMode).toEqual({ active: true, deviceId: 'peer-a', deviceName: 'A' });
+    expect(harness.snapshot().attachments[0].health).toBe('degraded');
+    expect(harness.manager.dispose).not.toHaveBeenCalled();
+    expect(harness.discarded).toEqual([]);
+    expect(getActiveSurfaceScope().epoch).toBe(originalScope.epoch);
+    expect(getActiveSurfaceId()).toBe('peer-a');
+
+    harness.manager.setHealth('peer-a', 'ready');
+    expect(harness.commits).toEqual(['peer-a']);
+    expect(harness.manager.get('peer-a')).toBe(originalConnection);
+    expect(harness.snapshot().attachments[0].health).toBe('ready');
+    harness.controller.stop();
+  });
+
+  it('returns locally and stops peer attachments when the account logs out during recovery', async () => {
+    const harness = createHarness();
+    harness.controller.start();
+    await harness.controller.switchToDevice('peer-a', 'A');
+    harness.manager.reportPresence([]);
+
+    harness.reportLogin(false);
+    await vi.waitFor(() => expect(harness.manager.dispose).toHaveBeenCalled());
+
+    expect(harness.snapshot().peerMode).toEqual({ active: false });
+    expect(harness.snapshot().attachments).toEqual([]);
     expect(harness.discarded).toEqual(['peer-a']);
-    expect(harness.autoExits).toEqual([{
-      deviceId: 'peer-a',
-      deviceName: 'A',
-      reason: 'peer_offline',
-    }]);
+    harness.controller.stop();
+  });
+
+  it('still allows explicit disconnect while a peer is reconnecting', async () => {
+    const harness = createHarness();
+    harness.controller.start();
+    await harness.controller.switchToDevice('peer-a', 'A');
+    harness.manager.reportPresence([]);
+
+    await harness.controller.disconnectDevice('peer-a');
+
+    expect(harness.snapshot().peerMode).toEqual({ active: false });
+    expect(harness.discarded).toEqual(['peer-a']);
+    expect(harness.manager.dispose).toHaveBeenCalled();
     expect(getActiveSurfaceId()).toBe(LOCAL_SURFACE_ID);
     harness.controller.stop();
   });
+
 });

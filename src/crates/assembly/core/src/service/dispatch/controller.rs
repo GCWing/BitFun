@@ -204,8 +204,10 @@ pub(super) fn validate_device_attachment_budget(
 #[serde(rename_all = "camelCase")]
 pub struct DispatchQueryJobRequest {
     pub job_id: String,
-    /// Query kind understood by the target (currently `usageReport`).
+    /// Query kind understood by the target.
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1107,12 +1109,29 @@ pub async fn query_job(
     let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
         anyhow::bail!("SSH dispatch query requires an SSH target");
     };
-    dispatch_ssh::query(
-        manager,
-        connection_id,
-        &json!({ "jobId": request.job_id, "kind": request.kind }),
-    )
-    .await
+    if request.kind == "readFile" {
+        let probe = dispatch_ssh::probe(manager, connection_id, None).await?;
+        validate_file_query_capability(probe.protocol.as_ref())?;
+    }
+    dispatch_ssh::query(manager, connection_id, &serde_json::to_value(request)?).await
+}
+
+pub(super) fn validate_file_query_capability(protocol: Option<&Value>) -> anyhow::Result<()> {
+    let supported = protocol
+        .and_then(|value| value.get("capabilities"))
+        .and_then(Value::as_array)
+        .is_some_and(|capabilities| {
+            capabilities.iter().any(|capability| {
+                capability.as_str()
+                    == Some(
+                        openbitfun_services_core::dispatch_contract::DISPATCH_READ_FILE_CAPABILITY,
+                    )
+            })
+        });
+    if !supported {
+        anyhow::bail!("This target does not support remote file previews. Update its CLI or sync changes to view files.");
+    }
+    Ok(())
 }
 
 pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyhow::Result<()> {
@@ -1121,6 +1140,17 @@ pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyho
     }
     if request.kind.trim().is_empty() || request.kind.len() > 64 {
         anyhow::bail!("Dispatch query kind is invalid");
+    }
+    if request.kind == "readFile"
+        && request
+            .file_path
+            .as_deref()
+            .is_none_or(|path| path.trim().is_empty())
+    {
+        anyhow::bail!("Dispatch file query requires a filePath");
+    }
+    if request.kind != "readFile" && request.file_path.is_some() {
+        anyhow::bail!("Only a dispatch file query accepts a filePath");
     }
     // Which kinds exist is the target's contract; an unknown kind comes back
     // as a clear target-side error instead of drifting a second list here.
@@ -1677,6 +1707,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn legacy_query_payload_is_unchanged_and_file_preview_is_optional() {
+        let old = json!({"jobId": "job-1", "kind": "usageReport"});
+        let request: DispatchQueryJobRequest = serde_json::from_value(old.clone()).unwrap();
+        assert!(validate_query_request(&request).is_ok());
+        assert_eq!(serde_json::to_value(request).unwrap(), old);
+        assert!(
+            validate_file_query_capability(Some(&json!({"capabilities": ["session_query"]})))
+                .is_err()
+        );
+        assert!(validate_file_query_capability(Some(
+            &json!({"capabilities": ["query_file_content"]})
+        ))
+        .is_ok());
+        assert!(validate_file_query_capability(None).is_err());
+    }
+
+    #[test]
     fn rejects_false_or_mismatched_submit_acknowledgements() {
         assert!(validate_submit_ack(
             &json!({"accepted": false, "jobId": "j", "sessionId": "s"}),
@@ -1871,7 +1918,7 @@ mod tests {
         let init = crate::util::create_test_command("git")
             .arg("-C")
             .arg(&repository)
-            .args(["init", "--quiet", "--initial-branch=main"])
+            .args(["init", "--quiet"])
             .output()
             .expect("run git init");
         assert!(
@@ -1879,6 +1926,14 @@ mod tests {
             "git init failed: {}",
             String::from_utf8_lossy(&init.stderr)
         );
+
+        let branch = crate::util::create_test_command("git")
+            .arg("-C")
+            .arg(&repository)
+            .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+            .output()
+            .expect("select initial branch");
+        assert!(branch.status.success());
 
         let store =
             OutboundDispatchStore::new_in_root_for_tests(temp.path().join("dispatch-outbound"));

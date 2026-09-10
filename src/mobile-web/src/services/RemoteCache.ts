@@ -1,8 +1,10 @@
 import type {
   ChatMessage,
   RecentWorkspaceEntry,
+  RemoteWorkspaceIdentity,
   SessionInfo,
 } from './RemoteSessionManager';
+import { mergeWorkspaceSessions } from './workspaceIdentity';
 
 const DB_NAME = 'openbitfun-mobile-remote-cache';
 const DB_VERSION = 1;
@@ -120,26 +122,6 @@ function sortSessions(sessions: SessionInfo[]): SessionInfo[] {
   ));
 }
 
-function mergeSessions(
-  existing: SessionInfo[],
-  incoming: SessionInfo[],
-  workspacePath: string | undefined,
-  replaceWorkspace: boolean,
-): SessionInfo[] {
-  const retained = replaceWorkspace
-    ? workspacePath
-      ? existing.filter((session) => session.workspace_path !== workspacePath)
-      : []
-    : existing;
-  const merged = new Map(retained.map((session) => [session.session_id, session]));
-  incoming.forEach((session) => {
-    merged.set(session.session_id, workspacePath && !session.workspace_path
-      ? { ...session, workspace_path: workspacePath }
-      : session);
-  });
-  return sortSessions([...merged.values()]).slice(0, MAX_SESSIONS_PER_DEVICE);
-}
-
 async function readSessionRecord(scope: RemoteCacheScope): Promise<SessionStateRecord | null> {
   const db = await openDatabase();
   if (!db) return null;
@@ -174,7 +156,11 @@ export const remoteCache = {
   saveSessionPage(
     scope: RemoteCacheScope | null,
     sessions: SessionInfo[],
-    options: { workspacePath?: string; replaceWorkspace?: boolean } = {},
+    options: {
+      workspacePath?: string;
+      workspaceIdentity?: RemoteWorkspaceIdentity;
+      replaceWorkspace?: boolean;
+    } = {},
   ): void {
     if (!scope) return;
     enqueueWrite(async () => {
@@ -186,12 +172,16 @@ export const remoteCache = {
         key: scope.key,
         accountId: scope.accountId,
         deviceId: scope.deviceId,
-        sessions: mergeSessions(
+        sessions: sortSessions(mergeWorkspaceSessions(
           existing?.sessions ?? [],
           sessions,
-          options.workspacePath,
+          options.workspacePath ? {
+            path: options.workspacePath,
+            remote_connection_id: options.workspaceIdentity?.remoteConnectionId,
+            remote_ssh_host: options.workspaceIdentity?.remoteSshHost,
+          } : undefined,
           options.replaceWorkspace ?? false,
-        ),
+        )).slice(0, MAX_SESSIONS_PER_DEVICE),
         workspaces: existing?.workspaces ?? [],
         updatedAt: Date.now(),
       } satisfies SessionStateRecord);

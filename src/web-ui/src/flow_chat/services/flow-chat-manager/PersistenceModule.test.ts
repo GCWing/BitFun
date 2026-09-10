@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { activateSurface, getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 import type { DialogTurn, ModelRound } from '../../types/flow-chat';
 import {
   convertDialogTurnToBackendFormat,
   debouncedSaveDialogTurn,
   immediateSaveDialogTurn,
   saveDialogTurnToDisk,
+  updateSessionMetadata,
 } from './PersistenceModule';
 
 // Vitest hoists `vi.mock` factories above ordinary module-scope declarations,
@@ -102,6 +104,32 @@ describe('PersistenceModule', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it('saves a visible result receipt with its retained generation and no metadata read', async () => {
+    const turn = createDialogTurn('completed');
+    turn.recoveryEpoch = 2;
+    await updateSessionMetadata(createContext(turn), SESSION_ID, ['unreadCompletion', 'needsUserAttention']);
+    expect(mockLoadSessionMetadata).not.toHaveBeenCalled();
+    expect(mockSaveSessionMetadata).toHaveBeenCalledWith(expect.objectContaining({
+      unreadCompletion: undefined,
+      lastTurn: expect.objectContaining({ turnId: TURN_ID, status: 'completed', executionGeneration: 2 }),
+    }), 'D:/workspace/OpenBitFun', ['unreadCompletion', 'needsUserAttention'], undefined, undefined);
+  });
+
+  it('never writes old notification metadata to a device selected during its read', async () => {
+    const original = getActiveSurfaceId();
+    try {
+      activateSurface('metadata-origin');
+      mockLoadSessionMetadata.mockImplementationOnce(async () => {
+        activateSurface('metadata-new-device');
+        return null;
+      });
+      await updateSessionMetadata(createContext(createDialogTurn('completed')), SESSION_ID);
+      expect(mockSaveSessionMetadata).not.toHaveBeenCalled();
+    } finally {
+      activateSurface(original);
+    }
   });
 
   it('persists dialog turn token usage metadata when available', () => {

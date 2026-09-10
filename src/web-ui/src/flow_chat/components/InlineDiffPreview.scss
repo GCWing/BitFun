@@ -15,24 +15,6 @@
     overflow-y: auto;
     overflow-x: hidden;
     
-    // Custom scrollbar
-    &::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    
-    &::-webkit-scrollbar-thumb {
-      background: var(--openbitfun-color-scrollbar-thumb);
-      border-radius: 3px;
-
-      &:hover {
-        background: var(--openbitfun-color-scrollbar-thumb-hover);
-      }
-    }
   }
   
   &--empty {

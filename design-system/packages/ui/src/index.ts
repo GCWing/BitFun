@@ -1,4 +1,5 @@
 import "./styles/layers.css";
+import "./styles/scrollbars.css";
 
 export {
   DesignSystemProvider,
@@ -170,6 +171,9 @@ export {
   type DialogBodyProps,
   type DialogCloseProps,
   type DialogCloseReason,
+  type DialogFooterAppearance,
+  type DialogFooterProps,
+  type DialogHeaderProps,
   type DialogProps,
   type DialogSize,
   type SheetPlacement,
@@ -197,6 +201,7 @@ export {
 } from "./components/NavigationPanel";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
 export { Radio, type RadioProps, type RadioSize } from "./components/Radio";
+export { RollingText, type RollingTextProps } from "./components/RollingText";
 export {
   ScrollArea,
   type ScrollAreaOrientation,

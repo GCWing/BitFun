@@ -2,7 +2,7 @@
  * BranchesView — Left: branch list (switch/create/delete). Right: commit history for selected branch.
  */
 
-import { Button, Icon, IconButton, SearchField, Tooltip, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SearchField, Tooltip, ScrollArea } from '@openbitfun/ui';
 import React, { useCallback, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw, FileText } from 'lucide-react';
@@ -224,7 +224,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
           <div data-openbitfun-component="branches-view" data-openbitfun-part="actions" className="openbitfun-git-scene-branches__toolbar-actions">
             <Button
               size="sm"
-              variant="fill"
+              variant="primary"
               leadingIcon={<Icon name="plus" size="sm" />}
               onClick={() => handleCreateFrom(branches.find(b => b.current)?.name ?? selectedBranchName ?? '')}
               title={t('dialog.createNewBranch.title')}
@@ -242,7 +242,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
             </div>
           ) : (
             filteredBranches.map((branch, idx) => (
-              <div
+              <div data-overflow-trigger
                 data-openbitfun-component="branches-view"
                 data-openbitfun-part="branch"
                 data-openbitfun-state={[
@@ -255,7 +255,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
               >
                 <div data-openbitfun-component="branches-view" data-openbitfun-part="branchInfo" className="openbitfun-git-scene-branches__info">
                   <Icon name="git" size="sm" />
-                  <span className="openbitfun-git-scene-branches__name">{branch.name}</span>
+                  <OverflowText className="openbitfun-git-scene-branches__name">{branch.name}</OverflowText>
                   {branch.current && <span className="openbitfun-git-scene-branches__current-badge">{t('branch.current')}</span>}
                 </div>
                 <div data-openbitfun-component="branches-view" data-openbitfun-part="branchActions" className="openbitfun-git-scene-branches__actions" onClick={e => e.stopPropagation()}>
@@ -335,12 +335,12 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
                   key={commit.hash ?? idx}
                   className={`openbitfun-git-scene-branches__commit ${isExpanded ? 'openbitfun-git-scene-branches__commit--expanded' : ''}`}
                 >
-                  <div data-openbitfun-component="branches-view" data-openbitfun-part="commitHeader" className="openbitfun-git-scene-branches__commit-header" onClick={() => toggleCommitExpand(commit.hash)}>
+                  <div data-overflow-trigger data-openbitfun-component="branches-view" data-openbitfun-part="commitHeader" className="openbitfun-git-scene-branches__commit-header" onClick={() => toggleCommitExpand(commit.hash)}>
                     <button type="button" className="openbitfun-git-scene-branches__expand">
                       {isExpanded ? <Icon name="chevron-down" size="xs" /> : <Icon name="chevron-right" size="xs" />}
                     </button>
                     <div data-openbitfun-component="branches-view" data-openbitfun-part="commitInfo" className="openbitfun-git-scene-branches__commit-info">
-                      <div className="openbitfun-git-scene-branches__commit-message">{summary}</div>
+                      <div className="openbitfun-git-scene-branches__commit-message"><OverflowText>{summary}</OverflowText></div>
                       <div className="openbitfun-git-scene-branches__commit-meta">
                         {author} · {commit.hash?.substring(0, 7)}
                       </div>

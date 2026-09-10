@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import {
+import { OverflowText,
   Button,
   Icon,
   Input,
@@ -550,9 +550,9 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
                   const stats = blocker.stats.get(file);
                   return (
                     <div className="branch-switch-conflict-dialog__file" key={file} role="listitem">
-                      <span className="branch-switch-conflict-dialog__file-path" title={file}>
+                      <OverflowText className="branch-switch-conflict-dialog__file-path" title={file}>
                         {file}
-                      </span>
+                      </OverflowText>
                       {stats ? (
                         <span className="branch-switch-conflict-dialog__file-stats">
                           <span className="branch-switch-conflict-dialog__additions">

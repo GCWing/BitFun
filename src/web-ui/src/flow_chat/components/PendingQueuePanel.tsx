@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ListEnd } from 'lucide-react';
-import { Tooltip } from '@openbitfun/ui';
+import { OverflowText, Tooltip } from '@openbitfun/ui';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
@@ -204,7 +204,7 @@ export function PendingQueuePanel({
   }
 
   return (
-    <ChatComposerQueue
+    <ChatComposerQueue data-overflow-trigger
       aria-label={t('pendingQueue.label', { count: visibleItems.length })}
       className={`openbitfun-pending-queue-panel ${className ?? ''}`.trim()}
       data-openbitfun-product-component="pending-queue-panel"
@@ -271,13 +271,13 @@ export function PendingQueuePanel({
                       data-openbitfun-product-component="pending-queue-panel"
                       data-openbitfun-product-part="preview"
                       title={previewText}
-                    >
+                    ><OverflowText behavior="marquee">
                       {previewText || (
                         <span className="openbitfun-pending-queue-panel__preview-empty">
                           {t('pendingQueue.emptyPlaceholder')}
                         </span>
                       )}
-                    </div>
+                    </OverflowText></div>
                     <div
                       className="openbitfun-pending-queue-panel__sending-label"
                       data-openbitfun-product-component="pending-queue-panel"
@@ -293,13 +293,13 @@ export function PendingQueuePanel({
                       data-openbitfun-product-component="pending-queue-panel"
                       data-openbitfun-product-part="preview"
                       title={previewText}
-                    >
+                    ><OverflowText behavior="marquee">
                       {previewText || (
                         <span className="openbitfun-pending-queue-panel__preview-empty">
                           {t('pendingQueue.emptyPlaceholder')}
                         </span>
                       )}
-                    </div>
+                    </OverflowText></div>
                     {isFailed && (
                       <div
                         className="openbitfun-pending-queue-panel__failed-label"

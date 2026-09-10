@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { buildLoopx } from './build-loopx.mjs';
+import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 import { extractProductConfigArg } from './product-customization/cli.mjs';
 import { productBuildEnvironment } from './product-customization/projections.mjs';
 import { resolveProductDefinition } from './product-customization/resolver.mjs';
@@ -25,12 +26,6 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const LINUX_FLASHGREP_BINARIES = [
-  'flashgrep-x86_64-unknown-linux-musl',
-  'flashgrep-x86_64-unknown-linux-gnu',
-  'flashgrep-aarch64-unknown-linux-musl',
-  'flashgrep-aarch64-unknown-linux-gnu',
-];
 
 function tauriBuildArgsFromArgv() {
   const args = process.argv.slice(2);
@@ -54,8 +49,11 @@ async function main() {
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
   preparePluginHost();
-  // Flashgrep distribution is temporarily suspended.
-  const flashgrepBinary = null;
+  const flashgrepBinary = prepareMacOSFlashgrepForSigning(
+    ensureFlashgrepBinary({ target: optionValue(forward, '--target') || rustHostTargetTriple() }),
+    desktopDir,
+  );
+  process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
   const loopxResourceDir = await prepareBundledLoopx(forward, desktopDir);
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
   process.env.CI = 'true';
@@ -74,14 +72,23 @@ async function main() {
   });
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
   const tauriArgs = ['build', '--config', tauriConfig, ...forward];
-  const buildStartedAtMs = Date.now();
+  let attemptStartedAtMs = Date.now();
   let r = runTauriBuild(tauriBin, tauriArgs, desktopDir);
 
-  if (!r.error && shouldRetryMacDmgBuild(r, forward, desktopDir, buildStartedAtMs)) {
+  const maxMacDmgBuildAttempts = 3;
+  for (
+    let attempt = 1;
+    attempt < maxMacDmgBuildAttempts
+      && !r.error
+      && shouldRetryMacDmgBuild(r, forward, desktopDir, attemptStartedAtMs);
+    attempt += 1
+  ) {
+    const retryDelaySeconds = attempt * 10;
     console.warn(
-      '[tauri-build] DMG bundling failed after the macOS app bundle was created; retrying once in 10 seconds.'
+      `[tauri-build] DMG bundling failed after the macOS app bundle was refreshed; retrying build attempt ${attempt + 1}/${maxMacDmgBuildAttempts} in ${retryDelaySeconds} seconds.`
     );
-    await new Promise((resolveRetry) => setTimeout(resolveRetry, 10_000));
+    await new Promise((resolveRetry) => setTimeout(resolveRetry, retryDelaySeconds * 1_000));
+    attemptStartedAtMs = Date.now();
     r = runTauriBuild(tauriBin, tauriArgs, desktopDir);
   }
 
@@ -106,11 +113,27 @@ async function main() {
 
   if (r.status === 0 && forward.includes('--no-bundle')) {
     console.warn(
-      '[tauri-build] No bundle was produced. The raw desktop executable depends on its adjacent frontend, mobile-web, and resources directories and must not be distributed by itself.'
+      '[tauri-build] No bundle was produced. The raw desktop executable depends on its adjacent frontend, flashgrep, mobile-web, and resources directories and must not be distributed by itself.'
     );
   }
 
   process.exit(r.status ?? 1);
+}
+
+function rustHostTargetTriple() {
+  const result = spawnSync('rustc', ['-vV'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || result.stderr || `exit status ${result.status}`;
+    throw new Error(`Could not determine the Rust host target: ${detail}`);
+  }
+  const host = String(result.stdout).match(/^host:\s*(\S+)$/m)?.[1];
+  if (!host) throw new Error('rustc -vV did not report a host target triple.');
+  return host;
 }
 
 function preparePluginHost() {
@@ -172,13 +195,28 @@ export function shouldRetryMacDmgBuild(
     'macos'
   );
 
+  const freshAfterMs = buildStartedAtMs - 1_000;
   try {
-    return readdirSync(bundleDir, { withFileTypes: true }).some(
-      (entry) =>
-        entry.isDirectory() &&
-        entry.name.endsWith('.app') &&
-        statSync(join(bundleDir, entry.name)).mtimeMs >= buildStartedAtMs - 1_000
-    );
+    return readdirSync(bundleDir, { withFileTypes: true }).some((entry) => {
+      if (!entry.isDirectory() || !entry.name.endsWith('.app')) {
+        return false;
+      }
+
+      const appDir = join(bundleDir, entry.name);
+      if (statSync(appDir).mtimeMs >= freshAfterMs) {
+        return true;
+      }
+
+      // The Rust cache can restore an existing app directory without changing
+      // its own mtime. Tauri still refreshes the executable inside it before
+      // codesigning, so use that file as the reliable bundling boundary.
+      const executableDir = join(appDir, 'Contents', 'MacOS');
+      return readdirSync(executableDir, { withFileTypes: true }).some(
+        (executable) =>
+          executable.isFile()
+          && statSync(join(executableDir, executable.name)).mtimeMs >= freshAfterMs
+      );
+    });
   } catch {
     return false;
   }
@@ -243,7 +281,7 @@ export function prepareMacOSFlashgrepForSigning(
       '--timestamp',
       signedBinary,
     ],
-    { encoding: 'utf8', shell: false },
+    { encoding: 'utf8', shell: false, windowsHide: true },
   );
   if (result.error || result.status !== 0) {
     const detail = result.error?.message || result.stderr || `exit status ${result.status}`;
@@ -405,19 +443,7 @@ async function prepareBundledLoopx(forwardArgs, desktopDir) {
 }
 
 function bundledFlashgrepResources(primaryBinary) {
-  if (!primaryBinary) return [];
-  const binaries = [primaryBinary];
-
-  if (process.platform === 'win32') {
-    for (const binaryName of LINUX_FLASHGREP_BINARIES) {
-      const binaryPath = join(ROOT, 'resources', 'flashgrep', binaryName);
-      if (existsSync(binaryPath)) {
-        binaries.push(binaryPath);
-      }
-    }
-  }
-
-  return [...new Set(binaries)];
+  return primaryBinary ? [primaryBinary] : [];
 }
 
 function toTauriPath(value) {

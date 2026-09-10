@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
-import { Button, Icon, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@openbitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 
 import { useI18n } from '@/infrastructure/i18n';
@@ -158,7 +158,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         className="openbitfun-image-viewer__toolbar"
         leading={
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="info" className="openbitfun-image-viewer__info">
-            <span className="openbitfun-image-viewer__filename">{fileName || filePath.split(/[/\\]/).pop()}</span>
+            <OverflowText className="openbitfun-image-viewer__filename">{fileName || filePath.split(/[/\\]/).pop()}</OverflowText>
             {imageDimensions && (
               <span className="openbitfun-image-viewer__dimensions">
                 {imageDimensions.width} × {imageDimensions.height}

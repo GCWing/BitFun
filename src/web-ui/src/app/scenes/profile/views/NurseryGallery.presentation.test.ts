@@ -28,10 +28,12 @@ describe('Nursery gallery presentation', () => {
     expect(gallerySection).toMatch(
       /\.nursery-gallery \{\s+background: var\(--openbitfun-color-surface-scene\);/,
     );
-    expect(gallerySection).toContain('background: var(--openbitfun-color-surface-tertiary);');
+    expect(readSibling('./NurseryGallery.tsx')).toContain('appearance="subtle"');
+    expect(readSibling('./AssistantCard.tsx')).toContain('appearance="subtle"');
+    expect(gallerySection).toContain('border-color: var(--openbitfun-color-border-subtle);');
     expect(gallerySection).toContain('color: var(--openbitfun-color-content-primary);');
     expect(gallerySection).toContain('color: var(--openbitfun-color-content-muted);');
-    expect(gallerySection).toContain('border-radius: var(--openbitfun-layout-field-group-radius);');
+    expect(gallerySection).toContain('border-radius: var(--openbitfun-layout-card-radius-md);');
     expect(gallerySection).not.toContain('--openbitfun-color-content-on-dark');
     expect(gallerySection).not.toContain('--openbitfun-color-content-on-light');
     expect(gallerySection).not.toContain('--openbitfun-color-overlay-scrim');

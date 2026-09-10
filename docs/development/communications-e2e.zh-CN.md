@@ -284,7 +284,7 @@ SSH 与账号设备 RPC 两种传输各跑一轮；目标分别为 CLI daemon �
 | EXT-08 | 模型 SSE/WebSocket：多字节/JSON 跨块、首包超时、流中断、429、5xx | 调用与执行状态保真；不把部分响应当完整，也不重复已有工具副作用 |
 | EXT-09 | AI relay 模型请求来自本地/peer/dispatch 不同执行端 | 使用声明的模型 provider 和凭据域；断线不能偷偷改变执行宿主 |
 | EXT-10 | Plugin Host IPC、SDK stdio：帧边界、correlation、取消、worker 崩溃、背压 | 各协议独立限制与生命周期成立；不复用客户端数复制 Runtime owner |
-| EXT-11 | LAN、ngrok/自建 Relay、嵌入式 Relay 运行手机主线 | 同一共享路由契约；公网地址变化、端口占用和服务停止明确反映 |
+| EXT-11 | 官方 Relay 与 LAN 嵌入式 Relay 运行同一账号设备主线 | 同一共享路由契约；公网地址变化、端口占用和服务停止明确反映 |
 | EXT-12 | 发布页面/附件上传、读取、账号 sync 大包与设备 RPC 并发 | 各路由认证和大小上限一致；没有把 HTTP body limit 当业务完整性保证 |
 
 ## 5. 本地自动验证入口

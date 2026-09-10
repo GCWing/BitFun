@@ -9,6 +9,7 @@ import { ActionItem, type ActionItemProps } from "../ActionItem";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { ScrollArea, type ScrollAreaProps } from "../ScrollArea";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./NavigationPanel.module.css";
 
 export interface NavigationPanelProps
@@ -162,9 +163,9 @@ export const NavigationPanelSection = forwardRef<HTMLElement, NavigationPanelSec
       >
         {headingId && (
           <div className={styles.heading} data-openbitfun-part="heading" id={headingId}>
-            <span className={styles.headingLabel} data-openbitfun-part="heading-label">
+            <OverflowText className={styles.headingLabel} data-openbitfun-part="heading-label">
               {title}
-            </span>
+            </OverflowText>
             {actions.length > 0 && (
               <span className={styles.headingActions} data-openbitfun-part="heading-actions">
                 {actions.map((action) => (

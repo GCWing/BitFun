@@ -222,8 +222,8 @@ openbitfun_restore_previous_relay() {
 
 openbitfun_run_relay_image() {
   local image_ref="$1" platform="$2" attempt stale
-  openbitfun_image_docker volume create relay-server_relay-db >/dev/null
-  openbitfun_image_docker volume create relay-server_room-web >/dev/null
+  openbitfun_image_docker volume create relay-server_relay-db >/dev/null || return 1
+  openbitfun_image_docker volume create relay-server_room-web >/dev/null || return 1
 
   OPENBITFUN_RELAY_BACKUP_CONTAINER=""
   if openbitfun_image_docker container inspect openbitfun-relay >/dev/null 2>&1; then
@@ -260,7 +260,7 @@ openbitfun_run_relay_image() {
     -v relay-server_room-web:/app/room-web \
     -v relay-server_relay-db:/app/data \
     "$image_ref" >/dev/null; then
-    echo ">>> ERROR: the published Relay image could not start; restoring the previous container." >&2
+    echo ">>> ERROR: the Relay image could not start; restoring the previous container." >&2
     openbitfun_restore_previous_relay
     trap - INT TERM
     return 1
@@ -280,7 +280,7 @@ openbitfun_run_relay_image() {
         --filter 'name=^openbitfun-relay-before-release-' 2>/dev/null); do
         openbitfun_image_docker rm -f "$stale" >/dev/null 2>&1 || true
       done
-      echo ">>> Published Relay image is healthy."
+      echo ">>> Relay image is healthy."
       return 0
     fi
     if ! openbitfun_image_docker inspect -f '{{.State.Running}}' openbitfun-relay 2>/dev/null | grep -qx true; then
@@ -289,7 +289,7 @@ openbitfun_run_relay_image() {
     sleep 2
   done
 
-  echo ">>> ERROR: published Relay image failed its health check; restoring the previous container." >&2
+  echo ">>> ERROR: Relay image failed its health check; restoring the previous container." >&2
   echo ">>> Container state: $(openbitfun_image_docker inspect \
     -f 'running={{.State.Running}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} err={{.State.Error}}' \
     openbitfun-relay 2>&1 || true)"

@@ -13,6 +13,7 @@ import {
 } from "react";
 import { Icon } from "../Icon";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { ScrollArea, type ScrollbarVisibility } from "../ScrollArea";
 import styles from "./Listbox.module.css";
 
@@ -214,16 +215,18 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
     metadata,
     selected = false,
     tabIndex = -1,
+    title,
     value,
     ...props
   }, ref) {
     return (
-      <button
+      <button data-overflow-trigger
         {...props}
         aria-disabled={disabled || undefined}
         aria-selected={selected}
         className={classNames(styles.option, className)}
         data-active={active ? "true" : "false"}
+        data-overflow-active={active ? "true" : undefined}
         data-openbitfun-listbox-option=""
         data-openbitfun-part="option"
         data-selected={selected ? "true" : "false"}
@@ -232,6 +235,7 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
         ref={ref}
         role="option"
         tabIndex={tabIndex}
+        title={title}
         type="button"
       >
         {leading !== undefined && leading !== null && (
@@ -240,7 +244,7 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
           </span>
         )}
         <span className={styles.content} data-openbitfun-part="content">
-          <span className={styles.label} data-openbitfun-part="label">{children}</span>
+          <OverflowText title={title === "" ? "" : undefined} className={styles.label} data-openbitfun-part="label" marqueeActive={active}>{children}</OverflowText>
           {description !== undefined && description !== null && (
             <span className={styles.description} data-openbitfun-part="description">
               {description}
@@ -248,7 +252,7 @@ export const ListboxOption = forwardRef<HTMLButtonElement, ListboxOptionProps>(
           )}
         </span>
         {metadata !== undefined && metadata !== null && (
-          <span className={styles.metadata} data-openbitfun-part="metadata">{metadata}</span>
+          <OverflowText title={title === "" ? "" : undefined} className={styles.metadata} data-openbitfun-part="metadata" marqueeActive={active}>{metadata}</OverflowText>
         )}
         <span aria-hidden="true" className={styles.indicator} data-openbitfun-part="indicator">
           {indicator ?? (selected ? <Icon name="check-line" /> : null)}

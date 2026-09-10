@@ -125,7 +125,7 @@ const GitScene: React.FC<GitSceneProps> = ({
                 <p>{t('trust.required', { path: workspacePath })}</p>
               </div>
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={<ShieldAlert />}
                 onClick={handleTrustRepository}
@@ -159,7 +159,7 @@ const GitScene: React.FC<GitSceneProps> = ({
                 <p>{t('init.notRepository')}</p>
               </div>
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="plus" size="lg" />}
                 onClick={handleInitGitRepository}

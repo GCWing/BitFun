@@ -173,7 +173,6 @@ $ins-r-lg: 12px;
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-overline-sm-font-size);
     line-height: var(--openbitfun-type-label-md-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -294,7 +293,6 @@ $ins-r-lg: 12px;
     color: var(--openbitfun-color-content-muted);
     font-size: var(--openbitfun-type-label-sm-font-size);
     line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -375,7 +373,6 @@ $ins-r-lg: 12px;
     font-size: var(--openbitfun-type-micro-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
     line-height: var(--openbitfun-type-modifier-leading-dense-line-height);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
@@ -541,7 +538,6 @@ $ins-r-lg: 12px;
       color: var(--openbitfun-color-content-primary);
       font-size: var(--openbitfun-type-label-md-font-size);
       font-weight: var(--openbitfun-type-label-selected-font-weight);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -603,14 +599,13 @@ $ins-r-lg: 12px;
     line-height: var(--openbitfun-type-modifier-leading-snug-line-height);
     opacity: 0.72;
 
-    > span {
+    > span:not([data-overflow-content]) {
       display: inline-flex;
       align-items: center;
       min-width: 0;
       max-width: 100%;
       gap: 3px;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -724,14 +719,6 @@ $ins-r-lg: 12px;
   flex-direction: row;
   min-height: 0;
   overflow-x: hidden;
-
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb {
-    background: var(--openbitfun-color-border-default);
-    border-radius: 3px;
-  }
-  &::-webkit-scrollbar-thumb:hover { background: var(--openbitfun-color-field-border-hover); }
 }
 
 // Report body column
@@ -858,7 +845,6 @@ $ins-r-lg: 12px;
   &__label {
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     font-size: var(--openbitfun-type-label-md-font-size);
   }
 }
@@ -1068,7 +1054,6 @@ $ins-r-lg: 12px;
     color: var(--openbitfun-color-content-muted);
     flex-shrink: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

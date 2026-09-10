@@ -11,7 +11,7 @@
     145deg,
     color-mix(in srgb, var(--openbitfun-color-surface-raised) 12%, transparent) 0%,
     transparent 58%,
-    color-mix(in srgb, var(--openbitfun-color-status-success-content) 8%, transparent) 100%
+    color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 8%, transparent) 100%
   );
   color: var(--openbitfun-color-content-primary);
   animation: openbitfun-realtime-call-in 260ms cubic-bezier(0.18, 0.9, 0.3, 1.08) both;
@@ -58,7 +58,6 @@
       color: var(--openbitfun-color-content-secondary);
       font-size: var(--openbitfun-type-label-sm-font-size);
       line-height: var(--openbitfun-type-body-sm-line-height);
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -68,20 +67,20 @@
     height: 8px;
     flex: 0 0 8px;
     border-radius: 50%;
-    background: var(--openbitfun-color-status-success-content);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-success-content) 12%, transparent);
+    background: var(--openbitfun-color-status-success-emphasis);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 12%, transparent);
     animation: openbitfun-realtime-call-live 1.8s ease-in-out infinite;
   }
 
   &[data-openbitfun-phase='connecting'] &__live-dot,
   &[data-openbitfun-phase='ending'] &__live-dot {
-    background: var(--openbitfun-color-status-warning-content);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+    background: var(--openbitfun-color-status-warning-emphasis);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 12%, transparent);
   }
 
   &[data-openbitfun-phase='error'] &__live-dot {
-    background: var(--openbitfun-color-status-danger-content);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-danger-content) 12%, transparent);
+    background: var(--openbitfun-color-status-danger-emphasis);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--openbitfun-color-status-danger-emphasis) 12%, transparent);
   }
 
   &__conversation {
@@ -200,7 +199,7 @@
   }
 
   &__control--end {
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 32%, transparent);
+    border-color: var(--openbitfun-color-status-danger-border);
     background: var(--openbitfun-color-status-danger-content);
     color: var(--openbitfun-color-content-on-dark);
 

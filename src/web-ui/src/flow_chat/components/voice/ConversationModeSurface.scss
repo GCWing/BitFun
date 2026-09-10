@@ -40,7 +40,6 @@
   font-size: var(--openbitfun-type-label-sm-font-size);
   font-weight: var(--openbitfun-type-label-sm-font-weight);
   line-height: var(--openbitfun-type-label-md-line-height);
-  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -61,7 +60,6 @@
 
   &:active:not(:disabled) {
     background: var(--openbitfun-color-action-neutral-surface-hover);
-    transform: scale(0.985);
   }
 
   &:focus-visible {

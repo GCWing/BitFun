@@ -2,6 +2,7 @@
 
 mod artifacts;
 mod auth;
+mod auth_admission;
 pub mod config;
 mod db;
 mod error;
@@ -46,6 +47,18 @@ pub async fn build_market_router(config: MarketConfig) -> anyhow::Result<Router>
         );
     }
     retention::spawn_cleanup_loop(db.clone(), artifacts.clone());
+    let auth_cleanup_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            if let Err(error) = auth_cleanup_db.cleanup_expired_auth().await {
+                tracing::error!(%error, "Global identity authorization cleanup failed");
+            }
+        }
+    });
     let auth = AuthService::new(config.clone(), db.clone())
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let state = Arc::new(MarketState {

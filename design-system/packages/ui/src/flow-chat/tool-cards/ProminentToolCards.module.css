@@ -4,7 +4,6 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--openbitfun-color-content-secondary);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -20,7 +19,6 @@
 
   .summary {
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -79,12 +77,12 @@
 
   .outputGroup[data-tone="warning"] .outputBlock {
     color: var(--openbitfun-color-status-warning-content);
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 7%, transparent);
+    background: var(--openbitfun-color-status-warning-surface);
   }
 
   .outputGroup[data-tone="danger"] .outputBlock {
     color: var(--openbitfun-color-status-danger-content);
-    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 7%, transparent);
+    background: var(--openbitfun-color-status-danger-surface);
   }
 
   .footer {
@@ -119,7 +117,6 @@
     min-inline-size: 0;
     overflow: hidden;
     color: var(--openbitfun-color-content-secondary);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -150,7 +147,6 @@
     overflow: hidden;
     min-inline-size: 0;
     color: var(--openbitfun-color-content-secondary);
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -256,7 +252,6 @@
   .agentStatus {
     min-inline-size: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

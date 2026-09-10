@@ -1,12 +1,13 @@
 @layer openbitfun.components {
   .button {
-    --_button-background: var(--openbitfun-color-surface-tertiary);
-    --_button-background-hover: var(--openbitfun-color-action-neutral-surface);
-    --_button-background-active: var(--openbitfun-color-action-neutral-surface);
-    --_button-border: var(--openbitfun-color-action-neutral-border);
-    --_button-border-hover: var(--_button-border);
-    --_button-border-active: var(--_button-border);
-    --_button-content: var(--openbitfun-color-action-neutral-content);
+    --_button-background: transparent;
+    --_button-background-hover: var(--openbitfun-component-button-fill-background);
+    --_button-background-active: var(--openbitfun-component-button-fill-background);
+    --_button-border: var(--openbitfun-component-button-outline-border);
+    --_button-border-hover: var(--openbitfun-component-button-outline-border-interactive);
+    --_button-border-active: var(--openbitfun-component-button-outline-border-interactive);
+    --_button-content: var(--openbitfun-component-button-content);
+    --_button-content-disabled: var(--openbitfun-color-action-neutral-content-disabled);
     --_button-font-size: var(--openbitfun-type-label-md-font-size);
     --_button-height: var(--openbitfun-control-height-md);
     --_button-leading-icon-size: 16px;
@@ -25,7 +26,7 @@
     border: var(--openbitfun-border-width-default) solid var(--_button-border);
     border-radius: var(--openbitfun-radius-pill);
     color: var(--_button-content);
-    background: var(--openbitfun-color-surface-tertiary);
+    background: transparent;
     font-family: var(--openbitfun-type-label-md-font-family);
     font-size: var(--_button-font-size);
     font-weight: var(--openbitfun-type-label-md-font-weight);
@@ -73,23 +74,28 @@
   }
 
   .button:disabled {
-    color: var(--openbitfun-color-action-neutral-content-disabled);
+    color: var(--_button-content-disabled);
     cursor: not-allowed;
   }
 
   .button[data-openbitfun-variant="fill"] {
-    --_button-background: var(--openbitfun-color-action-neutral-surface);
-    --_button-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
-    --_button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
+    --_button-background: var(--openbitfun-component-button-fill-background);
+    --_button-background-hover: var(--openbitfun-component-button-fill-background-hover);
+    --_button-background-active: var(--openbitfun-component-button-fill-background-pressed);
     --_button-border: transparent;
+    --_button-border-hover: transparent;
+    --_button-border-active: transparent;
   }
 
   .button[data-openbitfun-variant="primary"] {
-    --_button-background: var(--openbitfun-color-action-primary-background);
-    --_button-background-hover: var(--openbitfun-color-action-primary-hover);
-    --_button-background-active: var(--openbitfun-color-action-primary-pressed);
+    --_button-background: var(--openbitfun-component-button-primary-background);
+    --_button-background-hover: var(--openbitfun-component-button-primary-background-hover);
+    --_button-background-active: var(--openbitfun-component-button-primary-background-pressed);
     --_button-border: transparent;
+    --_button-border-hover: transparent;
+    --_button-border-active: transparent;
     --_button-content: var(--openbitfun-color-action-primary-content);
+    --_button-content-disabled: var(--openbitfun-component-button-primary-content-disabled);
   }
 
   .button[data-openbitfun-variant="secondary"] {
@@ -103,8 +109,7 @@
   }
 
   .button[data-openbitfun-variant="primary"]:disabled {
-    --_button-background: var(--openbitfun-color-action-neutral-surface);
-    --_button-content: var(--openbitfun-color-action-neutral-content-disabled);
+    --_button-background: var(--openbitfun-component-button-fill-background);
   }
 
   .button[data-openbitfun-variant="secondary"]:disabled {
@@ -113,40 +118,44 @@
   }
 
   .button[data-openbitfun-variant="text"] {
-    --_button-background: var(--openbitfun-color-surface-tertiary);
-    --_button-background-hover: var(--openbitfun-color-action-neutral-surface-hover);
-    --_button-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
+    --_button-background: transparent;
+    --_button-background-hover: transparent;
+    --_button-background-active: transparent;
     --_button-border: transparent;
-    --_button-content: var(--openbitfun-color-accent-default);
+    --_button-border-hover: transparent;
+    --_button-border-active: transparent;
+    --_button-content: var(--openbitfun-component-button-text-content);
+    --_button-content-disabled: var(--openbitfun-component-button-text-content-disabled);
+
+    border-radius: 0;
   }
 
   .button[data-openbitfun-variant="text"]:is(:hover, [data-openbitfun-preview-state="hover"]):not(:disabled) {
-    --_button-content: var(--openbitfun-color-accent-hover);
+    --_button-content: var(--openbitfun-component-button-text-content-hover);
 
     text-decoration: underline;
     text-underline-offset: 0.12em;
   }
 
   .button[data-openbitfun-variant="text"]:is(:active, [data-openbitfun-preview-state="active"]):not(:disabled) {
-    --_button-content: var(--openbitfun-color-accent-default);
+    --_button-content: var(--openbitfun-component-button-text-content);
 
     text-decoration: underline;
     text-underline-offset: 0.12em;
   }
 
-  .button[data-openbitfun-variant="text"]:disabled {
-    --_button-content: var(--openbitfun-color-accent-disabled);
-  }
-
   .button[data-openbitfun-variant="fill"]:disabled {
-    --_button-background: var(--openbitfun-color-action-neutral-surface);
+    --_button-background: var(--openbitfun-component-button-fill-background);
   }
 
   .button[data-openbitfun-tone="danger"] {
     --_button-background-hover: var(--openbitfun-color-status-danger-surface);
     --_button-background-active: var(--openbitfun-color-status-danger-surface);
     --_button-border: var(--openbitfun-color-status-danger-border);
+    --_button-border-hover: var(--_button-border);
+    --_button-border-active: var(--_button-border);
     --_button-content: var(--openbitfun-color-status-danger-content);
+    --_button-content-disabled: var(--openbitfun-color-action-neutral-content-disabled);
   }
 
   .button[data-openbitfun-tone="danger"][data-openbitfun-variant="fill"] {
@@ -219,7 +228,6 @@
     gap: var(--openbitfun-space-1);
     line-height: var(--openbitfun-type-body-sm-line-height);
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .label > :where(svg, img) {
@@ -228,6 +236,7 @@
   }
 
   .icon {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -250,6 +259,11 @@
   .trailingIcon {
     inline-size: var(--_button-trailing-icon-size);
     block-size: var(--_button-trailing-icon-size);
+    opacity: 0.5;
+  }
+
+  .button:disabled .trailingIcon {
+    opacity: 1;
   }
 
   .progress {

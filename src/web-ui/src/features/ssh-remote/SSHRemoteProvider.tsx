@@ -558,7 +558,10 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           ? 'error'
           : 'connecting';
       }
-      setWorkspaceStatuses(prev => ({ ...prev, ...initialStatuses }));
+      // A background check is not a reconnect. Keep the last observed state
+      // while the probe is pending, including when session selection checks
+      // every opened workspace again.
+      setWorkspaceStatuses(prev => ({ ...initialStatuses, ...prev }));
 
       type ConnectedEntry = { workspace: RemoteWorkspace; connectionId: string };
       const results = await Promise.all(
@@ -617,6 +620,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             connectionId: workspace.connectionId,
             remotePath: workspace.remotePath,
           });
+          setWorkspaceStatuses(prev => ({ ...prev, [workspace.connectionId]: 'connecting' }));
           const result = await tryReconnectWithRetry(workspace);
 
           if (result !== false) {

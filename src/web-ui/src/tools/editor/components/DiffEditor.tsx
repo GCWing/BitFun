@@ -8,7 +8,7 @@ import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/Mo
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
-import { LoadingState } from '@openbitfun/ui';
+import { OverflowText, LoadingState } from '@openbitfun/ui';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
@@ -585,7 +585,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           <AlertCircle size={32} className="diff-editor-error__icon" />
           <p className="diff-editor-error__message">{error}</p>
           {filePath && (
-            <p className="diff-editor-error__path">{filePath}</p>
+            <p className="diff-editor-error__path"><OverflowText>{filePath}</OverflowText></p>
           )}
         </div>
       )}

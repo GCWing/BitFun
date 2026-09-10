@@ -4,8 +4,8 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 import {
   remoteConnectAPI,
   type DeviceInfo,
-  type RemoteConnectStatus,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { remoteConnectStatusSource, useRemoteConnectStatus } from '@/infrastructure/remote-connect/remoteConnectStatus';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import {
@@ -17,14 +17,13 @@ import {
 
 const TOPOLOGY_POLL_MS = 15_000;
 
-export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string) {
+export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string, fallbackMobileDeviceName?: string) {
   const account = useAccountLoginState();
   const peerContext = usePeerDeviceModeOptional();
   const dispatchJobs = useDispatchJobStore(state => state.jobs);
 
   const [localDevice, setLocalDevice] = useState<DeviceInfo | null>(null);
-  const [remoteStatus, setRemoteStatus] = useState<RemoteConnectStatus | null>(null);
-  const [remoteStatusState, setRemoteStatusState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const { status: remoteStatus, state: remoteStatusState } = useRemoteConnectStatus();
   const [accountService, setAccountService] = useState<DeviceOverviewConnectionService | null>(null);
   const refreshGenerationRef = useRef(0);
 
@@ -38,18 +37,7 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
       })
       .catch(() => undefined);
 
-    const statusPromise = remoteConnectAPI.getStatus()
-      .then(status => {
-        if (!isCurrent()) return;
-        setRemoteStatus(status);
-        setRemoteStatusState('ready');
-      })
-      .catch(() => {
-        if (!isCurrent()) return;
-        // A failed probe cannot prove a previous connection still exists.
-        setRemoteStatus(null);
-        setRemoteStatusState('unavailable');
-      });
+    const statusPromise = remoteConnectStatusSource.refresh().catch(() => undefined);
 
     const relayPromise = account.loggedIn
       ? remoteConnectAPI.accountGetCredentialHint().then(hint => {
@@ -82,6 +70,7 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
 
   useEffect(() => {
     const unlistenLogin = api.listen('account://login-state', () => {
+      remoteConnectStatusSource.invalidate();
       void refresh();
     });
     const unlistenPresence = api.listen('account://device-presence', () => {
@@ -137,6 +126,7 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
   const localDeviceName = localDevice?.device_name?.trim() || fallbackLocalDeviceName;
   const overview = useMemo(() => projectDeviceInterconnectionOverview({
     localDeviceName,
+    fallbackMobileDeviceName,
     peer,
     remoteStatus,
     remoteStatusState,
@@ -145,6 +135,7 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
   }), [
     accountService,
     localDeviceName,
+    fallbackMobileDeviceName,
     peer,
     projectedDispatchJobs,
     remoteStatus,

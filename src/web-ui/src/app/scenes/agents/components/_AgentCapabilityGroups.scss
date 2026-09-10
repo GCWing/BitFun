@@ -1,0 +1,86 @@
+// Shared layout for Agent capability configuration; controls own their paint.
+@mixin capability-group-layout($kind) {
+  .#{$kind}-group-picker,
+  .#{$kind}-group-summary {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--openbitfun-space-4);
+  }
+
+  .#{$kind}-group-picker {
+    &__sections {
+      display: flex;
+      flex-direction: column;
+      gap: var(--openbitfun-space-5);
+    }
+
+    &__group-head,
+    &__group-title-wrap,
+    &__group-actions {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: var(--openbitfun-space-2);
+    }
+
+    &__group-head {
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    &__group-title-wrap {
+      flex: 1 1 auto;
+    }
+
+    &__group-name {
+      min-width: 0;
+      color: var(--openbitfun-color-content-primary);
+      font-size: var(--openbitfun-type-label-md-font-size);
+      font-weight: var(--openbitfun-type-label-selected-font-weight);
+      line-height: var(--openbitfun-type-label-md-line-height);
+    }
+
+    &__selected-count,
+    &__group-count {
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-meta-font-size);
+      line-height: var(--openbitfun-type-meta-line-height);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    &__group-actions {
+      flex: 0 0 auto;
+    }
+
+    &__token-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--openbitfun-space-2);
+    }
+
+    &__token {
+      max-width: 100%;
+    }
+  }
+
+  .#{$kind}-group-summary {
+    &__#{$kind}s {
+      display: flex;
+      min-width: 0;
+      flex-wrap: wrap;
+      gap: var(--openbitfun-space-2);
+    }
+
+    &__item {
+      max-width: 100%;
+    }
+
+    &__empty {
+      color: var(--openbitfun-color-content-muted);
+      font-size: var(--openbitfun-type-body-sm-font-size);
+      line-height: var(--openbitfun-type-body-sm-line-height);
+    }
+  }
+}

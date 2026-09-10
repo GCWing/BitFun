@@ -46,7 +46,6 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .openbitfun-harness-selector__row-contract {
@@ -66,19 +65,19 @@
 
   width: 100%;
 
-  &[data-openbitfun-profile='minimal'] {
+  &[data-openbitfun-profile='Minimal'] {
     --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-minimal);
   }
 
-  &[data-openbitfun-profile='balanced'] {
+  &[data-openbitfun-profile='Standard'] {
     --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-standard);
   }
 
-  &[data-openbitfun-profile='ultimate'] {
+  &[data-openbitfun-profile='Ultimate'] {
     --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-ultimate);
   }
 
-  &[data-openbitfun-profile='creative'] {
+  &[data-openbitfun-profile='Creative'] {
     --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-creative);
   }
 
@@ -88,14 +87,14 @@
     font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
 
-  &[data-openbitfun-profile='ultimate'] [data-openbitfun-component='action-item'] {
+  &[data-openbitfun-profile='Ultimate'] [data-openbitfun-component='action-item'] {
     [data-openbitfun-part='label'] {
       font-style: italic;
       font-weight: var(--openbitfun-type-label-selected-font-weight);
     }
   }
 
-  &[data-openbitfun-profile='creative'] [data-openbitfun-component='action-item'] {
+  &[data-openbitfun-profile='Creative'] [data-openbitfun-component='action-item'] {
     [data-openbitfun-part='label'] {
       font-family: var(--openbitfun-type-flow-code-font-family);
       font-weight: var(--openbitfun-type-label-sm-font-weight);
@@ -109,10 +108,10 @@
 // the glow keeps the same geometry for every Harness identity color.
 .openbitfun-chat-input__mode-dropdown--agent-boost:has(
   .openbitfun-harness-selector--menu-item:is(
-    [data-openbitfun-profile='minimal'],
-    [data-openbitfun-profile='balanced'],
-    [data-openbitfun-profile='ultimate'],
-    [data-openbitfun-profile='creative']
+    [data-openbitfun-profile='Minimal'],
+    [data-openbitfun-profile='Standard'],
+    [data-openbitfun-profile='Ultimate'],
+    [data-openbitfun-profile='Creative']
   )
 ) {
   overflow: hidden;
@@ -144,25 +143,25 @@
 }
 
 .openbitfun-chat-input__mode-dropdown--agent-boost:has(
-  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='minimal']
+  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='Minimal']
 ) {
   --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-minimal);
 }
 
 .openbitfun-chat-input__mode-dropdown--agent-boost:has(
-  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='balanced']
+  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='Standard']
 ) {
   --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-standard);
 }
 
 .openbitfun-chat-input__mode-dropdown--agent-boost:has(
-  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='ultimate']
+  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='Ultimate']
 ) {
   --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-ultimate);
 }
 
 .openbitfun-chat-input__mode-dropdown--agent-boost:has(
-  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='creative']
+  .openbitfun-harness-selector--menu-item[data-openbitfun-profile='Creative']
 ) {
   --openbitfun-harness-profile-accent: var(--openbitfun-color-identity-harness-creative);
 }
@@ -185,19 +184,19 @@
   color: currentColor;
 }
 
-.openbitfun-harness-selector__density-mark[data-harness-profile='minimal'] {
+.openbitfun-harness-selector__density-mark[data-harness-profile='Minimal'] {
   color: var(--openbitfun-color-identity-harness-minimal);
 }
 
-.openbitfun-harness-selector__density-mark[data-harness-profile='balanced'] {
+.openbitfun-harness-selector__density-mark[data-harness-profile='Standard'] {
   color: var(--openbitfun-color-identity-harness-standard);
 }
 
-.openbitfun-harness-selector__density-mark[data-harness-profile='ultimate'] {
+.openbitfun-harness-selector__density-mark[data-harness-profile='Ultimate'] {
   color: var(--openbitfun-color-identity-harness-ultimate);
 }
 
-.openbitfun-harness-selector__density-mark[data-harness-profile='creative'] {
+.openbitfun-harness-selector__density-mark[data-harness-profile='Creative'] {
   color: var(--openbitfun-color-identity-harness-creative);
 }
 

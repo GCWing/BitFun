@@ -6,6 +6,7 @@ import {
 } from "react";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import styles from "./ActionItem.module.css";
 
 export interface ActionItemAction {
@@ -57,7 +58,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
       data-openbitfun-tone={tone}
       data-disabled={disabled ? "true" : "false"}
     >
-      <button
+      <button data-overflow-trigger
         {...props}
         className={styles.trigger}
         data-openbitfun-part="trigger"
@@ -70,7 +71,7 @@ export const ActionItem = forwardRef<HTMLButtonElement, ActionItemProps>(functio
             {leading}
           </span>
         )}
-        <span className={styles.label} data-openbitfun-part="label">{children}</span>
+        <OverflowText className={styles.label} data-openbitfun-part="label">{children}</OverflowText>
         {metadata !== undefined && metadata !== null && (
           <span className={styles.metadata} data-openbitfun-part="metadata">
             {metadata}

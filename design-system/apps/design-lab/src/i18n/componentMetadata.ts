@@ -75,6 +75,7 @@ const descriptionKeys: Readonly<Record<string, MessageKey>> = {
   ProminentToolCard: "component.ProminentToolCard.description",
   ReadFileToolCard: "component.ReadFileToolCard.description",
   ReviewSummaryToolCard: "component.ReviewSummaryToolCard.description",
+  RollingText: "component.RollingText.description",
   RunCodeToolCard: "component.RunCodeToolCard.description",
   SearchField: "component.SearchField.description",
   SegmentedControl: "component.SegmentedControl.description",

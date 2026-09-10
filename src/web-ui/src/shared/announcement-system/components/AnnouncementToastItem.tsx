@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Icon } from '@openbitfun/ui';
+import { Button, Icon, OverflowText } from '@openbitfun/ui';
 import type { AnnouncementCard } from '../types';
 import { useAnnouncementStore } from '../store/announcementStore';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -71,7 +71,7 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
     >
       {/* Row 1: title + close (with optional countdown ring) */}
       <div className="announcement-toast__header">
-        <div className="announcement-toast__title">{resolve(toast.title)}</div>
+        <OverflowText as="div" lines={2} className="announcement-toast__title">{resolve(toast.title)}</OverflowText>
         {toast.dismissible && (
           <div className="announcement-toast__close-wrap">
             {autoDismissMs && (
@@ -100,12 +100,12 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
       </div>
 
       {/* Row 2: description */}
-      <p className="announcement-toast__desc">{resolve(toast.description)}</p>
+      <OverflowText as="p" lines={3} className="announcement-toast__desc">{resolve(toast.description)}</OverflowText>
 
       {/* Row 3: action buttons */}
       <div className="announcement-toast__actions">
         <Button
-          variant="fill"
+          variant="primary"
           size="sm"
           onClick={handleAction}
         >

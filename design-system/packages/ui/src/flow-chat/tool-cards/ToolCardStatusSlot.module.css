@@ -38,11 +38,15 @@
   }
 
   .success {
-    color: var(--openbitfun-color-status-success-content);
+    color: var(--openbitfun-color-status-success-emphasis);
   }
 
   .danger {
-    color: var(--openbitfun-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-emphasis);
+  }
+
+  .statusLayer .processing {
+    color: var(--openbitfun-color-status-info-emphasis);
   }
 
   .muted {

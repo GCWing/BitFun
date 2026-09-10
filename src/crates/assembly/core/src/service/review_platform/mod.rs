@@ -9,15 +9,16 @@ use crate::infrastructure::try_get_path_manager_arc;
 use std::sync::Arc;
 
 pub use openbitfun_services_integrations::review_platform::{
-    ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewEvidenceCompleteness,
-    ReviewFileStatus, ReviewItemState, ReviewPlatformAccount, ReviewPlatformActionResult,
+    classify_git_command_failure, untrusted_repository_error_message, ReviewAuthSource,
+    ReviewAuthState, ReviewChecks, ReviewDecision, ReviewEvidenceCompleteness, ReviewFileStatus,
+    ReviewItemState, ReviewPlatformAccount, ReviewPlatformActionResult,
     ReviewPlatformApprovalRequest, ReviewPlatformAuthChallenge, ReviewPlatformAuthChallengeState,
     ReviewPlatformCapabilities, ReviewPlatformCiItem, ReviewPlatformCiLog, ReviewPlatformCommit,
     ReviewPlatformCreatePullRequestRequest, ReviewPlatformDetailSection, ReviewPlatformError,
     ReviewPlatformFile, ReviewPlatformIssueComment, ReviewPlatformIssueEvidence,
-    ReviewPlatformKind, ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail,
-    ReviewPlatformPullRequestDetailPage, ReviewPlatformPullRequestFileDiff,
-    ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
+    ReviewPlatformKind, ReviewPlatformListState, ReviewPlatformPullRequest,
+    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage,
+    ReviewPlatformPullRequestFileDiff, ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
     ReviewPlatformReplyToThreadRequest, ReviewPlatformRepositoryRef,
     ReviewPlatformRequestChangesRequest, ReviewPlatformResolveThreadRequest,
     ReviewPlatformSubmitReviewRequest, ReviewPlatformThread, ReviewPlatformThreadKind,
@@ -105,7 +106,8 @@ impl ReviewPlatformWorkspaceClassifier for CoreReviewPlatformWorkspaceClassifier
             } else {
                 stderr
             };
-            return Err(ReviewPlatformError::InvalidRepository(
+            return Err(classify_git_command_failure(
+                current_dir,
                 message.trim().to_string(),
             ));
         }
@@ -154,6 +156,18 @@ impl ReviewPlatformService {
     ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
         owner_service()?
             .workspace_context(repository_path, remote_id)
+            .await
+    }
+
+    pub async fn workspace_snapshot_with_state(
+        repository_path: &str,
+        remote_id: Option<&str>,
+        page: Option<u32>,
+        per_page: Option<u32>,
+        state: ReviewPlatformListState,
+    ) -> Result<ReviewPlatformWorkspaceSnapshot, ReviewPlatformError> {
+        owner_service()?
+            .workspace_snapshot_with_state(repository_path, remote_id, page, per_page, state)
             .await
     }
 

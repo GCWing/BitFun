@@ -19,7 +19,7 @@ export function buildMiniAppCustomizationSessionRequest(
   return {
     sessionId: input.sessionId,
     sessionName: input.sessionName,
-    agentType: 'agentic',
+    agentType: 'Standard',
     workspacePath: input.workspacePath,
     remoteConnectionId: input.remoteConnectionId,
     remoteSshHost: input.remoteSshHost,
@@ -92,7 +92,7 @@ export async function launchMiniAppCustomizationSession(params: {
     params.prompt,
     created.sessionId,
     params.displayMessage,
-    'agentic',
+    'Standard',
     undefined,
     {
       userMessageMetadata: {

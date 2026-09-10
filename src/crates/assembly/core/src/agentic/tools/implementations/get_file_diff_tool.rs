@@ -201,6 +201,7 @@ impl GetFileDiffTool {
         let platform = match pull_request.platform() {
             "github" => Some(ReviewPlatformKind::Github),
             "gitlab" => Some(ReviewPlatformKind::Gitlab),
+            "gitee" => Some(ReviewPlatformKind::Gitee),
             "gitcode" => None,
             value => {
                 return Err(OpenBitFunError::tool(format!(
@@ -2034,60 +2035,65 @@ mod tests {
 
     #[test]
     fn pull_request_diff_route_uses_prepared_provider_identity_not_remote_id() {
-        let mut context = prepared_context();
-        context.custom_data.insert(
-            "deep_review_run_manifest".to_string(),
-            json!({
-                "evidencePack": {
-                    "reviewTarget": {
-                        "version": 1,
-                        "source": "pull_request",
-                        "fingerprint": "provider-route-fingerprint",
-                        "baseRevision": "1111111111111111111111111111111111111111",
-                        "headRevision": "2222222222222222222222222222222222222222",
-                        "completeness": "complete",
-                        "workspaceBinding": "unavailable",
-                        "pullRequest": {
-                            "remoteId": "fabricated-remote-that-must-not-route",
-                            "platform": "github",
-                            "host": "github.com",
-                            "projectPath": "exact/project",
-                            "pullRequestId": "42",
-                            "number": 42,
-                            "webUrl": "https://github.com/exact/project/pull/42"
-                        },
-                        "files": [{
-                            "path": "src/lib.rs",
-                            "status": "modified",
-                            "completeness": "complete"
-                        }],
-                        "limitations": []
+        for (platform_name, platform, host) in [
+            ("github", ReviewPlatformKind::Github, "github.com"),
+            ("gitee", ReviewPlatformKind::Gitee, "gitee.com"),
+        ] {
+            let mut context = prepared_context();
+            context.custom_data.insert(
+                "deep_review_run_manifest".to_string(),
+                json!({
+                    "evidencePack": {
+                        "reviewTarget": {
+                            "version": 1,
+                            "source": "pull_request",
+                            "fingerprint": "provider-route-fingerprint",
+                            "baseRevision": "1111111111111111111111111111111111111111",
+                            "headRevision": "2222222222222222222222222222222222222222",
+                            "completeness": "complete",
+                            "workspaceBinding": "unavailable",
+                            "pullRequest": {
+                                "remoteId": "fabricated-remote-that-must-not-route",
+                                "platform": platform_name,
+                                "host": host,
+                                "projectPath": "exact/project",
+                                "pullRequestId": "42",
+                                "number": 42,
+                                "webUrl": format!("https://{host}/exact/project/pulls/42")
+                            },
+                            "files": [{
+                                "path": "src/lib.rs",
+                                "status": "modified",
+                                "completeness": "complete"
+                            }],
+                            "limitations": []
+                        }
                     }
+                }),
+            );
+            let evidence = GetFileDiffTool::target_evidence(&context)
+                .expect("evidence should parse")
+                .expect("evidence should exist");
+
+            let route =
+                GetFileDiffTool::pull_request_file_diff_route(&context, &evidence, "src/lib.rs")
+                    .expect("prepared provider route should be exact");
+
+            assert_eq!(
+                route,
+                ProviderFileDiffRoute::Identity {
+                    platform,
+                    host: host.to_string(),
+                    project_path: "exact/project".to_string(),
+                    pull_request_id: "42".to_string(),
+                    base_revision: "1111111111111111111111111111111111111111".to_string(),
+                    head_revision: "2222222222222222222222222222222222222222".to_string(),
+                    file_path: "src/lib.rs".to_string(),
+                    file_page_hint: Some(1),
+                    repository_path: None,
                 }
-            }),
-        );
-        let evidence = GetFileDiffTool::target_evidence(&context)
-            .expect("evidence should parse")
-            .expect("evidence should exist");
-
-        let route =
-            GetFileDiffTool::pull_request_file_diff_route(&context, &evidence, "src/lib.rs")
-                .expect("prepared provider route should be exact");
-
-        assert_eq!(
-            route,
-            ProviderFileDiffRoute::Identity {
-                platform: ReviewPlatformKind::Github,
-                host: "github.com".to_string(),
-                project_path: "exact/project".to_string(),
-                pull_request_id: "42".to_string(),
-                base_revision: "1111111111111111111111111111111111111111".to_string(),
-                head_revision: "2222222222222222222222222222222222222222".to_string(),
-                file_path: "src/lib.rs".to_string(),
-                file_page_hint: Some(1),
-                repository_path: None,
-            }
-        );
+            );
+        }
     }
 
     #[tokio::test]

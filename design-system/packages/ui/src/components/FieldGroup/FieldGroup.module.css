@@ -63,11 +63,11 @@
   }
 
   .description {
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-content-primary);
     font-family: var(--openbitfun-type-body-sm-font-family);
     font-size: var(--openbitfun-type-body-sm-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
-    line-height: var(--openbitfun-type-body-sm-line-height);
+    line-height: var(--openbitfun-type-form-description-line-height);
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   }
 
@@ -86,7 +86,7 @@
   }
 
   .group[data-appearance="subtle"] {
-    background: var(--openbitfun-color-surface-tertiary);
+    background: var(--openbitfun-color-field-group-background);
   }
 
   .group[data-appearance="plain"] {

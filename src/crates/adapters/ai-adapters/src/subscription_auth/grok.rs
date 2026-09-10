@@ -530,9 +530,9 @@ mod tests {
         let headers = inference_headers();
         assert_eq!(
             headers.get("User-Agent").map(String::as_str),
-            Some(concat!("opencode/", "1.18.25"))
+            Some(concat!("opencode/", "1.18.29"))
         );
-        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.25");
+        assert_eq!(super::super::OPENCODE_COMPAT_VERSION, "1.18.29");
         assert!(!headers.contains_key("X-XAI-Token-Auth"));
         assert!(!headers.contains_key("x-grok-model-override"));
     }

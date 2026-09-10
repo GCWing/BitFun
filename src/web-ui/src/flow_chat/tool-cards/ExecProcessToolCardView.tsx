@@ -285,9 +285,10 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   if (model.tty && model.kind !== 'command') {
     footerMetadataItems.push({ value: t('toolCards.execProcess.tty') });
   }
+  // A non-zero exit code is command result data for the model, not an
+  // execution failure. The card only reflects whether the command itself ran.
   const exitCodeFooterItem: CommandToolCardFooterItem | undefined = model.exitCode != null
     ? {
-        tone: model.exitCode === 0 ? 'success' : 'danger',
         value: t('toolCards.terminal.exitCode', { code: model.exitCode }),
       }
     : undefined;
@@ -359,9 +360,10 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
             timeoutMs={timeoutMs}
             showControls={false}
             completedDurationMs={status === 'completed' ? completedDurationMs : undefined}
+            showCompletedDuration={isExpanded}
             completedStatus={
               status === 'completed'
-                ? model.exitCode === 0 || model.exitCode == null ? 'success' : 'error'
+                ? 'success'
                 : status === 'error' ? 'error' : rejectedOrCancelled ? 'cancelled' : undefined
             }
           />

@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import {
   forwardRef,
   useId,
@@ -220,7 +221,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
       ref={ref}
     >
       {hasSummary ? (
-        <button
+        <button data-overflow-trigger
           aria-controls={detailsId}
           aria-expanded={resolvedExpanded}
           className={styles.summaryButton}
@@ -239,9 +240,9 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
               {summaryDetail !== undefined && summaryDetail !== null && (
                 <>
                   <span aria-hidden="true" className={styles.summaryArrow}>→</span>
-                  <span className={styles.summaryDetail} data-openbitfun-part="summary-detail">
+                  <OverflowText className={styles.summaryDetail} data-openbitfun-part="summary-detail">
                     {summaryDetail}
-                  </span>
+                  </OverflowText>
                 </>
               )}
             </span>
@@ -317,13 +318,13 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                                 {option.label}
                               </span>
                               {option.description !== undefined && option.description !== null && (
-                                <span
+                                <OverflowText
                                   className={styles.optionDescription}
                                   data-openbitfun-part="description"
                                   title={descriptionTitle(option.description)}
                                 >
                                   {option.description}
-                                </span>
+                                </OverflowText>
                               )}
                             </span>
                           </label>
@@ -370,13 +371,13 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                               {!customSelected
                                 && customOption.description !== undefined
                                 && customOption.description !== null && (
-                                  <span
+                                  <OverflowText
                                     className={styles.optionDescription}
                                     data-openbitfun-part="description"
                                     title={descriptionTitle(customOption.description)}
                                   >
                                     {customOption.description}
-                                  </span>
+                                  </OverflowText>
                                 )}
                             </span>
                           </label>
@@ -452,7 +453,7 @@ export const AskUser = forwardRef<HTMLDivElement, AskUserProps>(function AskUser
                 onClick={onSubmit}
                 size="sm"
                 title={submitTitle}
-                variant="fill"
+                variant="primary"
               >
                 {state === "submitting" && submittingLabel !== undefined
                   ? submittingLabel

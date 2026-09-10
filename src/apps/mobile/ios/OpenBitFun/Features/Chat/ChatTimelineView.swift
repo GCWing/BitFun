@@ -94,14 +94,23 @@ private struct ConversationRowView: View {
     }
 
     private var userRow: some View {
-        VStack(alignment: .trailing, spacing: 7) {
-            if !row.images.isEmpty { TimelineImageGrid(images: row.images) }
-            if !row.text.isEmpty {
-                Text(row.text)
-                    .font(MobileDesignTypography.bodyMedium.font)
-                    .foregroundStyle(OpenBitFunTheme.ink)
-                    .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
-                    .textSelection(.enabled)
+        VStack(alignment: .trailing, spacing: 6) {
+            IntrinsicWidthCapLayout(maxWidth: MobileDesignGeometry.messageBubbleMaxWidth) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !row.images.isEmpty { TimelineImageGrid(images: row.images) }
+                    if !row.text.isEmpty {
+                        Text(row.text)
+                            .font(MobileDesignTypography.bodyLarge.font)
+                            .foregroundStyle(OpenBitFunTheme.ink)
+                            .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing)
+                            .padding(.vertical, MobileDesignTypography.bodyLarge.lineSpacing / 2)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(.horizontal, MobileDesignGeometry.messageBubbleHorizontalPadding)
+                .padding(.vertical, MobileDesignGeometry.messageBubbleVerticalPadding)
+                .background(OpenBitFunTheme.soft)
+                .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.messageBubbleRadius))
             }
             if row.pending {
                 Text(model.localized("正在发送"))
@@ -117,12 +126,8 @@ private struct ConversationRowView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, MobileDesignGeometry.messageBubbleHorizontalPadding)
-        .padding(.vertical, MobileDesignGeometry.messageBubbleVerticalPadding)
-        .frame(maxWidth: MobileDesignGeometry.messageBubbleMaxWidth, alignment: .trailing)
-        .background(OpenBitFunTheme.soft)
-        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.messageBubbleRadius))
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.vertical, 2)
     }
 
     private var assistantRow: some View {
@@ -139,7 +144,9 @@ private struct ConversationRowView: View {
                 if !row.tools.isEmpty { ToolStatusList(tools: row.tools, model: model) }
             }
             if !row.images.isEmpty { TimelineImageGrid(images: row.images) }
-            if row.showRetry {
+            if let error = row.error, !error.isEmpty {
+                assistantFailure(error)
+            } else if row.showRetry {
                 Button { model.retryMessage(row.text) } label: {
                     Label(model.localized("重试"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
@@ -150,6 +157,61 @@ private struct ConversationRowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func assistantFailure(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.localized("本次回复失败"))
+                .font(MobileDesignTypography.labelSmall.font.weight(.medium))
+                .foregroundStyle(OpenBitFunTheme.statusDanger)
+            Text(error)
+                .font(MobileDesignTypography.bodySmall.font)
+                .foregroundStyle(OpenBitFunTheme.ink)
+                .lineSpacing(MobileDesignTypography.bodySmall.lineSpacing)
+                .textSelection(.enabled)
+            if row.showRetry {
+                Button(model.localized("重试")) { model.retryMessage(row.text) }
+                    .font(MobileDesignTypography.bodySmall.font.weight(.medium))
+                    .foregroundStyle(MobileDesignColors.fileLink)
+                    .buttonStyle(.plain)
+            }
+        }
+        .padding(.leading, 12)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(OpenBitFunTheme.statusDanger).frame(width: 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct IntrinsicWidthCapLayout: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache _: inout ()
+    ) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let availableWidth = min(proposal.width ?? maxWidth, maxWidth)
+        let size = subview.sizeThatFits(
+            ProposedViewSize(width: availableWidth, height: proposal.height)
+        )
+        return CGSize(width: min(size.width, availableWidth), height: size.height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal _: ProposedViewSize,
+        subviews: Subviews,
+        cache _: inout ()
+    ) {
+        guard let subview = subviews.first else { return }
+        subview.place(
+            at: bounds.origin,
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
+    }
 }
 
 private struct EmptyConversationRow: View {
@@ -157,7 +219,7 @@ private struct EmptyConversationRow: View {
         VStack(spacing: 8) {
             Image(systemName: "sparkles").font(.system(size: 23, weight: .medium))
             Text(MobileLocalization.text("从这里开始新的对话"))
-                .font(MobileDesignTypography.bodyMedium.font)
+                .font(MobileDesignTypography.bodyLarge.font)
         }
         .foregroundStyle(OpenBitFunTheme.muted)
         .frame(maxWidth: .infinity, minHeight: 180)
@@ -204,7 +266,7 @@ private struct SubagentBlock: View {
                     Spacer()
                     if running { ProgressView().controlSize(.mini) }
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MobileDesignTypography.labelSmall.font)
                 }
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .frame(minHeight: 32)
@@ -241,7 +303,7 @@ private struct ThinkingBlock: View {
                         .font(MobileDesignTypography.labelMedium.font)
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MobileDesignTypography.labelSmall.font)
                 }
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .frame(minHeight: 32)
@@ -249,9 +311,9 @@ private struct ThinkingBlock: View {
             .buttonStyle(.plain)
             if expanded {
                 Text(text)
-                    .font(MobileDesignTypography.bodyMedium.font)
+                    .font(MobileDesignTypography.bodyLarge.font)
                     .foregroundStyle(OpenBitFunTheme.muted)
-                    .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+                    .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing)
                     .textSelection(.enabled)
             }
         }
@@ -306,66 +368,238 @@ private struct MarkdownBlockView: View {
         switch block.type {
         case "heading":
             Text(inlineString(block.inlines))
-                .font(.system(size: headingSize, weight: .bold))
+                .font(headingFont)
                 .foregroundStyle(OpenBitFunTheme.ink).textSelection(.enabled)
         case "quote":
             Text(inlineString(block.inlines))
-                .font(MobileDesignTypography.bodyMedium.font).foregroundStyle(OpenBitFunTheme.muted)
-                .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing).padding(.leading, 12)
+                .font(MobileDesignTypography.bodyLarge.font).foregroundStyle(OpenBitFunTheme.muted)
+                .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing).padding(.leading, 12)
                 .overlay(alignment: .leading) { Rectangle().fill(OpenBitFunTheme.line).frame(width: 2) }
                 .textSelection(.enabled)
         case "list":
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(block.items, id: \.id) { item in
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Text(item.marker).foregroundStyle(OpenBitFunTheme.muted)
-                            .frame(width: 20, alignment: .trailing)
-                        Text(inlineString(item.inlines)).foregroundStyle(OpenBitFunTheme.ink)
-                            .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+                        if let checked = taskListState(item.text) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(OpenBitFunTheme.line, lineWidth: 1)
+                                if checked {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(OpenBitFunTheme.muted)
+                                }
+                            }
+                            .frame(width: 16, height: 16)
+                            .padding(.horizontal, 2)
+                        } else {
+                            Text(item.marker).foregroundStyle(OpenBitFunTheme.muted)
+                                .frame(width: 20, alignment: .trailing)
+                        }
+                        Text(listItemInlineString(item)).foregroundStyle(OpenBitFunTheme.ink)
+                            .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing)
                             .textSelection(.enabled)
                     }
-                    .font(MobileDesignTypography.bodyMedium.font)
+                    .font(MobileDesignTypography.bodyLarge.font)
                 }
             }
         case "code": CodeBlock(language: block.language, code: block.text)
-        case "table":
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(block.text).font(.system(size: 12.5, design: .monospaced))
-                    .foregroundStyle(OpenBitFunTheme.ink).padding(12).textSelection(.enabled)
-            }
-            .background(OpenBitFunTheme.soft).clipShape(RoundedRectangle(cornerRadius: 12))
+        case "table": MarkdownTableView(source: block.text)
         case "divider": Rectangle().fill(OpenBitFunTheme.line).frame(height: 1).padding(.vertical, 3)
         default:
             Text(inlineString(block.inlines))
-                .font(MobileDesignTypography.bodyMedium.font).foregroundStyle(OpenBitFunTheme.ink)
-                .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing).textSelection(.enabled)
+                .font(MobileDesignTypography.bodyLarge.font).foregroundStyle(OpenBitFunTheme.ink)
+                .lineSpacing(MobileDesignTypography.bodyLarge.lineSpacing).textSelection(.enabled)
         }
     }
 
-    private var headingSize: CGFloat {
-        switch block.level { case 1: 18; case 2: 16; default: 15 }
+    private var headingFont: Font {
+        switch block.level {
+        case 1: MobileDesignTypography.headlineSmall.font
+        case 2: MobileDesignTypography.titleMedium.font.bold()
+        default: MobileDesignTypography.bodyLarge.font.bold()
+        }
     }
 
     private func inlineString(_ inlines: [MarkdownInline]) -> AttributedString {
-        var result = AttributedString()
-        for inline in inlines {
-            var part = AttributedString(inline.text)
-            switch inline.type {
-            case "strong": part.font = .system(size: 14, weight: .semibold)
-            case "emphasis": part.font = .system(size: 14).italic()
-            case "code":
-                part.font = .system(size: 13, design: .monospaced)
-                part.backgroundColor = OpenBitFunTheme.soft
-            case "link":
-                part.foregroundColor = MobileDesignColors.fileLink
-                part.underlineStyle = .single
-                part.link = URL(string: inline.url)
-            default: break
-            }
-            result.append(part)
-        }
-        return result.characters.isEmpty ? AttributedString(block.text) : result
+        markdownInlineString(inlines, fallback: block.text)
     }
+
+    private func taskListState(_ text: String) -> Bool? {
+        let prefix = text.prefix(3).lowercased()
+        if prefix == "[x]" { return true }
+        if prefix == "[ ]" { return false }
+        return nil
+    }
+
+    private func listItemInlineString(_ item: MarkdownListItem) -> AttributedString {
+        guard taskListState(item.text) != nil else {
+            return markdownInlineString(item.inlines, fallback: item.text)
+        }
+        let text = String(item.text.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        return markdownInlineString(
+            MarkdownParser.shared.parseInlineText(value: text),
+            fallback: text
+        )
+    }
+}
+
+private struct MarkdownTableView: View {
+    let source: String
+
+    private var table: MarkdownTableData { MarkdownTableData(source: source) }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            tableGrid(flexibleColumns: true)
+            ScrollView(.horizontal, showsIndicators: false) {
+                tableGrid(flexibleColumns: false)
+            }
+        }
+        .background(OpenBitFunTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(OpenBitFunTheme.line, lineWidth: 1))
+    }
+
+    private func tableGrid(flexibleColumns: Bool) -> some View {
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
+                GridRow(alignment: .top) {
+                    ForEach(Array(row.cells.enumerated()), id: \.offset) { columnIndex, cell in
+                        Text(markdownInlineString(
+                            MarkdownParser.shared.parseInlineText(value: cell.text),
+                            fallback: cell.text
+                        ))
+                        .font(MobileDesignTypography.bodySmall.font)
+                        .foregroundStyle(OpenBitFunTheme.ink)
+                        .multilineTextAlignment(cell.textAlignment)
+                        .textSelection(.enabled)
+                        .frame(
+                            minWidth: 132,
+                            maxWidth: flexibleColumns ? .infinity : 180,
+                            minHeight: 42,
+                            alignment: cell.frameAlignment
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(rowIndex == 0 || rowIndex.isMultiple(of: 2)
+                            ? OpenBitFunTheme.soft
+                            : OpenBitFunTheme.card)
+                        .overlay(alignment: .trailing) {
+                            if columnIndex < row.cells.count - 1 {
+                                Rectangle().fill(OpenBitFunTheme.line).frame(width: 1)
+                            }
+                        }
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if rowIndex < table.rows.count - 1 {
+                        Rectangle().fill(OpenBitFunTheme.line).frame(height: 1)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: flexibleColumns ? .infinity : nil)
+    }
+}
+
+private struct MarkdownTableData {
+    struct Row { let cells: [Cell] }
+    struct Cell {
+        let text: String
+        let alignment: Alignment
+
+        var textAlignment: TextAlignment {
+            if alignment == .center { return .center }
+            if alignment == .trailing { return .trailing }
+            return .leading
+        }
+
+        var frameAlignment: Alignment { alignment }
+    }
+
+    let rows: [Row]
+
+    init(source: String) {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        guard lines.count >= 2 else {
+            rows = [Row(cells: [Cell(text: source, alignment: .leading)])]
+            return
+        }
+        let header = Self.splitRow(lines[0])
+        let separators = Self.splitRow(lines[1])
+        let alignments = separators.map(Self.alignment)
+        let values = [header] + lines.dropFirst(2).map(Self.splitRow)
+        let columnCount = max(header.count, alignments.count)
+        rows = values.map { row in
+            Row(cells: (0..<columnCount).map { index in
+                Cell(
+                    text: index < row.count ? row[index] : "",
+                    alignment: index < alignments.count ? alignments[index] : .leading
+                )
+            })
+        }
+    }
+
+    private static func splitRow(_ line: String) -> [String] {
+        var source = line.trimmingCharacters(in: .whitespaces)
+        if source.first == "|" { source.removeFirst() }
+        if source.last == "|" { source.removeLast() }
+        var cells: [String] = []
+        var current = ""
+        var inCode = false
+        var escaped = false
+        for character in source {
+            if escaped {
+                current.append(character)
+                escaped = false
+            } else if character == "\\" {
+                escaped = true
+            } else if character == "`" {
+                inCode.toggle()
+                current.append(character)
+            } else if character == "|" && !inCode {
+                cells.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            } else {
+                current.append(character)
+            }
+        }
+        if escaped { current.append("\\") }
+        cells.append(current.trimmingCharacters(in: .whitespaces))
+        return cells
+    }
+
+    private static func alignment(_ separator: String) -> Alignment {
+        let value = separator.trimmingCharacters(in: .whitespaces)
+        if value.hasPrefix(":") && value.hasSuffix(":") { return .center }
+        if value.hasSuffix(":") { return .trailing }
+        return .leading
+    }
+}
+
+private func markdownInlineString(
+    _ inlines: [MarkdownInline],
+    fallback: String
+) -> AttributedString {
+    var result = AttributedString()
+    for inline in inlines {
+        var part = AttributedString(inline.text)
+        switch inline.type {
+        case "strong": part.font = .system(size: 14, weight: .semibold)
+        case "emphasis": part.font = .system(size: 14).italic()
+        case "code":
+            part.font = .system(size: 13, design: .monospaced)
+            part.backgroundColor = OpenBitFunTheme.soft
+        case "link":
+            part.foregroundColor = MobileDesignColors.fileLink
+            part.underlineStyle = .single
+            part.link = URL(string: inline.url)
+        default: break
+        }
+        result.append(part)
+    }
+    return result.characters.isEmpty ? AttributedString(fallback) : result
 }
 
 private struct CodeBlock: View {
@@ -591,7 +825,7 @@ private struct ToolStatusRow: View {
                         .foregroundStyle(OpenBitFunTheme.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     if tool.phase == "RUNNING" { ProgressView().controlSize(.mini) }
-                    else { Text(statusMark).font(.system(size: 11, weight: .semibold)).foregroundStyle(statusColor) }
+                    else { Text(statusMark).font(MobileDesignTypography.labelSmall.font).foregroundStyle(statusColor) }
                 }
                 .frame(minHeight: 32)
             }
@@ -641,7 +875,7 @@ private struct ToolStatusRow: View {
             Text(tool.question ?? model.localized("请输入回复")).font(MobileDesignTypography.bodySmall.font)
                 .foregroundStyle(OpenBitFunTheme.ink)
             TextField(model.localized("回复"), text: $answer, axis: .vertical)
-                .font(MobileDesignTypography.bodyMedium.font).lineLimit(2...5).padding(10)
+                .font(MobileDesignTypography.bodyLarge.font).lineLimit(2...5).padding(10)
                 .background(OpenBitFunTheme.card).clipShape(RoundedRectangle(cornerRadius: 11))
                 .overlay(RoundedRectangle(cornerRadius: 11).stroke(OpenBitFunTheme.line, lineWidth: 1))
             Button { model.answerTool(tool.id, answer: answer); answer = "" } label: {

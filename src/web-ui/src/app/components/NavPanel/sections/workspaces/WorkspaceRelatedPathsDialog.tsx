@@ -440,7 +440,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
             <div data-openbitfun-component="workspace-related-paths-dialog" data-openbitfun-part="footerActions" className="workspace-related-paths-dialog__footer-actions">
               <Button
                 type="button"
-                variant="outline"
+                variant="fill"
                 size="sm"
                 onClick={onClose}
                 disabled={saving}
@@ -449,7 +449,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
               </Button>
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 onClick={() => void handleSave()}
                 disabled={saving || hasInvalidDraft || isUnchanged}

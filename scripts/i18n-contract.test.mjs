@@ -12,6 +12,7 @@ const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'local
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const expectedGeneratedFiles = [
   'src/web-ui/src/infrastructure/i18n/presets/generatedLocaleContract.ts',
+  'src/web-ui/index.html',
   'src/mobile-web/src/i18n/generatedLocaleContract.ts',
   'OpenBitFun-Installer/src/i18n/generatedLocaleContract.ts',
   'src/crates/assembly/core/src/service/i18n/generated_locale_contract.rs',

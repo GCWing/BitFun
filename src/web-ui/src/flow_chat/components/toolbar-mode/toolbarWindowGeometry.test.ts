@@ -6,6 +6,12 @@ import {
 import { resolveToolbarWindowGeometry } from './toolbarWindowGeometry';
 
 describe('resolveToolbarWindowGeometry', () => {
+  it('uses a near-square-root-of-two portrait ratio when expanded', () => {
+    expect(
+      TOOLBAR_EXPANDED_SIZE.height / TOOLBAR_EXPANDED_SIZE.width,
+    ).toBeCloseTo(Math.SQRT2, 2);
+  });
+
   it('uses the authored logical size when the work area has room', () => {
     const geometry = resolveToolbarWindowGeometry({
       monitor: {

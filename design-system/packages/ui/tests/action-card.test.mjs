@@ -26,8 +26,8 @@ test("ActionCard keeps its native trigger and sibling actions independent", () =
   assert.match(markup, /data-selected="true"/);
   assert.match(markup, /data-size="md"/);
   assert.match(markup, /data-openbitfun-part="leading"/);
-  assert.match(markup, /data-openbitfun-part="title">New session<\/span>/);
-  assert.match(markup, /data-openbitfun-part="description">Start a conversation<\/span>/);
+  assert.match(markup, /data-openbitfun-part="title"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>New session<\/span><\/span>/);
+  assert.match(markup, /data-openbitfun-part="description"[^>]*data-overflow-behavior="marquee"[^>]*><span[^>]*>Start a conversation<\/span><\/span>/);
   assert.equal((markup.match(/<button/g) ?? []).length, 3);
   assert.ok(triggerEnd < siblingAction);
 });

@@ -1,6 +1,6 @@
 import React, { useCallback, useId, useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { Tooltip, Icon } from '@openbitfun/ui';
+import { OverflowText, Tooltip, Icon } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   getAiErrorPresentation,
@@ -55,7 +55,7 @@ export const TurnFailureNoticeItem: React.FC<TurnFailureNoticeItemProps> = ({ er
         <div data-openbitfun-component="turn-failure-notice" data-openbitfun-part="header" className="turn-failure-notice__header">
           <div data-openbitfun-component="turn-failure-notice" data-openbitfun-part="summary" className="turn-failure-notice__summary">
             <div data-openbitfun-component="turn-failure-notice" data-openbitfun-part="title" className="turn-failure-notice__title">{t(presentation.titleKey)}</div>
-            <div data-openbitfun-component="turn-failure-notice" data-openbitfun-part="message" className="turn-failure-notice__message">{t(presentation.messageKey)}</div>
+            <div data-openbitfun-component="turn-failure-notice" data-openbitfun-part="message" className="turn-failure-notice__message"><OverflowText>{t(presentation.messageKey)}</OverflowText></div>
           </div>
 
           {(facts.length > 0 || rawError) && (

@@ -5,7 +5,7 @@ import OpenBitFunMobileCore
 @MainActor
 final class MobileAppModel: ObservableObject {
     @Published var appLanguage: MobileLanguage = MobileLocalization.restoredLanguage()
-    @Published var surface: MobileSurface = .local
+    @Published var surface: MobileSurface = .remote
     @Published var sessions: [ChatSession]
     @Published var remoteSessions: [ChatSession] = []
     @Published var remoteQuery = ""
@@ -27,17 +27,6 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteCreateSubmitting = false
     @Published var remoteCreateError: String?
     @Published var remoteCreateDeviceError: String?
-    @Published var generalConfigOpen = false
-    @Published var generalConfigured = false
-    @Published var generalConfigBaseURL = ""
-    @Published var generalConfigModel = ""
-    @Published var generalConfigHasAPIKey = false
-    @Published var generalConfigFailure: String?
-    @Published var generalConnectionTestRunning = false
-    @Published var generalConnectionTestMessage: String?
-    @Published var generalExportOpen = false
-    @Published var generalExportName = "conversation.md"
-    @Published var generalExportData = Data()
     @Published var selectedSessionID: String
     @Published var messages: [ChatMessage]
     @Published var timelineRows: [MobileConversationRow] = []
@@ -58,6 +47,7 @@ final class MobileAppModel: ObservableObject {
     @Published var localSessionSelected = false
     @Published var pairingSheetOpen = false
     @Published var pairingScanRequested = false
+    var pendingDeviceLink: String?
     @Published var pairingBusy = false
     @Published var pairingError: String?
     @Published var coreErrorMessage: String?
@@ -65,16 +55,15 @@ final class MobileAppModel: ObservableObject {
     @Published var accountUserID: String?
     @Published var localDeviceID = ""
     @Published var accountBusy = false
+    @Published var accountAuthorizationURL: URL?
     @Published var accountFailureStage: String?
     @Published var accountFailureCanRetry = false
     @Published var accountDeviceName: String?
-    @Published var directPairingDeviceName: String?
     @Published var accountDeviceCount = 0
     @Published var accountDevices: [MobileAccountDevice] = []
     @Published var accountSelectedDeviceID: String?
     @Published var accountRefreshing = false
     @Published var deviceDirectory: [MobileDeviceDirectoryEntry] = []
-    @Published var directPairingDirectoryEntry: MobileDeviceDirectoryEntry?
     @Published var remoteWorkspaces: [MobileWorkspaceGroup] = []
     @Published var workspaceLoading = false
     @Published var workspaceLoadFailed = false
@@ -89,16 +78,14 @@ final class MobileAppModel: ObservableObject {
     @Published var downloadStatusText: String?
     @Published var downloadPhase: MobileDownloadPhase = .idle
     var activeTurnID: String?
-    var directPairingConnected = false
     var accountLoginPreview = false
     var localActionPreview = false
     var composerModelPickerPreview = false
+    var designGalleryPreview = false
     var remoteCreatePreview = false
     var directoryFixturePreview = false
     var pairingGeneration: UInt64 = 0
     var accountGeneration: UInt64 = 0
-    var pendingAccountOperationPreservesPairing: (generation: UInt64, preserve: Bool)?
-    var pairingIntentInFlight = false
     var remoteTargetEpoch: UInt64 = 0
     var remoteExpectedDeviceKey: String?
     var remoteBoundTargetKey: String?
@@ -129,10 +116,6 @@ final class MobileAppModel: ObservableObject {
         self.timelineRows = messages.map(Self.simpleTimelineRow)
         self.coreAdapter = nil
         let adapter = MobileCoreAdapter(
-            onState: { [weak self] state in self?.apply(coreState: state) },
-            onPairingState: { [weak self] state, generation in
-                self?.apply(pairingState: state, generation: generation)
-            },
             onAccountState: { [weak self] state, generation in
                 self?.apply(accountState: state, generation: generation)
             },
@@ -160,14 +143,14 @@ final class MobileAppModel: ObservableObject {
     }
 
     var selectedSession: ChatSession? {
-        guard (surface == .local && localSessionSelected) || (surface == .remote && remoteSessionSelected) else {
+        guard remoteSessionSelected else {
             return nil
         }
         return visibleSessions.first { $0.id == selectedSessionID }
     }
 
     var visibleSessions: [ChatSession] {
-        surface == .local ? sessions : remoteSessions
+        remoteSessions
     }
 
     var remoteCreateInteraction: RemoteCreateInteractionState {
@@ -232,30 +215,16 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    var usesDirectPairing: Bool { directPairingConnected }
-
-    var directPairingSidebarDeviceID: String { "qr:\(directPairingDeviceName ?? "desktop")" }
-
     func dismissPairing() {
         pairingError = nil
-        coreAdapter?.dismissPairingFailure()
     }
 
     func handleScenePhase(_ phase: ScenePhase) {
-        switch phase {
-        case .active: coreAdapter?.pairingForeground()
-        case .background: coreAdapter?.pairingBackground()
-        default: break
-        }
+        if phase == .active, accountUser != nil { refreshRemoteDevices() }
     }
 
     func verifyRemoteConnection() {
-        guard accountUser == nil else {
-            refreshRemoteDevices()
-            return
-        }
-        connectionPhase = .reconnecting
-        coreAdapter?.verifyPairing()
+        refreshRemoteDevices()
     }
 
     func disconnectRemote() {
@@ -263,9 +232,6 @@ final class MobileAppModel: ObservableObject {
         committedRemoteCreate = nil
         remoteLastAppliedAuthority = nil
         coreAdapter?.disconnect()
-        directPairingConnected = false
-        directPairingDeviceName = nil
-        pendingAccountOperationPreservesPairing = nil
         remoteConnected = false
         remoteSessionSelected = false
         remoteSessions = []
@@ -284,7 +250,7 @@ final class MobileAppModel: ObservableObject {
         selectedSessionID = ""
         timelineRows = []
         messages = []
-        surface = .local
+        surface = .remote
         connectionPhase = .connected
     }
 
@@ -302,21 +268,24 @@ final class MobileAppModel: ObservableObject {
     }
 
     func submitPairing(url: String) {
-        prepareProjectionForPairingSubmission()
-        pairingIntentInFlight = true
-        pairingGeneration &+= 1
+        guard let result = coreAdapter?.resolveDeviceLink(url: url) else { return }
+        pairingBusy = false
         pairingError = nil
-        pairingBusy = true
-        coreAdapter?.submitPairing(url: url)
-    }
-
-    func submitPairing(url: String, userID: String, password: String) {
-        prepareProjectionForPairingSubmission()
-        pairingIntentInFlight = true
-        pairingGeneration &+= 1
-        pairingError = nil
-        pairingBusy = true
-        coreAdapter?.submitPairing(url: url, userID: userID, password: password)
+        if result.status == .signInRequired {
+            pendingDeviceLink = url
+            openAccountFromPairing()
+        } else if result.status == .ready,
+                  let id = result.deviceId,
+                  let device = accountDevices.first(where: { $0.id == id }) {
+            pendingDeviceLink = nil
+            pairingSheetOpen = false
+            selectRemoteDevice(device)
+        } else {
+            pendingDeviceLink = nil
+            pairingError = result.status == .invalid
+                ? localized("请使用当前版本的 OpenBitFun 设备二维码。")
+                : localized("该设备已离线，或不属于当前 GitHub 账户。")
+        }
     }
 
     private func prepareProjectionForPairingSubmission() {
@@ -348,14 +317,10 @@ final class MobileAppModel: ObservableObject {
         guard transition.clearBoundRemoteProjection else { return }
 
         invalidateTargetScopedFileTransfers()
-        directPairingConnected = false
-        directPairingDeviceName = nil
-        directPairingDirectoryEntry = nil
         remoteConnected = transition.remoteConnected
         remoteExpectedDeviceKey = nil
         remoteLastAppliedAuthority = nil
         committedRemoteCreate = nil
-        pendingAccountOperationPreservesPairing = nil
         remoteInitialSessionReady = false
         remoteInitialWorkspaceReady = false
         remoteSessionSelected = false
@@ -393,12 +358,8 @@ final class MobileAppModel: ObservableObject {
     }
 
     func stopSending() {
-        if surface == .remote {
-            guard remoteSessionSelected else { return }
-            coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
-        } else {
-            coreAdapter?.cancelGeneralChat()
-        }
+        guard remoteSessionSelected else { return }
+        coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
     }
 
     func retryMessage(_ text: String) {
@@ -420,28 +381,7 @@ final class MobileAppModel: ObservableObject {
         guard !normalized.isEmpty, selectedSession != nil else { return }
         if surface == .remote {
             coreAdapter?.renameRemoteSession(sessionID: selectedSessionID, title: normalized)
-        } else {
-            coreAdapter?.renameGeneralSession(sessionID: selectedSessionID, title: normalized)
         }
-    }
-
-    func togglePinSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.pinGeneralSession(sessionID: session.id, pinned: !session.pinned)
-    }
-
-    func archiveSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.archiveGeneralSession(
-            sessionID: session.id,
-            archived: session.status.lowercased() != "archived"
-        )
-    }
-
-    func deleteSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.deleteGeneralSession(sessionID: session.id)
-        localSessionSelected = false
     }
 
     func showUploadedFiles() {
@@ -462,85 +402,4 @@ final class MobileAppModel: ObservableObject {
         }
     }
 
-    private func apply(pairingState state: PairingUiState, generation: UInt64) {
-        guard !localActionPreview, generation == pairingGeneration,
-              remoteExpectedDeviceKey == nil || remoteExpectedDeviceKey == "pairing" || pairingIntentInFlight else { return }
-        pairingBusy = state is PairingUiStateConnecting
-        if let failed = state as? PairingUiStateFailed {
-            pairingBusy = false
-            pairingIntentInFlight = false
-            pairingError = PairingFailureCopy.message(failed.failure, localized: localized)
-            let healthyConnected: Bool
-            switch connectionPhase {
-            case .connected: healthyConnected = remoteConnected
-            case .reconnecting, .disconnected: healthyConnected = false
-            }
-            let retainAccount = RemoteAuthorityGate.shouldRetainAccountAfterPairingFailure(
-                captured: pairingRetainedAccountAuthority,
-                adapterTargetKey: coreAdapter?.currentRemoteTargetKey,
-                adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? 0,
-                modelTargetKey: remoteExpectedDeviceKey,
-                modelEpoch: remoteTargetEpoch,
-                healthyConnected: healthyConnected
-            )
-            let invalidatedAccountAuthority = !retainAccount &&
-                (remoteExpectedDeviceKey?.hasPrefix("account:") == true)
-            if invalidatedAccountAuthority, let targetKey = remoteExpectedDeviceKey {
-                invalidateTargetScopedFileTransfers()
-                _ = coreAdapter?.invalidateRemoteAuthority(
-                    ifTargetKey: targetKey,
-                    epoch: remoteTargetEpoch
-                )
-                clearInvalidatedRemoteAuthorityProjection(
-                    adapterEpoch: coreAdapter?.currentRemoteTargetEpoch ?? remoteTargetEpoch
-                )
-            } else {
-                pairingRetainedAccountAuthority = nil
-            }
-            remoteConnected = retainAccount
-            if !retainAccount {
-                let clearingVisibleRemoteConversation = surface == .remote || remoteSessionSelected
-                remoteSessionSelected = false
-                if clearingVisibleRemoteConversation {
-                    selectedSessionID = ""
-                    activeTurnID = nil
-                    isSending = false
-                    busy = false
-                    timelineRows = []
-                    messages = []
-                }
-                connectionPhase = .disconnected
-            }
-        } else if let paired = state as? PairingUiStatePaired {
-            pairingBusy = false
-            pairingError = nil
-            directPairingConnected = true
-            pairingIntentInFlight = false
-            pairingRetainedAccountAuthority = nil
-            remoteConnected = true
-            directPairingDeviceName = paired.workspace.roomLabel
-            if pendingDirectoryRemoteDraft?.targetKey == "pairing",
-               pendingDirectoryRemoteDraft?.rawDeviceKey != directPairingSidebarDeviceID {
-                pendingDirectoryRemoteDraft = nil
-                showToast(localized("远程会话连接已失效，请重新选择设备后重试"))
-            }
-            directPairingDirectoryEntry = MobileDeviceDirectoryEntry(
-                id: directPairingSidebarDeviceID,
-                name: paired.workspace.roomLabel,
-                online: true,
-                expanded: true,
-                status: "READY",
-                error: nil,
-                workspaces: remoteWorkspaces,
-                sessions: remoteSessions
-            )
-            surface = .remote
-            switch paired.liveness {
-            case .checking: connectionPhase = .reconnecting
-            case .lost: connectionPhase = .disconnected
-            default: connectionPhase = .connected
-            }
-            pairingSheetOpen = false
-        }
-    }
 }

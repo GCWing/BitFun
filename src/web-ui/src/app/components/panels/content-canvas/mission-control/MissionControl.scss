@@ -156,23 +156,6 @@
     gap: 10px;
     padding: 8px 16px 16px;
     align-content: start;
-    
-    &::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--openbitfun-color-scrollbar-thumb);
-      border-radius: 3px;
-      
-      &:hover {
-        background: var(--openbitfun-color-action-neutral-surface-pressed);
-      }
-    }
   }
 
   // Empty state

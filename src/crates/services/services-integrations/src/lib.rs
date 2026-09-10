@@ -4,6 +4,7 @@
 //! can opt into only the integration family they need.
 
 #[cfg(any(
+    feature = "account-identity",
     feature = "mcp",
     feature = "miniapp-market",
     feature = "miniapp-runtime",
@@ -63,7 +64,7 @@ pub mod mcp;
 #[cfg(feature = "models-dev")]
 pub mod models_dev;
 
-#[cfg(feature = "miniapp-runtime")]
+#[cfg(any(feature = "miniapp-runtime", feature = "miniapp-storage"))]
 pub mod miniapp;
 
 #[cfg(all(feature = "miniapp-loopx", not(feature = "miniapp-runtime")))]
@@ -75,8 +76,14 @@ pub mod miniapp_market;
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 
+#[cfg(any(feature = "git", feature = "review-platform"))]
+mod repository_trust;
+
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;
+
+#[cfg(feature = "remote-persistence")]
+pub mod remote_persistence;
 
 #[cfg(all(test, feature = "remote-connect"))]
 mod feature_contract_tests {
@@ -109,3 +116,6 @@ pub mod web_tools;
 #[cfg(all(windows, feature = "git"))]
 #[link(name = "advapi32")]
 unsafe extern "system" {}
+
+#[cfg(feature = "account-identity")]
+pub mod account_identity;

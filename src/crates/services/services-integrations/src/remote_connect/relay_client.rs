@@ -1,19 +1,15 @@
 //! WebSocket client for connecting to the Relay Server.
 //!
-//! Manages the desktop-side WebSocket connection. In the new architecture the
-//! relay bridges HTTP requests from mobile to the desktop via WebSocket.
-//! The desktop receives `PairRequest` and `Command` messages (with correlation
-//! IDs) and responds with `RelayResponse`.
-//!
-//! Supports automatic reconnect with exponential backoff and room re-creation
-//! so that in-flight QR codes remain valid.
+//! Account devices authenticate over WebSocket and receive presence and opaque
+//! device messages. Payload submission uses bounded HTTP; reconnect repeats
+//! account authentication before sending further control messages.
 
 use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 #[cfg(windows)]
 use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
@@ -38,28 +34,15 @@ const RELAY_DIAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1
 /// Heartbeats are sent every 30 seconds. Two missed acknowledgements plus
 /// scheduling/network slack indicates a half-open socket that should be
 /// replaced even when the OS has not surfaced a read error yet.
-const RELAY_INBOUND_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
+pub const RELAY_INBOUND_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
 
 /// Messages in the relay protocol (both directions).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RelayMessage {
     // ── Outbound (desktop → relay) ──────────────────────────────────
-    CreateRoom {
-        room_id: Option<String>,
-        device_id: String,
-        device_type: String,
-        public_key: String,
-    },
-    /// Respond to a bridged HTTP request identified by `correlation_id`.
-    RelayResponse {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     Heartbeat,
-    /// Account-authenticated connect (parallel to CreateRoom for device
-    /// routing). Validates the token and registers this device.
+    /// Authenticate the socket and register this account device.
     AuthConnect {
         token: String,
         device_name: String,
@@ -74,22 +57,6 @@ pub enum RelayMessage {
     },
 
     // ── Inbound (relay → desktop) ───────────────────────────────────
-    RoomCreated {
-        room_id: String,
-    },
-    /// Mobile pairing request forwarded by the relay.
-    PairRequest {
-        correlation_id: String,
-        public_key: String,
-        device_id: String,
-        device_name: String,
-    },
-    /// Encrypted command from mobile forwarded by the relay.
-    Command {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     HeartbeatAck,
     Error {
         message: String,
@@ -125,22 +92,6 @@ pub struct DevicePresenceEntry {
 #[derive(Debug, Clone)]
 pub enum RelayEvent {
     Connected,
-    RoomCreated {
-        room_id: String,
-    },
-    /// Mobile wants to pair.
-    PairRequest {
-        correlation_id: String,
-        public_key: String,
-        device_id: String,
-        device_name: String,
-    },
-    /// Mobile sent an encrypted command.
-    CommandReceived {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     Reconnected,
     Disconnected,
     Error {
@@ -178,9 +129,6 @@ pub enum ConnectionState {
 #[derive(Debug, Clone, Default)]
 struct ReconnectCtx {
     ws_url: String,
-    device_id: String,
-    room_id: String,
-    public_key: String,
     /// Account token for device-routing re-auth after reconnect.
     token: String,
     /// Device name for re-auth after reconnect.
@@ -207,7 +155,6 @@ const RELAY_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 pub struct RelayClient {
     lifecycle: ConnectionOwner,
     event_tx: mpsc::UnboundedSender<RelayEvent>,
-    room_id: Arc<RwLock<Option<String>>>,
 }
 
 impl RelayClient {
@@ -222,7 +169,6 @@ impl RelayClient {
                 reconnect_ctx: None,
             })),
             event_tx,
-            room_id: Arc::new(RwLock::new(None)),
         };
         (client, event_rx)
     }
@@ -234,7 +180,6 @@ impl RelayClient {
     pub async fn connect(&self, ws_url: &str) -> Result<()> {
         let (ready_tx, ready_rx) = oneshot::channel();
         let generation = {
-            let mut room_id = self.room_id.write().await;
             let mut owner = self.lifecycle.lock().unwrap();
             if let Some(task) = owner.task.take() {
                 task.abort();
@@ -246,11 +191,9 @@ impl RelayClient {
                 ws_url: ws_url.to_string(),
                 ..Default::default()
             });
-            *room_id = None;
             let generation = owner.generation;
             owner.task = Some(tokio::spawn(Self::run_connection(
                 self.lifecycle.clone(),
-                self.room_id.clone(),
                 self.event_tx.clone(),
                 generation,
                 ws_url.to_string(),
@@ -269,7 +212,6 @@ impl RelayClient {
 
     async fn run_connection(
         lifecycle: ConnectionOwner,
-        room_id: Arc<RwLock<Option<String>>>,
         event_tx: mpsc::UnboundedSender<RelayEvent>,
         generation: u64,
         ws_url: String,
@@ -308,7 +250,7 @@ impl RelayClient {
                 let _ = event_tx.send(event);
             }
             info!("Relay transport connected");
-            Self::run_socket(socket, cmd_rx, &lifecycle, &room_id, &event_tx, generation).await;
+            Self::run_socket(socket, cmd_rx, &lifecycle, &event_tx, generation).await;
             {
                 let mut owner = lifecycle.lock().unwrap();
                 if owner.generation != generation {
@@ -345,18 +287,6 @@ impl RelayClient {
 
     async fn reconnect(ctx: &ReconnectCtx) -> Result<WsStream> {
         let mut socket = dial(&ctx.ws_url).await?;
-        if !ctx.room_id.is_empty() {
-            write_relay_message(
-                &mut socket,
-                &RelayMessage::CreateRoom {
-                    room_id: Some(ctx.room_id.clone()),
-                    device_id: ctx.device_id.clone(),
-                    device_type: "desktop".to_string(),
-                    public_key: ctx.public_key.clone(),
-                },
-            )
-            .await?;
-        }
         if !ctx.token.is_empty() {
             write_relay_message(
                 &mut socket,
@@ -375,7 +305,6 @@ impl RelayClient {
         socket: WsStream,
         mut commands: mpsc::Receiver<RelayMessage>,
         lifecycle: &ConnectionOwner,
-        room_id: &Arc<RwLock<Option<String>>>,
         event_tx: &mpsc::UnboundedSender<RelayEvent>,
         generation: u64,
     ) {
@@ -386,9 +315,7 @@ impl RelayClient {
             loop {
                 match await_relay_inbound(reader.next()).await {
                     Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str(&text) {
-                        Ok(msg) => {
-                            Self::dispatch(msg, event_tx, room_id, lifecycle, generation).await
-                        }
+                        Ok(msg) => Self::dispatch(msg, event_tx, lifecycle, generation).await,
                         Err(error) => warn!("Unparseable relay message: {error}"),
                     },
                     Ok(Some(Ok(Message::Close(_)))) | Ok(None) => break,
@@ -422,50 +349,14 @@ impl RelayClient {
     async fn dispatch(
         msg: RelayMessage,
         event_tx: &mpsc::UnboundedSender<RelayEvent>,
-        room_id_store: &Arc<RwLock<Option<String>>>,
         lifecycle: &ConnectionOwner,
         generation: u64,
     ) {
-        let mut room_id_store = room_id_store.write().await;
         let mut owner = lifecycle.lock().unwrap();
         if owner.generation != generation {
             return;
         }
         match msg {
-            RelayMessage::RoomCreated { room_id } => {
-                debug!("Room created/restored: {room_id}");
-                *room_id_store = Some(room_id.clone());
-                if let Some(ctx) = owner.reconnect_ctx.as_mut() {
-                    ctx.room_id = room_id.clone();
-                }
-                let _ = event_tx.send(RelayEvent::RoomCreated { room_id });
-            }
-            RelayMessage::PairRequest {
-                correlation_id,
-                public_key,
-                device_id,
-                device_name,
-            } => {
-                info!("PairRequest from {device_id}");
-                let _ = event_tx.send(RelayEvent::PairRequest {
-                    correlation_id,
-                    public_key,
-                    device_id,
-                    device_name,
-                });
-            }
-            RelayMessage::Command {
-                correlation_id,
-                encrypted_data,
-                nonce,
-            } => {
-                debug!("Command received, corr={correlation_id}");
-                let _ = event_tx.send(RelayEvent::CommandReceived {
-                    correlation_id,
-                    encrypted_data,
-                    nonce,
-                });
-            }
             RelayMessage::HeartbeatAck => {
                 debug!("Heartbeat acknowledged");
             }
@@ -524,48 +415,6 @@ impl RelayClient {
         })
     }
 
-    pub async fn create_room(
-        &self,
-        device_id: &str,
-        public_key: &str,
-        room_id: Option<&str>,
-    ) -> Result<()> {
-        let mut owner = self.lifecycle.lock().unwrap();
-        Self::enqueue(
-            &owner,
-            RelayMessage::CreateRoom {
-                room_id: room_id.map(str::to_string),
-                device_id: device_id.to_string(),
-                device_type: "desktop".to_string(),
-                public_key: public_key.to_string(),
-            },
-        )?;
-        if let Some(ctx) = owner.reconnect_ctx.as_mut() {
-            ctx.device_id = device_id.to_string();
-            ctx.room_id = room_id.unwrap_or_default().to_string();
-            ctx.public_key = public_key.to_string();
-        }
-        Ok(())
-    }
-
-    /// Send a relay response back to the relay server for a bridged HTTP request.
-    pub async fn send_relay_response(
-        &self,
-        correlation_id: &str,
-        encrypted_data: &str,
-        nonce: &str,
-    ) -> Result<()> {
-        self.send(RelayMessage::RelayResponse {
-            correlation_id: correlation_id.to_string(),
-            encrypted_data: encrypted_data.to_string(),
-            nonce: nonce.to_string(),
-        })
-        .await
-    }
-
-    /// Authenticate this connection with an account token (parallel to
-    /// `create_room` for the device-routing pathway). The relay validates the
-    /// token and registers the device; success arrives as `RelayEvent::AuthOk`.
     pub async fn connect_authenticated(&self, token: &str, device_name: &str) -> Result<()> {
         let mut owner = self.lifecycle.lock().unwrap();
         // Only desktops hold a relay WebSocket — phones and watches talk HTTP —
@@ -585,8 +434,8 @@ impl RelayClient {
         Ok(())
     }
 
-    /// Send an encrypted payload to another device in the same account. The
-    /// relay routes by `target_device_id` without decrypting.
+    /// Submit device payloads over memory-admitted HTTP. The WebSocket remains
+    /// the receiving/control channel and does not accept attachment-sized input.
     pub async fn send_device_message(
         &self,
         target_device_id: &str,
@@ -594,24 +443,43 @@ impl RelayClient {
         encrypted_data: &str,
         nonce: &str,
     ) -> Result<()> {
-        self.send(RelayMessage::DeviceMessage {
-            target_device_id: target_device_id.to_string(),
-            correlation_id: correlation_id.to_string(),
-            encrypted_data: encrypted_data.to_string(),
-            nonce: nonce.to_string(),
-        })
-        .await
+        let context = self
+            .lifecycle
+            .lock()
+            .unwrap()
+            .reconnect_ctx
+            .clone()
+            .filter(|context| !context.token.is_empty())
+            .ok_or_else(|| anyhow!("Authenticated relay connection is unavailable"))?;
+        let endpoint = device_message_endpoint(&context.ws_url, target_device_id)?;
+        let response = super::relay_http::relay_http_client()
+            .post(endpoint)
+            .bearer_auth(&context.token)
+            .timeout(RELAY_WRITE_TIMEOUT)
+            .json(&RelayMessage::DeviceMessage {
+                target_device_id: target_device_id.to_string(),
+                correlation_id: correlation_id.to_string(),
+                encrypted_data: encrypted_data.to_string(),
+                nonce: nonce.to_string(),
+            })
+            .send()
+            .await?;
+        if response.status() != reqwest::StatusCode::NO_CONTENT {
+            return Err(anyhow!(
+                "Relay device message rejected (HTTP {})",
+                response.status()
+            ));
+        }
+        Ok(())
     }
 
     pub async fn disconnect(&self) {
         let task = {
-            let mut room_id = self.room_id.write().await;
             let mut owner = self.lifecycle.lock().unwrap();
             owner.generation += 1;
             owner.state = ConnectionState::Disconnected;
             owner.cmd_tx = None;
             owner.reconnect_ctx = None;
-            *room_id = None;
             let task = owner.task.take();
             if let Some(task) = &task {
                 task.abort();
@@ -626,10 +494,40 @@ impl RelayClient {
         }
         info!("Relay client disconnected");
     }
+}
 
-    pub fn room_id(&self) -> &Arc<RwLock<Option<String>>> {
-        &self.room_id
+fn device_message_endpoint(ws_url: &str, target_device_id: &str) -> Result<reqwest::Url> {
+    if target_device_id.is_empty()
+        || target_device_id.len() > 128
+        || !target_device_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        || matches!(target_device_id, "." | "..")
+    {
+        return Err(anyhow!("Invalid relay target device id"));
     }
+    let mut url = reqwest::Url::parse(ws_url)?;
+    let scheme = match url.scheme() {
+        "wss" => "https",
+        "ws" => "http",
+        _ => return Err(anyhow!("Invalid relay WebSocket scheme")),
+    };
+    url.set_scheme(scheme)
+        .map_err(|_| anyhow!("Invalid relay HTTP scheme"))?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(anyhow!("Invalid relay WebSocket endpoint"));
+    }
+    let base = url
+        .path()
+        .strip_suffix("/ws")
+        .ok_or_else(|| anyhow!("Invalid relay WebSocket path"))?;
+    let path = format!("{base}/api/devices/{target_device_id}/messages");
+    url.set_path(&path);
+    Ok(url)
 }
 
 impl Drop for RelayClient {
@@ -652,7 +550,7 @@ async fn next_relay_outbound(
     let received = std::pin::pin!(commands.recv());
     let tick = std::pin::pin!(heartbeat.tick());
     // select polls its first future first. A continuously ready command queue
-    // must not starve the keepalive that preserves the room and inbound health.
+    // must not starve the keepalive that preserves device presence and inbound health.
     match futures::future::select(tick, received).await {
         futures::future::Either::Left(_) => Some(RelayMessage::Heartbeat),
         futures::future::Either::Right((command, _)) => command,
@@ -750,6 +648,41 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn device_http_endpoint_preserves_version_prefix_and_rejects_path_injection() {
+        assert_eq!(
+            super::device_message_endpoint("wss://remote.example/v/1.0.0/ws", "desktop-1")
+                .unwrap()
+                .as_str(),
+            "https://remote.example/v/1.0.0/api/devices/desktop-1/messages"
+        );
+        assert_eq!(
+            super::device_message_endpoint("ws://127.0.0.1:3000/ws", "desktop")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:3000/api/devices/desktop/messages"
+        );
+        for id in [
+            "",
+            ".",
+            "..",
+            "../other",
+            "device?x=1",
+            "%2f",
+            "device#fragment",
+        ] {
+            assert!(super::device_message_endpoint("wss://remote.example/ws", id).is_err());
+        }
+        for url in [
+            "https://remote.example/ws",
+            "wss://user@remote.example/ws",
+            "wss://remote.example/ws?token=x",
+            "wss://remote.example/wrong",
+        ] {
+            assert!(super::device_message_endpoint(url, "desktop").is_err());
+        }
+    }
+
     use super::*;
 
     async fn connected_fixture() -> (
@@ -767,6 +700,69 @@ mod tests {
         });
         connected.unwrap();
         (client, events, listener, socket)
+    }
+
+    #[tokio::test]
+    async fn device_payload_uses_authenticated_http_and_reports_rejection() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (client, _events, listener, _socket) = connected_fixture().await;
+        client
+            .connect_authenticated("fixture-token", "Desktop")
+            .await
+            .unwrap();
+        let server = tokio::spawn(async move {
+            for status in ["204 No Content", "503 Service Unavailable"] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                let (header_end, length) = loop {
+                    let mut buffer = [0u8; 8192];
+                    assert!(bytes.len() < 1024 * 1024);
+                    let count = stream.read(&mut buffer).await.unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
+                        let header = String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+                        assert!(
+                            header.starts_with("post /api/devices/controller/messages http/1.1")
+                        );
+                        assert!(header.contains("authorization: bearer fixture-token"));
+                        let length: usize = header
+                            .lines()
+                            .find_map(|line| line.strip_prefix("content-length:"))
+                            .unwrap()
+                            .trim()
+                            .parse()
+                            .unwrap();
+                        break (end + 4, length);
+                    }
+                };
+                while bytes.len() < header_end + length {
+                    let mut buffer = [0u8; 8192];
+                    let count = stream.read(&mut buffer).await.unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                let body: serde_json::Value =
+                    serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap();
+                assert_eq!(body["encrypted_data"].as_str().unwrap().len(), 256 * 1024);
+                assert_eq!(body["correlation_id"], "correlation");
+                let reply =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                stream.write_all(reply.as_bytes()).await.unwrap();
+            }
+        });
+        let payload = "a".repeat(256 * 1024);
+        client
+            .send_device_message("controller", "correlation", &payload, "nonce")
+            .await
+            .unwrap();
+        let error = client
+            .send_device_message("controller", "correlation", &payload, "nonce")
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("503"));
+        server.await.unwrap();
+        client.disconnect().await;
     }
 
     #[tokio::test]
@@ -881,30 +877,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reconnect_restores_server_assigned_room_and_account_before_new_commands() {
-        let (client, mut events, listener, mut socket) = connected_fixture().await;
-        client
-            .create_room("device", "public-key", None)
-            .await
-            .unwrap();
+    async fn reconnect_authenticates_account_before_new_commands() {
+        let (client, _events, listener, mut socket) = connected_fixture().await;
         client
             .connect_authenticated("test-token", "test-device")
             .await
             .unwrap();
-        for _ in 0..2 {
-            socket.next().await.unwrap().unwrap();
-        }
-        socket
-            .send(Message::Text(
-                serde_json::to_string(&RelayMessage::RoomCreated {
-                    room_id: "assigned-room".into(),
-                })
-                .unwrap()
-                .into(),
-            ))
-            .await
-            .unwrap();
-        while !matches!(events.recv().await, Some(RelayEvent::RoomCreated { .. })) {}
+        socket.next().await.unwrap().unwrap();
         socket.close(None).await.unwrap();
         let mut replacement = tokio::time::timeout(std::time::Duration::from_secs(5), async {
             tokio_tungstenite::accept_async(listener.accept().await.unwrap().0)
@@ -913,20 +892,6 @@ mod tests {
         })
         .await
         .unwrap();
-        let room: RelayMessage = serde_json::from_str(
-            &replacement
-                .next()
-                .await
-                .unwrap()
-                .unwrap()
-                .into_text()
-                .unwrap(),
-        )
-        .unwrap();
-        assert!(
-            matches!(room, RelayMessage::CreateRoom { room_id: Some(id), device_id, public_key, .. }
-            if id == "assigned-room" && device_id == "device" && public_key == "public-key")
-        );
         let auth: RelayMessage = serde_json::from_str(
             &replacement
                 .next()
@@ -953,7 +918,6 @@ mod tests {
             owner.state = ConnectionState::Connected;
             owner.cmd_tx = Some(tx);
             owner.reconnect_ctx = Some(ReconnectCtx {
-                room_id: "accepted-room".into(),
                 token: "accepted-token".into(),
                 ..Default::default()
             });
@@ -972,16 +936,11 @@ mod tests {
             "Relay send queue is full; request was not queued"
         );
         assert!(client
-            .create_room("device", "key", Some("rejected-room"))
-            .await
-            .is_err());
-        assert!(client
             .connect_authenticated("rejected-token", "device")
             .await
             .is_err());
         let owner = client.lifecycle.lock().unwrap();
         let ctx = owner.reconnect_ctx.as_ref().unwrap();
-        assert_eq!(ctx.room_id, "accepted-room");
         assert_eq!(ctx.token, "accepted-token");
     }
 
@@ -992,10 +951,10 @@ mod tests {
         let mut heartbeat = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
         heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         for id in ["first", "second"] {
-            tx.try_send(RelayMessage::RelayResponse {
-                correlation_id: id.into(),
-                encrypted_data: "test-payload".into(),
-                nonce: "test-nonce".into(),
+            tx.try_send(RelayMessage::AuthConnect {
+                token: id.into(),
+                device_name: "test-device".into(),
+                device_kind: "desktop".into(),
             })
             .unwrap();
         }
@@ -1010,7 +969,7 @@ mod tests {
         for expected in ["first", "second"] {
             assert!(matches!(
                 next_relay_outbound(&mut commands, &mut heartbeat).await,
-                Some(RelayMessage::RelayResponse { correlation_id, .. }) if correlation_id == expected
+                Some(RelayMessage::AuthConnect { token, .. }) if token == expected
             ));
         }
         drop(tx);

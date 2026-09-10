@@ -105,6 +105,17 @@ test('allows only the exact legacy data-directory ignore entry', () => {
 });
 
 test('limits retired identity data to the one-time production migration boundary', () => {
+  for (const file of [
+  ]) {
+    assert.deepEqual(violationsFor(retiredName, file), []);
+  }
+  for (const file of [
+    'src/apps/desktop/src/lib.rs',
+    'src/web-ui/src/locales/en-US/settings.json',
+    'src/shared/interactive-capabilities/catalog.json',
+  ]) {
+    assert.equal(violationsFor(retiredName, file).length, 1);
+  }
   const retiredField = ['min', 'Bit', 'fun', 'Version'].join('');
   assert.deepEqual(
     violationsFor(
@@ -115,6 +126,41 @@ test('limits retired identity data to the one-time production migration boundary
   );
   assert.equal(
     violationsFor(`const field = "${retiredField}";`, 'src/example.ts').length,
+    1,
+  );
+  assert.deepEqual(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/services/legacy-migration/src/source.rs',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/assembly/core/src/legacy_migration/source.rs',
+    ),
+    [],
+  );
+  assert.deepEqual(
+    violationsFor(
+      `const sourceLabel = "${retiredName}";`,
+      'src/apps/data-migrator/ui/app.js',
+    ),
+    [],
+  );
+  assert.equal(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/services/example/src/source.rs',
+    ).length,
+    1,
+  );
+  assert.equal(
+    violationsFor(
+      `const sourceLabel = "${retiredName}";`,
+      'src/apps/desktop/src/example.rs',
+    ).length,
     1,
   );
 });

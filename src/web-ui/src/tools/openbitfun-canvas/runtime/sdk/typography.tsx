@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 import { commonStyle, sizeValue, toneColor, weightValue } from './style';
 import type {
   CanvasCodeProps,
@@ -98,7 +99,7 @@ export function Text({
 }: CanvasTextProps) {
   const Component = as;
   const truncateStyle = truncate
-    ? { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' } as const
+    ? { minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' } as const
     : {};
 
   return (
@@ -134,7 +135,7 @@ export function Text({
         }, style),
       }}
     >
-      {children}
+      {truncate ? <OverflowText>{children}</OverflowText> : children}
     </Component>
   );
 }

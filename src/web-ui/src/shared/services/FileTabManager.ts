@@ -137,8 +137,6 @@ class FileTabManager {
     const eventName = mode === 'project' ? 'project-create-tab' : 'agent-create-tab';
     
     
-    window.dispatchEvent(new CustomEvent('expand-right-panel'));
-
     // When the target scene was just added to openTabs it hasn't mounted yet,
     // so the ContentCanvas event listener doesn't exist.  Enqueue the event;
     // useTabLifecycle will drain and process it once it registers its listener.
@@ -148,26 +146,9 @@ class FileTabManager {
     }
     
     
-    const isRightPanelCollapsed = this.isRightPanelCollapsed();
-    
-    if (isRightPanelCollapsed) {
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail }));
-      }, 300);
-    } else {
-      window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail }));
-    }
-  }
-
-   
-  private isRightPanelCollapsed(): boolean {
-    
-    try {
-      const layoutState = (window as any).__OPENBITFUN_LAYOUT_STATE__;
-      return layoutState?.rightPanelCollapsed ?? false;
-    } catch {
-      return false;
-    }
+    // Deliver content to its target. That host owns any panel expansion, so a
+    // standalone file view neither changes nor waits for the session's layout.
+    window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail }));
   }
 
    

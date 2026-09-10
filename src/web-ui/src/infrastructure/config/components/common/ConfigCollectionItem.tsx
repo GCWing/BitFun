@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 ;
 import { RetainedMountBoundary } from '@/shared/presence';
 import './ConfigCollectionItem.scss';
@@ -66,7 +66,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
       data-openbitfun-part="collectionItem"
       {...rootProps}
     >
-      <div
+      <div data-overflow-trigger
         className={`openbitfun-config-page-row openbitfun-config-page-row--center openbitfun-collection-item__row ${
           toggleOnRowClick && hasDetails && !disabled ? 'openbitfun-collection-item__row--toggleable' : ''
         }`}
@@ -80,7 +80,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
               badgePlacement === 'below' ? 'openbitfun-collection-item__label--stacked' : ''
             }`}
           >
-            <span id={labelId} className="openbitfun-collection-item__name" data-openbitfun-component="config" data-openbitfun-part="collectionName">{label}</span>
+            <OverflowText id={labelId} className="openbitfun-collection-item__name" data-openbitfun-component="config" data-openbitfun-part="collectionName">{label}</OverflowText>
             {badge && (
               <span
                 className={`openbitfun-collection-item__badges ${

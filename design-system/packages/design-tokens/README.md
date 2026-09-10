@@ -18,6 +18,11 @@ Only semantic and system token names are public API. Density modes reuse the sam
 
 `tokenCatalog` is the authoring contract for visual tools. Each entry exposes its type, CSS variable, category, description, and resolved value in every density mode. Applications normally consume `tokens`; editors consume the catalog instead of maintaining a second token list.
 
+`motion.duration.contentSwap` (320ms) gives `RollingText` one cadence for vertical
+line travel and intrinsic-width changes. It has its own token so tuning content
+replacement does not change the existing hover-feedback and larger-view
+transition durations. It is zeroed in the reduced-motion projection.
+
 ## Semantic typography roles
 
 Text-bearing components consume a complete semantic role rather than assembling

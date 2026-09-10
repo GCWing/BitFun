@@ -263,7 +263,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
       <div className={`git-graph-view git-graph-view--error ${className}`} data-openbitfun-component="git-tool" data-openbitfun-part="graphRoot" data-openbitfun-state="error">
         <div className="git-graph-view__error" data-openbitfun-component="git-tool" data-openbitfun-part="graphStatus">
           <p>{t('graph.loadFailedWithMessage', { error })}</p>
-          <Button variant="fill" size="sm" onClick={loadGraphData}>
+          <Button variant="primary" size="sm" onClick={loadGraphData}>
             {t('common.retry')}
           </Button>
         </div>

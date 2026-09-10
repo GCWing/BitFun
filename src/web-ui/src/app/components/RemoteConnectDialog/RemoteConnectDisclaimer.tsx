@@ -45,7 +45,6 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
             <li>{t('remoteConnect.disclaimerItemDataUsage')}</li>
             <li>{t('remoteConnect.disclaimerItemCredentials')}</li>
             <li>{t('remoteConnect.disclaimerItemQrCode')}</li>
-            <li>{t('remoteConnect.disclaimerItemNgrok')}</li>
             <li>{t('remoteConnect.disclaimerItemSelfHosted')}</li>
             <li>{t('remoteConnect.disclaimerItemNetwork')}</li>
             <li>{t('remoteConnect.disclaimerItemBot')}</li>
@@ -60,7 +59,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
       <div className="openbitfun-remote-disclaimer__actions" data-openbitfun-component="remote-connect-disclaimer" data-openbitfun-part="actions">
         <Button
           className="openbitfun-remote-disclaimer__action"
-          variant="outline"
+          variant="fill"
           size="sm"
           onClick={onClose}
         >
@@ -69,7 +68,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
         {canAgree && (
           <Button
             className="openbitfun-remote-disclaimer__action"
-            variant="fill"
+            variant="primary"
             size="sm"
             onClick={onAgree}
             data-testid="remote-connect-disclaimer-agree"

@@ -628,7 +628,8 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let repository = temp.path().join("repository");
         std::fs::create_dir_all(&repository).expect("repository");
-        git(&repository, &["init", "--quiet", "--initial-branch=main"]);
+        git(&repository, &["init", "--quiet"]);
+        git(&repository, &["symbolic-ref", "HEAD", "refs/heads/main"]);
         git(&repository, &["config", "user.name", "Dispatch Test"]);
         git(
             &repository,
@@ -745,7 +746,8 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let repository = temp.path().join("repository");
         std::fs::create_dir_all(&repository).expect("repository");
-        git(&repository, &["init", "--quiet", "--initial-branch=main"]);
+        git(&repository, &["init", "--quiet"]);
+        git(&repository, &["symbolic-ref", "HEAD", "refs/heads/main"]);
         git(&repository, &["config", "user.name", "Dispatch Test"]);
         git(
             &repository,

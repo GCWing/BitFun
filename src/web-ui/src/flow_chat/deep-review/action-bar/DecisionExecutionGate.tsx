@@ -117,7 +117,7 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
 
       <div className="deep-review-action-bar__decision-gate-actions">
         <Button
-          variant="fill"
+          variant="primary"
           size="sm"
           disabled={confirmDisabled}
           onClick={() => void onConfirm()}
@@ -125,7 +125,7 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
           {t('deepReviewActionBar.decisionGate.confirmFix')}
         </Button>
         <Button
-          variant="outline"
+          variant="fill"
           size="sm"
           onClick={onCancel}
         >

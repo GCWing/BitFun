@@ -15,6 +15,7 @@ import { ActionItem, type ActionItemProps } from "../ActionItem";
 import { IconButton, type IconButtonProps } from "../IconButton";
 import { ScrollArea, type ScrollbarVisibility } from "../ScrollArea";
 import { classNames } from "../../internal/classNames";
+import { OverflowText } from "../../primitives/OverflowText";
 import { isImeOwnedKeyboardEvent } from "../../internal/ime";
 import styles from "./Menu.module.css";
 
@@ -248,7 +249,7 @@ export const MenuSection = forwardRef<HTMLDivElement, MenuSectionProps>(function
     >
       {headingId && (
         <div className={styles.heading} data-openbitfun-part="heading" id={headingId}>
-          <span className={styles.headingLabel} data-openbitfun-part="heading-label">{title}</span>
+          <OverflowText className={styles.headingLabel} data-openbitfun-part="heading-label">{title}</OverflowText>
           {actions.length > 0 && (
             <span className={styles.headingActions} data-openbitfun-part="heading-actions">
               {actions.map((action) => (

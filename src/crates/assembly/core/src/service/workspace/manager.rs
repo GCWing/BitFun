@@ -1,10 +1,15 @@
 //! Workspace manager.
 
+pub use super::types::{
+    GitInfo, PrimaryAssistantKey, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
+    WorkspaceStatistics, WorkspaceStatus, WorkspaceType, WorkspaceWorktreeInfo,
+};
 #[cfg(feature = "git")]
 use super::worktree_topology::global_worktree_topology_service;
 use super::WorktreeTopologyFreshness;
 use crate::util::{errors::*, FrontMatterMarkdown};
 use log::warn;
+pub use openbitfun_runtime_ports::RelatedPath;
 use openbitfun_services_core::workspace_identity::{
     canonicalize_local_workspace_root, local_workspace_stable_storage_id,
     normalize_local_workspace_root_for_stable_id, normalize_remote_workspace_path,
@@ -16,107 +21,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-pub use openbitfun_runtime_ports::RelatedPath;
-
-/// Workspace type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum WorkspaceType {
-    RustProject,
-    NodeProject,
-    PythonProject,
-    JavaProject,
-    CppProject,
-    WebProject,
-    MobileProject,
-    Other,
-}
-
-/// Workspace status.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum WorkspaceStatus {
-    Active,
-    Inactive,
-    Loading,
-    Error,
-    Archived,
-}
-
-/// Workspace lifecycle kind.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "lowercase")]
-pub enum WorkspaceKind {
-    #[default]
-    Normal,
-    Assistant,
-    Remote,
-}
-
-/// Stable identity of the assistant workspace that owns the primary role.
-///
-/// Local workspace ids are derived from canonical storage paths, so the primary
-/// selection is persisted using the assistant identity instead of that path-derived id.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PrimaryAssistantKey {
-    BuiltIn,
-    Named { assistant_id: String },
-}
-
-impl PrimaryAssistantKey {
-    pub fn from_workspace(workspace: &WorkspaceInfo) -> Option<Self> {
-        if workspace.workspace_kind != WorkspaceKind::Assistant {
-            return None;
-        }
-
-        Some(match workspace.assistant_id.as_deref() {
-            Some(assistant_id) if !assistant_id.trim().is_empty() => Self::Named {
-                assistant_id: assistant_id.trim().to_string(),
-            },
-            _ => Self::BuiltIn,
-        })
-    }
-
-    pub fn matches(&self, workspace: &WorkspaceInfo) -> bool {
-        if workspace.workspace_kind != WorkspaceKind::Assistant {
-            return false;
-        }
-
-        match (self, workspace.assistant_id.as_deref()) {
-            (Self::BuiltIn, None) => true,
-            (Self::Named { assistant_id }, Some(candidate)) => assistant_id == candidate,
-            _ => false,
-        }
-    }
-}
-
 pub(crate) const IDENTITY_FILE_NAME: &str = "IDENTITY.md";
-
-/// Parsed agent identity fields from `IDENTITY.md` frontmatter.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceIdentity {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub creature: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vibe: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avatar: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub emoji: Option<String>,
-}
-
-/// Git worktree metadata attached to a workspace.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceWorktreeInfo {
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub branch: Option<String>,
-    pub main_repo_path: String,
-    pub is_main: bool,
-}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -128,10 +33,22 @@ struct WorkspaceIdentityFrontmatter {
     emoji: Option<String>,
 }
 
-impl WorkspaceIdentity {
-    pub(crate) async fn load_from_workspace_root(
-        workspace_root: &Path,
-    ) -> Result<Option<Self>, String> {
+/// Runtime operations stay in Core; persisted records are shared with offline tools.
+#[async_trait::async_trait]
+pub(crate) trait WorkspaceIdentityRuntimeExt: Sized {
+    async fn load_from_workspace_root(workspace_root: &Path) -> Result<Option<Self>, String>;
+    fn from_markdown(content: &str) -> Result<Self, String>;
+    fn is_empty(&self) -> bool;
+    #[cfg(any(feature = "agent-runtime", test))]
+    fn collect_changed_fields(
+        previous: Option<&WorkspaceIdentity>,
+        current: Option<&WorkspaceIdentity>,
+    ) -> Vec<String>;
+}
+
+#[async_trait::async_trait]
+impl WorkspaceIdentityRuntimeExt for WorkspaceIdentity {
+    async fn load_from_workspace_root(workspace_root: &Path) -> Result<Option<Self>, String> {
         let identity_path = workspace_root.join(IDENTITY_FILE_NAME);
         if !identity_path.exists() {
             return Ok(None);
@@ -175,7 +92,8 @@ impl WorkspaceIdentity {
             && self.emoji.is_none()
     }
 
-    pub(crate) fn collect_changed_fields(
+    #[cfg(any(feature = "agent-runtime", test))]
+    fn collect_changed_fields(
         previous: Option<&WorkspaceIdentity>,
         current: Option<&WorkspaceIdentity>,
     ) -> Vec<String> {
@@ -220,62 +138,6 @@ fn normalize_identity_field(value: Option<String>) -> Option<String> {
             Some(trimmed.to_string())
         }
     })
-}
-
-/// Workspace metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceInfo {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "rootPath")]
-    pub root_path: PathBuf,
-    #[serde(rename = "workspaceType")]
-    pub workspace_type: WorkspaceType,
-    #[serde(rename = "workspaceKind", default)]
-    pub workspace_kind: WorkspaceKind,
-    #[serde(
-        rename = "assistantId",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub assistant_id: Option<String>,
-    pub status: WorkspaceStatus,
-    pub languages: Vec<String>,
-    #[serde(rename = "openedAt")]
-    pub opened_at: chrono::DateTime<chrono::Utc>,
-    #[serde(rename = "lastAccessed")]
-    pub last_accessed: chrono::DateTime<chrono::Utc>,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub statistics: Option<WorkspaceStatistics>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub identity: Option<WorkspaceIdentity>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worktree: Option<WorkspaceWorktreeInfo>,
-    #[serde(rename = "relatedPaths", default)]
-    pub related_paths: Vec<RelatedPath>,
-    pub metadata: HashMap<String, serde_json::Value>,
-}
-
-/// Workspace statistics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceStatistics {
-    pub total_files: usize,
-    pub total_directories: usize,
-    pub total_size_bytes: u64,
-    pub file_extensions: HashMap<String, usize>,
-    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
-    pub git_info: Option<GitInfo>,
-}
-
-/// Git information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GitInfo {
-    pub is_git_repo: bool,
-    pub current_branch: Option<String>,
-    pub remote_url: Option<String>,
-    pub has_uncommitted_changes: bool,
-    pub total_commits: Option<usize>,
 }
 
 /// Options for scanning a workspace.
@@ -342,21 +204,49 @@ impl Default for WorkspaceOpenOptions {
     }
 }
 
-impl WorkspaceInfo {
-    /// SSH connection id persisted in [`WorkspaceInfo::metadata`] for remote workspaces.
-    pub fn remote_ssh_connection_id(&self) -> Option<&str> {
-        self.metadata
-            .get("connectionId")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-    }
+/// Runtime operations stay in Core; persisted records are shared with offline tools.
+#[async_trait::async_trait]
+pub trait WorkspaceInfoRuntimeExt: Sized {
+    async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self>;
+    async fn new_without_worktree(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+    ) -> OpenBitFunResult<Self>;
+    async fn new_inner(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+        load_worktree: bool,
+    ) -> OpenBitFunResult<Self>;
+    async fn load_identity(&mut self);
+    async fn load_worktree(&mut self, freshness: WorktreeTopologyFreshness);
+    async fn resolve_worktree_info(
+        workspace_root: &Path,
+        freshness: WorktreeTopologyFreshness,
+    ) -> Option<WorkspaceWorktreeInfo>;
+    async fn detect_workspace_type(&mut self);
+    async fn detect_languages_from_files(&mut self);
+    async fn scan_workspace(&mut self, options: ScanOptions) -> OpenBitFunResult<()>;
+    fn scan_directory<'a>(
+        &'a self,
+        dir: &'a Path,
+        stats: &'a mut WorkspaceStatistics,
+        options: &'a ScanOptions,
+        depth: usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = OpenBitFunResult<()>> + 'a + Send>>;
+    async fn scan_git_info(&self) -> Option<GitInfo>;
+    fn touch(&mut self);
+    async fn is_valid(&self) -> bool;
+    fn get_summary(&self) -> WorkspaceSummary;
+}
 
+#[async_trait::async_trait]
+impl WorkspaceInfoRuntimeExt for WorkspaceInfo {
     /// Creates a new workspace record.
-    pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self> {
+    async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self> {
         Self::new_inner(root_path, options, true).await
     }
 
-    pub(crate) async fn new_without_worktree(
+    async fn new_without_worktree(
         root_path: PathBuf,
         options: WorkspaceOpenOptions,
     ) -> OpenBitFunResult<Self> {
@@ -530,7 +420,7 @@ impl WorkspaceInfo {
         self.worktree = Self::resolve_worktree_info(&self.root_path, freshness).await;
     }
 
-    pub(crate) async fn resolve_worktree_info(
+    async fn resolve_worktree_info(
         workspace_root: &Path,
         freshness: WorktreeTopologyFreshness,
     ) -> Option<WorkspaceWorktreeInfo> {
@@ -786,12 +676,12 @@ impl WorkspaceInfo {
     }
 
     /// Updates the last-accessed timestamp.
-    pub fn touch(&mut self) {
+    fn touch(&mut self) {
         self.last_accessed = chrono::Utc::now();
     }
 
     /// Checks whether the workspace is still valid.
-    pub async fn is_valid(&self) -> bool {
+    async fn is_valid(&self) -> bool {
         if self.workspace_kind == WorkspaceKind::Remote {
             return true;
         }
@@ -799,7 +689,7 @@ impl WorkspaceInfo {
     }
 
     /// Returns a workspace summary.
-    pub fn get_summary(&self) -> WorkspaceSummary {
+    fn get_summary(&self) -> WorkspaceSummary {
         WorkspaceSummary {
             id: self.id.clone(),
             name: self.name.clone(),
@@ -1541,7 +1431,7 @@ pub struct WorkspaceManagerStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceIdentity;
+    use super::{WorkspaceIdentity, WorkspaceIdentityRuntimeExt};
 
     #[test]
     fn workspace_identity_reads_optional_avatar_without_requiring_it() {

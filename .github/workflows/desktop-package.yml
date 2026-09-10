@@ -44,6 +44,7 @@ concurrency:
 jobs:
   # ── Resolve version info ───────────────────────────────────────────
   prepare:
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'data-migrator-v')
     name: Prepare
     runs-on: ubuntu-latest
     outputs:
@@ -87,11 +88,10 @@ jobs:
             TAG="${INPUT_TAG_NAME}"
             VERSION="${TAG#v}"
             CHANNEL="${INPUT_RELEASE_CHANNEL:-stable}"
-            # A one-off image backfill must use the workflow branch: an older
-            # tag does not contain Dockerfile.release or this publishing job.
-            if [[ "${INPUT_RELAY_IMAGE_ONLY}" == "true" ]]; then
-              CHECKOUT_REF="${GITHUB_SHA}"
-            elif [[ -n "${INPUT_CHECKOUT_REF}" ]]; then
+            # Image-only rebuilds use the same immutable source tag as their
+            # archives. Using the workflow branch breaks the tag/SHA guard and
+            # can combine a new Dockerfile with unrelated release binaries.
+            if [[ -n "${INPUT_CHECKOUT_REF}" ]]; then
               CHECKOUT_REF="${INPUT_CHECKOUT_REF}"
             else
               CHECKOUT_REF="${TAG}"
@@ -313,6 +313,9 @@ jobs:
       - name: Verify release version metadata
         run: node scripts/verify-release-version-sync.mjs --version "${{ needs.prepare.outputs.version }}"
 
+      - name: Download and verify target Flashgrep binary
+        run: node scripts/prepare-flashgrep-resource.mjs --target "${{ matrix.platform.target }}"
+
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
 
@@ -341,8 +344,7 @@ jobs:
     name: Linux CLI and Relay Server
     needs: prepare
     if: >-
-      needs.prepare.outputs.relay_image_only != 'true' &&
-      needs.prepare.outputs.release_channel == 'stable'
+      needs.prepare.outputs.relay_image_only != 'true'
     uses: ./.github/workflows/linux-binaries.yml
     secrets:
       release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -360,8 +362,7 @@ jobs:
     needs: [prepare, linux-binaries]
     if: >-
       always() &&
-      ((needs.prepare.outputs.upload_to_release == 'true' &&
-        needs.prepare.outputs.release_channel == 'stable') ||
+      (needs.prepare.outputs.upload_to_release == 'true' ||
        needs.prepare.outputs.relay_image_only == 'true') &&
       (needs.prepare.outputs.relay_image_only == 'true' ||
        needs.linux-binaries.result == 'success')
@@ -369,10 +370,11 @@ jobs:
     permissions:
       contents: write
       packages: write
-    env:
-      IMAGE: ghcr.io/gcwing/openbitfun-relay-server
-
     steps:
+      - name: Resolve image repository
+        shell: bash
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openbitfun-relay-server" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -396,7 +398,7 @@ jobs:
           set -euo pipefail
           mkdir -p linux-release-assets
           gh release download "${RELEASE_TAG}" \
-            --repo GCWing/OpenBitFun \
+            --repo "${GITHUB_REPOSITORY}" \
             --dir linux-release-assets \
             --pattern 'openbitfun-relay-server-*.tar.gz' \
             --pattern 'openbitfun-relay-server-*.tar.gz.sha256'
@@ -441,10 +443,10 @@ jobs:
             echo 'value<<EOF'
             echo "${IMAGE}:${RELEASE_TAG}"
             echo "${IMAGE}:${asset_version}"
-            if [[ "${IMAGE_ONLY}" == "true" ]]; then
+            if [[ "${IMAGE_ONLY}" == "true" && "${RELEASE_CHANNEL}" == "stable" ]]; then
               # Backfilling an older release must not roll the floating tag
               # backwards. GitHub's latest endpoint excludes prereleases.
-              latest_release="$(gh api repos/GCWing/OpenBitFun/releases/latest --jq .tag_name)"
+              latest_release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
               if [[ "${RELEASE_TAG}" == "${latest_release}" ]]; then
                 echo "${IMAGE}:latest"
               fi
@@ -541,6 +543,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
+          prerelease: ${{ needs.prepare.outputs.release_channel == 'beta' }}
+          make_latest: "false"
           files: |
             relay-image.json
             relay-image.json.sig
@@ -554,9 +558,8 @@ jobs:
       always() &&
       needs.prepare.outputs.upload_to_release == 'true' &&
       needs.package.result == 'success' &&
-      (needs.prepare.outputs.release_channel == 'beta' ||
-       (needs.linux-binaries.result == 'success' &&
-        needs.publish-relay-image.result == 'success'))
+      needs.linux-binaries.result == 'success' &&
+      needs.publish-relay-image.result == 'success'
     runs-on: ubuntu-latest
     env:
       REQUIRED_UPDATER_PLATFORMS: windows-x86_64,darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64
@@ -573,7 +576,6 @@ jobs:
           merge-multiple: true
 
       - name: Download Linux binary artifacts
-        if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
           pattern: openbitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
@@ -581,24 +583,19 @@ jobs:
           merge-multiple: true
 
       - name: Download Relay image descriptor
-        if: needs.prepare.outputs.release_channel == 'stable'
         uses: actions/download-artifact@v7
         with:
           name: openbitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
           path: relay-image-assets
 
       - name: List release assets
-        env:
-          RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
         run: |
           echo "Release assets:"
           find release-assets -type f | sort
-          if [[ "${RELEASE_CHANNEL}" == "stable" ]]; then
-            echo "Linux CLI and Relay Server assets:"
-            find linux-release-assets -type f | sort
-            echo "Relay image descriptor:"
-            find relay-image-assets -type f | sort
-          fi
+          echo "Linux CLI and Relay Server assets:"
+          find linux-release-assets -type f | sort
+          echo "Relay image descriptor:"
+          find relay-image-assets -type f | sort
 
       - name: Prepare versioned Windows installer
         run: |
@@ -643,13 +640,12 @@ jobs:
             --required-manual-platforms "windows-x86_64"
 
       - name: Generate Linux binaries manifest
-        if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           node scripts/generate-linux-binaries-manifest.mjs \
             --assets-dir linux-release-assets \
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
-            --repo "GCWing/OpenBitFun" \
+            --repo "${{ github.repository }}" \
             --out linux-release-assets/linux-binaries.json
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
@@ -682,8 +678,7 @@ jobs:
           node scripts/write-minisign-public-key.mjs \
             --out release-assets/minisign.pub
 
-      - name: Stage stable release assets
-        if: needs.prepare.outputs.release_channel == 'stable'
+      - name: Stage release assets
         shell: bash
         run: |
           set -euo pipefail
@@ -712,27 +707,6 @@ jobs:
             relay-image-assets/relay-image.json \
             relay-image-assets/relay-image.json.sig
 
-      - name: Stage beta release assets
-        if: needs.prepare.outputs.release_channel == 'beta'
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s globstar
-          node scripts/stage-github-release-assets.mjs \
-            --out-dir release-upload-assets \
-            release-updater-assets/* \
-            release-manual-assets/*.exe \
-            release-manual-assets/*.exe.sig \
-            release-assets/**/*.AppImage \
-            release-assets/**/*.AppImage.sig \
-            release-assets/**/*.deb \
-            release-assets/**/*.deb.sig \
-            release-assets/**/*.dmg \
-            release-assets/**/*.dmg.sig \
-            release-assets/**/*.rpm \
-            release-assets/**/*.rpm.sig \
-            release-assets/minisign.pub
-
       - name: Upload to release
         uses: softprops/action-gh-release@v3
         with:
@@ -757,29 +731,38 @@ jobs:
             --check-urls true
 
       - name: Verify published Linux binaries manifest
-        if: needs.prepare.outputs.release_channel == 'stable'
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
-          while IFS= read -r cli_url; do
-            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
-            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
-          done < <(jq -r '.platforms[].cli.url' linux-binaries.published.json)
+          jq -e '.platforms | has("linux-x86_64") and has("linux-aarch64")' linux-binaries.published.json >/dev/null
+          while IFS= read -r archive_url; do
+            test -n "${archive_url}"
+            curl -fsSLI --retry 5 --retry-delay 3 "${archive_url}" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive_url}.sha256" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive_url}.sig" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive_url}.sha256.sig" -o /dev/null
+          done < <(jq -r '.platforms[] | .cli.url, .relay.url' linux-binaries.published.json)
 
       - name: Verify published Relay image descriptor
-        if: needs.prepare.outputs.release_channel == 'stable'
+        shell: bash
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
             -o relay-image.published.json
           test "$(jq -r '.tag' relay-image.published.json)" = "${{ needs.prepare.outputs.release_tag }}"
-          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/openbitfun-relay-server"
+          test "$(jq -r '.version' relay-image.published.json)" = "${{ needs.prepare.outputs.version }}"
+          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openbitfun-relay-server"
+          jq -e '.platforms | sort == ["linux/amd64", "linux/arm64"]' relay-image.published.json >/dev/null
           jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/GCWing/OpenBitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
-            -o /dev/null
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
+            -o relay-image.published.json.sig
+          # These exact bytes were signed in the image job. Detect a stale or
+          # crossed upload pair before advertising a release as ready.
+          cmp relay-image-assets/relay-image.json relay-image.published.json
+          cmp relay-image-assets/relay-image.json.sig relay-image.published.json.sig
 
       - name: Resolve beta channel promotion
         id: beta-channel
@@ -829,6 +812,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CHECKOUT_REF: ${{ needs.prepare.outputs.checkout_ref }}
           CHANNEL_EXISTS: ${{ steps.beta-channel.outputs.channel_exists }}
+          CANDIDATE_VERSION: ${{ steps.beta-channel.outputs.candidate_version }}
         run: |
           set -euo pipefail
           if [[ "${CHANNEL_EXISTS}" != "true" ]]; then
@@ -844,11 +828,22 @@ jobs:
           gh release upload channel-beta beta-channel/latest.json \
             --repo "${GITHUB_REPOSITORY}" \
             --clobber
-          curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
-            -o channel-beta.published.json
-          test "$(jq -r '.version' channel-beta.published.json)" = \
-            "${{ steps.beta-channel.outputs.candidate_version }}"
+          # A successful HTTP response can still contain the previous CDN object.
+          # Retry content validation as well as transport failures after replacement.
+          for attempt in {1..12}; do
+            if curl -fsSL --max-time 30 \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
+              -o channel-beta.published.json && \
+              jq -e --arg version "${CANDIDATE_VERSION}" \
+                '.version == $version' channel-beta.published.json >/dev/null; then
+              echo "Beta channel manifest verified: ${CANDIDATE_VERSION}"
+              exit 0
+            fi
+            echo "Beta channel manifest is not ready (attempt ${attempt}/12)."
+            if [[ "${attempt}" -lt 12 ]]; then sleep 5; fi
+          done
+          echo "Beta channel manifest did not converge to ${CANDIDATE_VERSION}." >&2
+          exit 1
 
       # Nudge the openbitfun.com mirror to sync now instead of on its next
       # 10-minute cron tick. Until the mirror has these bytes, CN clients have

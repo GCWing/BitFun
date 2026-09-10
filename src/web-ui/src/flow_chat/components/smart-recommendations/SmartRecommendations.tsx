@@ -145,7 +145,7 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
           return (
             <Button
               key={action.id}
-              variant={action.type === 'primary' ? 'fill' : 'outline'}
+              variant={action.type === 'primary' ? 'primary' : 'outline'}
               size="sm"
               leadingIcon={CatalogIconName
                 ? <Icon name={CatalogIconName} size="md" />

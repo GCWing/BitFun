@@ -32,9 +32,17 @@ export interface ToggleMainWindowFullscreenResponse {
 /** Close-button behavior values (matches `app.close_button_behavior` config key). */
 export type CloseBehavior = 'quit' | 'minimize_to_tray' | 'ask';
 
+export interface SystemInfo {
+  platform: string;
+  arch: string;
+  osVersion?: string | null;
+  /** Absent on older peers. Always belongs to the host serving the request. */
+  homeDir?: string | null;
+}
+
 export class SystemAPI {
    
-  async getSystemInfo(): Promise<any> {
+  async getSystemInfo(): Promise<SystemInfo> {
     try {
       return await api.invoke('get_system_info', { 
         request: {} 
@@ -156,8 +164,8 @@ export class SystemAPI {
    
   async checkPathExists(path: string): Promise<boolean> {
     try {
-      return await api.invoke('check_path_exists', { 
-        request: { path } 
+      return await api.invoke('check_path_exists', {
+        request: { path }
       });
     } catch (error) {
       throw createTauriCommandError('check_path_exists', error, { path });

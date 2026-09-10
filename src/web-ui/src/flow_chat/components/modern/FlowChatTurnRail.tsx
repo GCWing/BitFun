@@ -285,6 +285,8 @@ export const FlowChatTurnRail: React.FC<FlowChatTurnRailProps> = ({
                 key={turn.itemKey}
                 placement="right"
                 delay={250}
+                interactive
+                trigger="hover-focus"
                 className="flowchat-turn-rail__tooltip"
                 content={(
                   <span className="flowchat-turn-rail__tooltip-content" data-openbitfun-component="flow-chat-turn-rail" data-openbitfun-part="tooltipContent">

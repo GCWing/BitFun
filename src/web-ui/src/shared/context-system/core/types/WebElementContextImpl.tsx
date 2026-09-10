@@ -100,7 +100,7 @@ export class WebElementCardRenderer implements ContextCardRenderer<'web-element'
                     {v && (
                       <>
                         <span className="web-element-context-card__attr-eq">=</span>
-                        <span className="web-element-context-card__attr-val">
+                        <span className="web-element-context-card__attr-val" title={v}>
                           &quot;{v.length > 20 ? `${v.slice(0, 20)}…` : v}&quot;
                         </span>
                       </>
@@ -110,7 +110,7 @@ export class WebElementCardRenderer implements ContextCardRenderer<'web-element'
               </div>
             )}
             {context.textContent && (
-              <div className="web-element-context-card__text">
+              <div className="web-element-context-card__text" title={context.textContent}>
                 {context.textContent.length > 80
                   ? `${context.textContent.slice(0, 80)}…`
                   : context.textContent}

@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type { HTMLAttributes, ReactNode } from "react";
 import { Archive } from "lucide-react";
 import { classNames } from "../../internal/classNames";
@@ -52,13 +53,13 @@ export function ContextCompressionToolCard({
           <ProminentToolCardSummary
             action={title}
             content={content !== undefined && content !== null ? (
-              <span
+              <OverflowText
                 className={summary !== undefined && summary !== null ? styles.summary : styles.processing}
                 data-openbitfun-part={summary !== undefined && summary !== null ? "summary" : "processing"}
                 title={typeof summary === "string" ? summary : undefined}
               >
                 {content}
-              </span>
+              </OverflowText>
             ) : undefined}
             icon={<Archive aria-hidden="true" />}
             statusIcon={loading ? <ToolProcessingDots size={16} /> : undefined}

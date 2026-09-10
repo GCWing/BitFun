@@ -134,6 +134,7 @@ export const coreTypesIntegrationTestTargets = [
     name: 'core_type_contracts',
     path: 'tests/core_type_contracts.rs',
     leaves: [
+      'tests/core_type_contracts/agent_identity.rs',
       'tests/core_type_contracts/session_contracts.rs',
       'tests/core_type_contracts/session_usage_contracts.rs',
       'tests/core_type_contracts/surface_contracts.rs',
@@ -210,6 +211,11 @@ export const productDomainsIntegrationTestTargets = [
     name: 'loopx_contracts',
     path: 'tests/loopx_contracts.rs',
     requiredFeatures: ['miniapp'],
+  },
+  {
+    name: 'legacy_migration_contracts',
+    path: 'tests/legacy_migration_contracts.rs',
+    requiredFeatures: ['legacy-migration'],
   },
   {
     name: 'plugin_source_contracts',

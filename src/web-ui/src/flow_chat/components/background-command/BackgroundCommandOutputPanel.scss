@@ -25,35 +25,6 @@
     margin-left: auto;
   }
 
-  &__sanitize-toggle-trigger {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 0 auto;
-  }
-
-  &__sanitize-toggle {
-    align-items: center;
-    gap: var(--openbitfun-space-1);
-    padding: 3px 8px;
-    border: 1px solid var(--openbitfun-color-border-default);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 72%, transparent);
-
-    .openbitfun-checkbox__wrapper {
-      margin-top: 0;
-    }
-
-    .openbitfun-checkbox__label {
-      color: var(--openbitfun-color-content-secondary);
-      font-size: var(--openbitfun-type-flow-support-font-size);
-      font-weight: var(--openbitfun-type-label-sm-font-weight);
-    }
-
-    &:hover .openbitfun-checkbox__label {
-      color: var(--openbitfun-color-content-primary);
-    }
-  }
-
   &__title-group {
     display: flex;
     align-items: center;
@@ -81,7 +52,6 @@
       font-size: var(--openbitfun-type-flow-support-font-size);
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
       display: block;
     }
   }
@@ -142,18 +112,28 @@
   }
 
   &__notice {
-    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-warning-content) 30%, transparent);
-    background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, transparent);
+    border: 1px solid var(--openbitfun-color-status-warning-border);
+    background: var(--openbitfun-color-status-warning-surface);
     color: var(--openbitfun-color-content-secondary);
+
+    > svg {
+      color: var(--openbitfun-color-status-warning-emphasis);
+    }
   }
 
   &__error {
-    border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 30%, transparent);
-    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+    border: 1px solid var(--openbitfun-color-status-danger-border);
+    background: var(--openbitfun-color-status-danger-surface);
     color: var(--openbitfun-color-status-danger-content);
+
+    > svg {
+      color: var(--openbitfun-color-status-danger-emphasis);
+    }
   }
 
   &__output {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
     margin: var(--openbitfun-space-3) var(--openbitfun-space-4) var(--openbitfun-space-4);
@@ -161,7 +141,6 @@
     border: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 86%, transparent);
     border-radius: var(--openbitfun-radius-lg);
     background: var(--openbitfun-color-surface-scene);
-    scrollbar-color: color-mix(in srgb, var(--openbitfun-color-content-secondary) 36%, transparent) transparent;
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--openbitfun-color-content-primary) 4%, transparent);
   }
 
@@ -223,24 +202,44 @@
     gap: var(--openbitfun-space-2);
   }
 
-  &__terminal {
-    height: 100% !important;
-    min-height: 100%;
+  &__terminal-container {
+    // Give the renderer a definite height inherited from the output viewport.
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  &__projection {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto hidden;
+  }
+
+  &__projection-host {
+    height: 100%;
+    width: 100%;
 
     .xterm {
       height: 100%;
+      padding: 0;
+      background: var(--openbitfun-color-surface-scene);
 
-      &:not(.allow-transparency) {
-        .xterm-viewport {
-          background-color: var(--openbitfun-color-surface-scene);
-        }
-      }
-
-      .xterm-screen {
-        width: 100%;
-        height: 100%;
+      &:not(.allow-transparency) .xterm-viewport {
+        background-color: var(--openbitfun-color-surface-scene);
       }
     }
+  }
+
+  &__projection-fallback {
+    margin: 0;
+    overflow: auto;
+    font-family: var(--openbitfun-type-code-md-font-family);
+    font-size: var(--openbitfun-type-flow-control-font-size);
+    line-height: var(--openbitfun-type-flow-code-line-height);
+    white-space: pre-wrap;
   }
 
   &__empty {
@@ -263,10 +262,6 @@
 
     &__meta {
       flex-wrap: wrap;
-    }
-
-    &__sanitize-toggle-trigger {
-      margin-left: auto;
     }
 
     &__input-editor-footer,

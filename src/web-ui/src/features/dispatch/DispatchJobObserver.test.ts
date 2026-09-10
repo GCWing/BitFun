@@ -79,7 +79,7 @@ function runningOutboundRecord() {
     workspacePath: '/repo',
     promptPreview: 'Dispatch test',
     title: 'Dispatch test',
-    agentType: 'agentic',
+    agentType: 'Standard',
     approvalPolicy: 'reject-and-report' as const,
     lastCursor: 0,
     lastState: 'running' as const,
@@ -108,7 +108,7 @@ function registerRunningJob(
     },
     sourceWorkspacePath: '/source',
     title: 'Dispatch test',
-    agentType: 'agentic',
+    agentType: 'Standard',
     approvalPolicy: 'reject-and-report',
     cursor: 0,
     state: 'running',
@@ -145,6 +145,7 @@ function createContext() {
       getState: vi.fn(() => ({ sessions })),
       addExternalSession: vi.fn(),
       updateSessionDispatchTarget: vi.fn(),
+      updateSessionTitle: vi.fn(),
       applyDispatchSnapshot: vi.fn((
         sessionId: string,
         snapshot: { cursor: number; state: string },
@@ -242,7 +243,7 @@ function installProcessingProjection(): void {
     }],
     status: 'idle',
     config: {
-      agentType: 'agentic',
+      agentType: 'Standard',
       dispatchTargetRequest: {
         kind: 'ssh',
         connectionId: 'ssh-1',
@@ -263,7 +264,7 @@ function installProcessingProjection(): void {
     lastActiveAt: 1,
     error: null,
     historyState: 'ready',
-    mode: 'agentic',
+    mode: 'Standard',
     workspacePath: '/source',
     projectWorkspacePath: '/source',
     sessionKind: 'normal',
@@ -357,6 +358,82 @@ describe('DispatchJobObserver', () => {
       activeSessionId: null,
     }));
     vi.useRealTimers();
+  });
+
+  it.each(['ssh', 'device'] as const)('persists %s generated titles and restores them after projection recreation', async (kind) => {
+    registerRunningJob();
+    if (kind === 'device') {
+      const target = { kind: 'device' as const, deviceId: 'device-1', workspacePath: '/repo', displayName: 'peer' };
+      dispatchJobStore.getState().registerJob({ ...dispatchJobStore.getState().jobs['job-1'], target, targetRequest: target });
+      mocks.listJobs.mockResolvedValue([{ ...runningOutboundRecord(), target }]);
+    }
+    installProcessingProjection();
+    const projection = flowChatStore.getState().sessions.get('session-1')!;
+    projection.config.dispatchTarget = dispatchJobStore.getState().jobs['job-1'].target;
+    mocks.status.mockResolvedValue(status({ cursor: 50, events: [{
+      type: 'agentEvent', timestamp: '2026-07-28T00:00:02Z',
+      event: { id: 'title-1', event: { type: 'SessionTitleGenerated', session_id: 'session-1', title: 'Investigate build failure' } },
+    }] }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.title).toBe('Investigate build failure');
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({ title: 'Investigate build failure', titleSource: 'generated' });
+    cleanup();
+
+    // A recreated renderer resumes from its paired transcript cursor, which
+    // may already be past the title event, while the index still has the default.
+    const storage = dispatchJobStore.persist.getOptions().storage!;
+    const persisted = (await storage.getItem('openbitfun-dispatch-jobs-v1'))!;
+    dispatchJobStore.setState({ jobs: {} });
+    await storage.setItem('openbitfun-dispatch-jobs-v1', persisted);
+    await dispatchJobStore.persist.rehydrate();
+    flowChatStore.setState(() => ({ sessions: new Map(), activeSessionId: null }));
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript({ cursor: 50 }));
+    mocks.status.mockResolvedValue(status({ cursor: 50, events: [] }));
+    const restored = installDispatchJobObserver(createTerminalContext());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.title).toBe('Investigate build failure');
+    restored();
+  });
+
+  it('keeps a manual name when a legacy target title is replayed', async () => {
+    registerRunningJob();
+    dispatchJobStore.getState().updateTitle('job-1', 'My investigation');
+    installProcessingProjection();
+    mocks.status.mockResolvedValue(status({ cursor: 50, events: [{
+      type: 'agentEvent', timestamp: '2026-07-28T00:00:02Z',
+      event: { frontendEventName: 'session_title_generated', frontendPayload: { sessionId: 'session-1', title: 'Old generated name' } },
+    }] }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.title).toBe('My investigation');
+    expect(dispatchJobStore.getState().jobs['job-1'].title).toBe('My investigation');
+    cleanup();
+  });
+
+  it('replays a pre-title transcript cache so the generated name is recovered after upgrade', async () => {
+    registerRunningJob({ cursor: 50, appliedEventIds: ['title-1'] });
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript({ schemaVersion: 4, cursor: 50 }));
+    mocks.status.mockResolvedValue(status({ cursor: 50, events: [{
+      type: 'agentEvent', timestamp: '2026-07-28T00:00:02Z',
+      event: { id: 'title-1', event: { type: 'SessionTitleGenerated', session_id: 'session-1', title: 'Recovered title' } },
+    }] }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).toHaveBeenCalledWith('job-1', 0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.title).toBe('Recovered title');
+    cleanup();
+  });
+
+  it('restores title metadata from the transcript when the renderer cache is missing', async () => {
+    mocks.listJobs.mockResolvedValue([runningOutboundRecord()]);
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript({ title: 'Cached investigation', titleSource: 'generated' }));
+    mocks.status.mockResolvedValue(status({ cursor: 50, events: [] }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.title).toBe('Cached investigation');
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({ title: 'Cached investigation', titleSource: 'generated' });
+    cleanup();
   });
 
   it('projects raw target events into the existing frontend event contract', () => {
@@ -816,7 +893,7 @@ describe('DispatchJobObserver', () => {
       workspacePath: '/target/repo',
       promptPreview: 'Dispatch test',
       title: 'Dispatch test',
-      agentType: 'agentic',
+      agentType: 'Standard',
       approvalPolicy: 'reject-and-report' as const,
       lastCursor: 0,
       lastState: 'running' as const,
@@ -875,7 +952,7 @@ describe('DispatchJobObserver', () => {
       workspacePath: '/target/repo',
       promptPreview: 'Dispatch test',
       title: 'Dispatch test',
-      agentType: 'agentic',
+      agentType: 'Standard',
       approvalPolicy: 'reject-and-report',
       lastCursor: 0,
       lastState: 'running',
@@ -913,7 +990,7 @@ describe('DispatchJobObserver', () => {
     expect(context.flowChatStore.addExternalSession).toHaveBeenCalledWith(
       'session-restored',
       'Dispatch test',
-      'agentic',
+      'Standard',
       '/projects/OpenBitFun',
       expect.objectContaining({
         projectWorkspacePath: '/projects/OpenBitFun',

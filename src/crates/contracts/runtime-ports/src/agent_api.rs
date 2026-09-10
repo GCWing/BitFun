@@ -2407,7 +2407,7 @@ mod tests {
             Ok(AgentSessionForkResult {
                 session_id: format!("{}-fork", request.source_session_id),
                 session_name: "Fork".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
             })
         }
     }
@@ -2491,7 +2491,7 @@ mod tests {
     fn agent_session_create_request_keeps_rust_literal_compatible() {
         let request = AgentSessionCreateRequest {
             session_name: "Generated session".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -2513,7 +2513,7 @@ mod tests {
     fn agent_session_create_request_keeps_legacy_payload_compatible() {
         let request: AgentSessionCreateRequest = serde_json::from_value(serde_json::json!({
             "sessionName": "Generated session",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "workspacePath": "/workspace/project"
         }))
         .expect("deserialize legacy create request");
@@ -2529,7 +2529,7 @@ mod tests {
         let legacy = serde_json::json!({
             "sessionId": "session_1",
             "sessionName": "Main",
-            "agentType": "agentic"
+            "agentType": "Standard"
         });
 
         let result: AgentSessionCreateResult =
@@ -2551,7 +2551,7 @@ mod tests {
         let result: AgentSessionCreateResult = serde_json::from_value(serde_json::json!({
             "sessionId": "session_1",
             "sessionName": "Main",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "modelId": "provider/model",
             "workspacePath": "/worktrees/session_1",
             "workspaceId": "workspace_1",
@@ -3025,7 +3025,7 @@ mod tests {
             original_message: Some("raw hello".to_string()),
             turn_id: Some("turn_1".to_string()),
             execution: Default::default(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
@@ -3058,7 +3058,7 @@ mod tests {
         assert_eq!(json["outputSchema"]["type"], "object");
         assert_eq!(json["originalMessage"], "raw hello");
         assert_eq!(json["turnId"], "turn_1");
-        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["agentType"], "Standard");
         assert_eq!(json["workspacePath"], "/workspace/project");
         assert_eq!(json["remoteConnectionId"], "conn-1");
         assert_eq!(json["remoteSshHost"], "host-1");
@@ -3136,7 +3136,7 @@ mod tests {
         );
         let request = AgentBackgroundResultRequest {
             session_id: "session_1".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
@@ -3148,7 +3148,7 @@ mod tests {
         let json = serde_json::to_value(request).expect("serialize background result request");
 
         assert_eq!(json["sessionId"], "session_1");
-        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["agentType"], "Standard");
         assert_eq!(json["workspacePath"], "/workspace/project");
         assert_eq!(json["remoteConnectionId"], "conn-1");
         assert_eq!(json["remoteSshHost"], "host-1");
@@ -3161,7 +3161,7 @@ mod tests {
     fn agent_thread_goal_delivery_request_serializes_lifecycle_contract() {
         let request = AgentThreadGoalDeliveryRequest {
             session_id: "session_1".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
@@ -3183,7 +3183,7 @@ mod tests {
         let json = serde_json::to_value(request).expect("serialize thread goal delivery request");
 
         assert_eq!(json["sessionId"], "session_1");
-        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["agentType"], "Standard");
         assert_eq!(json["workspacePath"], "/workspace/project");
         assert_eq!(json["remoteConnectionId"], "conn-1");
         assert_eq!(json["remoteSshHost"], "host-1");
@@ -3404,11 +3404,11 @@ mod tests {
         let summary = AgentSessionSummary {
             session_id: "session_1".to_string(),
             session_name: "Main".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             model_id: Some("provider/model".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: Some("plan".to_string()),
-            last_submitted_agent_type: Some("agentic".to_string()),
+            last_submitted_agent_type: Some("Standard".to_string()),
             turn_count: 3,
             created_at_ms: 1000,
             last_active_at_ms: 2000,
@@ -3465,7 +3465,7 @@ mod tests {
         };
         let mode_request = AgentSessionModeUpdateRequest {
             session_id: "session_1".to_string(),
-            mode_id: "agentic".to_string(),
+            mode_id: "Standard".to_string(),
         };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
@@ -3503,7 +3503,7 @@ mod tests {
         assert_eq!(list_json["remoteConnectionId"], "conn-1");
         assert_eq!(summary_json["modelId"], "provider/model");
         assert_eq!(summary_json["lastUserDialogAgentType"], "plan");
-        assert_eq!(summary_json["lastSubmittedAgentType"], "agentic");
+        assert_eq!(summary_json["lastSubmittedAgentType"], "Standard");
         assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
         assert_eq!(summary_json["turnCount"], 3);
@@ -3524,7 +3524,7 @@ mod tests {
         assert_eq!(model_json["sessionId"], "session_1");
         assert_eq!(model_json["modelId"], "provider/model");
         assert_eq!(mode_json["sessionId"], "session_1");
-        assert_eq!(mode_json["modeId"], "agentic");
+        assert_eq!(mode_json["modeId"], "Standard");
         assert_eq!(workspace_json["sessionId"], "session_1");
         assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");

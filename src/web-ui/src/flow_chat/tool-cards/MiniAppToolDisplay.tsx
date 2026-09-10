@@ -2,7 +2,7 @@
  * MiniAppToolDisplay — InitMiniApp result on the prominent FlowChat framework.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Icon } from '@openbitfun/ui';
+import { OverflowText, Button, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { ToolCardProps } from '../types/flow-chat';
@@ -97,7 +97,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
                 ? t('toolCards.initMiniApp.operationInit')
                 : t('toolCards.initMiniApp.skeletonReady')}
           </span>
-          <span
+          <OverflowText
             data-openbitfun-component="mini-app-tool-display"
             data-openbitfun-part="command"
             className="command-text"
@@ -105,15 +105,15 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
             data-app-id={appId || ''}
           >
             {commandText}
-          </span>
+          </OverflowText>
         </span>
       }
       extra={
         <>
           {success && appId && status === 'completed' && (
-            <span data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="output" className="output-summary" title={appId}>
+            <OverflowText data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="output" className="output-summary" title={appId}>
               {appId}
-            </span>
+            </OverflowText>
           )}
           {isFailed && (
             <div data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="errorIndicator" className="error-indicator">
@@ -133,9 +133,9 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
         <div data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="rows" className="miniapp-result-rows" data-testid="chat-miniapp-file-list">
           <div data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="row" className="miniapp-result-row">
             <span data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="label" className="miniapp-result-label">{t('toolCards.initMiniApp.labelAppId')}</span>
-            <span data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="value" className="miniapp-result-value" title={appId}>
+            <OverflowText data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="value" className="miniapp-result-value" title={appId}>
               {appId}
-            </span>
+            </OverflowText>
           </div>
           {miniAppFiles.map(filePath => (
             <div
@@ -147,9 +147,9 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
               data-path={filePath}
             >
               <span data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="label" className="miniapp-result-label">{t('toolCards.initMiniApp.labelPath')}</span>
-              <span data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="value" className="miniapp-result-value" title={filePath}>
+              <OverflowText data-openbitfun-component="mini-app-tool-display" data-openbitfun-part="value" className="miniapp-result-value" title={filePath}>
                 {filePath}
-              </span>
+              </OverflowText>
             </div>
           ))}
         </div>

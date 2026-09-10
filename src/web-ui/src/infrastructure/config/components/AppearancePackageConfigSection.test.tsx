@@ -12,6 +12,8 @@ import {
   AppearancePackageFailurePanel,
 } from './AppearancePackageConfigSection';
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
 const getPreviewAssetMock = vi.hoisted(() => vi.fn());
 const selectAppearanceMock = vi.hoisted(() => vi.fn());
 const appearanceStateMock = vi.hoisted(() => ({
@@ -143,6 +145,7 @@ describe('AppearancePackageConfigSection', () => {
   it('reuses the built-in high-density artwork in the hover preview without requesting a package asset', async () => {
     appearanceStateMock.selectedAppearanceId = 'system';
     const container = document.createElement('div');
+    document.body.appendChild(container);
     const root = createRoot(container);
 
     try {
@@ -163,11 +166,13 @@ describe('AppearancePackageConfigSection', () => {
       expect(getPreviewAssetMock).not.toHaveBeenCalledWith('system');
     } finally {
       act(() => root.unmount());
+      container.remove();
     }
   });
 
   it('renders stored preview assets and releases their object URLs', async () => {
     const container = document.createElement('div');
+    document.body.appendChild(container);
     const root = createRoot(container);
     const createObjectURL = vi.fn(() => 'blob:appearance-preview');
     const revokeObjectURL = vi.fn();
@@ -180,32 +185,35 @@ describe('AppearancePackageConfigSection', () => {
       height: 9,
     });
 
-    await act(async () => {
-      root.render(<AppearancePackageConfigSection />);
-      await Promise.resolve();
-    });
+    try {
+      await act(async () => {
+        root.render(<AppearancePackageConfigSection />);
+        await Promise.resolve();
+      });
 
-    const preview = container.querySelector<HTMLImageElement>(
-      '[data-appearance-id="sample.appearance"] .appearance-package-config__card-preview img',
-    );
-    expect(preview?.src).toBe('blob:appearance-preview');
-    expect(preview?.alt).toBe('');
-    expect(preview?.closest('article')?.getAttribute('aria-label')).toBe('Sample Appearance');
-    expect(container.querySelectorAll('.appearance-package-config__selected-mark')).toHaveLength(1);
-    expect(container.querySelector('.appearance-package-config__card-preview--builtin')).not.toBeNull();
-    expect(createObjectURL).toHaveBeenCalledOnce();
+      const preview = container.querySelector<HTMLImageElement>(
+        '[data-appearance-id="sample.appearance"] .appearance-package-config__card-preview img',
+      );
+      expect(preview?.src).toBe('blob:appearance-preview');
+      expect(preview?.alt).toBe('');
+      expect(preview?.closest('article')?.getAttribute('aria-label')).toBe('Sample Appearance');
+      expect(container.querySelectorAll('.appearance-package-config__selected-mark')).toHaveLength(1);
+      expect(container.querySelector('.appearance-package-config__card-preview--builtin')).not.toBeNull();
+      expect(createObjectURL).toHaveBeenCalledOnce();
 
-    await act(async () => {
-      preview?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      await new Promise(resolve => setTimeout(resolve, 220));
-    });
+      await act(async () => {
+        preview?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 220));
+      });
 
-    const largerPreview = document.querySelector<HTMLImageElement>(
-      '[data-testid="appearance-package-preview-popover"] img',
-    );
-    expect(largerPreview?.src).toBe('blob:appearance-preview');
-
-    act(() => root.unmount());
+      const largerPreview = document.querySelector<HTMLImageElement>(
+        '[data-testid="appearance-package-preview-popover"] img',
+      );
+      expect(largerPreview?.src).toBe('blob:appearance-preview');
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+    }
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:appearance-preview');
   });
 

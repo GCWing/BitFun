@@ -236,12 +236,12 @@ async fn review_lookup_cold_loads_the_requested_project_registry() {
 #[test]
 fn top_level_modes_default_to_auto() {
     for agent_type in [
-        "agentic",
+        "Standard",
         "Cowork",
         "Creative",
         "Claw",
         "DeepResearch",
-        "Ultra",
+        "Ultimate",
     ] {
         assert_eq!(default_model_id_for_builtin_agent(agent_type), "primary");
     }
@@ -270,7 +270,7 @@ fn registry_exposes_sdk_agent_ids_without_leaking_core_agent_details() {
     let global_agent_ids =
         RuntimeAgentRegistry::agent_ids(&registry, RuntimeAgentRegistryQuery::default());
 
-    assert!(global_agent_ids.contains(&"agentic".to_string()));
+    assert!(global_agent_ids.contains(&"Standard".to_string()));
     assert!(global_agent_ids.contains(&"Explore".to_string()));
     assert!(!global_agent_ids.contains(&"ProjectReviewer".to_string()));
     assert!(!global_agent_ids.contains(&"OtherProjectReviewer".to_string()));
@@ -329,7 +329,7 @@ fn every_builtin_standard_mode_defaults_to_the_thread_goal_lifecycle() {
         .filter(|spec| spec.category == AgentCategory::Mode)
     {
         let mode = (spec.factory)();
-        if matches!(mode.id(), "minimal" | "Ultra") {
+        if matches!(mode.id(), "Minimal" | "Ultimate") {
             continue;
         }
         let default_tools = mode.default_tools();
@@ -433,7 +433,7 @@ fn agent_list_and_delete_are_exposed_only_to_swarm_planners() {
             .default_tools()
             .iter()
             .any(|tool| tool == "AgentDelete");
-        let should_have_controls = matches!(agent.id(), "Ultra" | "SwarmPlanner");
+        let should_have_controls = matches!(agent.id(), "Ultimate" | "SwarmPlanner");
         assert_eq!(
             has_list,
             should_have_controls,
@@ -455,13 +455,13 @@ fn skill_tool_is_exposed_only_to_ultra_and_swarm_worker_within_the_swarm_catalog
         let agent = (spec.factory)();
         if !matches!(
             agent.id(),
-            "Ultra" | "SwarmPlanner" | "SwarmWorker" | "SwarmReviewer"
+            "Ultimate" | "SwarmPlanner" | "SwarmWorker" | "SwarmReviewer"
         ) {
             continue;
         }
         assert_eq!(
             agent.default_tools().iter().any(|tool| tool == "Skill"),
-            matches!(agent.id(), "Ultra" | "SwarmWorker"),
+            matches!(agent.id(), "Ultimate" | "SwarmWorker"),
             "unexpected Skill exposure for {}",
             agent.id()
         );
@@ -620,7 +620,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
 
     let agentic_visible = registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("agentic"),
+            parent_agent_type: Some("Standard"),
             workspace_root: None,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -681,7 +681,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
 
     let ultra_visible = registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("Ultra"),
+            parent_agent_type: Some("Ultimate"),
             workspace_root: None,
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -906,7 +906,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         .insert(workspace.clone(), project_entries);
 
     let builtin_query = SubagentQueryContext {
-        parent_agent_type: Some("agentic"),
+        parent_agent_type: Some("Standard"),
         workspace_root: Some(&workspace),
         list_scope: SubagentListScope::RegistryManagement,
         include_disabled: true,
@@ -932,7 +932,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
     );
     let mut project_overrides = HashMap::new();
     project_overrides.insert(
-        resolve_mode_config_profile_id("agentic").into_owned(),
+        resolve_mode_config_profile_id("Standard").into_owned(),
         project_parent_map,
     );
 
@@ -945,7 +945,7 @@ async fn parent_subagent_overrides_follow_source_scopes() {
     user_parent_map.insert(builtin_override_key, AgentSubagentOverrideState::Disabled);
     let mut user_overrides = HashMap::new();
     user_overrides.insert(
-        resolve_mode_config_profile_id("agentic").into_owned(),
+        resolve_mode_config_profile_id("Standard").into_owned(),
         user_parent_map,
     );
 
@@ -1402,7 +1402,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
 
     let local_only = registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("agentic"),
+            parent_agent_type: Some("Standard"),
             workspace_root: Some(&workspace),
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -1415,7 +1415,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
 
     let external = registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("agentic"),
+            parent_agent_type: Some("Standard"),
             workspace_root: Some(&workspace),
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -1620,7 +1620,7 @@ fn persisted_external_owner_never_falls_back_to_a_same_name_local_mode() {
 
     assert!(registry
         .resolve_primary_agent_for_turn(
-            "agentic",
+            "Standard",
             Some(Path::new("C:/workspace/restarted-external-owner")),
             true,
             Some(openbitfun_core_types::SessionAgentRouteOwner::External),
@@ -1628,7 +1628,7 @@ fn persisted_external_owner_never_falls_back_to_a_same_name_local_mode() {
         .is_none());
     let local = registry
         .resolve_primary_agent_for_turn(
-            "agentic",
+            "Standard",
             Some(Path::new("C:/workspace/legacy-local-owner")),
             true,
             Some(openbitfun_core_types::SessionAgentRouteOwner::Local),
@@ -1683,7 +1683,7 @@ async fn external_agent_role_controls_main_and_task_projection() {
         .expect("external primary projection should be visible");
     assert!(!registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("agentic"),
+            parent_agent_type: Some("Standard"),
             workspace_root: Some(&workspace),
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -1708,7 +1708,7 @@ async fn external_agent_role_controls_main_and_task_projection() {
         .any(|agent| agent.id == logical_id));
     let subagent = registry
         .get_subagents_for_query(&SubagentQueryContext {
-            parent_agent_type: Some("agentic"),
+            parent_agent_type: Some("Standard"),
             workspace_root: Some(&workspace),
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
@@ -1727,7 +1727,7 @@ async fn external_agent_role_controls_main_and_task_projection() {
 fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
     let registry = AgentRegistry::new();
     let workspace = PathBuf::from("D:/workspace/owner-takeover");
-    let logical_id = "agentic";
+    let logical_id = "Standard";
     let runtime_key = "external::agentic";
     registry.install_external_subagent_routes(
         &workspace,
@@ -1782,7 +1782,7 @@ fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
 fn validated_generation_replacement_restores_same_name_local_agent() {
     let registry = AgentRegistry::new();
     let workspace = PathBuf::from("D:/workspace/plugin-agent-removed");
-    let logical_id = "agentic";
+    let logical_id = "Standard";
     let runtime_key = "external::agentic::generation-1";
     registry.install_external_subagent_routes(
         &workspace,
@@ -1857,11 +1857,11 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
     registry.install_external_subagent_routes(
         &workspace,
         vec![
-            registration("external::base-agentic", "agentic", "Base", "claude-code"),
+            registration("external::base-agentic", "Standard", "Base", "claude-code"),
             registration("external::base-only", "base-only", "Base", "claude-code"),
         ],
         [
-            route("agentic", "external::base-agentic"),
+            route("Standard", "external::base-agentic"),
             route("base-only", "external::base-only"),
         ]
         .into_iter()
@@ -1871,11 +1871,11 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
         &workspace,
         "opencode-plugin-config",
         vec![
-            registration("external::plugin-agentic", "agentic", "Plugin", "opencode"),
+            registration("external::plugin-agentic", "Standard", "Plugin", "opencode"),
             registration("external::plugin-only", "plugin-only", "Plugin", "opencode"),
         ],
         [
-            route("agentic", "external::plugin-agentic"),
+            route("Standard", "external::plugin-agentic"),
             route("plugin-only", "external::plugin-only"),
         ]
         .into_iter()
@@ -1883,7 +1883,7 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
     );
 
     let plugin_turn = registry
-        .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+        .resolve_primary_agent_for_turn("Standard", Some(&workspace), true, None)
         .expect("overlay route");
     assert_eq!(plugin_turn.runtime_agent_key, "external::plugin-agentic");
     assert_eq!(
@@ -1906,14 +1906,14 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
         vec![
             registration(
                 "external::base-agentic-v2",
-                "agentic",
+                "Standard",
                 "Base v2",
                 "claude-code",
             ),
             registration("external::base-only", "base-only", "Base", "claude-code"),
         ],
         [
-            route("agentic", "external::base-agentic-v2"),
+            route("Standard", "external::base-agentic-v2"),
             route("base-only", "external::base-only"),
         ]
         .into_iter()
@@ -1921,7 +1921,7 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
     );
     assert_eq!(
         registry
-            .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+            .resolve_primary_agent_for_turn("Standard", Some(&workspace), true, None)
             .expect("overlay still wins after base refresh")
             .runtime_agent_key,
         "external::plugin-agentic"
@@ -1931,7 +1931,7 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
 
     assert_eq!(
         registry
-            .resolve_primary_agent_for_turn("agentic", Some(&workspace), true, None)
+            .resolve_primary_agent_for_turn("Standard", Some(&workspace), true, None)
             .expect("latest base route restored")
             .runtime_agent_key,
         "external::base-agentic-v2"
@@ -1955,7 +1955,7 @@ fn route_overlay_overrides_without_replacing_base_external_routes() {
 fn persisted_route_key_rejects_same_name_external_provider_takeover() {
     let registry = AgentRegistry::new();
     let workspace = PathBuf::from("D:/workspace/plugin-agent-takeover");
-    let logical_id = "agentic";
+    let logical_id = "Standard";
     let registration = |runtime_key: &str, route_key: &str| ExternalSubagentRegistration {
         runtime_key: runtime_key.to_string(),
         logical_id: logical_id.to_string(),

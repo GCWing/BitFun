@@ -25,6 +25,8 @@ public data class ChatMessage public constructor(
     public val tools: List<RemoteToolStatusResponse>?,
     public val items: List<ChatMessageItemResponse>?,
     public val images: List<ImageAttachment>?,
+    /** Relay failure detail for an assistant message or active turn. */
+    public val error: String?,
 )
 
 public data class SessionSummary public constructor(

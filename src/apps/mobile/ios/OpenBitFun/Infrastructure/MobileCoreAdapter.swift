@@ -9,8 +9,6 @@ final class MobileCoreAdapter {
     private let accountLoginLog = Logger(subsystem: "com.openbitfun.mobile.ios", category: "account-login")
     let deviceID: String
     private let scope: any CoroutineScope
-    private let generalChat: GeneralChatStore
-    private let pairing: PairingStore
     private let account: AccountStore
     private let deviceDirectory: DeviceDirectoryStore
     private var remoteSession: RemoteSessionStore?
@@ -21,11 +19,9 @@ final class MobileCoreAdapter {
     private var initialRemoteTargetSelectionOpen = true
     private var directoryGeneration: UInt64 = 0
     private var accountGeneration: UInt64 = 0
-    private var pairingGeneration: UInt64 = 0
     private var observations: [Task<Void, Never>] = []
     private var accountObservation: Task<Void, Never>?
     private var directoryObservation: Task<Void, Never>?
-    private var pairingObservation: Task<Void, Never>?
     private var remoteObservations: [Task<Void, Never>] = []
     private var pendingDirectoryReconciles: [String: PendingDirectoryReconcile] = [:]
 
@@ -36,13 +32,10 @@ final class MobileCoreAdapter {
     }
 
     private enum DesiredRemoteTarget: Equatable {
-        case pairing
         case account(deviceID: String)
         case accountRestore
     }
 
-    var onState: ((GeneralChatUiState) -> Void)?
-    var onPairingState: ((PairingUiState, UInt64) -> Void)?
     var onAccountState: ((AccountUiState, UInt64) -> Void)?
     var onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)?
     var onRemoteState: ((RemoteSessionUiState, String, UInt64) -> Void)?
@@ -52,18 +45,15 @@ final class MobileCoreAdapter {
     var onCreateUnavailable: ((String, String?) -> Void)?
 
     init(
-        onState: ((GeneralChatUiState) -> Void)? = nil,
-        onPairingState: ((PairingUiState, UInt64) -> Void)? = nil,
         onAccountState: ((AccountUiState, UInt64) -> Void)? = nil,
         onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)? = nil,
         onRemoteState: ((RemoteSessionUiState, String, UInt64) -> Void)? = nil,
         onWorkspaceState: ((RemoteWorkspaceUiState, String, UInt64) -> Void)? = nil,
         onDirectoryState: ((DeviceDirectoryUiState, UInt64) -> Void)? = nil,
         onCreateOperation: ((CreateSessionOperationState, String) -> Void)? = nil,
-        onCreateUnavailable: ((String, String?) -> Void)? = nil,
+        onCreateUnavailable: ((String, String?) -> Void)? = nil
     ) {
         self.scope = MainScope()
-        self.generalChat = GeneralChatStore.companion.create(scope: scope)
         let defaults = UserDefaults.standard
         let installID: String
         if let stored = defaults.string(forKey: "openbitfun.mobile.install_id") {
@@ -73,21 +63,14 @@ final class MobileCoreAdapter {
             defaults.set(installID, forKey: "openbitfun.mobile.install_id")
         }
         self.deviceID = installID
-        self.pairing = PairingStore.companion.create(
-            scope: scope,
-            device: DeviceIdentity(installId: installID, displayName: "OpenBitFun iPhone"),
-            log: CoreLogNone.shared,
-        )
         self.account = AccountStore.companion.create(
             scope: scope,
             service: "com.openbitfun.mobile.account",
             deviceId: installID,
             deviceName: "OpenBitFun iPhone",
-            log: CoreLogNone.shared,
+            log: CoreLogNone.shared
         )
         self.deviceDirectory = DeviceDirectoryStore.companion.create(scope: scope, accountStore: account)
-        self.onState = onState
-        self.onPairingState = onPairingState
         self.onAccountState = onAccountState
         self.onRemoteTargetBound = onRemoteTargetBound
         self.onRemoteState = onRemoteState
@@ -96,98 +79,12 @@ final class MobileCoreAdapter {
         self.onCreateOperation = onCreateOperation
         self.onCreateUnavailable = onCreateUnavailable
 
-        let flow = SkieSwiftStateFlow<GeneralChatUiState>(generalChat.state)
-        onState?(flow.value)
-        observations.append(Task { [weak self] in
-            for await state in flow {
-                guard !Task.isCancelled else { return }
-                self?.onState?(state)
-            }
-        })
-
         rebindDirectoryObservation(generation: directoryGeneration)
 
         rebindAccountObservation()
 
-        rebindPairingObserver(capturedGeneration: pairingGeneration)
 
         account.dispatch(intent: AccountIntentRestore.shared)
-        pairing.dispatch(intent: PairingIntentForeground.shared)
-    }
-
-    func updateDraft(_ text: String) {
-        generalChat.dispatch(intent: GeneralChatIntentUpdateDraft(text: text))
-    }
-
-    func send() {
-        generalChat.dispatch(intent: GeneralChatIntentSend.shared)
-    }
-
-    func cancelGeneralChat() {
-        generalChat.dispatch(intent: GeneralChatIntentCancel.shared)
-    }
-
-    func setGeneralChatImages(_ images: [ComposerAttachment]) {
-        generalChat.dispatch(intent: GeneralChatIntentSetImages(images: images.map(\.coreImage)))
-    }
-
-    func renameGeneralSession(sessionID: String, title: String) {
-        generalChat.dispatch(intent: GeneralChatIntentRenameSession(sessionId: sessionID, title: title))
-    }
-
-    func pinGeneralSession(sessionID: String, pinned: Bool) {
-        generalChat.dispatch(intent: GeneralChatIntentPinSession(sessionId: sessionID, pinned: pinned))
-    }
-
-    func archiveGeneralSession(sessionID: String, archived: Bool) {
-        generalChat.dispatch(intent: GeneralChatIntentArchiveSession(sessionId: sessionID, archived: archived))
-    }
-
-    func deleteGeneralSession(sessionID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentDeleteSession(sessionId: sessionID))
-    }
-
-    func selectGeneralModel(modelID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentSelectModel(modelId: modelID))
-    }
-
-    func selectGeneralSession(sessionID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentSelectSession(sessionId: sessionID))
-    }
-
-    func saveGeneralConfig(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentSaveConfig(
-                baseUrl: baseURL, model: model, apiKey: apiKey, clearApiKey: clearAPIKey
-            )
-        )
-    }
-
-    func testGeneralConnection(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentTestConnection(
-                baseUrl: baseURL, model: model, apiKey: apiKey, clearApiKey: clearAPIKey
-            )
-        )
-    }
-
-    func exportGeneralSession(sessionID: String) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentExportSession(
-                sessionId: sessionID,
-                untitledLabel: "未命名会话",
-                userLabel: "用户",
-                assistantLabel: "OpenBitFun"
-            )
-        )
-    }
-
-    func clearGeneralExport() {
-        generalChat.dispatch(intent: GeneralChatIntentClearExport.shared)
-    }
-
-    func newGeneralSession() {
-        generalChat.dispatch(intent: GeneralChatIntentNewSession.shared)
     }
 
     private func rebindAccountObservation(emitCurrent: Bool = true) {
@@ -220,92 +117,30 @@ final class MobileCoreAdapter {
         )
     }
 
-    private func rebindPairingObserver(capturedGeneration: UInt64) {
-        pairingObservation?.cancel()
-        let flow = SkieSwiftStateFlow<PairingUiState>(pairing.state)
-        let generation = capturedGeneration
-        onPairingState?(flow.value, generation)
-        if let paired = flow.value as? PairingUiStatePaired {
-            startRemoteSessionStoreIfNeeded(paired: paired, generation: generation)
-        }
-        pairingObservation = Task { [weak self] in
-            for await state in flow {
-                guard !Task.isCancelled else { return }
-                self?.onPairingState?(state, generation)
-                if let paired = state as? PairingUiStatePaired {
-                    self?.startRemoteSessionStoreIfNeeded(paired: paired, generation: generation)
-                }
-            }
-        }
-    }
-
-    func submitPairing(url: String) {
-        preparePairingSubmission()
-        pairing.dispatch(intent: PairingIntentSubmit(pairingUrl: url))
-        rebindPairingObserver(capturedGeneration: pairingGeneration)
-    }
-
-    func submitPairing(url: String, userID: String, password: String) {
-        preparePairingSubmission()
-        pairing.dispatch(
-            intent: PairingIntentSubmit(
-                pairingUrl: url,
-                userId: userID,
-                password: password
-            )
+    func resolveDeviceLink(url: String) -> AccountDeviceLinkResult {
+        let result = AccountDeviceLinkKt.resolveAccountDeviceLink(
+            url: url, state: SkieSwiftStateFlow<AccountUiState>(account.state).value
         )
-        rebindPairingObserver(capturedGeneration: pairingGeneration)
-    }
-
-    private func preparePairingSubmission() {
-        desiredRemoteTarget = .pairing
-        initialRemoteTargetSelectionOpen = false
-        pairingGeneration &+= 1
-        pairingObservation?.cancel()
-        pairingObservation = nil
-        if remoteTargetKey == "pairing" {
-            resetRemoteStores()
+        if result.status == .signInRequired, let relayUrl = result.relayUrl {
+            account.dispatch(intent: AccountIntentSelectRelay(relayUrl: relayUrl))
         }
-        pairing.dispatch(intent: PairingIntentDisconnect.shared)
+        return result
     }
 
-    func dismissPairingFailure() {
-        pairing.dispatch(intent: PairingIntentDismiss.shared)
-    }
-
-    func pairingForeground() {
-        pairing.dispatch(intent: PairingIntentForeground.shared)
-    }
-
-    func pairingBackground() {
-        pairing.dispatch(intent: PairingIntentBackground.shared)
-    }
-
-    func verifyPairing() {
-        pairing.dispatch(intent: PairingIntentVerify.shared)
-    }
-
-    func beginAccountOperation() -> (accountGeneration: UInt64, remoteTargetEpoch: UInt64, preservePairing: Bool) {
+    func beginAccountOperation() -> (accountGeneration: UInt64, remoteTargetEpoch: UInt64) {
         accountGeneration &+= 1
-        let preservePairing = remoteTargetKey == "pairing"
-        if preservePairing {
-            desiredRemoteTarget = .pairing
-        } else {
-            desiredRemoteTarget = nil
-            initialRemoteTargetSelectionOpen = false
-            resetRemoteStores()
-            remoteTargetEpoch &+= 1
-        }
+        desiredRemoteTarget = nil
+        initialRemoteTargetSelectionOpen = false
+        resetRemoteStores()
+        remoteTargetEpoch &+= 1
         rebindAccountObservation(emitCurrent: false)
-        return (accountGeneration, remoteTargetEpoch, preservePairing)
+        return (accountGeneration, remoteTargetEpoch)
     }
 
-    func loginAccount(relayURL: String, username: String, password: String) {
-        if remoteTargetKey != "pairing" {
-            desiredRemoteTarget = .accountRestore
-        }
+    func loginAccount() {
+        desiredRemoteTarget = .accountRestore
         initialRemoteTargetSelectionOpen = false
-        account.dispatch(intent: AccountIntentLogin(relayUrl: relayURL, username: username, password: password))
+        account.dispatch(intent: AccountIntentLogin.shared)
     }
 
     func selectAccountDevice(id: String) {
@@ -361,16 +196,11 @@ final class MobileCoreAdapter {
         account.dispatch(intent: AccountIntentRetry.shared)
     }
 
-    func logoutAccount(preservePairing: Bool) {
+    func logoutAccount() {
         pendingDirectoryReconciles.removeAll()
-        let keepPairing = preservePairing && remoteTargetKey == "pairing"
-        if keepPairing {
-            desiredRemoteTarget = .pairing
-        } else {
-            desiredRemoteTarget = nil
-            initialRemoteTargetSelectionOpen = false
-            resetRemoteStores()
-        }
+        desiredRemoteTarget = nil
+        initialRemoteTargetSelectionOpen = false
+        resetRemoteStores()
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentStop.shared)
         account.dispatch(intent: AccountIntentLogout.shared)
     }
@@ -378,7 +208,6 @@ final class MobileCoreAdapter {
     func disconnect() {
         desiredRemoteTarget = nil
         initialRemoteTargetSelectionOpen = false
-        pairing.dispatch(intent: PairingIntentDisconnect.shared)
         resetRemoteStores()
     }
 
@@ -387,7 +216,7 @@ final class MobileCoreAdapter {
             intent: RemoteSessionIntentSendMessage(
                 sessionId: sessionID,
                 content: content,
-                images: images.isEmpty ? nil : images.map(\.coreImage),
+                images: images.isEmpty ? nil : images.map(\.coreImage)
             )
         )
     }
@@ -609,20 +438,6 @@ final class MobileCoreAdapter {
         remoteWorkspace?.dispatch(intent: RemoteWorkspaceIntentDismissPreview.shared)
     }
 
-    private func startRemoteSessionStoreIfNeeded(paired: PairingUiStatePaired, generation: UInt64) {
-        let targetKey = "pairing"
-        guard generation == pairingGeneration,
-              remoteTargetIsDesired(.pairing),
-              remoteTargetKey != targetKey,
-              let sessionStore = pairing.createSessionStore(scope: scope) else { return }
-        commitInitialRemoteTargetIfNeeded(.pairing)
-        bindRemoteStores(
-            targetKey: targetKey,
-            sessionStore: sessionStore,
-            workspaceStore: pairing.createWorkspaceStore(scope: scope)
-        )
-    }
-
     private func startAccountRemoteSessionIfNeeded(ready: AccountUiStateReady, generation: UInt64) {
         guard generation == accountGeneration,
               let deviceID = ready.selectedDeviceId else { return }
@@ -641,8 +456,6 @@ final class MobileCoreAdapter {
 
     private func remoteTargetIsDesired(_ candidate: DesiredRemoteTarget) -> Bool {
         switch desiredRemoteTarget {
-        case .pairing:
-            return candidate == .pairing
         case let .account(deviceID):
             return candidate == .account(deviceID: deviceID)
         case .accountRestore:
@@ -664,9 +477,6 @@ final class MobileCoreAdapter {
         pendingDirectoryReconciles.removeValue(forKey: requestID)
         guard let targetKey = remoteTargetKey else { return }
 
-        if targetKey == "pairing" {
-            return
-        }
         let prefix = "account:"
         guard targetKey.hasPrefix(prefix) else { return }
         let deviceID = String(targetKey.dropFirst(prefix.count))
@@ -681,7 +491,6 @@ final class MobileCoreAdapter {
 
     private func remoteTargetKind(_ targetKey: String?) -> String {
         guard let targetKey else { return "none" }
-        if targetKey == "pairing" { return "pairing" }
         if targetKey.hasPrefix("account:") { return "account" }
         return "other"
     }
@@ -780,14 +589,10 @@ final class MobileCoreAdapter {
         observations.forEach { $0.cancel() }
         observations.removeAll()
         directoryObservation?.cancel()
-        pairingObservation?.cancel()
-        pairingObservation = nil
         directoryObservation = nil
         resetRemoteStores()
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentStop.shared)
-        pairing.dispatch(intent: PairingIntentDisconnect.shared)
         account.stop()
-        generalChat.stop()
     }
 }
 

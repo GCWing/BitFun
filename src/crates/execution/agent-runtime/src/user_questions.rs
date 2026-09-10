@@ -269,6 +269,18 @@ impl UserInputManager {
         pending.into_iter().map(|(_, tool_id)| tool_id).collect()
     }
 
+    /// Compact batch read for navigation; do not clone question/tool payloads.
+    pub fn pending_question_counts(&self) -> HashMap<String, usize> {
+        let state = lock_user_input_state(&self.state);
+        let mut counts = HashMap::new();
+        for pending in state.pending.values() {
+            if let Some(question) = &pending.question {
+                *counts.entry(question.session_id.clone()).or_default() += 1;
+            }
+        }
+        counts
+    }
+
     pub fn pending_question_snapshot(&self, session_id: &str) -> PendingUserQuestionSnapshot {
         let state = lock_user_input_state(&self.state);
         let mut questions = state
@@ -537,6 +549,7 @@ mod tests {
         let pending = manager.pending_question_snapshot("session-1");
         assert_eq!(pending.questions, vec![question]);
         assert!(pending.revision > 0);
+        assert_eq!(manager.pending_question_counts().get("session-1"), Some(&1));
 
         manager
             .send_answer("tool-1", json!({"0": "yes"}))
@@ -549,6 +562,7 @@ mod tests {
             .pending_question_snapshot("session-1")
             .questions
             .is_empty());
+        assert!(manager.pending_question_counts().is_empty());
         drop(registration);
     }
 

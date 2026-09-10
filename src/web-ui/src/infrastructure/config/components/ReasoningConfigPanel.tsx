@@ -154,11 +154,11 @@ export const ReasoningConfigPanel: React.FC<ReasoningConfigPanelProps> = ({
           data-openbitfun-component="reasoning-config-panel"
           data-openbitfun-part="actions"
         >
-          <Button variant="outline" onClick={onCancel}>
+          <Button variant="fill" onClick={onCancel}>
             {t('actions.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             disabled={invalid}
             onClick={() => onApply({
               reasoning: draft,

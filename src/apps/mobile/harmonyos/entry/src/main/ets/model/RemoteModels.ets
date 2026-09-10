@@ -1,18 +1,4 @@
-export interface RemoteDescriptor {
-  relayUrl: string;
-  roomId: string;
-  publicKey: string;
-  accountAuth: boolean;
-  accountUsername: string;
-}
 
-export interface PairState {
-  descriptor?: RemoteDescriptor;
-  connected: boolean;
-  deviceId: string;
-  userId: string;
-  message: string;
-}
 
 export class EncryptedPayload {
   encrypted_data: string = '';

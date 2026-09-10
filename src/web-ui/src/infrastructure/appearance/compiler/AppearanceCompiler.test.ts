@@ -66,6 +66,33 @@ describe('AppearanceCompiler', () => {
     );
   });
 
+  it('targets the renamed context picker for legacy file-picker Appearance packages', () => {
+    const pkg: AppearancePackage = {
+      schema: 'openbitfun.appearance',
+      schemaVersion: APPEARANCE_SCHEMA_VERSION,
+      id: 'test.legacy-context-picker',
+      name: 'Legacy Context Picker',
+      version: '1.0.0',
+      mode: 'dark',
+      components: {
+        'file-mention-picker': {
+          parts: {
+            root: { base: { opacity: { kind: 'number', value: 0.9 } } },
+          },
+        },
+      },
+    };
+
+    const snapshot = new AppearanceCompiler(createDefaultAppearanceRegistry()).compile(pkg, 1);
+
+    expect(snapshot.cssText).toContain(
+      '[data-openbitfun-component="chat-context-picker"][data-openbitfun-part="root"]',
+    );
+    expect(snapshot.cssText).not.toContain(
+      '[data-openbitfun-component="file-mention-picker"]',
+    );
+  });
+
   it('rejects retired Settings surface ids without rewriting the package', () => {
     const pkg: AppearancePackage = {
       schema: 'openbitfun.appearance',
@@ -941,7 +968,7 @@ describe('AppearanceCompiler', () => {
         'chat-input-pixel-pet': {
           parts: { root: { facets: { mood: { working: { backgroundColor: accent } } } } },
         },
-        'file-mention-picker': {
+        'chat-context-picker': {
           parts: { root: { states: { loading: { backgroundColor: accent } } } },
         },
         'session-file-modifications-bar': {
@@ -1007,7 +1034,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="plan-viewer"][data-openbitfun-part="editorPanel"][data-openbitfun-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="terminal-tool"][data-openbitfun-part="screen"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="app-layout"][data-openbitfun-part="root"][data-openbitfun-state~="toolbar"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="skill-group-picker"][data-openbitfun-part="token"][data-openbitfun-state~="selected"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="skill-group-picker"][data-openbitfun-product-part="token"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="working-copy-view"][data-openbitfun-part="file"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="assistant-config-page"][data-openbitfun-part="persona"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="assistant-defaults-page"][data-openbitfun-part="skill"][data-openbitfun-state~="covered"]');
@@ -1017,7 +1044,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="skills-config"][data-openbitfun-part="marketItem"][data-openbitfun-state~="installed"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="diff-editor"][data-openbitfun-part="loading"][data-openbitfun-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="agent-companion-desktop-pet"][data-openbitfun-part="hitbox"][data-openbitfun-state~="attention"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="tool-group-picker"][data-openbitfun-part="token"][data-openbitfun-state~="selected"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="tool-group-picker"][data-openbitfun-product-part="token"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="inline-diff-preview"][data-openbitfun-part="root"][data-openbitfun-state~="empty"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="export-image"][data-openbitfun-part="trigger"][data-openbitfun-state~="exporting"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="user-message-item"][data-openbitfun-part="root"][data-openbitfun-state~="failed"]');
@@ -1029,7 +1056,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="settings-nav"][data-openbitfun-part="item"][data-openbitfun-state~="active"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="background-command-output-panel"][data-openbitfun-part="root"][data-openbitfun-state~="error"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="chat-input-pixel-pet"][data-openbitfun-part="root"][data-openbitfun-mood="working"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="file-mention-picker"][data-openbitfun-part="root"][data-openbitfun-state~="loading"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-component="chat-context-picker"][data-openbitfun-part="root"][data-openbitfun-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="session-file-modifications-bar"][data-openbitfun-part="file"][data-openbitfun-operation="edit"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-product-component="editor-breadcrumb"][data-openbitfun-product-part="item"][data-openbitfun-state~="active"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="git-branch-history"][data-openbitfun-part="commit"][data-openbitfun-state~="expanded"]');

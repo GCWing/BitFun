@@ -1425,7 +1425,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.handle_turn_started("turn", "hello");
@@ -1443,7 +1443,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.handle_turn_started("turn", "hello");
@@ -1488,7 +1488,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.handle_turn_started("turn", "/compact");
@@ -1541,7 +1541,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.handle_turn_started("turn", "/compact");
@@ -1584,7 +1584,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.handle_turn_started("turn", "/compact");
@@ -1611,7 +1611,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("old-model-id".to_string());
@@ -1634,7 +1634,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("removed-model".to_string());
@@ -1664,7 +1664,7 @@ mod tests {
         let mut state = ChatState::new(
             "current-session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("removed-model".to_string());
@@ -1686,7 +1686,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("newer-explicit-model".to_string());
@@ -1711,7 +1711,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("old-model-id".to_string());
@@ -1739,7 +1739,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         state.current_model_id = Some("old-model-id".to_string());
@@ -1764,11 +1764,11 @@ mod tests {
 
     #[test]
     fn mode_selection_commits_visible_state_only_after_runtime_success() {
-        let mut current_mode = "agentic".to_string();
+        let mut current_mode = "Standard".to_string();
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
 
@@ -1786,11 +1786,11 @@ mod tests {
 
     #[test]
     fn mode_selection_failure_preserves_visible_state_and_explains_retry() {
-        let mut current_mode = "agentic".to_string();
+        let mut current_mode = "Standard".to_string();
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
 
@@ -1804,8 +1804,8 @@ mod tests {
         );
 
         assert!(!applied);
-        assert_eq!(current_mode, "agentic");
-        assert_eq!(state.agent_type, "agentic");
+        assert_eq!(current_mode, "Standard");
+        assert_eq!(state.agent_type, "Standard");
         let notice = state.messages.last().expect("failure notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
             panic!("failure notice must be text");
@@ -1842,11 +1842,11 @@ mod tests {
 
     #[test]
     fn unknown_mode_update_outcome_requires_restore_before_retry() {
-        let mut current_mode = "agentic".to_string();
+        let mut current_mode = "Standard".to_string();
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
 
@@ -1858,8 +1858,8 @@ mod tests {
         );
 
         assert!(!applied);
-        assert_eq!(current_mode, "agentic");
-        assert_eq!(state.agent_type, "agentic");
+        assert_eq!(current_mode, "Standard");
+        assert_eq!(state.agent_type, "Standard");
         let notice = state.messages.last().expect("unknown-outcome notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
             panic!("unknown-outcome notice must be text");
@@ -1885,7 +1885,7 @@ mod tests {
         let mut state = ChatState::new(
             "session".to_string(),
             "Original".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
 

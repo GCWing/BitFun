@@ -494,7 +494,7 @@ struct RemoteAuthorityGateTests {
         )
         expectInvalidationBeforeMutation(
             in: accountSource,
-            function: "func loginAccount(relayURL: String, username: String, password: String)",
+            function: "func loginAccount()",
             mutation: "coreAdapter?.beginAccountOperation()",
             message: "non-retained login invalidates transfers before adapter authority reset"
         )
@@ -536,9 +536,9 @@ struct RemoteAuthorityGateTests {
         expectCallBeforeMutation(
             in: modelSource,
             function: "func submitPairing(url: String)",
-            call: "prepareProjectionForPairingSubmission()",
-            mutation: "coreAdapter?.submitPairing(url: url)",
-            message: "pairing replacement preparation runs before adapter pairing mutation"
+            call: "coreAdapter?.resolveDeviceLink(url: url)",
+            mutation: "selectRemoteDevice(device)",
+            message: "QR membership validation precedes the device selection path that invalidates transfers"
         )
         expectInvalidationBeforeMutation(
             in: modelSource,

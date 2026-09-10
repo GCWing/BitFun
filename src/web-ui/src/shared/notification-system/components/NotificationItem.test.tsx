@@ -45,7 +45,7 @@ describe('NotificationItem accessibility', () => {
       duration: 0,
       closable: true,
       actions: [
-        { label: 'Retry', onClick: vi.fn() },
+        { label: 'Retry', onClick: vi.fn(), variant: 'primary' },
         { label: 'Delete', onClick: vi.fn(), variant: 'danger' },
       ],
       status: 'active',
@@ -58,6 +58,10 @@ describe('NotificationItem accessibility', () => {
     expect(item?.getAttribute('aria-live')).toBe('assertive');
     expect(item?.getAttribute('aria-atomic')).toBe('true');
     expect(container.querySelector('.notification-item__actions [data-openbitfun-component="button"]')?.textContent).toBe('Retry');
+    const retryAction = container.querySelector<HTMLButtonElement>('.notification-item__actions [data-openbitfun-component="button"]')!;
+    expect(retryAction.getAttribute('data-openbitfun-variant')).toBe('primary');
+    act(() => retryAction.click());
+    expect(notification.actions![0].onClick).toHaveBeenCalledOnce();
     const dangerAction = Array.from(
       container.querySelectorAll<HTMLButtonElement>('.notification-item__actions [data-openbitfun-component="button"]'),
     ).find(button => button.textContent === 'Delete');

@@ -23,10 +23,9 @@
     flex: 0 0 auto;
   }
 
-  span {
+  span:not([data-overflow-content]) {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -34,7 +33,7 @@
     max-width: 28px;
     padding: 0 6px;
 
-    span {
+    span:not([data-overflow-content]) {
       display: none;
     }
   }

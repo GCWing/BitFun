@@ -38,6 +38,11 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::{sleep, timeout};
 
+// Only host-native binaries are distributed. Keep remote operations explicitly gated.
+fn require_remote_flashgrep() -> Result<(), String> {
+    Err("Flashgrep is not supported for remote workspaces".to_string())
+}
+
 const REMOTE_STDIO_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const REMOTE_STDIO_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const REMOTE_STDIO_SESSION_IDLE_GRACE: Duration = Duration::from_secs(45);
@@ -553,6 +558,7 @@ impl RemoteWorkspaceSearchService {
     }
 
     pub async fn get_index_status(&self, root_path: &str) -> Result<WorkspaceIndexStatus, String> {
+        require_remote_flashgrep()?;
         let session = self.get_or_open_stdio_session(root_path).await?;
         let repo_status: WorkspaceSearchRepoStatus = session.status().await?.into();
         let active_task = match repo_status.active_task_id.clone() {
@@ -579,6 +585,7 @@ impl RemoteWorkspaceSearchService {
     }
 
     pub async fn build_index(&self, root_path: &str) -> Result<IndexTaskHandle, String> {
+        require_remote_flashgrep()?;
         let session = self.get_or_open_stdio_session(root_path).await?;
         let task = session.build_index().await?;
         let repo_status = session.status().await?;
@@ -589,6 +596,7 @@ impl RemoteWorkspaceSearchService {
     }
 
     pub async fn rebuild_index(&self, root_path: &str) -> Result<IndexTaskHandle, String> {
+        require_remote_flashgrep()?;
         let session = self.get_or_open_stdio_session(root_path).await?;
         let task = session.rebuild_index().await?;
         let repo_status = session.status().await?;
@@ -602,6 +610,7 @@ impl RemoteWorkspaceSearchService {
         &self,
         request: ContentSearchRequest,
     ) -> Result<ContentSearchResult, String> {
+        require_remote_flashgrep()?;
         let repo_root = normalize_remote_workspace_path(&request.repo_root.to_string_lossy());
         let session = self.get_or_open_stdio_session(&repo_root).await?;
         let scope = build_remote_scope(
@@ -892,6 +901,7 @@ impl RemoteWorkspaceSearchService {
     }
 
     pub async fn glob(&self, request: GlobSearchRequest) -> Result<GlobSearchResult, String> {
+        require_remote_flashgrep()?;
         let repo_root = normalize_remote_workspace_path(&request.repo_root.to_string_lossy());
         let session = self.get_or_open_stdio_session(&repo_root).await?;
         let search_path = request
@@ -946,6 +956,13 @@ impl RemoteWorkspaceSearchService {
         root_path: &str,
     ) -> Result<RemoteStdioSessionLease, String> {
         let context = self.ensure_remote_search_context(root_path).await?;
+        self.open_stdio_session(context).await
+    }
+
+    async fn open_stdio_session(
+        &self,
+        context: RemoteSearchContext,
+    ) -> Result<RemoteStdioSessionLease, String> {
         let key = remote_stdio_session_key(&context.connection.connection_id, &context.repo_root);
 
         if let Some(entry) = REMOTE_STDIO_SESSIONS.read().await.get(&key).cloned() {
@@ -1528,12 +1545,35 @@ mod tests {
 
     #[tokio::test]
     async fn remote_search_rejects_non_linux_before_stdio_open() {
+        let provider = Arc::new(FakeRemoteSearchProvider {
+            cached_os_type: Some("Darwin".into()),
+            connection_id: "os-gate".into(),
+            remote_root: "/Users/example/project".into(),
+            fail_stdio_spawn: false,
+            resolve_count: AtomicU64::new(0),
+            stdio_spawn_count: AtomicU64::new(0),
+        });
+        let service = RemoteWorkspaceSearchService::new(provider.clone());
+        let error = match service
+            .get_or_open_stdio_session("/Users/example/project")
+            .await
+        {
+            Ok(_) => panic!("non-Linux remotes must not open Flashgrep"),
+            Err(error) => error,
+        };
+        assert!(error.contains("supports Linux only"));
+        assert!(error.contains("Darwin"));
+        assert_eq!(provider.stdio_spawn_count.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn remote_flashgrep_rejects_requests_before_provider_io() {
         let _test_guard = REMOTE_SEARCH_TEST_LOCK.lock().await;
         clear_remote_search_test_state().await;
         let provider = Arc::new(FakeRemoteSearchProvider {
-            cached_os_type: Some("Darwin".to_string()),
+            cached_os_type: Some("Linux".to_string()),
             connection_id: "conn-1".to_string(),
-            remote_root: "/Users/example/project".to_string(),
+            remote_root: "/home/example/project".to_string(),
             fail_stdio_spawn: false,
             resolve_count: AtomicU64::new(0),
             stdio_spawn_count: AtomicU64::new(0),
@@ -1541,12 +1581,52 @@ mod tests {
         let service = RemoteWorkspaceSearchService::new(provider.clone());
 
         let error = service
-            .get_index_status("/Users/example/project")
+            .get_index_status("/home/example/project")
             .await
-            .expect_err("non-linux remotes must fail before opening flashgrep");
+            .expect_err("remote Flashgrep must be gated before provider IO");
 
-        assert!(error.contains("supports Linux only"));
-        assert!(error.contains("Darwin"));
+        assert!(error.contains("Flashgrep is not supported for remote workspaces"));
+        assert_eq!(
+            service.build_index("/remote/repo").await.unwrap_err(),
+            error
+        );
+        assert_eq!(
+            service.rebuild_index("/remote/repo").await.unwrap_err(),
+            error
+        );
+        assert_eq!(
+            service
+                .glob(GlobSearchRequest {
+                    repo_root: "/remote/repo".into(),
+                    search_path: None,
+                    pattern: "**/*".into(),
+                    limit: 10,
+                })
+                .await
+                .unwrap_err(),
+            error
+        );
+        assert_eq!(
+            service
+                .search_content(ContentSearchRequest {
+                    repo_root: "/remote/repo".into(),
+                    search_path: None,
+                    pattern: "needle".into(),
+                    output_mode: crate::workspace_search::ContentSearchOutputMode::Content,
+                    case_sensitive: false,
+                    use_regex: false,
+                    whole_word: false,
+                    multiline: false,
+                    max_results: None,
+                    globs: vec![],
+                    file_types: vec![],
+                    exclude_file_types: vec![],
+                })
+                .await
+                .unwrap_err(),
+            error
+        );
+        assert_eq!(provider.resolve_count.load(Ordering::Relaxed), 0);
         assert_eq!(provider.stdio_spawn_count.load(Ordering::Relaxed), 0);
     }
 
@@ -1582,10 +1662,12 @@ mod tests {
         });
         let service = RemoteWorkspaceSearchService::new(provider.clone());
 
-        let error = service
-            .get_index_status(repo_root)
-            .await
-            .expect_err("resolved non-Linux connection should reject without using stale cache");
+        let error = match service.get_or_open_stdio_session(repo_root).await {
+            Ok(_) => {
+                panic!("resolved non-Linux connection should reject without using stale cache")
+            }
+            Err(error) => error,
+        };
 
         assert_eq!(provider.resolve_count.load(Ordering::Relaxed), 1);
         assert!(error.contains("Darwin"));
@@ -1607,10 +1689,25 @@ mod tests {
         });
         let service = RemoteWorkspaceSearchService::new(provider.clone());
 
-        let error = service
-            .get_index_status(repo_root)
+        let error = match service
+            .open_stdio_session(RemoteSearchContext {
+                connection: RemoteWorkspaceEntry {
+                    connection_id: "conn-guard".into(),
+                    connection_name: "test".into(),
+                    ssh_host: "example.test".into(),
+                    remote_root: repo_root.into(),
+                },
+                binary_path: "/remote/flashgrep".into(),
+                repo_root: repo_root.into(),
+                storage_root: "/remote/search".into(),
+                remote_arch: "x86_64".into(),
+                local_binary_sha256: "fixture".into(),
+            })
             .await
-            .expect_err("fake provider rejects stdio spawn");
+        {
+            Ok(_) => panic!("fake provider rejects stdio spawn"),
+            Err(error) => error,
+        };
 
         assert!(error.contains("spawn failed"));
         assert_eq!(provider.stdio_spawn_count.load(Ordering::Relaxed), 1);

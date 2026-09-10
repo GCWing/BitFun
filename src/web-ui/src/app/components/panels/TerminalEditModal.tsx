@@ -41,6 +41,8 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
   showStartupCommand = true,
 }) => {
   const { t } = useI18n('panels/terminal');
+  const { t: tCommon } = useI18n('common');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [name, setName] = useState(initialName);
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory);
   const [startupCommand, setStartupCommand] = useState(initialStartupCommand);
@@ -48,6 +50,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setSaveError(null);
       setName(initialName);
       setWorkingDirectory(initialWorkingDirectory);
       setStartupCommand(initialStartupCommand);
@@ -74,12 +77,17 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
 
     const trimmedWorkingDirectory = workingDirectory.trim();
     const trimmedCommand = startupCommand.trim();
-    onSave({
-      name: trimmedName,
-      workingDirectory: trimmedWorkingDirectory || undefined,
-      startupCommand: trimmedCommand || undefined,
-    });
-    onClose();
+    setSaveError(null);
+    try {
+      onSave({
+        name: trimmedName,
+        workingDirectory: trimmedWorkingDirectory || undefined,
+        startupCommand: trimmedCommand || undefined,
+      });
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    }
   }, [name, onClose, onSave, startupCommand, workingDirectory]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -142,13 +150,17 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
             />
           </Field>
         ) : null}
+        {saveError && <p role="alert" className="terminal-edit-dialog__error"
+          data-openbitfun-component="terminal-edit-modal" data-openbitfun-part="error">
+          {tCommon('nav.resources.actionFailed', { error: saveError })}
+        </p>}
       </div>
 
       <div data-openbitfun-component="terminal-edit-modal" data-openbitfun-part="footer" className="terminal-edit-dialog__footer">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="fill" onClick={onClose}>
           {t('dialog.editTerminal.cancel')}
         </Button>
-        <Button variant="fill" onClick={handleSave} disabled={!canSave}>
+        <Button variant="primary" onClick={handleSave} disabled={!canSave}>
           {t('dialog.editTerminal.save')}
         </Button>
       </div>

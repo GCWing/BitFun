@@ -1076,8 +1076,7 @@ test('stages unique release asset names before publishing', () => {
   );
   const steps = workflow.jobs['upload-release-assets'].steps;
   const stagingIndexes = [
-    steps.findIndex((step) => step.name === 'Stage stable release assets'),
-    steps.findIndex((step) => step.name === 'Stage beta release assets'),
+    steps.findIndex((step) => step.name === 'Stage release assets'),
   ];
   const uploadIndex = steps.findIndex((step) => step.name === 'Upload to release');
 
@@ -1182,10 +1181,10 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
     (step) => step.name === 'Publish beta channel manifest',
   );
   assert.ok(verifyIndexPublished >= 0 && verifyIndexPublished < promoteIndex);
-  assert.match(workflow.jobs['linux-binaries'].if, /release_channel == 'stable'/);
+  assert.doesNotMatch(workflow.jobs['linux-binaries'].if, /release_channel/);
   assert.equal(
-    uploadSteps.find((step) => step.name === 'Stage beta release assets').if,
-    "needs.prepare.outputs.release_channel == 'beta'",
+    uploadSteps.find((step) => step.name === 'Stage release assets').if,
+    undefined,
   );
   assert.match(
     uploadSteps.find((step) => step.name === 'Generate updater manifest').run,
@@ -1228,6 +1227,206 @@ test('beta publishing cannot advance the Relay latest image tag', () => {
   );
   assert.match(imageTags.run, /RELEASE_CHANNEL.*stable/);
   assert.doesNotMatch(imageTags.run, /RELEASE_PRERELEASE/);
+});
+
+test('stable and beta publication require every producer, while artifact-only runs never publish', () => {
+  const { jobs } = yaml.parse(readFileSync(
+    path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8',
+  ));
+  // These workflow conditions use the shared Boolean/string subset of Actions
+  // expressions and JavaScript. Exercise the actual conditions, not a copy.
+  const condition = (job, needs) => {
+    const expression = job.if.replace(/needs\.([\w-]+)/g, 'needs["$1"]');
+    return Function('needs', 'always', `return (${expression});`)(needs, () => true);
+  };
+  const results = ['success', 'failure', 'cancelled', 'skipped'];
+  for (const channel of ['stable', 'beta']) {
+    for (const upload of ['true', 'false']) {
+      for (const desktop of results) for (const linux of results) for (const image of results) {
+        const needs = {
+          prepare: { outputs: { release_channel: channel, upload_to_release: upload, relay_image_only: 'false' } },
+          package: { result: desktop },
+          'linux-binaries': { result: linux },
+          'publish-relay-image': { result: image },
+        };
+        assert.equal(condition(jobs['linux-binaries'], needs), true);
+        assert.equal(condition(jobs['publish-relay-image'], needs), upload === 'true' && linux === 'success');
+        assert.equal(condition(jobs['upload-release-assets'], needs),
+          upload === 'true' && [desktop, linux, image].every((result) => result === 'success'),
+          JSON.stringify(needs));
+      }
+    }
+    const backfill = {
+      prepare: { outputs: { release_channel: channel, upload_to_release: 'true', relay_image_only: 'true' } },
+      package: { result: 'skipped' },
+      'linux-binaries': { result: 'skipped' },
+      'publish-relay-image': { result: 'success' },
+    };
+    assert.equal(condition(jobs['linux-binaries'], backfill), false);
+    assert.equal(condition(jobs['publish-relay-image'], backfill), true);
+    assert.equal(condition(jobs['upload-release-assets'], backfill), false);
+  }
+  const backfillRelease = jobs['publish-relay-image'].steps.find(
+    (step) => step.name === 'Attach descriptor to an existing release (image-only backfill)',
+  );
+  assert.equal(backfillRelease.with.prerelease, "${{ needs.prepare.outputs.release_channel == 'beta' }}");
+  assert.equal(backfillRelease.with.make_latest, 'false');
+  const steps = jobs['upload-release-assets'].steps;
+  for (const name of [
+    'Download Linux binary artifacts', 'Download Relay image descriptor',
+    'Generate Linux binaries manifest', 'Stage release assets',
+    'Verify published Linux binaries manifest', 'Verify published Relay image descriptor',
+  ]) {
+    assert.equal(steps.find((step) => step.name === name)?.if, undefined, name);
+    assert.ok(steps.some((step) => step.name === name), name);
+  }
+  const stage = steps.find((step) => step.name === 'Stage release assets');
+  for (const pattern of [
+    'linux-release-assets/openbitfun-cli-*.tar.gz',
+    'linux-release-assets/openbitfun-relay-server-*.tar.gz',
+    'linux-release-assets/*.tar.gz.sig', 'linux-release-assets/*.tar.gz.sha256.sig',
+    'linux-release-assets/linux-binaries.json', 'relay-image-assets/relay-image.json.sig',
+  ]) assert.ok(stage.run.includes(pattern), pattern);
+  assert.match(steps.find((step) => step.name === 'Generate Linux binaries manifest').run, /--repo "\$\{\{ github.repository \}\}"/);
+  for (const name of ['Verify published Linux binaries manifest', 'Verify published Relay image descriptor']) {
+    const verification = steps.find((step) => step.name === name);
+    assert.match(verification.run, /github.repository/);
+    assert.ok(steps.indexOf(verification) < steps.findIndex((step) => step.name === 'Publish beta channel manifest'));
+  }
+});
+
+test('Relay image rebuild resolves the release tag instead of the newer workflow commit', (t) => {
+  const { jobs } = yaml.parse(readFileSync(
+    path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8',
+  ));
+  const step = jobs.prepare.steps.find((entry) => entry.name === 'Resolve version metadata');
+  const verification = jobs['upload-release-assets'].steps.find((entry) => entry.name === 'Verify published Relay image descriptor');
+  assert.match(verification.run, /cmp relay-image-assets\/relay-image.json relay-image.published.json/);
+  assert.match(verification.run, /cmp relay-image-assets\/relay-image.json.sig relay-image.published.json.sig/);
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-relay-rebuild-ref-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const tagSha = 'a'.repeat(40);
+  const headSha = 'b'.repeat(40);
+  for (const checkoutRef of ['', 'newer-branch']) {
+    const output = path.join(root, `output-${checkoutRef || 'tag'}`);
+    const result = spawnSync('bash', ['-c', `
+      git() {
+        case "$1" in
+          fetch|merge-base) return 0 ;;
+          rev-parse)
+            case "\${!#}" in
+              'v1.0.0^{commit}') echo "$TAG_SHA" ;;
+              *) echo "$GITHUB_SHA" ;;
+            esac ;;
+        esac
+      }
+      ${step.run.replaceAll('${{ github.event.release.prerelease }}', 'false')}
+    `], {
+      cwd: repoRoot, encoding: 'utf8', windowsHide: true,
+      env: {
+        ...process.env,
+        GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_SHA: headSha,
+        GITHUB_REPOSITORY: 'GCWing/OpenBitFun', GITHUB_OUTPUT: output,
+        INPUT_TAG_NAME: 'v1.0.0', INPUT_CHECKOUT_REF: checkoutRef,
+        INPUT_RELEASE_CHANNEL: 'stable', INPUT_UPLOAD_TO_RELEASE: 'true',
+        INPUT_RELAY_IMAGE_ONLY: 'true', TAG_SHA: tagSha,
+      },
+    });
+    if (checkoutRef) {
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /not requested commit/);
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(readFileSync(output, 'utf8'), new RegExp(`checkout_ref=${tagSha}`));
+    }
+  }
+});
+
+test('Relay image tag selection keeps Beta and old stable backfills away from latest', {
+  skip: process.platform === 'win32',
+}, (t) => {
+  const { jobs } = yaml.parse(readFileSync(
+    path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8',
+  ));
+  const step = jobs['publish-relay-image'].steps.find((entry) => entry.name === 'Resolve image tags');
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-image-tags-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const scenario of [
+    { channel: 'beta', version: '1.0.0-beta.3', imageOnly: 'false', latest: false },
+    { channel: 'beta', version: '1.0.0-beta.3', imageOnly: 'true', latest: false },
+    { channel: 'stable', version: '1.0.0', imageOnly: 'false', latest: true },
+    { channel: 'stable', version: '1.0.0', imageOnly: 'true', latest: true },
+    { channel: 'stable', version: '0.2.19', imageOnly: 'true', latest: false },
+  ]) {
+    const output = path.join(root, 'output');
+    writeFileSync(output, '');
+    const result = spawnSync('bash', ['-c', `gh() { printf 'v1.0.0\\n'; }\n${step.run}`], {
+      env: { ...process.env, GITHUB_OUTPUT: output, GITHUB_REPOSITORY: 'test-owner/OpenBitFun',
+        IMAGE: 'ghcr.io/test-owner/openbitfun-relay-server', RELEASE_TAG: `v${scenario.version}`,
+        RELEASE_VERSION: scenario.version, RELEASE_CHANNEL: scenario.channel, IMAGE_ONLY: scenario.imageOnly },
+      encoding: 'utf8', windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const tags = readFileSync(output, 'utf8').trim().split('\n');
+    assert.deepEqual(tags, [
+      'value<<EOF', `ghcr.io/test-owner/openbitfun-relay-server:v${scenario.version}`,
+      `ghcr.io/test-owner/openbitfun-relay-server:${scenario.version}`,
+      ...(scenario.latest ? ['ghcr.io/test-owner/openbitfun-relay-server:latest'] : []), 'EOF',
+    ]);
+  }
+});
+
+test('beta channel readback retries stale content and fails if it never converges', {
+  skip: process.platform === 'win32' || spawnSync('jq', ['--version'], { windowsHide: true }).status !== 0,
+}, (t) => {
+  const workflow = yaml.parse(readFileSync(
+    path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8',
+  ));
+  const step = workflow.jobs['upload-release-assets'].steps.find(
+    (entry) => entry.name === 'Publish beta channel manifest',
+  );
+  assert.equal(step.env.CANDIDATE_VERSION, '${{ steps.beta-channel.outputs.candidate_version }}');
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-beta-readback-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bin = path.join(root, 'bin');
+  mkdirSync(bin);
+  for (const command of ['gh', 'sleep']) {
+    writeFileSync(path.join(bin, command), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  }
+  writeFileSync(path.join(bin, 'curl'), `#!/usr/bin/env node
+const fs = require('node:fs');
+const count = fs.existsSync('requests') ? Number(fs.readFileSync('requests', 'utf8')) + 1 : 1;
+fs.writeFileSync('requests', String(count));
+if (process.env.READBACK_CASE === 'transport' && count === 1) process.exit(22);
+const output = process.argv[process.argv.indexOf('-o') + 1];
+const content = process.env.READBACK_CASE === 'malformed' && count === 1
+  ? 'not json'
+  : JSON.stringify({ version: process.env.READBACK_CASE === 'stale' || count === 1 ? '0.2.19-beta.1' : '1.0.0-beta.1' });
+fs.writeFileSync(output, content);
+`, { mode: 0o755 });
+  for (const scenario of ['converges', 'transport', 'malformed', 'stale']) {
+    const cwd = path.join(root, scenario);
+    mkdirSync(cwd);
+    writeFileSync(path.join(cwd, 'latest.published.json'), '{"version":"1.0.0-beta.1"}');
+    const result = spawnSync('bash', ['-c', step.run], {
+      cwd,
+      env: {
+        ...process.env,
+        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        READBACK_CASE: scenario,
+        CHANNEL_EXISTS: 'true',
+        GITHUB_REPOSITORY: 'test/repo',
+        CANDIDATE_VERSION: '1.0.0-beta.1',
+      },
+      encoding: 'utf8',
+      timeout: 10000,
+      windowsHide: true,
+    });
+    assert.equal(result.status, scenario === 'stale' ? 1 : 0, `${scenario}: ${result.stderr}`);
+    const requests = Number(readFileSync(path.join(cwd, 'requests'), 'utf8'));
+    assert.ok(requests > 1 && requests <= 12, `${scenario}: bounded content retries`);
+    if (scenario === 'stale') assert.match(result.stderr, /did not converge/);
+  }
 });
 
 test('nightly and beta use the shared build-version projection', () => {

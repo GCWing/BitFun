@@ -17,7 +17,7 @@ describe('Assistant defaults capability presentation', () => {
       /\.assistant-defaults-row\s*\{[\s\S]*&--unavailable\s*\{[\s\S]*opacity:\s*0\.7;/,
     );
     expect(stylesheet).toMatch(
-      /@media \(max-width: 760px\)[\s\S]*\.assistant-defaults-row__source,[\s\S]*display:\s*none;/,
+      /@container assistant-catalog \(max-width: 760px\)[\s\S]*\.assistant-defaults-row__source,[\s\S]*display:\s*none;/,
     );
   });
 });

@@ -1,3 +1,4 @@
+import { isSessionSceneId } from '@/app/components/SceneBar/types';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
@@ -15,16 +16,6 @@ function openStandaloneShellSession(sessionId: string): void {
 
   openScene('terminal' as SceneTabId);
 
-  // Force a remount when reopening the same session so the terminal view
-  // can recover from stale/error state and always reflect the latest selection.
-  if (terminalState.activeSessionId === sessionId) {
-    terminalState.setActiveSession(null);
-    window.setTimeout(() => {
-      useTerminalSceneStore.getState().setActiveSession(sessionId);
-    }, 0);
-    return;
-  }
-
   terminalState.setActiveSession(sessionId);
 }
 
@@ -37,7 +28,7 @@ export function openShellSessionTarget(options: OpenShellSessionTargetOptions): 
   const { sessionId, sessionName } = options;
   const { activeTabId } = useSceneStore.getState();
 
-  if (activeTabId === 'session') {
+  if (isSessionSceneId(activeTabId)) {
     const targetMode = getCachedTerminalPanelPosition() === 'bottom' ? 'bottom-terminal' : 'agent';
     createTerminalTab(sessionId, sessionName, targetMode);
     return;

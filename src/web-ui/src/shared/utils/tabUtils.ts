@@ -20,6 +20,8 @@ export interface TabCreationOptions {
   replaceExisting?: boolean;
   /** Target canvas: agent (AuxPane), project (FileViewer), git (Git scene diff area) */
   mode?: TabTargetMode;
+  /** Rechecked after delayed panel expansion so stale host work cannot open a tab. */
+  isCurrent?: () => boolean;
 }
 
 interface CreateTerminalTabOptions {
@@ -58,6 +60,7 @@ function isRightPanelCollapsed(): boolean {
 
  
 export function createTab(options: TabCreationOptions): void {
+  if (options.isCurrent && !options.isCurrent()) return;
   const {
     type,
     title,
@@ -87,6 +90,7 @@ export function createTab(options: TabCreationOptions): void {
   if (mode === 'agent' && isRightPanelCollapsed()) {
     window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
     window.setTimeout(() => {
+      if (options.isCurrent && !options.isCurrent()) return;
       window.dispatchEvent(createTabEvent);
     }, 300);
     return;
@@ -445,18 +449,15 @@ export function createTerminalTab(
   mode: 'agent' | 'project' | 'bottom-terminal' = 'agent',
   options: CreateTerminalTabOptions = {}
 ): void {
-  const title = sessionName.length > 20 
-    ? `${sessionName.slice(0, 20)}...` 
-    : sessionName;
-
   const detail = {
     type: 'terminal',
-    title: `${title}`,
+    title: sessionName,
     data: { sessionId, sessionName },
     metadata: {
       isTerminal: true,
       sessionId,
       duplicateCheckKey: `terminal-${sessionId}`,
+      terminalCloseBehavior: 'detach',
     },
     checkDuplicate: true,
     duplicateCheckKey: `terminal-${sessionId}`,

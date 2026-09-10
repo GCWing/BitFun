@@ -1,15 +1,12 @@
 /**
- * Store sync service
- * Syncs data from old FlowChatStore to new ModernFlowChatStore
+ * Active-session presentation projection.
+ * FlowChatStore owns selection; ModernFlowChatStore only projects that selection.
  * Maintains original concept: Session → DialogTurn → ModelRound → FlowItem
  */
 
 import { flowChatStore } from '../store/FlowChatStore';
 import { useModernFlowChatStore } from '../store/modernFlowChatStore';
 import type { Session } from '../types/flow-chat';
-import { createLogger } from '@/shared/utils/logger';
-
-const log = createLogger('StoreSync');
 
 function isSessionAlreadySynced(
   sessionId: string,
@@ -42,68 +39,45 @@ function hasRenderableContent(session: Session): boolean {
  * Sync session data to new Store
  */
 export function syncSessionToModernStore(sessionId: string): void {
-  const oldState = flowChatStore.getState();
-  const session = oldState.sessions.get(sessionId);
-
-  if (!session) {
-    log.warn('Session not found', { sessionId });
-    return;
-  }
-
-  const modernStore = useModernFlowChatStore.getState();
-  if (isSessionAlreadySynced(sessionId, session, modernStore)) {
-    return;
-  }
-  modernStore.setActiveSession(session);
+  // An async opener may finish after selection changed or the session was
+  // removed. Presentation sync must never become another selection writer.
+  if (flowChatStore.getState().activeSessionId !== sessionId) return;
+  syncActiveSessionToModernStore();
 }
 
-/**
- * Start auto sync
- * Listens to old Store changes and automatically syncs to new Store
- *
- * Performance optimization: relies on FlowChatStore's immutable updates, each update creates a new session reference.
- * Uses reference comparison to skip redundant syncs — if the active session object hasn't changed, no work is done.
- */
-export function startAutoSync(): () => void {
-  let lastSyncedSessionId: string | null = null;
-  let lastSyncedSession: object | null = null;
-
-  const unsubscribe = flowChatStore.subscribe((state) => {
-    const modernStore = useModernFlowChatStore.getState();
-
-    if (state.activeSessionId) {
-      const session = state.sessions.get(state.activeSessionId);
-      if (
-        session &&
-        (
-          session !== lastSyncedSession ||
-          state.activeSessionId !== lastSyncedSessionId ||
-          !isSessionAlreadySynced(state.activeSessionId, session, modernStore)
-        )
-      ) {
-        lastSyncedSessionId = state.activeSessionId;
-        lastSyncedSession = session;
-        modernStore.setActiveSession(session);
-      }
-    } else if (lastSyncedSessionId !== null) {
-      lastSyncedSessionId = null;
-      lastSyncedSession = null;
+function syncActiveSessionToModernStore(): void {
+  const state = flowChatStore.getState();
+  const session = state.activeSessionId ? state.sessions.get(state.activeSessionId) : undefined;
+  const modernStore = useModernFlowChatStore.getState();
+  if (!session) {
+    // Empty is an authoritative projection too, including the first sync after
+    // remount and a dangling selection. Do not depend on subscriber-local history.
+    if (modernStore.activeSession || modernStore.virtualItems.length || modernStore.visibleTurnInfo) {
       modernStore.clear();
     }
-  });
-
-  const currentState = flowChatStore.getState();
-  if (currentState.activeSessionId) {
-    const session = currentState.sessions.get(currentState.activeSessionId);
-    if (session) {
-      lastSyncedSessionId = currentState.activeSessionId;
-      lastSyncedSession = session;
-      const modernStore = useModernFlowChatStore.getState();
-      if (!isSessionAlreadySynced(currentState.activeSessionId, session, modernStore)) {
-        modernStore.setActiveSession(session);
-      }
-    }
+    return;
   }
 
-  return unsubscribe;
+  if (!isSessionAlreadySynced(session.sessionId, session, modernStore)) {
+    modernStore.setActiveSession(session);
+  }
+}
+
+const syncConsumers = new Set<symbol>();
+let unsubscribeSource: (() => void) | undefined;
+
+/** Share one source subscription across the shell and standalone chat hosts. */
+export function startAutoSync(): () => void {
+  const consumer = Symbol();
+  syncConsumers.add(consumer);
+  unsubscribeSource ??= flowChatStore.subscribe(syncActiveSessionToModernStore);
+  syncActiveSessionToModernStore();
+
+  return () => {
+    syncConsumers.delete(consumer);
+    if (syncConsumers.size === 0) {
+      unsubscribeSource?.();
+      unsubscribeSource = undefined;
+    }
+  };
 }

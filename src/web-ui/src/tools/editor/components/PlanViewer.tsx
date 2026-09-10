@@ -1,6 +1,6 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
-import { Button, Icon, IconButton, Input, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Input, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Loader2, AlertCircle, FileText } from 'lucide-react';
 import yaml from 'yaml';
@@ -799,7 +799,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
       data-openbitfun-part="root"
       data-openbitfun-state={hasTodos && isTodosExpanded ? 'expanded' : undefined}
     >
-      <div
+      <div data-overflow-trigger
         className={`plan-viewer-header ${hasTodos ? 'plan-viewer-header--collapsible' : ''}`}
         data-openbitfun-component="plan-viewer"
         data-openbitfun-part="header"
@@ -818,7 +818,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
             </span>
           )}
           <FileText size={16} className="file-icon" />
-          <span className="file-name">{displayFileName}</span>
+          <OverflowText className="file-name">{displayFileName}</OverflowText>
           {hasUnsavedChanges && <span className="unsaved-indicator">{t('editor.planViewer.unsaved')}</span>}
         </div>
         <div className="header-right" onClick={(e) => e.stopPropagation()} data-openbitfun-component="plan-viewer" data-openbitfun-part="headerActions">
@@ -828,7 +828,7 @@ Read the plan file before making changes and treat it as the source of truth. Do
 
               <Button
                 type="button"
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={
                   buildStatus === 'building'

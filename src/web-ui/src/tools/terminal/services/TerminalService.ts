@@ -25,6 +25,7 @@ import type {
   TerminalEventCallback,
   UnsubscribeFunction,
 } from '../types';
+import { TerminalOriginCache } from './terminalWorkspaceScope';
 
 const log = createLogger('TerminalService');
 
@@ -32,6 +33,7 @@ const log = createLogger('TerminalService');
  * Singleton wrapper for terminal-related Tauri API calls.
  */
 export class TerminalService {
+  private readonly originCache = new TerminalOriginCache();
   private static instance: TerminalService | null = null;
   
   private eventListeners: Map<string, Set<TerminalEventCallback>> = new Map();
@@ -240,10 +242,14 @@ export class TerminalService {
   }
 
   async createSession(request: CreateSessionRequest): Promise<SessionResponse> {
+    const scope = getActiveSurfaceScope();
     try {
       const session = await api.invoke<SessionResponse>('terminal_create', { request });
+      scope.assertCurrent('terminal_create');
       log.debug('Session created', { sessionId: session.id });
-      return session;
+      return this.originCache.project(scope.surfaceId, {
+        ...session, initialCwd: session.initialCwd || request.workingDirectory || session.cwd,
+      });
     } catch (error) {
       log.error('Failed to create session', error);
       throw error;
@@ -251,9 +257,11 @@ export class TerminalService {
   }
 
   async getSession(sessionId: string): Promise<SessionResponse> {
+    const scope = getActiveSurfaceScope();
     try {
       const session = await api.invoke<SessionResponse>('terminal_get', { sessionId });
-      return session;
+      scope.assertCurrent('terminal_get');
+      return this.originCache.project(scope.surfaceId, session);
     } catch (error) {
       log.error('Failed to get session', { sessionId, error });
       throw error;
@@ -261,9 +269,11 @@ export class TerminalService {
   }
 
   async listSessions(): Promise<SessionResponse[]> {
+    const scope = getActiveSurfaceScope();
     try {
       const sessions = await api.invoke<SessionResponse[]>('terminal_list');
-      return sessions;
+      scope.assertCurrent('terminal_list');
+      return sessions.map(session => this.originCache.project(scope.surfaceId, session));
     } catch (error) {
       log.error('Failed to list sessions', error);
       throw error;

@@ -15,6 +15,28 @@ fn metadata(session_id: &str) -> SessionMetadata {
     )
 }
 
+#[test]
+fn legacy_agent_identity_migrates_without_changing_session_history() {
+    let mut old = serde_json::to_value(metadata("legacy-session")).unwrap();
+    old["agentType"] = serde_json::json!("agentic");
+    old["lastUserDialogAgentType"] = serde_json::json!("Ultra");
+    old["lastSubmittedAgentType"] = serde_json::json!("minimal");
+    let migrated: SessionMetadata = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(migrated.agent_type, "Standard");
+    assert_eq!(
+        migrated.last_user_dialog_agent_type.as_deref(),
+        Some("Ultimate")
+    );
+    assert_eq!(
+        migrated.last_submitted_agent_type.as_deref(),
+        Some("Minimal")
+    );
+    old["agentType"] = serde_json::json!("Standard");
+    old["lastUserDialogAgentType"] = serde_json::json!("Ultimate");
+    old["lastSubmittedAgentType"] = serde_json::json!("Minimal");
+    assert_eq!(serde_json::to_value(migrated).unwrap(), old);
+}
+
 fn user_message(content: &str) -> UserMessageData {
     UserMessageData {
         id: format!("user-{content}"),
@@ -132,6 +154,102 @@ fn finished_turn(
     turn.end_time = Some(end_time);
     turn.duration_ms = Some(end_time.saturating_sub(turn.start_time));
     turn
+}
+
+#[test]
+fn latest_turn_summary_is_additive_and_legacy_metadata_still_round_trips() {
+    let original = metadata("session-a");
+    let mut legacy = serde_json::to_value(&original).unwrap();
+    legacy.as_object_mut().unwrap().remove("lastTurn");
+    let mut loaded: SessionMetadata = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(loaded.last_turn.is_none());
+    assert_eq!(serde_json::to_value(&loaded).unwrap(), legacy);
+    let result = finished_turn("session-a", 0, TurnStatus::Error, 20);
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut loaded,
+        "/workspace",
+        None,
+        &result,
+        20
+    ));
+    let new_payload = serde_json::to_value(&loaded).unwrap();
+    assert_eq!(new_payload["lastTurn"]["turnId"], "turn-0");
+    assert_eq!(new_payload["lastTurn"]["status"], "error");
+    assert_eq!(new_payload["unreadCompletion"], "error");
+    let round_trip: SessionMetadata = serde_json::from_value(new_payload).unwrap();
+    assert_eq!(round_trip.last_turn, loaded.last_turn);
+}
+
+#[test]
+fn headless_completion_is_unread_but_checkpoint_repairs_do_not_revive_receipts() {
+    let mut metadata = metadata("session-a");
+    let active = turn("session-a", 0, 1, 0);
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "/workspace",
+        None,
+        &active,
+        1
+    ));
+    let done = finished_turn("session-a", 0, TurnStatus::Completed, 20);
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "/workspace",
+        Some(&active),
+        &done,
+        20
+    ));
+    assert_eq!(metadata.unread_completion.as_deref(), Some("completed"));
+    metadata.unread_completion = None;
+    let mut repaired = done.clone();
+    repaired.end_time = Some(21);
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "/workspace",
+        Some(&done),
+        &repaired,
+        21
+    ));
+    assert!(metadata.unread_completion.is_none());
+}
+
+#[test]
+fn repairing_an_older_turn_does_not_replace_the_latest_outcome() {
+    let mut metadata = metadata("session-a");
+    let first = finished_turn("session-a", 0, TurnStatus::Error, 20);
+    let second = finished_turn("session-a", 1, TurnStatus::Completed, 30);
+    refresh_session_metadata_from_turns(&mut metadata, "/workspace", &[first.clone(), second], 30);
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "/workspace",
+        Some(&first),
+        &first,
+        40
+    ));
+    assert_eq!(metadata.last_turn.as_ref().unwrap().turn_id, "turn-1");
+    assert_eq!(
+        metadata.last_turn.as_ref().unwrap().status,
+        TurnStatus::Completed
+    );
+}
+
+#[test]
+fn delayed_read_receipts_cannot_clear_a_newer_result_and_legacy_receipts_still_work() {
+    use openbitfun_services_core::session::apply_session_unread_completion;
+    let mut current = metadata("session-a");
+    let first = finished_turn("session-a", 0, TurnStatus::Completed, 20);
+    refresh_session_metadata_from_turns(&mut current, "/workspace", &[first.clone()], 20);
+    let mut stale = current.clone();
+    stale.unread_completion = None;
+    let second = finished_turn("session-a", 1, TurnStatus::Completed, 30);
+    refresh_session_metadata_from_turns(&mut current, "/workspace", &[first, second], 30);
+    apply_session_unread_completion(&mut current, &stale);
+    assert_eq!(current.unread_completion.as_deref(), Some("completed"));
+    let mut legacy = current.clone();
+    legacy.last_turn = None;
+    legacy.unread_completion = None;
+    apply_session_unread_completion(&mut current, &legacy);
+    assert!(current.unread_completion.is_none());
 }
 
 #[test]
@@ -391,6 +509,99 @@ fn saved_turn_refresh_rejects_gaps_and_session_mismatches() {
         &turn("session-1", 0, 1, 0),
         50,
     ));
+}
+
+#[test]
+fn completed_recovery_keeps_its_generation_and_rejects_an_older_receipt() {
+    use openbitfun_services_core::session::apply_session_unread_completion;
+    let mut current = metadata("session-1");
+    let mut completed = finished_turn("session-1", 0, TurnStatus::Completed, 100);
+    completed.recovery_epoch = Some(1);
+    refresh_session_metadata_from_turns(&mut current, "workspace", &[completed.clone()], 100);
+    let mut old = current.clone();
+    old.unread_completion = None;
+
+    completed.recovery_epoch = Some(2);
+    completed.end_time = Some(200);
+    refresh_session_metadata_from_turns(&mut current, "workspace", &[completed], 200);
+    assert_eq!(
+        current.last_turn.as_ref().unwrap().execution_generation,
+        Some(2)
+    );
+    apply_session_unread_completion(&mut current, &old);
+    assert_eq!(current.unread_completion.as_deref(), Some("completed"));
+
+    let mut receipt = current.clone();
+    receipt.unread_completion = None;
+    apply_session_unread_completion(&mut current, &receipt);
+    assert!(current.unread_completion.is_none());
+}
+
+#[test]
+fn recovery_summary_upgrade_and_receipts_preserve_pause_cancellation_boundaries() {
+    use openbitfun_services_core::session::{
+        apply_session_unread_completion, DialogTurnRecoveryData, DialogTurnRecoveryStatus,
+        SessionLastTurn,
+    };
+    let old = serde_json::json!({"turnId": "turn", "turnIndex": 0, "status": "cancelled"});
+    let legacy: SessionLastTurn = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(legacy.recovery_pending, None);
+    assert_eq!(serde_json::to_value(&legacy).unwrap(), old);
+
+    let mut old_summary = metadata("session-1");
+    old_summary.last_turn = Some(legacy);
+    old_summary.unread_completion = Some("interrupted".into());
+    let mut new_client_receipt = old_summary.clone();
+    new_client_receipt
+        .last_turn
+        .as_mut()
+        .unwrap()
+        .recovery_pending = Some(false);
+    new_client_receipt.unread_completion = None;
+    apply_session_unread_completion(&mut old_summary, &new_client_receipt);
+    assert!(
+        old_summary.unread_completion.is_none(),
+        "new receipts must work with legacy summaries"
+    );
+
+    let mut current = metadata("session-1");
+    let mut paused = finished_turn("session-1", 0, TurnStatus::Cancelled, 100);
+    paused.finish_reason = Some("interrupted".into());
+    paused.recovery = Some(DialogTurnRecoveryData {
+        status: DialogTurnRecoveryStatus::Interrupted,
+        execution_generation: 1,
+        resume_count: 0,
+        interrupted_at: Some(100),
+        model_id: None,
+    });
+    refresh_session_metadata_from_turns(&mut current, "workspace", &[paused.clone()], 100);
+    assert_eq!(
+        current.last_turn.as_ref().unwrap().recovery_pending,
+        Some(true)
+    );
+    let mut read_pause = current.clone();
+    read_pause.unread_completion = None;
+    apply_session_unread_completion(&mut current, &read_pause);
+    assert!(current.unread_completion.is_none());
+    assert_eq!(
+        current.last_turn.as_ref().unwrap().recovery_pending,
+        Some(true)
+    );
+
+    paused.finish_reason = Some("cancelled".into());
+    paused.recovery_epoch = Some(1);
+    paused.recovery = None;
+    refresh_session_metadata_from_turns(&mut current, "workspace", &[paused], 200);
+    assert_eq!(
+        current.last_turn.as_ref().unwrap().recovery_pending,
+        Some(false)
+    );
+    apply_session_unread_completion(&mut current, &read_pause);
+    assert_eq!(current.unread_completion.as_deref(), Some("interrupted"));
+    let mut read_stop = current.clone();
+    read_stop.unread_completion = None;
+    apply_session_unread_completion(&mut current, &read_stop);
+    assert!(current.unread_completion.is_none());
 }
 
 #[test]

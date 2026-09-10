@@ -222,8 +222,8 @@ html.theme-switching {
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  background: var(--openbitfun-color-status-warning-content);
-  color: var(--openbitfun-color-action-primary-content);
+  background: var(--openbitfun-color-status-warning-emphasis);
+  color: var(--openbitfun-color-content-on-light);
   font-size: var(--openbitfun-type-body-md-font-size);
   font-weight: var(--openbitfun-type-label-lg-font-weight);
   animation: slideDown var(--motion-fast) var(--easing-standard);

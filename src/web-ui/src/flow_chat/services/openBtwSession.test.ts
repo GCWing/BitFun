@@ -139,7 +139,7 @@ describe('openBtwSessionInAuxPane', () => {
     vi.unstubAllGlobals();
   });
 
-  it('clears the child session unread completion marker after opening the aux pane', () => {
+  it('keeps the child session unread until its result is actually visible', () => {
     openBtwSessionInAuxPane({
       childSessionId: 'review-child',
       parentSessionId: 'parent-session',
@@ -158,14 +158,7 @@ describe('openBtwSessionInAuxPane', () => {
     );
 
     expect(mocks.clearSessionUnreadCompletion).not.toHaveBeenCalled();
-    expect(animationFrameCallbacks).toHaveLength(1);
-
-    animationFrameCallbacks.shift()?.(0);
-    expect(mocks.clearSessionUnreadCompletion).not.toHaveBeenCalled();
-    expect(animationFrameCallbacks).toHaveLength(1);
-
-    animationFrameCallbacks.shift()?.(16);
-    expect(mocks.clearSessionUnreadCompletion).toHaveBeenCalledWith('review-child');
+    expect(animationFrameCallbacks).toHaveLength(0);
   });
 
   it('carries Review-check presentation without changing the child session kind', () => {
@@ -263,7 +256,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
     });
     sessions.set('subagent-child', {
       sessionId: 'subagent-child',
@@ -298,7 +291,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
     });
     sessions.set('subagent-child', {
       sessionId: 'subagent-child',
@@ -327,7 +320,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -343,7 +336,7 @@ describe('openBtwSessionInAuxPane', () => {
     expect(mocks.addExternalSession).toHaveBeenCalledWith(
       'subagent-child',
       expect.any(String),
-      'agentic',
+      'Standard',
       'D:\\workspace\\repo',
       expect.objectContaining({
         parentSessionId: 'parent-session',
@@ -367,7 +360,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -405,7 +398,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-current',
       remoteSshHost: 'host-current',
     });
@@ -436,7 +429,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -467,7 +460,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -537,7 +530,7 @@ describe('openMainSession', () => {
 
     await openMainSession('session-b');
 
-    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
+    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b', expect.any(Function));
     expect(mocks.syncSessionToModernStore).not.toHaveBeenCalledWith('session-b');
     expect(mocks.openScene).not.toHaveBeenCalledWith('session');
   });
@@ -553,7 +546,7 @@ describe('openMainSession', () => {
 
     await openMainSession('session-b');
 
-    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
+    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b', expect.any(Function));
     expect(mocks.syncSessionToModernStore).toHaveBeenCalledWith('session-b');
     expect(mocks.openScene).toHaveBeenCalledWith('session');
   });

@@ -22,7 +22,7 @@ export function resolveChatInputQuickSkillShortcuts<
   const availableSkillsByName = new Map<string, TSkill>();
 
   for (const skill of skills) {
-    if (!isSkillAvailableForUserInvocation(skill)) continue;
+    if (!skill.selectedForRuntime || !isSkillAvailableForUserInvocation(skill)) continue;
 
     const normalizedName = skill.name.trim().toLowerCase();
     if (normalizedName && !availableSkillsByName.has(normalizedName)) {

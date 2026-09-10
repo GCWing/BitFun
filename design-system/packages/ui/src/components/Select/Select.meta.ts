@@ -21,6 +21,8 @@ export const selectMeta = {
   states: ["default", "hover", "focus-visible", "open", "invalid", "disabled"],
   tokens: [
     "color.field.background",
+    "color.field.placeholder",
+    "opacity.iconArtwork",
     "color.field.backgroundHover",
     "color.field.border",
     "color.field.borderHover",

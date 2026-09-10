@@ -9,13 +9,31 @@
     border-radius: var(--openbitfun-radius-pill);
   }
 
+  /* Search owns a quiet focus treatment without changing general-purpose Input. */
+  .root[data-variant="default"] .field:where(:not([data-invalid="true"])) {
+    border-color: var(--openbitfun-color-border-subtle);
+  }
+
+  .root[data-variant="default"] .field:where(:not([data-invalid="true"], [data-disabled="true"])):is(:hover, :focus-within) {
+    border-color: var(--openbitfun-color-border-default);
+  }
+
+  .field [data-openbitfun-part="trailing"] {
+    gap: var(--openbitfun-space-1);
+  }
+
   .root .clear {
     /* The clear action is already composited inside Input's field surface. */
     --_icon-button-background: transparent;
     --_icon-button-background-hover: transparent;
     --_icon-button-background-active: transparent;
+    --_icon-button-content: var(--openbitfun-color-field-placeholder);
 
     background: transparent;
+  }
+
+  .root .clear:disabled {
+    --_icon-button-content: var(--openbitfun-color-content-disabled);
   }
 
   .root[data-variant="embedded"] .field,
@@ -28,10 +46,109 @@
     box-shadow: none;
   }
 
+  .root[data-variant="panel"] {
+    flex-direction: column;
+    border-radius: var(--openbitfun-radius-lg);
+    outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    outline-offset: calc(-1 * var(--openbitfun-border-width-default));
+    color: var(--openbitfun-color-content-primary);
+    background: var(--openbitfun-color-surface-raised);
+    box-shadow: var(--openbitfun-shadow-overlay);
+  }
+
+  .root[data-variant="panel"]:focus-within {
+    outline-color: var(--openbitfun-color-border-default);
+  }
+
+  .root[data-variant="panel"]:has(.field[data-invalid="true"]) {
+    outline-color: var(--openbitfun-color-status-danger-border);
+  }
+
+  .root[data-variant="panel"] .field,
+  .root[data-variant="panel"] .field:is(:hover, :focus-within, [data-invalid="true"]) {
+    /* Preserve the input row's geometry when a pill expands into a panel. */
+    border: var(--openbitfun-border-width-default) solid transparent;
+    border-radius: inherit;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .footer {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--openbitfun-space-2);
+    min-inline-size: 0;
+    min-block-size: calc(var(--openbitfun-control-height-sm) + var(--openbitfun-space-1) - var(--openbitfun-border-width-default));
+    padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
+  }
+
+  @supports (backdrop-filter: none) or (-webkit-backdrop-filter: none) {
+    .root[data-variant="panel"] {
+      /* Surface tokens may be opaque; composite the whole panel before blurring. */
+      background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 80%, transparent);
+      -webkit-backdrop-filter: var(--openbitfun-effect-blur-medium);
+      backdrop-filter: var(--openbitfun-effect-blur-medium);
+    }
+  }
+
+  :where(:global([data-contrast="high"])) .root[data-variant="panel"] {
+    background: var(--openbitfun-color-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .root[data-variant="panel"] {
+      background: var(--openbitfun-color-surface-raised);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root[data-variant="default"] .field,
+    .root[data-variant="default"] .field:is(:hover, :focus-within) {
+      border-color: ButtonText;
+    }
+
+    .root[data-variant="default"] .field:focus-within {
+      border-color: Highlight;
+    }
+
+    .root[data-variant="panel"],
+    .root[data-variant="panel"]:has(.field[data-invalid="true"]) {
+      outline-color: ButtonText;
+      background: Canvas;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+
+    .root[data-variant="panel"]:focus-within,
+    .root[data-variant="panel"]:has(.field[data-invalid="true"]):focus-within {
+      outline-color: Highlight;
+    }
+  }
+
   .icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .icon > :where(svg, img),
+  .icon > [data-openbitfun-component="icon"] {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
   }
 
   .shortcut {

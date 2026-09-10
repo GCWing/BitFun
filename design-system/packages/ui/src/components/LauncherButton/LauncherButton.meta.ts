@@ -26,6 +26,6 @@ export const launcherButtonMeta = {
     "control.launcherButton.gap",
     "control.launcherButton.iconSize",
     "control.launcherButton.radius",
-    "type.code.md.fontSize",
+    "type.code.meta.fontSize",
   ],
 } as const satisfies ComponentMeta;

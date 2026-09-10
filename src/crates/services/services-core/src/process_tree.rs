@@ -7,6 +7,8 @@
 
 use std::fmt;
 use std::io;
+#[cfg(windows)]
+use std::sync::{Arc, LazyLock, Mutex, Weak};
 use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
@@ -94,7 +96,7 @@ impl ProcessTreeChild {
         #[cfg(windows)]
         {
             let _ = grace;
-            let had_job = self.platform.job.take().is_some();
+            let had_job = self.platform.job.close();
             if !parent_exited {
                 self.child.wait().await?;
             }
@@ -135,7 +137,7 @@ impl Drop for ProcessTreeChild {
         }
         #[cfg(windows)]
         {
-            self.platform.job.take();
+            self.platform.job.close();
         }
         if !parent_exited {
             let _ = self.child.start_kill();
@@ -200,7 +202,48 @@ fn process_group_is_alive(process_group_id: i32) -> bool {
 
 #[cfg(windows)]
 struct PlatformProcessTree {
-    job: Option<win32job::Job>,
+    job: Arc<ManagedWindowsJob>,
+}
+
+#[cfg(windows)]
+struct ManagedWindowsJob(Mutex<Option<win32job::Job>>);
+
+#[cfg(windows)]
+impl ManagedWindowsJob {
+    fn close(&self) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+            .is_some()
+    }
+}
+
+#[cfg(windows)]
+#[derive(Default)]
+struct ManagedWindowsJobs {
+    shutting_down: bool,
+    jobs: Vec<Weak<ManagedWindowsJob>>,
+}
+
+#[cfg(windows)]
+static MANAGED_WINDOWS_JOBS: LazyLock<Mutex<ManagedWindowsJobs>> =
+    LazyLock::new(|| Mutex::new(ManagedWindowsJobs::default()));
+
+/// Emergency/final cleanup for managed children. Protocol shutdown belongs to
+/// callers and runs first. Host-lifetime Jobs are deliberately not registered.
+pub(crate) fn cleanup_all_process_trees() {
+    #[cfg(windows)]
+    {
+        let mut registry = MANAGED_WINDOWS_JOBS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        registry.shutting_down = true;
+        // Also serialize repeated callers until every registered handle closes.
+        for job in registry.jobs.drain(..).filter_map(|job| job.upgrade()) {
+            job.close();
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -217,6 +260,17 @@ async fn spawn_windows_process_tree(command: &mut Command) -> io::Result<Process
     command.creation_flags(CREATE_SUSPENDED.0 | CREATE_NO_WINDOW);
     let mut child = command.spawn()?;
     let attach_result = (|| {
+        // Serialize registration/resume with final cleanup. Once shutdown has
+        // begun, a newly spawned child remains suspended and is killed below.
+        let mut registry = MANAGED_WINDOWS_JOBS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if registry.shutting_down {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "managed process trees are shutting down",
+            ));
+        }
         let process_id = child
             .id()
             .ok_or_else(|| io::Error::other("spawned process has no process id"))?;
@@ -225,18 +279,24 @@ async fn spawn_windows_process_tree(command: &mut Command) -> io::Result<Process
             .ok_or_else(|| io::Error::other("spawned process has no process handle"))?;
         job.assign_process(process_handle as isize)
             .map_err(job_error)?;
-        resume_primary_thread(process_id)
+        resume_primary_thread(process_id)?;
+        let job = Arc::new(ManagedWindowsJob(Mutex::new(Some(job))));
+        registry.jobs.retain(|job| job.strong_count() > 0);
+        registry.jobs.push(Arc::downgrade(&job));
+        Ok(job)
     })();
 
-    if let Err(error) = attach_result {
-        drop(job);
-        let _ = child.kill().await;
-        return Err(error);
-    }
+    let job = match attach_result {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill().await;
+            return Err(error);
+        }
+    };
 
     Ok(ProcessTreeChild {
         child,
-        platform: PlatformProcessTree { job: Some(job) },
+        platform: PlatformProcessTree { job },
     })
 }
 
@@ -360,7 +420,11 @@ mod tests {
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("\"$OPENBITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture")
+            // Keep the shell as the managed process-group leader. Some shells
+            // replace themselves with their final foreground command, which
+            // would make the fixture a process-group leader and cause setsid()
+            // to fail on macOS before it can publish its PID.
+            .arg("\"$OPENBITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture & wait")
             .env("OPENBITFUN_PROCESS_TREE_TEST_EXE", executable)
             .env("OPENBITFUN_DETACHED_FIXTURE", "1")
             .env("OPENBITFUN_DESCENDANT_PID_FILE", &pid_file)
@@ -409,28 +473,61 @@ mod tests {
 
     #[cfg(windows)]
     fn descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id); while ($true) { Start-Sleep -Seconds 60 }"#;
-        let mut command = Command::new("powershell.exe");
-        command
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(script)
-            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
-        command
+        Command::from(windows_fixture_command(pid_file, "parent"))
     }
 
     #[cfg(windows)]
     fn orphaned_descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id)"#;
-        let mut command = Command::new("powershell.exe");
+        Command::from(windows_fixture_command(pid_file, "orphan-parent"))
+    }
+
+    #[cfg(windows)]
+    fn windows_fixture_command(pid_file: &Path, role: &str) -> std::process::Command {
+        // Reuse the test binary so readiness does not depend on PowerShell
+        // startup, Start-Process behavior, or an external ping executable.
+        let mut command = crate::process_manager::create_command(
+            std::env::current_exe().expect("locate process-tree test executable"),
+        );
         command
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(script)
-            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
+            .args([
+                "--exact",
+                "process_tree::tests::windows_fixture_process",
+                "--nocapture",
+            ])
+            .env("OPENBITFUN_PROCESS_TREE_FIXTURE_ROLE", role)
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit());
         command
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_fixture_process() {
+        let Ok(role) = std::env::var("OPENBITFUN_PROCESS_TREE_FIXTURE_ROLE") else {
+            return;
+        };
+        let pid_file =
+            std::env::var_os("OPENBITFUN_DESCENDANT_PID_FILE").expect("fixture PID file path");
+        match role.as_str() {
+            "parent" | "orphan-parent" => {
+                let _child = windows_fixture_command(Path::new(&pid_file), "leaf")
+                    .spawn()
+                    .expect("spawn fixture descendant");
+                if role == "orphan-parent" {
+                    return;
+                }
+            }
+            "leaf" => {
+                std::fs::write(&pid_file, std::process::id().to_string())
+                    .expect("publish fixture descendant PID");
+            }
+            _ => panic!("unknown process-tree fixture role: {role}"),
+        }
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+        }
     }
 
     #[cfg(unix)]

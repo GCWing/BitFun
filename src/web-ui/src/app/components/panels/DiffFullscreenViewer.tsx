@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Button, Icon, IconButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 ;
@@ -81,7 +81,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
   const fileName = retainedContent.filePath.split(/[/\\]/).pop() || retainedContent.filePath;
 
   const fullscreenContent = (
-    <div
+    <div data-overflow-trigger
       className="diff-fullscreen-overlay"
       data-state={isOpen ? 'open' : 'closed'}
       aria-hidden={!isOpen}
@@ -101,15 +101,15 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
               </svg>
             </div>
             <div className="file-details">
-              <div className="file-name">{fileName}</div>
-              <div className="file-path-full">{retainedContent.filePath}</div>
+              <div className="file-name"><OverflowText>{fileName}</OverflowText></div>
+              <div className="file-path-full"><OverflowText>{retainedContent.filePath}</OverflowText></div>
             </div>
           </div>
 
           <div className="header-actions" data-openbitfun-component="diff-fullscreen-viewer" data-openbitfun-part="actions">
             <Tooltip content={t('diffFullscreen.acceptFileTooltip')}>
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 leadingIcon={<Icon name="check-circle" size="lg" />}
                 onClick={onAcceptFile}
@@ -121,7 +121,7 @@ export const DiffFullscreenViewer: React.FC<DiffFullscreenViewerProps> = ({
             
             <Tooltip content={t('diffFullscreen.rejectFileTooltip')}>
               <Button
-                variant="outline"
+                variant="fill"
                 size="sm"
                 leadingIcon={<Icon name="xmark" size="lg" />}
                 onClick={onRejectFile}

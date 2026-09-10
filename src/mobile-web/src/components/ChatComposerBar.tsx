@@ -12,6 +12,7 @@ interface ChatComposerBarProps {
   containerRef: React.Ref<HTMLDivElement>;
   expanded: boolean;
   imageAnalyzing: boolean;
+  sending: boolean;
   input: string;
   inputRef: React.Ref<HTMLTextAreaElement>;
   modelControls: React.ReactNode;
@@ -34,6 +35,7 @@ export default function ChatComposerBar({
   containerRef,
   expanded,
   imageAnalyzing,
+  sending,
   input,
   inputRef,
   modelControls,
@@ -91,7 +93,7 @@ export default function ChatComposerBar({
                 appearance="plain"
                 aria-label={t('common.submit')}
                 className="chat-page__send-btn"
-                disabled={remoteUnavailable || (!input.trim() && pendingImages.length === 0)}
+                disabled={remoteUnavailable || sending || (!input.trim() && pendingImages.length === 0)}
                 icon={(
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="M10 3L10 17M10 3L5 8M10 3L15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

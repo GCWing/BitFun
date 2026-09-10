@@ -28,13 +28,13 @@ dashmap = "6"
 rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
-subtle = "2"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 
-# The relay stores encrypted blobs and password-derived hashes, not master keys.
+# The relay stores verified account identity, device public keys, and opaque blobs.
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-argon2 = "0.5"
-aes-gcm = "0.10"
 openbitfun-page-function-runtime = { path = "../page-function-runtime" }
 # Two SQLite drivers here is deliberate, not drift. They own disjoint databases:
 #
@@ -53,6 +53,7 @@ rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

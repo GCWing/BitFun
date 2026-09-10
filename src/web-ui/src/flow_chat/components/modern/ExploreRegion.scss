@@ -104,23 +104,6 @@
     box-sizing: border-box;
     // Hide scrollbar track by default; only show when content actually overflows.
     overflow: hidden;
-
-    &::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--openbitfun-color-border-default);
-      border-radius: 2px;
-
-      &:hover {
-        background: var(--openbitfun-color-field-border-hover);
-      }
-    }
   }
 }
 

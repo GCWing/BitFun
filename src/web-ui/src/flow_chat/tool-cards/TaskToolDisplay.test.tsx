@@ -127,7 +127,7 @@ vi.mock('../store/FlowChatStore', () => ({
           workspacePath: 'D:\\workspace\\repo',
           remoteConnectionId: 'remote-1',
           remoteSshHost: 'host-1',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
         }],
         ['deep-review-parent-session', {
           sessionId: 'deep-review-parent-session',

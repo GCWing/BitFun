@@ -4,6 +4,8 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
+import type { UiSessionMetadataField } from '@/infrastructure/api/service-api/SessionAPI';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
@@ -378,9 +380,9 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
           })
         );
 
-        // Mark session as unread if it was interrupted while not active
+        // An interrupted shutdown still needs a visible-result acknowledgement.
         if (sessionId !== state.activeSessionId) {
-          context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
+          context.flowChatStore.markSessionUnreadCompletion(sessionId, 'interrupted', lastTurn.id);
         }
 
         savePromises.push(
@@ -535,6 +537,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
       : undefined,
     finishReason: dialogTurn.finishReason,
     recovery: dialogTurn.recovery,
+    recoveryEpoch: dialogTurn.recovery?.executionGeneration ?? dialogTurn.recoveryEpoch,
     hasFinalResponse: dialogTurn.hasFinalResponse,
     error: dialogTurn.error,
     errorDetail: dialogTurn.errorDetail,
@@ -552,10 +555,13 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
  */
 export async function updateSessionMetadata(
   context: FlowChatContext,
-  sessionId: string
+  sessionId: string,
+  fields?: UiSessionMetadataField[],
 ): Promise<void> {
+  const scope = getActiveSurfaceScope();
   try {
     const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
+    if (!scope.isCurrent()) return;
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
@@ -565,22 +571,25 @@ export async function updateSessionMetadata(
 
     let existingMetadata: any = null;
     try {
-      existingMetadata = await sessionAPI.loadSessionMetadata(
-        sessionId,
-        workspacePath,
-        session.remoteConnectionId,
-        session.remoteSshHost
-      );
+      if (!fields) {
+        existingMetadata = await sessionAPI.loadSessionMetadata(
+          sessionId,
+          workspacePath,
+          session.remoteConnectionId,
+          session.remoteSshHost
+        );
+      }
     } catch {
       // ignore
     }
+    if (!scope.isCurrent()) return;
 
     const metadata = buildSessionMetadata(session, existingMetadata);
 
     await sessionAPI.saveSessionMetadata(
       metadata,
       workspacePath,
-      [
+      fields ?? [
         'sessionName',
         'tags',
         'todos',

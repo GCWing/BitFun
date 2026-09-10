@@ -96,7 +96,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
       {phase === 'review_completed' && remediationItemCount > 0 && (
         <>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             loading={activeAction === 'fix'}
             disabled={isFixDisabled}
@@ -158,7 +158,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             followUpReviewState !== 'available' &&
             followUpReviewState !== 'completed' && (
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               loading={activeAction === 'review' || followUpReviewState === 'launching'}
               disabled={activeAction !== null || followUpReviewState === 'launching'}
@@ -187,7 +187,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
       {hasInterruption && (
         <>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             loading={activeAction === 'resume'}
             disabled={activeAction !== null || isResumeRunning}
@@ -244,7 +244,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           </div>
           {remainingFixIds.length > 0 && (
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={() => void onContinueFix()}
               leadingIcon={<Play size={14} />}
@@ -256,7 +256,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             </Button>
           )}
           <Button
-            variant="outline"
+            variant="fill"
             size="sm"
             onClick={onSkipRemainingFixes}
           >

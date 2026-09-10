@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Icon,
   IconButton,
@@ -59,6 +59,9 @@ import type {
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import SessionTitleConfig from './SessionTitleConfig';
+import DefaultHarnessConfig from './DefaultHarnessConfig';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { isRemoteWorkspace } from '@/shared/types/global-state';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
@@ -118,6 +121,9 @@ type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
 const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
 const DEFAULT_SWARM_MAX_CONCURRENCY = 16;
+// Match the setting.tools.execution integer ranges in the product control registry.
+const SUBAGENT_MAX_CONCURRENCY_LIMIT = 32;
+const SWARM_MAX_CONCURRENCY_LIMIT = 64;
 const SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH = 'app.flow_chat.show_permission_mode_control';
 
 function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
@@ -623,8 +629,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     }
   };
 
-  const handleSwarmMaxConcurrencyChange = async (value: number) => {
-    if (Number.isNaN(value) || value < 1) return;
+  const handleSwarmMaxConcurrencyChange = async (input: number) => {
+    if (!Number.isFinite(input)) return;
+    const value = Math.min(SWARM_MAX_CONCURRENCY_LIMIT, Math.max(1, Math.round(input)));
     const previous = swarmMaxConcurrency;
     setSwarmMaxConcurrency(value);
     setToolExecConfigLoading(true);
@@ -634,14 +641,17 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     } catch (error) {
       log.error('Failed to save swarm_max_concurrency', error);
       setSwarmMaxConcurrency(previous);
-      notificationService.error(tTools('messages.saveFailed'));
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setToolExecConfigLoading(false);
     }
   };
 
-  const handleSubagentMaxConcurrencyChange = async (value: number) => {
-    if (Number.isNaN(value) || value < 1) return;
+  const handleSubagentMaxConcurrencyChange = async (input: number) => {
+    if (!Number.isFinite(input)) return;
+    const value = Math.min(SUBAGENT_MAX_CONCURRENCY_LIMIT, Math.max(1, Math.round(input)));
     const previous = subagentMaxConcurrency;
     setSubagentMaxConcurrency(value);
     setToolExecConfigLoading(true);
@@ -651,7 +661,9 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     } catch (error) {
       log.error('Failed to save subagent_max_concurrency', error);
       setSubagentMaxConcurrency(previous);
-      notificationService.error(tTools('messages.saveFailed'));
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       setToolExecConfigLoading(false);
     }
@@ -936,6 +948,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   const appearanceView = page;
   const showsExecutionSettings = page === 'execution';
 
+  const { workspace } = useCurrentWorkspace();
   const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
   if (loadError) {
     return (
@@ -999,7 +1012,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
             >
               <Button
                 size="md"
-                variant="fill"
+                variant="primary"
                 onClick={() => void handleImportCompanionPet()}
                 disabled={!IS_TAURI_DESKTOP || companionPetImporting}
                 title={t('features.pet.importHint')}
@@ -1048,7 +1061,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                     data-openbitfun-part="petOption"
                     data-openbitfun-state={isSelected ? 'selected' : undefined}
                   >
-                    <button
+                    <button data-overflow-trigger
                       type="button"
                       className="openbitfun-runtime-settings__pet-card-select"
                       data-openbitfun-component="runtime-settings"
@@ -1076,10 +1089,10 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                         data-openbitfun-component="runtime-settings"
                         data-openbitfun-part="petOptionMain"
                       >
-                        <strong>{label}</strong>
-                        <span data-openbitfun-component="runtime-settings" data-openbitfun-part="petGroup">
+                        <strong><OverflowText>{label}</OverflowText></strong>
+                        <OverflowText data-openbitfun-component="runtime-settings" data-openbitfun-part="petGroup">
                           {sourceLabel}
-                        </span>
+                        </OverflowText>
                       </span>
                     </button>
                     {isUserPet && IS_TAURI_DESKTOP && (
@@ -1109,8 +1122,10 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
         {page === 'session-workspace' && settings ? (
           <>
 
-        {/* Flashgrep entry stays hidden while its binaries are not distributed. */}
-        {WORKSPACE_SEARCH_AVAILABLE && (
+        <DefaultHarnessConfig />
+
+        {/* Accelerated search is available for local workspaces only. */}
+        {WORKSPACE_SEARCH_AVAILABLE && !isRemoteWorkspace(workspace) && (
           <ConfigPageSection
             title={t('features.workspaceSearch.title')}
             description={t('features.workspaceSearch.subtitle')}
@@ -1256,7 +1271,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 value={subagentMaxConcurrency}
                 onValueChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
                 min={1}
-                max={100}
+                max={SUBAGENT_MAX_CONCURRENCY_LIMIT}
                 step={1}
                 size="sm"
                 variant="compact"
@@ -1274,7 +1289,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 value={swarmMaxConcurrency}
                 onValueChange={(val) => void handleSwarmMaxConcurrencyChange(val)}
                 min={1}
-                max={100}
+                max={SWARM_MAX_CONCURRENCY_LIMIT}
                 step={1}
                 size="sm"
                 variant="compact"
@@ -1590,7 +1605,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           </div>
           <div className="openbitfun-debug-config__modal-footer" data-openbitfun-component="runtime-settings" data-openbitfun-part="modalFooter">
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={() => setBrowserRestartPrompt(null)}
               disabled={browserControlBusy}
@@ -1598,7 +1613,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
               {t('browserControl.restartModal.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={() => void handleBrowserControlRestart()}
               disabled={browserControlBusy}

@@ -17,7 +17,7 @@ test("SessionIcon preserves the shared catalog geometry and opacity", async () =
   assert.equal(renderedPath, expectedPath);
   assert.match(markup, /fill="currentColor"/);
   assert.doesNotMatch(markup, /black/i);
-  assert.match(markup, /fill-opacity="0.8"/);
+  assert.match(markup, /fill-opacity="var\(--openbitfun-opacity-icon-artwork\)"/);
 });
 
 test("SessionIcon accepts size and standard SVG properties", () => {

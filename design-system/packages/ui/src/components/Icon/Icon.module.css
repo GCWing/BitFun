@@ -19,6 +19,11 @@
     background-color: transparent;
   }
 
+  /* Reviewed monochrome paths keep authored opacity outside control slots. */
+  .icon[data-openbitfun-artwork="monochrome"] {
+    opacity: var(--openbitfun-opacity-icon-artwork);
+  }
+
   .icon[data-openbitfun-source="line"] > svg {
     display: block;
     inline-size: 100%;
@@ -62,19 +67,19 @@
   }
 
   .icon[data-openbitfun-tone="info"] {
-    color: var(--openbitfun-color-status-info-content);
+    color: var(--openbitfun-color-status-info-emphasis);
   }
 
   .icon[data-openbitfun-tone="success"] {
-    color: var(--openbitfun-color-status-success-content);
+    color: var(--openbitfun-color-status-success-emphasis);
   }
 
   .icon[data-openbitfun-tone="warning"] {
-    color: var(--openbitfun-color-status-warning-content);
+    color: var(--openbitfun-color-status-warning-emphasis);
   }
 
   .icon[data-openbitfun-tone="danger"] {
-    color: var(--openbitfun-color-status-danger-content);
+    color: var(--openbitfun-color-status-danger-emphasis);
   }
 
   @media (forced-colors: active) {

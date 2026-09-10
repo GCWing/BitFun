@@ -3,11 +3,9 @@
 /**
  * Prevent the retired product identity from returning to production sources.
  *
- * The normal product is OpenBitFun-only. The only legacy exception is the
- * exact legacy data-directory ignore entry for machine-local data retained
- * across upgrades.
- * A future one-time importer may add another deliberately narrow allowlist for
- * its source adapters and fixtures.
+ * The normal product is OpenBitFun-only. Legacy exceptions are restricted to
+ * the exact data-directory ignore entry and the one-time migration documents,
+ * migrator app/service boundary, and fixtures used for in-place upgrades.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -21,6 +19,8 @@ const retiredProductToken = `${'bit'}${'fun'}`;
 const shortPrefix = `${'b'}${'f'}`;
 const productIdentityOwner = 'src/crates/contracts/core-types/src/product_identity.rs';
 const retiredIdentityDataBoundaryFiles = new Set([
+  'OPENBITFUN_LEGACY_DATA_MIGRATION_IMPLEMENTATION_PLAN.md',
+  'OPENBITFUN_LEGACY_DATA_MIGRATION_INVENTORY.md',
   'deploy/openbitfun-host/README.md',
   'deploy/openbitfun-host/migrate-market-data-v1.py',
   'src/apps/relay-server/README.md',
@@ -31,7 +31,14 @@ const retiredIdentityDataBoundaryFiles = new Set([
   'src/apps/mobile/harmonyos/entry/src/main/ets/services/HarmonyUpgradeIdentityContract.ets',
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/profile/backup_config.json',
 ]);
+const retiredIdentityDataBoundaryPrefixes = Object.freeze([
+  'src/apps/data-migrator/',
+  'src/crates/assembly/core/src/legacy_migration/',
+  'src/crates/services/legacy-migration/',
+  'src/crates/services/legacy-migration-adapters/',
+]);
 const noncanonicalIdentityDataBoundaryFiles = new Set([
+  'OPENBITFUN_LEGACY_DATA_MIGRATION_INVENTORY.md',
   'deploy/openbitfun-host/migrate-market-data-v1.py',
 ]);
 
@@ -56,6 +63,7 @@ const identityRules = Object.freeze([
       && location.location === 'content'
       && location.lineText?.trim() === `.${retiredProductToken}/`,
     allowedFiles: retiredIdentityDataBoundaryFiles,
+    allowedFilePrefixes: retiredIdentityDataBoundaryPrefixes,
   }),
   Object.freeze({
     id: 'retired-css-token-prefix',
@@ -226,6 +234,9 @@ function collectMatches(value, location) {
         continue;
       }
       if (rule.allowedFiles?.has(location.file)) {
+        continue;
+      }
+      if (rule.allowedFilePrefixes?.some((prefix) => location.file.startsWith(prefix))) {
         continue;
       }
       if (rule.isViolation && !rule.isViolation(match[0])) {

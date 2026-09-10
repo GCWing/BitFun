@@ -7,13 +7,16 @@
 
 import { forwardRef, useEffect, useRef, useImperativeHandle, useCallback } from 'react';
 import { ContentCanvas, useCanvasStore } from '../../components/panels/content-canvas';
-import { GlobalSearchContent } from '../../global-search/GlobalSearchRoot';
+import { usePanelTabCoordinator } from '../../components/panels/content-canvas/hooks/usePanelTabCoordinator';
+import { TAB_EVENTS } from '../../components/panels/content-canvas/types';
+import { collapseSessionAuxPane, expandSessionAuxPane } from './sessionPanelLayout';
 import {
   switchAgentCanvasWorkspace,
   removeAgentCanvasSnapshot,
 } from '../../components/panels/content-canvas/stores';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { useI18n } from '@/infrastructure/i18n';
 import type { PanelContent as OldPanelContent } from '../../components/panels/base/types';
 import type { PanelContent } from '../../components/panels/content-canvas/types';
 import { createLogger } from '@/shared/utils/logger';
@@ -38,6 +41,7 @@ interface AuxPaneProps {
 
 const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
   ({ workspacePath, isSceneActive = true, terminalResizeSuspended = false }, ref) => {
+    const { t } = useI18n('components');
     const { workspace } = useCurrentWorkspace();
     const workspaceId = workspace?.id;
 
@@ -49,6 +53,16 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
     const closeAllTabs = useCanvasStore(state => state.closeAllTabs);
     const primaryGroup = useCanvasStore(state => state.primaryGroup);
     const secondaryGroup = useCanvasStore(state => state.secondaryGroup);
+    const tertiaryGroup = useCanvasStore(state => state.tertiaryGroup);
+    const canvasWorkspaceKey = useCanvasStore(state => state.workspaceKey);
+    const { expandPanel, collapsePanel } = usePanelTabCoordinator({
+      visibleTabCount: [primaryGroup, secondaryGroup, tertiaryGroup]
+        .reduce((count, group) => count + group.tabs.filter(tab => !tab.isHidden).length, 0),
+      scopeKey: canvasWorkspaceKey,
+      expandEventName: TAB_EVENTS.EXPAND_RIGHT_PANEL,
+      onExpand: expandSessionAuxPane,
+      onCollapse: collapseSessionAuxPane,
+    });
 
     const convertContent = useCallback((oldContent: OldPanelContent): PanelContent => {
       return {
@@ -62,15 +76,15 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
     useImperativeHandle(ref, () => ({
       addTab: (content: OldPanelContent) => {
         addTab(convertContent(content), 'active');
-        window.dispatchEvent(new CustomEvent('expand-right-panel'));
+        expandPanel();
       },
       switchToTab: (tabId: string) => {
         if (primaryGroup.tabs.find(t => t.id === tabId)) {
           switchToTab(tabId, 'primary');
-          window.dispatchEvent(new CustomEvent('expand-right-panel'));
+          expandPanel();
         } else if (secondaryGroup.tabs.find(t => t.id === tabId)) {
           switchToTab(tabId, 'secondary');
-          window.dispatchEvent(new CustomEvent('expand-right-panel'));
+          expandPanel();
         }
       },
       findTabByMetadata: (metadata: Record<string, any>) => {
@@ -96,12 +110,12 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
       primaryGroup.tabs,
       secondaryGroup.tabs,
       convertContent,
+      expandPanel,
     ]);
 
     const prevWorkspaceIdRef = useRef<string | undefined>(undefined);
 
-    useEffect(() => {
-      const next = workspaceId;
+    const syncAgentCanvasWorkspace = useCallback((next: string | undefined) => {
       const prev = prevWorkspaceIdRef.current;
       if (prev === next) return;
 
@@ -111,16 +125,29 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
       });
       switchAgentCanvasWorkspace(prev ?? null, next ?? null);
       prevWorkspaceIdRef.current = next;
-    }, [workspaceId]);
+    }, []);
+
+    useEffect(() => {
+      syncAgentCanvasWorkspace(workspaceId);
+    }, [syncAgentCanvasWorkspace, workspaceId]);
 
     useEffect(() => {
       const removeListener = workspaceManager.addEventListener((event) => {
+        if (
+          event.type === 'workspace:switched'
+          || event.type === 'workspace:active-changed'
+        ) {
+          // WorkspaceManager emits these events synchronously while activation is
+          // still in progress. Swap the canvas before callers can open the target
+          // session's review tab; the context effect above remains a fallback.
+          syncAgentCanvasWorkspace(event.workspace?.id);
+        }
         if (event.type === 'workspace:closed') {
           removeAgentCanvasSnapshot(event.workspaceId);
         }
       });
       return () => removeListener();
-    }, []);
+    }, [syncAgentCanvasWorkspace]);
 
     const handleInteraction = useCallback(async (itemId: string, userInput: string) => {
       log.debug('Panel interaction', { itemId, userInput });
@@ -136,11 +163,21 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
           workspacePath={workspacePath}
           mode="agent"
           isSceneActive={isSceneActive}
+          onReveal={expandPanel}
+          onCollapsePanel={collapsePanel}
           onInteraction={handleInteraction}
           onBeforeClose={handleBeforeClose}
           terminalResizeSuspended={terminalResizeSuspended}
           missionControlEnabled={false}
-          emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}
+          emptyState={
+            <div
+              className="openbitfun-aux-pane__empty-state"
+              data-openbitfun-component="aux-pane"
+              data-openbitfun-part="emptyState"
+            >
+              {t('canvas.noContentOpen')}
+            </div>
+          }
         />
       </div>
     );

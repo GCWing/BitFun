@@ -218,7 +218,6 @@
     color: var(--openbitfun-color-content-muted);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     max-width: 120px;
   }
   
@@ -253,9 +252,6 @@
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
-    &:active {
-      transform: scale(0.985);
-    }
     border-radius: var(--openbitfun-radius-sm);
     
     &:hover {
@@ -321,7 +317,6 @@
     color: var(--openbitfun-color-content-primary);
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
   
   &__override-selector {

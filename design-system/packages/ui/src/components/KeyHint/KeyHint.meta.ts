@@ -11,9 +11,10 @@ export const keyHintMeta = {
   ],
   states: ["default"],
   tokens: [
-    "color.content.muted",
+    "color.keyHint.content",
     "color.keyHint.background",
     "type.micro.fontSize",
+    "type.modifier.leading.none.lineHeight",
     "radius.xs",
   ],
 } as const satisfies ComponentMeta;

@@ -193,7 +193,7 @@ const FeatureModal: React.FC = () => {
             )}
             {!isFirst && (
               <Button
-                variant="outline"
+                variant="fill"
                 size="sm"
                 onClick={() => setPage(currentPage - 1)}
               >
@@ -202,7 +202,7 @@ const FeatureModal: React.FC = () => {
             )}
             {!isLast ? (
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 onClick={() => setPage(currentPage + 1)}
               >
@@ -210,7 +210,7 @@ const FeatureModal: React.FC = () => {
               </Button>
             ) : (
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 onClick={() => triggerClose()}
               >

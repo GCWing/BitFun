@@ -16,15 +16,14 @@ import {
 } from './paletteHelpers';
 
 const CHINA_STYLE_PAPER = '#faf8f0';
+const CHINA_STYLE_CHROME = '#f0ede0';
+const CHINA_STYLE_SURFACE_INSET = '#f5f3e8';
 const CHINA_STYLE_INK = '#1c1c1f';
 const CHINA_STYLE_BUTTON_TEXT = '#3d3d3d';
 const CHINA_STYLE_BLUE = '#2e5e8a';
 const CHINA_STYLE_BLUE_HOVER = '#234a6d';
 const CHINA_STYLE_GREEN = '#7eb09b';
 const CHINA_STYLE_GREEN_HOVER = '#5a9078';
-const CHINA_STYLE_SUCCESS = '#52ad5a';
-const CHINA_STYLE_WARNING = '#f0a020';
-const CHINA_STYLE_ERROR = '#c8102e';
 const CHINA_STYLE_BORDER = '#6a5c46';
 
 const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
@@ -37,17 +36,19 @@ export const openBitFunChinaStylePalette: AppearancePalette = {
   type: 'light',
   description: 'Chinese style appearance - Rice paper and ink, blue and vermilion, warm and elegant',
   author: 'OpenBitFun Team',
-  version: '1.0.0',
+  version: '1.1.0',
 
 
   colors: {
     background: {
+      // Warm structural chrome frames the rice-paper content and white overlays.
       primary: CHINA_STYLE_PAPER,
-      secondary: '#f5f3e8',
-      tertiary: '#f0ede0',
-      elevated: '#f0ede0',
-      workbench: CHINA_STYLE_PAPER,
+      secondary: CHINA_STYLE_PAPER,
+      tertiary: CHINA_STYLE_SURFACE_INSET,
+      elevated: STATIC_WHITE,
+      workbench: CHINA_STYLE_SURFACE_INSET,
       scene: CHINA_STYLE_PAPER,
+      chrome: CHINA_STYLE_CHROME,
     },
 
     text: {
@@ -61,14 +62,7 @@ export const openBitFunChinaStylePalette: AppearancePalette = {
 
     purple: createSecondaryAccentScale({ base: CHINA_STYLE_GREEN, hover: CHINA_STYLE_GREEN_HOVER }),
 
-    semantic: createSemanticColors({
-      success: CHINA_STYLE_SUCCESS,
-      warning: CHINA_STYLE_WARNING,
-      error: CHINA_STYLE_ERROR,
-      info: CHINA_STYLE_BLUE,
-      bgAlpha: 0.08,
-      borderAlpha: 0.25,
-    }),
+    semantic: createSemanticColors('light'),
 
     border: {
       subtle: chinaStyleBorder(0.12),
@@ -86,12 +80,9 @@ export const openBitFunChinaStylePalette: AppearancePalette = {
       strong: chinaStyleBlue(0.18),
     },
 
-    git: createGitColors({
+    git: createGitColors('light', {
       branch: rgbFromHex(CHINA_STYLE_BLUE),
       branchBg: chinaStyleBlue(0.08),
-      changes: rgbFromHex(CHINA_STYLE_WARNING),
-      added: rgbFromHex(CHINA_STYLE_SUCCESS),
-      deleted: rgbFromHex(CHINA_STYLE_ERROR),
     }),
   },
 

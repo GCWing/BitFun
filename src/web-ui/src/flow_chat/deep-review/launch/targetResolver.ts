@@ -1,4 +1,4 @@
-import { gitAPI, workspaceAPI } from '@/infrastructure/api';
+import { gitAPI, systemAPI, workspaceAPI } from '@/infrastructure/api';
 import { isGitRepositoryUntrustedError } from '@/infrastructure/api/errors/TauriCommandError';
 import type {
   GitChangedFile,
@@ -285,6 +285,32 @@ function workspaceFilePath(workspacePath: string, filePath: string): string {
     ? workspacePath.replace(/\\/g, '/')
     : workspacePath;
   return `${rootPath.replace(/\/+$/, '')}/${normalizePath(filePath, workspacePath)}`;
+}
+
+async function findMissingWorkspacePaths(
+  workspacePath: string,
+  paths: string[],
+): Promise<string[]> {
+  const results = await Promise.all([...new Set(paths)].map(async (path) => ({
+    path,
+    exists: await systemAPI.checkPathExists(
+      workspaceFilePath(workspacePath, path),
+    ),
+  })));
+  return results.flatMap(({ path, exists }) => exists ? [] : [path]);
+}
+
+function missingExplicitTarget(
+  target: ReviewTargetClassification,
+): ResolvedDeepReviewTarget {
+  return {
+    target,
+    changeStats: buildUnknownChangeStats(target),
+    targetEvidence: buildUnknownReviewTargetEvidence(
+      target,
+      'explicit_target_path_not_found',
+    ),
+  };
 }
 
 function countTextFileLines(content: string): number {
@@ -604,15 +630,8 @@ export async function resolveSlashCommandReviewTarget(
       };
     }
 
-    if (remoteConnectionId) {
-      return resolveCurrentFileReviewSnapshot(
-        workspacePath,
-        target,
-        remoteConnectionId,
-      );
-    }
-
-    if (!bindTargetToWorkspace(target, workspacePath)) {
+    const workspaceTarget = bindTargetToWorkspace(target, workspacePath);
+    if (!workspaceTarget) {
       return {
         target,
         changeStats: buildUnknownChangeStats(target),
@@ -624,6 +643,14 @@ export async function resolveSlashCommandReviewTarget(
     }
 
     try {
+      if (remoteConnectionId) {
+        return resolveCurrentFileReviewSnapshot(
+          workspacePath,
+          workspaceTarget,
+          remoteConnectionId,
+        );
+      }
+
       const [status, changedFiles] = await Promise.all([
         gitAPI.getStatus(workspacePath, 'review_explicit_scope_snapshot'),
         gitAPI.getChangedFiles(workspacePath, {
@@ -641,18 +668,22 @@ export async function resolveSlashCommandReviewTarget(
       for (const path of collectWorkspaceDiffFilePaths(status)) {
         candidatePaths.add(normalizePath(path, workspacePath).replace(/\/+$/, ''));
       }
-      const requested = explicitFilePaths.map((path) => {
-        const normalized = normalizePath(path, workspacePath);
-        const normalizedPath = normalized.replace(/\/+$/, '');
-        const exactFileExists = candidatePaths.has(normalizedPath);
-        const containsChangedFiles = [...candidatePaths].some((candidate) => (
-          candidate.startsWith(`${normalizedPath}/`)
-        ));
-        return {
-          path: normalizedPath,
-          directory: /[\\/]$/.test(path) || (!exactFileExists && containsChangedFiles),
-        };
-      });
+      const requested = workspaceTarget.files
+        .filter((file) => !file.excluded)
+        .map((file) => {
+          const normalized = normalizePath(file.normalizedPath, workspacePath);
+          const normalizedPath = normalized.replace(/\/+$/, '');
+          const exactFileExists = candidatePaths.has(normalizedPath);
+          const containsChangedFiles = [...candidatePaths].some((candidate) => (
+            candidate.startsWith(`${normalizedPath}/`)
+          ));
+          return {
+            path: normalizedPath,
+            directory:
+              /[\\/]$/.test(file.normalizedPath) ||
+              (!exactFileExists && containsChangedFiles),
+          };
+        });
       const matchesRequestedPath = (path: string): boolean => {
         const normalized = normalizePath(path, workspacePath).replace(/\/+$/, '');
         return requested.some((entry) => (
@@ -681,12 +712,29 @@ export async function resolveSlashCommandReviewTarget(
           represented.add(normalized);
         }
       }
+      const requestedHasScopedChange = (entry: (typeof requested)[number]): boolean =>
+        scopedChanges.some((change) => [change.path, change.oldPath]
+          .filter((path): path is string => Boolean(path))
+          .map((path) => normalizePath(path, workspacePath).replace(/\/+$/, ''))
+          .some((path) => (
+            path === entry.path ||
+            (entry.directory && path.startsWith(`${entry.path}/`))
+          )));
+      const missingPaths = await findMissingWorkspacePaths(
+        workspacePath,
+        requested
+          .filter((entry) => !requestedHasScopedChange(entry))
+          .map((entry) => entry.path),
+      );
+      if (missingPaths.length > 0) {
+        return missingExplicitTarget(workspaceTarget);
+      }
       if (scopedChanges.length === 0) {
         return {
-          target,
-          changeStats: buildUnknownChangeStats(target),
+          target: workspaceTarget,
+          changeStats: buildUnknownChangeStats(workspaceTarget),
           targetEvidence: buildUnknownReviewTargetEvidence(
-            target,
+            workspaceTarget,
             'explicit_file_scope_has_no_workspace_changes',
           ),
         };

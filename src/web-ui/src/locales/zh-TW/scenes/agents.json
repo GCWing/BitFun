@@ -9,7 +9,7 @@
   "loading": "載入中…",
   "page": {
     "title": "智能體",
-    "subtitle": "管理智能體及其執行框架，讓不同任務使用合適的能力組合",
+    "subtitle": "配置四種 Agent Harness、面向任務的智能體與受委派的子智能體",
     "searchPlaceholder": "搜尋 Agent 名稱或描述…",
     "newAgent": "新增 Agent"
   },
@@ -20,25 +20,25 @@
   },
   "harnessZone": {
     "title": "Agent Harness",
-    "subtitle": "決定 Agent 如何組織任務、呼叫工具、協同智能體並整合結果",
+    "subtitle": "定義會話如何執行任務，各自管理工具與協作策略",
     "flowCaption": "同一任務 · 四種策略 · 一個結果",
     "task": "任務",
     "result": "結果",
     "profiles": {
-      "minimal": {
-        "name": "極簡",
+      "Minimal": {
+        "name": "$t(shared:agents.Minimal)",
         "purpose": "精簡流程，快速推進"
       },
-      "balanced": {
-        "name": "標準",
+      "Standard": {
+        "name": "$t(shared:agents.Standard)",
         "purpose": "平衡效率與品質"
       },
-      "ultimate": {
-        "name": "極致",
+      "Ultimate": {
+        "name": "$t(shared:agents.Ultimate)",
         "purpose": "深度拆解與智能協同"
       },
-      "creative": {
-        "name": "創造",
+      "Creative": {
+        "name": "$t(shared:agents.Creative)",
         "purpose": "OpenBitFun 的定製與創造"
       }
     }
@@ -52,26 +52,15 @@
     "user": "用戶",
     "project": "項目",
     "external": "外部",
-    "mode": "可直接呼叫",
-    "subagent": "協作 Agent"
+    "subagent": "子智能體",
+    "agent": "智能體"
   },
   "coreAgentsZone": {
-    "title": "已接入 Agent",
-    "subtitle": "目前已經可以設定的 Runtime Agent；遷移期間仍會顯示舊 Mode 接線",
-    "empty": "暫未檢測到核心智能體",
+    "title": "智能體",
+    "subtitle": "直接承接任務的智能體，例如助理、辦公協作與深度研究",
+    "empty": "暫無可用智能體",
     "roleLabel": "主要應用 · ",
-    "computerUseDisabledBadge": "已在設定中停用",
-    "modes": {
-      "agentic": {
-        "role": "編碼智能體"
-      },
-      "cowork": {
-        "role": "辦公智能體"
-      },
-      "computerUse": {
-        "role": "電腦操作智能體"
-      }
-    }
+    "computerUseDisabledBadge": "已在設定中停用"
   },
   "agentsZone": {
     "title": "智能體",
@@ -93,13 +82,13 @@
       "model": "模型"
     },
     "badges": {
-      "agent": "Agent",
-      "userMode": "用戶 Agent",
-      "projectMode": "項目 Agent",
-      "subagent": "Sub-Agent",
-      "userSubagent": "用戶 Sub-Agent",
-      "projectSubagent": "項目 Sub-Agent",
-      "externalSubagent": "外部 Sub-Agent",
+      "agent": "智能體",
+      "userMode": "使用者智能體",
+      "projectMode": "專案智能體",
+      "subagent": "子智能體",
+      "userSubagent": "用戶子智能體",
+      "projectSubagent": "項目子智能體",
+      "externalSubagent": "外部子智能體",
       "disabled": "已停用"
     },
     "actions": {
@@ -108,17 +97,17 @@
     "meta": {
       "tools": "{{count}} 個工具",
       "skills": "{{count}} 個 Skills",
-      "subagents": "{{count}} 個 Sub-Agent",
+      "subagents": "{{count}} 個子智能體",
       "externalProvider": "外部 · {{provider}}",
       "singleRun": "單次執行 · 不支援追問"
     },
     "modelSelector": {
       "label": "模型",
-      "default": "使用預設 Sub-Agent 模型",
+      "default": "使用預設 子智能體 模型",
       "inherit": "繼承父會話",
       "fast": "快速模型",
       "primary": "主力模型",
-      "updateFailed": "更新 Sub-Agent 模型失敗"
+      "updateFailed": "更新 子智能體 模型失敗"
     }
   },
   "capabilityCategories": {
@@ -159,13 +148,13 @@
     "toolsUnsupported": "所連接的 Peer 主機未提供工具目錄。",
     "toolsFailed": "無法載入工具目錄，請嘗試重新開啟此 Agent。",
     "skills": "Skills",
-    "subagents": "Sub-Agents",
+    "subagents": "子智能體",
     "skillsCancel": "取消編輯",
     "skillsSave": "儲存",
     "skillsEdit": "管理 Skills",
-    "subagentsEdit": "管理 Sub-Agents",
+    "subagentsEdit": "管理 子智能體",
     "subagentsDone": "完成",
-    "noSubagents": "目前沒有可管理的 Sub-Agent",
+    "noSubagents": "目前沒有可管理的 子智能體",
     "enableGroup": "啟用分組",
     "disableGroup": "停用分組",
     "clearGroup": "清空",
@@ -173,7 +162,7 @@
     "cancel": "取消",
     "save": "儲存",
     "skillToggleFailed": "Skill 切換失敗",
-    "subagentToggleFailed": "Sub-Agent 切換失敗",
+    "subagentToggleFailed": "子智能體 切換失敗",
     "sharedProfileLabel": "共享設定",
     "sharedProfileDefaultLabel": "共享編碼設定",
     "sharedProfileDescription": "這裡的改動會同時套用到：{{modes}}。",
@@ -216,33 +205,12 @@
       "builtin": "內置分組",
       "myGroups": "我的分組",
       "otherSkills": "其他 Skill",
-      "selectedCount": "已啟用 {{count}} 個 Skill",
-      "manageGroups": "管理分組",
-      "manageTitle": "管理我的 Skill 分組",
-      "manageSubtitle": "整理可重複使用的個人 Skill 選擇。",
-      "createGroup": "新增分組",
-      "saveGroup": "儲存分組",
-      "editGroup": "編輯分組",
-      "deleteGroup": "刪除分組",
-      "moveUp": "上移",
-      "moveDown": "下移",
-      "groupName": "分組名稱",
-      "groupNamePlaceholder": "例如：日常開發",
-      "groupSkills": "Skill",
-      "groupCount": "{{count}} 個 Skill",
+      "selectedCount": "已選擇 {{count}} 個技能",
       "unavailableCount": "{{count}} 個不可用",
-      "noUserGroups": "還沒有個人 Skill 分組。",
-      "enableGroupSkills": "啟用 {{name}} 中的所有 Skill",
-      "clearGroupSkills": "清空 {{name}} 中的 Skill",
-      "deleteTitle": "刪除 Skill 分組",
-      "deleteMessage": "刪除 \"{{name}}\"？這不會更改任何 Agent 的 Skill 選擇。",
-      "deleteConfirm": "刪除",
-      "saveFailed": "儲存 Skill 分組失敗",
-      "validation": {
-        "nameRequired": "請輸入分組名稱",
-        "nameDuplicate": "已存在同名分組",
-        "skillsRequired": "請至少選擇一個 Skill"
-      }
+      "enableGroupSkills": "選擇 {{name}} 中的所有技能",
+      "clearGroupSkills": "取消選擇 {{name}} 中的技能",
+      "loadFailed": "自訂分組載入失敗，仍可逐項選擇技能。",
+      "retry": "重試"
     },
     "toolGroups": {
       "builtin": "內置分組",
@@ -300,10 +268,10 @@
     "deleteFailed": "刪除失敗：",
     "form": {
       "title": "新增自定義 Agent",
-      "subtitle": "建立自定義 mode 或 sub-agent，分別定義它的提示詞、工具和運行時上下文策略",
+      "subtitle": "建立智能體或子智能體，定義提示詞、工具與執行時上下文策略。",
       "titleEdit": "編輯自定義 Agent",
       "subtitleEdit": "可修改顯示名稱、描述、系統提示詞、工具和運行時上下文策略。",
-      "subtitleEditMode": "可修改顯示名稱、描述、系統提示詞、工具和運行時上下文策略。模型請在 ChatInput 中為該 Agent 選擇。",
+      "subtitleEditMode": "可修改顯示名稱、描述、系統提示詞、工具與執行時上下文策略。模型可在會話輸入框中選擇。",
       "subtitleEditSubagent": "可修改顯示名稱、描述、系統提示詞、工具、模型和運行時上下文策略。",
       "loadingDetail": "載入中…",
       "save": "儲存",
@@ -311,8 +279,8 @@
       "updateFailed": "儲存失敗：",
       "basicInformation": "基本資訊",
       "kind": "類型",
-      "kindAgentTooltip": "建立後可在對話輸入框的模式選擇器中作為獨立模式直接選擇。",
-      "kindSubagentTooltip": "建立後主 Agent 可透過委派它完成子任務；不會作為可直接選擇的模式。",
+      "kindAgentTooltip": "建立後可在會話輸入框的選擇器中選擇該智能體，直接向它分配任務。",
+      "kindSubagentTooltip": "由主智能體委派子任務並接收執行結果。",
       "id": "Agent ID",
       "idPlaceholder": "用於模型識別、設定和路由，建立後不可修改",
       "idRequired": "ID 不能為空",
@@ -320,7 +288,7 @@
       "name": "名稱（選填）",
       "namePlaceholder": "僅用於顯示，留空時使用 Agent ID",
       "level": "級別",
-      "modeUserOnly": "目前版本中，自定義 mode 僅支援用戶級。",
+      "modeUserOnly": "目前版本中，直接承接任務的自訂智能體僅支援使用者層級。",
       "description": "描述",
       "descPlaceholder": "簡要描述該 Agent 的用途",
       "descRequired": "描述不能為空",
@@ -387,17 +355,19 @@
     }
   },
   "agentDescriptions": {
-    "Agentic": "自主執行模式：自動分析需求、規劃任務並執行程式碼修改",
-    "Cowork": "協作模式：與您並肩工作，在關鍵步驟徵求您的確認",
-    "ComputerUse": "電腦使用模式：能夠操作瀏覽器、桌面應用和檔案系統",
-    "DeepResearch": "深度研究智慧體：對複雜主題進行系統性調研和分析",
-    "Explore": "探索智慧體：快速瀏覽程式碼庫，理解專案結構和關鍵檔案",
-    "CodeReview": "程式碼審查智慧體：對程式碼進行品質檢查和改進建議",
-    "DeepReview": "嚴格審核相容模式：僅在歷史會話或命令需要時執行最高強度的審核流程",
-    "GenerateDoc": "檔案生成智慧體：自動生成程式碼檔案和說明",
-    "Init": "初始化智慧體：幫助設定專案結構和初始設定",
-    "ReviewFixer": "審查修復智慧體：根據審查結果自動修復程式碼問題",
-    "Claw": "抓取模式：從外部來源提取和整合資訊",
-    "Ultra": "群體規劃模式：將複雜工作拆成邊界清晰的智慧體任務，協調執行並彙總審查結果"
+    "Cowork": "辦公協作智能體：協助處理辦公與研究任務，在關鍵步驟與您確認。",
+    "ComputerUse": "電腦操作子智能體：受委派操作瀏覽器、桌面應用程式與檔案系統。",
+    "DeepResearch": "深度研究智能體：對複雜主題進行系統性調研和分析",
+    "Explore": "探索子智能體：快速瀏覽程式碼庫，理解專案結構和關鍵檔案",
+    "CodeReview": "程式碼審查子智能體：對程式碼進行品質檢查和改進建議",
+    "DeepReview": "嚴格審查相容子智能體：用於歷史會話或命令中的審查流程。",
+    "GenerateDoc": "檔案生成子智能體：自動生成程式碼檔案和說明",
+    "Init": "初始化智能體：幫助設定專案結構和初始設定",
+    "ReviewFixer": "審查修復子智能體：根據審查結果自動修復程式碼問題",
+    "Claw": "個人助理：結合您的偏好與上下文，協助處理日常任務。",
+    "Standard": "透過規劃、工具與子智能體協作完成一般任務。",
+    "Ultimate": "拆解複雜任務，協調並行子智能體並審查結果。",
+    "Minimal": "使用精簡執行流程與固定的小型工具集。",
+    "Creative": "創造與客製 OpenBitFun 體驗及能力。"
   }
 }

@@ -136,10 +136,10 @@ export function InputDialog({
         ) : null}
       </DialogBody>
       <DialogFooter data-openbitfun-component="input-dialog" data-openbitfun-part="actions">
-        <Button onClick={onClose} size="sm" variant="outline">
+        <Button onClick={onClose} size="sm" variant="fill">
           {cancelText ?? t('dialog.confirm.cancel')}
         </Button>
-        <Button onClick={handleConfirm} size="sm" variant="fill">
+        <Button onClick={handleConfirm} size="sm" variant="primary">
           {confirmText ?? t('dialog.confirm.ok')}
         </Button>
       </DialogFooter>

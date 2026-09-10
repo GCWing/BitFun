@@ -34,7 +34,7 @@ interface ColorsPageProps {
 }
 
 const semanticColorTokens = themeTokenCatalog.filter(
-  (token): token is ThemeTokenCatalogEntry => token.category === "color",
+  (token): token is ThemeTokenCatalogEntry => token.type === "color",
 );
 
 const semanticGroupOrder: readonly SemanticColorGroup[] = [
@@ -126,6 +126,7 @@ const referenceNameByValue = new Map(
 );
 
 function getSemanticGroup(token: ThemeTokenCatalogEntry): SemanticColorGroup {
+  if (token.name.startsWith("component.button.")) return "action";
   const segment = token.name.split(".")[1] as SemanticColorGroup | undefined;
   return segment && semanticGroupOrder.includes(segment) ? segment : "accent";
 }

@@ -275,8 +275,10 @@ export function settleDialogTurnToTerminalStatus(
   requestedStatus: TerminalDialogTurnStatus,
   settledAt: number,
   error?: string,
+  options?: { preserveTerminalOutcome?: boolean },
 ): DialogTurn {
-  const alreadyTerminal = isTerminalTurnStatus(dialogTurn.status);
+  const alreadyTerminal = options?.preserveTerminalOutcome !== false
+    && isTerminalTurnStatus(dialogTurn.status);
   const finalTurnStatus = alreadyTerminal ? dialogTurn.status : requestedStatus;
   const normalizedError = error?.trim() || undefined;
   const nextError = finalTurnStatus === 'error'

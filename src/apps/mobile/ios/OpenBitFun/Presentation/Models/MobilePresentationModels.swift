@@ -89,6 +89,7 @@ struct MobileConversationRow: Identifiable, Equatable {
     let typing: Bool
     let pending: Bool
     let showRetry: Bool
+    let error: String?
 }
 
 enum MobileFilePreviewFailureKind: String {

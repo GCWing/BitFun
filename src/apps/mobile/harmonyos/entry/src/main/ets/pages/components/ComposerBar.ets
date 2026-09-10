@@ -28,26 +28,18 @@ export enum ComposerPresentation {
 }
 
 const COMPOSER_ACTION_SIZE: number = MobileDesignGeometry.composerActionSize;
-/** ChatGPT's visible send circle is about 32pt inside a 44pt hit target. */
+/** The optical primary surface is separate from its full touch target. */
 const COMPOSER_PRIMARY_SURFACE_SIZE: number = 32;
 const COMPOSER_SEND_TRANSITION_DURATION: number = 200;
 const COMPOSER_INPUT_HEIGHT: number = MobileDesignGeometry.composerInputHeight;
 const COMPOSER_EXPANDED_INPUT_HEIGHT: number = MobileDesignGeometry.composerExpandedInputHeight;
+const COMPOSER_EXPANDED_INPUT_MAX_HEIGHT: number =
+  MobileDesignTypography.bodyLarge.lineHeight * 4 + 18;
 const COMPOSER_COLLAPSED_HEIGHT: number = MobileDesignGeometry.composerCollapsedHeight;
-// On a narrow phone, the 44vp controls should nearly fill the pill, matching
-// the compact ChatGPT composer instead of inheriting the roomier 56vp shell.
-const COMPOSER_COMPACT_COLLAPSED_HEIGHT: number = 52;
-// ArkUI's circular action is 44vp. The shared 40vp action-row token is too
-// short for this rendered control, so expand the Harmony row and its card by
-// the same delta instead of allowing the button to overflow the bottom edge.
-const COMPOSER_EXPANDED_ACTION_ROW_HEIGHT: number = Math.max(
-  MobileDesignGeometry.composerExpandedActionRowHeight,
-  COMPOSER_ACTION_SIZE
-);
-const COMPOSER_EXPANDED_HEIGHT: number = MobileDesignGeometry.composerExpandedHeight +
-  COMPOSER_EXPANDED_ACTION_ROW_HEIGHT - MobileDesignGeometry.composerExpandedActionRowHeight;
-/** Matches the compact reference's roughly eight-percent side inset. */
-const COMPOSER_COMPACT_HORIZONTAL_GUTTER: number = 32;
+const COMPOSER_COMPACT_COLLAPSED_HEIGHT: number = MobileDesignGeometry.composerCollapsedHeight;
+const COMPOSER_EXPANDED_ACTION_ROW_HEIGHT: number = MobileDesignGeometry.composerExpandedActionRowHeight;
+const COMPOSER_EXPANDED_HEIGHT: number = MobileDesignGeometry.composerExpandedHeight;
+const COMPOSER_COMPACT_HORIZONTAL_GUTTER: number = MobileDesignGeometry.contentGutter;
 const COMPOSER_IMAGE_CARD_SIZE: number = 64;
 const COMPOSER_IMAGE_STRIP_TOP_GAP: number = 6;
 /** Strip height plus its top gap and the parent Column's 2vp row spacing. */
@@ -160,8 +152,12 @@ export struct ComposerBar {
         .clip(true)
       }
       .width('100%')
-      .height(this.isComposerExpanded() ? MobileDesignGeometry.composerExpandedInputRowHeight :
-        this.collapsedComposerHeight())
+      .constraintSize({
+        minHeight: this.isComposerExpanded() ? MobileDesignGeometry.composerExpandedInputRowHeight :
+          this.collapsedComposerHeight(),
+        maxHeight: this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_MAX_HEIGHT :
+          this.collapsedComposerHeight()
+      })
 
       if (this.isComposerExpanded()) {
         Row({ space: 6 }) {
@@ -187,7 +183,7 @@ export struct ComposerBar {
       }
     }
     .width('100%')
-    .height(this.composerHeight())
+    .constraintSize({ minHeight: this.composerHeight() })
     .padding({
       left: 8,
       right: 8,
@@ -223,9 +219,9 @@ export struct ComposerBar {
           .opacity(0.68)
       }
       .width(16)
-      .height(32)
+      .height(COMPOSER_ACTION_SIZE)
     }
-    .height(32)
+    .height(COMPOSER_ACTION_SIZE)
     .constraintSize({ maxWidth: 220 })
     .padding({ left: 4, right: 4 })
     .backgroundColor(TRANSPARENT)
@@ -305,20 +301,16 @@ export struct ComposerBar {
           .fontSize(MobileDesignTypography.bodySmall.size)
           .fontWeight(FontWeight.Medium)
           .fontColor(INK)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(ConversationModelPresentationPolicy.secondaryLabel(model, RemoteI18n.t('chat.model')))
           .fontSize(MobileDesignTypography.labelSmall.size)
           .fontColor(MUTED)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .height(MobileDesignGeometry.composerModelSelectorRowHeight)
-    .padding({ left: 10, right: 10 })
+    .constraintSize({ minHeight: MobileDesignGeometry.composerModelSelectorRowHeight })
+    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
     .backgroundColor(this.isSelectedModel(model) ? SOFT : TRANSPARENT)
     .borderRadius(MobileDesignGeometry.composerModelSelectorRowRadius)
     .onClick(() => {
@@ -354,7 +346,10 @@ export struct ComposerBar {
       TextArea({ placeholder: this.inputPlaceholder(), text: this.inputText })
         .id(this.inputId)
         .layoutWeight(1)
-        .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
+        .constraintSize({
+          minHeight: this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT,
+          maxHeight: this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_MAX_HEIGHT : COMPOSER_INPUT_HEIGHT
+        })
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .lineHeight(MobileDesignTypography.bodyLarge.lineHeight)
         .fontColor(INK)
@@ -391,7 +386,10 @@ export struct ComposerBar {
       }
     }
     .layoutWeight(1)
-    .height(this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT)
+    .constraintSize({
+      minHeight: this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_HEIGHT : COMPOSER_INPUT_HEIGHT,
+      maxHeight: this.isComposerExpanded() ? COMPOSER_EXPANDED_INPUT_MAX_HEIGHT : COMPOSER_INPUT_HEIGHT
+    })
     .alignItems(VerticalAlign.Center)
     .padding({ left: this.isVoiceListening ? 12 : 0, right: 0 })
     .backgroundColor(this.isVoiceListening ? SOFT : TRANSPARENT)
@@ -573,8 +571,8 @@ export struct ComposerBar {
         .objectFit(ImageFit.Cover)
         .borderRadius(14)
       Text('×')
-        .width(32)
-        .height(32)
+        .width(COMPOSER_ACTION_SIZE)
+        .height(COMPOSER_ACTION_SIZE)
         .fontSize(MobileDesignTypography.bodyLarge.size)
         .fontColor(CARD)
         .textAlign(TextAlign.Center)

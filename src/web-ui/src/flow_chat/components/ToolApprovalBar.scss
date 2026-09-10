@@ -6,10 +6,10 @@
   gap: 6px;
   margin: 0 0 var(--openbitfun-control-flow-chat-card-gap);
   padding: 7px var(--openbitfun-control-tool-card-expanded-padding-inline);
-  border: 1px solid var(--openbitfun-color-status-warning-content);
+  border: 1px solid var(--openbitfun-color-status-warning-border);
   border-radius: var(--openbitfun-control-flow-chat-card-radius);
-  background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 7%, var(--openbitfun-color-surface-scene));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+  background: var(--openbitfun-color-status-warning-surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 12%, transparent);
   box-sizing: border-box;
 }
 
@@ -26,7 +26,6 @@
   font-size: var(--openbitfun-type-flow-control-font-size);
   line-height: var(--openbitfun-type-flow-support-line-height);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -60,12 +59,12 @@
 }
 
 .tool-approval-bar__auto-execute-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 18%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 18%, transparent);
   color: var(--openbitfun-color-status-success-content);
 }
 
 .tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 24%, transparent);
+  background: color-mix(in srgb, var(--openbitfun-color-status-success-emphasis) 24%, transparent);
   color: var(--openbitfun-color-status-success-content);
 }
 
@@ -89,16 +88,16 @@
   color: var(--openbitfun-color-content-primary);
   font-size: var(--openbitfun-type-flow-control-font-size);
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-status-warning-content) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-status-warning-emphasis) 12%, transparent);
 }
 
 .tool-approval-bar__instruction-submit {
   flex-shrink: 0;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--openbitfun-color-status-danger-content) 45%, transparent);
+  border: 1px solid var(--openbitfun-color-status-danger-border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+  background: var(--openbitfun-color-status-danger-surface);
   color: var(--openbitfun-color-status-danger-content);
   font-size: var(--openbitfun-type-flow-control-font-size);
   cursor: pointer;
@@ -106,13 +105,7 @@
 }
 
 .tool-approval-bar__instruction-submit:hover {
-  background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 16%, transparent);
-}
-
-.tool-approval-bar__instruction-submit:active:not(:disabled),
-.tool-approval-bar__icon-button:active:not(:disabled),
-.tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  transform: scale(0.97);
+  background: color-mix(in srgb, var(--openbitfun-color-status-danger-emphasis) 16%, transparent);
 }
 
 .tool-approval-bar__instruction-submit:focus-visible,

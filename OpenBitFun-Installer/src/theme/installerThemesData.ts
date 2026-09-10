@@ -63,7 +63,6 @@ type ThemeSeed = {
     secondary?: string;
   };
   accent: string;
-  semantic?: Partial<SemanticColors>;
 };
 
 function createBackground(seed: ThemeSeed['background']): BackgroundColors {
@@ -140,7 +139,6 @@ function createInstallerTheme(seed: ThemeSeed): InstallerTheme {
         success: tone.semantic.success,
         warning: tone.semantic.warning,
         error: tone.semantic.error,
-        ...seed.semantic,
       },
       border: { ...tone.border },
       element: { ...tone.element },
@@ -157,11 +155,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     background: { primary: MIDNIGHT_CARD_BACKGROUND, secondary: DARK_CARD_SURFACE },
     accent: DEFAULT_BLUE,
-    semantic: {
-      success: '#6aab73',
-      warning: '#e0a055',
-      error: '#cc7f7a',
-    },
   }),
   createInstallerTheme({
     id: 'openbitfun-china-style',
@@ -169,11 +162,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'light',
     background: { primary: '#faf8f0', secondary: '#f5f3e8' },
     accent: '#2e5e8a',
-    semantic: {
-      success: '#52ad5a',
-      warning: '#f0a020',
-      error: '#c8102e',
-    },
   }),
   createInstallerTheme({
     id: 'openbitfun-china-night',
@@ -181,11 +169,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     background: { primary: '#1a1814', secondary: DARK_CARD_SURFACE },
     accent: '#73a5cc',
-    semantic: {
-      success: '#6bc072',
-      warning: '#f5b555',
-      error: '#e85555',
-    },
   }),
   createInstallerTheme({
     id: 'openbitfun-cyber',
@@ -193,11 +176,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     background: { primary: '#0e0e10', secondary: DARK_CARD_SURFACE },
     accent: '#00e6ff',
-    semantic: {
-      success: '#00ff9f',
-      warning: '#ffcc00',
-      error: '#ff0055',
-    },
   }),
   createInstallerTheme({
     id: 'openbitfun-tokyo-night',
@@ -205,11 +183,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     background: { primary: '#1a1b26', secondary: DARK_CARD_SURFACE },
     accent: '#7aa2f7',
-    semantic: {
-      success: '#9ece6a',
-      warning: '#e0af68',
-      error: '#f7768e',
-    },
   }),
   createInstallerTheme({
     id: 'openbitfun-slate',
@@ -217,11 +190,6 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     background: { primary: DARK_CARD_SURFACE },
     accent: '#7ab0ee',
-    semantic: {
-      success: '#7eb09b',
-      warning: '#f59e0b',
-      error: '#c9878d',
-    },
   }),
 ];
 

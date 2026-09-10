@@ -1,4 +1,5 @@
 import type { SceneTabId } from '@/app/components/SceneBar/types';
+import { isSessionSceneId } from '@/app/components/SceneBar/types';
 import { useSceneStore } from '@/app/stores/sceneStore';
 
 export type OpenIntent = 'file' | 'terminal';
@@ -38,8 +39,8 @@ export function resolveOpenTarget(intent: OpenIntent, context: OpenTargetContext
   }
 
   // Contextual file opens from the active Session stay in its AuxPane.
-  if (activeTabId === 'session') {
-    return { mode: 'agent', targetSceneId: 'session', sceneJustOpened: false };
+  if (activeTabId && isSessionSceneId(activeTabId)) {
+    return { mode: 'agent', targetSceneId: activeTabId, sceneJustOpened: false };
   }
 
   // Non-agent scenes route to their dedicated host scenes.

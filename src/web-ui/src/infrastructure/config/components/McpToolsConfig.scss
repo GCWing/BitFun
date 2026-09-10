@@ -88,21 +88,37 @@
     border: 1px solid transparent;
 
     &.is-healthy {
-      background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 10%, transparent);
+      background: var(--openbitfun-color-status-success-surface);
       color: var(--openbitfun-color-status-success-content);
-      border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 25%, transparent);
+      border-color: var(--openbitfun-color-status-success-border);
+
+      > svg,
+      > [data-openbitfun-component='icon'] {
+        color: var(--openbitfun-color-status-success-emphasis);
+      }
     }
 
     &.is-pending {
-      background: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 10%, transparent);
+      background: var(--openbitfun-color-status-warning-surface);
       color: var(--openbitfun-color-status-warning-content);
-      border-color: color-mix(in srgb, var(--openbitfun-color-status-warning-content) 25%, transparent);
+      border-color: var(--openbitfun-color-status-warning-border);
+
+      > svg,
+      > [data-openbitfun-component='icon'],
+      > [data-openbitfun-part='processing'] {
+        color: var(--openbitfun-color-status-warning-emphasis);
+      }
     }
 
     &.is-error {
-      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+      background: var(--openbitfun-color-status-danger-surface);
       color: var(--openbitfun-color-status-danger-content);
-      border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 25%, transparent);
+      border-color: var(--openbitfun-color-status-danger-border);
+
+      > svg,
+      > [data-openbitfun-component='icon'] {
+        color: var(--openbitfun-color-status-danger-emphasis);
+      }
     }
 
     &.is-muted {
@@ -130,15 +146,15 @@
   }
 
   &__runtime-badge--ok {
-    background: color-mix(in srgb, var(--openbitfun-color-status-success-content) 10%, transparent);
+    background: var(--openbitfun-color-status-success-surface);
     color: var(--openbitfun-color-status-success-content);
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-success-content) 25%, transparent);
+    border-color: var(--openbitfun-color-status-success-border);
   }
 
   &__runtime-badge--error {
-    background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 10%, transparent);
+    background: var(--openbitfun-color-status-danger-surface);
     color: var(--openbitfun-color-status-danger-content);
-    border-color: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 25%, transparent);
+    border-color: var(--openbitfun-color-status-danger-border);
   }
 
   &__server-details {

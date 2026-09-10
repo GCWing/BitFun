@@ -4,6 +4,8 @@
 //! tested without compiling the full OpenBitFun product runtime.
 
 pub mod bounded_fs;
+#[cfg(feature = "coordination-store")]
+pub mod coordination_persistence;
 #[cfg(feature = "credential-vault")]
 pub mod credential_vault;
 #[cfg(feature = "diagnostics")]
@@ -29,6 +31,8 @@ pub mod local_runtime_ports;
 pub mod managed_runtime;
 #[cfg(feature = "markdown")]
 pub mod markdown;
+#[cfg(feature = "memory-store")]
+pub mod memory_store;
 #[cfg(feature = "permission")]
 pub mod permission_store;
 #[cfg(feature = "local-storage")]
@@ -37,6 +41,13 @@ pub mod persistence;
 pub mod process_manager;
 #[cfg(feature = "process-runtime")]
 pub mod process_tree;
+#[cfg(feature = "session-event-format")]
+pub mod session_projection_format;
+pub mod storage_error;
+#[cfg(feature = "workspace-persistence")]
+pub mod workspace_persistence;
+#[cfg(feature = "workspace-persistence")]
+pub mod workspace_records;
 #[cfg(any(
     feature = "filesystem",
     feature = "local-storage",

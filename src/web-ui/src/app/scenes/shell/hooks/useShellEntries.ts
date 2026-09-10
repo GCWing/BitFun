@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { getActiveSurfaceScope, onSurfaceActivated } from '@/infrastructure/peer-device/deviceSurface';
 import { openShellSessionTarget } from '@/shared/services/openShellSessionTarget';
 import {
   AGENT_SOURCE,
@@ -11,21 +12,25 @@ import {
   type ShellEntry,
 } from './shellEntryTypes';
 import { useManualTerminalProfiles } from './useManualTerminalProfiles';
+import { getTerminalService } from '@/tools/terminal/services/TerminalService';
 import { useTerminalSessions } from './useTerminalSessions';
 
 interface EditingTerminalState {
   entry: ShellEntry;
+  key: string | undefined;
 }
 
 export interface UseShellEntriesReturn {
   entries: ShellEntry[];
+  loading: boolean;
+  error: string | null;
   editModalOpen: boolean;
   editingTerminal: EditingTerminalState | null;
   closeEditModal: () => void;
   refresh: () => Promise<void>;
-  createManualTerminal: (shellType?: string) => Promise<void>;
+  createManualTerminal: (shellType?: string, directory?: string, shellId?: string) => Promise<void>;
   openEntry: (entry: ShellEntry) => Promise<void>;
-  startEntry: (entry: ShellEntry) => Promise<boolean>;
+  startEntry: (entry: ShellEntry) => Promise<string>;
   stopEntry: (entry: ShellEntry) => Promise<void>;
   deleteEntry: (entry: ShellEntry) => Promise<void>;
   openEditModal: (entry: ShellEntry) => void;
@@ -33,23 +38,37 @@ export interface UseShellEntriesReturn {
 }
 
 export function useShellEntries(): UseShellEntriesReturn {
-  const { workspacePath, workspace } = useCurrentWorkspace();
+  const { workspacePath, activeWorkspace: workspace, openedWorkspacesList } = useWorkspaceContext();
+  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
   const isRemote = workspace?.workspaceKind === 'remote';
   const currentConnectionId = workspace?.connectionId ?? null;
+  // Keep legacy local keys; never load controller profiles on another target.
+  const profileKey = scope.surfaceId === 'local' && !isRemote
+    ? workspacePath : scope.key('terminal-profiles', currentConnectionId, workspacePath);
+  const workspaces = useMemo(() => openedWorkspacesList.map(item => ({
+    rootPath: item.rootPath, isRemote: item.workspaceKind === 'remote', connectionId: item.connectionId,
+  })), [openedWorkspacesList]);
 
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editingTerminal, setEditingTerminal] = useState<EditingTerminalState | null>(null);
+  const [editingState, setEditingTerminal] = useState<EditingTerminalState | null>(null);
+  const editingTerminal = editingState?.key === profileKey ? editingState : null;
+  const editModalOpen = editingTerminal !== null;
+  useEffect(() => { setEditingTerminal(null); }, [profileKey, scope]);
 
   const {
     profiles,
+    error: profilesError,
     profilesBySessionId,
     refreshProfiles,
     saveProfile,
     removeProfile,
     getProfileById,
     getProfileBySessionId,
-  } = useManualTerminalProfiles(workspacePath);
+  } = useManualTerminalProfiles(workspacePath ? profileKey : undefined);
+  const savedSessionIds = useMemo(() => new Set(profiles.map(profile => profile.sessionId)), [profiles]);
   const {
+    assertCurrent,
+    loading,
+    error,
     sessions,
     sessionMap,
     refreshSessions,
@@ -63,6 +82,9 @@ export function useShellEntries(): UseShellEntriesReturn {
     workspacePath,
     isRemote,
     currentConnectionId,
+    scope,
+    workspaces,
+    savedSessionIds,
   });
 
   const manualEntries = useMemo<ShellEntry[]>(() => {
@@ -80,10 +102,10 @@ export function useShellEntries(): UseShellEntriesReturn {
   const agentEntries = useMemo<ShellEntry[]>(
     () =>
       sessions
-        .filter((session) => session.source === AGENT_SOURCE)
+        .filter((session) => session.source === AGENT_SOURCE && !profilesBySessionId.has(session.id))
         .map((session) => createSessionEntry(session, 'agent-session'))
         .sort(compareShellEntries),
-    [sessions],
+    [profilesBySessionId, sessions],
   );
 
   const entries = useMemo<ShellEntry[]>(
@@ -93,31 +115,47 @@ export function useShellEntries(): UseShellEntriesReturn {
 
   const refresh = useCallback(async () => {
     await refreshSessions();
+    assertCurrent();
     refreshProfiles();
-  }, [refreshProfiles, refreshSessions]);
+  }, [assertCurrent, refreshProfiles, refreshSessions]);
 
   const openShellSession = useCallback((sessionId: string, sessionName: string) => {
+    assertCurrent();
     openShellSessionTarget({ sessionId, sessionName });
-  }, []);
+  }, [assertCurrent]);
 
-  const startEntry = useCallback(
-    (entry: ShellEntry) => startEntrySession(entry),
-    [startEntrySession],
-  );
+  const startEntry = useCallback(async (entry: ShellEntry) => {
+    const { session, created } = await startEntrySession(entry);
+    assertCurrent();
+    // SSH and older hosts may allocate a new id despite the requested id.
+    // Bind the saved configuration before running a command that can fail.
+    if (entry.profileId && session.id !== entry.sessionId) {
+      saveProfile({
+        id: entry.profileId, sessionId: session.id, name: entry.name,
+        workingDirectory: entry.workingDirectory, startupCommand: entry.startupCommand,
+        shellType: entry.shellType,
+      });
+    }
+    openShellSession(session.id, entry.name);
+    if (created && entry.startupCommand?.trim()) {
+      await getTerminalService().sendCommand(session.id, entry.startupCommand);
+      assertCurrent();
+    }
+    return session.id;
+  }, [assertCurrent, openShellSession, saveProfile, startEntrySession]);
 
   const openEntry = useCallback(async (entry: ShellEntry) => {
-    if (!entry.isRunning) {
-      const started = await startEntry(entry);
-      if (!started) {
-        return;
-      }
+    assertCurrent();
+    if (!entry.isRunning && entry.isPersisted) {
+      setEditingTerminal({ entry, key: profileKey });
+      return;
     }
 
     openShellSession(entry.sessionId, entry.name);
-  }, [openShellSession, startEntry]);
+  }, [assertCurrent, openShellSession, profileKey]);
 
-  const createManualTerminal = useCallback(async (shellType?: string) => {
-    const session = await createManualSession(shellType);
+  const createManualTerminal = useCallback(async (shellType?: string, directory?: string, shellId?: string) => {
+    const session = await createManualSession(shellType, directory, shellId);
     if (session) {
       openShellSession(session.id, session.name);
     }
@@ -128,28 +166,31 @@ export function useShellEntries(): UseShellEntriesReturn {
   }, [stopEntrySession]);
 
   const deleteEntry = useCallback(async (entry: ShellEntry) => {
+    assertCurrent();
     if (entry.profileId) {
       removeProfile(entry.profileId);
+      return;
     }
 
+    if (entry.isRunning) throw new Error('Stop the terminal before removing it');
     if (hasSession(entry.sessionId)) {
       await closeSessionIfPresent(entry.sessionId);
     }
 
     await refreshSessions();
-  }, [closeSessionIfPresent, hasSession, refreshSessions, removeProfile]);
+  }, [assertCurrent, closeSessionIfPresent, hasSession, refreshSessions, removeProfile]);
 
   const openEditModal = useCallback((entry: ShellEntry) => {
-    setEditingTerminal({ entry });
-    setEditModalOpen(true);
-  }, []);
+    assertCurrent();
+    setEditingTerminal({ entry, key: profileKey });
+  }, [assertCurrent, profileKey]);
 
   const closeEditModal = useCallback(() => {
-    setEditModalOpen(false);
     setEditingTerminal(null);
   }, []);
 
   const saveEdit = useCallback((input: SaveShellEntryInput) => {
+    assertCurrent();
     if (!editingTerminal || !workspacePath) {
       return;
     }
@@ -173,10 +214,12 @@ export function useShellEntries(): UseShellEntriesReturn {
     }
 
     closeEditModal();
-  }, [closeEditModal, editingTerminal, getProfileById, getProfileBySessionId, hasSession, renameSessionLocally, saveProfile, workspacePath]);
+  }, [assertCurrent, closeEditModal, editingTerminal, getProfileById, getProfileBySessionId, hasSession, renameSessionLocally, saveProfile, workspacePath]);
 
   return {
     entries,
+    loading,
+    error: error || profilesError,
     editModalOpen,
     editingTerminal,
     closeEditModal,

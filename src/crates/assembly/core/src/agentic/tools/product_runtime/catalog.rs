@@ -588,7 +588,7 @@ mod tests {
         append_selected_plugin_tool_names(
             &mut allowed_tools,
             &selected,
-            &tool_context(Some("Agentic")),
+            &tool_context(Some("Standard")),
         )
         .await;
 
@@ -699,7 +699,7 @@ mod tests {
         let manifest = resolve_product_tool_manifest(
             &allowed_tools,
             &AgentToolPolicyOverrides::default(),
-            &tool_context(Some("agentic")),
+            &tool_context(Some("Standard")),
         )
         .await;
 
@@ -718,7 +718,7 @@ mod tests {
     #[tokio::test]
     async fn runtime_restrictions_hide_tools_from_manifest_and_get_tool_spec() {
         let allowed_tools = vec!["Read".to_string(), "WebFetch".to_string()];
-        let mut context = tool_context(Some("agentic"));
+        let mut context = tool_context(Some("Standard"));
         context
             .runtime_tool_restrictions
             .denied_tool_names
@@ -765,7 +765,7 @@ mod tests {
         let manifest = resolve_product_resolved_tool_manifest(
             &allowed_tools,
             &AgentToolPolicyOverrides::default(),
-            &tool_context(Some("agentic")),
+            &tool_context(Some("Standard")),
         )
         .await;
 
@@ -813,7 +813,7 @@ mod tests {
                 .expect("CallDeferredTool gateway"),
             Arc::new(DeferredMcpCatalogTool) as Arc<dyn Tool>,
         ];
-        let context = tool_context(Some("agentic"));
+        let context = tool_context(Some("Standard"));
         let manifest = openbitfun_agent_tools::resolve_contextual_tool_manifest(
             &tool_snapshot,
             &["mcp__github__search_repos".to_string()],
@@ -888,7 +888,7 @@ mod tests {
             CALL_DEFERRED_TOOL_NAME.to_string(),
             "mcp__github__search_repos".to_string(),
         ];
-        let mut context = tool_context(Some("agentic"));
+        let mut context = tool_context(Some("Standard"));
         context.custom_data.insert(
             DEFERRED_TOOL_LOADING_CONTEXT_KEY.to_string(),
             Value::String("false".to_string()),
@@ -949,7 +949,7 @@ mod tests {
         let visible = resolve_product_resolved_visible_tools(
             &["Read".to_string(), "WebFetch".to_string()],
             &AgentToolPolicyOverrides::default(),
-            &tool_context(Some("agentic")),
+            &tool_context(Some("Standard")),
         )
         .await;
 
@@ -1001,7 +1001,7 @@ mod tests {
     async fn product_get_tool_spec_returns_assistant_hint_for_direct_webfetch_in_agentic_mode() {
         let results = resolve_product_get_tool_spec_results(
             &json!({ "tool_name": "WebFetch" }),
-            &tool_context(Some("agentic")),
+            &tool_context(Some("Standard")),
             "GetToolSpec",
         )
         .await
@@ -1032,12 +1032,12 @@ mod tests {
     #[tokio::test]
     async fn product_agentic_manifest_keeps_canvas_tools_opt_in() {
         let policy = crate::agentic::agents::get_agent_registry()
-            .get_agent_tool_policy("agentic", None)
+            .get_agent_tool_policy("Standard", None)
             .await;
         let manifest = resolve_product_resolved_tool_manifest(
             &policy.allowed_tools,
             &policy.exposure_overrides,
-            &tool_context(Some("agentic")),
+            &tool_context(Some("Standard")),
         )
         .await;
 

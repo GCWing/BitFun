@@ -620,6 +620,9 @@ export const useModernFlowChatStore = create<ModernFlowChatState>()(
     setActiveSession: (session) => {
       const items = sessionToVirtualItems(session);
       set((state) => {
+        if (state.activeSession?.sessionId !== session?.sessionId) {
+          state.visibleTurnInfo = null;
+        }
         state.activeSession = session;
         state.virtualItems = items;
       });

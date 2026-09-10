@@ -82,11 +82,10 @@
       radial-gradient(circle at top, color-mix(in srgb, var(--openbitfun-color-accent-default) 8%, transparent), transparent 42%),
       var(--openbitfun-color-surface-canvas);
 
-    span {
+    span:not([data-overflow-content]) {
       max-width: min(60vw, 520px);
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
   }
 

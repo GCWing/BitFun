@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback } from 'react';
-import {
+import { OverflowText,
   Icon,
   IconButton,
   NavigationPanel,
@@ -70,7 +70,7 @@ const GitNav: React.FC = () => {
     >
       <NavigationPanelHeader className="openbitfun-git-nav__panel-header">
         <div className="openbitfun-git-scene-nav__header" data-openbitfun-component="git-nav" data-openbitfun-part="header">
-          <span className="openbitfun-git-scene-nav__title" data-openbitfun-component="git-nav" data-openbitfun-part="title">{t('title')}</span>
+          <OverflowText className="openbitfun-git-scene-nav__title" data-openbitfun-component="git-nav" data-openbitfun-part="title">{t('title')}</OverflowText>
         </div>
       </NavigationPanelHeader>
       <NavigationPanelBody>
@@ -79,9 +79,9 @@ const GitNav: React.FC = () => {
             <div className="openbitfun-git-scene-nav__status" data-openbitfun-component="git-nav" data-openbitfun-part="status">
           <div className="openbitfun-git-scene-nav__branch-row">
             <Icon name="git" size="xs" aria-hidden />
-            <span className="openbitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
+            <OverflowText className="openbitfun-git-scene-nav__branch-name" title={currentBranch ?? undefined}>
               {currentBranch ?? t('common.unknown')}
-            </span>
+            </OverflowText>
           </div>
           {(ahead > 0 || behind > 0) && (
             <div className="openbitfun-git-scene-nav__sync-badges">

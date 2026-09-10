@@ -300,12 +300,19 @@ pub(crate) async fn send_stream(
     // self-contained so the standard Responses path stays untouched.
     if super::codex_chatgpt::is_codex_chatgpt_endpoint(&client.config.request_url) {
         return super::codex_chatgpt::send_stream(
-            client, messages, tools, extra_body, max_tries, trace,
+            client,
+            messages,
+            tools,
+            extra_body,
+            max_tries,
+            trace,
+            request_context,
         )
         .await;
     }
 
     let url = client.config.request_url.clone();
+    let request_context = shared::prepare_request_context(client, request_context);
     debug!(
         "Responses config: model={}, request_url={}, max_tries={}",
         client.config.model, client.config.request_url, max_tries
@@ -333,7 +340,14 @@ pub(crate) async fn send_stream(
         max_tries,
         ttft_timeout,
         trace,
-        || common::apply_headers(client, client.client.post(&url)),
+        || {
+            shared::apply_affinity_headers(
+                client,
+                common::apply_headers(client, client.client.post(&url)),
+                &url,
+                request_context.as_ref(),
+            )
+        },
         move |response, tx, tx_raw, remaining_ttft_timeout| {
             handle_responses_stream(
                 response,

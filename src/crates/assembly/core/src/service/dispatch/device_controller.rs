@@ -17,11 +17,12 @@ use super::controller::{
     bind_outbound_record, continue_payload, finish_sync, provisioned_path, record_follow_up_state,
     release_unbound_preparation_baseline, result_bundle_path, same_target_identity,
     target_have_tips, validate_answer_request, validate_append_request, validate_continue_request,
-    validate_device_attachment_budget, validate_query_request, validate_submission_preflight,
-    validate_submit_ack, validate_submit_request, DispatchAnswerRequest, DispatchAppendRequest,
-    DispatchContinueRequest, DispatchJobRequest, DispatchListJobsRequest,
-    DispatchProbeTargetRequest, DispatchQueryJobRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchSyncResultRequest, DISPATCH_PROTOCOL_VERSION,
+    validate_device_attachment_budget, validate_file_query_capability, validate_query_request,
+    validate_submission_preflight, validate_submit_ack, validate_submit_request,
+    DispatchAnswerRequest, DispatchAppendRequest, DispatchContinueRequest, DispatchJobRequest,
+    DispatchListJobsRequest, DispatchProbeTargetRequest, DispatchQueryJobRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest,
+    DISPATCH_PROTOCOL_VERSION,
 };
 use super::preparation::{DispatchPreparationRequest, DispatchPreparationTarget};
 use super::{
@@ -371,10 +372,16 @@ pub async fn query_device_job(
     let DispatchTarget::Device { device_id, .. } = &record.target else {
         unreachable!("load_device_record validates target kind")
     };
+    if request.kind == "readFile" {
+        let protocol = rpc
+            .invoke(device_id, "dispatch_target_probe", json!({}))
+            .await?;
+        validate_file_query_capability(Some(&protocol))?;
+    }
     rpc.invoke(
         device_id,
         "dispatch_target_query",
-        json!({ "jobId": request.job_id, "kind": request.kind }),
+        serde_json::to_value(request)?,
     )
     .await
 }
@@ -940,6 +947,79 @@ mod tests {
         .expect("record");
         store.bind_if_absent(&record).await.expect("bind");
         store
+    }
+
+    struct QueryRpc {
+        supports_files: bool,
+        calls: Mutex<Vec<(String, Value)>>,
+    }
+
+    #[async_trait]
+    impl DeviceDispatchRpc for QueryRpc {
+        async fn invoke(
+            &self,
+            device_id: &str,
+            command: &str,
+            args: Value,
+        ) -> anyhow::Result<Value> {
+            assert_eq!(device_id, "device-a");
+            self.calls.lock().unwrap().push((command.to_owned(), args));
+            Ok(if command == "dispatch_target_probe" {
+                json!({"capabilities": if self.supports_files { vec!["query_file_content"] } else { vec!["session_query"] }})
+            } else {
+                json!({"kind": "readFile", "content": "target content"})
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn file_query_negotiates_with_the_owning_device_and_preserves_old_usage_queries() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = device_store(temp.path()).await;
+        for supports_files in [false, true] {
+            let rpc = QueryRpc {
+                supports_files,
+                calls: Mutex::new(Vec::new()),
+            };
+            let request = DispatchQueryJobRequest {
+                job_id: "job-1".into(),
+                kind: "readFile".into(),
+                file_path: Some("/w/result.txt".into()),
+            };
+            let result = query_device_job(&rpc, &store, request).await;
+            assert_eq!(result.is_ok(), supports_files);
+            let calls = rpc.calls.lock().unwrap();
+            assert_eq!(calls[0].0, "dispatch_target_probe");
+            assert_eq!(calls.len(), if supports_files { 2 } else { 1 });
+            if supports_files {
+                assert_eq!(
+                    calls[1].1,
+                    json!({"jobId": "job-1", "kind": "readFile", "filePath": "/w/result.txt"})
+                );
+            }
+        }
+        let rpc = QueryRpc {
+            supports_files: false,
+            calls: Mutex::new(Vec::new()),
+        };
+        query_device_job(
+            &rpc,
+            &store,
+            DispatchQueryJobRequest {
+                job_id: "job-1".into(),
+                kind: "usageReport".into(),
+                file_path: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            *rpc.calls.lock().unwrap(),
+            vec![(
+                "dispatch_target_query".into(),
+                json!({"jobId": "job-1", "kind": "usageReport"})
+            )]
+        );
     }
 
     #[tokio::test]

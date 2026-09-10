@@ -100,6 +100,7 @@ assertRequiredTokens(systemTokens, [
   "radius.3xl",
   "radius.4xl",
   "motion.duration.fast",
+  "motion.duration.contentSwap",
   "focus.width",
 ]);
 
@@ -155,6 +156,7 @@ const css = [
   "  :where([data-openbitfun-design-system-root]) {\n",
   "    --openbitfun-motion-duration-fast: 0ms;\n",
   "    --openbitfun-motion-duration-normal: 0ms;\n",
+  "    --openbitfun-motion-duration-content-swap: 0ms;\n",
   "    --openbitfun-motion-duration-slow: 0ms;\n",
   "    --openbitfun-motion-duration-loop: 0ms;\n",
   "  }\n",

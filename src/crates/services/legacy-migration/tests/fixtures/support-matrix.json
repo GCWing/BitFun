@@ -1,0 +1,79 @@
+{
+  "matrixVersion": 1,
+  "sourceProduct": "bitfun",
+  "supportedVersions": ">=0.2.0,<1.0.0",
+  "canonicalFixtureVersion": "0.2.19",
+  "sourceRetentionPolicy": "never_delete_automatically",
+  "domains": [
+    {
+      "id": "settings_and_credentials",
+      "owner": "configuration and credential store owners",
+      "atomicSubdomains": ["settings", "credentials"],
+      "requiredInputs": ["user-root/config/app.json"],
+      "conflictPolicy": "target_explicit_value_wins"
+    },
+    {
+      "id": "agents_skills_and_miniapps",
+      "owner": "Agent, Skill, and MiniApp product-domain owners",
+      "atomicSubdomains": ["skills", "miniapps", "agents"],
+      "requiredInputs": [
+        "user-root/agents",
+        "user-root/skills",
+        "user-root/data/miniapps"
+      ],
+      "conflictPolicy": "preserve_both_or_report"
+    },
+    {
+      "id": "workspaces_sessions_and_tasks",
+      "owner": "workspace, Session persistence, and Agent coordination owners",
+      "atomicSubdomains": ["workspace_sessions", "agent_coordination"],
+      "requiredInputs": [
+        "user-root/data/workspace_data.json",
+        "home/projects",
+        "user-root/data/agent-runtime/coordination.sqlite"
+      ],
+      "requiredReferences": [
+        "session.id -> coordination_sessions.parent_session_id",
+        "agents.child_session_id -> child session.id",
+        "background_tasks.parent_dialog_turn_id -> parent turn.id",
+        "background_tasks.child_dialog_turn_id -> child turn.id"
+      ],
+      "conflictPolicy": "group_blocked_when_reference_closure_fails"
+    },
+    {
+      "id": "memory",
+      "owner": "Memory store owner",
+      "atomicSubdomains": ["structured_memory", "file_memory"],
+      "requiredInputs": [
+        "user-root/data/memories/memories.sqlite",
+        "home/memories"
+      ],
+      "conflictPolicy": "stable_id_then_content_hash"
+    },
+    {
+      "id": "remote_connections_and_devices",
+      "owner": "Remote Connect and Remote SSH owners",
+      "atomicSubdomains": ["remote_connect_devices", "remote_ssh"],
+      "requiredInputs": [
+        "home/device_identity.json",
+        "home/remote_connect_persistence.json",
+        "ssh/ssh_connections.json",
+        "ssh/remote_workspace.json",
+        "ssh/known_hosts"
+      ],
+      "conflictPolicy": "target_identity_wins_and_reauthenticate_when_unportable"
+    }
+  ],
+  "globalExcludes": [
+    "cache",
+    "logs",
+    "temp",
+    "skills/.system",
+    "data/agent-runtime/ownership",
+    "data/agent-runtime/ipc-v*",
+    "**/*.lock",
+    "**/*.pid",
+    "**/*-shm",
+    "**/request-traces"
+  ]
+}

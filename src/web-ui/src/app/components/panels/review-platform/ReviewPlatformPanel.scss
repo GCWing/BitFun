@@ -112,10 +112,9 @@
     color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-meta-font-size);
 
-    span {
+    span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
@@ -165,10 +164,9 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--openbitfun-color-action-quiet-hover) 58%, transparent);
 
-    span,
+    span:not([data-overflow-content]),
     strong {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -455,7 +453,6 @@
   &__timeline-main strong {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -555,7 +552,6 @@
       min-width: 0;
       margin: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--openbitfun-type-body-lg-font-size);
       font-weight: var(--openbitfun-type-label-selected-font-weight);
@@ -668,7 +664,6 @@
 
     strong {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -681,10 +676,9 @@
   &__fact-value--review {
     justify-content: space-between;
 
-    > span {
+    > span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -887,10 +881,9 @@
     gap: 2px;
 
     strong,
-    span {
+    span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -1186,10 +1179,9 @@
     gap: 2px;
 
     strong,
-    span {
+    span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     strong {
@@ -1501,7 +1493,6 @@
   &__thread-anchor {
     display: block;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1584,7 +1575,7 @@
       flex-direction: column;
     }
 
-    &__fact-value--review > span {
+    &__fact-value--review > span:not([data-overflow-content]) {
       white-space: normal;
     }
 

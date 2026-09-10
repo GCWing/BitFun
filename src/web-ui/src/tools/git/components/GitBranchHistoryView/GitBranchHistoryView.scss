@@ -241,7 +241,6 @@
     color: var(--openbitfun-color-content-primary);
     line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -256,7 +255,6 @@
   &__commit-author {
     max-width: 120px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

@@ -47,14 +47,9 @@
       opacity: 0.8;
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    > span {
+    > span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -97,7 +92,6 @@
     strong,
     small {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -156,7 +150,7 @@
     width: 18px;
     padding: 0;
 
-    > span {
+    > span:not([data-overflow-content]) {
       display: none;
     }
   }

@@ -3,7 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
@@ -14,21 +14,22 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
+import { planFileTreeReveal } from '@/tools/file-system/utils/fileTreeReveal';
 
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
-import type { FileSystemNode } from '@/tools/file-system/types';
+import type { FileSystemNode, FileTreeRevealTarget } from '@/tools/file-system/types';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
 import { LoadingState } from '@openbitfun/ui';
 import { InputDialog } from '@/app/components/InputDialog';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
-import { getMotionAwareScrollBehavior } from '@/shared/utils/motionPreference';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
   basenamePath,
   normalizeLocalPathForRename,
@@ -104,6 +105,7 @@ function getSearchBackendBadgeVariant(
 
 interface FilesPanelProps {
   workspacePath?: string;
+  searchStateKey?: string;
   onFileSelect?: (filePath: string, fileName: string) => void;
   onFileDoubleClick?: (filePath: string) => void;
   hideHeader?: boolean;
@@ -116,6 +118,7 @@ interface FilesPanelProps {
 
 const FilesPanel: React.FC<FilesPanelProps> = ({
   workspacePath,
+  searchStateKey,
   onFileSelect,
   onFileDoubleClick,
   hideHeader = false,
@@ -129,6 +132,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   
   const panelRef = useRef<HTMLDivElement>(null);
+  const navigationRequestRef = useRef(0);
+  const [revealTarget, setRevealTarget] = useState<FileTreeRevealTarget>();
+  useEffect(() => {
+    navigationRequestRef.current += 1;
+    setRevealTarget(undefined);
+    return () => { navigationRequestRef.current += 1; };
+  }, [workspacePath, currentWorkspace?.id, currentWorkspace?.connectionId]);
   const lastFocusRefreshAtRef = useRef<number>(0);
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
@@ -156,6 +166,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     clearSearch,
   } = useExplorerSearch({
     workspacePath,
+    stateKey: searchStateKey,
     initialMode: 'content',
     filenameSearchDebounce: 300,
     contentSearchDebounce: 300,
@@ -587,57 +598,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 
     log.debug('Navigating to path', { path: data.path, scrollIntoView: data.scrollIntoView });
 
-    const normalizedTarget = data.path.replace(/\\/g, '/');
-    const normalizedWorkspace = workspacePath.replace(/\\/g, '/');
-
-    let relativePath = normalizedTarget;
-    if (normalizedTarget.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
-      relativePath = normalizedTarget.slice(normalizedWorkspace.length).replace(/^\//, '');
-    }
-
-    const parts = relativePath.split('/').filter(Boolean);
-    let currentPath = normalizedWorkspace;
-    const isWindowsPath = workspacePath.includes('\\');
-
-    const targetPaths = new Set<string>();
-    targetPaths.add(isWindowsPath ? normalizedWorkspace.replace(/\//g, '\\') : normalizedWorkspace);
-
-    let finalExpandPath = '';
-    const pathsToExpand: string[] = [];
-    for (const part of parts) {
-      currentPath = `${currentPath}/${part}`;
-      const expandPath = isWindowsPath ? currentPath.replace(/\//g, '\\') : currentPath;
-      finalExpandPath = expandPath;
-      targetPaths.add(expandPath);
-      pathsToExpand.push(expandPath);
-    }
-
-    expandedFolders.forEach(folderPath => {
-      if (!targetPaths.has(folderPath)) {
-        expandFolder(folderPath, false);
-      }
-    });
-
-    const performScroll = () => {
-      if (!data.scrollIntoView || !finalExpandPath) {
-        return;
-      }
-      const escapedPath = finalExpandPath.replace(/\\/g, '\\\\');
-      const targetElement = document.querySelector(`[data-file-path="${escapedPath}"]`);
-      if (targetElement) {
-        targetElement.scrollIntoView({
-          behavior: getMotionAwareScrollBehavior('smooth'),
-          block: 'center',
-        });
-        targetElement.classList.add('openbitfun-file-explorer__node-content--highlighted');
-        setTimeout(() => {
-          targetElement.classList.remove('openbitfun-file-explorer__node-content--highlighted');
-        }, 2000);
-      }
-    };
+    const plan = planFileTreeReveal(workspacePath, data.path, isRemoteCurrentWorkspace);
+    if (!plan) return;
+    const scope = getActiveSurfaceScope();
+    const request = ++navigationRequestRef.current;
+    const isCurrent = () => scope.isCurrent() && request === navigationRequestRef.current;
 
     void (async () => {
-      for (const expandPath of pathsToExpand) {
+      for (const expandPath of plan.pathsToExpand) {
+        if (!isCurrent()) return;
         try {
           await expandFolderEnsure(expandPath);
         } catch (err) {
@@ -645,9 +614,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           break;
         }
       }
-      setTimeout(performScroll, 100);
+      if (!isCurrent()) return;
+      selectFile(plan.targetPath);
+      if (data.scrollIntoView) setRevealTarget({ path: plan.targetPath, requestId: request });
     })();
-  }, [workspacePath, expandFolder, expandFolderEnsure, expandedFolders]);
+  }, [workspacePath, isRemoteCurrentWorkspace, expandFolderEnsure, selectFile]);
 
   const findNode = useCallback((nodes: FileSystemNode[], path: string): FileSystemNode | null => {
     for (const node of nodes) {
@@ -1038,7 +1009,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [onExplorerToolbarApi]);
 
   return (
-    <div
+    <div data-overflow-trigger
       data-openbitfun-component="files-panel"
       data-openbitfun-part="root"
       ref={panelRef}
@@ -1255,6 +1226,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               key={workspacePath || 'no-workspace'}
               fileTree={fileTree}
               selectedFile={selectedFile}
+              revealTarget={revealTarget}
               expandedFolders={expandedFolders}
               loadingPaths={loadingPaths}
               onNodeExpand={handleNodeExpandLazy}
@@ -1281,12 +1253,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           {Array.from(transfers.entries()).map(([id, tp]) => (
             <div className="openbitfun-files-panel__transfer" data-openbitfun-component="files-panel" data-openbitfun-part="transfer" role="status" key={id}>
               <div className="openbitfun-files-panel__transfer-label">
-                <span className="openbitfun-files-panel__transfer-label-text">
+                <OverflowText className="openbitfun-files-panel__transfer-label-text">
                   {tp.phase === 'download'
                     ? t('transfer.downloading')
                     : t('transfer.uploading')}
                   {tp.label ? ` — ${tp.label}` : ''}
-                </span>
+                </OverflowText>
                 {!tp.indeterminate &&
                 tp.bytesTotal &&
                 tp.bytesTotal > 0 ? (

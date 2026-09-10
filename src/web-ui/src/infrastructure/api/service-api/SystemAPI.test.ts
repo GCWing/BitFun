@@ -111,4 +111,17 @@ describe('SystemAPI', () => {
     await expect(systemAPI.setClipboard('device-code')).rejects.toThrow('Clipboard write failed');
     expect(invokeMock).not.toHaveBeenCalled();
   });
+
+  it('checks path existence on the active host', async () => {
+    invokeMock.mockResolvedValueOnce(true);
+
+    await expect(systemAPI.checkPathExists(
+      '/workspace/src/existing.ts',
+    )).resolves.toBe(true);
+    expect(invokeMock).toHaveBeenCalledWith('check_path_exists', {
+      request: {
+        path: '/workspace/src/existing.ts',
+      },
+    });
+  });
 });

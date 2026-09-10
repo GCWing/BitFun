@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { FilePlus, FolderPlus } from 'lucide-react';
 import { VirtualFileTree } from './VirtualFileTree';
@@ -48,6 +48,7 @@ function buildFileNodeContext(node: FileSystemNode, workspacePath?: string): Fil
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   fileTree,
   selectedFile,
+  revealTarget,
   onFileSelect,
   className = '',
   showFileSize = false,
@@ -121,9 +122,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const renderNodeContent = useCallback((node: FileSystemNode, _level: number) => {
     return (
       <div className="openbitfun-file-explorer__node-wrapper">
-        <span className={`openbitfun-file-explorer__node-name ${node.isCompressed ? 'openbitfun-file-explorer__compressed-path' : ''}`}>
+        <OverflowText className={`openbitfun-file-explorer__node-name ${node.isCompressed ? 'openbitfun-file-explorer__compressed-path' : ''}`}>
           {node.name}
-        </span>
+        </OverflowText>
         
         {showFileSize && !node.isDirectory && node.size && (
           <span className="openbitfun-file-explorer__node-size">
@@ -359,6 +360,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       <VirtualFileTree
         flatNodes={flatNodes}
         selectedFile={selectedFile}
+        revealTarget={revealTarget}
         expandedFolders={expandedFolders}
         onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
         onToggleExpand={toggleExpandedState}

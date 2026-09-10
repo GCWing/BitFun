@@ -121,6 +121,7 @@ import {
 import type { ComponentMeta } from "@openbitfun/ui/registry";
 import previewImage from "../assets/design-system-hero.webp";
 import { IconCompositionPreview } from "../preview/IconCompositionPreview";
+import { RollingTextPreview } from "../preview/RollingTextPreview";
 import { NestedMenuPattern } from "./ReferencePatterns";
 import { useI18n, type MessageKey } from "../i18n";
 import {
@@ -152,7 +153,8 @@ type PageHeaderAlign = "center" | "start";
 type PageHeaderSize = "display" | "lg" | "md" | "sm";
 
 const buttonVariants = ["outline", "fill", "secondary", "primary", "text"] as const;
-const iconButtonVariants = ["quiet", "fill", "primary"] as const;
+const iconButtonVariants = ["quiet", "outline", "fill", "primary"] as const;
+const iconButtonSizes = ["xs", "standard", "sm", "md", "lg"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
@@ -174,7 +176,10 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   chevron: "detail.option.chevron",
   center: "detail.option.center",
   default: "detail.option.default",
+  replacing: "detail.option.replacing",
   disabled: "detail.option.disabled",
+  filled: "detail.option.filled",
+  "read-only": "detail.option.read-only",
   display: "detail.option.display",
   error: "detail.option.error",
   expanded: "detail.option.expanded",
@@ -295,6 +300,27 @@ function NumberInputPreview({ state }: { state: string }) {
   );
 }
 
+function SearchFieldStatePreview({ state }: { state: string }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(state === "default" ? "" : "OpenBitFun");
+  return (
+    <SearchField
+      aria-label={t("components.preview.searchLabel")}
+      className={state === "hover" ? "lab-force-hover" : state === "focus-visible" ? "lab-force-focus" : undefined}
+      clearLabel={t("components.preview.searchClear")}
+      disabled={state === "disabled"}
+      invalid={state === "invalid"}
+      leadingIcon={<Icon name="search" />}
+      onClear={() => setValue("")}
+      onValueChange={setValue}
+      placeholder={t("components.preview.searchPlaceholder")}
+      readOnly={state === "read-only"}
+      shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}
+      value={value}
+    />
+  );
+}
+
 export function ComponentDetailPage({
   colorScheme,
   component,
@@ -307,6 +333,8 @@ export function ComponentDetailPage({
   const { t } = useI18n();
   const stateLabel = (state: string) => optionLabelKeys[state] ? t(optionLabelKeys[state]) : state;
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [iconButtonSize, setIconButtonSize] = useState<(typeof iconButtonSizes)[number]>("xs");
+  const [iconButtonShape, setIconButtonShape] = useState<"square" | "circle">("square");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [iconName, setIconName] = useState<IconName>("search");
   const [numberBadgeValue, setNumberBadgeValue] = useState("18");
@@ -321,14 +349,14 @@ export function ComponentDetailPage({
   const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
-  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("md");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [activityShowDetail, setActivityShowDetail] = useState(false);
   const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
   const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
-  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
-  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("md");
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("md");
+  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
@@ -394,7 +422,7 @@ export function ComponentDetailPage({
         return ["raised", "subtle", "media"] as const;
       case "Input":
       case "SearchField":
-        return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+        return ["default", "filled", "hover", "focus-visible", "read-only", "invalid", "disabled"] as const;
       case "Select":
         return ["default", "hover", "focus-visible", "open", "invalid", "disabled"] as const;
       case "Field":
@@ -437,6 +465,9 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "RollingText") {
+      return 'import { RollingText, TabGroup } from "@openbitfun/ui";\n\n// Keep the identity stable for title edits; change it when replacing the resource.\n<RollingText transitionKey={record.id}>{record.title}</RollingText>\n\n// TabGroup owns the text slot and composes RollingText without nested clipping.\n<TabGroup\n  aria-label="Views"\n  items={[{ value: slotId, label: record.title, labelTransitionKey: record.id }]}\n/>\n';
+    }
     if (component.name === "MobileActionSheet") return `import { MobileActionSheet } from "@openbitfun/ui/mobile";\n\n<MobileActionSheet\n  actions={[\n    { id: "rename", label: "${t("components.preview.modalSave")}" },\n    { id: "delete", label: "${t("components.preview.confirmDelete")}", tone: "danger" },\n  ]}\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onAction={handleAction}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  title="${t("components.preview.session")}"\n/>`;
     if (component.name === "MobileComposer") return `import { MobileComposer } from "@openbitfun/ui/mobile";\n\n<MobileComposer\n  expanded={expanded}\n  leading={<AttachButton />}\n  startActions={<ModelControls />}\n  endActions={<SendButton />}\n>\n  <textarea />\n</MobileComposer>`;
     if (component.name === "MobileChoiceSheet") return `import { MobileChoiceSheet } from "@openbitfun/ui/mobile";\n\n<MobileChoiceSheet\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onOpenChange={() => setOpen(false)}\n  onSelect={setMode}\n  open={open}\n  options={[\n    { label: "${t("components.preview.modeMinimal")}", value: "minimal" },\n    { label: "${t("components.preview.modeStandard")}", value: "standard" },\n    { label: "${t("components.preview.modeUltimate")}", value: "ultimate" },\n  ]}\n  selectedValue={mode}\n  title="${t("components.preview.selectExecutionMode")}"\n/>`;
@@ -514,7 +545,7 @@ export function ComponentDetailPage({
 
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
-      return `import { IconButton } from "@openbitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
+      return `import { IconButton } from "@openbitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"\n  size="${iconButtonSize}"\n  shape="${iconButtonShape}"${stateProps}\n/>`;
     }
     if (component.name === "Field") {
       const labelAction = fieldShowLabelAction
@@ -533,7 +564,9 @@ export function ComponentDetailPage({
         ? " disabled"
         : previewState === "invalid"
           ? " invalid"
-          : "";
+          : previewState === "read-only"
+            ? ' readOnly defaultValue="OpenBitFun"'
+            : previewState === "default" ? "" : ' defaultValue="OpenBitFun"';
       return `import { Icon, Input } from "@openbitfun/ui";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Icon name="eye" />}${stateProps}\n/>`;
     }
     if (component.name === "KeyHint") {
@@ -552,7 +585,7 @@ export function ComponentDetailPage({
       return `import { Icon, Menu, MenuItem, MenuSection, MenuSeparator } from "@openbitfun/ui";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
     if (component.name === "Dialog") {
-      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@openbitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter appearance="floating">\n    <Button onClick={() => setOpen(false)} variant="secondary">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
+      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@openbitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter appearance="floating">\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
     }
     if (component.name === "Sheet") {
       return `import { Button, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Sheet } from "@openbitfun/ui";\n\n<Sheet onOpenChange={() => setOpen(false)} open={open} placement="right" size="lg">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Sheet>`;
@@ -562,12 +595,8 @@ export function ComponentDetailPage({
       return `import { Icon, IconButton, PageHeader } from "@openbitfun/ui";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<Icon name="xmark" />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Icon name="gear" />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
     }
     if (component.name === "SearchField") {
-      const stateProps = previewState === "disabled"
-        ? " disabled"
-        : previewState === "invalid"
-          ? " invalid"
-          : "";
-      return `import { Icon, KeyHint, SearchField } from "@openbitfun/ui";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Icon name="search" />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${stateProps}\n/>`;
+      const searchStateProps = previewState === "disabled" ? " disabled" : previewState === "invalid" ? " invalid" : previewState === "read-only" ? " readOnly" : "";
+      return `import { useState } from "react";\nimport { Icon, KeyHint, SearchField } from "@openbitfun/ui";\n\nfunction Example() {\n  const [query, setQuery] = useState(${JSON.stringify(previewState === "default" ? "" : "OpenBitFun")});\n  return (\n    <SearchField\n      clearLabel="${t("components.preview.searchClear")}"\n      onClear={() => setQuery("")}\n      onValueChange={setQuery}\n      value={query}\n      aria-label="${t("components.preview.searchLabel")}"\n      leadingIcon={<Icon name="search" />}\n      placeholder="${t("components.preview.searchPlaceholder")}"\n      shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${searchStateProps}\n    />\n  );\n}`;
     }
     if (component.name === "Combobox") {
       return `import { Combobox } from "@openbitfun/ui";\n\n<Combobox\n  aria-label="Mode"\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value={mode}\n/>`;
@@ -586,10 +615,10 @@ export function ComponentDetailPage({
     }
     if (component.name === "SegmentedControl") {
       const defaultMode = previewState === "unselected" ? "agent" : "chat";
-      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
+      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  size="md"\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
-      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill emphasis leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
     }
     if (component.name === "Disclosure") {
       const stateProps = previewState === "open" ? " defaultOpen" : previewState === "disabled" ? " disabled" : "";
@@ -628,6 +657,8 @@ export function ComponentDetailPage({
     fieldShowLabelAction,
     flowChatPreview,
     iconButtonVariant,
+    iconButtonSize,
+    iconButtonShape,
     iconName,
     iconSize,
     iconTone,
@@ -786,9 +817,9 @@ export function ComponentDetailPage({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
           <DialogFooter appearance="floating">
-            <Button onClick={closePreview} variant="secondary">
+            <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}
             </Button>
             <Button onClick={closePreview} variant="primary">
@@ -849,7 +880,8 @@ export function ComponentDetailPage({
         disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
         icon={<List aria-hidden="true" />}
         loading={state === "loading" || applyInspectorControls && inspectorLoading}
-        size={size}
+        size={iconButtonSize}
+        shape={iconButtonShape}
         variant={previewVariant}
       />
     );
@@ -1117,6 +1149,7 @@ export function ComponentDetailPage({
     if (component.name === "StatusPill") {
       return (
         <StatusPill
+          emphasis
           leading={<Icon name="unselected" />}
           tone={state as StatusPillTone}
         >
@@ -1316,10 +1349,13 @@ export function ComponentDetailPage({
         <Input
           aria-label={t("components.preview.inputLabel")}
           className={previewClassName}
+          defaultValue={state === "default" ? undefined : "OpenBitFun"}
+          key={state}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           placeholder={t("components.preview.inputPlaceholder")}
-          trailing={<Icon name="eye" size="lg" aria-hidden="true" />}
+          readOnly={state === "read-only"}
+          trailing={<Icon name="eye" />}
         />
       );
     }
@@ -1764,22 +1800,7 @@ export function ComponentDetailPage({
     }
 
     if (component.name === "SearchField") {
-      const previewClassName = state === "hover"
-        ? "lab-force-hover"
-        : state === "focus-visible"
-          ? "lab-force-focus"
-          : undefined;
-      return (
-        <SearchField
-          aria-label={t("components.preview.searchLabel")}
-          className={previewClassName}
-          disabled={state === "disabled"}
-          invalid={state === "invalid"}
-          leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
-          placeholder={t("components.preview.searchPlaceholder")}
-          shortcut={<KeyHint icon={<Icon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>}
-        />
-      );
+      return <SearchFieldStatePreview key={state} state={state} />;
     }
 
     if (component.name === "NavigationPanel") {
@@ -1866,8 +1887,9 @@ export function ComponentDetailPage({
       const defaultMode = state === "unselected" ? "agent" : "chat";
       return (
         <SegmentedControl
+          size="md"
           aria-label={t("components.preview.segmentedLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultMode}
           disabled={state === "disabled"}
           key={state}
@@ -1886,12 +1908,16 @@ export function ComponentDetailPage({
       );
     }
 
+    if (component.name === "RollingText") {
+      return <RollingTextPreview interactive={state === "replacing"} />;
+    }
+
     if (component.name === "TabGroup") {
       const defaultTab = state === "unselected" ? "settings" : "welcome";
       return (
         <TabGroup
           aria-label={t("components.preview.tabGroupLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultTab}
           items={[
             {
@@ -2106,38 +2132,43 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "Button" ? (
-                <div
-                  className="component-preview-matrix"
-                  data-component="button"
-                  data-state-count={states.length}
-                >
-                  <span className="component-preview-matrix__corner" />
-                  {states.map((state, index) => (
-                    <span
-                      className="component-preview-matrix__column-label"
-                      data-last={index === states.length - 1 || undefined}
-                      key={state}
+                (["plain", "subtle"] as const).map((surface) => (
+                  <section className="button-state-surface" data-surface={surface} key={surface}>
+                    <h3>{t(surface === "plain" ? "detail.option.plain" : "detail.option.subtle")}</h3>
+                    <div
+                      className="component-preview-matrix"
+                      data-component="button"
+                      data-state-count={states.length}
                     >
-                      {stateLabel(state)}
-                    </span>
-                  ))}
-                  {buttonVariants.map((matrixVariant) => (
-                    <Fragment key={matrixVariant}>
-                      <span className="component-preview-matrix__row-label">
-                        {stateLabel(matrixVariant)}
-                      </span>
-                      {states.map((state) => (
-                        <div
-                          className="component-preview-matrix__cell"
-                          data-active={matrixVariant === variant && state === previewState || undefined}
-                          key={`${matrixVariant}-${state}`}
+                      <span className="component-preview-matrix__corner" />
+                      {states.map((state, index) => (
+                        <span
+                          className="component-preview-matrix__column-label"
+                          data-last={index === states.length - 1 || undefined}
+                          key={state}
                         >
-                          {renderPreview(state, matrixVariant)}
-                        </div>
+                          {stateLabel(state)}
+                        </span>
                       ))}
-                    </Fragment>
-                  ))}
-                </div>
+                      {buttonVariants.map((matrixVariant) => (
+                        <Fragment key={matrixVariant}>
+                          <span className="component-preview-matrix__row-label">
+                            {stateLabel(matrixVariant)}
+                          </span>
+                          {states.map((state) => (
+                            <div
+                              className="component-preview-matrix__cell"
+                              data-active={matrixVariant === variant && state === previewState || undefined}
+                              key={`${matrixVariant}-${state}`}
+                            >
+                              {renderPreview(state, matrixVariant)}
+                            </div>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </section>
+                ))
               ) : component.name === "Icon" ? (
                 <>
                   <IconCompositionPreview />
@@ -2379,6 +2410,12 @@ export function ComponentDetailPage({
                       value={iconButtonVariant}
                     />
                   )}
+                  {component.name === "IconButton" && (
+                    <>
+                      <InspectorSelect label={t("detail.size")} options={iconButtonSizes} value={iconButtonSize} onChange={(value) => setIconButtonSize(value as (typeof iconButtonSizes)[number])} translateOptions={false} />
+                      <InspectorSelect label="shape" options={["square", "circle"]} value={iconButtonShape} onChange={(value) => setIconButtonShape(value as "square" | "circle")} translateOptions={false} />
+                    </>
+                  )}
                   {component.name === "Field" && (
                     <InspectorSelect
                       label={t("detail.orientation")}
@@ -2472,7 +2509,7 @@ export function ComponentDetailPage({
                       value={scrollAreaOrientation}
                     />
                   )}
-                  {(component.name === "Button" || component.name === "IconButton") && (
+                  {component.name === "Button" && (
                     <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}

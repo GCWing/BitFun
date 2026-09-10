@@ -10,6 +10,7 @@ import {
   resolveTokens,
   tokenNameToCssVariable,
 } from "@openbitfun/token-engine";
+import { resolveStatusColors } from "./resolve-status-colors.mjs";
 
 const packageDirectory = fileURLToPath(new URL("../", import.meta.url));
 const sourceDirectory = path.join(packageDirectory, "src");
@@ -37,7 +38,7 @@ const highContrastDarkTokens = resolveTokens(
   mergeTokenDocuments(reference, dark, highContrastDark),
 );
 
-const PUBLIC_THEME_TOKEN_PREFIXES = ["color.", "effect.", "opacity.", "shadow."];
+const PUBLIC_THEME_TOKEN_PREFIXES = ["color.", "component.button.", "effect.", "opacity.", "shadow."];
 const REFERENCE_COLOR_TOKEN_PATTERN = /^ref\.color\.([a-z][a-z0-9-]*)\.(\d+)$/;
 
 function createReferenceColorArtifacts(document, tokens) {
@@ -90,11 +91,11 @@ function createReferenceColorArtifacts(document, tokens) {
 const referenceColorArtifacts = createReferenceColorArtifacts(reference, referenceTokens);
 
 function selectSemanticTokens(tokens) {
-  return Object.fromEntries(
+  return resolveStatusColors(Object.fromEntries(
     Object.entries(tokens).filter(([name]) =>
       PUBLIC_THEME_TOKEN_PREFIXES.some((prefix) => name.startsWith(prefix)),
     ),
-  );
+  ));
 }
 
 const semanticThemes = {
@@ -140,13 +141,16 @@ const requiredSemanticTokens = [
   "color.identity.globalSearch.newProject",
   "color.identity.globalSearch.openFiles",
   "color.status.info.content",
+  "color.status.info.emphasis",
   "color.status.info.surface",
   "color.status.success.content",
+  "color.status.success.emphasis",
   "color.status.success.surface",
   "color.status.warning.content",
   "color.status.warning.emphasis",
   "color.status.warning.surface",
   "color.status.danger.content",
+  "color.status.danger.emphasis",
   "color.status.danger.surface",
   "effect.blur.base",
   "opacity.disabled",

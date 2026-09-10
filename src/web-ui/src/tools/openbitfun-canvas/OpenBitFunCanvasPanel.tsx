@@ -386,7 +386,7 @@ export const OpenBitFunCanvasPanel: React.FC<OpenBitFunCanvasPanelProps> = ({
       name: data.name,
       stack: data.stack,
     });
-    const mode = session.mode || 'agentic';
+    const mode = session.mode || 'Standard';
     try {
       const { FlowChatManager } = await import('@/flow_chat/services/FlowChatManager');
       await FlowChatManager.getInstance().sendMessage(

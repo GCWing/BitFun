@@ -118,9 +118,56 @@ test('rejects duplicate GitHub release asset names before upload', () => {
   assert.match(result.stderr, /macos-arm64/);
 });
 
+test('Beta Linux CLI and Relay manifests keep signed assets on the versioned repository release', (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-beta-linux-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const version = '1.0.0-beta.3';
+  const tag = `v${version}`;
+  const assets = [];
+  for (const target of ['x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
+    for (const name of [`openbitfun-cli-${version}-${target}.tar.gz`, `openbitfun-relay-server-${target}.tar.gz`]) {
+      for (const suffix of ['', '.sha256', '.sig', '.sha256.sig']) {
+        const filename = path.join(temp, name + suffix);
+        fs.writeFileSync(filename, `fixture ${name}${suffix}`);
+        assets.push(filename);
+      }
+    }
+  }
+  const out = path.join(temp, 'linux-binaries.json');
+  const result = run('scripts/generate-linux-binaries-manifest.mjs', [
+    '--assets-dir', temp, '--version', version, '--tag', tag,
+    '--repo', 'test-owner/OpenBitFun', '--out', out,
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const manifest = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.equal(manifest.version, version);
+  assert.equal(manifest.tag, tag);
+  assert.deepEqual(Object.keys(manifest.platforms).sort(), ['linux-aarch64', 'linux-x86_64']);
+  for (const platform of Object.values(manifest.platforms)) {
+    for (const artifact of [platform.cli, platform.relay]) {
+      assert.equal(artifact.url, `https://github.com/test-owner/OpenBitFun/releases/download/${tag}/${artifact.filename}`);
+      assert.equal(artifact.sha256Url, `${artifact.url}.sha256`);
+      assert.equal(artifact.sigUrl, `${artifact.url}.sig`);
+      assert.equal(artifact.sha256SigUrl, `${artifact.url}.sha256.sig`);
+    }
+  }
+  const staged = path.join(temp, 'staged');
+  const staging = run('scripts/stage-github-release-assets.mjs', ['--out-dir', staged, ...assets, out]);
+  assert.equal(staging.status, 0, staging.stderr);
+  assert.deepEqual(fs.readdirSync(staged).sort(), [...assets, out].map((file) => path.basename(file)).sort());
+  fs.unlinkSync(assets.find((file) => file.endsWith('.tar.gz')));
+  const missing = run('scripts/generate-linux-binaries-manifest.mjs', [
+    '--assets-dir', temp, '--version', version, '--tag', tag,
+    '--repo', 'test-owner/OpenBitFun', '--out', out,
+  ]);
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /Required Linux release asset was not found/);
+});
+
 function run(script, args) {
   return spawnSync(process.execPath, [script, ...args], {
     cwd: root,
     encoding: 'utf8',
+    windowsHide: true,
   });
 }

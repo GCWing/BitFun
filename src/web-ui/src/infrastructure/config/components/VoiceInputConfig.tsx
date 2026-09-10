@@ -475,7 +475,7 @@ const VoiceInputConfig: React.FC = () => {
                     >
                       {status === 'unavailable' ? (
                         <Button
-                          variant="fill"
+                          variant="primary"
                           size="sm"
                           onClick={() => void handleUseLocal()}
                           disabled={voiceInputSaving}
@@ -485,7 +485,7 @@ const VoiceInputConfig: React.FC = () => {
                       ) : null}
                       {status === 'downloading' && selectedModel?.state === 'downloading' ? (
                         <Button
-                          variant="outline"
+                          variant="fill"
                           size="sm"
                           onClick={() => void handleCancelDownload(selectedModel)}
                           loading={busyAction === `cancel:${selectedModel.modelId}`}
@@ -494,7 +494,7 @@ const VoiceInputConfig: React.FC = () => {
                         </Button>
                       ) : null}
                       <Button
-                        variant={status === 'setup' ? 'fill' : 'outline'}
+                        variant={status === 'setup' ? 'primary' : 'outline'}
                         size="sm"
                         onClick={() => setLocalModelsOpen(true)}
                       >

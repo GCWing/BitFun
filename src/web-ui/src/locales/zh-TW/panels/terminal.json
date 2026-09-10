@@ -1,6 +1,7 @@
 {
   "title": "終端",
   "emptyState": "目前沒有開啟的終端",
+  "actions": { "closeView": "關閉終端機檢視", "stopTerminal": "停止終端機" },
   "dialog": {
     "editTerminal": {
       "title": "編輯終端",

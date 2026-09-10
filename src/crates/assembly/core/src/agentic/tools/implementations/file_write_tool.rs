@@ -2,15 +2,7 @@ use super::plan_artifact_diagnostics::{
     diagnose_plan_artifact, is_plan_artifact_path, PlanArtifactIssue,
 };
 use crate::agentic::tools::file_permissions::file_permission_intents_allowing_managed_plan_edits;
-use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_modification_time_ms, file_mutation_timestamp_ms,
-    get_stored_file_read_state, read_current_file_content, read_state_tracking_enabled,
-    update_file_read_state_after_mutation, validate_existing_file_read_before_write,
-    FILE_UNEXPECTEDLY_MODIFIED_ERROR,
-};
-use crate::agentic::tools::file_tool_guidance::{
-    file_tool_guidance_message, is_file_tool_guidance_message,
-};
+use crate::agentic::tools::file_tool_guidance::is_file_tool_guidance_message;
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext,
     ValidationResult,
@@ -66,22 +58,6 @@ impl FileWriteTool {
         Self
     }
 
-    fn format_write_freshness_guidance(logical_path: &str, error: String) -> String {
-        if error == FILE_UNEXPECTEDLY_MODIFIED_ERROR || error.contains("unexpectedly modified") {
-            format!(
-                "The file {} changed since it was last read. Use Read again, then retry Write.",
-                logical_path
-            )
-        } else if error.contains("modified since read") {
-            format!(
-                "The file {} changed after it was last read. Use Read again, then retry Write.",
-                logical_path
-            )
-        } else {
-            error
-        }
-    }
-
     async fn file_exists(
         context: &ToolUseContext,
         resolved: &ToolPathResolution,
@@ -113,65 +89,6 @@ impl FileWriteTool {
         Ok(existing == content.as_bytes())
     }
 
-    async fn existing_file_write_freshness_error(
-        context: &ToolUseContext,
-        resolved: &ToolPathResolution,
-    ) -> Option<String> {
-        match Self::file_exists(context, resolved).await {
-            Ok(false) => return None,
-            Ok(true) => {}
-            Err(error) => return Some(error.to_string()),
-        }
-        if !read_state_tracking_enabled(context) {
-            return None;
-        }
-
-        let current_content = match read_current_file_content(context, resolved).await {
-            Ok(content) => content,
-            Err(error) => return Some(error.to_string()),
-        };
-        let read_state = get_stored_file_read_state(context, resolved);
-        let current_mtime_ms = file_modification_time_ms(context, resolved).await;
-
-        assert_file_not_unexpectedly_modified(
-            read_state.as_ref(),
-            &current_content,
-            current_mtime_ms,
-        )
-        .err()
-        .map(|error| Self::format_write_freshness_guidance(&resolved.logical_path, error))
-    }
-
-    async fn assert_write_freshness_if_exists(
-        context: &ToolUseContext,
-        resolved: &ToolPathResolution,
-    ) -> OpenBitFunResult<()> {
-        if let Some(error) = Self::existing_file_write_freshness_error(context, resolved).await {
-            return Err(OpenBitFunError::tool(file_tool_guidance_message(error)));
-        }
-
-        Ok(())
-    }
-
-    async fn write_guardrail_preflight_error(
-        context: &ToolUseContext,
-        resolved: &ToolPathResolution,
-    ) -> Option<String> {
-        match Self::file_exists(context, resolved).await {
-            Ok(false) => return None,
-            Ok(true) => {}
-            Err(error) => return Some(error.to_string()),
-        }
-
-        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await {
-            return Some(file_tool_guidance_message(message));
-        }
-
-        Self::existing_file_write_freshness_error(context, resolved)
-            .await
-            .map(file_tool_guidance_message)
-    }
-
     pub(crate) async fn preflight_write_error(
         context: &ToolUseContext,
         file_path: &str,
@@ -185,7 +102,10 @@ impl FileWriteTool {
             return Some(err.to_string());
         }
 
-        Self::write_guardrail_preflight_error(context, &resolved).await
+        Self::file_exists(context, &resolved)
+            .await
+            .err()
+            .map(|error| error.to_string())
     }
 
     fn parse_payload(input: &Value) -> Result<ParsedWritePayload<'_>, String> {
@@ -599,8 +519,6 @@ impl Tool for FileWriteTool {
             return Ok(vec![result]);
         }
 
-        Self::assert_write_freshness_if_exists(context, &resolved).await?;
-
         context
             .file_system_for_path(&resolved)?
             .write_file(&resolved.resolved_path, content.as_bytes())
@@ -614,8 +532,6 @@ impl Tool for FileWriteTool {
         let outcome =
             write_file_success_outcome(&resolved.logical_path, file_already_exists, &content);
 
-        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-        update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
         crate::agentic::execution::edit_constraint_guard::record_mutation_applied(
             context,
             "Write",
@@ -798,7 +714,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn write_never_overwrites_an_unreadable_existing_file_without_read_state() {
+    async fn write_never_overwrites_an_unreadable_existing_file() {
         for remote in [false, true] {
             let root = if remote {
                 PathBuf::from("/remote/workspace")
@@ -918,7 +834,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_write_error_allows_existing_file_without_read_state_tracking() {
+    async fn preflight_write_error_allows_existing_file() {
         let root =
             std::env::temp_dir().join(format!("openbitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");

@@ -21,7 +21,7 @@ import {
   ConfigRefreshButton,
 } from './common';
 import './UsageStatisticsConfig.scss';
-import { Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Input, Select, Tooltip, ScrollArea } from '@openbitfun/ui';
 import {
   formatCacheHitRate,
   formatTokenCount,
@@ -282,13 +282,13 @@ const DistributionPanel: React.FC<{
                           style={{ background: DONUT_PALETTE[index % DONUT_PALETTE.length] }}
                         />
                         <span className="openbitfun-usage-stats__entry-copy">
-                          <span className="openbitfun-usage-stats__entry-primary">
+                          <OverflowText className="openbitfun-usage-stats__entry-primary">
                             {display.primary}
-                          </span>
+                          </OverflowText>
                           {display.secondary && (
-                            <span className="openbitfun-usage-stats__entry-secondary">
+                            <OverflowText className="openbitfun-usage-stats__entry-secondary">
                               {display.secondary}
-                            </span>
+                            </OverflowText>
                           )}
                         </span>
                       </span>
@@ -339,13 +339,13 @@ const ModelCacheHitRateList: React.FC<{ entries: UsageStatisticsEntry[] }> = ({ 
                 style={{ background: color }}
               />
               <span className="openbitfun-usage-stats__entry-copy">
-                <span className="openbitfun-usage-stats__entry-primary">
+                <OverflowText className="openbitfun-usage-stats__entry-primary">
                   {display.primary}
-                </span>
+                </OverflowText>
                 {display.secondary && (
-                  <span className="openbitfun-usage-stats__entry-secondary">
+                  <OverflowText className="openbitfun-usage-stats__entry-secondary">
                     {display.secondary}
-                  </span>
+                  </OverflowText>
                 )}
               </span>
             </span>
@@ -966,15 +966,15 @@ const UsageStatisticsConfig: React.FC = () => {
               >
                 {summaryCards.map((card) => (
                   <div className="openbitfun-usage-stats__summary-card" key={card.key}>
-                    <span className="openbitfun-usage-stats__summary-label">{t(card.key)}</span>
+                    <OverflowText className="openbitfun-usage-stats__summary-label">{t(card.key)}</OverflowText>
                     <strong
                       className={[
                         'openbitfun-usage-stats__summary-value',
                         card.highlight && 'openbitfun-usage-stats__summary-value--highlight',
                       ].filter(Boolean).join(' ')}
-                    >
+                    ><OverflowText behavior="marquee">
                       {card.value}
-                    </strong>
+                    </OverflowText></strong>
                   </div>
                 ))}
               </div>

@@ -1,5 +1,5 @@
 /**
- * Full-screen style modal showing download progress for in-app updates.
+ * Download progress and installation confirmation for in-app updates.
  */
 
 import {
@@ -8,9 +8,12 @@ import {
   Dialog,
   DialogBody,
   DialogClose,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogHeading,
   DialogTitle,
+  Icon,
 } from '@openbitfun/ui';
 import React, { useMemo } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
@@ -83,29 +86,29 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
   } else if (installed) {
     body = (
       <>
-        <div data-openbitfun-component="update" data-openbitfun-part="alert">
-          <Alert
-            tone="success"
-            message={t('update.readyVersion', { version: version ?? '' })}
-            showIcon
-            className="openbitfun-update-progress__alert"
-          />
+        <div
+          className="openbitfun-update-progress__ready"
+          data-openbitfun-component="update"
+          data-openbitfun-part="alert"
+          role="status"
+        >
+          <span className="openbitfun-update-progress__status-icon" aria-hidden="true">
+            <Icon name="check-circle" size="md" tone="success" />
+          </span>
+          <div className="openbitfun-update-progress__summary">
+            <p className="openbitfun-update-progress__version">
+              {t('update.readyVersion', { version: version ?? '' })}
+            </p>
+            <div data-openbitfun-component="update" data-openbitfun-part="restartHint">
+              <DialogDescription>{t('update.installWarning')}</DialogDescription>
+            </div>
+          </div>
         </div>
-        <p className="openbitfun-update-progress__restart">{t('update.installWarning')}</p>
-        {errorMessage ? <Alert tone="error" message={errorMessage} showIcon /> : null}
-        <div className="openbitfun-update-progress__actions" data-openbitfun-component="update" data-openbitfun-part="actions">
-          {errorMessage && onDownloadAgain ? (
-            <Button variant="outline" size="md" disabled={installing} onClick={onDownloadAgain}>
-              {t('update.downloadAgain')}
-            </Button>
-          ) : null}
-          <Button variant="outline" size="md" disabled={installing} onClick={onCloseInstalled}>
-            {t('update.restartLater')}
-          </Button>
-          <Button variant="fill" size="md" disabled={installing} loading={installing} onClick={onRestart}>
-            {t(installing ? 'update.installing' : 'update.installAndRestart')}
-          </Button>
-        </div>
+        {errorMessage ? (
+          <div data-openbitfun-component="update" data-openbitfun-part="alert">
+            <Alert tone="error" message={errorMessage} showIcon />
+          </div>
+        ) : null}
       </>
     );
   } else {
@@ -155,16 +158,37 @@ export const UpdateInstallProgressModal: React.FC<UpdateInstallProgressModalProp
         </DialogHeading>
         {!installing && (!!error || !!installed) && <DialogClose />}
       </DialogHeader>
-      <DialogBody inset="none">
-      <div
-        className="openbitfun-update-progress"
-        data-openbitfun-component="update"
-        data-openbitfun-part="progressRoot"
-        data-openbitfun-status={error ? 'error' : installed ? 'installed' : 'downloading'}
-      >
-        {body}
-      </div>
-          </DialogBody>
+      <DialogBody>
+        <div
+          className="openbitfun-update-progress"
+          data-openbitfun-component="update"
+          data-openbitfun-part="progressRoot"
+          data-openbitfun-status={error ? 'error' : installed ? 'installed' : 'downloading'}
+        >
+          {body}
+        </div>
+      </DialogBody>
+      {installed ? (
+        <DialogFooter>
+          <div
+            className="openbitfun-update-progress__actions"
+            data-openbitfun-component="update"
+            data-openbitfun-part="actions"
+          >
+            {errorMessage && onDownloadAgain ? (
+              <Button variant="outline" size="md" disabled={installing} onClick={onDownloadAgain}>
+                {t('update.downloadAgain')}
+              </Button>
+            ) : null}
+            <Button variant="fill" size="md" disabled={installing} onClick={onCloseInstalled}>
+              {t('update.restartLater')}
+            </Button>
+            <Button variant="primary" size="md" disabled={installing} loading={installing} onClick={onRestart}>
+              {t(installing ? 'update.installing' : 'update.installAndRestart')}
+            </Button>
+          </div>
+        </DialogFooter>
+      ) : null}
     </Dialog>
   );
 };

@@ -3,8 +3,11 @@
 //! This crate must stay lightweight: do not add runtime, network, platform, or
 //! product assembly dependencies here.
 
+pub mod agent_identity;
+pub mod agent_identity_wire;
 pub mod ai;
 pub mod errors;
+pub mod installer_config_handoff;
 pub mod model;
 pub mod product_identity;
 pub mod session;

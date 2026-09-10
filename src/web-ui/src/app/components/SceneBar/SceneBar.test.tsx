@@ -4,7 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InteractionMotion } from '@/shared/utils/motionPreference';
-import type { SceneTabId } from './types';
+import type { SceneTab, SceneTabId } from './types';
 import SceneBar from './SceneBar';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,8 +16,9 @@ const sceneHarness = vi.hoisted(() => ({
       { id: 'settings' as const, lastUsed: 2 },
       { id: 'terminal' as const, lastUsed: 3 },
       { id: 'git' as const, lastUsed: 4 },
-    ],
+    ] as SceneTab[],
     activeTabId: 'session' as SceneTabId,
+    pendingTabId: null as SceneTabId | null,
     navigationMotion: 'instant' as InteractionMotion,
     sessionTitle: undefined as string | undefined,
     tabDefs: [
@@ -39,8 +40,8 @@ vi.mock('../../hooks/useSceneManager', () => ({
   }),
 }));
 
-vi.mock('../../hooks/useCurrentSessionTitle', () => ({
-  useCurrentSessionTitle: () => sceneHarness.state.sessionTitle ?? '',
+vi.mock('../../hooks/useSessionTabLabels', () => ({
+  useSessionTabLabels: () => ({ session: sceneHarness.state.sessionTitle ?? '' }),
 }));
 
 vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
@@ -73,8 +74,10 @@ describe('SceneBar overflow navigation', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     sceneHarness.state.activeTabId = 'session';
+    sceneHarness.state.pendingTabId = null;
     sceneHarness.state.navigationMotion = 'instant';
     sceneHarness.state.sessionTitle = undefined;
+    for (const tab of sceneHarness.state.openTabs) delete tab.session;
     sceneHarness.activateScene.mockReset();
     sceneHarness.closeScene.mockReset();
   });
@@ -102,13 +105,17 @@ describe('SceneBar overflow navigation', () => {
     const sessionTab = container.querySelector<HTMLElement>('[role="tab"][data-openbitfun-value="session"]')!;
     const settingsTab = container.querySelector<HTMLElement>('[role="tab"][data-openbitfun-value="settings"]')!;
 
-    expect(sessionTab.querySelector('.openbitfun-scene-bar__tab-title')?.textContent)
+    expect(sessionTab.querySelector('[data-openbitfun-part="label"]')?.textContent)
       .toBe('Investigate top tabs');
-    expect(settingsTab.querySelector('.openbitfun-scene-bar__tab-title')?.textContent)
+    expect(settingsTab.querySelector('[data-openbitfun-part="label"]')?.textContent)
       .toBe('Settings');
     expect(sessionTab.querySelector('[data-openbitfun-part="icon"]')).toBeNull();
     expect(sessionTab.closest('[data-openbitfun-part="item"]')?.getAttribute('data-has-icon'))
       .toBe('false');
+    expect(sessionTab.closest('[data-openbitfun-part="item"]')?.hasAttribute('data-overflow-trigger'))
+      .toBe(true);
+    expect(sessionTab.querySelector('[data-openbitfun-part="label"]')?.getAttribute('data-overflow-behavior'))
+      .toBe('marquee');
     expect(container.querySelector('[data-scene-bar-part="tabs"]')?.getAttribute('data-size'))
       .toBe('sm');
     expect(container.querySelector('.openbitfun-scene-bar__tab-subtitle')).toBeNull();
@@ -142,6 +149,36 @@ describe('SceneBar overflow navigation', () => {
       }));
     });
     expect(sceneHarness.activateScene).toHaveBeenLastCalledWith('git');
+  });
+
+  it('keeps the tab and rolling label mounted when its workspace selects another session', () => {
+    const sessionSlot = sceneHarness.state.openTabs[0];
+    sessionSlot.session = { surfaceId: 'local', workspaceKey: 'workspace-a', sessionId: 'a' };
+    sceneHarness.state.sessionTitle = 'First title';
+    renderSceneBar();
+    const tab = container.querySelector<HTMLButtonElement>('[role="tab"][data-openbitfun-value="session"]')!;
+    const label = tab.querySelector('[data-openbitfun-component="rolling-text"]');
+    expect(label).not.toBeNull();
+    tab.focus();
+
+    sessionSlot.session = { ...sessionSlot.session, sessionId: 'b' };
+    sceneHarness.state.sessionTitle = 'Second title';
+    renderSceneBar();
+    expect(container.querySelector('[role="tab"][data-openbitfun-value="session"]')).toBe(tab);
+    expect(tab.querySelector('[data-openbitfun-component="rolling-text"]')).toBe(label);
+    expect(document.activeElement).toBe(tab);
+    expect(tab.textContent).toBe('Second title');
+    expect(tab.textContent).not.toContain('workspace-a');
+  });
+
+  it('marks pending navigation and lets the user return to the displayed tab', () => {
+    sceneHarness.state.activeTabId = 'settings';
+    sceneHarness.state.pendingTabId = 'session';
+    renderSceneBar();
+    expect(container.querySelector('[data-scene-bar-part="tabs"]')?.getAttribute('aria-busy')).toBe('true');
+    const settings = container.querySelector<HTMLButtonElement>('[role="tab"][data-openbitfun-value="settings"]')!;
+    act(() => settings.click());
+    expect(sceneHarness.activateScene).toHaveBeenCalledWith('settings');
   });
 
   it('exposes overflow controls and translates a vertical wheel into horizontal movement', () => {

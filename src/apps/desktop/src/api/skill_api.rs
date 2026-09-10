@@ -24,7 +24,7 @@ use openbitfun_core::agentic::tools::implementations::skills::mode_overrides::{
 };
 use openbitfun_core::agentic::tools::implementations::skills::{
     resolver::resolve_skill_default_enabled_for_mode, ModeSkillInfo, SkillData, SkillInfo,
-    SkillLocation, SkillRegistry,
+    SkillLocation, SkillRegistry, SkillScanReport,
 };
 use openbitfun_core::agentic::workspace::RemoteWorkspaceFs;
 use openbitfun_core::infrastructure::get_path_manager_arc;
@@ -229,6 +229,18 @@ async fn get_all_skills_for_workspace_input(
     registry: &SkillRegistry,
     workspace_path: Option<&str>,
 ) -> Result<Vec<SkillInfo>, String> {
+    Ok(
+        get_skill_scan_report_for_workspace_input(state, registry, workspace_path)
+            .await?
+            .skills,
+    )
+}
+
+async fn get_skill_scan_report_for_workspace_input(
+    state: &State<'_, AppState>,
+    registry: &SkillRegistry,
+    workspace_path: Option<&str>,
+) -> Result<SkillScanReport, String> {
     if let Some((remote_root, entry)) = resolve_remote_workspace(state, workspace_path).await? {
         await_remote_skill_discovery(
             async {
@@ -238,7 +250,7 @@ async fn get_all_skills_for_workspace_input(
                     .map_err(|e| format!("Remote file service not available: {}", e))?;
                 let remote_workspace_fs = RemoteWorkspaceFs::new(entry.connection_id, remote_fs);
                 Ok(registry
-                    .get_all_skills_for_remote_workspace(&remote_workspace_fs, &remote_root)
+                    .get_skill_scan_report_for_remote_workspace(&remote_workspace_fs, &remote_root)
                     .await)
             },
             REMOTE_SKILL_DISCOVERY_TIMEOUT,
@@ -246,17 +258,19 @@ async fn get_all_skills_for_workspace_input(
         .await
     } else {
         Ok(registry
-            .get_all_skills_for_workspace(workspace_root_from_input(workspace_path).as_deref())
+            .get_skill_scan_report_for_workspace(
+                workspace_root_from_input(workspace_path).as_deref(),
+            )
             .await)
     }
 }
 
-async fn get_mode_skill_infos_for_workspace_input(
+async fn get_mode_skill_scan_report_for_workspace_input(
     state: &State<'_, AppState>,
     registry: &SkillRegistry,
     mode_id: &str,
     workspace_path: Option<&str>,
-) -> Result<Vec<ModeSkillInfo>, String> {
+) -> Result<SkillScanReport<ModeSkillInfo>, String> {
     if let Some((remote_root, entry)) = resolve_remote_workspace(state, workspace_path).await? {
         await_remote_skill_discovery(
             async {
@@ -267,7 +281,7 @@ async fn get_mode_skill_infos_for_workspace_input(
                 let remote_workspace_fs =
                     RemoteWorkspaceFs::new(entry.connection_id.clone(), remote_fs.clone());
                 Ok(registry
-                    .get_mode_skill_infos_for_remote_workspace(
+                    .get_mode_skill_scan_report_for_remote_workspace(
                         &remote_workspace_fs,
                         &remote_root,
                         mode_id,
@@ -279,15 +293,26 @@ async fn get_mode_skill_infos_for_workspace_input(
         .await
     } else if let Some(workspace_root) = workspace_root_from_input(workspace_path) {
         Ok(registry
-            .get_mode_skill_infos_for_workspace(Some(&workspace_root), mode_id)
+            .get_mode_skill_scan_report_for_workspace(Some(&workspace_root), mode_id)
             .await)
     } else {
         // Mode-scoped built-in and user-level skills should still be available even
         // when no project workspace is open. In that case there are simply no
         // project-level overrides to apply.
         Ok(registry
-            .get_mode_skill_infos_for_workspace(None, mode_id)
+            .get_mode_skill_scan_report_for_workspace(None, mode_id)
             .await)
+    }
+}
+
+fn serialize_skill_scan_response<T: Serialize>(
+    report: SkillScanReport<T>,
+    include_diagnostics: bool,
+) -> Result<Value, serde_json::Error> {
+    if include_diagnostics {
+        serde_json::to_value(report)
+    } else {
+        serde_json::to_value(report.skills)
     }
 }
 
@@ -526,6 +551,7 @@ async fn clear_project_mode_skill_selection_remote(
 pub async fn get_skill_configs(
     state: State<'_, AppState>,
     force_refresh: Option<bool>,
+    include_diagnostics: Option<bool>,
     workspace_path: Option<String>,
 ) -> Result<Value, String> {
     let registry = SkillRegistry::global();
@@ -535,9 +561,10 @@ pub async fn get_skill_configs(
     }
 
     let all_skills =
-        get_all_skills_for_workspace_input(&state, registry, workspace_path.as_deref()).await?;
+        get_skill_scan_report_for_workspace_input(&state, registry, workspace_path.as_deref())
+            .await?;
 
-    serde_json::to_value(all_skills)
+    serialize_skill_scan_response(all_skills, include_diagnostics.unwrap_or(false))
         .map_err(|e| format!("Failed to serialize skill configs: {}", e))
 }
 
@@ -591,6 +618,7 @@ pub async fn get_mode_skill_configs(
     state: State<'_, AppState>,
     mode_id: String,
     force_refresh: Option<bool>,
+    include_diagnostics: Option<bool>,
     workspace_path: Option<String>,
 ) -> Result<Value, String> {
     let registry = SkillRegistry::global();
@@ -599,7 +627,7 @@ pub async fn get_mode_skill_configs(
         registry.refresh().await;
     }
 
-    let mode_skill_infos = get_mode_skill_infos_for_workspace_input(
+    let mode_skill_infos = get_mode_skill_scan_report_for_workspace_input(
         &state,
         registry,
         &mode_id,
@@ -607,7 +635,7 @@ pub async fn get_mode_skill_configs(
     )
     .await?;
 
-    serde_json::to_value(mode_skill_infos)
+    serialize_skill_scan_response(mode_skill_infos, include_diagnostics.unwrap_or(false))
         .map_err(|e| format!("Failed to serialize mode skill configs: {}", e))
 }
 
@@ -1085,6 +1113,27 @@ mod tests {
     use super::{await_remote_skill_discovery, can_delete_owned_skill};
     use std::future;
     use tokio::time::Duration;
+
+    #[test]
+    fn skill_scan_response_preserves_legacy_arrays_and_opt_in_diagnostics() {
+        let report = super::SkillScanReport {
+            skills: vec!["existing"],
+            diagnostics: vec![
+                openbitfun_core::agentic::tools::implementations::skills::SkillScanDiagnostic {
+                    path: "/remote/denied".into(),
+                    source_id: "codex".into(),
+                    message: "permission denied".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            super::serialize_skill_scan_response(report.clone(), false).unwrap(),
+            serde_json::json!(["existing"])
+        );
+        let value = super::serialize_skill_scan_response(report, true).unwrap();
+        assert_eq!(value["skills"], serde_json::json!(["existing"]));
+        assert_eq!(value["diagnostics"][0]["sourceId"], "codex");
+    }
 
     #[tokio::test]
     async fn remote_skill_discovery_returns_before_the_deadline() {

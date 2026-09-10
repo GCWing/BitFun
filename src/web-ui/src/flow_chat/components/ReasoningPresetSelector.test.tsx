@@ -246,7 +246,8 @@ describe('ReasoningPresetSelector', () => {
     expect(options[2]?.getAttribute('aria-checked')).toBe('true');
   });
 
-  it('presents a merged off/on/effort catalog as four user-facing intensity levels', async () => {
+  it('preserves the actual choices in a merged toggle and effort catalog', async () => {
+    const onSelect = vi.fn();
     await act(async () => {
       root.render(
         <ReasoningPresetSelector
@@ -262,7 +263,7 @@ describe('ReasoningPresetSelector', () => {
             ],
           }}
           selectedPreset="low"
-          onSelect={vi.fn()}
+          onSelect={onSelect}
         />,
       );
     });
@@ -283,11 +284,28 @@ describe('ReasoningPresetSelector', () => {
     expect(options.map(option => option.querySelector(
       '.openbitfun-reasoning-preset-selector__option-label',
     )?.textContent))
-      .toEqual(['Off', 'Low', 'Medium', 'High', 'Maximum']);
+      .toEqual(['Off', 'On', 'Low', 'High', 'Maximum']);
     expect(options.every(option => option.querySelector('small, svg') === null)).toBe(true);
 
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-reasoning-preset-selector-btn"]',
+    );
+    expect(trigger?.getAttribute('aria-label')).toBe('Thinking: Low');
+
+    for (const [label, presetId] of [['Low', 'low'], ['On', 'on']] as const) {
+      if (trigger?.getAttribute('aria-expanded') !== 'true') {
+        await act(async () => trigger?.click());
+      }
+      const visibleChoice = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
+        '[data-preset-id]',
+      )).find(option => option.textContent === label);
+      expect(visibleChoice).toBeDefined();
+      await act(async () => visibleChoice?.click());
+      expect(onSelect).toHaveBeenLastCalledWith(presetId);
+    }
+
     expect(zhCnFlowChat.reasoningSelector.levels)
-      .toMatchObject({ off: '关闭', low: '低', medium: '中', high: '高', max: '最高' });
+      .toMatchObject({ off: '关闭', on: '开启', low: '低', medium: '中', high: '高', max: '最高' });
   });
 
   it('returns focus to the trigger and keeps keyboard motion suppressed while exiting', async () => {

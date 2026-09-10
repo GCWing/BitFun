@@ -72,7 +72,7 @@
     max-width: 100%;
     padding: 6px 10px;
     border-radius: var(--openbitfun-radius-sm);
-    border: 1px dashed color-mix(in srgb, var(--openbitfun-color-status-warning-content) 40%, transparent);
+    border: 1px dashed var(--openbitfun-color-status-warning-border);
     color: var(--openbitfun-color-status-warning-content);
     font-size: var(--openbitfun-type-label-sm-font-size);
     line-height: var(--openbitfun-type-body-lg-line-height);
@@ -176,9 +176,8 @@
     padding: var(--openbitfun-space-2) var(--openbitfun-space-3) var(--openbitfun-space-3);
 
     strong,
-    span {
+    span:not([data-overflow-content]) {
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 

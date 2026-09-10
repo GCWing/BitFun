@@ -3,10 +3,12 @@
     --_tab-group-item-height: var(--openbitfun-control-tab-group-item-height);
     --_tab-group-item-padding-block: var(--openbitfun-space-component-block);
     --_tab-group-item-padding-inline: var(--openbitfun-control-tab-group-item-padding-inline);
+    --_tab-group-item-gap: var(--openbitfun-control-tab-group-item-gap);
+    --_tab-group-item-icon-size: var(--openbitfun-control-tab-group-item-icon-size);
     --_tab-group-item-action-reserve: calc(
       var(--openbitfun-control-tab-group-item-action-size)
       + var(--openbitfun-control-tab-group-item-action-inset)
-      + var(--openbitfun-control-tab-group-item-gap)
+      + var(--_tab-group-item-gap)
     );
 
     display: inline-flex;
@@ -18,6 +20,8 @@
     --_tab-group-item-height: var(--openbitfun-control-tab-group-item-height-sm);
     --_tab-group-item-padding-block: var(--openbitfun-control-tab-group-item-padding-block-sm);
     --_tab-group-item-padding-inline: var(--openbitfun-control-tab-group-item-padding-inline-sm);
+    --_tab-group-item-gap: var(--openbitfun-control-tab-group-item-gap-sm);
+    --_tab-group-item-icon-size: var(--openbitfun-control-tab-group-item-icon-size-sm);
   }
 
   .item {
@@ -30,9 +34,9 @@
 
   .tab {
     --_tab-background: transparent;
-    --_tab-background-hover: var(--openbitfun-color-action-neutral-surface);
-    --_tab-background-active: var(--openbitfun-color-action-neutral-surface-pressed);
-    --_tab-border: var(--openbitfun-color-action-neutral-border);
+    --_tab-background-hover: var(--openbitfun-component-button-fill-background);
+    --_tab-background-active: var(--openbitfun-component-button-fill-background);
+    --_tab-border: var(--openbitfun-component-button-outline-border);
     --_tab-content: var(--openbitfun-color-content-primary);
 
     display: inline-flex;
@@ -40,6 +44,7 @@
     justify-content: center;
     min-inline-size: 0;
     block-size: var(--_tab-group-item-height);
+    max-inline-size: 100%;
     padding-block: var(--_tab-group-item-padding-block);
     padding-inline: var(--_tab-group-item-padding-inline);
     border: var(--openbitfun-border-width-default) solid var(--_tab-border);
@@ -81,11 +86,13 @@
   .item:hover .tab:not(:disabled),
   .tabGroup[data-openbitfun-preview-state="hover"] .tab[aria-selected="false"]:not(:disabled) {
     background: var(--_tab-background-hover);
+    border-color: var(--openbitfun-component-button-outline-border-interactive);
   }
 
   .tab:active:not(:disabled),
   .tabGroup[data-openbitfun-preview-state="active"] .tab[aria-selected="false"]:not(:disabled) {
     background: var(--_tab-background-active);
+    border-color: var(--openbitfun-component-button-outline-border-interactive);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
@@ -100,13 +107,14 @@
   }
 
   .icon {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    inline-size: var(--openbitfun-control-tab-group-item-icon-size);
-    block-size: var(--openbitfun-control-tab-group-item-icon-size);
-    margin-inline-end: var(--openbitfun-control-tab-group-item-gap);
+    inline-size: var(--_tab-group-item-icon-size);
+    block-size: var(--_tab-group-item-icon-size);
+    margin-inline-end: var(--_tab-group-item-gap);
     color: currentColor;
   }
 
@@ -121,7 +129,6 @@
     min-inline-size: 0;
     line-height: var(--openbitfun-type-label-md-line-height);
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .endAction {
