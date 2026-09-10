@@ -1,10 +1,14 @@
 import { OverflowText, Button, IconButton } from '@openbitfun/ui';
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
+import {getActiveSurfaceId, onSurfaceActivated} from '@/infrastructure/peer-device/deviceSurface';
+import {createBtwPanelViewState, type BtwPanelViewState} from './btwPanelViewState';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
 import { CornerUpLeft, Loader2, Square } from 'lucide-react';
 import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
-import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
+import {BtwVirtualSessionList} from './BtwVirtualSessionList';
+import {useBtwSessionState} from './useBtwSessionState';
+import {useFlowChatViewportOwner} from '../modern/useFlowChatViewportOwner';
 import {RuntimeStatusSlot} from '../modern/RuntimeStatusSlot';
 import {pendingPermissionToolCallIdsForSession} from '../modern/permissionRequestRouting';
 import {usePermissionRequests} from '../modern/usePermissionRequests';
@@ -12,7 +16,7 @@ import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ChatInputApprovalBand} from '../ChatInputApprovalBand';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
-import type {DialogTurn, FlowChatState, Session} from '../../types/flow-chat';
+import type {DialogTurn, Session} from '../../types/flow-chat';
 import {sessionToVirtualItems} from '../../store/modernFlowChatStore';
 import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../events/flowchatNavigation';
 import {fileTabManager} from '@/shared/services/FileTabManager';
@@ -31,7 +35,6 @@ import {
   type ReviewDetailContentState,
   type ReviewDetailExecutionState,
 } from '../../utils/reviewDetailState';
-import {findReviewTaskOutcome} from '../../utils/reviewTaskOutcome';
 import {
   loadBtwSessionHistory,
   type BtwSessionViewKind,
@@ -90,6 +93,7 @@ function findReviewChildByRequestId(
 import './BtwSessionPanel.scss';
 
 export interface BtwSessionPanelProps {
+  isActive?: boolean;
   childSessionId?: string;
   parentSessionId?: string;
   workspacePath?: string;
@@ -97,7 +101,7 @@ export interface BtwSessionPanelProps {
   displayTitle?: string;
 }
 
-const resolveSessionTitle = (session?: Session | null, fallback = 'Side thread') =>
+const resolveSessionTitle = (session?: Pick<Session, 'title'> | null, fallback = 'Side thread') =>
   session?.title?.trim() || fallback;
 const log = createLogger('BtwSessionPanel');
 const REVIEW_ACTION_BOTTOM_BLANK_SPACE_PX = 96;
@@ -139,22 +143,42 @@ const isSameReviewResult = (left: unknown, right: unknown): boolean => {
   }
 };
 
-export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
+export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = (props) => {
+  const surfaceId = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceId, getActiveSurfaceId);
+  const viewState = useMemo(createBtwPanelViewState, [surfaceId, props.childSessionId, props.viewKind]);
+  return props.isActive === false ? null : (
+    <BtwSessionPanelContent
+      key={`${surfaceId}:${props.childSessionId}:${props.viewKind ?? ''}`}
+      {...props}
+      viewState={viewState}
+    />
+  );
+};
+
+const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPanelViewState }> = ({
   childSessionId,
   parentSessionId,
   workspacePath,
   viewKind,
   displayTitle,
+  viewState,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
+  const { childSession, parentMetadata, reviewTaskOutcome } = useBtwSessionState(
+    childSessionId, parentSessionId, viewKind === 'review-check',
+  );
   const [stoppingReview, setStoppingReview] = useState(false);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(() => {
+    viewState.restoring = !viewState.followTail && viewState.anchor !== null;
+    return !viewState.followTail;
+  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const listHeaderRef = useRef<HTMLDivElement>(null);
+  const viewportOwner = useFlowChatViewportOwner(scrollContainerRef);
   useSessionCompletionReceipt(childSessionId ?? null, scrollContainerRef);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const [actionBarHeight, setActionBarHeight] = useState(0);
-  const shouldAutoScrollRef = useRef(true);
+  const shouldAutoScrollRef = useRef(viewState.followTail);
 
   // Embedded child sessions live outside the primary composer. Give direct
   // child requests an actionable surface here, while delegated requests stay
@@ -171,12 +195,6 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     [permissionRequests, childSessionId],
   );
 
-  useEffect(() => {
-    return flowChatStore.subscribe(setFlowChatState);
-  }, []);
-
-  const childSession = childSessionId ? flowChatState.sessions.get(childSessionId) : undefined;
-  const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
   const childSessionRef = useRef(childSession);
   childSessionRef.current = childSession;
   const childRelationship = resolveSessionRelationship(childSession);
@@ -225,11 +243,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     onExpandGroup,
     onExpandAllInTurn,
     onCollapseGroup,
-  } = useExploreGroupState(virtualItems);
+  } = useExploreGroupState(virtualItems, viewState.exploreGroupStates);
+  useEffect(() => {
+    viewState.exploreGroupStates = exploreGroupStates;
+  }, [exploreGroupStates, viewState]);
   const isReviewDetail = viewKind === 'review-check' || childKind === 'review' || childKind === 'deep_review';
-  const reviewTaskOutcome = viewKind === 'review-check'
-    ? findReviewTaskOutcome(parentSession, childSession?.parentToolCallId)
-    : null;
   const reviewDetailProjection = isReviewDetail
     ? deriveReviewDetailProjection(childSession, virtualItems.length > 0, reviewTaskOutcome)
     : null;
@@ -259,7 +277,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const loadChildHistory = useCallback(async () => {
     if (!childSessionId || !childSession) return;
 
-    const path = workspacePath ?? childSession.workspacePath ?? parentSession?.workspacePath;
+    const path = workspacePath ?? childSession.workspacePath ?? parentMetadata?.workspacePath;
     if (!path) return;
 
     await loadBtwSessionHistory({
@@ -267,12 +285,12 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       ...(!childSession.workspacePath
         ? {
             workspacePath: path,
-            remoteConnectionId: childSession.remoteConnectionId || parentSession?.remoteConnectionId,
-            remoteSshHost: childSession.remoteSshHost || parentSession?.remoteSshHost,
+            remoteConnectionId: childSession.remoteConnectionId || parentMetadata?.remoteConnectionId,
+            remoteSshHost: childSession.remoteSshHost || parentMetadata?.remoteSshHost,
           }
         : {}),
     });
-  }, [childSessionId, childSession, parentSession, workspacePath]);
+  }, [childSessionId, childSession, parentMetadata, workspacePath]);
 
   useEffect(() => {
     if (!childSession?.isHistorical || childSession.historyState !== 'metadata-only') return;
@@ -284,10 +302,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     if (!container) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     setShowScrollToBottom(distanceFromBottom > 120);
-    if (distanceFromBottom < 80) {
+    if (distanceFromBottom < 80 && !viewState.restoring) {
       shouldAutoScrollRef.current = true;
     }
-  }, []);
+    viewState.followTail = shouldAutoScrollRef.current;
+  }, [viewState]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -295,6 +314,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     const handleWheel = (e: WheelEvent) => {
       if (e.deltaY < 0) {
         shouldAutoScrollRef.current = false;
+        viewState.followTail = false;
       } else if (e.deltaY > 0) {
         const { scrollTop, scrollHeight, clientHeight } = container;
         const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
@@ -311,27 +331,32 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       container.removeEventListener('wheel', handleWheel);
       container.removeEventListener('scroll', updateScrollAffordance);
     };
-  }, [updateScrollAffordance]);
+  }, [updateScrollAffordance, viewState]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !shouldAutoScrollRef.current) return;
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
+    const frame = requestAnimationFrame(() => {
+      if (!shouldAutoScrollRef.current) return;
+      viewportOwner.write({ owner: 'follow-output', topPx: container.scrollHeight, holdForMs: 0 });
       setShowScrollToBottom(false);
     });
-  }, [virtualItems]);
+    return () => cancelAnimationFrame(frame);
+  }, [virtualItems, viewportOwner]);
 
   const handleScrollToBottom = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     shouldAutoScrollRef.current = true;
-    container.scrollTo({
-      top: container.scrollHeight,
+    viewState.followTail = true;
+    viewState.restoring = false;
+    viewportOwner.write({
+      owner: 'one-shot-navigation',
+      topPx: container.scrollHeight,
       behavior: getMotionAwareScrollBehavior('smooth'),
     });
     setShowScrollToBottom(false);
-  }, []);
+  }, [viewportOwner, viewState]);
 
   const handleFileViewRequest = useCallback((
     filePath: string,
@@ -464,7 +489,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     : showMinimizedIndicator
       ? REVIEW_ACTION_BOTTOM_BLANK_SPACE_PX
       : 0;
-  const parentLabel = resolveSessionTitle(parentSession, t('btw.parent'));
+  const parentLabel = resolveSessionTitle(parentMetadata, t('btw.parent'));
   const backTooltip = btwOrigin?.parentTurnIndex
     ? t('flowChatHeader.btwBackTooltipWithTurn', {
         title: parentLabel,
@@ -783,6 +808,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   // Restore persisted review action state once for each stable session location.
   useEffect(() => {
     if (!isReviewSession || !childSessionId || !persistedReviewWorkspacePath) return;
+    const locationKey = JSON.stringify([
+      childSessionId, persistedReviewWorkspacePath,
+      persistedReviewRemoteConnectionId, persistedReviewRemoteSshHost,
+    ]);
+    if (viewState.restoredReviewLocation === locationKey) return;
 
     const store = useReviewActionBarStore.getState();
     const currentActionState = store.getSessionState(childSessionId);
@@ -804,12 +834,14 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       persistedReviewRemoteSshHost,
     ).then((persisted: ReviewActionPersistedState | null) => {
       const latestChildSession = childSessionRef.current;
-      if (cancelled || !persisted || !latestChildSession) return;
+      if (cancelled || !latestChildSession) return;
       if (
         sessionProjectWorkspacePath(latestChildSession) !== persistedReviewWorkspacePath
         || latestChildSession.remoteConnectionId !== persistedReviewRemoteConnectionId
         || latestChildSession.remoteSshHost !== persistedReviewRemoteSshHost
       ) return;
+      viewState.restoredReviewLocation = locationKey;
+      if (!persisted) return;
 
       const latestReviewData = findLatestCodeReviewResult(latestChildSession) as DeepReviewActionData | null;
       const reviewMode: ReviewActionMode = isDeepReview ? 'deep' : 'standard';
@@ -923,6 +955,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     persistedReviewWorkspacePath,
     persistedReviewRemoteConnectionId,
     persistedReviewRemoteSshHost,
+    viewState,
   ]);
 
   // Observe action bar height to adjust body padding dynamically
@@ -1080,7 +1113,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               <div className="btw-session-panel__meta" data-openbitfun-component="btw-session-panel" data-openbitfun-part="meta">
                 <span className="btw-session-panel__meta-label">{childOriginLabel}</span>
                 <Icon name="link" size="2xs" />
-                <OverflowText className="btw-session-panel__meta-title">{resolveSessionTitle(parentSession, t('btw.parent'))}</OverflowText>
+                <OverflowText className="btw-session-panel__meta-title">{resolveSessionTitle(parentMetadata, t('btw.parent'))}</OverflowText>
               </div>
             )}
             {(viewKind === 'review-check' || childKind === 'review' || childKind === 'deep_review') && (
@@ -1141,45 +1174,56 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           className="btw-session-panel__body"
           data-openbitfun-component="btw-session-panel"
           data-openbitfun-part="body"
-          style={reviewActionBottomPadding > 0 ? { paddingBottom: `${reviewActionBottomPadding}px` } : undefined}
+          style={{
+            paddingTop: 0,
+            overflowAnchor: 'none',
+            ...(reviewActionBottomPadding > 0 ? { paddingBottom: reviewActionBottomPadding } : {}),
+          }}
         >
-          {isReviewDetail && reviewDetailNotices.length > 0 && (
-            <div
-              className={`btw-session-panel__empty-state${virtualItems.length > 0 ? ' btw-session-panel__empty-state--with-content' : ''}`}
-              data-openbitfun-component="btw-session-panel"
-              data-openbitfun-part="empty"
-              role={reviewDetailNotices.some(({ state }) =>
-                state === 'load-failed' || state === 'failed' || state === 'timed-out')
-                ? 'alert'
-                : 'status'}
-              aria-live="polite"
-            >
-              {reviewDetailNotices.map(({ state, key }) => (
-                <span key={state}>{t(key, { label: childBadgeLabel })}</span>
-              ))}
-              {canRetryReviewDetailLoad && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadChildHistory}
-                >
-                  {t('childSession.reviewDetail.retryLoad')}
-                </Button>
-              )}
-            </div>
-          )}
+          {/* Include the top inset and notices in the virtualizer's measured offset. */}
+          <div ref={listHeaderRef} style={{ paddingTop: 12 }}>
+            {isReviewDetail && reviewDetailNotices.length > 0 && (
+              <div
+                className={`btw-session-panel__empty-state${virtualItems.length > 0 ? ' btw-session-panel__empty-state--with-content' : ''}`}
+                data-openbitfun-component="btw-session-panel"
+                data-openbitfun-part="empty"
+                role={reviewDetailNotices.some(({ state }) =>
+                  state === 'load-failed' || state === 'failed' || state === 'timed-out')
+                  ? 'alert'
+                  : 'status'}
+                aria-live="polite"
+              >
+                {reviewDetailNotices.map(({ state, key }) => (
+                  <span key={state}>{t(key, { label: childBadgeLabel })}</span>
+                ))}
+                {canRetryReviewDetailLoad && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadChildHistory}
+                  >
+                    {t('childSession.reviewDetail.retryLoad')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
           {virtualItems.length === 0 ? (
             !isReviewDetail || reviewDetailNotices.length === 0 ? (
               <div className="btw-session-panel__empty-state" data-openbitfun-component="btw-session-panel" data-openbitfun-part="empty">{t('session.empty')}</div>
             ) : null
           ) : (
-            virtualItems.map((item, index) => (
-              <VirtualItemRenderer
-                key={`${item.turnId}-${item.type}-${index}`}
-                item={item}
-                index={index}
-              />
-            ))
+            <BtwVirtualSessionList
+              key={childSessionId}
+              items={virtualItems}
+              scrollerRef={scrollContainerRef}
+              headerRef={listHeaderRef}
+              followRef={shouldAutoScrollRef}
+              viewportOwner={viewportOwner}
+              exploreGroupStates={exploreGroupStates}
+              isHistorical={childSession.isHistorical === true}
+              viewState={viewState}
+            />
           )}
           <RuntimeStatusSlot
             sessionId={childSessionId}

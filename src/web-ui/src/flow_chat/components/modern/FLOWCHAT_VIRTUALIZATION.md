@@ -1,5 +1,15 @@
 # FlowChat Virtualization
 
+## Embedded session lifetime
+
+`BtwSessionPanel` keeps a lightweight tab-owned wrapper while its content is
+inactive. Its transcript and observers unmount immediately. `BtwVirtualSessionList`
+shares the virtualizer and stable row keys; `useBtwPanelViewport` saves a visible
+row key and intra-row offset while reading, then restores against estimated and
+mounted geometry. Readers following output return to the live tail. The shared
+`useExploreGroupState` accepts initial expansion state for this remount boundary;
+the primary transcript retains its existing default and session lifetime.
+
 ## Result visibility and read receipts
 
 `useSessionCompletionReceipt` reads the final projected non-user item for the

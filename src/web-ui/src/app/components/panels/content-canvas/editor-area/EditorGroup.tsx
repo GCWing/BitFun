@@ -127,9 +127,11 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   
   // Tabs to render (active + cached). Hidden terminal tabs stay mounted so
   // reopening a terminal reuses the xterm buffer instead of replaying history.
+  // Child-session tabs retain only their lightweight wrapper; that wrapper
+  // unmounts its transcript while inactive and owns reading state until close.
   const tabsToRender = useMemo(() => {
     const result = group.tabs.filter(t => 
-      (!t.isHidden && (t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
+      (!t.isHidden && (t.content.type === 'btw-session' || t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
       (t.isHidden && isKeepAliveTerminalTab(t))
     );
     return result;

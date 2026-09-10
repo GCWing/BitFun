@@ -821,6 +821,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div className="openbitfun-flexible-panel__loading" data-openbitfun-component="flexible-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
             <BtwSessionPanel
+              isActive={isActive}
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
