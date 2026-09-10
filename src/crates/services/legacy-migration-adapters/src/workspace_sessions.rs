@@ -54,6 +54,83 @@ const SESSION_OWNED_DIRECTORIES: &[&str] = &["snapshots", "artifacts", "tool-res
 
 pub(crate) struct WorkspaceSessionsAdapter;
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct MigrationItemCounts {
+    pub imported: u64,
+    pub skipped: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceReportCounts {
+    pub sessions: MigrationItemCounts,
+    pub workspaces: MigrationItemCounts,
+    pub assistant_directories: MigrationItemCounts,
+}
+
+/// Project both old and new run manifests into user-facing entity counts.
+/// Auxiliary exclusions remain in the original manifest, not in these totals.
+pub fn workspace_report_counts(
+    roots: &MigrationRoots,
+    report: &openbitfun_product_domains::legacy_migration::MigrationRunReport,
+) -> LegacyMigrationResult<WorkspaceReportCounts> {
+    uuid::Uuid::parse_str(&report.run_id)
+        .map_err(|_| LegacyMigrationError::InvalidRequest("invalid migration run id".into()))?;
+    let layout = openbitfun_legacy_migration::MigrationLayout::new(roots, &report.run_id);
+    let root = layout.stage_root().join("workspace-sessions");
+    let manifest: WorkspaceSessionsManifest =
+        read_bounded_json(&root, &root.join("manifest.json"))?;
+    let plan: openbitfun_product_domains::legacy_migration::MigrationPlan = layout
+        .read_json(&layout.plan_path())?
+        .ok_or_else(|| LegacyMigrationError::InvalidPlan("migration plan is missing".into()))?;
+    let counts = |actions: Vec<SessionImportAction>| MigrationItemCounts {
+        imported: actions
+            .iter()
+            .filter(|a| **a == SessionImportAction::Import)
+            .count() as u64,
+        skipped: actions
+            .iter()
+            .filter(|a| **a != SessionImportAction::Import)
+            .count() as u64,
+    };
+    let mut result = WorkspaceReportCounts {
+        sessions: counts(manifest.sessions.iter().map(|e| e.action).collect()),
+        workspaces: MigrationItemCounts {
+            imported: manifest.workspace_id_map.len() as u64,
+            skipped: 0,
+        },
+        assistant_directories: counts(
+            manifest
+                .assistant_workspaces
+                .iter()
+                .map(|e| e.action)
+                .collect(),
+        ),
+    };
+    let target_workspaces = plan
+        .conflicts
+        .iter()
+        .filter(|c| c.code == "workspace_target_wins")
+        .count() as u64;
+    result.workspaces.imported = result.workspaces.imported.saturating_sub(target_workspaces);
+    result.workspaces.skipped += target_workspaces;
+    if let Some(domain) = report
+        .domain_results
+        .iter()
+        .find(|r| r.domain == MigrationDomainId::WorkspaceSessions)
+    {
+        for diagnostic in &domain.warnings {
+            match diagnostic.code.as_str() {
+                "session_source_skipped" | "session_entry_skipped" => result.sessions.skipped += 1,
+                "workspace_item_skipped" => result.workspaces.skipped += 1,
+                "assistant_workspace_not_migrated" => result.assistant_directories.skipped += 1,
+                _ => {}
+            }
+        }
+    }
+    Ok(result)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SessionImportAction {

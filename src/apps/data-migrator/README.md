@@ -35,6 +35,11 @@ needed for migration. ARM Windows/Linux packages are not currently produced.
 5. Read the report. Sign in again or repair paths where indicated, close the
    tool, and open OpenBitFun yourself.
 
+The report lists Sessions, workspace records, and assistant directories separately.
+Expected auxiliary exclusions (such as request traces and lock files) do not
+contribute to these displayed counts. Historical runs use their saved manifests
+for the same breakdown; missing manifests are shown as unavailable.
+
 The UI uses the shared design-system tokens bundled offline, follows the system
 light/dark/high-contrast setting, and offers English, Simplified Chinese, and
 Traditional Chinese.

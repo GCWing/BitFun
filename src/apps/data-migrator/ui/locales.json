@@ -1,5 +1,9 @@
 {
   "en": {
+    "sessions": "Sessions",
+    "workspaces": "Workspaces",
+    "assistantDirectories": "Assistant directories",
+    "itemCountsUnavailable": "Item counts are unavailable for this run.",
     "eyebrow": "OpenBitFun Data Migrator",
     "title": "Import data from BitFun",
     "intro": "A separate, offline tool. Choose what to import; your original BitFun data is preserved.",
@@ -76,6 +80,10 @@
     "extension_item_skipped": "Incomplete or unsupported extensions will be skipped; valid extensions can continue."
   },
   "zh-CN": {
+    "sessions": "会话",
+    "workspaces": "工作区",
+    "assistantDirectories": "助手目录",
+    "itemCountsUnavailable": "本次迁移的分类计数不可用。",
     "eyebrow": "OpenBitFun 独立数据迁移器",
     "title": "从 BitFun 导入数据",
     "intro": "独立运行，离线导入。选择需要迁移的内容，原始 BitFun 数据会被保留。",
@@ -152,6 +160,10 @@
     "extension_item_skipped": "将跳过不完整或不支持的扩展，其他有效扩展可继续迁移。"
   },
   "zh-TW": {
+    "sessions": "工作階段",
+    "workspaces": "工作區",
+    "assistantDirectories": "助理目錄",
+    "itemCountsUnavailable": "本次遷移的分類計數無法取得。",
     "eyebrow": "OpenBitFun 獨立資料遷移器",
     "title": "從 BitFun 匯入資料",
     "intro": "獨立執行，離線匯入。選擇需要遷移的內容，原始 BitFun 資料會被保留。",

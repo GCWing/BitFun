@@ -34,6 +34,7 @@ cargo test -p openbitfun-data-migrator -p openbitfun-legacy-migration-adapters -
 cargo test -p openbitfun-legacy-migration --test migration_engine_contracts
 node --test scripts/data-migrator-tauri-build.test.mjs
 node --check src/apps/data-migrator/ui/app.js
+node --test scripts/data-migrator-report.test.mjs
 pnpm run theme:color-audit:all
 ```
 

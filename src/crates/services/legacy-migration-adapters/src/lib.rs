@@ -12,6 +12,7 @@ mod remote_connect;
 mod remote_ssh;
 mod settings;
 mod workspace_sessions;
+pub use workspace_sessions::{workspace_report_counts, MigrationItemCounts, WorkspaceReportCounts};
 
 use openbitfun_legacy_migration::{
     DomainContext, DomainScan, LegacyDomainAdapter, LegacyMigrationResult, MigrationRoots,

@@ -1478,6 +1478,11 @@ mod tests {
             .join(COORDINATION_RELATIVE_PATH)
             .is_file());
         assert!(deep.is_dir());
+        let counts = crate::workspace_report_counts(&roots, &report).unwrap();
+        assert_eq!(counts.sessions.imported, 2);
+        assert_eq!(counts.sessions.skipped, 0);
+        assert_eq!(counts.workspaces.imported, 1);
+        assert_eq!(counts.assistant_directories.imported, 1);
         let relative = deep.strip_prefix(&roots.legacy_home_root).unwrap();
         assert_eq!(
             fs::read(roots.target_home_root.join(relative).join("content.txt")).unwrap(),
