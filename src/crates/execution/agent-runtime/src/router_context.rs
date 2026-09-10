@@ -310,6 +310,32 @@ pub struct RouterSummaryWork {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct RouterEntryTokenRecord {
+    pub sequence: u64,
+    pub source_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub round_id: Option<String>,
+    pub kind: RouterEntryKind,
+    pub section: &'static str,
+    pub token_count: usize,
+    pub is_error: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RouterCompressionRecord {
+    pub status: String,
+    pub base_through: u64,
+    pub through: u64,
+    pub pending_tokens: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct PreparedRouterContext {
     /// Trace writers emit the actual input separately from these budget/cursor facts.
     #[serde(skip_serializing)]
@@ -319,6 +345,8 @@ pub struct PreparedRouterContext {
     pub input_tokens: usize,
     pub budget_tokens: usize,
     pub pending_tokens: usize,
+    pub entry_tokens: Vec<RouterEntryTokenRecord>,
+    pub compression_records: Vec<RouterCompressionRecord>,
     pub counter: &'static str,
     pub summarized_through: u64,
     pub observed_through: u64,
@@ -522,6 +550,29 @@ impl RouterContextState {
         };
         let recent: Vec<_> = self.entries.iter().skip(start).collect();
         let full_recent: Vec<_> = recent.iter().map(|entry| entry_for_prompt(entry)).collect();
+        let entry_tokens = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| RouterEntryTokenRecord {
+                sequence: entry.sequence,
+                source_id: entry.source_id.clone(),
+                round_id: entry
+                    .content
+                    .get("round_id")
+                    .filter(|value| !value.is_null())
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| value.to_string())
+                    }),
+                kind: entry.kind,
+                section: if index < start { "pending" } else { "recent" },
+                token_count: entry.token_count,
+                is_error: entry.is_error,
+            })
+            .collect::<Vec<_>>();
         let full_prompt = format!(
             "## Task\n{task}\n\n## Earlier history summary\n{history}\n\n## Recent trajectory\n{}",
             json!(full_recent)
@@ -533,6 +584,8 @@ impl RouterContextState {
                 input_tokens: counter.count(&full_prompt),
                 budget_tokens: max_tokens,
                 pending_tokens,
+                entry_tokens,
+                compression_records: Vec::new(),
                 counter: counter.name(),
                 user_prompt: full_prompt,
                 summarized_through: self.summarized_through,
@@ -596,6 +649,8 @@ impl RouterContextState {
             input_tokens: counter.count(&user_prompt),
             budget_tokens: max_tokens,
             pending_tokens,
+            entry_tokens,
+            compression_records: Vec::new(),
             counter: counter.name(),
             user_prompt,
             summarized_through: self.summarized_through,

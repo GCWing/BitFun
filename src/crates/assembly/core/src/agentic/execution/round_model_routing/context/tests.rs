@@ -76,6 +76,18 @@ async fn slow_summary_never_blocks_routing_and_is_applied_to_only_its_prefix() {
     let snapshot = serde_json::to_value(&messages).unwrap();
     let first = context.prepare(&messages).await;
     assert!(first.user_prompt.contains("step-7"));
+    assert_eq!(first.entry_tokens.len(), 8);
+    assert_eq!(
+        first
+            .entry_tokens
+            .iter()
+            .filter(|entry| entry.section == "pending")
+            .count(),
+        5
+    );
+    assert!(first.entry_tokens.iter().all(|entry| entry.token_count > 0));
+    assert_eq!(first.compression_records.len(), 1);
+    assert_eq!(first.compression_records[0].status, "in_flight");
     assert_eq!(serde_json::to_value(&messages).unwrap(), snapshot);
     tokio::task::yield_now().await;
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
@@ -88,10 +100,25 @@ async fn slow_summary_never_blocks_routing_and_is_applied_to_only_its_prefix() {
     assert_eq!(pending.summarized_through, 0);
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     provider.release.notify_one();
-    settle(&mut context).await;
-    let prepared = context.render();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while context
+            .pending_summary
+            .as_ref()
+            .is_some_and(|handle| !handle.is_finished())
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    context.factory.config.summary_enabled = false;
+    let prepared = context.prepare(&messages).await;
     assert!(prepared.user_prompt.contains("parser regression"));
     assert!(prepared.user_prompt.contains("latest-new-evidence"));
+    assert_eq!(prepared.compression_records.len(), 1);
+    assert_eq!(prepared.compression_records[0].status, "applied");
+    assert!(prepared.compression_records[0].latency_ms.is_some());
+    assert!(prepared.compression_records[0].usage.is_some());
     assert_eq!(prepared.observed_through, 9);
     assert_eq!(prepared.summarized_through, 5);
 }

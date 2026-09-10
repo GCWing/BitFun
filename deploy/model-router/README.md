@@ -138,9 +138,13 @@ CLI 与 Desktop 共用此 Core 路径；无需分别实现压缩。在不经启�
 Router 上下文并访问 Router/fast API。这里是宿主侧实现约束；各远程场景仍需部署后的端到端
 smoke 验证。
 
-评测程序只需传入真实任务描述，不要逐轮自行构造 Router 输入。`ROUTER_TRACE_PATH` 会记录
-Router 输入预算/计数方式/准备耗时/增量游标，以及单独的 `router_context_summary` 事件（fast 模型名、
-延迟、usage、错误）。这部分是额外模型开销，不混入主轮次 Token Usage，评测时应单独汇总。
+评测程序只需传入真实任务描述，不要逐轮自行构造 Router 输入。`ROUTER_TRACE_PATH` 的每条
+`router_decision` 会记录 Router 输入预算/计数方式/准备耗时/增量游标、pending 总 tokens、
+每条 pending/recent entry 的 sequence、round ID、类型、token 数和错误标记，以及本轮观察到的
+压缩状态。压缩记录包含 `in_flight`、`applied`、`failed`、`incomplete` 或 `stale` 状态及其
+快照边界、pending tokens、延迟、usage 和错误。单独的 `router_context_summary` 事件仍然保留，
+便于不依赖 Router 决策频率审计摘要请求。这部分是额外模型开销，不混入主轮次 Token Usage，
+评测时应单独汇总。
 未返回 usage 的请求保持缺失，不能按零计费。可设 `ROUTER_SUMMARY_ENABLED=false` 对照纯规则
 裁剪版本；固定 Router system prompt 和 `simple/non_simple` 决策协议不变。
 

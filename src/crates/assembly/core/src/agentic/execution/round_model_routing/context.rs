@@ -12,8 +12,8 @@ use log::warn;
 #[cfg(test)]
 use openbitfun_agent_runtime::router_context::Utf8ByteBudget;
 use openbitfun_agent_runtime::router_context::{
-    CachedRouterTokenCounter, PreparedRouterContext, RouterContextState, RouterEntryKind,
-    RouterSummaryWork, RouterTokenCounter,
+    CachedRouterTokenCounter, PreparedRouterContext, RouterCompressionRecord, RouterContextState,
+    RouterEntryKind, RouterSummaryWork, RouterTokenCounter,
 };
 use openbitfun_agent_tools::effective_tool_invocation;
 use openbitfun_ai_adapters::local_tokenizer::LocalTokenizer;
@@ -135,6 +135,27 @@ struct SummaryResult {
     model_id: String,
     model_name: String,
     usage: Option<Value>,
+}
+
+#[derive(Clone)]
+struct SummarySnapshot {
+    base_through: u64,
+    through: u64,
+    pending_tokens: usize,
+}
+
+impl SummarySnapshot {
+    fn record(&self, status: &str) -> RouterCompressionRecord {
+        RouterCompressionRecord {
+            status: status.into(),
+            base_through: self.base_through,
+            through: self.through,
+            pending_tokens: self.pending_tokens,
+            latency_ms: None,
+            usage: None,
+            error: None,
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -298,6 +319,7 @@ impl RouterContextFactory {
             checkpoint_writer: None,
             checkpoint_revision: None,
             pending_summary: None,
+            active_summary: None,
             last_attempt_round: None,
         }
     }
@@ -311,7 +333,8 @@ pub struct RoundRouterContext {
     checkpoint_sender: Option<watch::Sender<Option<Arc<RouterContextState>>>>,
     checkpoint_writer: Option<JoinHandle<()>>,
     checkpoint_revision: Option<(u64, u64, usize)>,
-    pending_summary: Option<JoinHandle<(RouterSummaryWork, OpenBitFunResult<SummaryResult>)>>,
+    pending_summary: Option<JoinHandle<(RouterSummaryWork, OpenBitFunResult<SummaryResult>, u64)>>,
+    active_summary: Option<SummarySnapshot>,
     last_attempt_round: Option<u64>,
 }
 
@@ -405,16 +428,20 @@ impl RoundRouterContext {
         self.observe(messages);
         let observe_ms = started.elapsed().as_millis() as u64;
         let phase = Instant::now();
-        self.poll_summary().await;
+        let mut compression_records = self.poll_summary().await.into_iter().collect::<Vec<_>>();
         let summary_apply_ms = phase.elapsed().as_millis() as u64;
         let phase = Instant::now();
         self.start_summary();
+        if let Some(active) = &self.active_summary {
+            compression_records.push(active.record("in_flight"));
+        }
         let summary_prepare_ms = phase.elapsed().as_millis() as u64;
         let phase = Instant::now();
         self.queue_save();
         let checkpoint_ms = phase.elapsed().as_millis() as u64;
         let phase = Instant::now();
         let mut prepared = self.render();
+        prepared.compression_records = compression_records;
         prepared.preparation.observe_ms = observe_ms;
         prepared.preparation.summary_apply_ms = summary_apply_ms;
         prepared.preparation.summary_prepare_ms = summary_prepare_ms;
@@ -433,7 +460,7 @@ impl RoundRouterContext {
 
     pub async fn finish(&mut self, messages: &[Message]) {
         self.observe(messages);
-        self.poll_summary().await;
+        let _ = self.poll_summary().await;
         if let Some(handle) = self.pending_summary.take() {
             handle.abort();
         }
@@ -478,22 +505,54 @@ impl RoundRouterContext {
         }
     }
 
-    async fn poll_summary(&mut self) {
+    async fn poll_summary(&mut self) -> Option<RouterCompressionRecord> {
         if !self
             .pending_summary
             .as_ref()
             .is_some_and(|handle| handle.is_finished())
         {
-            return;
+            return None;
         }
         let Some(handle) = self.pending_summary.take() else {
-            return;
+            return None;
         };
-        if let Ok((work, Ok(result))) = handle.await {
-            if result.complete {
-                if self.state.apply_summary(&work, &result.text) {
-                    self.last_attempt_round = None;
+        let snapshot = self.active_summary.take();
+        match handle.await {
+            Ok((work, result, latency_ms)) => {
+                let mut record = SummarySnapshot {
+                    base_through: work.base_through,
+                    through: work.through,
+                    pending_tokens: work.pending_tokens,
                 }
+                .record("failed");
+                record.latency_ms = Some(latency_ms);
+                match result {
+                    Ok(result) if result.complete => {
+                        record.usage = result.usage;
+                        if self.state.apply_summary(&work, &result.text) {
+                            record.status = "applied".into();
+                            self.last_attempt_round = None;
+                        } else {
+                            record.status = "stale".into();
+                            record.error = Some(
+                                "Summary snapshot no longer matches the current context".into(),
+                            );
+                        }
+                    }
+                    Ok(result) => {
+                        record.status = "incomplete".into();
+                        record.usage = result.usage;
+                        record.error =
+                            Some("Fast model did not return a complete router summary".into());
+                    }
+                    Err(error) => record.error = Some(error.to_string()),
+                }
+                Some(record)
+            }
+            Err(error) => {
+                let mut record = snapshot?.record("task_failed");
+                record.error = Some(error.to_string());
+                Some(record)
             }
         }
     }
@@ -521,6 +580,11 @@ impl RoundRouterContext {
             return;
         };
         self.last_attempt_round = Some(self.state.observed_rounds);
+        self.active_summary = Some(SummarySnapshot {
+            base_through: work.base_through,
+            through: work.through,
+            pending_tokens: work.pending_tokens,
+        });
         let factory = self.factory.clone();
         let session_id = self.state.session_id.clone();
         let dialog_turn_id = self.state.dialog_turn_id.clone();
@@ -570,7 +634,7 @@ impl RoundRouterContext {
                 }),
             );
             trace_guard.finish();
-            (work, result)
+            (work, result, started.elapsed().as_millis() as u64)
         }));
     }
 
