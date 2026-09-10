@@ -33,7 +33,7 @@ fn fixture(fail: bool) -> (RoundRouterContext, Arc<FakeSummary>) {
         release: Notify::new(),
         fail,
     });
-    let mut factory = RouterContextFactory::new(
+    let mut factory = RouterContextFactory::new_with_counter(
         RouterContextConfig {
             summary_trigger_tokens: 1,
             ..Default::default()
@@ -41,6 +41,7 @@ fn fixture(fail: bool) -> (RoundRouterContext, Arc<FakeSummary>) {
         3,
         "fixture system",
         None,
+        Arc::new(Utf8ByteBudget),
     )
     .unwrap();
     factory.summary_provider = provider.clone();
@@ -457,7 +458,14 @@ fn budget_validation_reserves_system_template_and_output() {
         context_window: 512,
         ..Default::default()
     };
-    assert!(RouterContextFactory::new(config, 3, "system", None).is_err());
+    assert!(RouterContextFactory::new_with_counter(
+        config,
+        3,
+        "system",
+        None,
+        Arc::new(Utf8ByteBudget),
+    )
+    .is_err());
 }
 
 #[test]

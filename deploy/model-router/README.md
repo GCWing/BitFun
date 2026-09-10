@@ -126,10 +126,14 @@ history，不计算也不持久化 summary 的 tokens。
 
 ### 准确 token 预算
 
-`deploy/model-router/tokenizer.json` 是当前 `router-best` 对应的固定 tokenizer，编译时直接
-嵌入 BitFun 二进制。运行机器不需要 Router 模型目录、额外 tokenizer 文件或相关环境变量，
-客户端也不会下载资源或请求额外服务。预算会单独预留固定 system prompt、128 输出 tokens
-和 256 模板 tokens。
+BitFun 不在 Git 仓库或二进制中内嵌 tokenizer。编译不需要该资源；运行前只需将当前
+`router-best` 对应的 `tokenizer.json` 下载到 `deploy/model-router/tokenizer.json`。启动脚本
+会把该路径传给 `OPENBITFUN_ROUND_ROUTER_TOKENIZER_PATH`；也可以通过
+`ROUTER_TOKENIZER_PATH=/absolute/path/tokenizer.json` 覆盖。直接启动 CLI 或 Desktop 时必须
+显式设置 `OPENBITFUN_ROUND_ROUTER_TOKENIZER_PATH`。无需下载模型权重，但 tokenizer 必须与
+服务端 Router 模型一致，否则 token 预算会失真。当前文件的 SHA-256 应为
+`aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4`。预算会单独预留固定
+system prompt、128 输出 tokens 和 256 模板 tokens。
 
 CLI 与 Desktop 共用此 Core 路径；无需分别实现压缩。在不经启动脚本的 Desktop/CLI 宿主上，
 使用对应的 `OPENBITFUN_ROUND_ROUTER_*` 环境变量（例如 `..._MAX_INPUT_TOKENS`、
