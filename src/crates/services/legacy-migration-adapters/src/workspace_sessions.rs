@@ -4,6 +4,7 @@ use super::common::{
 };
 use openbitfun_core_types::product_identity::product_id;
 use openbitfun_core_types::validate_session_id;
+use openbitfun_legacy_migration::copy_directory as copy_tree;
 use openbitfun_legacy_migration::{
     atomic_write_bytes, atomic_write_json, DomainContext, DomainScan, LegacyDomainAdapter,
     LegacyMigrationError, LegacyMigrationResult, MigrationRoots,
@@ -339,12 +340,19 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 action: None,
             })
             .collect::<Vec<_>>();
-        warnings.extend(plan.conflicts.iter().filter(|conflict| conflict.resolution == ConflictResolution::ItemSkipped).map(|conflict| MigrationDiagnostic {
-            code: conflict.code.clone(), severity: FindingSeverity::Warning,
-            domain: Some(self.domain()),
-            message: "An unreadable or unsupported source item was skipped; other Sessions were imported.".to_string(),
-            ..Default::default()
-        }));
+        warnings.extend(
+            plan.conflicts
+                .iter()
+                .filter(|conflict| conflict.resolution == ConflictResolution::ItemSkipped)
+                .map(|conflict| MigrationDiagnostic {
+                    code: conflict.code.clone(),
+                    severity: FindingSeverity::Warning,
+                    domain: Some(self.domain()),
+                    relative_path: Some(conflict.source_summary.clone()),
+                    message: conflict.target_summary.clone(),
+                    ..Default::default()
+                }),
+        );
         let orphaned_relationships = orphaned_session_relationship_count(&manifest);
         if orphaned_relationships > 0 {
             warnings.push(MigrationDiagnostic {
@@ -964,11 +972,14 @@ fn plan_assistant_workspaces(
         let relative_path = PathBuf::from(file_name(&source_path)?);
         let (expected_hash, logical_bytes) = match hash_tree_with_size(&source_path) {
             Ok(value) => value,
-            Err(_) => {
-                conflicts.push(skipped_workspace(&relative_display(
-                    &roots.legacy_home_root,
-                    &source_path,
-                )));
+            Err(error) => {
+                conflicts.push(MigrationConflict {
+                    domain: MigrationDomainId::WorkspaceSessions,
+                    code: "assistant_workspace_not_migrated".into(),
+                    source_summary: relative_display(&roots.legacy_home_root, &source_path),
+                    target_summary: format!("Source workspace retained: {error}"),
+                    resolution: ConflictResolution::ItemSkipped,
+                });
                 continue;
             }
         };
@@ -1616,11 +1627,33 @@ fn index_target_sessions(
 fn find_session_roots(home_root: &Path) -> LegacyMigrationResult<Vec<PathBuf>> {
     let mut found = Vec::new();
     let mut visited = 0usize;
-    for name in ["projects", "remote_ssh", "personal_assistant"] {
-        let root = home_root.join(name);
-        if root.exists() {
-            find_session_roots_recursive(&root, 0, &mut visited, &mut found)?;
+    // Local and assistant Sessions share projects/<slug>/sessions. Workspace
+    // content (including personal_assistant) is not a runtime discovery root.
+    // Do not descend into snapshots, plugin data, or user build/dependency trees.
+    let projects = home_root.join("projects");
+    if projects.exists() {
+        for runtime in child_directories(&projects)? {
+            visited += 1;
+            if visited > MAX_RUNTIME_DIRECTORIES {
+                return Err(LegacyMigrationError::ResourceLimit(format!(
+                    "workspace runtime contains more than {MAX_RUNTIME_DIRECTORIES} directories"
+                )));
+            }
+            let sessions = runtime.join("sessions");
+            match fs::symlink_metadata(&sessions) {
+                Ok(_) => {
+                    reject_linked_directory(&sessions)?;
+                    found.push(sessions);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(io_error(&sessions, error)),
+            }
         }
+    }
+    // SSH mirrors encode a variable number of POSIX remote path components.
+    let remote = home_root.join("remote_ssh");
+    if remote.exists() {
+        find_session_roots_recursive(&remote, 0, &mut visited, &mut found)?;
     }
     found.sort();
     Ok(found)
@@ -1821,61 +1854,53 @@ fn hash_entries(mut entries: Vec<(PathBuf, Vec<u8>)>) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-fn hash_tree_with_size(root: &Path) -> LegacyMigrationResult<(String, u64)> {
+fn tree_entries(root: &Path) -> LegacyMigrationResult<Vec<(PathBuf, bool)>> {
     let mut entries = Vec::new();
-    collect_tree_entries(root, root, 0, &mut entries)?;
-    let logical_bytes = entries
-        .iter()
-        .map(|(_, bytes)| bytes.len() as u64)
-        .sum::<u64>();
-    Ok((hash_entries(entries), logical_bytes))
+    openbitfun_legacy_migration::visit_directory(root, |path, directory| {
+        if path != root {
+            entries.push((path.to_path_buf(), directory));
+        }
+        Ok(())
+    })?;
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(entries)
+}
+fn hash_tree_with_size(root: &Path) -> LegacyMigrationResult<(String, u64)> {
+    use std::io::Read;
+    let mut hasher = Sha256::new();
+    let mut logical_bytes = 0u64;
+    let mut buffer = [0u8; 64 * 1024];
+    for (path, directory) in tree_entries(root)? {
+        if directory {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|_| LegacyMigrationError::PathEscape(path.clone()))?;
+        hasher.update(relative.to_string_lossy().replace('\\', "/").as_bytes());
+        hasher.update([0]);
+        let mut file = fs::File::open(&path).map_err(|error| io_error(&path, error))?;
+        loop {
+            let read = file
+                .read(&mut buffer)
+                .map_err(|error| io_error(&path, error))?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+            logical_bytes += read as u64;
+        }
+        hasher.update([0]);
+    }
+    Ok((
+        format!("sha256:{}", hex::encode(hasher.finalize())),
+        logical_bytes,
+    ))
 }
 
 fn hash_tree(root: &Path) -> LegacyMigrationResult<String> {
     hash_tree_with_size(root).map(|(hash, _)| hash)
 }
-
-fn collect_tree_entries(
-    root: &Path,
-    directory: &Path,
-    depth: usize,
-    entries: &mut Vec<(PathBuf, Vec<u8>)>,
-) -> LegacyMigrationResult<()> {
-    if depth > MAX_RUNTIME_DEPTH {
-        return Err(LegacyMigrationError::ResourceLimit(format!(
-            "target tree depth exceeds {MAX_RUNTIME_DEPTH}: {}",
-            root.display()
-        )));
-    }
-    reject_linked_directory(directory)?;
-    for entry in read_dir_sorted(directory)? {
-        let path = entry.path();
-        let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
-        if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
-            return Err(LegacyMigrationError::LinkedPath(path));
-        }
-        if metadata.is_dir() {
-            collect_tree_entries(root, &path, depth + 1, entries)?;
-        } else if metadata.is_file() {
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|_| LegacyMigrationError::PathEscape(path.clone()))?
-                .to_path_buf();
-            entries.push((
-                relative,
-                fs::read(&path).map_err(|error| io_error(&path, error))?,
-            ));
-        }
-        if entries.len() > MAX_SESSION_FILES {
-            return Err(LegacyMigrationError::ResourceLimit(format!(
-                "target tree contains more than {MAX_SESSION_FILES} files: {}",
-                root.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
 fn require_tree_hash(path: &Path, expected: &str) -> LegacyMigrationResult<()> {
     let actual = hash_tree(path)?;
     if actual != expected {
@@ -1936,27 +1961,6 @@ fn install_directory_idempotent(
         fs::remove_dir_all(&temp).map_err(|error| io_error(&temp, error))?;
     }
     install_result
-}
-
-fn copy_tree(source: &Path, target: &Path) -> LegacyMigrationResult<()> {
-    reject_linked_directory(source)?;
-    fs::create_dir_all(target).map_err(|error| io_error(target, error))?;
-    for entry in read_dir_sorted(source)? {
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        let metadata =
-            fs::symlink_metadata(&source_path).map_err(|error| io_error(&source_path, error))?;
-        if metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
-            return Err(LegacyMigrationError::LinkedPath(source_path));
-        }
-        if metadata.is_dir() {
-            copy_tree(&source_path, &target_path)?;
-        } else if metadata.is_file() {
-            let bytes = fs::read(&source_path).map_err(|error| io_error(&source_path, error))?;
-            atomic_write_bytes(&target_path, &bytes)?;
-        }
-    }
-    Ok(())
 }
 
 fn install_file_idempotent(
@@ -2229,6 +2233,48 @@ mod tests {
         assert!(current_workspace_storage_id(&workspace)
             .unwrap()
             .starts_with("remote_"));
+    }
+
+    #[test]
+    fn streamed_tree_hash_preserves_the_existing_manifest_format() {
+        let temp = test_tempdir("tree-hash");
+        let entries = vec![
+            (PathBuf::from("z"), vec![42; 150_000]),
+            (PathBuf::from("a/b"), b"hello".to_vec()),
+        ];
+        for (path, bytes) in &entries {
+            atomic_write_bytes(&temp.path().join(path), bytes).unwrap();
+        }
+        let (hash, size) = hash_tree_with_size(temp.path()).unwrap();
+        assert_eq!(hash, hash_entries(entries));
+        assert_eq!(size, 150_005);
+    }
+
+    #[test]
+    fn session_discovery_ignores_workspace_content_and_runtime_artifacts() {
+        let temp = test_tempdir("session-discovery");
+        let home = temp.path();
+        let expected = vec![
+            home.join("projects/assistant/sessions"),
+            home.join("projects/local/sessions"),
+            home.join("remote_ssh/host/srv/nested/repo/sessions"),
+        ];
+        for path in &expected {
+            fs::create_dir_all(path).unwrap();
+        }
+        for relative in [
+            "personal_assistant/workspace/build",
+            "projects/local/snapshots",
+            "projects/local/plugin-runtime",
+        ] {
+            let mut deep = home.join(relative);
+            for _ in 0..=MAX_RUNTIME_DEPTH {
+                deep.push("d");
+            }
+            // A user directory named sessions is not product Session storage.
+            fs::create_dir_all(deep.join("sessions")).unwrap();
+        }
+        assert_eq!(find_session_roots(home).unwrap(), expected);
     }
 
     #[test]

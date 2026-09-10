@@ -1752,7 +1752,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn startup_rejects_speech_generation_fields_without_mutating_the_file() {
+    async fn startup_recovers_speech_generation_fields_without_mutating_the_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("speech-startup-repair");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -1781,17 +1781,22 @@ mod tests {
             .await
             .expect("seed config");
 
-        let error = match ConfigService::with_settings(ConfigManagerSettings {
+        let service = ConfigService::with_settings(ConfigManagerSettings {
             path_manager: Some(path_manager.clone()),
             auto_save: true,
             backup_count: 5,
         })
         .await
-        {
-            Ok(_) => panic!("inapplicable speech model fields must fail startup"),
-            Err(error) => error,
-        };
-        assert!(error.to_string().contains("context_window"), "{error}");
+        .expect("legacy speech fields should recover");
+        let models = service.get_ai_models().await.unwrap();
+        assert!(models[0].enabled);
+        assert_eq!(models[0].context_window, None);
+        assert_eq!(models[0].max_tokens, None);
+        assert!(service
+            .load_diagnostics()
+            .await
+            .iter()
+            .any(|d| d.path.ends_with("context_window")));
         assert_eq!(
             tokio::fs::read_to_string(path_manager.app_config_file())
                 .await
@@ -2261,7 +2266,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn startup_rejects_invalid_canonical_reasoning_config() {
+    async fn startup_disables_invalid_reasoning_model_without_mutating_the_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         let user_root = dir.path().join("invalid-reasoning-startup");
         let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
@@ -2300,13 +2305,31 @@ mod tests {
         .await
         .expect("invalid config should be written");
 
-        let error = match ConfigService::with_settings(settings()).await {
-            Ok(_) => panic!("invalid canonical reasoning must fail startup"),
-            Err(error) => error,
-        };
-
-        assert!(error
-            .to_string()
-            .contains("default preset 'missing' is not available"));
+        let original = tokio::fs::read(path_manager.app_config_file())
+            .await
+            .unwrap();
+        let service = ConfigService::with_settings(settings()).await.unwrap();
+        let models = service.get_ai_models().await.unwrap();
+        assert_eq!(models.len(), 1);
+        assert!(!models[0].enabled);
+        assert_eq!(models[0].api_key, "key");
+        assert_eq!(
+            models[0]
+                .reasoning
+                .as_ref()
+                .unwrap()
+                .default_preset
+                .as_deref(),
+            Some("missing")
+        );
+        assert!(service.load_diagnostics().await.iter().any(|d| d
+            .message
+            .contains("default preset 'missing' is not available")));
+        assert_eq!(
+            tokio::fs::read(path_manager.app_config_file())
+                .await
+                .unwrap(),
+            original
+        );
     }
 }

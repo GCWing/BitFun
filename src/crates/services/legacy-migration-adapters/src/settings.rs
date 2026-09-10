@@ -50,6 +50,7 @@ struct MergeOutcome {
     skipped: u64,
     conflicts: Vec<MigrationConflict>,
     rejected: Vec<String>,
+    repairs: Vec<openbitfun_config_contracts::ConfigDiagnostic>,
 }
 
 impl LegacyDomainAdapter for SettingsAdapter {
@@ -67,7 +68,7 @@ impl LegacyDomainAdapter for SettingsAdapter {
             finding: ScanFinding {
                 domain: self.domain(),
                 code: if outcome.rejected.is_empty() { "legacy_settings_supported" } else { "settings_items_skipped" }.to_string(),
-                severity: if outcome.rejected.is_empty() { FindingSeverity::Info } else { FindingSeverity::Warning },
+                severity: if outcome.rejected.is_empty() && outcome.repairs.is_empty() { FindingSeverity::Info } else { FindingSeverity::Warning },
                 entity_count: outcome.imported + outcome.skipped,
                 logical_bytes: bytes.len() as u64,
                 source_schema: Some(SOURCE_SCHEMA.to_string()),
@@ -114,6 +115,14 @@ impl LegacyDomainAdapter for SettingsAdapter {
                         .to_string(),
                     ..Default::default()
                 })
+                .chain(outcome.repairs.iter().map(|repair| MigrationDiagnostic {
+                    code: repair.code.clone(),
+                    severity: FindingSeverity::Warning,
+                    domain: Some(self.domain()),
+                    relative_path: Some(repair.path.clone()),
+                    message: repair.message.clone(),
+                    ..Default::default()
+                }))
                 .collect(),
             ..MigrationDomainResult::default()
         })
@@ -455,6 +464,8 @@ fn merge_settings(
         ))
     })?;
     merge_models(source_models, &mut merged.ai.models, &mut outcome)?;
+    outcome.repairs =
+        openbitfun_config_contracts::normalization::recover_persisted_config(&mut merged);
     merged.product_id = defaults.product_id;
     merged.schema_version = defaults.schema_version;
     merged.version = defaults.version;
@@ -609,6 +620,15 @@ fn normalize_legacy_config_value(value: &mut Value) {
     let Some(ai) = value.get_mut("ai").and_then(Value::as_object_mut) else {
         return;
     };
+    // The retired 0.2.x selector is translated only at the legacy import boundary.
+    if let Some(mode) = ai
+        .get_mut("agent_model_defaults")
+        .and_then(|defaults| defaults.get_mut("mode"))
+    {
+        if mode.as_str() == Some("auto") {
+            *mode = Value::String("primary".to_string());
+        }
+    }
     if let Some(profiles) = ai.get_mut("agent_profiles").and_then(Value::as_object_mut) {
         for (profile_id, profile) in profiles {
             let Some(profile) = profile.as_object_mut() else {
@@ -929,6 +949,122 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn settings_recovery_is_reported_and_source_credentials_are_preserved() {
+        let temp = test_tempdir("settings-recovery");
+        let roots = test_roots(temp.path());
+        seed_source(&roots, true);
+        let mut source = read_source_config(&roots).unwrap();
+        source["ai"]["stream_idle_timeout_secs"] = serde_json::json!(0);
+        source["ai"]["default_models"]["primary"] = serde_json::json!("missing-model");
+        atomic_write_json(&source_config_path(&roots), &source).unwrap();
+        let original = fs::read(source_config_path(&roots)).unwrap();
+        let fingerprint = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let selection = MigrationSelection {
+            groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+        };
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let plan = engine
+            .plan(&fingerprint, selection, &CancellationToken::default())
+            .unwrap();
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        let settings = report
+            .domain_results
+            .iter()
+            .find(|r| r.domain == MigrationDomainId::Settings)
+            .unwrap();
+        assert_eq!(settings.state, MigrationDomainState::Verified);
+        assert!(settings
+            .warnings
+            .iter()
+            .any(|d| d.relative_path.as_deref() == Some("ai.stream_idle_timeout_secs")));
+        assert!(settings
+            .warnings
+            .iter()
+            .any(|d| d.relative_path.as_deref() == Some("ai.default_models.primary")));
+        let target = read_target_config(&roots).unwrap();
+        assert_eq!(
+            target.ai.default_models.primary.as_deref(),
+            Some("legacy-model")
+        );
+        assert_eq!(
+            target.ai.models[0].api_key,
+            source["ai"]["models"][0]["api_key"].as_str().unwrap()
+        );
+        assert_eq!(fs::read(source_config_path(&roots)).unwrap(), original);
+    }
+
+    #[test]
+    fn merged_references_use_the_preserved_target_model_capabilities() {
+        let source = serde_json::json!({"schema_version":1,"version":"0.2.19", "ai": {
+            "models":[{"id":"same", "name":"Source", "provider":"openai", "enabled":true}],
+            "default_models":{"primary":"same"},
+            "agent_model_defaults":{"subagents":{"default":{"kind":"fixed","model_id":"same"}}},
+            "stream_idle_timeout_secs":0
+        }});
+        let original = source.clone();
+        let mut target = GlobalConfig::default();
+        target.ai.models.push(AIModelConfig {
+            id: "same".into(),
+            name: "Target".into(),
+            enabled: false,
+            ..AIModelConfig::default()
+        });
+        let (merged, outcome) = merge_settings(&source, target).unwrap();
+        assert_eq!(merged.ai.models[0].name, "Target");
+        assert!(!merged.ai.models[0].enabled);
+        assert_eq!(merged.ai.default_models.primary, None);
+        assert_eq!(
+            merged
+                .ai
+                .agent_model_defaults
+                .subagents
+                .default_selection
+                .fixed_model_id(),
+            Some("fast")
+        );
+        assert!(outcome
+            .repairs
+            .iter()
+            .any(|d| d.path == "ai.default_models.primary"));
+        assert!(outcome
+            .repairs
+            .iter()
+            .any(|d| d.path == "ai.stream_idle_timeout_secs"));
+        assert_eq!(source, original);
+    }
+
+    #[test]
+    fn legacy_auto_mode_migrates_to_primary_without_overriding_target_model() {
+        let source = serde_json::json!({
+            "schema_version": 1, "version": "0.2.19",
+            "ai": {"agent_model_defaults": {"mode": "auto"}}
+        });
+        let original = source.clone();
+        let (config, fields, rejected) = convert_source_config(&source).unwrap();
+        assert!(rejected.is_empty());
+        assert_eq!(config.ai.agent_model_defaults.mode, "primary");
+        assert_eq!(fields["ai"]["agent_model_defaults"]["mode"], "primary");
+        let (merged, _) = merge_settings(&source, GlobalConfig::default()).unwrap();
+        assert_eq!(merged.ai.agent_model_defaults.mode, "primary");
+        let mut target = GlobalConfig::default();
+        target.ai.agent_model_defaults.mode = "custom-model".into();
+        target.ai.models.push(AIModelConfig {
+            id: "custom-model".into(),
+            name: "Custom".into(),
+            provider: "openai".into(),
+            enabled: true,
+            ..Default::default()
+        });
+        let (merged, _) = merge_settings(&source, target).unwrap();
+        assert_eq!(merged.ai.agent_model_defaults.mode, "custom-model");
+        assert_eq!(source, original);
+    }
+
+    #[test]
     fn malformed_fields_and_models_do_not_discard_valid_siblings() {
         let source = serde_json::json!({"schema_version":1,"version":"0.2.19","ai":{
             "subagent_max_concurrency": 3, "stream_idle_timeout_secs":"broken", "enable_deferred_tool_loading": [],
@@ -1157,11 +1293,16 @@ mod tests {
             AIModelConfig {
                 id: "target-model".to_string(),
                 name: "Target model".to_string(),
+                provider: "openai".to_string(),
+                enabled: true,
                 ..AIModelConfig::default()
             },
             AIModelConfig {
                 id: "legacy-model".to_string(),
                 api_key: "target-secret".to_string(),
+                name: "Legacy model".to_string(),
+                provider: "openai".to_string(),
+                enabled: true,
                 custom_headers: Some(Default::default()),
                 custom_request_body: Some(String::new()),
                 ..AIModelConfig::default()

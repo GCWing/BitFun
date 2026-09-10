@@ -2895,6 +2895,32 @@ mod tests {
     }
 
     #[test]
+    fn mode_model_selector_preserves_configured_ids_on_round_trip() {
+        for (stored, expected) in [
+            ("custom-selector", "custom-selector"),
+            ("primary", "primary"),
+            ("fast", "fast"),
+            ("custom-model", "custom-model"),
+        ] {
+            let mut value = serde_json::to_value(GlobalConfig::default()).unwrap();
+            value["ai"]["agent_model_defaults"]["mode"] = serde_json::json!(stored);
+            let config: GlobalConfig = serde_json::from_value(value).unwrap();
+            assert_eq!(config.ai.agent_model_defaults.mode, expected);
+            let saved = serde_json::to_value(&config).unwrap();
+            assert_eq!(saved["ai"]["agent_model_defaults"]["mode"], expected);
+            let reloaded: GlobalConfig = serde_json::from_value(saved).unwrap();
+            assert_eq!(reloaded.ai.agent_model_defaults.mode, expected);
+        }
+        let missing: AgentModelDefaultsConfig =
+            serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(missing.mode, "primary");
+        assert!(serde_json::from_value::<AgentModelDefaultsConfig>(
+            serde_json::json!({"mode": 42})
+        )
+        .is_err());
+    }
+
+    #[test]
     fn builtin_subagent_without_override_uses_the_shared_default() {
         let mut defaults = AgentModelDefaultsConfig::default();
         defaults.subagents.default_selection = SubagentModelSelection::fixed("primary");

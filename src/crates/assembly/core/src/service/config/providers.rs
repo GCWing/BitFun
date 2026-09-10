@@ -13,6 +13,7 @@ use crate::infrastructure::ai::AIClient;
 use crate::util::errors::*;
 use async_trait::async_trait;
 use log::{error, info};
+#[cfg(any(feature = "ai-adapter-runtime", test))]
 use openbitfun_core_types::ReasoningCatalogBinding;
 #[cfg(test)]
 use openbitfun_core_types::{ReasoningConfig, ReasoningPreset, ReasoningPresetAction};
@@ -180,56 +181,15 @@ impl ConfigProvider for AIConfigProvider {
             }
 
             for (index, model) in ai_config.models.iter().enumerate() {
-                if !model.supports_text_generation() {
-                    for (field, present) in [
-                        ("context_window", model.context_window.is_some()),
-                        ("max_tokens", model.max_tokens.is_some()),
-                        ("temperature", model.temperature.is_some()),
-                        ("top_p", model.top_p.is_some()),
-                    ] {
-                        if present {
-                            return Err(OpenBitFunError::validation(format!(
-                                "Model '{}' has text-generation-only field {field} at index {}",
-                                model.name, index
-                            )));
-                        }
-                    }
-                }
+                openbitfun_config_contracts::normalization::validate_model_config(model, index)
+                    .map_err(OpenBitFunError::validation)?;
                 if !model.enabled {
                     continue;
-                }
-                if model.name.trim().is_empty() {
-                    return Err(OpenBitFunError::validation(format!(
-                        "Model name is required at index {}",
-                        index
-                    )));
-                }
-                if model.provider.trim().is_empty() {
-                    return Err(OpenBitFunError::validation(format!(
-                        "Model provider is required at index {}",
-                        index
-                    )));
                 }
                 if model.api_key.trim().is_empty() {
                     warnings.push(format!("Model '{}' has empty API key", model.name));
                 }
                 if model.supports_text_generation() {
-                    if let Some(context_window) = model.context_window {
-                        if context_window < MIN_MODEL_CONTEXT_WINDOW_TOKENS {
-                            return Err(OpenBitFunError::validation(format!(
-                                "Model '{}' context_window must be at least {} at index {}",
-                                model.name, MIN_MODEL_CONTEXT_WINDOW_TOKENS, index
-                            )));
-                        }
-                    }
-                    if let Some(max_tokens) = model.max_tokens {
-                        if max_tokens == 0 {
-                            return Err(OpenBitFunError::validation(format!(
-                                "Model '{}' max_tokens must be greater than 0 at index {}",
-                                model.name, index
-                            )));
-                        }
-                    }
                     if let Some(temperature) = model.temperature {
                         if !temperature.is_nan() && !(0.0..=2.0).contains(&temperature) {
                             warnings.push(format!(
@@ -239,15 +199,9 @@ impl ConfigProvider for AIConfigProvider {
                         }
                     }
                 }
-
+                #[cfg(feature = "ai-adapter-runtime")]
                 if let Some(reasoning) = model.reasoning.as_ref() {
-                    reasoning.validate_schema().map_err(|message| {
-                        OpenBitFunError::validation(format!(
-                            "Model '{}' reasoning config is invalid at index {}: {}",
-                            model.name, index, message
-                        ))
-                    })?;
-
+                    #[cfg(feature = "ai-adapter-runtime")]
                     if let Some(default_preset) = reasoning.default_preset.as_deref() {
                         #[cfg(feature = "ai-adapter-runtime")]
                         {
@@ -263,16 +217,6 @@ impl ConfigProvider for AIConfigProvider {
                                     model.name, default_preset, index
                                 )));
                             }
-                        }
-
-                        #[cfg(not(feature = "ai-adapter-runtime"))]
-                        if reasoning.preset(default_preset).is_none()
-                            && matches!(reasoning.catalog, ReasoningCatalogBinding::Disabled)
-                        {
-                            return Err(OpenBitFunError::validation(format!(
-                                "Model '{}' reasoning default preset '{}' is not available at index {}",
-                                model.name, default_preset, index
-                            )));
                         }
                     }
 
@@ -321,14 +265,13 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
-            let enabled_model_with_capability =
-                |model_id: &str, capability: ModelCapability| {
-                    ai_config.models.iter().any(|model| {
-                        model.enabled
-                            && model.id == model_id
-                            && model.supports_capability(capability.clone())
-                    })
-                };
+            let enabled_model_with_capability = |model_id: &str, capability: ModelCapability| {
+                ai_config.models.iter().any(|model| {
+                    model.enabled
+                        && model.id == model_id
+                        && model.supports_capability(capability.clone())
+                })
+            };
             for (field, model_id, capability) in [
                 (
                     "primary",
@@ -400,19 +343,20 @@ impl ConfigProvider for AIConfigProvider {
                 crate::service::config::types::TaskModelSelection::Fixed { .. } => {}
             }
 
-            let validate_agent_selection =
-                |path: &str, selection: &SubagentModelSelection| -> OpenBitFunResult<()> {
-                    if selection
-                        .fixed_model_id()
-                        .is_some_and(|model_id| !valid_task_model(model_id))
-                    {
-                        return Err(OpenBitFunError::validation(format!(
+            let validate_agent_selection = |path: &str,
+                                            selection: &SubagentModelSelection|
+             -> OpenBitFunResult<()> {
+                if selection
+                    .fixed_model_id()
+                    .is_some_and(|model_id| !valid_task_model(model_id))
+                {
+                    return Err(OpenBitFunError::validation(format!(
                             "ai.agent_model_defaults.{path} references unavailable or incapable model '{}'",
                             selection.fixed_model_id().expect("checked above")
                         )));
-                    }
-                    Ok(())
-                };
+                }
+                Ok(())
+            };
             if !valid_task_model(&ai_config.agent_model_defaults.mode) {
                 return Err(OpenBitFunError::validation(format!(
                     "ai.agent_model_defaults.mode references unavailable or incapable model '{}'",
@@ -458,7 +402,6 @@ impl ConfigProvider for AIConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// Web UI appearance selection provider.
@@ -507,7 +450,6 @@ impl ConfigProvider for AppearanceConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// Editor configuration provider.
@@ -560,7 +502,6 @@ impl ConfigProvider for EditorConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// Terminal configuration provider.
@@ -617,7 +558,6 @@ impl ConfigProvider for TerminalConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// Workspace configuration provider.
@@ -668,7 +608,6 @@ impl ConfigProvider for WorkspaceConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// App configuration provider.
@@ -728,7 +667,6 @@ impl ConfigProvider for AppConfigProvider {
         }
         Ok(())
     }
-
 }
 
 /// Configuration provider registry.

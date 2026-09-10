@@ -361,13 +361,15 @@ fn preview(source: &RemoteConnectState, target: &RemoteConnectState) -> Preview 
     let mut skipped = source.omitted.len() as u64;
     let mut conflicts = Vec::new();
     if source.device.is_some() {
-        if target.device.is_some() {
+        if let Some(target_device) = &target.device {
             skipped += 1;
-            conflicts.push(target_wins(
-                "device_identity_target_wins",
-                "legacy device identity",
-                "current device identity",
-            ));
+            if source.device.as_ref() != Some(target_device) {
+                conflicts.push(target_wins(
+                    "device_identity_target_wins",
+                    "legacy device identity",
+                    "current device identity",
+                ));
+            }
         } else {
             imported += 1;
         }
@@ -1190,6 +1192,32 @@ mod tests {
         assert_eq!(source.omitted.len(), 2);
         assert_eq!(source.files.len(), 2);
         assert!(read_state(root, false).is_err());
+    }
+
+    #[test]
+    fn identical_device_identity_is_a_duplicate_without_a_conflict() {
+        let device = owner::DeviceIdentityRecord {
+            device_id: "11111111111111111111111111111111".into(),
+            device_name: "device".into(),
+            mac_address: "02:00:00:00:00:11".into(),
+        };
+        let source = RemoteConnectState {
+            device: Some(device.clone()),
+            ..Default::default()
+        };
+        let mut target = RemoteConnectState {
+            device: Some(device),
+            ..Default::default()
+        };
+        let duplicate = preview(&source, &target);
+        assert_eq!(duplicate.imported, 0);
+        assert_eq!(duplicate.skipped, 1);
+        assert!(duplicate.conflicts.is_empty());
+        target.device.as_mut().unwrap().device_name = "different".into();
+        assert_eq!(
+            preview(&source, &target).conflicts[0].code,
+            "device_identity_target_wins"
+        );
     }
 
     #[test]
