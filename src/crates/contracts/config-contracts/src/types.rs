@@ -64,6 +64,26 @@ where
     }
 }
 
+/// Tolerant reader for optional string maps.
+///
+/// Older documents persisted `""` for an unset map instead of omitting the key,
+/// which a plain `Option<HashMap>` reader rejects as a type error. Treat a blank
+/// string as absent and keep rejecting genuinely malformed values.
+fn deserialize_optional_string_map<'de, D>(
+    deserializer: D,
+) -> Result<Option<HashMap<String, String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(serde_json::Value::String(value)) if value.trim().is_empty() => Ok(None),
+        Some(value) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
+
 /// Web UI font preferences (settings → basics). Keys match `FontPreference` in the frontend (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1582,7 +1602,7 @@ pub struct AIModelConfig {
     pub inline_think_in_text: bool,
 
     /// Custom HTTP request headers.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_string_map")]
     pub custom_headers: Option<std::collections::HashMap<String, String>>,
 
     /// Custom header mode: "replace" (default, full replacement) or "merge" (merge; apply
