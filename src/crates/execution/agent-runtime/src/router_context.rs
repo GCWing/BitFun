@@ -259,6 +259,9 @@ pub struct RouterEntry {
     pub kind: RouterEntryKind,
     #[serde(default)]
     pub is_error: bool,
+    /// Exact Router-tokenizer count of the projected content serialized as JSON.
+    #[serde(default)]
+    pub token_count: usize,
     pub content: Value,
 }
 
@@ -302,6 +305,7 @@ impl Default for RouterContextState {
 pub struct RouterSummaryWork {
     pub base_through: u64,
     pub through: u64,
+    pub pending_tokens: usize,
     pub prompt: String,
 }
 
@@ -314,6 +318,7 @@ pub struct PreparedRouterContext {
     pub preparation: RouterPreparationMetrics,
     pub input_tokens: usize,
     pub budget_tokens: usize,
+    pub pending_tokens: usize,
     pub counter: &'static str,
     pub summarized_through: u64,
     pub observed_through: u64,
@@ -362,19 +367,32 @@ impl RouterContextState {
                 .pointer("/assistant/tool_calls")
                 .and_then(Value::as_array)
                 .is_some_and(|values| values.iter().any(flagged));
-        self.entries.push_back(RouterEntry {
+        // Count the exact representation retained by the Router. Counting happens
+        // after deterministic projection, so raw multi-megabyte tool output never
+        // reaches the tokenizer and every observed entry is charged exactly once.
+        let mut entry = RouterEntry {
             sequence: self.next_sequence,
             source_id,
             kind,
             is_error,
-            content: compact_json(&content, 4_096, counter),
-        });
+            token_count: 0,
+            content,
+        };
+        entry.token_count = counter.count(&entry_for_prompt(&entry).to_string());
+        self.entries.push_back(entry);
         self.next_sequence += 1;
         // Backpressure for failed/slow summary providers, never an agent-loop limit.
         while self.entries.len() > 128 {
             if let Some(entry) = self.entries.pop_front() {
                 self.omitted_through = entry.sequence;
             }
+        }
+    }
+
+    /// Populate per-entry token metadata added after v1 checkpoints were introduced.
+    pub fn refresh_token_counts(&mut self, counter: &dyn RouterTokenCounter) {
+        for entry in &mut self.entries {
+            entry.token_count = counter.count(&entry_for_prompt(entry).to_string());
         }
     }
 
@@ -389,46 +407,45 @@ impl RouterContextState {
             .unwrap_or(0)
     }
 
+    pub fn pending_tokens(&self, recent_rounds: usize) -> usize {
+        self.entries
+            .iter()
+            .take(self.recent_start(recent_rounds))
+            .map(|entry| entry.token_count)
+            .sum()
+    }
+
     pub fn summary_work(
         &self,
         recent_rounds: usize,
-        min_rounds: usize,
-        counter: &dyn RouterTokenCounter,
+        trigger_tokens: usize,
     ) -> Option<RouterSummaryWork> {
         let prefix: Vec<_> = self
             .entries
             .iter()
             .take(self.recent_start(recent_rounds))
             .collect();
-        if prefix
-            .iter()
-            .filter(|entry| entry.kind == RouterEntryKind::Round)
-            .count()
-            < min_rounds
-        {
+        let pending_tokens = self.pending_tokens(recent_rounds);
+        if pending_tokens < trigger_tokens {
             return None;
         }
         let through = prefix.last()?.sequence;
-        let entries: Vec<_> = prefix.iter().map(|entry| json!(entry)).collect();
+        let entries: Vec<_> = prefix.iter().map(|entry| entry_for_prompt(entry)).collect();
         Some(RouterSummaryWork {
             base_through: self.summarized_through,
             through,
+            pending_tokens,
             prompt: format!(
                 "Task:\n{}\n\nPrevious router summary:\n{}\n\nObserved entries through sequence {through}:\n{}\n\nPreviously omitted through sequence: {}",
-                truncate(&self.task, 800, counter),
-                truncate(&self.summary, 900, counter),
-                compact_json(&json!(entries), 6_000, counter),
+                self.task,
+                self.summary,
+                json!(entries),
                 self.omitted_through,
             ),
         })
     }
 
-    pub fn apply_summary(
-        &mut self,
-        work: &RouterSummaryWork,
-        summary: &str,
-        counter: &dyn RouterTokenCounter,
-    ) -> bool {
+    pub fn apply_summary(&mut self, work: &RouterSummaryWork, summary: &str) -> bool {
         if work.base_through != self.summarized_through
             || work.through <= self.summarized_through
             || work.through >= self.next_sequence
@@ -436,7 +453,7 @@ impl RouterContextState {
         {
             return false;
         }
-        self.summary = truncate(summary.trim(), 900, counter);
+        self.summary = summary.trim().to_string();
         self.summarized_through = work.through;
         self.entries.retain(|entry| entry.sequence > work.through);
         true
@@ -449,7 +466,6 @@ impl RouterContextState {
         counter: &dyn RouterTokenCounter,
     ) -> PreparedRouterContext {
         let max_tokens = max_tokens.max(512);
-        let task_budget = (max_tokens / 5).min(800);
         // Latest steering first so shrinking never preferentially drops the active request.
         let updates = self
             .latest_user_updates
@@ -459,29 +475,79 @@ impl RouterContextState {
             .collect::<Vec<_>>()
             .join("\nPrevious user update:\n");
         let task = if updates.is_empty() {
-            truncate(&self.task, task_budget, counter)
+            self.task.clone()
         } else {
-            format!(
-                "{}\nUser update:\n{}",
-                truncate(&self.task, task_budget / 2, counter),
-                truncate(&updates, task_budget / 2, counter)
-            )
+            format!("{}\nUser update:\n{}", self.task, updates)
         };
         let start = self.recent_start(recent_rounds);
         let pending: Vec<_> = self
             .entries
             .iter()
             .take(start)
-            .map(|entry| json!(entry))
+            .map(entry_for_prompt)
             .collect();
-        let history_budget = max_tokens / 4;
-        let history = format!(
-            "{}\nUnsummarized earlier observations: {}\nOmitted through sequence: {}",
-            truncate(&self.summary, history_budget / 2, counter),
-            compact_json(&json!(pending), history_budget / 2, counter),
+        let pending_tokens = self
+            .entries
+            .iter()
+            .take(start)
+            .map(|entry| entry.token_count)
+            .sum();
+        let history = match (
+            self.summary.is_empty(),
+            pending.is_empty(),
             self.omitted_through,
-        );
+        ) {
+            (true, true, 0) => "(none)".to_string(),
+            _ => format!(
+                "{}{}{}",
+                if self.summary.is_empty() {
+                    ""
+                } else {
+                    self.summary.as_str()
+                },
+                if pending.is_empty() {
+                    String::new()
+                } else {
+                    format!("\nUnsummarized earlier observations: {}", json!(pending))
+                },
+                if self.omitted_through == 0 {
+                    String::new()
+                } else {
+                    format!(
+                        "\nEarlier observations omitted through sequence: {}",
+                        self.omitted_through
+                    )
+                },
+            ),
+        };
         let recent: Vec<_> = self.entries.iter().skip(start).collect();
+        let full_recent: Vec<_> = recent.iter().map(|entry| entry_for_prompt(entry)).collect();
+        let full_prompt = format!(
+            "## Task\n{task}\n\n## Earlier history summary\n{history}\n\n## Recent trajectory\n{}",
+            json!(full_recent)
+        );
+        if counter.count(&full_prompt) <= max_tokens {
+            return PreparedRouterContext {
+                preparation_ms: 0,
+                preparation: RouterPreparationMetrics::default(),
+                input_tokens: counter.count(&full_prompt),
+                budget_tokens: max_tokens,
+                pending_tokens,
+                counter: counter.name(),
+                user_prompt: full_prompt,
+                summarized_through: self.summarized_through,
+                observed_through: self.next_sequence.saturating_sub(1),
+                omitted_through: self.omitted_through,
+            };
+        }
+
+        // Overflow is exceptional relative to the training distribution. Preserve
+        // the same three-section protocol and latest trajectory, shrinking only
+        // after the complete training-shaped prompt has been measured.
+        let task_budget = (max_tokens / 5).max(128);
+        let task = truncate(&task, task_budget, counter);
+        let history_budget = (max_tokens / 5).max(128);
+        let history = truncate(&history, history_budget, counter);
         let newest_round = recent
             .iter()
             .rposition(|entry| entry.kind == RouterEntryKind::Round)
@@ -529,12 +595,25 @@ impl RouterContextState {
             preparation: RouterPreparationMetrics::default(),
             input_tokens: counter.count(&user_prompt),
             budget_tokens: max_tokens,
+            pending_tokens,
             counter: counter.name(),
             user_prompt,
             summarized_through: self.summarized_through,
             observed_through: self.next_sequence.saturating_sub(1),
             omitted_through: self.omitted_through,
         }
+    }
+}
+
+fn entry_for_prompt(entry: &RouterEntry) -> Value {
+    if entry.kind == RouterEntryKind::Round {
+        let mut value = entry.content.clone();
+        if let Some(object) = value.as_object_mut() {
+            object.insert("is_error".into(), json!(entry.is_error));
+        }
+        value
+    } else {
+        json!({"kind": entry.kind, "content": entry.content})
     }
 }
 
@@ -960,8 +1039,8 @@ mod tests {
             json!("Do not edit; continue verification"),
             &counter,
         );
-        let work = state.summary_work(3, 4, &counter).unwrap();
-        assert!(state.apply_summary(&work, "Earlier tests failed", &counter));
+        let work = state.summary_work(3, 4).unwrap();
+        assert!(state.apply_summary(&work, "Earlier tests failed"));
         let original = state.prepare(3, 4096, &Utf8ByteBudget);
         let cached = state.prepare(3, 4096, &counter);
         assert_eq!(original.user_prompt, cached.user_prompt);
@@ -1033,19 +1112,34 @@ mod tests {
     }
 
     #[test]
+    fn summary_trigger_uses_only_projected_pending_token_volume() {
+        let mut state = RouterContextState::default();
+        for index in 0..4 {
+            append_round(&mut state, index);
+        }
+        let eligible_tokens = state.pending_tokens(3);
+        assert_eq!(eligible_tokens, state.entries[0].token_count);
+        assert!(state.summary_work(3, eligible_tokens + 1).is_none());
+        let work = state.summary_work(3, eligible_tokens).unwrap();
+        assert_eq!(work.pending_tokens, eligible_tokens);
+        assert!(state.apply_summary(&work, "updated factual summary"));
+        assert_eq!(state.summary, "updated factual summary");
+    }
+
+    #[test]
     fn delayed_summary_covers_only_its_snapshot_and_keeps_new_evidence() {
         let mut state = RouterContextState::default();
         for index in 0..8 {
             append_round(&mut state, index);
         }
-        let work = state.summary_work(3, 4, &Utf8ByteBudget).unwrap();
+        let work = state.summary_work(3, 4).unwrap();
         append_round(&mut state, 8);
-        assert!(state.apply_summary(&work, "Earlier factual summary", &Utf8ByteBudget));
+        assert!(state.apply_summary(&work, "Earlier factual summary"));
         assert_eq!(state.entries.front().unwrap().sequence, work.through + 1);
         let prompt = state.prepare(3, 4096, &Utf8ByteBudget).user_prompt;
         assert!(prompt.contains("Earlier factual summary"));
         assert!(prompt.contains("step-8"));
-        assert!(!state.apply_summary(&work, "stale", &Utf8ByteBudget));
+        assert!(!state.apply_summary(&work, "stale"));
     }
 
     #[test]
@@ -1109,7 +1203,7 @@ mod tests {
         assert_eq!(state.entries.len(), 128);
         assert_eq!(state.omitted_through, 72);
         assert_eq!(state.observed_rounds, 200);
-        let work = state.summary_work(3, 4, &Utf8ByteBudget).unwrap();
+        let work = state.summary_work(3, 4).unwrap();
         assert_eq!(work.through, 197);
         let prepared = state.prepare(3, 4096, &Utf8ByteBudget);
         assert!(prepared.user_prompt.contains("step-199"));

@@ -49,11 +49,11 @@ pub fn with_configured_round_model_router(
 ) -> Result<execution::ExecutionEngine> {
     if let Some(router_config) = execution::HttpRoundModelRouterConfig::from_env()? {
         info!(
-            "Enabling per-round model routing: endpoint={}, model={}, recent_rounds={}, max_input_chars={}, timeout_ms={}",
+            "Enabling per-round model routing: endpoint={}, model={}, recent_rounds={}, max_input_tokens={}, timeout_ms={}",
             router_config.endpoint,
             router_config.model,
             router_config.recent_rounds,
-            router_config.max_input_chars,
+            router_config.context.max_input_tokens,
             router_config.timeout.as_millis()
         );
         execution_engine = execution_engine.with_round_model_router(Arc::new(
