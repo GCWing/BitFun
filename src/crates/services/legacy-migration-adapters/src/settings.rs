@@ -482,12 +482,24 @@ fn convert_source_config(
     let mut converted = serde_json::to_value(&defaults)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
     let mut rejected = Vec::new();
-    let accepted = accept_config_patch(&mut converted, "", &normalized_source, &mut rejected)
+    let mut accepted = accept_config_patch(&mut converted, "", &normalized_source, &mut rejected)
         .unwrap_or_else(|| serde_json::json!({}));
     let config: GlobalConfig = serde_json::from_value(converted)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
     let mut compatible_source = serde_json::to_value(&config)
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    // The owner deserializer renames legacy profile keys. Apply the same
+    // mapping to the source-field mask so renamed profiles are not discarded.
+    if let Some(profiles) = accepted
+        .pointer_mut("/ai/agent_profiles")
+        .and_then(Value::as_object_mut)
+    {
+        *profiles =
+            openbitfun_config_contracts::agent_identity_migration::canonicalize_agent_profile_keys(
+                profiles,
+            )
+            .map_err(LegacyMigrationError::InvalidRequest)?;
+    }
     retain_source_fields(&mut compatible_source, &accepted);
     Ok((config, compatible_source, rejected))
 }
@@ -939,6 +951,62 @@ mod tests {
     }
 
     #[test]
+    fn renamed_agent_profiles_preserve_source_fields_and_target_preferences() {
+        let source = serde_json::json!({
+            "schema_version": 1, "version": "0.2.19",
+            "ai": {"agent_profiles": {
+                "coding_shared": {"added_tools": ["LegacyTool"]},
+                "Standard": {"removed_tools": ["ReadFile"]},
+                "Ultra": {"enabled_skills": ["user::bitfun::skill"]},
+                "custom::agentic": {"added_tools": ["CustomTool"]}
+            }}
+        });
+        let original = source.clone();
+        let (_, fields, rejected) = convert_source_config(&source).unwrap();
+        assert!(rejected.is_empty());
+        let profiles = &fields["ai"]["agent_profiles"];
+        assert!(profiles.get("coding_shared").is_none());
+        assert!(profiles.get("Ultra").is_none());
+        assert_eq!(
+            profiles["Standard"]["added_tools"],
+            serde_json::json!(["LegacyTool"])
+        );
+        assert_eq!(
+            profiles["Standard"]["removed_tools"],
+            serde_json::json!(["ReadFile"])
+        );
+        assert!(profiles["Standard"].get("enabled_user_skills").is_none());
+        assert_eq!(
+            profiles["Ultimate"]["enabled_user_skills"],
+            serde_json::json!(["user::openbitfun::skill"])
+        );
+        assert_eq!(
+            profiles["custom::agentic"]["added_tools"],
+            serde_json::json!(["CustomTool"])
+        );
+
+        let mut target = GlobalConfig::default();
+        target.ai.agent_profiles = serde_json::from_value(serde_json::json!({
+            "Standard": {"profile_id": "Standard", "added_tools": ["TargetTool"]}
+        }))
+        .unwrap();
+        let (merged, outcome) = merge_settings(&source, target).unwrap();
+        assert_eq!(
+            merged.ai.agent_profiles["Standard"].added_tools,
+            ["TargetTool"]
+        );
+        assert!(!outcome.conflicts.is_empty());
+        assert_eq!(
+            merged.ai.agent_profiles["Ultimate"].enabled_user_skills,
+            ["user::openbitfun::skill"]
+        );
+        let saved = serde_json::to_value(&merged).unwrap();
+        let reloaded: GlobalConfig = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!(serde_json::to_value(reloaded).unwrap(), saved);
+        assert_eq!(source, original);
+    }
+
+    #[test]
     fn settings_and_credentials_convert_without_staging_secrets() {
         let temp = test_tempdir("settings-credentials");
         let roots = test_roots(temp.path());
@@ -997,8 +1065,9 @@ mod tests {
                 .fixed_model_id(),
             Some("legacy-model")
         );
-        let profile = &target.ai.agent_profiles["coding_shared"];
-        assert_eq!(profile.profile_id, "coding_shared");
+        assert!(!target.ai.agent_profiles.contains_key("coding_shared"));
+        let profile = &target.ai.agent_profiles["Standard"];
+        assert_eq!(profile.profile_id, "Standard");
         assert_eq!(profile.added_tools, ["LegacyTool"]);
         assert_eq!(profile.removed_tools, ["ReadFile"]);
         assert_eq!(
