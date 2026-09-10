@@ -12,6 +12,12 @@ impl LocalTokenizer {
         Self::from_tokenizer(tokenizer)
     }
 
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let tokenizer = tokenizers::Tokenizer::from_bytes(bytes)
+            .map_err(|error| anyhow!("Cannot load embedded tokenizer: {error}"))?;
+        Self::from_tokenizer(tokenizer)
+    }
+
     fn from_tokenizer(mut tokenizer: tokenizers::Tokenizer) -> Result<Self> {
         // Counting must never inherit padding/truncation saved by a training pipeline.
         tokenizer.with_padding(None);
@@ -75,5 +81,22 @@ mod tests {
         assert!(
             LocalTokenizer::from_file(Path::new("/nonexistent/router-tokenizer.json")).is_err()
         );
+    }
+
+    #[test]
+    fn loads_tokenizer_from_embedded_bytes() {
+        let model = WordLevel::builder()
+            .vocab(
+                [("[UNK]".to_string(), 0), ("hello".to_string(), 1)]
+                    .into_iter()
+                    .collect(),
+            )
+            .unk_token("[UNK]".into())
+            .build()
+            .unwrap();
+        let tokenizer = tokenizers::Tokenizer::new(model);
+        let bytes = tokenizer.to_string(false).unwrap();
+        let counter = LocalTokenizer::from_bytes(bytes.as_bytes()).unwrap();
+        assert_eq!(counter.count("hello").unwrap(), 1);
     }
 }

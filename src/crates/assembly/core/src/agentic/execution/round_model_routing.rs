@@ -96,7 +96,6 @@ pub struct HttpRoundModelRouterConfig {
     pub api_key: Option<String>,
     pub timeout: Duration,
     pub recent_rounds: usize,
-    pub max_input_chars: usize,
     pub simple_threshold: f64,
     pub trace_path: Option<PathBuf>,
     pub context: RouterContextConfig,
@@ -137,16 +136,10 @@ impl HttpRoundModelRouterConfig {
         })?;
         let timeout_ms = parse_env_usize("OPENBITFUN_ROUND_ROUTER_TIMEOUT_MS", 10_000)?;
         let recent_rounds = parse_env_usize("OPENBITFUN_ROUND_ROUTER_RECENT_ROUNDS", 3)?;
-        let max_input_chars = parse_env_usize("OPENBITFUN_ROUND_ROUTER_MAX_INPUT_CHARS", 80_000)?;
-        let simple_threshold = parse_env_f64("OPENBITFUN_ROUND_ROUTER_SIMPLE_THRESHOLD", 0.7)?;
+        let simple_threshold = parse_env_f64("OPENBITFUN_ROUND_ROUTER_SIMPLE_THRESHOLD", 0.75)?;
         if recent_rounds == 0 {
             return Err(OpenBitFunError::Configuration(
                 "OPENBITFUN_ROUND_ROUTER_RECENT_ROUNDS must be positive".to_string(),
-            ));
-        }
-        if max_input_chars < 4_096 {
-            return Err(OpenBitFunError::Configuration(
-                "OPENBITFUN_ROUND_ROUTER_MAX_INPUT_CHARS must be at least 4096".to_string(),
             ));
         }
         if !(0.0..=1.0).contains(&simple_threshold) {
@@ -167,7 +160,6 @@ impl HttpRoundModelRouterConfig {
                 .filter(|value| !value.trim().is_empty()),
             timeout: Duration::from_millis(timeout_ms as u64),
             recent_rounds,
-            max_input_chars,
             simple_threshold,
             trace_path: std::env::var("OPENBITFUN_ROUND_ROUTER_TRACE")
                 .ok()
@@ -220,7 +212,6 @@ impl HttpRoundModelRouter {
         let context_factory = RouterContextFactory::new(
             config.context.clone(),
             config.recent_rounds,
-            config.max_input_chars,
             &config.system_prompt,
             config.trace_path.clone(),
         )?;
@@ -609,7 +600,6 @@ mod tests {
             api_key: None,
             timeout: Duration::from_secs(3),
             recent_rounds: 3,
-            max_input_chars: 80_000,
             simple_threshold: 0.7,
             trace_path: None,
             context: super::RouterContextConfig {

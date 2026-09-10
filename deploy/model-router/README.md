@@ -69,22 +69,25 @@ OpenBitFun 会保守地选择主力模型。
 ```text
 Router 模型：       router-best
 最近轨迹轮数：      3
-动态输入预算：      4096 tokens（不含固定 system prompt）
-模型上下文窗口：    33792 tokens
-兼容字符上限：      80000
-Simple 阈值：       0.7
+配置输入上限：      65536 tokens（与服务窗口同步，实际会扣除固定内容）
+服务上下文窗口：    65536 tokens
+Simple 阈值：       0.75
 请求超时：          10000 ms
-Fast 增量摘要：     开启；至少累计 4 个离开最近窗口的 round
-摘要请求超时：      20000 ms
+Fast 增量摘要：     开启；离开最近窗口的内容累计达到 8192 tokens
+历史摘要目标：      约 2048 tokens 以内
+摘要请求超时：      120000 ms
 ```
 
 可以通过 `ROUTER_MODEL`、`ROUTER_RECENT_ROUNDS`、`ROUTER_MAX_INPUT_TOKENS`、
-`ROUTER_CONTEXT_WINDOW`、`ROUTER_MAX_INPUT_CHARS`、`ROUTER_SIMPLE_THRESHOLD`、
-`ROUTER_TIMEOUT_MS`、`ROUTER_SUMMARY_ENABLED`、`ROUTER_SUMMARY_MIN_ROUNDS` 和
-`ROUTER_SUMMARY_TIMEOUT_MS` 覆盖这些默认值。
+`ROUTER_CONTEXT_WINDOW`、`ROUTER_SIMPLE_THRESHOLD`、`ROUTER_TIMEOUT_MS`、
+`ROUTER_SUMMARY_ENABLED`、`ROUTER_SUMMARY_TRIGGER_TOKENS`、
+`ROUTER_SUMMARY_MAX_TOKENS` 和 `ROUTER_SUMMARY_TIMEOUT_MS` 覆盖这些默认值。
 
-上下文窗口默认值沿用[模型卡的 vLLM 示例](https://huggingface.co/zxa11/qwen3-4b-router)，
-应与服务实际的 `--max-model-len` 一致。
+这些默认值来自当前训练数据和配置，而不是模型理论窗口：固定 system prompt 为 1580
+tokens，数据中 user prompt 最大 26517 tokens，完整 chat 输入最大 28110 tokens，SFT
+`max_length` 为 28672。线上 vLLM 的 `--max-model-len` 与 BitFun 配置上限均设为 65536；
+BitFun 会从中扣除固定 system prompt、128 个输出 tokens 和 256 个 chat-template 预留，
+所得值才是动态 user prompt 的实际兜底上限。通常输入远低于该值，不会为了上限进行补齐。
 
 ## Router 专用增量上下文
 
@@ -98,11 +101,15 @@ Fast 增量摘要：     开启；至少累计 4 个离开最近窗口的 round
 Router 有自己的去重游标、待摘要增量和历史摘要；不读取主 Agent 的 compression summary，
 不调用主 Agent 压缩器，不改主消息、主压缩配置或主压缩触发条件。
 
-离开最近窗口的旧轨迹累计至少 4 轮后，用配置中的 **fast** 模型发起一次独立、无工具的
-后台摘要请求。摘要基于旧 Router 摘要和本次旧轨迹快照，最多保留 900 个 Router 预算单位。
+每条观察先完成与 Router 输入一致的确定性预处理，再由 Router 自己的 tokenizer 计算并
+保存 token 数。离开最近 3 轮的旧轨迹累计达到 8192 tokens 后，用配置中的 **fast** 模型
+发起一次独立、无工具的后台摘要请求。摘要基于旧 Router 摘要和本次旧轨迹快照，提示 fast
+模型将新摘要控制在约 2000 tokens，并设置 2048 输出-token 上限。压缩触发只累计 pending
+history，不计算也不持久化 summary 的 tokens。
 摘要尚未完成时直接使用旧摘要加待处理增量，不等待模型返回。每个执行代最多一个摘要请求，
 每个进程最多两个；容量不足时不排队。摘要失败、超时、fast 未配置或返回空/截断内容时
-保留原状态，至少再观察 4 个新 round 才重试，不回退到主力模型做摘要。摘要请求使用 fast
+保留原状态；同一 Router round 内不会循环重试，下一轮会重新压缩现有的 summary + pending，
+不需要再累计 8192 个新 tokens，也不回退到主力模型做摘要。摘要请求使用 fast
 本身的 provider/采样/推理配置，不套用主 Agent 的 reasoning preset；输出预算在私有 client
 副本上设置为 4096，provider 自定义 request body 仍按既有适配器规则处理。
 
@@ -119,26 +126,29 @@ Router 有自己的去重游标、待摘要增量和历史摘要；不读取主 
 
 ### 准确 token 预算
 
-建议将 **实际 Router 模型同一版本** 的 `tokenizer.json` 放在运行 OpenBitFun 的宿主上：
-
-```bash
-export ROUTER_TOKENIZER_PATH='/path/to/qwen3-4b-router/tokenizer.json'
-```
-
-客户端只加载本地 tokenizer，不会自动下载或请求额外服务。未设置时会明确警告，并用 UTF-8
-字节数作为该 byte-level BPE 的保守上界，**不是精确 token 数**；因此输入会更短。路径错误
-会报告配置错误。预算还单独预留固定 system prompt、128 输出 tokens 和 256 模板 tokens；
-超过配置窗口则拒绝此 Router 配置。兼容字符上限仍生效，必要时继续收缩动态输入。
+BitFun 不在 Git 仓库或二进制中内嵌 tokenizer。编译不需要该资源；运行前只需将当前
+`router-best` 对应的 `tokenizer.json` 下载到 `deploy/model-router/tokenizer.json`。启动脚本
+会把该路径传给 `OPENBITFUN_ROUND_ROUTER_TOKENIZER_PATH`；也可以通过
+`ROUTER_TOKENIZER_PATH=/absolute/path/tokenizer.json` 覆盖。直接启动 CLI 或 Desktop 时必须
+显式设置 `OPENBITFUN_ROUND_ROUTER_TOKENIZER_PATH`。无需下载模型权重，但 tokenizer 必须与
+服务端 Router 模型一致，否则 token 预算会失真。当前文件的 SHA-256 应为
+`aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4`。预算会单独预留固定
+system prompt、128 输出 tokens 和 256 模板 tokens。
 
 CLI 与 Desktop 共用此 Core 路径；无需分别实现压缩。在不经启动脚本的 Desktop/CLI 宿主上，
 使用对应的 `OPENBITFUN_ROUND_ROUTER_*` 环境变量（例如 `..._MAX_INPUT_TOKENS`、
-`..._TOKENIZER_PATH`）。远程工作区、远程控制、Peer 或 Detached Dispatch 均由**真正执行
-turn 的宿主**准备 Router 上下文、读取 tokenizer 和访问 Router/fast API，不能填写控制端的
-本地路径。这里是宿主侧实现约束；各远程场景仍需部署后的端到端 smoke 验证。
+`..._SUMMARY_TRIGGER_TOKENS`）。远程工作区、远程控制、Peer 或 Detached Dispatch 均由
+**真正执行 turn 的宿主**准备
+Router 上下文并访问 Router/fast API。这里是宿主侧实现约束；各远程场景仍需部署后的端到端
+smoke 验证。
 
-评测程序只需传入真实任务描述，不要逐轮自行构造 Router 输入。`ROUTER_TRACE_PATH` 会记录
-Router 输入预算/计数方式/准备耗时/增量游标，以及单独的 `router_context_summary` 事件（fast 模型名、
-延迟、usage、错误）。这部分是额外模型开销，不混入主轮次 Token Usage，评测时应单独汇总。
+评测程序只需传入真实任务描述，不要逐轮自行构造 Router 输入。`ROUTER_TRACE_PATH` 的每条
+`router_decision` 会记录 Router 输入预算/计数方式/准备耗时/增量游标、pending 总 tokens、
+每条 pending/recent entry 的 sequence、round ID、类型、token 数和错误标记，以及本轮观察到的
+压缩状态。压缩记录包含 `in_flight`、`applied`、`failed`、`incomplete` 或 `stale` 状态及其
+快照边界、pending tokens、延迟、usage 和错误。单独的 `router_context_summary` 事件仍然保留，
+便于不依赖 Router 决策频率审计摘要请求。这部分是额外模型开销，不混入主轮次 Token Usage，
+评测时应单独汇总。
 未返回 usage 的请求保持缺失，不能按零计费。可设 `ROUTER_SUMMARY_ENABLED=false` 对照纯规则
 裁剪版本；固定 Router system prompt 和 `simple/non_simple` 决策协议不变。
 

@@ -11,7 +11,7 @@ struct FakeSummary {
 
 #[async_trait::async_trait]
 impl SummaryProvider for FakeSummary {
-    async fn summarize(&self, _: String) -> OpenBitFunResult<SummaryResult> {
+    async fn summarize(&self, _: String, _: usize) -> OpenBitFunResult<SummaryResult> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail {
             return Err(OpenBitFunError::AIClient("synthetic failure".into()));
@@ -33,12 +33,15 @@ fn fixture(fail: bool) -> (RoundRouterContext, Arc<FakeSummary>) {
         release: Notify::new(),
         fail,
     });
-    let mut factory = RouterContextFactory::new(
-        RouterContextConfig::default(),
+    let mut factory = RouterContextFactory::new_with_counter(
+        RouterContextConfig {
+            summary_trigger_tokens: 1,
+            ..Default::default()
+        },
         3,
-        80_000,
         "fixture system",
         None,
+        Arc::new(Utf8ByteBudget),
     )
     .unwrap();
     factory.summary_provider = provider.clone();
@@ -74,6 +77,18 @@ async fn slow_summary_never_blocks_routing_and_is_applied_to_only_its_prefix() {
     let snapshot = serde_json::to_value(&messages).unwrap();
     let first = context.prepare(&messages).await;
     assert!(first.user_prompt.contains("step-7"));
+    assert_eq!(first.entry_tokens.len(), 8);
+    assert_eq!(
+        first
+            .entry_tokens
+            .iter()
+            .filter(|entry| entry.section == "pending")
+            .count(),
+        5
+    );
+    assert!(first.entry_tokens.iter().all(|entry| entry.token_count > 0));
+    assert_eq!(first.compression_records.len(), 1);
+    assert_eq!(first.compression_records[0].status, "in_flight");
     assert_eq!(serde_json::to_value(&messages).unwrap(), snapshot);
     tokio::task::yield_now().await;
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
@@ -86,16 +101,31 @@ async fn slow_summary_never_blocks_routing_and_is_applied_to_only_its_prefix() {
     assert_eq!(pending.summarized_through, 0);
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     provider.release.notify_one();
-    settle(&mut context).await;
-    let prepared = context.render();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while context
+            .pending_summary
+            .as_ref()
+            .is_some_and(|handle| !handle.is_finished())
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    context.factory.config.summary_enabled = false;
+    let prepared = context.prepare(&messages).await;
     assert!(prepared.user_prompt.contains("parser regression"));
     assert!(prepared.user_prompt.contains("latest-new-evidence"));
+    assert_eq!(prepared.compression_records.len(), 1);
+    assert_eq!(prepared.compression_records[0].status, "applied");
+    assert!(prepared.compression_records[0].latency_ms.is_some());
+    assert!(prepared.compression_records[0].usage.is_some());
     assert_eq!(prepared.observed_through, 9);
     assert_eq!(prepared.summarized_through, 5);
 }
 
 #[tokio::test]
-async fn failed_summary_keeps_evidence_and_waits_for_fresh_rounds_before_retrying() {
+async fn failed_summary_keeps_evidence_and_retries_on_the_next_round() {
     let (mut context, provider) = fixture(true);
     let mut messages = rounds(20);
     context.prepare(&messages).await;
@@ -106,7 +136,7 @@ async fn failed_summary_keeps_evidence_and_waits_for_fresh_rounds_before_retryin
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     assert_eq!(context.state.summarized_through, 0);
     assert!(context.render().user_prompt.contains("step-19"));
-    messages.extend(rounds(4));
+    messages.extend(rounds(1));
     context.prepare(&messages).await;
     settle(&mut context).await;
     assert_eq!(provider.calls.load(Ordering::SeqCst), 2);
@@ -425,19 +455,21 @@ async fn late_checkpoint_cannot_overwrite_newer_generation_or_future_format() {
 #[test]
 fn budget_validation_reserves_system_template_and_output() {
     let config = RouterContextConfig {
-        context_window: 4_096,
+        context_window: 512,
         ..Default::default()
     };
-    assert!(RouterContextFactory::new(config, 3, 80_000, "system", None).is_err());
-    let config = RouterContextConfig {
-        tokenizer_path: Some(PathBuf::from("/nonexistent/router-tokenizer.json")),
-        ..Default::default()
-    };
-    assert!(RouterContextFactory::new(config, 3, 80_000, "system", None).is_err());
+    assert!(RouterContextFactory::new_with_counter(
+        config,
+        3,
+        "system",
+        None,
+        Arc::new(Utf8ByteBudget),
+    )
+    .is_err());
 }
 
 #[test]
-fn character_cap_is_independent_of_tokenizer_compression_ratio() {
+fn render_is_bounded_by_router_tokens_not_an_unrelated_character_cap() {
     struct SingleToken;
     impl RouterTokenCounter for SingleToken {
         fn count(&self, _: &str) -> usize {
@@ -448,13 +480,14 @@ fn character_cap_is_independent_of_tokenizer_compression_ratio() {
         }
     }
     let (mut context, _) = fixture(true);
-    context.factory.max_input_chars = 4096;
+    context.factory.config.max_input_tokens = 4096;
     context.factory.counter = Arc::new(SingleToken);
     context.state.task = "huge-task".repeat(20_000);
     context.observe(&[Message::assistant("huge-output".repeat(20_000))]);
     let prepared = context.render();
-    assert!(prepared.user_prompt.chars().count() <= 4096);
-    assert_eq!(prepared.counter, "utf8_byte_upper_bound");
+    assert!(prepared.user_prompt.chars().count() > 4096);
+    assert_eq!(prepared.input_tokens, 1);
+    assert_eq!(prepared.counter, "synthetic_single_token");
 }
 
 #[test]
@@ -499,7 +532,7 @@ async fn incomplete_summary_keeps_old_state_but_records_reported_usage() {
     struct Incomplete;
     #[async_trait::async_trait]
     impl SummaryProvider for Incomplete {
-        async fn summarize(&self, _: String) -> OpenBitFunResult<SummaryResult> {
+        async fn summarize(&self, _: String, _: usize) -> OpenBitFunResult<SummaryResult> {
             Ok(SummaryResult {
                 text: String::new(),
                 complete: false,
