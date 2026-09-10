@@ -10,23 +10,13 @@ import React, {
   type ReactNode,
 } from 'react';
 import type { SceneTabId } from '../SceneBar/types';
+import { SceneChromeContext, type SceneChromeContextValue } from './sceneChromeContext';
 
 interface SceneChromeContributionRecord {
   owner: symbol;
   content: ReactNode;
 }
 
-interface SceneChromeContextValue {
-  activeSceneId: SceneTabId | null;
-  setContribution: (
-    sceneId: SceneTabId,
-    owner: symbol,
-    content: ReactNode,
-  ) => void;
-  removeContribution: (sceneId: SceneTabId, owner: symbol) => void;
-}
-
-const SceneChromeContext = createContext<SceneChromeContextValue | null>(null);
 const SceneChromeContentContext = createContext<ReactNode>(null);
 
 interface SceneChromeProviderProps {
@@ -117,7 +107,3 @@ export const SceneChromeContribution: React.FC<SceneChromeContributionProps> = (
 
   return null;
 };
-
-export function useSceneChromeContext(): SceneChromeContextValue | null {
-  return useContext(SceneChromeContext);
-}

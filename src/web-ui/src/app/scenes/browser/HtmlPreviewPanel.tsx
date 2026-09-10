@@ -54,7 +54,6 @@ const HtmlPreviewPanel: React.FC<HtmlPreviewPanelProps> = ({
       }
     };
   // The session is intentionally recreated only when the opened file scope changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, workspacePath, remoteConnectionId]);
 
   if (error) {

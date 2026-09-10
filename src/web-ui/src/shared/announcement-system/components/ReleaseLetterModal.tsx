@@ -19,7 +19,7 @@ interface ReleaseLetterParagraph {
   text: string;
 }
 
-export function parseReleaseLetterBody(body: string): ReleaseLetterParagraph[] {
+function parseReleaseLetterBody(body: string): ReleaseLetterParagraph[] {
   return body
     .split(/\r?\n\s*\r?\n/)
     .map(paragraph => paragraph.trim())

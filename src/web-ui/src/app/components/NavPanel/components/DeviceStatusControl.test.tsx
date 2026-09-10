@@ -8,7 +8,7 @@ import {
   type DeviceInterconnectionOverview,
   type DeviceInterconnectionOverviewInput,
 } from '../deviceInterconnectionOverview';
-import { getDeviceArtworkKind } from './DeviceArtwork';
+import { getDeviceArtworkKind } from './deviceArtworkKind';
 import DeviceStatusControl from './DeviceStatusControl';
 
 const state = vi.hoisted(() => ({

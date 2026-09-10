@@ -143,18 +143,6 @@ const isSameReviewResult = (left: unknown, right: unknown): boolean => {
   }
 };
 
-export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = (props) => {
-  const surfaceId = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceId, getActiveSurfaceId);
-  const viewState = useMemo(createBtwPanelViewState, [surfaceId, props.childSessionId, props.viewKind]);
-  return props.isActive === false ? null : (
-    <BtwSessionPanelContent
-      key={`${surfaceId}:${props.childSessionId}:${props.viewKind ?? ''}`}
-      {...props}
-      viewState={viewState}
-    />
-  );
-};
-
 const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPanelViewState }> = ({
   childSessionId,
   parentSessionId,
@@ -1282,6 +1270,18 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
       </div>
       </FlowChatVolatileContext.Provider>
     </FlowChatContext.Provider>
+  );
+};
+
+export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = (props) => {
+  const surfaceId = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceId, getActiveSurfaceId);
+  const viewState = useMemo(createBtwPanelViewState, [surfaceId, props.childSessionId, props.viewKind]);
+  return props.isActive === false ? null : (
+    <BtwSessionPanelContent
+      key={`${surfaceId}:${props.childSessionId}:${props.viewKind ?? ''}`}
+      {...props}
+      viewState={viewState}
+    />
   );
 };
 
