@@ -177,6 +177,26 @@ export const mobileTokens = {
     "code_target_bg": {
       "light": "#FFF1BE",
       "dark": "#5A4E24"
+    },
+    "brand_dot": {
+      "light": "#16B9CE",
+      "dark": "#16B9CE"
+    },
+    "welcome_dock": {
+      "light": "#171917",
+      "dark": "#171917"
+    },
+    "welcome_button": {
+      "light": "#FFFFFF",
+      "dark": "#FFFFFF"
+    },
+    "welcome_button_label": {
+      "light": "#171917",
+      "dark": "#171917"
+    },
+    "welcome_secondary": {
+      "light": "#B9BCB9",
+      "dark": "#B9BCB9"
     }
   },
   "typography": {
@@ -259,6 +279,11 @@ export const mobileTokens = {
       "size": 12,
       "lineHeight": 16,
       "weight": 400
+    },
+    "brand_wordmark": {
+      "size": 42,
+      "lineHeight": 56,
+      "weight": 500
     }
   },
   "geometry": {
@@ -320,7 +345,23 @@ export const mobileTokens = {
     "model_list_top_padding": 10,
     "model_list_bottom_padding": 16,
     "model_empty_account_height": 80,
-    "model_editor_height": 560
+    "model_editor_height": 560,
+    "welcome_max_width": 520,
+    "welcome_gutter": 25,
+    "welcome_header_height": 58,
+    "welcome_button_height": 49,
+    "welcome_button_gap": 11,
+    "welcome_dock_radius": 30,
+    "welcome_dock_bottom": 39,
+    "welcome_mark_size": 92,
+    "welcome_word_size": 34,
+    "welcome_stage_height": 220,
+    "welcome_header_word_size": 17,
+    "recent_home_gutter": 24,
+    "recent_home_mark_size": 132,
+    "recent_home_title_size": 25,
+    "recent_home_max_width": 560,
+    "recent_home_row_padding": 18
   },
   "breakpoints": {
     "wide": 600,
@@ -329,7 +370,8 @@ export const mobileTokens = {
   },
   "motion": {
     "quick": 180,
-    "structure": 220
+    "structure": 220,
+    "startup_brand": 6800
   }
 };
 export const mobileComponents = {
@@ -905,37 +947,48 @@ export const mobileComponents = {
       "platformNotes": "Use a two-column library of square previews on compact screens and three columns when the gallery reaches 600vp. Clip previews to 24vp corners with 14vp column and 20vp row gaps; keep app names below images. The centered gallery caps at 1000vp, while open apps use full width. Reuse established showcase assets. Resize the grid without reloading an open app."
     },
     "welcome_home": {
-      "purpose": "Introduces the mobile companion and provides a direct connection action with an offline MiniApp alternative.",
+      "purpose": "Signed-out disconnected home: fixed brand mark, looping desktop phrases, equal login and QR actions.",
       "anatomy": [
-        "desktop_contour_brand_mark",
-        "centered_heading",
-        "connection_guidance",
-        "bottom_primary_action",
-        "quiet_miniapp_action"
+        "wordmark_header",
+        "fixed_brand_mark",
+        "sliding_phrase",
+        "dark_action_dock",
+        "login",
+        "scan",
+        "optional_bundled_miniapps"
       ],
       "states": [
-        "disconnected",
-        "connecting",
-        "connected",
-        "light",
-        "dark",
+        "signed_out",
+        "reduce_motion",
         "compact",
         "wide"
       ],
       "tokens": [
-        "page_bg",
-        "ink",
-        "muted",
-        "primary_action",
-        "content_on_action",
-        "body_medium"
+        "welcome_max_width",
+        "welcome_gutter",
+        "welcome_header_height",
+        "welcome_button_height",
+        "welcome_button_gap",
+        "welcome_dock_radius",
+        "welcome_dock_bottom",
+        "welcome_mark_size",
+        "welcome_word_size",
+        "welcome_stage_height",
+        "welcome_header_word_size",
+        "welcome_dock",
+        "welcome_button",
+        "welcome_button_label",
+        "welcome_secondary",
+        "brand_dot"
       ],
-      "platformNotes": "Reuse the desktop contour mark at 104vp. Use a 22vp medium heading and 14vp supporting copy, a scrollable hero, 24vp side margins, and a 52vp capsule action constrained to 360vp. Keep connection state truthful; offline MiniApps remain available."
+      "platformNotes": "A layout with C staggered slide motion. Mark never animates. Per-glyph entry: 180ms + index*55ms, 800ms cubic ease-out, 38px slide with 5px settling overshoot. Exit is 650ms, 30px left. Respect reduced motion and stop work offscreen. Retain real account/scan routing; only show MiniApps on hosts that implement them. Safe-area insets remain native."
     },
     "startup_brand_reveal": {
       "purpose": "Provides a short desktop-inspired identity transition on cold launch without waiting for network or account loading.",
       "anatomy": [
         "theme_background",
+        "bouncing_brand_dot",
+        "staggered_wordmark",
         "desktop_contour_brand_mark"
       ],
       "states": [
@@ -945,9 +998,11 @@ export const mobileComponents = {
       ],
       "tokens": [
         "page_bg",
-        "ink"
+        "ink",
+        "brand_dot",
+        "startup_brand"
       ],
-      "platformNotes": "Center the shared mark at 104vp above a 24vp medium OpenBitFun wordmark. Scale the mark from 0.94 to 1 over 360ms; reveal letters with opacity and an 8vp rise over 260ms each, starting at 140ms with 55ms staggering. Reserve the full wordmark width. Dissolve the overlay over 240ms starting at 1050ms. Remove on completion or background; never replay on foreground. Skip when the system reduced-motion setting is available and enabled. Clean up timers on removal."
+      "platformNotes": "Native cold-start overlay on HarmonyOS, Android and iOS; 6800ms timeline independent of network readiness. A cyan dot hops ahead of ten 42-unit letters with subtle letter bounce. At normalized text time 0.70–0.86 it arcs back to the dotless i, settling at 7.35 units diameter with one fading halo. Text time is min(progress / 0.65 * 0.9, 0.9). Logo expands from 0.65 to 1 with a small overshoot during progress 0.66–0.85 as the word moves down 42 units. Use a centered 280×240 stage, scaled down for narrow windows, 92-unit contour mark and platform-native soft sans typography. Fade the overlay over the last 3%. Reserve full glyph slots; no layout changes during reveal. Remove on completion or background and do not replay on activity recreation/foreground. Skip for reduced motion. Notification onboarding follows completion. The dedicated brand_dot token preserves identity independently of action/status colors."
     }
   }
 };
