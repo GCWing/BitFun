@@ -1,4 +1,3 @@
-import { MiniAppSurface } from './components/MiniAppSurface';
 import { AppRootPresentation } from './components/AppRootPresentation';
 import { WatchProvisionCard } from './components/WatchProvisionCard';
 import { ArkUiAppRootHostAdapter } from './host/AppRootHostAdapter';
@@ -44,6 +43,8 @@ struct AppRoot {
     Stack() {
       AppRootPresentation({
         shellState: this.runtime.appShellState,
+        miniAppState: this.runtime.miniAppViewModel.state,
+        miniAppActions: this.runtime.miniAppViewModel.actions,
         navigationStack: this.runtime.navigationStack,
         remotePageState: this.runtime.remotePageState,
         deviceDirectoryState: this.runtime.deviceDirectoryState,
@@ -52,10 +53,6 @@ struct AppRoot {
         deviceId: this.runtime.remoteConnectionController.getDeviceId(),
         actions: this.runtime.presentationActions
       })
-
-      if (this.runtime.miniAppViewModel.state.visible) {
-        MiniAppSurface({ state: this.runtime.miniAppViewModel.state, actions: this.runtime.miniAppViewModel.actions })
-      }
 
       // Sits above every route on purpose: a watch waiting for approval must
       // not be hidden behind whatever screen the phone happens to be on.

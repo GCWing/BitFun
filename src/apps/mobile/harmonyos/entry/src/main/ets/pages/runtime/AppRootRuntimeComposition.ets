@@ -823,8 +823,10 @@ export abstract class AppRootRuntimeComposition {
         setTimeout(() => this.appShellState.openSettings('account'), 180);
       },
       openSession: (session: RemoteSession): void => {
+        // The shell supplies the horizontal motion; do not stack a second
+        // NavDestination push animation on top of the closing drawer.
         this.closeAppSidebar();
-        this.conversationController.openHomeSession(session);
+        this.conversationController.openHomeSession(session, true);
       },
       deleteSession: (session: RemoteSession): void => { this.conversationController.deleteHomeSession(session); }
     },
