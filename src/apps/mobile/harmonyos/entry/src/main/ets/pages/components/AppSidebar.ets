@@ -58,12 +58,23 @@ export struct AppSidebar {
         // Device sections own their remote workspace and session rows.
         Scroll() {
           Column() {
-            Button(RemoteI18n.t('miniapp.title'))
-              .fontSize(MobileDesignTypography.titleSmall.size)
-              .fontColor(INK).backgroundColor(CARD)
-              .width('100%').height(MobileDesignGeometry.controlTouchSize)
-              .margin({ top: 8, bottom: 12 })
-              .onClick(() => this.onOpenMiniApps())
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 14 }) {
+                Stack({ alignContent: Alignment.Center }) {
+                  SidebarGlyph({ kind: 'apps' })
+                }.width(24).height(24)
+                Text(RemoteI18n.t('miniapp.title'))
+                  .fontSize(MobileDesignTypography.bodyLarge.size)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(INK)
+                Blank()
+              }.width('100%').alignItems(VerticalAlign.Center)
+            }
+            .width('100%').height(48).padding({ left: 4, right: 8 })
+            .backgroundColor(TRANSPARENT).borderRadius(12)
+            .margin({ top: 16, bottom: 16 }).stateEffect(true)
+            .accessibilityText(RemoteI18n.t('miniapp.title'))
+            .onClick(() => this.onOpenMiniApps())
             if (this.showWorkspaceSection) {
               this.contentSlot()
             }

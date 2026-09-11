@@ -1,4 +1,7 @@
 export const ZH_CN_MESSAGES: [string, string][] = [
+  ['miniapp.allApps', '全部应用'],
+  ['miniapp.availableOffline', '离线可用'],
+
   ['miniapp.timeout', '本地操作超时，操作可能仍会完成，未自动重试。'],
   ['miniapp.title', '小应用'],
   ['miniapp.refresh', '刷新'],

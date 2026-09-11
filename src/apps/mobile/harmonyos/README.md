@@ -46,8 +46,14 @@ The current project targets HarmonyOS `6.1.1(24)` and supports
 
 ## Built-in MiniApps
 
-Choose **MiniApps** from the sidebar or home to open Gomoku, Regex Playground,
-or Daily Divination. These bundled pages run locally in ArkWeb without signing
+Choose **MiniApps** from the sidebar to open Gomoku, Regex Playground,
+or Daily Divination. The gallery uses two columns of rounded showcase previews
+on phones and three on wide screens; tapping a preview opens the app directly.
+Showcase images reuse the existing desktop artwork under
+`src/web-ui/src/assets/miniapps/showcases/`. Navigation typography follows the
+shared mobile body role, with the same proportions on compact and wide hosts.
+
+These bundled pages run locally in ArkWeb without signing
 in, pairing, a desktop connection, or internet access. Storage and clipboard
 writes use the phone. Data is isolated by app and retained across app upgrades;
 it is not synchronized with desktop MiniApps. Closing a page discards its

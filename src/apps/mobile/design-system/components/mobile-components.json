@@ -126,6 +126,56 @@
       "states": ["loading", "text", "markdown", "image", "unsupported", "failed", "truncated"],
       "tokens": ["sheet_header_height", "file_link", "card", "line", "soft"],
       "platformNotes": "Placement is shared policy; rendering, file export, and platform-safe dismissal remain native adapters."
+    },
+    "miniapp_navigation": {
+      "purpose": "Opens locally bundled tools from primary sidebar navigation, without requiring account or device access.",
+      "anatomy": [
+        "outlined_apps_glyph",
+        "leading_aligned_label",
+        "full_row_touch_target"
+      ],
+      "states": [
+        "idle",
+        "pressed",
+        "focused",
+        "signed_out",
+        "connected"
+      ],
+      "tokens": [
+        "ink",
+        "body_large",
+        "control_touch_size"
+      ],
+      "platformNotes": "Use a quiet 48vp icon-and-label row in compact and wide sidebars, with 16vp medium-weight navigation text, a 24vp icon slot and a 14vp gap. Do not promote this navigation destination to a primary action on remote home."
+    },
+    "miniapp_catalog": {
+      "purpose": "Presents bundled apps with large visual previews that open each app directly.",
+      "anatomy": [
+        "back_control",
+        "centered_page_title",
+        "offline_caption",
+        "square_preview",
+        "app_title"
+      ],
+      "states": [
+        "catalog",
+        "loading",
+        "error",
+        "app_open",
+        "light",
+        "dark"
+      ],
+      "tokens": [
+        "page_bg",
+        "ink",
+        "muted",
+        "soft",
+        "body_large",
+        "title_small",
+        "body_medium",
+        "label_small"
+      ],
+      "platformNotes": "Use a two-column library of square previews on compact screens and three columns when the gallery reaches 600vp. Clip previews to 24vp corners with 14vp column and 20vp row gaps; keep app names below images. The centered gallery caps at 1000vp, while open apps use full width. Reuse established showcase assets. Resize the grid without reloading an open app."
     }
   }
 }
