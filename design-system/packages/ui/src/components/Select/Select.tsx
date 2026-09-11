@@ -364,6 +364,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       className={styles.popover}
       data-openbitfun-component="select-popup"
       data-openbitfun-part="popover"
+      data-openbitfun-native-webview-occlusion
       data-invalid={resolvedInvalid ? "true" : "false"}
       data-placement={layout?.placement ?? placement}
       data-size={size}

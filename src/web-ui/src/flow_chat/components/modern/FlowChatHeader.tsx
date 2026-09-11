@@ -493,6 +493,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
             data-openbitfun-component="flow-chat-header"
             data-openbitfun-part="commandMenu"
+            data-openbitfun-native-webview-occlusion
             aria-label={t('flowChatHeader.backgroundCommandActions')}
             style={backgroundCommandMenuPosition}
             data-testid="flowchat-header-background-menu"
@@ -724,6 +725,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               className="flowchat-header__session-overview-panel"
               data-openbitfun-component="flow-chat-header"
               data-openbitfun-part="sessionOverviewPanel"
+              data-openbitfun-native-webview-occlusion
               data-openbitfun-placement={sessionOverviewPanelLayout?.placement ?? 'bottom'}
               role="dialog"
               aria-label={t('flowChatHeader.sessionOverview')}
@@ -834,6 +836,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                           className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
                           data-openbitfun-component="flow-chat-header"
                           data-openbitfun-part="commandMenu"
+                          data-openbitfun-native-webview-occlusion
                           aria-label={t('flowChatHeader.backgroundCommandActions')}
                           style={backgroundCommandMenuPosition}
                           data-testid="flowchat-header-background-menu"

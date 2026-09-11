@@ -18,6 +18,12 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+Floating dialog/sheet overlays, menu popovers, select/combobox popups and tooltips declare
+`data-openbitfun-native-webview-occlusion` on their rendered floating surface.
+Native hosts use its visible bounds to temporarily hide overlapping child views;
+the components do not call platform APIs. Custom product popovers should declare
+the same marker on the floating element, including while its exit animation runs.
+
 ## Voice calls
 
 `VoiceCallPanel` owns the complete compact call surface: navigation, particle

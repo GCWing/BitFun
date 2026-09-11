@@ -502,6 +502,7 @@ export function Tooltip({
           ref={tooltipRef}
           id={tooltipId}
           role="tooltip"
+          data-openbitfun-native-webview-occlusion
           className={classNames(styles.root, className)}
           data-openbitfun-component="tooltip"
           data-openbitfun-placement={layout.placement}

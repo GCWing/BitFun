@@ -509,6 +509,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                   className="session-tree-popover__action-menu"
                   data-openbitfun-component="flow-chat-header"
                   data-openbitfun-part="sessionTreeMenu"
+                  data-openbitfun-native-webview-occlusion
                   aria-label={t('flowChatHeader.agentTreeActions')}
                   style={actionMenuPosition}
                   data-testid="flowchat-header-session-tree-menu"

@@ -165,6 +165,7 @@ const OverlaySurface = forwardRef<HTMLDivElement, OverlaySurfaceProps>(function 
         className={styles.overlay}
         data-openbitfun-component={kind}
         data-openbitfun-part="overlay"
+        data-openbitfun-native-webview-occlusion
         data-placement={placement}
         data-state={exiting ? "exiting" : "open"}
       >

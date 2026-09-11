@@ -423,6 +423,7 @@ describe('FlowChatHeader', () => {
     });
 
     const panel = document.querySelector('[data-testid="flowchat-header-session-overview-panel"]');
+    expect(panel?.hasAttribute('data-openbitfun-native-webview-occlusion')).toBe(true);
     const items = [...(panel?.querySelector(
       '.flowchat-header__session-overview-list',
     )?.children ?? [])] as HTMLElement[];

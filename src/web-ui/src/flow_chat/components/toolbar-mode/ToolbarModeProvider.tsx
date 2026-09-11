@@ -197,6 +197,8 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         // cannot finish, so a partial floating geometry is never persisted.
         log.error('Failed to restore main window after toolbar mode activation error', restoreError);
       }
+    } finally {
+      window.dispatchEvent(new CustomEvent('toolbar-mode-activation-finished'));
     }
   }, []);
 

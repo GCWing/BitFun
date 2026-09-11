@@ -511,6 +511,7 @@ const CollectionPicker = forwardRef<HTMLDivElement, PickerProps>(function Collec
       className={styles.popover}
       data-openbitfun-component={multiple ? "multi-select-popup" : "combobox-popup"}
       data-openbitfun-part="popover"
+      data-openbitfun-native-webview-occlusion
       data-keyboard-open={keyboardOpen ? "true" : "false"}
       data-invalid={invalid ? "true" : "false"}
       data-placement={layout?.placement ?? placement}
