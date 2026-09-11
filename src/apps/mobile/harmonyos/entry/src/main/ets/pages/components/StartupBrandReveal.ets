@@ -80,8 +80,8 @@ export struct StartupBrandReveal {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Stack({ alignContent: Alignment.TopStart }) {
-        WelcomeBrandFlow({ markSize: 92 })
-          .position({ x: 94, y: 14 }).scale({ x: this.markScale(), y: this.markScale() })
+        WelcomeBrandFlow({ markSize: 156, sweep: true })
+          .position({ x: 62, y: -34 }).scale({ x: this.markScale(), y: this.markScale() })
           .opacity(this.ease((this.progress - 0.66) / 0.19))
         ForEach(this.letters, (letter: string, index: number) => {
           Text(letter).fontSize(MobileDesignTypography.brandWordmark.size).fontWeight(FontWeight.Medium).fontColor(INK)
