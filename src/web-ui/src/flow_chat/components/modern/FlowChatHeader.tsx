@@ -548,7 +548,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       ? t('flowChatHeader.sessionOverviewBackgroundFinished', {
           count: backgroundCommandCount,
         })
-      : t('flowChatHeader.backgroundTerminalEmpty');
+      : t('flowChatHeader.backgroundCommandEmpty');
   let pullRequestOverviewSummary: string;
   switch (pullRequestOverview.status) {
     case 'loading':
@@ -807,9 +807,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   >
                     <span className="flowchat-header__session-overview-section-title">
                       <OverflowText>{t('flowChatHeader.backgroundCommandOverview')}</OverflowText>
-                      {runningBackgroundCommandCount > 0 ? (
-                        <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
-                      ) : null}
                     </span>
                     <span className="flowchat-header__session-overview-section-count" aria-hidden="true">
                       {backgroundCommandCount}
@@ -871,19 +868,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                             type="button"
                             className="flowchat-header__background-command-list-item-button flowchat-header__background-command-open-button"
                             onClick={() => handleCommandSelect(command)}
+                            aria-label={`${command.title}, ${t(command.status === 'running'
+                              ? 'flowChatHeader.backgroundCommandStatusRunning'
+                              : 'flowChatHeader.backgroundCommandStatusFinished')}`}
                           >
                             <span className="flowchat-header__background-command-list-title">
-                              <Icon name="terminal" size="xs" aria-hidden="true" />
+                              <span
+                                className="flowchat-header__background-command-icon"
+                                data-running={command.status === 'running' ? 'true' : undefined}
+                                aria-hidden="true"
+                              >
+                                <Icon name="terminal" size="xs" />
+                              </span>
                               <OverflowText>{command.title}</OverflowText>
                             </span>
-                            <OverflowText className="flowchat-header__background-command-list-meta">
-                              {[
-                                t('flowChatHeader.backgroundCommandSession', { id: command.execSessionId }),
-                                command.status === 'running'
-                                  ? t('flowChatHeader.backgroundCommandStatusRunning')
-                                  : t('flowChatHeader.backgroundCommandStatusFinished'),
-                              ].filter(Boolean).join(' · ')}
-                            </OverflowText>
                           </button>
                           {renderBackgroundCommandActions(command)}
                         </div>
@@ -897,7 +895,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       data-openbitfun-state="empty"
                       data-testid="flowchat-header-background-empty"
                     >
-                      {t('flowChatHeader.backgroundTerminalEmpty')}
+                      {t('flowChatHeader.backgroundCommandEmpty')}
                     </div>
                   )}
                 </div>

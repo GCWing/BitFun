@@ -439,7 +439,7 @@ describe('FlowChatHeader', () => {
     expect(items[2]?.querySelector('svg')).toBeNull();
     expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
     expect(panel?.querySelector('[data-testid="flowchat-header-background-empty"]')?.textContent)
-      .toBe('flowChatHeader.backgroundTerminalEmpty');
+      .toBe('flowChatHeader.backgroundCommandEmpty');
     expect(panel?.querySelector('[data-testid="flowchat-header-pull-requests-empty"]')?.textContent)
       .toBe('flowChatHeader.pullRequestEmpty');
     expect(panel?.querySelector('[data-testid="flowchat-header-session-overview-back"]')).toBeNull();
@@ -468,7 +468,7 @@ describe('FlowChatHeader', () => {
     );
 
     const panel = document.querySelector<HTMLElement>('.flowchat-header__session-overview-panel');
-    expect(commandSection?.textContent).toContain('flowChatHeader.backgroundTerminalEmpty');
+    expect(commandSection?.textContent).toContain('flowChatHeader.backgroundCommandEmpty');
     expect(panel?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(panel?.style.visibility).toBe('visible');
     expect(panel?.hasAttribute('data-openbitfun-view')).toBe(false);

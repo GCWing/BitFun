@@ -1404,12 +1404,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "空闲"
     },
-    "backgroundCommandOverview": "后台终端",
+    "backgroundCommandOverview": "后台命令",
     "backgroundCommands": "后台命令（{{count}}）",
     "backgroundCommandEmpty": "暂无后台命令",
-    "backgroundTerminalEmpty": "暂无后台终端",
     "backgroundCommandUntitled": "后台命令",
-    "backgroundCommandSession": "会话 #{{id}}",
     "backgroundCommandStatusRunning": "进行中",
     "backgroundCommandStatusFinished": "已结束",
     "backgroundCommandActions": "命令操作",

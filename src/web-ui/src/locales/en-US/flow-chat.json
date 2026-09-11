@@ -1404,12 +1404,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "Idle"
     },
-    "backgroundCommandOverview": "Background terminals",
+    "backgroundCommandOverview": "Background commands",
     "backgroundCommands": "Background commands ({{count}})",
     "backgroundCommandEmpty": "No background commands",
-    "backgroundTerminalEmpty": "No background terminals",
     "backgroundCommandUntitled": "Background command",
-    "backgroundCommandSession": "Session #{{id}}",
     "backgroundCommandStatusRunning": "Active",
     "backgroundCommandStatusFinished": "Finished",
     "backgroundCommandActions": "Command actions",

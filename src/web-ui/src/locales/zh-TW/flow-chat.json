@@ -1404,12 +1404,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "閒置"
     },
-    "backgroundCommandOverview": "背景終端",
+    "backgroundCommandOverview": "背景命令",
     "backgroundCommands": "背景命令（{{count}}）",
     "backgroundCommandEmpty": "目前沒有背景命令",
-    "backgroundTerminalEmpty": "目前沒有背景終端",
     "backgroundCommandUntitled": "背景命令",
-    "backgroundCommandSession": "會話 #{{id}}",
     "backgroundCommandStatusRunning": "進行中",
     "backgroundCommandStatusFinished": "已結束",
     "backgroundCommandActions": "命令操作",
